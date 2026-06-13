@@ -1,0 +1,38 @@
+name: Chore / maintenance
+description: Build, CI, deps, refactor, perf, or test work with no behavior change.
+title: "chore: "
+labels: ["chore"]
+body:
+  - type: input
+    id: epic
+    attributes:
+      label: Parent epic
+      description: The epic this belongs to, if any (e.g. #12).
+    validations:
+      required: false
+  - type: dropdown
+    id: type
+    attributes:
+      label: Change type
+      description: The conventional-commit type the PR title will use. (perf cuts a release, so file it as a feature/fix.)
+      options:
+        - chore
+        - ci
+        - refactor
+        - test
+    validations:
+      required: true
+  - type: textarea
+    id: task
+    attributes:
+      label: Task
+      description: What needs doing and why. No behavior change; if behavior changes, file a feature or bug instead.
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: Definition of done
+      description: How we know it is complete (a green gate, a removed dep, a faster path, a cleaner seam).
+    validations:
+      required: false

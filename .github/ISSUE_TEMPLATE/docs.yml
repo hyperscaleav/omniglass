@@ -1,0 +1,37 @@
+name: Docs / learning page
+description: A documentation or interactive learning-surface change.
+title: "docs: "
+labels: ["docs"]
+body:
+  - type: input
+    id: epic
+    attributes:
+      label: Parent epic
+      description: The epic this belongs to, if any (e.g. #12).
+    validations:
+      required: false
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Docs kind
+      options:
+        - Architecture (docs/architecture/)
+        - Concept / learning page
+        - Contributor doctrine (docs/contributing/)
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: change
+    attributes:
+      label: What changes
+      description: The page(s) to add or update, and what a reader should understand after.
+    validations:
+      required: true
+  - type: textarea
+    id: learning
+    attributes:
+      label: Interactive learning surface
+      description: If this teaches a concept, does it ship a surface that renders the real engine against real or lab data? If not, why not.
+    validations:
+      required: false

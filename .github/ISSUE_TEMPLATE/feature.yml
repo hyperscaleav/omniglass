@@ -1,0 +1,33 @@
+name: Feature / slice
+description: A single vertical slice of behavior.
+title: "feat: "
+labels: ["feature"]
+body:
+  - type: input
+    id: epic
+    attributes:
+      label: Parent epic
+      description: The epic this belongs to (e.g. #12).
+    validations:
+      required: false
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Behavior
+      description: What the feature does and how it is observed (an assertion, not a vibe).
+    validations:
+      required: true
+  - type: textarea
+    id: test
+    attributes:
+      label: How it will be tested
+      description: The failing test that will prove it. Tier(s)? unit / integration / e2e.
+    validations:
+      required: true
+  - type: textarea
+    id: docs
+    attributes:
+      label: Docs / learning page
+      description: The docs that ship with it. Is there an interactive learning surface?
+    validations:
+      required: false

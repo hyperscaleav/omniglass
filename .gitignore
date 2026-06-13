@@ -1,0 +1,31 @@
+# Binaries and build output
+/bin/
+/dist/
+omniglass
+*.exe
+*.test
+*.out
+
+# Embedded build artifacts (generated, not committed)
+/docs/public/
+/internal/docsembed/site/
+/web/dist/
+/web/node_modules/
+
+# Go
+/vendor/
+coverage.txt
+*.prof
+
+# Local env and secrets
+.env
+.env.local
+*.local
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+
+# Claude Code worktrees (local, never committed)
+.claude/worktrees/

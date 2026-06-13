@@ -1,0 +1,33 @@
+name: Spike / investigation
+description: A time-boxed investigation to learn whether something is possible. Not shippable behavior.
+title: "[Spike] "
+labels: ["spike"]
+body:
+  - type: input
+    id: epic
+    attributes:
+      label: Parent epic
+      description: The epic this informs, if any (e.g. #12).
+    validations:
+      required: false
+  - type: textarea
+    id: question
+    attributes:
+      label: Question to answer
+      description: The specific unknown this spike resolves. State what a yes or no answer looks like.
+    validations:
+      required: true
+  - type: input
+    id: timebox
+    attributes:
+      label: Timebox
+      description: The time budget (e.g. 1 day). A spike is bounded by definition.
+    validations:
+      required: true
+  - type: textarea
+    id: exit
+    attributes:
+      label: Exit criteria
+      description: What this produces (a decision note, a deleted prototype, follow-up issues). Spike code is deleted or stabilized with tests before it merges; it is never a standing excuse to skip the failing test.
+    validations:
+      required: true

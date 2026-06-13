@@ -1,0 +1,34 @@
+name: Epic
+description: A body of work composed of multiple issues toward one outcome.
+title: "[Epic] "
+labels: ["epic"]
+body:
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Outcome
+      description: The user-observable outcome this epic delivers. What is true when it is done?
+    validations:
+      required: true
+  - type: textarea
+    id: slices
+    attributes:
+      label: Slices / child issues
+      description: The vertical slices this breaks into. Link child issues as they are filed.
+      value: |
+        - [ ] #
+    validations:
+      required: false
+  - type: textarea
+    id: docs
+    attributes:
+      label: Docs impact
+      description: Which docs/learning pages this epic adds or changes.
+    validations:
+      required: false
+  - type: textarea
+    id: notes
+    attributes:
+      label: Design notes / links
+    validations:
+      required: false
