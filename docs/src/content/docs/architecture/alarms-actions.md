@@ -7,8 +7,7 @@ Component document of the
 [architecture overview](/architecture/). The response half of the
 pipeline: an **alarm** detects a condition and holds it; an **action** does
 something about it. Both are **stateful entities that hold their state directly**
-(not event-sourced). This supersedes the earlier `actions.md` (folded in here, on
-current vocabulary). The credentials an action uses to reach a sink live in
+(not event-sourced). The credentials an action uses to reach a sink live in
 credentials; the Expr and Go-template machinery in
 [expressions](/architecture/expressions/).
 
@@ -42,7 +41,7 @@ back into the datapoint layer (hub *Cycle safety*).
 An `event_rule` carries a required `fire` criterion and an optional `clear`
 criterion. With a `clear` criterion the fire event **opens** an alarm and the clear
 event **resolves** it; without one the rule is momentary (a one-shot event, no
-alarm). This absorbs what used to be a separate `alarm_rule`.
+alarm). There is no separate `alarm_rule`.
 
 ```yaml
 event_rule:

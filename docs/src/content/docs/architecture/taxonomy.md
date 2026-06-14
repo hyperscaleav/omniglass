@@ -3,7 +3,7 @@ title: Taxonomy
 description: "The authoritative telemetry data model: datapoints, provenance, rules, events, alarms, and actions, and how they fit together."
 ---
 
-**Status: design-of-record, not yet implemented.** This is the authoritative data model the storage layer is converging toward. The shipped schema still uses the older `datapoint_event_*` vocabulary; see [Implementation status](#implementation-status). This doc is the meaning of the data; the physical layout (tables, partitioning, the lineage CHECK, tiering) lives in storage, and the spine is [the architecture overview](/architecture/).
+This is the authoritative data model: the meaning of the data. The physical layout (tables, partitioning, the lineage CHECK, tiering) lives in storage; the spine is [the architecture overview](/architecture/).
 
 ## The model in two sentences
 
@@ -37,7 +37,7 @@ A **datapoint** is an observation: a value of one key, on one owning entity (com
 - **state** (`state_datapoint`): categorical, text, or a structured object. Discrete, dwell-measurable. Has a current value (`last()` is meaningful).
 - **log** (`log_datapoint`): a component's own words, the value is the log line (text or jsonb), keyed by log type (`log.system`, `log.os`, `log.app.<name>`). A stream, not a current value, but still an observation with a value at a time, so it is a datapoint, not a separate primitive. In practice only components emit logs.
 
-Treating log as a datapoint dissolves what used to be a special case: an alarm on a log line is just an event rule whose condition matches a `log_datapoint` value, no different in shape from a metric threshold.
+Treating log as a datapoint removes the usual special case: an alarm on a log line is just an event rule whose condition matches a `log_datapoint` value, no different in shape from a metric threshold.
 
 **An event is not a datapoint.** A datapoint is an observation (a value we recorded); an **event** is *our semantic assertion that something happened*, in our vocabulary. Datapoints are what rules read; events are what event rules produce.
 
@@ -47,9 +47,9 @@ A datapoint attaches to a **structural entity**, not only a component. The owner
 
 ### The instance dimension: many values of one key on one owner
 
-One owner can hold several distinct values of the *same* canonical key: three fan speeds on a switch, per-port counters, per-channel audio levels. The canonical registry deliberately holds **one** `datapoint_type` per measurement (`fan.speed`, not `fan.speed.intake`), so the discriminator lives outside the key, as an `instance text NOT NULL DEFAULT ''` column on all three datapoint tables. Series identity is therefore **`(owner, key, instance, provenance)`**: each instance is its own series, while a singleton (`instance = ''`, the default and the historical behavior) is unchanged. Aggregation stays clean (group by `key`, ignore `instance`); per-instance trends stay distinct.
+One owner can hold several distinct values of the *same* canonical key: three fan speeds on a switch, per-port counters, per-channel audio levels. The canonical registry deliberately holds **one** `datapoint_type` per measurement (`fan.speed`, not `fan.speed.intake`), so the discriminator lives outside the key, as an `instance text NOT NULL DEFAULT ''` column on all three datapoint tables. Series identity is therefore **`(owner, key, instance, provenance)`**: each instance is its own series, while a singleton (`instance = ''`) is the default. Aggregation stays clean (group by `key`, ignore `instance`); per-instance trends stay distinct.
 
-The instance rides the pipeline as a reserved **`instance` label** on the collected datapoint (no proto change, no `Owner` change): the collection extract spec authors it as a `key[instance]` suffix (`fan.speed[intake]=<oid>`, `fan.speed[exhaust]=<oid2>`), the parser strips the bracket into the label so `registryAllows` / `kindFor` still match the bare canonical key, and the derive step reads `instance` into the column. Calc folds **every** instance of an input key into the reduce: a rule reading `fan.speed` from a component gets one candidate per fan, so `worst` / `average` / `count` / Expr aggregate across all of them (a singleton key yields one candidate, the prior behavior). An input filter can select one instance (`instance == "intake"`). The worklist needs no instance granularity: `calc_work` collapses on `(owner, key)` and recompute re-reads current state of every instance, so two fan changes in one event coalesce to one correct recompute. Calc **outputs** stay aggregate (`instance = ''`); per-instance outputs (one health per fan, a group-by) are a separate future capability, not a silent gap, output owners default to the singleton.
+The instance rides the pipeline as a reserved **`instance` label** on the collected datapoint: the collection extract spec authors it as a `key[instance]` suffix (`fan.speed[intake]=<oid>`, `fan.speed[exhaust]=<oid2>`), the parser strips the bracket into the label so `registryAllows` / `kindFor` still match the bare canonical key, and the derive step reads `instance` into the column. Calc folds **every** instance of an input key into the reduce: a rule reading `fan.speed` from a component gets one candidate per fan, so `worst` / `average` / `count` / Expr aggregate across all of them (a singleton key yields one candidate). An input filter can select one instance (`instance == "intake"`). The worklist needs no instance granularity: `calc_work` collapses on `(owner, key)` and recompute re-reads current state of every instance, so two fan changes in one event coalesce to one correct recompute. Calc **outputs** stay aggregate (`instance = ''`); per-instance outputs (one health per fan, a group-by) are a separate future capability, not a silent gap, output owners default to the singleton.
 
 ### The has-a-value-now razor (datapoint vs event)
 
@@ -75,7 +75,7 @@ The naming convention is consistent: a `_type` registry defines what a thing *is
 
 ## Collection: how telemetry arrives
 
-A **task** is a node's unit of collection work. Two independent axes describe it, historically conflated into one three-way `poll / stream / listen` type, which was wrong.
+A **task** is a node's unit of collection work. Two independent axes describe it, and keeping them separate is what keeps the model clean.
 
 - **Task mode** (a property of the task): **poll** (we ask for each datum) or **listen** (we wait for it to arrive). Stated from *our* perspective on purpose: "pull/push" inverts depending on whose frame you take, because the component pushes exactly when we pull. `poll` and `listen` are verbs *we* perform.
 - **Transport** (a property of the interface): **stateless** (a throwaway connection per shot) or **stateful** (a held-open connection, which becomes a `session` and emits `session_log` rows for connect/auth/drop/reconnect).
@@ -87,7 +87,7 @@ These are orthogonal. All four cells are real:
 | **stateless** | SNMP get, HTTP GET | webhook, SNMP trap, syslog |
 | **stateful** | SSH-exec or xAPI `xStatus` on a held session | MQTT subscribe, xAPI feedback |
 
-The old `stream` and `listen` were never two modes (both wait for a frame and normalize on arrival); they differed only in transport. So `stream` collapses into **listen**, and statefulness moves to the interface.
+Waiting for a frame is a single mode (**listen**) regardless of transport; a held-open connection is a property of the interface, not a separate mode. So there are two task modes, and statefulness lives on the interface.
 
 **One ingest path.** Everything lands in telemetry first, including first-class data pushed by smart senders (control-system programmers instrumenting directly). Native push is self-describing (it carries its key), so its transform is a near-identity pass-through, marked `shape=native`. Nothing bypasses telemetry: it is the system of record and the replay source.
 
@@ -138,7 +138,7 @@ Not every log-to-state path goes through a command. The split is measured fact v
 
 ### declared values are variables
 
-mac, ip, serial, locked-input, anything an operator *sets* is declared intent, and declared intent is **not** a datapoint provenance. It lives in a [variable](/architecture/variables/)'s `declared_value`, resolved through the scope cascade and optionally linked to an observed `state_datapoint` for drift. This is what dissolves the old `prop_type` / `prop_binding` / `util_routing_props` / `component_effective_prop` machinery: it collapses into the variable table plus the cascade, not into a datapoint provenance. Ownership resolution reads the resolved identity (a declared identity variable, or the observed identity datapoint it links) to bind telemetry to components.
+mac, ip, serial, locked-input, anything an operator *sets* is declared intent, and declared intent is **not** a datapoint provenance. It lives in a [variable](/architecture/variables/)'s `declared_value`, resolved through the scope cascade and optionally linked to an observed `state_datapoint` for drift. There is no separate property or config store: config is the variable table plus the cascade, not a datapoint provenance. Ownership resolution reads the resolved identity (a declared identity variable, or the observed identity datapoint it links) to bind telemetry to components.
 
 ### Precedence: spec versus status lives in variables
 
@@ -147,7 +147,7 @@ When declared intent and observed reality disagree, which one wins is a **per-va
 - **observed wins** is `reconcile: accept` (or just `alert`): the declaration was a hint or stale guess, reality is truth. A device reporting a different MAC than the declared one is a divergence to investigate.
 - **declared wins** is `reconcile: enforce`: the declaration is the spec, reality should conform. Observed input HDMI2 against a declared HDMI1 means the world is wrong, alarm or remediate (self-healing, the Kubernetes spec-and-status pattern).
 
-Among datapoint provenances there is no precedence contest: intended is a pending bet that observed confirms or refutes (reconciliation, see [intended](#intended-the-declared-effect-of-a-command)), and observed supersedes it on arrival. So the old per-key `authoritative_provenance` attribute is superseded by the variable's reconcile policy. Device-swap (where a declared MAC is briefly authoritative before the device reports it) is handled by a future component "maintenance mode" that suppresses drift.
+Among datapoint provenances there is no precedence contest: intended is a pending bet that observed confirms or refutes (reconciliation, see [intended](#intended-the-declared-effect-of-a-command)), and observed supersedes it on arrival. The spec-versus-status decision is the variable's reconcile policy, not a per-key datapoint attribute. Device-swap (where a declared MAC is briefly authoritative before the device reports it) is handled by a future component "maintenance mode" that suppresses drift.
 
 ## Ground truth versus derived
 
@@ -167,7 +167,7 @@ After transform, rules evaluate the typed datapoints. Three families, distinct s
 - **calc_rule**: datapoints to datapoint (calculated). Owns inputs, a reduce (worst / majority / average / Expr), an output key, and a scope. For **cross-key** and **system-level** derivation; same-key multi-source reconcile is the key's `fusion_policy`, not a calc (see [Fusion](#fusion)).
 - **event_rule**: datapoint change to event. Carries a required **`fire_criteria`** and an optional **`clear_criteria`**. No clear criteria: the rule is **momentary** (one-shot events). With clear criteria: the fire event **opens** an alarm and the clear event **resolves** it (clear defaults to `!fire`).
 
-There is no `condition_rule` and no separate `alarm_rule`. An alarm is not produced by a different rule; it is an event rule whose events are paired (open, close). The `alarm_rule` that exists today is absorbed into `event_rule`. The old `datapoint_rule` is renamed to `transform_rule` and gains the `route` step (the ownership resolution that today lives in the same rule). A fourth rule, **`action_rule`** (a subscription wiring events/alarms to actions), and a deferred **`discovery_rule`** (observed data creates entities) round out the family; see [Actions](#actions-ordered-steps) and the spine's rules section.
+An alarm is not produced by a different rule; it is an event rule whose events are paired (open, close), so there is no `alarm_rule` and no `condition_rule`. The `transform_rule` carries the `route` step (the ownership resolution). A fourth rule, **`action_rule`** (a subscription wiring events/alarms to actions), and a deferred **`discovery_rule`** (observed data creates entities) round out the family; see [Actions](#actions-ordered-steps) and the spine's rules section.
 
 ### Alarms: stateful incidents, one row per open
 
@@ -300,13 +300,13 @@ A local quick-reference for the terms this leaf uses most; the **authoritative g
 | **observed** | Provenance: measured from a component. On-row lineage: `source_rule` (+ version) and `telemetry_id` (the source telemetry). |
 | **calculated** | Provenance: derived from other datapoints by a calc rule. On-row lineage: `source_rule` (+ version); `telemetry_id` null. |
 | **intended** | Provenance: the declared effect of a command, pending reconciliation. Lineage points at the command `event_id`. Only commands set intended. |
-| **variable** | A scoped, shaped config cell holding operator-**declared** intent (`declared_value`), optionally linked to an observed datapoint for drift and reconcile. The home for declared config; replaces the old prop tables. See [variables](/architecture/variables/). |
+| **variable** | A scoped, shaped config cell holding operator-**declared** intent (`declared_value`), optionally linked to an observed datapoint for drift and reconcile. The home for declared config. See [variables](/architecture/variables/). |
 | **source** | Which sensor/path produced an observed value (codec.cec vs display.lan). Distinct from provenance; enables multi-source rows on one key. A `source` registry carries default trust weights. |
-| **reconcile** | A per-[variable](/architecture/variables/) policy deciding spec-versus-status when declared and observed disagree: `alert` (default), `enforce` (declared wins, push to device), `accept` (observed wins). Replaces the old per-key authoritative_provenance. |
+| **reconcile** | A per-[variable](/architecture/variables/) policy deciding spec-versus-status when declared and observed disagree: `alert` (default), `enforce` (declared wins, push to device), `accept` (observed wins). |
 | **fusion_policy** | Per-key, built-in multi-source reconcile (mode + tie-break + source weights), applied on read. Same-key fusion lives here, not in a calc. |
 | **transform_rule** | telemetry to datapoint: match / extract / key / route / normalize. The `route` step is ownership resolution (a step inside the rule, not a separate rule). Named for its transformation. |
 | **calc_rule** | datapoint(s) to datapoint (calculated): inputs / reduce / output / scope. Cross-key / system-level derivation (same-key multi-source reconcile is the key's fusion_policy). |
-| **event_rule** | datapoint change to event: fire_criteria (required) + clear_criteria (optional; clear makes the events alarm-paired). Absorbs the old alarm_rule; no separate condition_rule. |
+| **event_rule** | datapoint change to event: fire_criteria (required) + clear_criteria (optional; clear makes the events alarm-paired). No separate alarm or condition rule. |
 | **action_rule** | A subscription (Expr over events; alarms via edge events) wiring occurrences to actions. Not a fourth pipeline family. |
 | **lineage (on-row)** | A derived row carries its own lineage, no separate execution table. Datapoints: `source_rule` + `source_rule_version` (+ `telemetry_id` for observed). Events/alarms/actions: their `source_rule` (+ trigger inputs). The rule version is the backtest hinge. |
 | **audit_log** | Who-did-what ground truth, one row per operator write, same-transaction as the change. The lineage target for operator writes, including variable changes. |
@@ -318,8 +318,8 @@ A local quick-reference for the terms this leaf uses most; the **authoritative g
 | **action** | An ordered sequence of steps. Step types: notify, command (v1); wait, branch (deferred). Length-1 common; multi-step is a "workflow" (deferred, except the canned remediate-verify-escalate). |
 | **ground truth** | The immutable, append-only records: telemetry (clean data), `log_datapoint`, `audit_log`, `session_log`, `internal_log` (and deferred `collection_log`/`node_log`). Each named for what it is; ground-truth-vs-derived is a table property, not a naming suffix. |
 
-## Implementation status
+## Build status
 
-The shipped code predates this model (the observed pipeline now dispatches metric, state, and log datapoints by kind). v2 is pre-deployment, so the build is **greenfield**: a **from-scratch initial migration** defines the whole schema (no data backfill, nothing to convert) and the code and tests are rewritten onto it. The full build sequence, the schema, and the TDD steps are tracked in the migration plan (the authoritative execution checklist); deferred builds are tracked as GitHub issues.
+Omniglass is built greenfield, one vertical slice per PR: a from-scratch migration defines the schema, and the code and tests are written onto it. Deferred capabilities are tracked as GitHub issues.
 
 Related: [variables](/architecture/variables/) (declared config, drift, reconcile), storage (physical tables, the lineage CHECK, partitioning, tiering), [the cascade](/architecture/cascade/) (the scope cascade), workers (the rule-engine worker), [alarms and actions](/architecture/alarms-actions/) (alarm lifecycle, actions), and [the architecture overview](/architecture/) (the spine).

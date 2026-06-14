@@ -257,8 +257,8 @@ razor: a bet in progress versus measured reality. An adaptive poll then reconcil
 
 mac, ip, serial, locked-input, model, capacity, anything an operator sets is a
 [variable](/architecture/variables/)'s `declared_value`, audited on change, not a datapoint
-provenance. This dissolves the old `prop_type` / `prop_binding` / `util_routing_props`
-machinery into the variable table plus the cascade. Ownership resolution (the transform
+provenance. There is no separate property or config store: config is the variable table plus
+the cascade. Ownership resolution (the transform
 `route` step) reads the resolved **identity** variable (its declared value, or the observed
 datapoint it links) to bind incoming telemetry to entities.
 
@@ -268,8 +268,7 @@ When declared intent and observed reality disagree, which wins is the
 [variable](/architecture/variables/)'s **`reconcile`** policy, not a per-key datapoint
 attribute: **observed wins** (`accept`, or just `alert`) when reality is truth,
 **declared wins** (`enforce`) when the declaration is the spec and reality should conform
-(the self-healing pattern). The old per-key `authoritative_provenance` is superseded by
-this per-variable policy.
+(the self-healing pattern). This is a per-variable policy, not a per-key datapoint attribute.
 
 ## Multi-source merge and fusion
 
@@ -315,8 +314,8 @@ A rule is named for its function; `rule` is the genus.
   scope. For cross-key and system-level derivation (same-key multi-source reconcile is
   the key's `fusion_policy`, not a calc).
 - **`event_rule`**: datapoint change to event: `fire_criteria` (required) +
-  `clear_criteria` (optional; a clear criterion makes the events alarm-paired). Absorbs
-  the old `alarm_rule`.
+  `clear_criteria` (optional; a clear criterion makes the events alarm-paired). No
+  separate alarm or condition rule.
 - **`action_rule`**: a *subscription* (an Expr predicate over events; alarms via their
   edge events) wiring occurrences to actions. Not a fourth pipeline family.
 - **`discovery_rule`** *(deferred, tracked)*, observed data **creates**
@@ -491,12 +490,12 @@ The authoritative reference. These nouns do not get redefined.
 | **observed** | Measured from a component. On-row lineage: `source_rule` (+ version) + `telemetry_id`. |
 | **calculated** | Derived from other datapoints by a calc_rule. On-row lineage: `source_rule`; `telemetry_id` null. |
 | **intended** | A command's declared effect, pending reconciliation. Lineage: the command `event_id`. Only commands set it. |
-| **variable** | A scoped, shaped config cell holding operator-**declared** intent (`declared_value`), optionally linked to an observed datapoint for drift/reconcile. Replaces the prop tables. See [variables](/architecture/variables/). |
+| **variable** | A scoped, shaped config cell holding operator-**declared** intent (`declared_value`), optionally linked to an observed datapoint for drift/reconcile. The home for declared config. See [variables](/architecture/variables/). |
 | **lineage (on-row)** | A derived row carries its own lineage; no execution table. The rule version is the backtest hinge. |
-| **reconcile** | Per-[variable](/architecture/variables/): spec-vs-status when declared and observed disagree (`alert` / `enforce` / `accept`). Replaces the old per-key authoritative_provenance. |
+| **reconcile** | Per-[variable](/architecture/variables/): spec-vs-status when declared and observed disagree (`alert` / `enforce` / `accept`). |
 | **transform_rule** | telemetry to datapoint: match / extract / key / route / normalize. The `route` step is ownership resolution. |
 | **calc_rule** | datapoint(s) to datapoint (calculated): cross-key / system-level derivation. (Same-key multi-source reconcile is the key's fusion_policy.) |
-| **event_rule** | datapoint change to event: fire_criteria + optional clear_criteria (clear makes events alarm-paired). Absorbs alarm_rule. |
+| **event_rule** | datapoint change to event: fire_criteria + optional clear_criteria (clear makes events alarm-paired). No separate alarm or condition rule. |
 | **action_rule** | A subscription (Expr over events; alarms via edge events) wiring occurrences to actions. |
 | **discovery_rule** | *(deferred)* observed data creates components/systems/locations + their identity variables; active/inactive; official/private; pairs with the authoritative source. |
 | **event** | A discrete semantic occurrence the action layer reacts to. Keyed, point-in-time, owned via the arc. Not a datapoint. |
@@ -569,10 +568,7 @@ The authoritative reference. These nouns do not get redefined.
 - **Action layer, calc, intended/command execution**: created-empty this PR, wired in
   follow-ons.
 
-## Implementation status
+## Build status
 
-The shipped schema predates this model (the observed pipeline now dispatches metric,
-state, and log datapoints by kind). The
-build order, the one forward migration, the convert-vs-net-new line, and the blast
-radius are in migration-plan. Physical tables, the lineage
+Omniglass is built greenfield, one vertical slice per PR. Physical tables, the lineage
 CHECK, partitioning, and tiering are in storage.

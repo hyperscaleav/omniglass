@@ -17,8 +17,8 @@ variable's `declared_value` is the spec, a linked datapoint is the status.
 ## Variable vs datapoint: opposite registries
 
 The two look alike (a typed, named, owned value) but run in opposite directions. Conflating
-them, modeling declared config as a datapoint with a "declared" provenance, was the earlier
-mistake this model corrects.
+them, modeling declared config as a datapoint with a "declared" provenance, would blur that
+direction.
 
 | | datapoint | variable |
 |---|---|---|
@@ -35,8 +35,8 @@ Different beasts, different tables.
 ## `variable_type` is a shape
 
 `variable_type` is not a measurement registry; it is the **structural shape** of a value, the
-way the old "credential shapes" (`username_password`, `snmp_community`, `header_token`) were,
-generalized to all config:
+way credential shapes (`username_password`, `snmp_community`, `header_token`) are, generalized
+to all config:
 
 - **scalars:** `string`, `int`, `float`, `bool`, `json`.
 - **structured built-ins:** `bearer_token {token}`, `basic_auth {username, password}`,
@@ -105,7 +105,7 @@ A variable can hold either or both:
 `$var:<name>` resolves through the scope cascade (component to system to location to global,
 with the template default as the base, nearest wins) and returns **`declared_value` when
 present, else `observed_value`**. So a configured value uses intent; a discovered value uses
-observation. This native indexed lookup replaces the old scan over declared datapoints.
+observation. This is a native indexed lookup, resolved on every poll and tick.
 
 ## Drift and reconcile
 
@@ -166,6 +166,6 @@ the variable instead. The `state` datapoint **kind** is unchanged: an observed s
 device reporting `power.state = on`) is still a `state_datapoint`, and a variable can link it.
 What moved is the *declared* value: from a datapoint row to `variable.declared_value`.
 
-This dissolves the old prop machinery (`prop_type`, `prop_binding`, the effective-prop
-resolution) into one table plus the cascade, and it gives the spec-and-status loop a real home
-instead of overloading datapoint provenance to carry operator intent.
+There is no separate prop or config store: config is one table plus the cascade, and the
+spec-and-status loop gets a real home instead of overloading datapoint provenance to carry
+operator intent.
