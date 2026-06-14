@@ -79,7 +79,7 @@ attributes are groups.
 - **variables -> scalar override**: the deepest/highest source wins; one value.
 - **tags -> union on name, override on value**: names accumulate; for a given
   name, the winning source's value wins.
-- **rules** (`transform_rule` / `calc_rule` / `event_rule`) -> **additive
+- **rules** (`calc_rule` / `event_rule`) -> **additive
   accumulation + explicit suppression**: a leaf is governed by the union of rules
   from every layer; a layer removes one by name with a suppression.
 

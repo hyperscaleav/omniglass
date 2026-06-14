@@ -183,14 +183,14 @@ its runtime, not a node tick.
 |---|---|---|
 | `path` | `interface.params.path` | the opaque, unguessable token in the inbound URL (`/webhooks/{path}`); a bearer locator, not the interface name |
 | `secret` | `interface.params.secret` | shared secret the sender presents in the `X-Omniglass-Token` header (or `?token=`), constant-time compared |
-| `component` | `interface.component` | when set, datapoints pre-bind to that component (trivial owner); when empty, transform rules route by labels |
+| `component` | `interface.component` | when set, datapoints pre-bind to that component (trivial owner); when empty, shared-interface ingress is owner-bound server-side by labels |
 | `extract` | `task.params.extract` | comma-separated `name=json:dot.path`; number/bool -> metric, string -> state (same extractor as the http poller) |
 | `raw_log` | `task.params.raw_log` | optional key to store the whole raw frame under (as JSON when the body parses, else text), the holding-pen an event_rule can later promote |
 
 One or more `mode: listen` tasks bind to a webhook interface; each inbound POST
 runs every enabled one, ingesting its points under that task's id through the
-normal pipeline (so owner attribution, transform rules, event rules, and calc
-rollups all apply unchanged).
+server-side ingress path (so owner attribution, parsing, event rules, and calc
+rollups all apply).
 
 **Response contract** (webhook senders retry on non-2xx): **202** = durably
 accepted; **401** bad/absent secret, **404** unknown path, **413** body over the
@@ -205,7 +205,7 @@ poller.
 HMAC-signature verification are deferred behind the auth seam. The route stamps a
 trusted, server-set `interface` label on every datapoint and copies body fields
 into attributes **only** via the declared `extract` set, so a body field cannot
-impersonate another interface; shared-interface transform rules should scope on
+impersonate another interface; shared-interface ingress should scope on
 `event.labels.interface`, and per-component interfaces (server-assigned owner)
 are preferred for high-trust sources. Node-hosted listeners (LAN-local sources),
 idempotency/dedup, and form-encoded bodies are deferred.
@@ -412,7 +412,7 @@ piece is owner resolution: `ProcessTelemetry` **pre-binds** a `node.self` envelo
 the reporting node (`owner_kind = node`, the fourth exclusive-arc alongside
 component/system/location), the node-arc analogue of a per-component interface
 pre-binding its telemetry to its component. So node datapoints land node-owned
-with no transform rules, no inline derivation, and the worker's batching +
+with no server-side parse, no inline derivation, and the worker's batching +
 concurrency + amortized rule refresh apply for free. This is the operator-visible
 health of the collection layer itself. Self-telemetry is best-effort (a failed
 report is logged, never fatal; it must not break collection).

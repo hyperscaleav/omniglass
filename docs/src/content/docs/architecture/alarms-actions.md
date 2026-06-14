@@ -100,7 +100,7 @@ Detection and response are kept **separate**, the discipline that avoids Zabbix'
 action/operation tangle: the `event_rule` does not contain its response. Instead an
 `action_rule` **subscribes to events and alarms** via an Expr predicate, so one action
 rule can serve many alarms. It is a subscription, not a fourth datapoint-pipeline
-rule family (the three families, transform / calc / event, produce data; the
+rule family (the derivation rules, calc and event, produce data; the
 `action_rule` wires the resulting events and alarms to actions):
 
 ```yaml

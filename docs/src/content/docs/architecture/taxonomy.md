@@ -7,11 +7,11 @@ This is the authoritative data model: the meaning of the data. The physical layo
 
 ## The model in two sentences
 
-Collectors load raw **telemetry**; **transform_rules** parse it into typed **datapoints** (metric, state, log) owned by a structural entity; **calc_rules** derive more datapoints, and **event_rules** evaluate datapoints into **events** (and the **alarms** they open and close); **actions** respond. Every datapoint carries a **provenance** (how we know it: observed, calculated, intended) and a **source**, and any two provenances (or sources) of one key disagreeing is the single universal divergence signal. Declared config (operator intent) lives in [variables](/architecture/variables/), not as a datapoint provenance.
+Flows collect from devices and **parse at the edge** into typed **datapoints** (metric, state, log) owned by a structural entity, keeping the raw payload in **telemetry** as a debug sidecar; **calc_rules** derive more datapoints, and **event_rules** evaluate datapoints into **events** (and the **alarms** they open and close); **actions** respond. Every datapoint carries a **provenance** (how we know it: observed, calculated, intended) and a **source**, and any two provenances (or sources) of one key disagreeing is the single universal divergence signal. Declared config (operator intent) lives in [variables](/architecture/variables/), not as a datapoint provenance.
 
 ```text
-telemetry --transform_rule--> datapoint (metric / state / log)
-                                  |  |
+flow step (edge) --parse--> datapoint (metric / state / log)
+                                  |  |   (raw payload --> telemetry, a debug sidecar)
                                   |  +--- calc_rule --> datapoint        (calculated)
                                   +----- event_rule --> event --> alarm
                                                           |
@@ -64,12 +64,12 @@ A raw occurrence we have not normalized (a syslog line, a raw webhook frame) lan
 
 Two registries, each named for what it holds, because a datapoint and an event are different shapes (a datapoint has a value; an event is an occurrence). We do **not** force them into one universal registry, that would be the false unification the rest of this model avoids.
 
-- **`datapoint_type`** describes every datapoint key: `(namespace, name, kind, value_type, unit, fusion_policy)`, with the official/private shadow (namespace shadow pattern). One registry across all three datapoint kinds (metric/state/log). The transform rule never decides a kind at runtime; the key already knows it, so a `key` lookup in `datapoint_type` routes a value to the right table. `fusion_policy` is the built-in, read-time multi-source reconcile carried on the key (see [Fusion](#fusion)). A key names a **measurement, never its owner** (`temperature`, not `room.temperature`), with snake_case segments in a dot hierarchy and the unit in the `unit` field (`fan.speed` + `unit: rpm`, not `fan_rpm`); the ship-with official set lives in `internal/registry/defaults.yaml`. Adding or naming one: the `canonical-datapoint` skill.
+- **`datapoint_type`** describes every datapoint key: `(namespace, name, kind, value_type, unit, fusion_policy)`, with the official/private shadow (namespace shadow pattern). One registry across all three datapoint kinds (metric/state/log). The kind is decided by the key, not at runtime: the compiler bakes each key's kind into the edge unit, so a value routes to the right table with no runtime lookup. `fusion_policy` is the built-in, read-time multi-source reconcile carried on the key (see [Fusion](#fusion)). A key names a **measurement, never its owner** (`temperature`, not `room.temperature`), with snake_case segments in a dot hierarchy and the unit in the `unit` field (`fan.speed` + `unit: rpm`, not `fan_rpm`); the ship-with official set lives in `internal/registry/defaults.yaml`. Adding or naming one: the `canonical-datapoint` skill.
 - **`event_type`** describes every event key: `(namespace, name, display_name, payload_schema, ...)`, same official/private shadow. Declaring event types (`call.started`, `cable.unplugged`, `command.sent`) is first-class and valuable: it gives events a known schema, makes them inspectable, and is what lets an event rule promote a raw log line into a *registered* event. An event key is registered here; an unregistered occurrence stays a `log_datapoint` line until a rule promotes it.
 
 The naming convention is consistent: a `_type` registry defines what a thing *is*, named for the thing (`datapoint_type`, `event_type`, like `component_type`, `interface_type`). There is no `key_def`; that was a rename with no justification (datapoint_type already spans the three datapoint kinds, and events are a different shape with their own registry).
 
-**Datapoint key naming is owner-agnostic.** A key names a *measurement*, never its owner: `temperature` is a Celsius reading whether a codec's thermals or a room's ambient sensor produced it, and the owner (component / system / location / node) plus a template's labels + a transform rule give it context. So there is no `system.` / `device.` / `room.` prefix; keys group by measurement domain (`cpu.utilization`, `power.state`, `video.input`, `audio.level`, `network.icmp.rtt`). This is the normalization the product hinges on: one canonical path means one comparable signal across every vendor, which is what makes cross-fleet dashboards and AI useful. The official set is seeded from `internal/registry/defaults.yaml` following OpenTelemetry semantic conventions for the IT leaves (`cpu.utilization`, `memory.usage`; semconv's own `system.` prefix is dropped to avoid colliding with the `system` entity type) and the [OpenAV minimum-device-functionality guidelines](https://github.com/OpenAVCloud/specifications/blob/main/min-device-functionality/OAVC-AV-Device-Minimum-Functionality-Guidelines.md) for AV signals. Templates *reference* these registered keys; a template can never mint one.
+**Datapoint key naming is owner-agnostic.** A key names a *measurement*, never its owner: `temperature` is a Celsius reading whether a codec's thermals or a room's ambient sensor produced it, and the owner (component / system / location / node) plus a template's labels and the flow that collected it give it context. So there is no `system.` / `device.` / `room.` prefix; keys group by measurement domain (`cpu.utilization`, `power.state`, `video.input`, `audio.level`, `network.icmp.rtt`). This is the normalization the product hinges on: one canonical path means one comparable signal across every vendor, which is what makes cross-fleet dashboards and AI useful. The official set is seeded from `internal/registry/defaults.yaml` following OpenTelemetry semantic conventions for the IT leaves (`cpu.utilization`, `memory.usage`; semconv's own `system.` prefix is dropped to avoid colliding with the `system` entity type) and the [OpenAV minimum-device-functionality guidelines](https://github.com/OpenAVCloud/specifications/blob/main/min-device-functionality/OAVC-AV-Device-Minimum-Functionality-Guidelines.md) for AV signals. Templates *reference* these registered keys; a template can never mint one.
 
 **Validation is enforced on ingest, under a policy.** A datapoint_type's `validation` (`{min,max}` for a metric, `{values:[...]}` for a state) is checked when an observed value lands, governed by a `validation_policy` config mode: **bypass** (skip), **audit** (the default: write the value but emit a `datapoint.validation_failed` event), or **enforce** (hold the value back from the typed series, emit the event). The raw telemetry row always persists, so an enforced-out value is never lost, it stays backfillable once the registry or the template is corrected. The point is visibility: an out-of-range or unmapped value means a template author declared a type the device disagrees with, so the violation surfaces as an owner-attributed event operators and admins see. The mode is a single global setting today; resolving it per-entity down the cascade (global, location, system, component) is the follow-on, gated on the cascade resolver.
 
@@ -89,7 +89,7 @@ These are orthogonal. All four cells are real:
 
 Waiting for a frame is a single mode (**listen**) regardless of transport; a held-open connection is a property of the interface, not a separate mode. So there are two task modes, and statefulness lives on the interface.
 
-**One ingest path.** Everything lands in telemetry first, including first-class data pushed by smart senders (control-system programmers instrumenting directly). Native push is self-describing (it carries its key), so its transform is a near-identity pass-through, marked `shape=native`. Nothing bypasses telemetry: it is the system of record and the replay source.
+**Native push.** First-class data pushed by smart senders (control-system programmers instrumenting directly) is self-describing (it carries its key), so its edge parse is a near-identity pass-through, marked `shape=native`. As with any flow, the raw payload is kept in `telemetry` as a debug sidecar.
 
 ## Provenance: how we know a value
 
@@ -107,11 +107,11 @@ A separate **`source`** column records *which sensor or path* produced an observ
 
 ### observed: from a component, via a transform
 
-"Measured from a component," not "from a device", every device is a component, but not every component is a device. The observed datapoint carries its own lineage on the row: `source_rule` + `source_rule_version` (which transform rule made it, the backtest hinge) and `telemetry_id` (the source telemetry row it was parsed from). There is no separate execution table, a derived datapoint is itself the evidence of the rule's run, exactly as an event/alarm/action row self-describes.
+"Measured from a component," not "from a device", every device is a component, but not every component is a device. The observed datapoint carries its own lineage on the row: `source_rule` + `source_rule_version` (which flow and template version made it, the backtest hinge) and `telemetry_id` (the raw payload it parsed, kept as a debug sidecar). There is no separate execution table, a derived datapoint is itself the evidence of the flow's run, exactly as an event/alarm/action row self-describes.
 
 ### calculated: derived by a calc rule
 
-A calculated value (a 5-minute average, a system rollup, a fused consensus) is parallel to observed: both are machine-derived. The difference is the input. A transform rule reads **telemetry** (so the row's `telemetry_id` is set); a calc rule reads **other datapoints** (so `telemetry_id` is null). Both carry `source_rule` + `source_rule_version` on the row. So observed and calculated differ on the row by `telemetry_id` set-or-null, which is also how the lineage CHECK tells them apart, and the exact inputs a calc read are reconstructable from the rule version (that is what backtest does); if an immutable input snapshot is ever needed it is a nullable `inputs jsonb` column, not a table.
+A calculated value (a 5-minute average, a system rollup, a fused consensus) is parallel to observed: both are machine-derived. The difference is the input. An edge flow parses a raw payload (so the observed row's `telemetry_id` points at the debug sidecar); a calc rule reads **other datapoints** (so `telemetry_id` is null). Both carry `source_rule` + `source_rule_version` on the row. So observed and calculated differ on the row by `telemetry_id` set-or-null, which is also how the lineage CHECK tells them apart, and the exact inputs a calc read are reconstructable from the rule version (that is what backtest does); if an immutable input snapshot is ever needed it is a nullable `inputs jsonb` column, not a table.
 
 ### intended: the declared effect of a command
 
@@ -153,21 +153,21 @@ Among datapoint provenances there is no precedence contest: intended is a pendin
 
 Distinguished by a property of the table, not a naming suffix.
 
-- **Ground truth, data**: **telemetry** is the clean collected-data primitive, *not* a log: schema defined by its payload, one row per *successful* collection emission, the only input and system of record, bound to no owner. It carries `collection_id` as its source, not a fixed `_log` shape.
+- **Raw debug sidecar**: **telemetry** is the raw collected payload, *not* a log: schema defined by its payload, one row per collection emission, TTL'd, bound to no owner, carrying `collection_id` as its source. Datapoints are emitted at the edge, not re-derived from telemetry, so replay and backfill from it are not guaranteed.
 - **Ground truth, logs** (immutable, append-only, the actor's own record): **`log_datapoint`** (a component's words, a datapoint kind), **`audit_log`** (an operator), **`session_log`** (connection lifecycle, node-reported), **`internal_log`** (platform self-narration), and the deferred **`collection_log`** / **`node_log`** companions. Each named for what it is. There is no separate rule-execution table: a derived row *is* the evidence of its rule's run, carrying `source_rule` + `source_rule_version` (and `telemetry_id` for observed) on the row itself.
 - **Derived** (produced by rules, reconstructable in principle from ground truth): **`metric_datapoint`**, **`state_datapoint`**, **event**, **alarm**, **action**.
 
 The full collection provenance chain (when the companions land): `datapoint -> telemetry_id -> telemetry -> collection_id -> collection_log -> node -> node_log`. `telemetry` stays clean (only passing collections); `collection_log` records every run including failures; `node_log` is the node's operational narration. See the architecture overview on the spine.
 
-## Rules: three families
+## Rules: calc, event, action
 
-After transform, rules evaluate the typed datapoints. Three families, distinct shapes.
+Parsing a raw payload into datapoints is the **edge flow step** ([collection](/architecture/collection/)), not a server-side rule: a flow extracts, keys, and normalizes on the node and emits resolved datapoints. The rules that run server-side over the typed datapoints are two derivation families plus a subscription.
 
-- **transform_rule**: telemetry to datapoint. Named for its transformation: it is the one of two datapoint-producers that reads telemetry. Multi-part: **match** (implicit, by `task_id`), **extract** (jsonpath / regex / oid-map; bounded comprehension over payload collections, which is also the fan-out), **key** (assign to a key; `datapoint_type` routes by kind), **route** (resolve the owning entity from indexed declared identity; this is the ownership resolution, a step inside the rule, not a separate rule), **normalize** (optional Expr: multiplier, enum map, trim). Expr is the compile target, never the authoring surface; its always-terminating guarantee is why it is safe on the ingest hot path. Logs are the degenerate case (no extract/key, just source + line).
 - **calc_rule**: datapoints to datapoint (calculated). Owns inputs, a reduce (worst / majority / average / Expr), an output key, and a scope. For **cross-key** and **system-level** derivation; same-key multi-source reconcile is the key's `fusion_policy`, not a calc (see [Fusion](#fusion)).
 - **event_rule**: datapoint change to event. Carries a required **`fire_criteria`** and an optional **`clear_criteria`**. No clear criteria: the rule is **momentary** (one-shot events). With clear criteria: the fire event **opens** an alarm and the clear event **resolves** it (clear defaults to `!fire`).
+- **action_rule**: a subscription wiring events and alarms to actions (below).
 
-An alarm is not produced by a different rule; it is an event rule whose events are paired (open, close), so there is no `alarm_rule` and no `condition_rule`. The `transform_rule` carries the `route` step (the ownership resolution). A fourth rule, **`action_rule`** (a subscription wiring events/alarms to actions), and a deferred **`discovery_rule`** (observed data creates entities) round out the family; see [Actions](#actions-ordered-steps) and the spine's rules section.
+An alarm is not produced by a different rule; it is an event rule whose events are paired (open, close), so there is no `alarm_rule` and no `condition_rule`. Ownership for a templated flow is stamped at the edge (the component is known); shared-interface ingress is owner-bound server-side. A deferred **`discovery_rule`** (observed data creates entities) rounds out the family; see [Actions](#actions-ordered-steps) and the spine's rules section.
 
 ### Alarms: stateful incidents, one row per open
 
@@ -223,7 +223,7 @@ Conflict detection (`disagree(observed, observed)`) is the complementary operati
 
 An action is an ordered sequence of **steps**; most are length 1. `notify` and `command` are step types, not kinds of action. A "workflow" is an action with more than one step, there is one action model, not a simple-action system plus a separate workflow engine.
 
-Actions are bound to what triggers them by an **`action_rule`**: a decoupled subscription (an Expr predicate over events and alarms, e.g. `on: alarm, when: alarm.severity >= 40`), so one action rule can serve many alarms and an alarm need not name its response. The `action_rule` is a *subscription*, not a fourth datapoint-pipeline rule family; the three families (`transform_rule`/`calc_rule`/`event_rule`) produce data, the `action_rule` wires the resulting events and alarms to actions. See [Alarms and actions](/architecture/alarms-actions/).
+Actions are bound to what triggers them by an **`action_rule`**: a decoupled subscription (an Expr predicate over events and alarms, e.g. `on: alarm, when: alarm.severity >= 40`), so one action rule can serve many alarms and an alarm need not name its response. The `action_rule` is a *subscription*, not a datapoint-pipeline rule family; the derivation rules (`calc_rule`, `event_rule`) produce data, the `action_rule` wires the resulting events and alarms to actions. See [Alarms and actions](/architecture/alarms-actions/).
 
 - **v1 builds**: `notify`, `command`, and one canned multi-step shape, **remediate-verify-escalate** (`command, wait wall-clock, recheck the measured datapoint, notify if unchanged`). This is the 99% remediation case and the self-healing reconcile loop. It is also the ITSM lifecycle driver: alarm open, try remediate, else create ticket; alarm update, comment; alarm resolve, resolve ticket.
 - **deferred**: general `wait` / `branch` / conditionally-activated rules (the durable resumable state machine). The substrate is the existing outbox + clock-worker plus a persisted cursor. The dangerous step is conditionally activating rules mid-execution (it can re-enter the rule graph and break the DAG); it needs the action-layer acyclic guard and is built last.
@@ -238,14 +238,14 @@ Current value (latest per owner / key / **instance** / **provenance**, fused acr
 flowchart TD
   subgraph edge["Edge (node)"]
     TASK["task<br/>poll · listen<br/>stateless / stateful"]
+    FLOW["flow step<br/>extract → key → normalize"]
+    TASK --> FLOW
   end
 
-  TASK -->|"one row per emission"| TEL["telemetry<br/>raw · ground-truth source · the only input"]
-
-  TEL --> TR["transform_rule<br/>match → extract → key → route → normalize"]
-  TR -->|"observed · lineage on row<br/>(source_rule, telemetry_id)"| M["metric_datapoint"]
-  TR --> S["state_datapoint"]
-  TR --> L["log_datapoint"]
+  FLOW -->|"raw payload"| TEL["telemetry<br/>TTL debug sidecar"]
+  FLOW -->|"observed · lineage on row<br/>(source_rule, telemetry_id)"| M["metric_datapoint"]
+  FLOW --> S["state_datapoint"]
+  FLOW --> L["log_datapoint"]
 
   M --> CALC["calc_rule<br/>cross-key · system-level"]
   S --> CALC
@@ -276,7 +276,7 @@ flowchart TD
   class TEL,AU gt;
 ```
 
-Teal nodes are the ground-truth lineage targets: `telemetry` (the source for observed, referenced by `telemetry_id`) and `audit_log` (operator writes, including variable changes); calculated and observed also carry `source_rule` on the row, intended points at the command `event` (via `event_id`). The three datapoint tables (`metric_datapoint`, `state_datapoint`, `log_datapoint`) are derived peers; a [variable](/architecture/variables/) holds declared config and can link a state datapoint.
+Teal nodes are ground-truth records: `telemetry` (the raw debug sidecar an observed row references via `telemetry_id`) and `audit_log` (operator writes, including variable changes); observed and calculated carry `source_rule` on the row, intended points at the command `event` (via `event_id`). The three datapoint tables (`metric_datapoint`, `state_datapoint`, `log_datapoint`) are emitted at the edge or derived; a [variable](/architecture/variables/) holds declared config and can link a state datapoint.
 
 ## Glossary
 
@@ -284,7 +284,7 @@ A local quick-reference for the terms this leaf uses most; the **authoritative g
 
 | Term | Definition |
 |---|---|
-| **telemetry** | The clean collected-data primitive (not a log): schema by payload, one row per *successful* collection emission, the only input + system of record, owns nothing; carries `collection_id` as its source. Ground truth. |
+| **telemetry** | The raw collected payload (not a log): schema by payload, one row per collection emission, a TTL'd debug sidecar, owns nothing; carries `collection_id` as its source. Datapoints are emitted at the edge, not re-derived from it. |
 | **task** | A node's unit of collection: **poll** (we ask) or **listen** (we wait), over a stateless or stateful (session) interface. Two orthogonal axes. |
 | **datapoint** | An observation: `(owner, key, instance, ts, value, provenance, source, lineage)`. Kinds: metric, state, log. Series identity is `(owner, key, instance, provenance)`. The thing rules read. |
 | **metric** | A numeric (float) `metric_datapoint`. Continuous, aggregatable. Has a current value. |
@@ -304,7 +304,7 @@ A local quick-reference for the terms this leaf uses most; the **authoritative g
 | **source** | Which sensor/path produced an observed value (codec.cec vs display.lan). Distinct from provenance; enables multi-source rows on one key. A `source` registry carries default trust weights. |
 | **reconcile** | A per-[variable](/architecture/variables/) policy deciding spec-versus-status when declared and observed disagree: `alert` (default), `enforce` (declared wins, push to device), `accept` (observed wins). |
 | **fusion_policy** | Per-key, built-in multi-source reconcile (mode + tie-break + source weights), applied on read. Same-key fusion lives here, not in a calc. |
-| **transform_rule** | telemetry to datapoint: match / extract / key / route / normalize. The `route` step is ownership resolution (a step inside the rule, not a separate rule). Named for its transformation. |
+| **edge parse** | A flow step parses a raw payload into datapoints on the node (extract / key / normalize), the edge half of the [flow engine](/architecture/collection/). There is no server-side transform rule. |
 | **calc_rule** | datapoint(s) to datapoint (calculated): inputs / reduce / output / scope. Cross-key / system-level derivation (same-key multi-source reconcile is the key's fusion_policy). |
 | **event_rule** | datapoint change to event: fire_criteria (required) + clear_criteria (optional; clear makes the events alarm-paired). No separate alarm or condition rule. |
 | **action_rule** | A subscription (Expr over events; alarms via edge events) wiring occurrences to actions. Not a fourth pipeline family. |

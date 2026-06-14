@@ -25,8 +25,9 @@ This is the north star, the spine of the architecture. It holds the whole-system
 
 ## The model in two sentences
 
-Collectors load raw **telemetry**; **transform_rules** parse it into typed
-**datapoints** (metric, state, log) owned by a structural entity; **calc_rules** derive
+Flows collect from devices and **parse at the edge** into typed
+**datapoints** (metric, state, log) owned by a structural entity, keeping the raw payload in
+**telemetry** as a debug sidecar; **calc_rules** derive
 more datapoints, and **event_rules** evaluate datapoints into **events** (and the
 **alarms** they open and close); **actions** respond. Every datapoint carries a
 **provenance** (observed, calculated, intended) and a **source**, and any two
@@ -35,13 +36,13 @@ signal. Declared config (operator intent) lives in [variables](/architecture/var
 
 ```mermaid
 flowchart LR
-  subgraph COLLECT["1 · Collect"]
-    TASK["task · poll/listen"] --> TEL["telemetry<br/>only input · ground truth"]
+  subgraph COLLECT["1 · Collect & parse (edge)"]
+    TASK["task · poll/listen"] --> FLOW["flow step<br/>extract · key · normalize"]
+    FLOW -.->|"raw"| TEL["telemetry<br/>TTL debug sidecar"]
   end
   subgraph TYPE["2 · Type, own, merge"]
-    TR["transform_rule<br/>extract · key · route · normalize"]
     DP{{"datapoint · metric/state/log<br/>owner-arc · provenance · source<br/>multi-source → fusion_policy (read-time)"}}
-    TEL --> TR --> DP
+    FLOW --> DP
   end
   subgraph DERIVE["3 · Derive"]
     CALC["calc_rule<br/>cross-key · system-level"]
@@ -218,9 +219,9 @@ A **task** is a node's unit of collection work. Two orthogonal axes:
 | **stateless**    | SNMP get, HTTP GET             | webhook, SNMP trap, syslog  |
 | **stateful**     | SSH-exec / xAPI `xStatus`      | MQTT subscribe, xAPI feedback |
 
-**One ingest path.** Everything lands in `telemetry` first, including first-class data
-pushed by smart senders (a near-identity transform, `shape=native`). Nothing bypasses
-telemetry: it is the system of record and the replay source.
+**Native push.** First-class data pushed by smart senders (a near-identity edge parse,
+`shape=native`) emits datapoints like any flow, keeping the raw payload in `telemetry` as a
+debug sidecar.
 
 ## Provenance: how we know a value
 
@@ -301,15 +302,11 @@ signal (`disagree(observed, observed)` across source flags a broken integration)
 identity, including shared join keys); the others are match-only and latch on
 (orphan-on-miss).
 
-## Rules: three pipeline families + a subscription
+## Rules: calc, event, action
 
-A rule is named for its function; `rule` is the genus.
-
-- **`transform_rule`**: telemetry to datapoint: **match** (by task) then **extract**
-  (jsonpath / regex / oid-map; the fan-out) then **key** (assign; datapoint_type routes by
-  kind) then **route** (resolve the owning entity from indexed identity variables) then
-  **normalize** (optional Expr). Named for its transformation: it is the one of two
-  datapoint-producers that reads telemetry.
+Parsing a raw payload into datapoints is the **edge flow step**
+([collection](/architecture/collection/)), not a server-side rule. The rules that run
+server-side over typed datapoints are named for their function; `rule` is the genus.
 - **`calc_rule`**: datapoint(s) to datapoint (calculated): inputs / reduce / output key /
   scope. For cross-key and system-level derivation (same-key multi-source reconcile is
   the key's `fusion_policy`, not a calc).
@@ -409,10 +406,10 @@ detection are one comparison applied to a key that holds more than one provenanc
 
 ## Ground truth versus derived
 
-- **Ground truth, data**: **telemetry** is the clean collected data primitive (not a
-  log): schema defined by its payload, one row per *successful* collection emission, the
-  only input and system of record. Like `event`, it carries a payload plus a source
-  (`collection_id`), not a fixed `_log` shape.
+- **Raw debug sidecar**: **telemetry** is the raw collected payload (not a
+  log): schema defined by its payload, one row per collection emission, TTL'd. Datapoints
+  are emitted at the edge, not re-derived from it (replay and backfill are not guaranteed).
+  Like `event`, it carries a payload plus a source (`collection_id`), not a fixed `_log` shape.
 - **Ground truth, logs** (immutable, append-only, the actor's own record): **`log_datapoint`**
   (a component's words), **`audit_log`** (an operator), **`session_log`** (connection
   lifecycle, node-reported), **`internal_log`** (platform self-narration), and the
@@ -472,7 +469,7 @@ The authoritative reference. These nouns do not get redefined.
 | **interface** | A connection to a component, declared per protocol; transport stateless or stateful (to session). |
 | **interface_type** | Protocol+style registry (ssh, ssh-exec, https, snmp, mqtt, webhook...); built-flag + param schema. |
 | **session** | A stateful interface's live held-open connection; a current-state view over `session_log`. |
-| **telemetry** | The clean collected-data primitive (not a log): schema by payload, one row per *successful* collection emission, the only input + system of record, owns nothing; carries `collection_id` as its source. Ground truth. |
+| **telemetry** | The raw collected payload (not a log): schema by payload, one row per collection emission, a TTL'd debug sidecar, owns nothing; carries `collection_id` as its source. Datapoints are emitted at the edge, not re-derived from it. |
 | **collection_log** | *(deferred companion)* The execution record: one row per collection run across all nodes, including failures, with timing/status/stderr. `telemetry.collection_id` points at it. |
 | **node_log** | *(deferred companion)* A node's operational log (collection events firing, errors, restarts), linked to `collection_log`. |
 | **datapoint** | An observation: a key's value on one owning entity at one time, with provenance + source + on-row lineage. Kinds: metric, state, log. |
@@ -493,7 +490,7 @@ The authoritative reference. These nouns do not get redefined.
 | **variable** | A scoped, shaped config cell holding operator-**declared** intent (`declared_value`), optionally linked to an observed datapoint for drift/reconcile. The home for declared config. See [variables](/architecture/variables/). |
 | **lineage (on-row)** | A derived row carries its own lineage; no execution table. The rule version is the backtest hinge. |
 | **reconcile** | Per-[variable](/architecture/variables/): spec-vs-status when declared and observed disagree (`alert` / `enforce` / `accept`). |
-| **transform_rule** | telemetry to datapoint: match / extract / key / route / normalize. The `route` step is ownership resolution. |
+| **edge parse** | A flow step parses a raw payload into datapoints on the node, the edge half of the [flow engine](/architecture/collection/). There is no server-side transform rule. |
 | **calc_rule** | datapoint(s) to datapoint (calculated): cross-key / system-level derivation. (Same-key multi-source reconcile is the key's fusion_policy.) |
 | **event_rule** | datapoint change to event: fire_criteria + optional clear_criteria (clear makes events alarm-paired). No separate alarm or condition rule. |
 | **action_rule** | A subscription (Expr over events; alarms via edge events) wiring occurrences to actions. |
