@@ -1,16 +1,16 @@
 ---
 title: Cascade
-description: How effective configuration (props, tags, rule-sets) is resolved for any entity and how the resolve view explains why a given value won.
+description: How effective configuration (variables, tags, rule-sets) is resolved for any entity and how the resolve view explains why a given value won.
 ---
 
 Component document of
 [architecture overview](/architecture/). How effective config
-(props, tags, rule-sets) is resolved for any entity, and how to explain why a
+(variables, tags, rule-sets) is resolved for any entity, and how to explain why a
 given value won.
 
 ## What it resolves
 
-The effective **props**, **tags**, and **rule-sets** for any entity. A
+The effective **variables** ([the config cells](/architecture/variables/)), **tags**, and **rule-sets** for any entity. A
 first-class **resolve view** explains every effective value: the winning source
 and what it shadowed. The order is deliberately hand-tuned (not derivable from a
 single rule), so the resolve view is the safety net, not an afterthought.
@@ -76,7 +76,7 @@ attributes are groups.
 
 ## Combinators (by what is resolved)
 
-- **props -> scalar override**: the deepest/highest source wins; one value.
+- **variables -> scalar override**: the deepest/highest source wins; one value.
 - **tags -> union on name, override on value**: names accumulate; for a given
   name, the winning source's value wins.
 - **rules** (`transform_rule` / `calc_rule` / `event_rule`) -> **additive
@@ -93,7 +93,7 @@ by attribute or by a hand-picked set, cutting across the tree. A group:
   filter, re-evaluated live as attributes change, so a device leaves the moment it
   stops matching);
 - has a **weight** (its specificity on the shared scale, see *Placement*; the only weights in the system);
-- carries **prop / tag / rule** bindings, with the same per-kind combinators;
+- carries **variable / tag / rule** bindings, with the same per-kind combinators;
 - is also the unit of **access control**: a visibility / permission scope (see
   [identity-access](/architecture/identity-access/)). One "set of entities" primitive serves both config and
   authZ, which an anonymous predicate never could.
@@ -110,7 +110,7 @@ a component-group to components directly; a system-group reaches a component
 **through the system layer** of its cascade.
 
 **Multiple membership.** An entity belongs to a flat **set** of groups. Collect all
-their bindings and fold by specificity (weight): highest wins for props and
+their bindings and fold by specificity (weight): highest wins for variables and
 tag-values; rules accumulate, with weight resolving any add-vs-suppress conflict;
 equal weights break by creation order. There is no second precedence axis.
 
@@ -124,7 +124,7 @@ list on the shared scale, fully predictable, and the resolve view names the winn
 
 ## The registry is outside the cascade
 
-`datapoint_type` defines **identity** (kind, unit, validation, authoritative_provenance)
+`datapoint_type` defines **identity** (kind, unit, validation, fusion_policy)
 for every datapoint key, which the cascade never overrides (policy, not ontology).
 Ship-with **default policy** lives at `global`, the floor of the chain.
 
@@ -145,7 +145,7 @@ For a target entity and a key, return:
 - the **ordered shadowed bindings** it beat (source + value).
 
 For rule-sets: the accumulated set, each rule tagged with its source and any
-**suppressions**. One view explains both override (props / tags) and accumulation
+**suppressions**. One view explains both override (variables / tags) and accumulation
 (rules).
 
 ## Worked example
@@ -193,5 +193,5 @@ rules accumulate down this same ladder, and a group can **suppress** one by name
 ## Resolution, in one line
 
 Build the entity's ordered layer path, place matching groups on it by weight, fold
-props (override) / tags (union + override) / rules (additive + suppress) down the
+variables (override) / tags (union + override) / rules (additive + suppress) down the
 combined specificity order, and emit effective values with provenance.

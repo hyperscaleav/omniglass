@@ -118,7 +118,7 @@ protocols are.
 ## Datapoint keys are declared, not implied by the extractor
 
 The extractor names a `key`; what that key *means* (kind, unit, validation,
-authoritative_provenance) lives on the **`datapoint_type`**, declared by the template and
+fusion_policy) lives on the **`datapoint_type`**, declared by the template and
 upserted into the private registry on assignment (the Zabbix-item-definition mirror):
 
 ```yaml
@@ -173,12 +173,13 @@ task type:
 
 ## The rest of the shape
 
-- **Props.** The template declares the props a component *requires* (the connection
-  and inventory facts, e.g. `ip-addr`, `serial`) and their defaults. Effective
-  values resolve through the cascade ([cascade](/architecture/cascade/)).
+- **Variables (props).** The template declares the [variables](/architecture/variables/) a
+  component *requires* (the connection and inventory facts, e.g. `ip-addr`, `serial`) and
+  their defaults. Effective values resolve through the cascade ([cascade](/architecture/cascade/)).
 - **Credential shapes.** The template declares the *kinds* of credential the device
-  needs (`username_password`, `snmp_community`, `header_token`); the operator binds
-  actual credentials by vault path at assignment (credentials).
+  needs (`username_password`, `snmp_community`, `header_token`); these are
+  [`variable_type`](/architecture/variables/) shapes, bound to actual secret values at
+  assignment (credentials).
 - **Tags.** Default org labels seeded onto the component (`category: audio-dsp`).
 - **Alarms / health.** Default `event_rule`s the template ships (the Zabbix-trigger
   mirror: fan stalled, sustained high temp), owned in detail by the alarm spoke.
@@ -200,8 +201,8 @@ implements this for the collection core: a component pins a template version who
 spec declares `forms` (the operator inputs, required fields = the gate), and
 `pollers` / `listeners` whose connection fields are Go templates over those inputs.
 Apply gates on the required form fields (a 422 lists the unmet ones and materializes
-nothing), writes the supplied inputs as **declared state** (provenance `declared`,
-audited), resolves the connection templates, and persists one per-component
+nothing), writes the supplied inputs as the component's [variables](/architecture/variables/)
+(their `declared_value`, audited), resolves the connection templates, and persists one per-component
 interface (`{component}-{type}`) plus one task per poller/listener, stamped with the
 requested `node`. Re-applying converges (interfaces upsert by name, tasks are
 content-addressed). The poller-oid and form-field keys are datapoint_types validated
