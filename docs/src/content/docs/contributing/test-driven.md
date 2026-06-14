@@ -1,4 +1,7 @@
-# Test-driven, always
+---
+title: Test-driven, always
+description: Build the failing test before the feature; each change carries the tier that proves it.
+---
 
 The loop, in order, for every behavior change:
 

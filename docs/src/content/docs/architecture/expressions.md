@@ -1,4 +1,7 @@
-# Expressions: one pluggable engine, Expr first
+---
+title: Expressions
+description: One pluggable expression engine, Expr first, behind every operator-authored expression leaf.
+---
 
 Omniglass evaluates small operator-authored expressions in many places: a transform's
 `value` and `normalize` leaves, a step's `when` guard, an `event_rule`'s fire/clear
@@ -24,7 +27,7 @@ type Engine interface {
 
 Every expression leaf carries an optional `engine` selector that defaults to `expr`. A
 compiled `Program` is cached by `(engine, source, env-shape)`, so compile cost is paid once.
-This is the lesson from the scratch repo: CEL had grown to ~17 hardcoded compile sites, so a
+This is the lesson learned: CEL had grown to ~17 hardcoded compile sites, so a
 dialect change was a 17-site edit. Here there is exactly **one** swap point.
 
 ## Why Expr is engine #1

@@ -1,4 +1,7 @@
-# The learning-tool restriction
+---
+title: The learning-tool restriction
+description: Every operator surface should also teach the concept it operates on, against real or simulated data.
+---
 
 Omniglass is two things at once, by design: **a functional tool and a learning tool.**
 This is a standing design restriction, not a nice-to-have. It shapes what we build and how

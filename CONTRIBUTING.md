@@ -2,11 +2,11 @@
 
 Omniglass is built in the open, one vertical slice at a time. This document is the
 contract for how a change gets in. The deeper doctrine lives in the docs site
-([API first](docs/contributing/api-first.md),
-[Test-driven](docs/contributing/test-driven.md),
-[Docs with everything](docs/contributing/docs-with-everything.md),
-[The learning-tool restriction](docs/contributing/learning-tool.md),
-[The design system](docs/contributing/design-system.md)); this is the
+([API first](docs/src/content/docs/contributing/api-first.md),
+[Test-driven](docs/src/content/docs/contributing/test-driven.md),
+[Docs with everything](docs/src/content/docs/contributing/docs-with-everything.md),
+[The learning-tool restriction](docs/src/content/docs/contributing/learning-tool.md),
+[The design system](docs/src/content/docs/contributing/design-system.md)); this is the
 operational checklist.
 
 ## The cardinal rules

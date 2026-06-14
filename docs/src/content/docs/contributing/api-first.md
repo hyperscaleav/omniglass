@@ -1,4 +1,7 @@
-# API first
+---
+title: API first
+description: The Go API is the single integration contract; the SPA, CLI, and YAML tooling are generated clients of it.
+---
 
 The Go HTTP API is the **single integration contract**. The SPA, the CLI, the node
 worklist, and the YAML authoring tooling are all **generated clients** of it. Nothing but
@@ -12,7 +15,7 @@ them, server-less, and committed. Everything downstream is generated from that d
 This is the rule: **you change a Go route or shape, you regenerate, you commit the derived
 artifacts.** A drift check in CI fails the PR if the committed artifacts are stale.
 
-## The generation pipeline (carried from the scratch repo)
+## The generation pipeline
 
 | Generator | Input | Output | Consumer |
 |---|---|---|---|
@@ -41,7 +44,7 @@ Every operation lives under `/api/v1/*`. The path shape is derivable, not specia
 - **official / private namespace** on every registry and rule family (below).
 - **List conventions** (AIP-132 target): `filter` / `orderBy` / `pageSize`+
   `pageToken` (cursor, never offset) / `fields`. The `filter` runs through the one pluggable
-  expression engine ([Expr by default](../architecture/expressions.md)), the same language
+  expression engine ([Expr by default](/architecture/expressions/)), the same language
   across rule scopes, dynamic groups, and list filters.
 
 The API is **self-describing**: the running server serves `GET /api/v1/openapi.json`,

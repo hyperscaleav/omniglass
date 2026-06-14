@@ -1,0 +1,49 @@
+---
+title: Omniglass
+description: Open observability and control plane for AV and IT estates, and a place to learn how one is built.
+template: splash
+hero:
+  tagline: An open observability and control plane for AV and IT estates, and a place to learn how one is built.
+  actions:
+    - text: Read the architecture
+      link: /architecture/
+      icon: right-arrow
+      variant: primary
+    - text: View on GitHub
+      link: https://github.com/hyperscaleav/omniglass
+      icon: external
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+Omniglass collects telemetry from devices, types it into owned datapoints, models
+health across systems and locations, alarms on it, and acts. It is a single Go binary
+over a BYO PostgreSQL database, and it is two things at once on purpose: a working tool,
+and a learning tool for how one is built.
+
+:::note[Early, and public from the first commit]
+Omniglass is being rebuilt in the open, one vertical slice at a time. The architecture is
+published ahead of the code, so the design is readable before the feature that implements
+it lands. Expect the surface to move.
+:::
+
+<CardGrid>
+  <Card title="Architecture" icon="open-book">
+    The model of record: the datapoint to event to action taxonomy, identity and access,
+    components and the cascade, nodes, and the expression engine.
+    [Start with the overview](/architecture/).
+  </Card>
+  <Card title="Contributing" icon="puzzle">
+    How a change gets in: API first, test first, docs with everything, the learning-tool
+    restriction, and the design system. [Read the doctrine](/contributing/api-first/).
+  </Card>
+  <Card title="One binary, run modes" icon="rocket">
+    A single artifact runs as server, node, or migrate, over standard managed PostgreSQL.
+    No bespoke datastore.
+  </Card>
+  <Card title="Functional and pedagogical" icon="approve-check">
+    Every operator surface should also teach the concept it operates on, interactively,
+    against real or simulated data.
+  </Card>
+</CardGrid>

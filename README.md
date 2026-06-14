@@ -15,7 +15,7 @@ It is two things at once, on purpose:
 > **Status: early, and public from the first commit.** Omniglass is being rebuilt in
 > the open, one vertical slice at a time. Expect the surface to move. The architecture
 > is published ahead of the code at
-> [omniglass.hyperscaleav.com/docs](https://omniglass.hyperscaleav.com/docs).
+> [docs.omniglass.hyperscaleav.com](https://docs.omniglass.hyperscaleav.com).
 
 ## Design principles
 
@@ -47,14 +47,14 @@ make run          # start the server; docs served at http://localhost:PORT/docs
 cmd/omniglass     entrypoint (server | node | migrate)
 internal/         the application (storage gateway, collection, rules, api, ...)
 db/migrations/    dbmate schema migrations (pure DDL)
-docs/             the Hugo (Hextra) docs + learning site, embedded into the binary
+docs/             the Astro Starlight docs + learning site (published; later embedded)
 web/              the operator SPA
 ```
 
 ## Documentation
 
 The architecture, concepts, and contributor guide live in [`docs/`](docs/) and are
-published at [omniglass.hyperscaleav.com/docs](https://omniglass.hyperscaleav.com/docs).
+published at [docs.omniglass.hyperscaleav.com](https://docs.omniglass.hyperscaleav.com).
 Start with the architecture spine.
 
 ## Contributing

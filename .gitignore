@@ -6,11 +6,15 @@ omniglass
 *.test
 *.out
 
-# Embedded build artifacts (generated, not committed)
-/docs/public/
+# Build artifacts (generated, not committed)
 /internal/docsembed/site/
 /web/dist/
 /web/node_modules/
+
+# Docs site (Astro Starlight)
+/docs/node_modules/
+/docs/dist/
+/docs/.astro/
 
 # Go
 /vendor/

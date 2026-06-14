@@ -1,0 +1,19 @@
+{
+  "name": "omniglass-docs",
+  "type": "module",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview"
+  },
+  "dependencies": {
+    "@astrojs/mdx": "^5.0.0",
+    "@astrojs/sitemap": "^3.2.1",
+    "@astrojs/starlight": "^0.38.2",
+    "astro": "^6.1.0",
+    "astro-mermaid": "^2.0.1",
+    "mermaid": "^11.14.0"
+  }
+}

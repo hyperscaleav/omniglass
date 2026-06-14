@@ -1,0 +1,11 @@
+/* Omniglass brand accent: teal on navy. */
+:root {
+  --sl-color-accent-low: #0c2b2e;
+  --sl-color-accent: #13b6a8;
+  --sl-color-accent-high: #9fe9e0;
+}
+:root[data-theme='light'] {
+  --sl-color-accent-low: #c7efea;
+  --sl-color-accent: #0f8d83;
+  --sl-color-accent-high: #0a3b38;
+}
