@@ -39,6 +39,7 @@ export default defineConfig({
           items: [
             { label: 'Overview', slug: 'architecture' },
             { label: 'Taxonomy', slug: 'architecture/taxonomy' },
+            { label: 'Variables', slug: 'architecture/variables' },
             { label: 'Identity and access', slug: 'architecture/identity-access' },
             { label: 'Components', slug: 'architecture/components' },
             { label: 'Cascade', slug: 'architecture/cascade' },

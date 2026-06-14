@@ -7,7 +7,7 @@ description: "The authoritative telemetry data model: datapoints, provenance, ru
 
 ## The model in two sentences
 
-Collectors load raw **telemetry**; **transform_rules** parse it into typed **datapoints** (metric, state, log) owned by a structural entity; **calc_rules** derive more datapoints, and **event_rules** evaluate datapoints into **events** (and the **alarms** they open and close); **actions** respond. Every datapoint carries a **provenance** (how we know it: observed, calculated, intended, declared) and a **source**, and any two provenances (or sources) of one key disagreeing is the single universal divergence signal.
+Collectors load raw **telemetry**; **transform_rules** parse it into typed **datapoints** (metric, state, log) owned by a structural entity; **calc_rules** derive more datapoints, and **event_rules** evaluate datapoints into **events** (and the **alarms** they open and close); **actions** respond. Every datapoint carries a **provenance** (how we know it: observed, calculated, intended) and a **source**, and any two provenances (or sources) of one key disagreeing is the single universal divergence signal. Declared config (operator intent) lives in [variables](/architecture/variables/), not as a datapoint provenance.
 
 ```text
 telemetry --transform_rule--> datapoint (metric / state / log)
@@ -18,14 +18,14 @@ telemetry --transform_rule--> datapoint (metric / state / log)
                                                        actions (notify / command / ...)
 ```
 
-The pipeline is a **DAG**: rules read observed and calculated values as truth, only *compare* intended and declared values, and never infer a new fact from an intended value treated as truth. See [The DAG invariant](#the-dag-invariant).
+The pipeline is a **DAG**: rules read observed and calculated values as truth, only *compare* intended values (and a variable's declared value) against observed, and never infer a new fact from an intended value treated as truth. See [The DAG invariant](#the-dag-invariant).
 
 ## Two orthogonal axes
 
 The model has exactly two independent questions, and conflating them is the only thing that makes it feel fuzzy.
 
 - **Kind** answers *what kind of thing is this?* It is fixed per **key**, forever, decided once when the key is defined. `power.state` is always a state.
-- **Provenance** answers *how do we know this particular value?* It varies per **row**. The same `power.state` can be observed, intended, or declared at different moments.
+- **Provenance** answers *how do we know this particular value?* It varies per **row**. The same `power.state` can be observed or intended at different moments. A *declared* desired value lives in a [variable](/architecture/variables/), not on the datapoint.
 
 Kind is a property of the key. Provenance is a property of the row.
 
@@ -64,7 +64,7 @@ A raw occurrence we have not normalized (a syslog line, a raw webhook frame) lan
 
 Two registries, each named for what it holds, because a datapoint and an event are different shapes (a datapoint has a value; an event is an occurrence). We do **not** force them into one universal registry, that would be the false unification the rest of this model avoids.
 
-- **`datapoint_type`** describes every datapoint key: `(namespace, name, kind, value_type, unit, authoritative_provenance, fusion_policy)`, with the official/private shadow (namespace shadow pattern). One registry across all three datapoint kinds (metric/state/log). The transform rule never decides a kind at runtime; the key already knows it, so a `key` lookup in `datapoint_type` routes a value to the right table. `fusion_policy` is the built-in, read-time multi-source reconcile carried on the key (see [Fusion](#fusion)). A key names a **measurement, never its owner** (`temperature`, not `room.temperature`), with snake_case segments in a dot hierarchy and the unit in the `unit` field (`fan.speed` + `unit: rpm`, not `fan_rpm`); the ship-with official set lives in `internal/registry/defaults.yaml`. Adding or naming one: the `canonical-datapoint` skill.
+- **`datapoint_type`** describes every datapoint key: `(namespace, name, kind, value_type, unit, fusion_policy)`, with the official/private shadow (namespace shadow pattern). One registry across all three datapoint kinds (metric/state/log). The transform rule never decides a kind at runtime; the key already knows it, so a `key` lookup in `datapoint_type` routes a value to the right table. `fusion_policy` is the built-in, read-time multi-source reconcile carried on the key (see [Fusion](#fusion)). A key names a **measurement, never its owner** (`temperature`, not `room.temperature`), with snake_case segments in a dot hierarchy and the unit in the `unit` field (`fan.speed` + `unit: rpm`, not `fan_rpm`); the ship-with official set lives in `internal/registry/defaults.yaml`. Adding or naming one: the `canonical-datapoint` skill.
 - **`event_type`** describes every event key: `(namespace, name, display_name, payload_schema, ...)`, same official/private shadow. Declaring event types (`call.started`, `cable.unplugged`, `command.sent`) is first-class and valuable: it gives events a known schema, makes them inspectable, and is what lets an event rule promote a raw log line into a *registered* event. An event key is registered here; an unregistered occurrence stays a `log_datapoint` line until a rule promotes it.
 
 The naming convention is consistent: a `_type` registry defines what a thing *is*, named for the thing (`datapoint_type`, `event_type`, like `component_type`, `interface_type`). There is no `key_def`; that was a rename with no justification (datapoint_type already spans the three datapoint kinds, and events are a different shape with their own registry).
@@ -93,16 +93,15 @@ The old `stream` and `listen` were never two modes (both wait for a frame and no
 
 ## Provenance: how we know a value
 
-Provenance is the second axis, stamped per datapoint row. The same key, with the same value, can be known four ways. Each provenance points at the immutable ground-truth record that produced it (its **lineage**), and the lineage column populated is mutually exclusive per provenance, enforced by a CHECK constraint.
+Provenance is the second axis, stamped per datapoint row. The same key, with the same value, can be known three ways. Each provenance points at the immutable ground-truth record that produced it (its **lineage**), and the lineage column populated is mutually exclusive per provenance, enforced by a CHECK constraint.
 
 | Provenance | How we know it | Lineage points at |
 |---|---|---|
 | **observed** | measured from a component | on-row: `source_rule` (+ version) and `telemetry_id` (the source telemetry) |
 | **calculated** | derived from other datapoints | on-row: `source_rule` (+ version), `telemetry_id` null |
 | **intended** | the declared effect of a command we issued, pending reconciliation | `event_id` (the command event) |
-| **declared** | asserted by an operator | `audit_id` (written same-tx with `audit_log`) |
 
-A value of any provenance is still a metric/state/log (the kind is fixed by the key); provenance only records *how it got there*. All four land in the same datapoint tables, side by side for the same key, which is what makes divergence detection free.
+A value of any provenance is still a metric/state/log (the kind is fixed by the key); provenance only records *how it got there*. All three land in the same datapoint tables, side by side for the same key, which is what makes divergence detection free. Declared intent is the fourth value an operator can assert, but it lives on a [variable](/architecture/variables/), not in the datapoint tables, and can be compared against an observed datapoint for drift.
 
 A separate **`source`** column records *which sensor or path* produced an observed value (`codec.cec` vs `display.lan` vs `control.system`). Source is distinct from provenance: provenance is *how we know* (observed), source is *which sensor told us*. Three sensors reporting one display's power are three observed rows on one key, differing only in source. This is what makes multi-source corroboration and [fusion](#fusion) possible.
 
@@ -137,18 +136,18 @@ Not every log-to-state path goes through a command. The split is measured fact v
 | "eth0 **is** down" | a component reporting measured reality | telemetry, transform, then **observed** state, directly |
 | we sent "**power on**" | intent in progress, not yet confirmed | command, event, then **intended** state |
 
-### declared: asserted by an operator
+### declared values are variables
 
-mac, ip, serial, locked-input, anything an operator sets, is a **declared** datapoint, written in the same transaction as its `audit_log` row. There is no separate property or config table; declared config *is* a datapoint with `provenance=declared`. This is what dissolves the old `prop_type` / `prop_binding` / `util_routing_props` / `component_effective_prop` machinery: it all collapses into declared-provenance datapoints plus a resolution view. Ownership resolution reads declared identity datapoints (the indexed serial/ip) to bind telemetry to components.
+mac, ip, serial, locked-input, anything an operator *sets* is declared intent, and declared intent is **not** a datapoint provenance. It lives in a [variable](/architecture/variables/)'s `declared_value`, resolved through the scope cascade and optionally linked to an observed `state_datapoint` for drift. This is what dissolves the old `prop_type` / `prop_binding` / `util_routing_props` / `component_effective_prop` machinery: it collapses into the variable table plus the cascade, not into a datapoint provenance. Ownership resolution reads the resolved identity (a declared identity variable, or the observed identity datapoint it links) to bind telemetry to components.
 
-### Precedence: fixed per key
+### Precedence: spec versus status lives in variables
 
-Each key carries one attribute, **`authoritative_provenance`**, deciding which side wins when two provenances disagree:
+When declared intent and observed reality disagree, which one wins is a **per-variable `reconcile` policy** ([variables](/architecture/variables/#drift-and-reconcile)), not a per-key datapoint attribute:
 
-- **observed wins** (most keys): the declaration was a hint or stale guess; reality is truth. A device reporting a different MAC than declared is a divergence to investigate.
-- **declared wins** (config/intent keys): the declaration is the spec; reality should conform. Observed input HDMI2 against declared HDMI1 means the world is wrong, alarm or remediate (self-healing, the Kubernetes spec-vs-status pattern).
+- **observed wins** is `reconcile: accept` (or just `alert`): the declaration was a hint or stale guess, reality is truth. A device reporting a different MAC than the declared one is a divergence to investigate.
+- **declared wins** is `reconcile: enforce`: the declaration is the spec, reality should conform. Observed input HDMI2 against a declared HDMI1 means the world is wrong, alarm or remediate (self-healing, the Kubernetes spec-and-status pattern).
 
-Precedence is fixed per key. Device-swap (where the declared MAC is briefly authoritative before the device reports it) is handled by a future component "maintenance mode" that suppresses drift, not by precedence flipping.
+Among datapoint provenances there is no precedence contest: intended is a pending bet that observed confirms or refutes (reconciliation, see [intended](#intended-the-declared-effect-of-a-command)), and observed supersedes it on arrival. So the old per-key `authoritative_provenance` attribute is superseded by the variable's reconcile policy. Device-swap (where a declared MAC is briefly authoritative before the device reports it) is handled by a future component "maintenance mode" that suppresses drift.
 
 ## Ground truth versus derived
 
@@ -195,7 +194,7 @@ Caught/caused/derived/scheduled is the event's **origin**, a small vocabulary on
 
 The pipeline must stay acyclic.
 
-> A rule may **read** observed and calculated values as truth. It may **compare** intended or declared values against observed (drift). It may **not** treat an intended value *as truth* to infer a new fact.
+> A rule may **read** observed and calculated values as truth. It may **compare** an intended value, or a variable's declared value, against observed (drift). It may **not** treat an intended value *as truth* to infer a new fact.
 
 This is what makes drift safe: a drift rule reads the *pair* (intended, observed) and emits when they disagree; the intended value is tested, not trusted. The one forward edge command-to-intended-state is terminal (nothing reads back from an intended value to produce more state). Event rules reading only observed/calculated keeps the graph acyclic with no runtime cycle guard required in v1.
 
@@ -204,7 +203,7 @@ This is what makes drift safe: a drift rule reads the *pair* (intended, observed
 Drift is a condition operator, **`disagree(A, B)`**, usable inside event rule conditions, comparing two provenances (or two sources) of one key:
 
 - `disagree(intended, observed)`: the command did not land (reconciliation)
-- `disagree(declared, observed)`: the world drifted from intent (config drift, device swap)
+- `disagree(declared, observed)`: the world drifted from intent (config drift, device swap); the declared side is read from a [variable](/architecture/variables/)
 - `disagree(observed, observed)` across `source`: sensors conflict (a failing sensor)
 
 > Any two provenances of the same key that disagree = an anomaly. One detector.
@@ -231,7 +230,7 @@ Actions are bound to what triggers them by an **`action_rule`**: a decoupled sub
 
 ## Reads: current value is a view
 
-Current value (latest per owner / key / **instance** / **provenance**, fused across sources per the key's `fusion_policy`) is a **view**, correct and zero-maintenance. It is keyed per-provenance because "current observed power" and "current declared power" are different values for the same key, and the divergence model depends on seeing both. A materialized `current_value` table is a deferred optimization, earned only when a fleet-dashboard read profile proves the view too slow (the same view-by-default discipline as storage). Ownership resolution reads declared identity datapoints by targeted indexed lookup, not a full scan, so it does not by itself justify the materialized table.
+Current value (latest per owner / key / **instance** / **provenance**, fused across sources per the key's `fusion_policy`) is a **view**, correct and zero-maintenance. It is keyed per-provenance because "current observed power" and "current intended power" are different values for the same key, and the divergence model depends on seeing both. A materialized `current_value` table is a deferred optimization, earned only when a fleet-dashboard read profile proves the view too slow (the same view-by-default discipline as storage). Ownership resolution reads resolved identity variables (the declared value, else the linked observed datapoint) by targeted indexed lookup, not a full scan, so it does not by itself justify the materialized table.
 
 ## The pipeline, end to end
 
@@ -262,8 +261,9 @@ flowchart TD
   EV -->|"fire = open · clear = resolve"| AL["alarm<br/>one incident · new row per open<br/>(event_rule, owner)"]
   EV -->|"command's effect · provenance=intended"| S
 
-  HUMAN["operator"] -->|"declared value"| S
-  HUMAN -.->|"record · lineage: declared"| AU["audit_log"]
+  HUMAN["operator"] -->|"declares"| VAR["variable<br/>declared_value (spec)"]
+  VAR -. "links · drift" .- S
+  HUMAN -.->|"audit"| AU["audit_log"]
 
   EV -. "disagree(A,B): drift / conflict" .- DIV{{"divergence"}}
 
@@ -276,7 +276,7 @@ flowchart TD
   class TEL,AU gt;
 ```
 
-Teal nodes are the ground-truth lineage targets: `telemetry` (the source for observed, referenced by `telemetry_id`) and `audit_log` (declared, via `audit_id`); calculated and observed also carry `source_rule` on the row, intended points at the command `event` (via `event_id`). The three datapoint tables (`metric_datapoint`, `state_datapoint`, `log_datapoint`) are derived peers.
+Teal nodes are the ground-truth lineage targets: `telemetry` (the source for observed, referenced by `telemetry_id`) and `audit_log` (operator writes, including variable changes); calculated and observed also carry `source_rule` on the row, intended points at the command `event` (via `event_id`). The three datapoint tables (`metric_datapoint`, `state_datapoint`, `log_datapoint`) are derived peers; a [variable](/architecture/variables/) holds declared config and can link a state datapoint.
 
 ## Glossary
 
@@ -288,28 +288,28 @@ A local quick-reference for the terms this leaf uses most; the **authoritative g
 | **task** | A node's unit of collection: **poll** (we ask) or **listen** (we wait), over a stateless or stateful (session) interface. Two orthogonal axes. |
 | **datapoint** | An observation: `(owner, key, instance, ts, value, provenance, source, lineage)`. Kinds: metric, state, log. Series identity is `(owner, key, instance, provenance)`. The thing rules read. |
 | **metric** | A numeric (float) `metric_datapoint`. Continuous, aggregatable. Has a current value. |
-| **state** | A categorical / text / object `state_datapoint`. Discrete, dwell-measurable. Has a current value. Holds declared config too. |
+| **state** | A categorical / text / object `state_datapoint`. Discrete, dwell-measurable. Has a current value. A [variable](/architecture/variables/) can link one as its observed side. |
 | **log** | A component's own words (`log_datapoint`), value = the line, keyed by log type. A datapoint (a value at a time) but a stream, not a current value. Also the holding pen for un-normalized occurrences. |
 | **owner / owner_kind** | A datapoint/event/alarm's subject, the exclusive-arc: `owner_kind` + the matching typed FK (`component_id`/`system_id`/`location_id`) + CHECK. |
 | **event** | Our semantic assertion that something happened. Keyed, point-in-time, rule-produced. **Not** a datapoint. Origin: caught, caused, derived, or scheduled. |
 | **alarm** | One open-to-close incident: a stateful row driven by an event rule's paired events. New row per open. Keyed by (event_rule, owner). The ITSM correlation anchor. Not a rule; not event-sourced. |
-| **datapoint_type** | The registry for datapoint keys across all three kinds: namespace, name, kind (metric/state/log), value_type, unit, authoritative_provenance, fusion_policy. Official/private shadow. |
+| **datapoint_type** | The registry for datapoint keys across all three kinds: namespace, name, kind (metric/state/log), value_type, unit, fusion_policy. Official/private shadow. |
 | **event_type** | The registry for event keys: namespace, name, display_name, payload_schema. Official/private shadow. Separate from datapoint_type because an event is a different shape (an occurrence, not a value). |
 | **kind** | What a key is: metric, state, or log. Fixed per key, decided at definition. |
-| **provenance** | How we know a datapoint's value: observed, calculated, intended, or declared. Per row, not per key. |
+| **provenance** | How we know a datapoint's value: observed, calculated, or intended. Per row, not per key. Declared intent is a [variable](/architecture/variables/), not a datapoint provenance. |
 | **observed** | Provenance: measured from a component. On-row lineage: `source_rule` (+ version) and `telemetry_id` (the source telemetry). |
 | **calculated** | Provenance: derived from other datapoints by a calc rule. On-row lineage: `source_rule` (+ version); `telemetry_id` null. |
 | **intended** | Provenance: the declared effect of a command, pending reconciliation. Lineage points at the command `event_id`. Only commands set intended. |
-| **declared** | Provenance: asserted by an operator (mac, ip, config). Lineage: `audit_id`, written same-transaction with `audit_log`. A `state_datapoint`; replaces the old prop tables. |
+| **variable** | A scoped, shaped config cell holding operator-**declared** intent (`declared_value`), optionally linked to an observed datapoint for drift and reconcile. The home for declared config; replaces the old prop tables. See [variables](/architecture/variables/). |
 | **source** | Which sensor/path produced an observed value (codec.cec vs display.lan). Distinct from provenance; enables multi-source rows on one key. A `source` registry carries default trust weights. |
-| **authoritative_provenance** | A per-key attribute deciding which provenance wins when two disagree (observed-wins for facts, declared-wins for config/intent). Fixed per key. |
+| **reconcile** | A per-[variable](/architecture/variables/) policy deciding spec-versus-status when declared and observed disagree: `alert` (default), `enforce` (declared wins, push to device), `accept` (observed wins). Replaces the old per-key authoritative_provenance. |
 | **fusion_policy** | Per-key, built-in multi-source reconcile (mode + tie-break + source weights), applied on read. Same-key fusion lives here, not in a calc. |
 | **transform_rule** | telemetry to datapoint: match / extract / key / route / normalize. The `route` step is ownership resolution (a step inside the rule, not a separate rule). Named for its transformation. |
 | **calc_rule** | datapoint(s) to datapoint (calculated): inputs / reduce / output / scope. Cross-key / system-level derivation (same-key multi-source reconcile is the key's fusion_policy). |
 | **event_rule** | datapoint change to event: fire_criteria (required) + clear_criteria (optional; clear makes the events alarm-paired). Absorbs the old alarm_rule; no separate condition_rule. |
 | **action_rule** | A subscription (Expr over events; alarms via edge events) wiring occurrences to actions. Not a fourth pipeline family. |
 | **lineage (on-row)** | A derived row carries its own lineage, no separate execution table. Datapoints: `source_rule` + `source_rule_version` (+ `telemetry_id` for observed). Events/alarms/actions: their `source_rule` (+ trigger inputs). The rule version is the backtest hinge. |
-| **audit_log** | Who-did-what ground truth, one row per operator write, same-transaction as the change. The lineage target for declared. |
+| **audit_log** | Who-did-what ground truth, one row per operator write, same-transaction as the change. The lineage target for operator writes, including variable changes. |
 | **session_log** | Connection-lifecycle transitions (node-reported, diagnostic). Alertable connection state is a state_datapoint. |
 | **internal_log** | Platform self-narration (startup, reconcile, migration, node-reg, config-sync). |
 | **disagree(A,B)** | A condition operator comparing two provenances (or sources) of one key. Drift, config drift, conflict. Terminal, keeps the DAG. |
@@ -322,4 +322,4 @@ A local quick-reference for the terms this leaf uses most; the **authoritative g
 
 The shipped code predates this model (the observed pipeline now dispatches metric, state, and log datapoints by kind). v2 is pre-deployment, so the build is **greenfield**: a **from-scratch initial migration** defines the whole schema (no data backfill, nothing to convert) and the code and tests are rewritten onto it. The full build sequence, the schema, and the TDD steps are tracked in the migration plan (the authoritative execution checklist); deferred builds are tracked as GitHub issues.
 
-Related: storage (physical tables, the lineage CHECK, partitioning, tiering), [the cascade](/architecture/cascade/) (declared-value cascade), workers (the rule-engine worker), [alarms and actions](/architecture/alarms-actions/) (alarm lifecycle, actions), and [the architecture overview](/architecture/) (the spine).
+Related: [variables](/architecture/variables/) (declared config, drift, reconcile), storage (physical tables, the lineage CHECK, partitioning, tiering), [the cascade](/architecture/cascade/) (the scope cascade), workers (the rule-engine worker), [alarms and actions](/architecture/alarms-actions/) (alarm lifecycle, actions), and [the architecture overview](/architecture/) (the spine).
