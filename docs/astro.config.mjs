@@ -42,6 +42,7 @@ export default defineConfig({
             { label: 'Variables', slug: 'architecture/variables' },
             { label: 'Identity and access', slug: 'architecture/identity-access' },
             { label: 'Components', slug: 'architecture/components' },
+            { label: 'Collection', slug: 'architecture/collection' },
             { label: 'Cascade', slug: 'architecture/cascade' },
             { label: 'Alarms and actions', slug: 'architecture/alarms-actions' },
             { label: 'Nodes', slug: 'architecture/nodes' },
