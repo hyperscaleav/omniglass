@@ -147,15 +147,36 @@ flowchart LR
   class DV,OV v;
 ```
 
-## Secrets
+## Secrets and credentials
 
-The shape marks **which fields are secret** (`oauth2.client_secret` yes, `client_id` no).
-Secret fields of `declared_value` are **encrypted at rest** (pgcrypto), **masked at
-interpolation time** (a community, a bearer token, an SSH key rendered into a request must
-never surface in a log line, an error string, or a datapoint label), and **access-audited**. A
-dedicated table is the right home: rotation replaces one row instead of leaving stale
-ciphertext across timeseries history, and masking covers one read path. Vault-backed
-resolution (an external store as a third value source) is a later provider.
+A credential lives in this model as a variable of a secret-bearing shape (`oauth2`,
+`ssh_credential`, `snmp_community`, `tls_cert`), not a separate vault primitive. The shape marks
+**which fields are secret** (`oauth2.client_secret` yes, `client_id` no).
+
+**Encryption at rest, through a pluggable `SecretProvider`.** Secret fields of `declared_value`
+are encrypt-at-write, decrypt-on-use, with the encryption key supplied by a pluggable
+**`SecretProvider`**: an envvar key by default, with **KMS, Vault, or an external store** behind
+the same interface and no model change (envelope encryption, a per-value DEK wrapped by the
+provider's KEK, is the shape when those land). Secrets are **masked at interpolation time** (a
+community, a bearer token, an SSH key rendered into a request must never surface in a log line, an
+error string, or a datapoint label), and **every decrypt is audited** ([audit](/architecture/audit/)).
+
+**Shared versus per-device is just scope.** A credential reused across a fleet (a building's
+SNMPv3 user, a service SSH key) is a variable set high in the cascade; a unique-per-device secret
+is the same shape set at component scope. There is no shared-versus-per-device split to model: it
+is the `$var:` cascade, like any other variable.
+
+**Lazy refresh, not cron.** A shape with a `refresh` behavior (`oauth2`) refreshes its
+machine-acquired token **on demand**, when the cached token is within a skew window of expiry,
+coordinated across replicas by a row lock on the variable (the SKIP-LOCKED family). Idle
+credentials never refresh; there is no scheduler. The machine-written token is a separate
+encrypted cache on the variable, not an operator-owned secret, so it avoids audit-on-read noise on
+every use.
+
+**Credential health is a datapoint.** Two flavors, both surfacing through the normal
+datapoint-to-alarm pipeline: **intrinsic expiry** (an `oauth2` token, a `tls_cert` `notAfter`)
+warns proactively before it dies; **observed-use failure** flips a credential unhealthy after N
+consecutive auth failures consumers report.
 
 ## How this changes provenance
 
