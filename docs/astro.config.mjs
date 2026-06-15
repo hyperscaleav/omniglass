@@ -48,6 +48,7 @@ export default defineConfig({
             { label: 'Health, SLI, and SLA', slug: 'architecture/health' },
             { label: 'Nodes', slug: 'architecture/nodes' },
             { label: 'Time', slug: 'architecture/time' },
+            { label: 'Storage', slug: 'architecture/storage' },
             { label: 'Audit', slug: 'architecture/audit' },
             { label: 'Files and blobs', slug: 'architecture/files' },
             { label: 'AI', slug: 'architecture/ai' },
