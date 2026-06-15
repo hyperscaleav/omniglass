@@ -1,126 +1,92 @@
 ---
 title: Why Omniglass
-description: "What Omniglass is, what it is for, and why it exists when Zabbix and Prometheus already do monitoring."
+description: "What Omniglass is, what it is for, and why AV needs its own observability platform instead of an IT monitoring tool."
 ---
 
-It is 9:58 on a Tuesday. A board meeting starts in two minutes. The executive walks in to a
-black display, a video bar with no touch panel, and a call that will not connect. Somewhere,
-the AV professional responsible for that room is about to find out the hard way, when the
-phone rings.
+Run AV at scale and you know the feeling. You find out a room is broken when someone walks out
+of it. The operation runs on tribal knowledge, escalations, and last-known-good guesses. Every
+high-profile meeting is a potential resume-generating event, and when one goes wrong you are in
+the postmortem with no data to back you up. It is the difference between a good night's sleep and
+a 3am call.
 
-That is the problem Omniglass exists to solve. **Make an AV system as observable and operable as
-any cloud service**, so the answer to "is the room working?" arrives before the meeting, not
-after the complaint.
+Here is the part nobody says out loud: **that is not a reflection of you or your team.** AV is
+genuinely, structurally hard to see, and the industry never shipped a right way to do it. Omniglass
+exists to ship one.
 
-## Start with the question
+## AV is not built to be observed
 
-Every monitoring tool answers a question, and the question gives away what it was built for.
+Most AV gear is built to be **controlled, not monitored**. You can tell a device what to do. Asking
+it what it is *doing* is a different problem entirely, and the device was not designed to answer it.
+So you cannot reliably say what is up, what is down, and what is about to fail. At a handful of rooms
+you can brute-force that with grit. At a thousand rooms, it collapses.
 
-Zabbix and Prometheus answer **"is the host up?"** They model a fleet of servers: a *host*, and
-the *metrics* it emits. That is exactly the right shape for a data center, and they are
-the best in the world at it.
+It is hard for reasons that are real, and none of them are your fault:
 
-Omniglass answers a different question: **"is the room working?"**
+- **It is agentless.** AV gear is firmware appliances. You cannot install an agent and be done; you
+  have to ask the device from the outside and take whatever it is willing, or able, to give you.
+- **There is no standard, and the APIs are uneven.** Control interfaces are usually decent;
+  *management* data is an afterthought, when it exists at all. Different port, protocol, and format
+  for every vendor, every product, sometimes every firmware revision. Every integration is bespoke.
+- **The system is the hard part.** A room is not a device. It is a signal chain (a display, a video
+  bar, the microphones, a DSP, a control processor, the UCC service in the cloud, the network) and
+  "healthy" is a fact about the whole chain. Two of those mics might be redundant; the control
+  processor speaks its own command dialect over a TCP port. Every unique combination of gear is its
+  own health model, and there is no standard to lean on.
+- **It is fragmented by design.** Each manufacturer portal sees only its own devices. Stack them up
+  and you have a dozen panes of glass and still no single view of the room.
 
-**A room is not a host.**
+Put plainly: AV was never required to be observable, so it isn't. That is an industry problem, not
+an operator one.
 
-```mermaid
-flowchart TD
-  R["Boardroom A<br/><b>a system</b> · is it working?"]
-  R --> D["Display"]
-  R --> VB["Video bar"]
-  R --> TP["Touch panel"]
-  R --> DSP["DSP"]
-  R --> CT["Control processor"]
-  R --> UC["UCC service (cloud)"]
-  R --> SC["Scheduling service"]
-  R --> NW["Network"]
-  R --> EN["Environment"]
-  classDef sys fill:#21CAB9,stroke:#080c16,color:#080c16;
-  class R sys;
-```
+## Why an IT monitoring tool does not finish the job
 
-A room is a **system**: a display, a video bar, a touch panel, a DSP, a control processor, a
-cloud UCC service, a scheduling service, the network it rides on, the environment around it.
-Together they have exactly one job: let people meet. The display being "up" tells you almost
-nothing. The *room* working is a fact about all of them, at once.
+The IT monitoring world (Zabbix, Prometheus, and the rest) is genuinely excellent at what it was
+built for: a fleet of servers, an agent on each one, clean and standardized metrics. The host-and-
+metric model is the right shape for a data center, and these tools are the best in the world at it.
 
-This is the line the discipline draws: **observable devices are not the same as observable
-systems.** You can have a perfectly instrumented display and still have no idea whether the
-room is usable.
+That model quietly assumes the three things AV does not have: **an agent to install, a standard API
+to read, and a host that is the thing you actually care about.** Point it at a room and the gaps
+show. There is no agent. There is no standard to read. And it has no idea what a "room" is, no
+language for an AV control protocol, no concept of a redundant mic. It can tell you a host is up. It
+cannot tell you the room is usable.
 
-## Why the tools we were handed do not fit
+You *can* bend these tools to AV. Skilled people do it every day, scraping web interfaces,
+automating CLI sessions, gluing middleware on the side to reach the gear the platform cannot. That
+work is real and it is impressive. But you are doing the platform's job for it, by hand, forever,
+and it still has no model of the room at the end.
 
-Give an AV pro a host-and-metric tool and ask them to monitor two hundred meeting rooms, and
-watch what happens. They bend it. They bolt on a separate integration tool to reach the gear
-the platform cannot speak to. They script a fake "room." They graft on a separate service-tree subsystem to get
-an SLA, a parallel feature instead of one composed from the core model. They keep inventory in a spreadsheet. It is duct tape, and
-duct tape does not survive contact with two hundred rooms.
+## It is an architecture problem, not a tooling problem
 
-The IT tools are not bad. They are aimed at a different target, and pointed at a room they miss
-everything that matters:
+The fix is not a better dashboard. It is a method: figure out **why** you monitor, then **what**
+(model what "healthy" means), then **how** (go get the data, however the device will give it). That
+is the [AV Observability Framework](https://hyperscaleav.com/framework), and its keystone is the
+**health model**, the thing that answers one deceptively simple question:
 
-- a **room** and a **system**, not just a host;
-- a **redundant** microphone whose failure should *degrade* the room, not down it;
-- an **AV control protocol** that sends plain command strings over a TCP port or serial line,
-  every vendor with its own dialect, no SNMP, no agent, no API;
-- a **UCC call state**, a **codec input**, a **DSP channel**, as first-class signals, not raw
-  vendor strings we had to scrape and guess at;
-- a **desired configuration** that should be enforced when the world drifts from it.
+> Is this room usable right now?
 
-None of that is a metric. So none of it fits.
+The health model always runs. The only question is whether it runs *as a system* against real
+signal, or in the operator's head at 3am against half of it. Omniglass is the tool that runs it as a
+system.
 
-## How Omniglass is built differently
+## What Omniglass is
 
-Omniglass starts from the discipline, not from a metrics database. Every part of the
-architecture follows from one question: "is the room working?"
+Omniglass is an **open, self-hosted observability and control plane for AV (and IT) estates**, built
+for the real world rather than the demo. It does three things an IT tool cannot, because they were
+designed in from the start, not bolted on.
 
-### The estate is the model
+**It meets the devices where they are.** Agentless and protocol-diverse, it goes and gets the data
+however the device will give it (SNMP, HTTP, SSH, a control processor's raw command dialect) and
+normalizes every vendor's reading into one canonical signal, so a Sony display and a Samsung display
+answer the same question the same way.
 
-A component, a system, a location: a real tree, the way an AV estate actually nests. The room
-*is* a system. The building *is* a location. Health, alarms, and config attach to any level,
-not only to a device. The host-and-metric world cannot say "this room," so it cannot reason about
-one. [The taxonomy](/architecture/taxonomy/) is built so it can.
+**It models your estate the way it actually nests.** Components, systems, rooms, buildings. The
+room is a first-class system, not a tag, so health, alarms, and config attach at the level you
+actually operate.
 
-### One canonical signal
-
-Every vendor's reading normalizes onto one canonical signal name from a governed
-[registry](/architecture/taxonomy/): `power.state`, `audio.level`, `call.state`. A Sony display
-and a Samsung display answer the same question the same way, because the *measurement* is named,
-not the device. That single
-canonical path is what makes a cross-fleet dashboard, a real SLA, and useful AI possible at all;
-a pile of vendor-specific strings makes all three impossible.
-
-### Collection that speaks AV's weird wire
-
-Reaching AV gear is the hard part, and it is where the IT tools tap out. Omniglass collects
-through a **[flow engine](/architecture/collection/)**: SNMP, HTTP, SSH, and the raw-socket AV
-control planes, parsed where it is collected, close to the gear, and normalized into the
-canonical signal on the way in. No middleware glue, no scripts in a second tool. The thing that talks to a Crestron
-processor and the thing that talks to a switch are the same engine.
-
-```mermaid
-flowchart LR
-  G["AV gear<br/>SNMP · HTTP · SSH · raw AV control"] -->|"flow engine<br/>parse at the edge"| DP["datapoint<br/>one canonical signal"]
-  DP -->|"event_rule fires"| EV["event"] -->|"fire opens / clear resolves"| AL["alarm<br/>room degraded"]
-  AL --> AC["action<br/>notify · remediate · open ticket"]
-  V["variable<br/>declared config: input = HDMI1"] -. "drift?" .- DP
-  classDef k fill:#21CAB9,stroke:#080c16,color:#080c16;
-  class DP k;
-```
-
-### Config is a first-class thing, with drift
-
-What a device *should* be is an operator decision: this codec should be on HDMI1, this DSP at
-this gain. Omniglass holds that as a **[variable](/architecture/variables/)**, a declared value
-that can be compared against the observed reality. When they disagree, that is **drift**, and
-drift is a signal you can alarm on or a fix you can push. The IT tools have nowhere to put
-"what it should be," so they cannot tell you when the world walked away from it.
-
-### Health is the headline
-
-Signals are not the point. **Health is.** Omniglass turns the canonical signals into the one
-answer that matters, and it rolls up the tree.
+**It runs the health model.** Signals roll up the tree into "is the room working," and the rollup is
+role-aware: a *required* display down takes the room down, a *redundant* mic only degrades it, an
+*informational* sensor does not touch it. That is what turns a wall of red dots into one honest
+answer, and it is what makes a real uptime SLA possible at all.
 
 ```mermaid
 flowchart BT
@@ -132,48 +98,50 @@ flowchart BT
   class S d;
 ```
 
-[Health](/architecture/health/) is just a computed datapoint, owned by the system, reduced from
-its members, and it is **role-aware**: a *required* member down takes the room down; a
-*redundant* one only degrades it (the room goes down only if every redundant peer is down); an
-*informational* one does not touch it. That is the
-difference between "a thing is red" and "the room is in trouble." And it is what makes a real uptime SLA possible at all.
+And then it acts: notify the right person, run remediate-verify-escalate (send the command, wait,
+re-check the real signal, escalate if it did not take), open and close the ticket as the alarm opens
+and clears.
 
-A room's health is a fact you can read at a glance:
+It is flexible enough to handle the mess, and clear enough that you can actually run it across a
+thousand rooms. Open source, self-hosted, vendor-agnostic, one server over a database you already
+know how to run. And it is free.
 
-| Member role | Example problem | Effect on the room |
-|---|---|---|
-| required | Display powered off while in use | down |
-| required | Video bar not connected to UCC | down |
-| redundant | Backup mic unreachable (a peer still holds) | degraded |
-| informational | Room temperature high | noted, room stays up |
+## The architecture, as one journey
 
-### And then it acts
+Every monitoring system is the same shape: **collect, evaluate, raise an event, hold it as an alarm,
+act, and see it the whole time.** Omniglass is that shape, built AV-native, and the architecture
+follows it end to end.
 
-Seeing is half of it. Omniglass also **acts**: notify the right person, run
-remediate-verify-escalate (send the command, wait, re-check the real datapoint, escalate if it
-did not take), open and close the ticket as the alarm opens and clears (and, on the reserved
-self-healing path, converge a drifted device back to its declared config). [Alarms and actions](/architecture/alarms-actions/) are one
-model, composed, not a separate workflow engine bolted on.
+```mermaid
+flowchart LR
+  G["AV gear<br/>SNMP · HTTP · SSH · raw AV control"] -->|"collect: flow engine, parse at the edge"| DP["datapoint<br/>one canonical signal"]
+  DP -->|"evaluate: event_rule"| EV["event"] -->|"fire opens / clear resolves"| AL["alarm<br/>room degraded"]
+  AL -->|"act"| AC["notify · remediate · ticket"]
+  V["variable<br/>desired config: input = HDMI1"] -. "drift?" .- DP
+  classDef k fill:#21CAB9,stroke:#080c16,color:#080c16;
+  class DP k;
+```
 
-## What Omniglass is
+Read it as a journey, and each stop is a page:
 
-Omniglass is an **open observability and control plane for AV and IT estates**. One install
-over a database you already know how to run: point it at your fleet and operate. It is fully open
-source and has been public from day one, so you can read every line, run it yourself, and never
-get locked into a vendor. (A single self-contained server on standard PostgreSQL; AGPLv3.)
+1. **[Collection](/architecture/collection/)** goes and gets the data from gear that never wanted to
+   give it, and parses it at the edge.
+2. **[Taxonomy](/architecture/taxonomy/)** types every reading into one owned, canonical signal, the
+   same measurement across every vendor.
+3. **[Variables](/architecture/variables/)** hold what a device *should* be, so config drift becomes
+   a signal you can see and a fix you can push.
+4. **[Health](/architecture/health/)** rolls the signals up the system tree into the one answer that
+   matters.
+5. **[Alarms and actions](/architecture/alarms-actions/)** detect a condition, hold it until it
+   resolves, and respond.
 
-It is also a **learning tool**. The same binary serves an interactive docs and concept site, so
-the tool that runs your estate also teaches the discipline it implements, against real or
-simulated data. The Measure and Instrument layers are concrete, explorable artifacts, not
-blueprints in a PDF.
+That journey is the whole architecture. The [overview](/architecture/) is the map of it.
 
-## The difference, in one line
+## The point
 
-We did not build Omniglass because the world needed another monitoring tool. We built it because
-the people who keep rooms working deserve to *see* them, as systems, not as a pile of hosts,
-and to act before the phone ever rings.
+We did not build Omniglass to add another monitoring tool to a crowded shelf. We built it so the
+people who keep rooms working can finally **know their systems**: see them as systems, not as a pile
+of hosts, and act before the 3am call.
 
-That one difference is the whole architecture.
-
-See how it is built. Start with the [architecture overview](/architecture/), then the
-[taxonomy](/architecture/taxonomy/).
+An IT tool answers "is the host up?" Omniglass answers "is the room working?" The industry never
+shipped a right way to see AV. So we did.
