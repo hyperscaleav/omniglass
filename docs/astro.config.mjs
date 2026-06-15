@@ -37,6 +37,7 @@ export default defineConfig({
         {
           label: 'Architecture',
           items: [
+            { label: 'Why Omniglass', slug: 'architecture/why' },
             { label: 'Overview', slug: 'architecture' },
             { label: 'Taxonomy', slug: 'architecture/taxonomy' },
             { label: 'Variables', slug: 'architecture/variables' },
