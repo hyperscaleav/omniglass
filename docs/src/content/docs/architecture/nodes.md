@@ -242,7 +242,7 @@ Generic lifecycle (exact enum deferred to the ssh slice):
 auth rejected, dropped, timeout). The **data event owns parse health**: a parse
 failure (connected, got bytes, the extraction did not match) lands on the record
 being produced (`telemetry` for polls and listener frames, the caused `event` + the
-`action` row for commands), with `raw` for replay, and surfaces as a collection-health
+`action` row for commands), with `raw` kept for debug, and surfaces as a collection-health
 datapoint so it is alertable. A command timeout can touch both.
 
 ## Inbound handling on a shared connection
@@ -261,8 +261,8 @@ matcher set**:
 - where the protocol **frames** responses vs events (xAPI tags `*r` vs `*e`, a
   request id correlates), framing drives routing and the regex only extracts within
   the matched frame; otherwise ordered content-matching is the fallback;
-- an **unmatched** frame lands as `raw` (orphan, logged, replay-recoverable), so a
-  missing matcher is a fixable gap, not lost data.
+- an **unmatched** frame lands as `raw` (orphan, logged), so a
+  missing matcher is a fixable gap that surfaces rather than failing silently.
 
 ## The component job queue
 
@@ -360,8 +360,8 @@ L6 (TLS), and further L7 handshakes slot in by extending the check stack: one
 
 The node ships a native `Event`: `{ datapoints, raw, labels }` plus an envelope
 (`task`, batch `ts`), as **native protobuf over gRPC**, buffered with
-retry/backoff. `raw` is the original wire bytes, kept so a wrong extraction is
-**replay-recoverable**. An **OTLP adapter** at the edge accepts OTLP from
+retry/backoff. `raw` is the original wire bytes, kept in the telemetry sidecar for a
+TTL'd debug window so a bad extraction can be inspected. An **OTLP adapter** at the edge accepts OTLP from
 third-party tools and translates to the native shape.
 
 ```mermaid
@@ -369,14 +369,14 @@ flowchart LR
   W["pull worklist<br/>(placed tasks + commands)"] --> X["execute:<br/>protocol + locate/Expr extraction"]
   X --> N["normalize: datapoints + labels + raw"]
   N --> S["buffer + ship<br/>native protobuf gRPC"]
-  S --> TE["telemetry<br/>(verbatim, the replay boundary)"]
-  TE -. handed off .-> WK["workers / storage:<br/>registry + bind + datapoint"]
+  S --> WK["server: validate + bind owner<br/>+ persist datapoints"]
+  S -.->|"raw"| TE["telemetry<br/>(raw, debug sidecar, TTL'd)"]
 ```
 
-The server appends the payload **verbatim** as a `telemetry` (the replay
-boundary: ground truth, immutable); everything after, registry lookup and binding to
-`datapoint`s, is derived and owned by workers and the storage
-spoke. The node's job ends at the ship.
+The node has already produced the datapoints at the edge; the server **validates and
+binds owner** (registry lookup, owner attribution) and **persists** them, and writes the
+raw payload to `telemetry` as a TTL'd debug sidecar. The server does not re-derive observed
+datapoints; only calc and event rules derive. The node's job ends at the ship.
 
 ## Tick scheduling, concurrency, and self-observability
 

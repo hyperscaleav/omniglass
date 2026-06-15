@@ -165,7 +165,7 @@ envvar key by default, KMS or Vault behind the same interface); every decrypt is
 
 | Table | Key columns | Notes |
 |---|---|---|
-| `variable_type` | (namespace, name), schema (fields + **per-field secret**), refresh, validation | the **shape** registry (a scalar, or structured like `oauth2` / `ssh_credential` / `snmp_community`); official namespace null, private shadow. Generalizes the old credential shapes |
+| `variable_type` | (namespace, name), schema (fields + **per-field secret**), refresh, validation | the **shape** registry (a scalar, or structured like `oauth2` / `ssh_credential` / `snmp_community`); official namespace null, private shadow |
 | `variable` | (name, **owner arc**), type, **declared_value** (secret fields encrypted), **linked_state** (-> state_datapoint, nullable), **observed_value**, reconcile | the config cell and the `$var:` cascade key; scope is the exclusive arc (template/component/system/location/global). Holds declared intent, optionally mirrors an observed datapoint for drift ([variables](/architecture/variables/)) |
 | `tag` | name, applies_to, propagates | operator-label registry (no `_type`, no namespace) |
 | `tag_binding` | (scope_kind, scope_id, tag), value | union + override combinator |

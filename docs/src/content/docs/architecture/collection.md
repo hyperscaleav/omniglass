@@ -79,8 +79,8 @@ interfaces:
 A top-level `flows` array. Each flow is **one trigger and a DAG of steps**, from trivial (one
 SNMP step reading 20 OIDs) to a multi-step branching pipeline.
 
-A **trigger** is one of three kinds, and unifies what used to be split into pollers and
-listeners: a poller is a schedule-triggered flow, a listener is an event-triggered flow.
+A **trigger** is one of three kinds, and unifies pollers and listeners: a poller is a
+schedule-triggered flow, a listener is an event-triggered flow.
 
 | Kind | Fires when | Notes |
 |---|---|---|
@@ -190,6 +190,6 @@ The flow runs the transform at the **edge**, not server-side:
   at the edge (the component is known, the flow runs for it). Fan-out to multiple owners (a
   management platform reporting for many devices) is a later phase.
 - Because parsing is the edge step, there is **no separately authored transform rule**. Routing
-  is the template's fan-out, and cross-entity rollups are [calc](/architecture/taxonomy/#rules-three-families)
+  is the template's fan-out, and cross-entity rollups are [calc](/architecture/taxonomy/#rules-calc-event-action)
   datapoints on system and location templates. The server-side work that remains is
   shared-interface owner-binding, untemplated raw ingress, and future replay.

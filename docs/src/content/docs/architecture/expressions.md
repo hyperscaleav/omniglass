@@ -27,8 +27,8 @@ type Engine interface {
 
 Every expression leaf carries an optional `engine` selector that defaults to `expr`. A
 compiled `Program` is cached by `(engine, source, env-shape)`, so compile cost is paid once.
-This is the lesson learned: CEL had grown to ~17 hardcoded compile sites, so a
-dialect change was a 17-site edit. Here there is exactly **one** swap point.
+A dialect hardcoded across the compile sites makes a swap an N-site edit; this seam keeps it
+to exactly **one** swap point.
 
 ## Why Expr is engine #1
 
@@ -40,7 +40,7 @@ collection extractors do constantly (`raw / 100.0`, `int(groups[1])`, `node.gain
 `groups[2] == 'true'`). **All transforms use Expr.** Where an expression is not even needed,
 prefer a straightforward native path over reaching for an engine at all.
 
-CEL is not carried forward as the standard. If a real case ever wants a second dialect, it
+CEL is not the standard dialect. If a real case ever wants a second dialect, it
 registers as another `Engine` implementation behind the same interface; it does not become
 the default and it does not change the schema.
 
@@ -52,7 +52,7 @@ the default and it does not change the schema.
 | step | `when` | the explicit branch guard (a false guard skips the step and dependents) |
 | `event_rule` | `fire_criteria`, `clear_criteria` | open/close an alarm-paired event off a datapoint change |
 | `calc_rule` | `reduce` (escape), `filter` | the named-reducer escape hatch and per-input filters |
-| rule | `scope` | which instances a rule fires for (the CEL escape becomes the Expr escape) |
+| rule | `scope` | which instances a rule fires for (the Expr scope escape) |
 | views / list | `filter` | the structured-query predicate operators compose |
 | dynamic group | membership `filter` | recomputed membership |
 

@@ -122,9 +122,8 @@ the declared side sourced from the variable. The `reconcile` policy turns drift 
 - **`accept`**: observed wins, write the observation into `declared` (reality becomes the new
   intent).
 
-`enforce` and `accept` are deferred; the column reserves the seam. This is where the old
-"declared wins" precedence lives now: it is a per-variable reconcile policy, not a per-key
-attribute on a datapoint.
+`enforce` and `accept` are deferred; the column reserves the seam. Spec-versus-status
+precedence is a per-variable reconcile policy, not a per-key attribute on a datapoint.
 
 ## The datapoint to variable worker
 

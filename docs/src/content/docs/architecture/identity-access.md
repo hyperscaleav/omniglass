@@ -209,7 +209,7 @@ TLS on the HTTP API and the gRPC ingest, terminated at the binary (it serves HTT
 
 ## Audit
 
-Every API operation records the resolved **actor** (the principal id) in `audit_log`. The field has existed since the first slice and was hardcoded to placeholders until IAM filled it. Secret decrypts are always audited, never filterable. System-mode writes record `actor = 'system'` (or `'bootstrap'` for the seed phase) so the audit trail distinguishes operator action from platform internals.
+Every API operation records the resolved **actor** (the principal id) in `audit_log`. Secret decrypts are always audited, never filterable. System-mode writes record `actor = 'system'` (or `'bootstrap'` for the seed phase) so the audit trail distinguishes operator action from platform internals.
 
 ## Bootstrap
 

@@ -38,7 +38,7 @@ error in the SPA.
   (`DensePage`, `FilterBar`, `Donut`, `SummaryFacet`, `Drawer`, `HealthBadge`,
   `Actor`, `Sparkline`) are the reuse target.
 - **Learning surfaces ride the real engine.** A concept page (a collection flow, a
-  transform, a calc rollup, an alarm lifecycle) renders the actual pipeline against real or
+  edge parse step, a calc rollup, an alarm lifecycle) renders the actual pipeline against real or
   lab-simulated data, not a static diagram. `solid-flow` is the workhorse for rendering the
   DAGs the engine actually runs.
 

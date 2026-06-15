@@ -37,9 +37,9 @@ Every operation lives under `/api/v1/*`. The path shape is derivable, not specia
   collision), `GET` reads, `PATCH` updates by PK (AIP-134, partial), `DELETE` removes.
   No upsert/register shortcuts.
 - **`:verb` (not `/verb`) for non-CRUD custom methods**: `/alarms/{id}:ack`,
-  `/nodes/{name}:heartbeat`, `/rules/transform:validate`, `/components/{name}:apply`,
+  `/nodes/{name}:heartbeat`, `/rules/calc:validate`, `/components/{name}:apply`,
   `/views/{id}:run`.
-- **Singular kind sub-segments**: `/rules/transform`, `/datapoints/metric`,
+- **Singular kind sub-segments**: `/rules/calc`, `/datapoints/metric`,
   `/types/component`, `/types/event`.
 - **official / private namespace** on every registry and rule family (below).
 - **List conventions** (AIP-132 target): `filter` / `orderBy` / `pageSize`+
