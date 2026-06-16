@@ -26,8 +26,8 @@ a genuine internal change, not as a routine escape hatch.
 ## What "the docs" means here
 
 - **Architecture pages** (`/architecture/`) hold the model: the spine plus leaf
-  documents, the glossary, the current decisions. Terms are defined once in the spine and
-  not redefined in leaves.
+  documents, and the current decisions. Each official term is defined once in the
+  [glossary](/architecture/taxonomy/#glossary) and not redefined in the leaves.
 - **Concept and learning pages** teach a concept interactively (see
   [the learning-tool restriction](/contributing/learning-tool/)). When a feature introduces a concept
   an operator must understand, the teaching surface ships with it.
