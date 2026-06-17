@@ -7,7 +7,7 @@ This is the authoritative data model: the meaning of the data. The physical layo
 
 ## The model in two sentences
 
-Flows collect from devices and **parse at the edge** into typed **datapoints** (metric, state, log) owned by a structural entity, keeping the raw payload in **telemetry** as a debug sidecar; **calc_rules** derive more datapoints, and **event_rules** evaluate datapoints into **events** (and the **alarms** they open and close); **actions** respond. Every datapoint carries a **provenance** (how we know it: observed, calculated, intended) and a **source**, and any two provenances (or sources) of one key disagreeing is the single universal divergence signal. Declared config (operator intent) lives in [variables](/architecture/variables/), not as a datapoint provenance.
+Flows collect from devices and **parse at the edge** into typed **datapoints** (metric, state, log) owned by a structural entity, keeping the raw payload in **telemetry** as a debug sidecar; **calc_rules** derive more datapoints, and **event_rules** evaluate datapoints into **events** (and the **alarms** they open and close); **actions** respond. Every datapoint carries a **provenance** (how we know it: observed, calculated, intended) and a **source**, and any two provenances (or sources) of one key disagreeing is the single universal divergence signal. Declared config (operator intent) lives in [config](/architecture/variables/), keyed to the same signal as its observed side but resolved down the cascade, never as a datapoint provenance.
 
 ```text
 function (edge) --parse--> datapoint (metric / state / log)
@@ -25,7 +25,7 @@ The pipeline is a **DAG**: rules read observed and calculated values as truth, o
 The model has exactly two independent questions, and conflating them is the only thing that makes it feel fuzzy.
 
 - **Kind** answers *what kind of thing is this?* It is fixed per **key**, forever, decided once when the key is defined. `power.state` is always a state.
-- **Provenance** answers *how do we know this particular value?* It varies per **row**. The same `power.state` can be observed or intended at different moments. A *declared* desired value lives in a [variable](/architecture/variables/), not on the datapoint.
+- **Provenance** answers *how do we know this particular value?* It varies per **row**. The same `power.state` can be observed or intended at different moments. A *declared* desired value lives in [config](/architecture/variables/) (keyed to the signal), not on the datapoint.
 
 Kind is a property of the key. Provenance is a property of the row.
 
@@ -136,9 +136,9 @@ Not every log-to-state path goes through a command. The split is measured fact v
 | "eth0 **is** down" | a component reporting measured reality | telemetry, transform, then **observed** state, directly |
 | we sent "**power on**" | intent in progress, not yet confirmed | command, event, then **intended** state |
 
-### declared values are variables
+### declared values are config
 
-mac, ip, serial, locked-input, anything an operator *sets* is declared intent, and declared intent is **not** a datapoint provenance. It lives in a [variable](/architecture/variables/)'s `declared_value`, resolved through the scope cascade and optionally linked to an observed `state_datapoint` for drift. There is no separate property or config store: config is the variable table plus the cascade, not a datapoint provenance. Ownership resolution reads the resolved identity (a declared identity variable, or the observed identity datapoint it links) to bind telemetry to components.
+mac, ip, serial, locked-input, anything an operator *sets* is declared intent, and declared intent is **not** a datapoint provenance. It lives in [config](/architecture/variables/): keyed to the same canonical signal as its observed side, resolved through the scope cascade, never in the datapoint tables. There is no separate property store: config is the declared side of a signal plus the cascade. Ownership resolution reads the resolved identity (a declared identity config value, or the observed identity datapoint that shares its key) to bind telemetry to components.
 
 ### Precedence: spec versus status lives in variables
 
@@ -309,7 +309,9 @@ This is the **authoritative glossary**: every official term in the architecture,
 | **source** | Which sensor/path produced an observed value; distinct from provenance; enables multi-source rows + fusion. A `source` registry carries default weights. |
 | **fusion_policy** | Per-key, built-in multi-source reconciliation (mode + tie-break + source weights), applied on read. |
 | **fusion** | Reconciling multiple observations: same-key multi-source = the key's fusion_policy (read-time); cross-key/system-level = a calc_rule. |
-| **variable** | A scoped, shaped config cell holding operator-**declared** intent (`declared_value`), optionally linked to an observed datapoint for drift/reconcile. The home for declared config. See [variables](/architecture/variables/). |
+| **config** | The declared side of a canonical signal: an operator-set value keyed to a `datapoint_type`, reconciled against the observed datapoint via the template's get/set functions and a per-item `reconcile` policy. See [config and credentials](/architecture/variables/). |
+| **credential** | An access secret with a structured shape, a pluggable `SecretProvider` (inline or external), and a lifecycle (refresh / rotation / expiry); read is `secret:read`-gated and every decrypt audited. Template-driven. |
+| **variable** | A free interpolated value (a macro): `$var:<name>`, resolved global→template→instance down the cascade; org-keyed, not signal-bound, no observed side. |
 | **drift** | The gap between a variable's declared value and its linked observed value. |
 | **reconcile** | Per-[variable](/architecture/variables/): spec-vs-status when declared and observed disagree (`alert` / `enforce` / `accept`). |
 | **cascade** | Resolves the effective variable value (declared or template default): global, type, template, location, system, component, group (weighted); most specific wins. |
@@ -346,7 +348,7 @@ This is the **authoritative glossary**: every official term in the architecture,
 | **internal_log** | Platform self-narration (startup, reconcile, migration, node-reg, config-sync). |
 | **ground truth** | Immutable append-only records: telemetry, log_datapoint, audit_log, session_log, internal_log. |
 | **principal / role / grant** | IAM subject; an RBAC capability set crossed with a scope. |
-| **credential** | A referenced secret (a variable of a secret-bearing shape), encrypted via the SecretProvider; decrypts audited. |
+| **secret:read** | The IAM permission to read a credential in plaintext; gated per role, and every decrypt is audited. |
 | **file / blob** | Searchable metadata over content-addressed bytes (pgblobs/S3/disk); dedup. |
 
 ## Build status

@@ -43,7 +43,7 @@ export default defineConfig({
             { label: 'Collection', slug: 'architecture/collection' },
             { label: 'Components', slug: 'architecture/components' },
             { label: 'Taxonomy (the model + glossary)', slug: 'architecture/taxonomy' },
-            { label: 'Variables', slug: 'architecture/variables' },
+            { label: 'Config & credentials', slug: 'architecture/variables' },
             { label: 'Cascade', slug: 'architecture/cascade' },
             { label: 'Health, SLI, and SLA', slug: 'architecture/health' },
             { label: 'Alarms and actions', slug: 'architecture/alarms-actions' },
