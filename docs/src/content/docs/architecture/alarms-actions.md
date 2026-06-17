@@ -53,6 +53,7 @@ event_rule:
   clear: "value < 60"                                # resolves it (defaults to !fire)
   for: 0                                             # sustained span (optional)
   severity: 30
+  health: degraded                                   # optional: degrade the owner's health while open
 ```
 
 `scope` selects the entities (fan-out, one alarm per match); `datapoint` is the
@@ -60,6 +61,17 @@ input; `window` / `for` are the aggregation machinery; `fire` / `clear` are the 
 leaves; `severity` is the integer (below). A rule is **suppressible by name through
 the cascade** ([cascade](/architecture/cascade/)): a high-weight group can remove a
 false-firing rule without editing it (the firmware-bug workaround).
+
+An event_rule also carries an optional **`health` impact** (`down` / `degraded`,
+default none): while the alarm it opens is open, it moves its owner's
+[health](/architecture/health/) by that much. Most rules carry none (an advisory
+alarm); the few that do are the owner's failure conditions. This is what makes health
+**alarm-sourced** rather than a parallel computation. Because a rule is scoped to
+whichever arc owns its datapoint, the same machinery yields **component-level** and
+**system-level** alarms: a system-scoped rule reads member data and fires a
+system-owned alarm for a condition only the system cares about (a display on input 2
+is fine for the display but wrong for the room), which is how system health sees what
+no single component can.
 
 ## Severity: an open integer, not an enum
 
@@ -135,19 +147,26 @@ verify TLS, bound timeouts, control redirects.
 ## Cycle safety in the action layer
 
 The `telemetry -> datapoint -> alarm` core is acyclic by construction (hub *Cycle
-safety*). The action layer closes the remaining thread with three rules:
+safety*), and **only data authors events**: an `event_rule` over datapoints (plus the
+clock's `origin=scheduled`) is the *only* way an event enters the log. Flows and
+actions never manufacture events, so the response layer cannot inject into the event
+graph at all. That leaves a single possible loop, the **data-mediated control loop**
+(an action commands a device, the device's new state arrives as a datapoint, which
+opens an alarm, which fires the action again), closed with three rules:
 
-1. **`action_rule.source` admits an alarm transition (open / resolve, an `event`), a
-   scheduled fire (an `event` with `origin=scheduled`), operator, and a flow's bounded
-   steps, never free-form `source=action`.** Action-to-action exists only as a bounded flow.
+1. **Alarms are terminal upstream** (they never write datapoints), so detection cannot
+   feed itself directly.
 2. **ack / snooze transitions do not match `action_rule`s** (only open / resolve do),
    which breaks the `action -> alarm(ack) -> action` loop.
-3. **Flows are finite by construction** (a step list, per-open-alarm, gated on open,
-   cancelled on resolve / ack), with a depth / step bound as defense. A flow's `emit` step
-   (raising an event) is the one re-entry edge, and the bound is what keeps it acyclic.
+3. **The control loop is lineage-guarded at dispatch.** Before an `action_rule` runs
+   an action, the engine walks the triggering event's **causation lineage**; if the
+   same `(action, owner)` already appears upstream it is suppressed, with a depth bound
+   as a backstop. Flows are finite by construction (a step list, per-open-alarm, gated
+   on open, cancelled on resolve / ack).
 
-So no edge can close a loop: alarms are terminal toward datapoints, actions fire only
-off open/resolve or bounded steps, and operator transitions never re-trigger.
+So no edge can close a loop: events come only from data, alarms are terminal toward
+datapoints, the response layer cannot author events, operator transitions never
+re-trigger, and the one real-world control loop is lineage-bounded.
 
 ## Flows: the multi-step action (deferred, defined)
 
@@ -157,11 +176,12 @@ canonical case is an **escalation**: "on this alarm, check X, wait 10m, if still
 and **cancelled on resolve or ack**. It depends on a durable per-incident timer
 ([time](/architecture/time/)), so it lands after the leaf step kinds and time exist.
 
-This is the platform's programmable layer: branching, parallel steps, `wait`, and `emit` (raise an
-Omniglass event). It is a **bounded** workflow engine, not a Turing-complete one: finite steps,
-cycle-guarded (above), with a depth/step cap as defense. That is enough for the real cases, an
-escalation, a time-bound access grant, an AI-troubleshooting flow that fetches more data and
-analyzes it, while staying safe to run. A future drag-and-drop editor edits flows.
+This is the platform's programmable layer: branching, parallel steps, `wait`, and acting (`notify`,
+`command` a device, page a human). A flow does **not** author events; it acts, and any effect it has
+on the world returns as ordinary data. It is a **bounded** workflow engine, not a Turing-complete
+one: finite steps, lineage-guarded (above), with a depth/step cap as defense. That is enough for the
+real cases, an escalation, a time-bound access grant, an AI-troubleshooting flow that fetches more
+data and analyzes it, while staying safe to run. A future drag-and-drop editor edits flows.
 
 ## Namespacing
 
@@ -180,7 +200,8 @@ concrete way to notify or to run a command against a given device class).
 
 ## Open items
 
-- The depth / step cap and cycle-detector shape for flows that `emit` events.
+- The depth bound and lineage-detector shape for the data-mediated control loop (an action whose
+  effect re-opens its own alarm).
 - Whether `severity_levels` is purely a render lookup or also carries policy (e.g. a
   default ack-timeout per level).
 - The dead-letter surface and operator replay of failed actions.

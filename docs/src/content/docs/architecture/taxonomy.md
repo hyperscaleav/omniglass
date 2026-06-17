@@ -315,12 +315,12 @@ This is the **authoritative glossary**: every official term in the architecture,
 | **cascade** | Resolves the effective variable value (declared or template default): global, type, template, location, system, component, group (weighted); most specific wins. |
 | **edge parse** | A function parses a raw payload into datapoints on the node, the edge half of [collection](/architecture/collection/). There is no server-side transform rule. |
 | **calc_rule** | datapoint(s) to datapoint (calculated): cross-key / system-level derivation. (Same-key multi-source reconcile is the key's fusion_policy.) |
-| **event_rule** | datapoint change to event: fire_criteria + optional clear_criteria (clear makes events alarm-paired). No separate alarm or condition rule. |
+| **event_rule** | datapoint change to event: fire_criteria + optional clear_criteria (clear makes events alarm-paired); an optional `health` impact lets its alarm move the owner's health. No separate alarm or condition rule. |
 | **action_rule** | A subscription (Expr over events; alarms via edge events) wiring occurrences to actions. |
 | **discovery_rule** | *(deferred)* observed data creates components/systems/locations + their identity variables; official/private. |
 | **event** | A discrete semantic occurrence the action layer reacts to. Keyed, point-in-time, owned via the arc. Not a datapoint. |
 | **origin** | How an event arose: caught, caused, derived, scheduled. |
-| **alarm** | One open-to-close incident: a stateful row driven by an event_rule's paired events; new row per open; keyed (event_rule, owner). Not event-sourced. The ITSM anchor. |
+| **alarm** | One open-to-close incident: a stateful row driven by an event_rule's paired events; new row per open; keyed (event_rule, owner); optionally health-impacting while open. Not event-sourced. The ITSM anchor. |
 | **action** | An ordered sequence of steps (notify, command in v1; wait/branch deferred). The canned remediate-verify-escalate ships v1. |
 | **command** | A `run`-action declaration in a component_template version (not a table); an instance is an `action` with `kind=command`. |
 | **disagree(A,B)** | A condition operator comparing two provenances or sources of one key. Drift, config drift, conflict. Keeps the DAG. |
@@ -336,7 +336,9 @@ This is the **authoritative glossary**: every official term in the architecture,
 | **location** | A place tree; classified by location_type; no template. |
 | **tag** | Operator label (registry + bindings); union + override. |
 | **group** | A named set (component/system/location/user), static or dynamic, weighted; a cascade overlay + access scope. |
-| **health** | An ordinary *calculated* state_datapoint owned by a system (up/degraded/down/unknown), reduced over its members, role-aware. |
+| **health** | The first-class operational state of every entity (up/degraded/down/unknown), carried as a *calculated* state_datapoint: `worst` over its open health-impacting alarms, rolled up the system tree role-aware. A model, not just a rule. See [health](/architecture/health/). |
+| **health impact** | An optional `down`/`degraded` tag on an `event_rule`: while the alarm it opens is open, it moves its owner's health by that much. What makes health alarm-sourced. |
+| **health_role** | A member's role in its system's health rollup (required / redundant / informational), declared on the system_template_member; the knob for the built-in role-aware rollup. |
 | **view** | A named query returning a uniform `{columns, rows}`; the read side, executed through the scoped gateway. |
 | **Storage Gateway** | The single door to the database; every read and write goes through it, and scope is injected here. |
 | **audit_log** | Who-did-what ground truth; one row per operator write, same-tx; the lineage target for operator writes, including variable changes. |

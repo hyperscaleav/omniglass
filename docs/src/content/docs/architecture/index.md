@@ -80,24 +80,27 @@ resolved down a **[cascade](/architecture/cascade/)**: set once high, overridden
 matters. Link a variable to its observed datapoint and the gap between intent and reality is
 **drift**, a signal you can alarm on, or a fix you can push back.
 
-## Model health
-
-A single signal is rarely the point. **Calculations** combine and roll signals up the tree, and the
-headline is **[health](/architecture/health/)**: a calculated datapoint owned by the **system**,
-reduced from its members and **role-aware**. A *required* component down takes the system down; a
-*redundant* one only degrades it; an *informational* one does not touch it. That is the answer to
-"is the system working?", and a target on it over time is a real uptime **SLA**.
-
-The rollup ships opinionated by default, with an escape hatch for the systems the defaults get wrong.
-The health model always runs; the only question is whether it runs *as a system* against real signal,
-or in the operator's head against half of it.
-
 ## Detect
 
 An **[event_rule](/architecture/alarms-actions/)** watches a datapoint and fires when its condition
 is met, recording an **event**: our assertion, in our own words, that something happened. Pair a fire
 with a clear and the two events open and resolve an **alarm**, the stateful incident, one row per
-occurrence, the thing an operator works and a ticket binds to.
+occurrence, the thing an operator works and a ticket binds to. An alarm can carry a **health impact**,
+which is what turns a detection into a verdict on the system.
+
+## Model health
+
+A single alarm is rarely the point. The headline is **[health](/architecture/health/)**: a
+first-class state carried as a calculated datapoint and owned by the **system**. A component goes
+unhealthy when a health-impacting **alarm** opens on it, and the system **rolls its members up,
+role-aware**. A *required* component down takes the system down; a *redundant* one only degrades it;
+an *informational* one does not touch it. That is the answer to "is the system working?", and a
+target on it over time is a real uptime **SLA**.
+
+The rollup ships **opinionated by default**, a first-class model rather than a byproduct of the rules
+engine, with an escape hatch for the systems the defaults get wrong. The health model always runs;
+the only question is whether it runs *as a system* against real signal, or in the operator's head
+against half of it.
 
 ## Act
 
@@ -118,14 +121,14 @@ entire time.
 ```mermaid
 flowchart LR
   G["gear"] -->|"collect (node + edge parse)"| DP["datapoint<br/>canonical signal"]
-  DP -->|"calculate"| H["health<br/>(rolls up the system)"]
   DP -->|"event_rule"| EV["event"] -->|"fire / clear"| AL["alarm"]
-  H --> EV
+  AL -->|"health impact"| H["health<br/>(rolls up the system)"]
   AL -->|"action_rule"| AC["action<br/>notify · remediate · ticket"]
   AC -.->|"command"| G
   VAR["variable<br/>declared config"] -. "drift" .- DP
   DP --> VW["views → console"]
   AL --> VW
+  H --> VW
   classDef k fill:#21CAB9,stroke:#080c16,color:#080c16;
   class DP k;
 ```
