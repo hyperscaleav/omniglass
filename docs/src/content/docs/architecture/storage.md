@@ -149,7 +149,7 @@ erDiagram
 |---|---|---|
 | `interface_type` | name, **built**, direction (in/out), param_schema (jsonb) | the protocol-and-style registry (`ssh`, `https`, `snmp`, `mqtt`, `webhook`, ...); generates the template config schema |
 | `interface` | name (per component), interface_type, **component** (nullable: set = pre-bound, null = shared/match-key), params (jsonb), **node** (server-assigned placement) | the connection, declared once ([collection](/architecture/collection/), [nodes](/architecture/nodes/)) |
-| `task` | **id = content hash**, interface, **mode (poll/listen)**, spec (jsonb), enabled | a node's unit of collection work; dedupes identical work. Parsing to datapoints is the **edge flow step** ([collection](/architecture/collection/)), not the task's job |
+| `task` | **id = content hash**, interface, **mode (poll/listen)**, spec (jsonb), enabled | a node's unit of collection work; dedupes identical work. Parsing to datapoints is the **edge function** ([collection](/architecture/collection/)), not the task's job |
 | `datapoint_type` | (namespace, name), kind (metric/state/log), value_type, unit, **fusion_policy**, validation (jsonb) | the one key registry across all datapoint kinds; official namespace null, private shadow on assignment; referenced by templates ([taxonomy](/architecture/taxonomy/)) |
 | `event_type` | (namespace, name), display_name, **payload_schema (jsonb)** | the event-key registry; lets an event_rule promote a raw log line into a registered event. Official namespace null, private shadow |
 
@@ -170,7 +170,7 @@ envvar key by default, KMS or Vault behind the same interface); every decrypt is
 | `tag` | name, applies_to, propagates | operator-label registry (no `_type`, no namespace) |
 | `tag_binding` | (scope_kind, scope_id, tag), value | union + override combinator |
 | `group` | id, kind (component/system/location/user), membership (static list or dynamic filter), **weight** | cascade band and access scope ([cascade](/architecture/cascade/), [identity and access](/architecture/identity-access/)) |
-| `calc_rule` / `event_rule` / `action_rule` | **(id, version)**, scope, spec (jsonb: Expr + params) | config, named for function ([taxonomy](/architecture/taxonomy/)); versioned so a backtest can pin the rule version. `calc_rule` = cross-key/system-level derivation; `event_rule` = fire_criteria + optional clear_criteria; `action_rule` = a subscription (an Expr predicate over events). Parsing is the edge flow step, not a rule; a deferred `discovery_rule` is not yet in schema |
+| `calc_rule` / `event_rule` / `action_rule` | **(id, version)**, scope, spec (jsonb: Expr + params) | config, named for function ([taxonomy](/architecture/taxonomy/)); versioned so a backtest can pin the rule version. `calc_rule` = cross-key/system-level derivation; `event_rule` = fire_criteria + optional clear_criteria; `action_rule` = a subscription (an Expr predicate over events). Parsing is the edge function, not a rule; a deferred `discovery_rule` is not yet in schema |
 
 ## Files and blobs
 

@@ -13,10 +13,10 @@ we judge it done.
 sense, a page is not just a control panel over data; it is an interactive explanation of
 the concept and the data flow behind it, driven by real or simulated data.
 
-A feature that introduces a concept (a collection flow, an edge parse step, a calc rollup, an
+A feature that introduces a concept (a collection function, an edge parse step, a calc rollup, an
 alarm lifecycle) should ship a surface where a learner can *see the concept happen*:
 
-- the flow or pipeline rendered, not just described,
+- the function or pipeline rendered, not just described,
 - real or simulated data moving through it,
 - the ability to poke it and watch the result change.
 

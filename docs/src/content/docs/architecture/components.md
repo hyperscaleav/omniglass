@@ -1,10 +1,10 @@
 ---
 title: Components
-description: What a device is, expressed as a versioned component template that mirrors a Zabbix template; how collection runs is the flow engine.
+description: What a device is, expressed as a versioned component template that mirrors a Zabbix template; how collection runs is its functions.
 ---
 
 Leaf of the [architecture spine](/architecture/). What a device *is*: the component template,
-the device shape. How collection *runs* is the [flow engine](/architecture/collection/); the
+the device shape. How collection *runs* is its [functions](/architecture/collection/); the
 node runtime that executes it is [nodes](/architecture/nodes/).
 
 ## The component model
@@ -19,10 +19,10 @@ A **`component_template` is the direct mirror to a Zabbix template**: it bundles
 versioned unit, everything needed to monitor and control a class of device. Where a Zabbix
 template ships items, triggers, macros, and tags, ours ships:
 
-- **collection** authored as the [flow engine](/architecture/collection/) (inputs, interfaces,
-  flows), below;
-- **commands** (the `run` actions the device supports), detail in
-  [alarms-actions](/architecture/alarms-actions/);
+- **collection** authored as [functions](/architecture/collection/) (inputs, interfaces,
+  functions), below;
+- **commands** (command-triggered functions the device supports, e.g. `reboot`, `set-input`),
+  detail in [collection](/architecture/collection/);
 - **`datapoint_type` references** (kind / unit / validation live on the registry, see
   [taxonomy](/architecture/taxonomy/); a template references a key, never mints one);
 - required **[variables](/architecture/variables/)** and defaults, and the **credential shapes**
@@ -33,13 +33,13 @@ template ships items, triggers, macros, and tags, ours ships:
 A template is authored once and **assigned to an existing component**; the node then executes
 the result.
 
-## Collection is the flow engine
+## Collection is functions
 
-A template's collection is authored as the [flow engine](/architecture/collection/): `inputs`
-(typed parameters), `interfaces` (connections declared once, possibly persistent), and `flows`
-(each a trigger plus a DAG of steps that parse at the edge and emit datapoints). Commands are
-interface functions in the same model. See [collection](/architecture/collection/) for the full
-schema; this page covers the rest of the device shape.
+A template's collection is authored as [functions](/architecture/collection/): `inputs`
+(typed parameters), `interfaces` (connections declared once, possibly persistent), and `functions`
+(each a trigger plus a DAG of steps that parse at the edge and emit datapoints). A command is a
+command-triggered function in the same model. See [collection](/architecture/collection/) for the
+full schema; this page covers the rest of the device shape.
 
 ## The rest of the shape
 
@@ -53,7 +53,7 @@ schema; this page covers the rest of the device shape.
 - **Tags.** Default org labels seeded onto the component (`category: audio-dsp`).
 - **Alarms / health.** Default `event_rule`s the template ships (the Zabbix-trigger mirror: fan
   stalled, sustained high temp), owned in detail by the alarm spoke.
-- **Flow trigger params are cascade bases.** A flow's `interval: 30s` is the floor of the
+- **Function trigger params are cascade bases.** A function's `interval: 30s` is the floor of the
   cascade, overridable by a location, group, or the instance (the `poll_interval` example in
   [cascade](/architecture/cascade/)), not a hard value.
 
@@ -63,7 +63,7 @@ Assigning a template to a component materializes its collection in one action: i
 template's required [`inputs`](/architecture/collection/#inputs-the-templates-typed-parameters)
 (the `:apply` gate, a 422 lists any unmet required fields), writes the supplied inputs as the
 component's [variables](/architecture/variables/) (`declared_value`, audited), resolves the
-interfaces, and compiles the flows to the per-node runtime unit at the server-chosen node.
+interfaces, and compiles the functions to the per-node runtime unit at the server-chosen node.
 Re-applying converges. The 80% case is one action, as cheap as "add host".
 
 ## Open items

@@ -61,7 +61,7 @@ write a list filter and a rule scope. One language across the surface.
 
 ## In-scope bindings
 
-Within a flow tick the engine environment exposes the documented namespaces: `$var:<key>`
+Within a function run the engine environment exposes the documented namespaces: `$var:<key>`
 (config/secret through the cascade), `$dp.<key>` (datapoints, emitted and readable for
 branching), `$steps.<id>.*` (ephemeral scratch), `$event` (a listen payload), and the
 extractor-local inputs a step prepares for its `value` leaf (`raw`, `groups`, `node`,

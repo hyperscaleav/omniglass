@@ -114,7 +114,7 @@ follows it end to end.
 
 ```mermaid
 flowchart LR
-  G["AV gear<br/>SNMP · HTTP · SSH · raw AV control"] -->|"collect: flow engine, parse at the edge"| DP["datapoint<br/>one canonical signal"]
+  G["AV gear<br/>SNMP · HTTP · SSH · raw AV control"] -->|"collect: functions, parse at the edge"| DP["datapoint<br/>one canonical signal"]
   DP -->|"evaluate: event_rule"| EV["event"] -->|"fire opens / clear resolves"| AL["alarm<br/>room degraded"]
   AL -->|"act"| AC["notify · remediate · ticket"]
   V["variable<br/>desired config: input = HDMI1"] -. "drift?" .- DP

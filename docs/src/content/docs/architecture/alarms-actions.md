@@ -1,13 +1,14 @@
 ---
 title: Alarms and actions
-description: How Hyperscale AV detects conditions with stateful alarms and responds with decoupled, cycle-safe actions and runbooks.
+description: How Omniglass detects a condition with a stateful alarm and responds with an action, which is a flow when it has more than one step.
 ---
 
 Component document of the
 [architecture overview](/architecture/). The response half of the
 pipeline: an **alarm** detects a condition and holds it; an **action** does
-something about it. Both are **stateful entities that hold their state directly**
-(not event-sourced). The credentials an action uses to reach a sink live in
+something about it. A simple action is a single step (a `notify`); a multi-step action is a
+**flow** (it branches, waits, and runs steps in parallel). Both alarm and action are **stateful
+entities that hold their state directly** (not event-sourced). The credentials an action uses to reach a sink live in
 credentials; the Expr and Go-template machinery in
 [expressions](/architecture/expressions/).
 
@@ -89,8 +90,8 @@ its own state directly (status, current step, delivery), not event-sourced:
   edge realization is in [components](/architecture/components/) / [nodes](/architecture/nodes/)).
 - a **simple** action carries delivery state (`queued / sent / failed / retried`,
   the at-least-once outbox);
-- a **multistep** action (a runbook) carries workflow state (current step, waiting,
-  done), exactly like an alarm's lifecycle.
+- a **multistep** action is a **flow**: it carries workflow state (current step, waiting,
+  branches), exactly like an alarm's lifecycle.
 
 The `action` row carries identity, kind, config, and current status.
 
@@ -99,7 +100,10 @@ The `action` row carries identity, kind, config, and current status.
 Detection and response are kept **separate**, the discipline that avoids Zabbix's
 action/operation tangle: the `event_rule` does not contain its response. Instead an
 `action_rule` **subscribes to events and alarms** via an Expr predicate, so one action
-rule can serve many alarms. It is a subscription, not a fourth datapoint-pipeline
+rule can serve many alarms. Subscriptions are **indexed by event key and label**, so dispatch
+evaluates only the predicates whose key or label already matches, not every rule on every event;
+an action rule may carry **multiple triggers** and fires if any matches (including a label or
+wildcard trigger, e.g. any event labeled `room=boardroom-a`). It is a subscription, not a fourth datapoint-pipeline
 rule family (the derivation rules, calc and event, produce data; the
 `action_rule` wires the resulting events and alarms to actions):
 
@@ -134,33 +138,30 @@ The `telemetry -> datapoint -> alarm` core is acyclic by construction (hub *Cycl
 safety*). The action layer closes the remaining thread with three rules:
 
 1. **`action_rule.source` admits an alarm transition (open / resolve, an `event`), a
-   scheduled fire (an `event` with `origin=scheduled`), operator, and the declarative
-   runbook step-list, never free-form `source=action`.** Action-to-action exists only
-   as a bounded runbook.
+   scheduled fire (an `event` with `origin=scheduled`), operator, and a flow's bounded
+   steps, never free-form `source=action`.** Action-to-action exists only as a bounded flow.
 2. **ack / snooze transitions do not match `action_rule`s** (only open / resolve do),
    which breaks the `action -> alarm(ack) -> action` loop.
-3. **Runbooks are finite by construction** (a declarative step list, per-open-alarm,
-   gated on open, cancelled on resolve / ack), with a depth / step bound as defense.
+3. **Flows are finite by construction** (a step list, per-open-alarm, gated on open,
+   cancelled on resolve / ack), with a depth / step bound as defense. A flow's `emit` step
+   (raising an event) is the one re-entry edge, and the bound is what keeps it acyclic.
 
 So no edge can close a loop: alarms are terminal toward datapoints, actions fire only
 off open/resolve or bounded steps, and operator transitions never re-trigger.
 
-## Runbook: the stateful meta-action (deferred, defined)
+## Flows: the multi-step action (deferred, defined)
 
-A **runbook** is a timer-driven, alarm-state-gated **sequence** of actions: "on this
-alarm, check X, wait 10m, if still open run Y, wait 1h, escalate to a human." It is
-an action that calls other actions over time, **instantiated per open alarm**, gated
-on the alarm still being open, and **cancelled on resolve or ack**. It depends on a
-durable per-incident timer (the time-source primitive, also deferred), so it lands
-after leaf actions and time exist.
+A **flow** is a multi-step action: a DAG of steps that can branch, run in parallel, and wait. The
+canonical case is an **escalation**: "on this alarm, check X, wait 10m, if still open run Y, wait
+1h, page a human." A flow is **instantiated per open alarm**, gated on the alarm still being open,
+and **cancelled on resolve or ack**. It depends on a durable per-incident timer
+([time](/architecture/time/)), so it lands after the leaf step kinds and time exist.
 
-Hard line: it stays a **declarative step list, never a Turing-complete workflow**.
-Complex logic lives inside a `run` action's script or a user-owned webhook receiver,
-not in the platform (that way lies a workflow engine, a different product).
-"Escalation policy" is the accurate concept; `runbook` is the working taxon (open to
-`playbook` / `routine`). Naming caveat: in ops "runbook" also means a human-followed
-documented procedure (likely a future KB artifact, a different surface); revisit if
-that gets built.
+This is the platform's programmable layer: branching, parallel steps, `wait`, and `emit` (raise an
+Omniglass event). It is a **bounded** workflow engine, not a Turing-complete one: finite steps,
+cycle-guarded (above), with a depth/step cap as defense. That is enough for the real cases, an
+escalation, a time-bound access grant, an AI-troubleshooting flow that fetches more data and
+analyzes it, while staying safe to run. A future drag-and-drop editor edits flows.
 
 ## Namespacing
 
@@ -175,12 +176,11 @@ concrete way to notify or to run a command against a given device class).
   resolving to different concrete commands by component type / model through the
   cascade (the edge dispatch and the `command` declaration already exist in
   [components](/architecture/components/) / [nodes](/architecture/nodes/); this is the abstract-to-concrete resolution layer above them).
-- **Runbook** (above), behind leaf actions and the time-source primitive.
+- **Flows** (above), the multi-step action, behind the leaf step kinds and the time primitive.
 
 ## Open items
 
-- The runbook taxon (`runbook` / `playbook` / `routine`) and whether the human-doc
-  sense collides.
+- The depth / step cap and cycle-detector shape for flows that `emit` events.
 - Whether `severity_levels` is purely a render lookup or also carries policy (e.g. a
   default ack-timeout per level).
 - The dead-letter surface and operator replay of failed actions.

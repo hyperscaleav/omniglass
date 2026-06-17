@@ -105,7 +105,7 @@ slow config signal) or "lost visibility, alarm" (a liveness signal) is **per-dat
 policy**: the datapoint_type declares its staleness tolerance.
 
 **Cadence is inferred for pollers, declared for heartbeats.** A poller's expected interval is its
-`interval` times a tolerance. A listen-triggered flow is **opt-in**: watched only if it declares
+`interval` times a tolerance. A listen-triggered function is **opt-in**: watched only if it declares
 an expected heartbeat interval (an MQTT keepalive, a source that pings); silence on a listener
 with no declared heartbeat is normal and unwatched.
 

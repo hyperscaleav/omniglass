@@ -16,7 +16,7 @@ is a generated client of the API (typed via `openapi-fetch` off the committed
 | Components / theme | daisyUI on Tailwind CSS v4 |
 | Data fetching | `@tanstack/solid-query` over a typed `openapi-fetch` client |
 | Tables | `@tanstack/solid-table` (group-by, sub-rows) |
-| Flow / graph viz | `solid-flow` (collection flows, pipelines, DAGs) |
+| Flow / graph viz | `solid-flow` (collection functions, pipelines, DAGs) |
 | Dashboards | `gridstack` (12-column widget grid) |
 | Build / test | Vite, Vitest, `@solidjs/testing-library` |
 
@@ -37,7 +37,7 @@ error in the SPA.
   the summary stays whole so click-to-filter is stable. The extracted primitives
   (`DensePage`, `FilterBar`, `Donut`, `SummaryFacet`, `Drawer`, `HealthBadge`,
   `Actor`, `Sparkline`) are the reuse target.
-- **Learning surfaces ride the real engine.** A concept page (a collection flow, a
+- **Learning surfaces ride the real engine.** A concept page (a collection function, a
   edge parse step, a calc rollup, an alarm lifecycle) renders the actual pipeline against real or
   lab-simulated data, not a static diagram. `solid-flow` is the workhorse for rendering the
   DAGs the engine actually runs.
