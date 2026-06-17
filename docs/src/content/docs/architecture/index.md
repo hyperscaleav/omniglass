@@ -75,10 +75,11 @@ fleet.
 
 Not every value is measured. Some are **declared**, set by an operator rather than read from a
 device: a setting that should hold (this input should be HDMI1), or a value that rides down the tree
-(this system polls every 30 seconds). A declared value is a **[variable](/architecture/variables/)**,
-resolved down a **[cascade](/architecture/cascade/)**: set once high, overridden exactly where it
-matters. Link a variable to its observed datapoint and the gap between intent and reality is
-**drift**, a signal you can alarm on, or a fix you can push back.
+(this system polls every 30 seconds). A declared value is **[config](/architecture/variables/)** when
+it is bound to a signal, or a plain **variable** when it just rides down the tree, both resolved down
+a **[cascade](/architecture/cascade/)**: set once high, overridden exactly where it matters. Config
+has an observed side, so the gap between intent and reality is **drift**, a signal you can alarm on or
+a fix you can push back.
 
 ## Detect
 
@@ -125,7 +126,7 @@ flowchart LR
   AL -->|"health impact"| H["health<br/>(rolls up the system)"]
   AL -->|"action_rule"| AC["action<br/>notify · remediate · ticket"]
   AC -.->|"command"| G
-  VAR["variable<br/>declared config"] -. "drift" .- DP
+  VAR["config<br/>declared"] -. "drift" .- DP
   DP --> VW["views → console"]
   AL --> VW
   H --> VW
@@ -171,7 +172,7 @@ A handful of patterns hold everywhere, and they are why the model stays coherent
 
 Every official term is defined once in the **[glossary](/architecture/taxonomy/#glossary)**. The deep
 pages in the sidebar follow this same journey: collection, the device shape, the data model,
-variables, the cascade, health, alarms and actions, then the foundations underneath.
+config and credentials, the cascade, health, alarms and actions, then the foundations underneath.
 
 Omniglass is built greenfield, one vertical slice per PR; the physical schema lives in
 [storage](/architecture/storage/).

@@ -117,7 +117,7 @@ flowchart LR
   G["AV gear<br/>SNMP · HTTP · SSH · raw AV control"] -->|"collect: functions, parse at the edge"| DP["datapoint<br/>one canonical signal"]
   DP -->|"evaluate: event_rule"| EV["event"] -->|"fire opens / clear resolves"| AL["alarm<br/>room degraded"]
   AL -->|"act"| AC["notify · remediate · ticket"]
-  V["variable<br/>desired config: input = HDMI1"] -. "drift?" .- DP
+  V["config<br/>desired: input = HDMI1"] -. "drift?" .- DP
   classDef k fill:#21CAB9,stroke:#080c16,color:#080c16;
   class DP k;
 ```
@@ -128,7 +128,7 @@ Read it as a journey, and each stop is a page:
    give it, and parses it at the edge.
 2. **[Taxonomy](/architecture/taxonomy/)** types every reading into one owned, canonical signal, the
    same measurement across every vendor.
-3. **[Variables](/architecture/variables/)** hold what a device *should* be, so config drift becomes
+3. **[Config](/architecture/variables/)** holds what a device *should* be, so drift becomes
    a signal you can see and a fix you can push.
 4. **[Health](/architecture/health/)** rolls the signals up the system tree into the one answer that
    matters.

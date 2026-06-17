@@ -18,13 +18,13 @@ recorded once, at the source.
   user, service account, or node.
 - **Ground truth and replay source.** Operator-driven transitions and config changes are not
   recomputable from telemetry, so the audit log is what replay reads for them: alarm ack and
-  snooze ([alarms and actions](/architecture/alarms-actions/)), and every variable change a
+  snooze ([alarms and actions](/architecture/alarms-actions/)), and every config change a
   reconcile consumes.
 
 ## Reads
 
 - **Secret decrypts are always audited and never filterable.** Every read of secret material
-  emits an `audit_log` (a variable secret decrypt), and that subset cannot be filtered away.
+  emits an `audit_log` (a credential decrypt), and that subset cannot be filtered away.
 - **Other reads are not audited at the storage layer.** Optional read-audit is config-driven at
   the API layer (per-resource opt-in or a verbosity setting), off by default.
 
@@ -37,7 +37,7 @@ high-assurance deployments is an open item.
 ## Who consumes it
 
 - **Replay**: operator transitions and config changes are replayed from here, not recomputed.
-- **Reconcile**: variable changes arrive as `audit_log` rows, so reconcile reacts to them.
+- **Reconcile**: config changes arrive as `audit_log` rows, so reconcile reacts to them.
 - **The alarm projection**: ack and snooze come from audit.
 
 ## Open items

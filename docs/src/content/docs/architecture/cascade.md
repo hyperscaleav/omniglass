@@ -1,16 +1,16 @@
 ---
 title: Cascade
-description: How effective configuration (variables, tags, rule-sets) is resolved for any entity and how the resolve view explains why a given value won.
+description: How effective settings (config, variables, tags, rule-sets) are resolved for any entity and how the resolve view explains why a given value won.
 ---
 
 Component document of
-[architecture overview](/architecture/). How effective config
-(variables, tags, rule-sets) is resolved for any entity, and how to explain why a
+[architecture overview](/architecture/). How effective settings
+(config, variables, tags, rule-sets) are resolved for any entity, and how to explain why a
 given value won.
 
 ## What it resolves
 
-The effective **variables** ([the config cells](/architecture/variables/)), **tags**, and **rule-sets** for any entity. A
+The effective **config and variables** ([config and credentials](/architecture/variables/)), **tags**, and **rule-sets** for any entity. A
 first-class **resolve view** explains every effective value: the winning source
 and what it shadowed. The order is deliberately hand-tuned (not derivable from a
 single rule), so the resolve view is the safety net, not an afterthought.
@@ -76,7 +76,7 @@ attributes are groups.
 
 ## Combinators (by what is resolved)
 
-- **variables -> scalar override**: the deepest/highest source wins; one value.
+- **config / variables -> scalar override**: the deepest/highest source wins; one value.
 - **tags -> union on name, override on value**: names accumulate; for a given
   name, the winning source's value wins.
 - **rules** (`calc_rule` / `event_rule`) -> **additive

@@ -31,8 +31,8 @@ ComponentTemplate (apiVersion, kind, metadata.labels)
   so a step can branch on a value a prior step just collected, straight from node memory.
 - **Two data planes, split by access pattern.** Timeseries [datapoints](/architecture/taxonomy/)
   (observed and calculated) are append-heavy and history-bearing. Current-value config and
-  secrets live in the separate [variable](/architecture/variables/) table (sargable
-  point-lookups). A variable may link a datapoint as its observed side.
+  credentials live in the separate [config and credentials](/architecture/variables/) store (sargable
+  point-lookups); config is keyed to a datapoint as its observed side.
 - **Kubernetes-style versioning.** `apiVersion: collection.omniglass.dev/v1alpha1` plus a
   `kind` (`ComponentTemplate`, later `SystemTemplate` / `LocationTemplate`). The parser gates
   on `apiVersion` and converts older versions forward.
@@ -94,7 +94,7 @@ primitives, a poller, a listener, and a command:
 | `command` | invoked on demand, by an operator or by a [flow](/architecture/alarms-actions/) | an action you run against the device (`reboot`, `set-input`) |
 
 A `command` function takes typed `args` and is the imperative path: it is how the platform *acts*
-on a device, and how a reconcile pushes a declared config back (see [variables](/architecture/variables/)).
+on a device, and how a reconcile pushes a declared config back (the **set** function, see [config](/architecture/variables/)).
 `triggers` is modeled as a list; the first phase enforces exactly one. The foreseeable
 multi-trigger case is a scheduled function that is also command-invocable for a targeted refetch.
 

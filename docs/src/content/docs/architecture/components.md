@@ -25,7 +25,7 @@ template ships items, triggers, macros, and tags, ours ships:
   detail in [collection](/architecture/collection/);
 - **`datapoint_type` references** (kind / unit / validation live on the registry, see
   [taxonomy](/architecture/taxonomy/); a template references a key, never mints one);
-- required **[variables](/architecture/variables/)** and defaults, and the **credential shapes**
+- required **[config](/architecture/variables/)** and defaults, and the **credential shapes**
   it needs (see [cascade](/architecture/cascade/), credentials);
 - default **tags**;
 - default **alarms / health** (the trigger mirror; the alarm spoke owns the detail).
@@ -43,8 +43,8 @@ full schema; this page covers the rest of the device shape.
 
 ## The rest of the shape
 
-- **Variables (props).** The template declares the [variables](/architecture/variables/) a
-  component *requires* (the connection and inventory facts, e.g. `ip-addr`, `serial`) and
+- **Config (props).** The template declares the [config](/architecture/variables/) a
+  component *requires* (connection and inventory facts, e.g. `ip-addr`, `serial`) and
   their defaults. Effective values resolve through the cascade ([cascade](/architecture/cascade/)).
 - **Credential shapes.** The template declares the *kinds* of credential the device needs
   (`username_password`, `snmp_community`, `header_token`); these are
@@ -62,7 +62,7 @@ full schema; this page covers the rest of the device shape.
 Assigning a template to a component materializes its collection in one action: it binds the
 template's required [`inputs`](/architecture/collection/#inputs-the-templates-typed-parameters)
 (the `:apply` gate, a 422 lists any unmet required fields), writes the supplied inputs as the
-component's [variables](/architecture/variables/) (`declared_value`, audited), resolves the
+component's [config](/architecture/variables/) (declared, audited), resolves the
 interfaces, and compiles the functions to the per-node runtime unit at the server-chosen node.
 Re-applying converges. The 80% case is one action, as cheap as "add host".
 

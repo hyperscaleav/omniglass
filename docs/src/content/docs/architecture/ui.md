@@ -46,10 +46,10 @@ label-and-color band) resolves client-side from the config view.
 
 ## Configuration UIs
 
-CRUD forms over the typed resource API, one per primitive (components, templates, rules, variables,
-tags, groups, schedules, severity levels, and the IAM resources). Editing a property is editing a
-**[variable](/architecture/variables/)** (an audited mutation), not a separate prop store; each
-write is an audited mutation ([audit](/architecture/audit/)). The standout is the **rule-authoring
+CRUD forms over the typed resource API, one per primitive (components, templates, rules, config,
+tags, groups, schedules, severity levels, and the IAM resources). Editing a setting is editing
+**[config](/architecture/variables/)**, an audited mutation, not a separate prop store
+([audit](/architecture/audit/)). The standout is the **rule-authoring
 page**:
 
 - an **Expr editor** for the predicate or condition, with the prepared-input contract surfaced

@@ -7,7 +7,7 @@ This is the authoritative data model: the meaning of the data. The physical layo
 
 ## The model in two sentences
 
-Flows collect from devices and **parse at the edge** into typed **datapoints** (metric, state, log) owned by a structural entity, keeping the raw payload in **telemetry** as a debug sidecar; **calc_rules** derive more datapoints, and **event_rules** evaluate datapoints into **events** (and the **alarms** they open and close); **actions** respond. Every datapoint carries a **provenance** (how we know it: observed, calculated, intended) and a **source**, and any two provenances (or sources) of one key disagreeing is the single universal divergence signal. Declared config (operator intent) lives in [config](/architecture/variables/), keyed to the same signal as its observed side but resolved down the cascade, never as a datapoint provenance.
+Functions collect from devices and **parse at the edge** into typed **datapoints** (metric, state, log) owned by a structural entity, keeping the raw payload in **telemetry** as a debug sidecar; **calc_rules** derive more datapoints, and **event_rules** evaluate datapoints into **events** (and the **alarms** they open and close); **actions** respond. Every datapoint carries a **provenance** (how we know it: observed, calculated, intended) and a **source**, and any two provenances (or sources) of one key disagreeing is the single universal divergence signal. Declared config (operator intent) lives in [config](/architecture/variables/), keyed to the same signal as its observed side but resolved down the cascade, never as a datapoint provenance.
 
 ```text
 function (edge) --parse--> datapoint (metric / state / log)
@@ -18,7 +18,7 @@ function (edge) --parse--> datapoint (metric / state / log)
                                                        actions (notify / command / ...)
 ```
 
-The pipeline is a **DAG**: rules read observed and calculated values as truth, only *compare* intended values (and a variable's declared value) against observed, and never infer a new fact from an intended value treated as truth. See [The DAG invariant](#the-dag-invariant).
+The pipeline is a **DAG**: rules read observed and calculated values as truth, only *compare* intended values (and config's declared value) against observed, and never infer a new fact from an intended value treated as truth. See [The DAG invariant](#the-dag-invariant).
 
 ## Two orthogonal axes
 
@@ -101,7 +101,7 @@ Provenance is the second axis, stamped per datapoint row. The same key, with the
 | **calculated** | derived from other datapoints | on-row: `source_rule` (+ version), `telemetry_id` null |
 | **intended** | the declared effect of a command we issued, pending reconciliation | `event_id` (the command event) |
 
-A value of any provenance is still a metric/state/log (the kind is fixed by the key); provenance only records *how it got there*. All three land in the same datapoint tables, side by side for the same key, which is what makes divergence detection free. Declared intent is the fourth value an operator can assert, but it lives on a [variable](/architecture/variables/), not in the datapoint tables, and can be compared against an observed datapoint for drift.
+A value of any provenance is still a metric/state/log (the kind is fixed by the key); provenance only records *how it got there*. All three land in the same datapoint tables, side by side for the same key, which is what makes divergence detection free. Declared intent is the fourth value an operator can assert, but it lives in [config](/architecture/variables/), not in the datapoint tables, and can be compared against an observed datapoint for drift.
 
 A separate **`source`** column records *which sensor or path* produced an observed value (`codec.cec` vs `display.lan` vs `control.system`). Source is distinct from provenance: provenance is *how we know* (observed), source is *which sensor told us*. Three sensors reporting one display's power are three observed rows on one key, differing only in source. This is what makes multi-source corroboration and [fusion](#fusion) possible.
 
@@ -140,14 +140,14 @@ Not every log-to-state path goes through a command. The split is measured fact v
 
 mac, ip, serial, locked-input, anything an operator *sets* is declared intent, and declared intent is **not** a datapoint provenance. It lives in [config](/architecture/variables/): keyed to the same canonical signal as its observed side, resolved through the scope cascade, never in the datapoint tables. There is no separate property store: config is the declared side of a signal plus the cascade. Ownership resolution reads the resolved identity (a declared identity config value, or the observed identity datapoint that shares its key) to bind telemetry to components.
 
-### Precedence: spec versus status lives in variables
+### Precedence: spec versus status lives in config
 
-When declared intent and observed reality disagree, which one wins is a **per-variable `reconcile` policy** ([variables](/architecture/variables/#drift-and-reconcile)), not a per-key datapoint attribute:
+When declared intent and observed reality disagree, which one wins is a **per-config-item `reconcile` policy** ([config](/architecture/variables/#drift-and-reconcile)), not a per-key datapoint attribute:
 
 - **observed wins** is `reconcile: accept` (or just `alert`): the declaration was a hint or stale guess, reality is truth. A device reporting a different MAC than the declared one is a divergence to investigate.
 - **declared wins** is `reconcile: enforce`: the declaration is the spec, reality should conform. Observed input HDMI2 against a declared HDMI1 means the world is wrong, alarm or remediate (self-healing, the Kubernetes spec-and-status pattern).
 
-Among datapoint provenances there is no precedence contest: intended is a pending bet that observed confirms or refutes (reconciliation, see [intended](#intended-the-declared-effect-of-a-command)), and observed supersedes it on arrival. The spec-versus-status decision is the variable's reconcile policy, not a per-key datapoint attribute. Device-swap (where a declared MAC is briefly authoritative before the device reports it) is handled by a future component "maintenance mode" that suppresses drift.
+Among datapoint provenances there is no precedence contest: intended is a pending bet that observed confirms or refutes (reconciliation, see [intended](#intended-the-declared-effect-of-a-command)), and observed supersedes it on arrival. The spec-versus-status decision is config's reconcile policy, not a per-key datapoint attribute. Device-swap (where a declared MAC is briefly authoritative before the device reports it) is handled by a future component "maintenance mode" that suppresses drift.
 
 ## Ground truth versus derived
 
@@ -194,7 +194,7 @@ Caught/caused/derived/scheduled is the event's **origin**, a small vocabulary on
 
 The pipeline must stay acyclic.
 
-> A rule may **read** observed and calculated values as truth. It may **compare** an intended value, or a variable's declared value, against observed (drift). It may **not** treat an intended value *as truth* to infer a new fact.
+> A rule may **read** observed and calculated values as truth. It may **compare** an intended value, or config's declared value, against observed (drift). It may **not** treat an intended value *as truth* to infer a new fact.
 
 This is what makes drift safe: a drift rule reads the *pair* (intended, observed) and emits when they disagree; the intended value is tested, not trusted. The one forward edge command-to-intended-state is terminal (nothing reads back from an intended value to produce more state). Event rules reading only observed/calculated keeps the graph acyclic with no runtime cycle guard required in v1.
 
@@ -203,7 +203,7 @@ This is what makes drift safe: a drift rule reads the *pair* (intended, observed
 Drift is a condition operator, **`disagree(A, B)`**, usable inside event rule conditions, comparing two provenances (or two sources) of one key:
 
 - `disagree(intended, observed)`: the command did not land (reconciliation)
-- `disagree(declared, observed)`: the world drifted from intent (config drift, device swap); the declared side is read from a [variable](/architecture/variables/)
+- `disagree(declared, observed)`: the world drifted from intent (config drift, device swap); the declared side is read from [config](/architecture/variables/)
 - `disagree(observed, observed)` across `source`: sensors conflict (a failing sensor)
 
 > Any two provenances of the same key that disagree = an anomaly. One detector.
@@ -230,7 +230,7 @@ Actions are bound to what triggers them by an **`action_rule`**: a decoupled sub
 
 ## Reads: current value is a view
 
-Current value (latest per owner / key / **instance** / **provenance**, fused across sources per the key's `fusion_policy`) is a **view**, correct and zero-maintenance. It is keyed per-provenance because "current observed power" and "current intended power" are different values for the same key, and the divergence model depends on seeing both. A materialized `current_value` table is a deferred optimization, earned only when a fleet-dashboard read profile proves the view too slow (the same view-by-default discipline as storage). Ownership resolution reads resolved identity variables (the declared value, else the linked observed datapoint) by targeted indexed lookup, not a full scan, so it does not by itself justify the materialized table.
+Current value (latest per owner / key / **instance** / **provenance**, fused across sources per the key's `fusion_policy`) is a **view**, correct and zero-maintenance. It is keyed per-provenance because "current observed power" and "current intended power" are different values for the same key, and the divergence model depends on seeing both. A materialized `current_value` table is a deferred optimization, earned only when a fleet-dashboard read profile proves the view too slow (the same view-by-default discipline as storage). Ownership resolution reads resolved identity config (the declared value, else the observed datapoint) by targeted indexed lookup, not a full scan, so it does not by itself justify the materialized table.
 
 ## The pipeline, end to end
 
@@ -261,7 +261,7 @@ flowchart TD
   EV -->|"fire = open · clear = resolve"| AL["alarm<br/>one incident · new row per open<br/>(event_rule, owner)"]
   EV -->|"command's effect · provenance=intended"| S
 
-  HUMAN["operator"] -->|"declares"| VAR["variable<br/>declared_value (spec)"]
+  HUMAN["operator"] -->|"declares"| VAR["config<br/>declared (spec)"]
   VAR -. "links · drift" .- S
   HUMAN -.->|"audit"| AU["audit_log"]
 
@@ -276,7 +276,7 @@ flowchart TD
   class TEL,AU gt;
 ```
 
-Teal nodes are ground-truth records: `telemetry` (the raw debug sidecar an observed row references via `telemetry_id`) and `audit_log` (operator writes, including variable changes); observed and calculated carry `source_rule` on the row, intended points at the command `event` (via `event_id`). The three datapoint tables (`metric_datapoint`, `state_datapoint`, `log_datapoint`) are emitted at the edge or derived; a [variable](/architecture/variables/) holds declared config and can link a state datapoint.
+Teal nodes are ground-truth records: `telemetry` (the raw debug sidecar an observed row references via `telemetry_id`) and `audit_log` (operator writes, including variable changes); observed and calculated carry `source_rule` on the row, intended points at the command `event` (via `event_id`). The three datapoint tables (`metric_datapoint`, `state_datapoint`, `log_datapoint`) are emitted at the edge or derived; [config](/architecture/variables/) holds declared intent, keyed to a state datapoint as its observed side.
 
 ## Glossary
 
@@ -294,7 +294,7 @@ This is the **authoritative glossary**: every official term in the architecture,
 | **telemetry** | The raw collected payload (not a log): schema by payload, one row per collection emission, a TTL'd debug sidecar, owns nothing; carries `collection_id` as its source. Datapoints are emitted at the edge, not re-derived from it. |
 | **datapoint** | An observation: a key's value on one owning entity at one time, with provenance + source + on-row lineage. Kinds: metric, state, log. |
 | **metric_datapoint** | Numeric (float8) datapoint. Continuous, aggregatable. The firehose. |
-| **state_datapoint** | Categorical/text/object datapoint. Discrete, dwell-measurable. A [variable](/architecture/variables/) can link one as its observed side. |
+| **state_datapoint** | Categorical/text/object datapoint. Discrete, dwell-measurable. [Config](/architecture/variables/) is keyed to one as its observed side. |
 | **log_datapoint** | A component's own log lines; value = the line. A stream; also the holding pen for un-normalized occurrences. |
 | **kind** | What a key is: metric, state, or log. Fixed per key at definition. |
 | **key** | The identity of what is measured or asserted; registered in `datapoint_type`. |
@@ -302,7 +302,7 @@ This is the **authoritative glossary**: every official term in the architecture,
 | **owner / owner_kind** | A datapoint/event/alarm's subject, the exclusive-arc: `owner_kind` + the matching typed FK (`component_id`/`system_id`/`location_id`) + CHECK. |
 | **datapoint_type** | Registry for datapoint keys: namespace, name, kind, value_type, unit, fusion_policy. Official/private shadow. |
 | **event_type** | Registry for event keys: namespace, name, display_name, payload_schema. Official/private shadow. |
-| **provenance** | How we know a value: observed, calculated, intended. Per row. Declared intent is a [variable](/architecture/variables/). |
+| **provenance** | How we know a value: observed, calculated, intended. Per row. Declared intent is [config](/architecture/variables/). |
 | **observed** | Measured from a component. On-row lineage: `source_rule` (+ version) + `telemetry_id`. |
 | **calculated** | Derived from other datapoints by a calc_rule. On-row lineage: `source_rule`; `telemetry_id` null. |
 | **intended** | A command's declared effect, pending reconciliation. Lineage: the command `event_id`. Only commands set it. |
@@ -312,14 +312,14 @@ This is the **authoritative glossary**: every official term in the architecture,
 | **config** | The declared side of a canonical signal: an operator-set value keyed to a `datapoint_type`, reconciled against the observed datapoint via the template's get/set functions and a per-item `reconcile` policy. See [config and credentials](/architecture/variables/). |
 | **credential** | An access secret with a structured shape, a pluggable `SecretProvider` (inline or external), and a lifecycle (refresh / rotation / expiry); read is `secret:read`-gated and every decrypt audited. Template-driven. |
 | **variable** | A free interpolated value (a macro): `$var:<name>`, resolved global→template→instance down the cascade; org-keyed, not signal-bound, no observed side. |
-| **drift** | The gap between a variable's declared value and its linked observed value. |
-| **reconcile** | Per-[variable](/architecture/variables/): spec-vs-status when declared and observed disagree (`alert` / `enforce` / `accept`). |
-| **cascade** | Resolves the effective variable value (declared or template default): global, type, template, location, system, component, group (weighted); most specific wins. |
+| **drift** | The gap between config's declared value and its observed datapoint, on one signal key. |
+| **reconcile** | Per-[config](/architecture/variables/) item: spec-vs-status when declared and observed disagree (`alert` / `enforce` / `accept`). |
+| **cascade** | Resolves the effective config / variable value (declared or template default): global, type, template, location, system, component, group (weighted); most specific wins. |
 | **edge parse** | A function parses a raw payload into datapoints on the node, the edge half of [collection](/architecture/collection/). There is no server-side transform rule. |
 | **calc_rule** | datapoint(s) to datapoint (calculated): cross-key / system-level derivation. (Same-key multi-source reconcile is the key's fusion_policy.) |
 | **event_rule** | datapoint change to event: fire_criteria + optional clear_criteria (clear makes events alarm-paired); an optional `health` impact lets its alarm move the owner's health. No separate alarm or condition rule. |
 | **action_rule** | A subscription (Expr over events; alarms via edge events) wiring occurrences to actions. |
-| **discovery_rule** | *(deferred)* observed data creates components/systems/locations + their identity variables; official/private. |
+| **discovery_rule** | *(deferred)* observed data creates components/systems/locations + their identity config; official/private. |
 | **event** | A discrete semantic occurrence the action layer reacts to. Keyed, point-in-time, owned via the arc. Not a datapoint. |
 | **origin** | How an event arose: caught, caused, derived, scheduled. |
 | **alarm** | One open-to-close incident: a stateful row driven by an event_rule's paired events; new row per open; keyed (event_rule, owner); optionally health-impacting while open. Not event-sourced. The ITSM anchor. |
@@ -343,7 +343,7 @@ This is the **authoritative glossary**: every official term in the architecture,
 | **health_role** | A member's role in its system's health rollup (required / redundant / informational), declared on the system_template_member; the knob for the built-in role-aware rollup. |
 | **view** | A named query returning a uniform `{columns, rows}`; the read side, executed through the scoped gateway. |
 | **Storage Gateway** | The single door to the database; every read and write goes through it, and scope is injected here. |
-| **audit_log** | Who-did-what ground truth; one row per operator write, same-tx; the lineage target for operator writes, including variable changes. |
+| **audit_log** | Who-did-what ground truth; one row per operator write, same-tx; the lineage target for operator writes, including config changes. |
 | **session_log** | Connection-lifecycle transitions (node-reported, diagnostic). |
 | **internal_log** | Platform self-narration (startup, reconcile, migration, node-reg, config-sync). |
 | **ground truth** | Immutable append-only records: telemetry, log_datapoint, audit_log, session_log, internal_log. |
@@ -355,4 +355,4 @@ This is the **authoritative glossary**: every official term in the architecture,
 
 Omniglass is built greenfield, one vertical slice per PR: a from-scratch migration defines the schema, and the code and tests are written onto it. Deferred capabilities are tracked as GitHub issues.
 
-Related: [variables](/architecture/variables/) (declared config, drift, reconcile), storage (physical tables, the lineage CHECK, partitioning, tiering), [the cascade](/architecture/cascade/) (the scope cascade), workers (the rule-engine worker), [alarms and actions](/architecture/alarms-actions/) (alarm lifecycle, actions), and [the architecture overview](/architecture/) (the spine).
+Related: [config and credentials](/architecture/variables/) (declared config, drift, reconcile, secrets), storage (physical tables, the lineage CHECK, partitioning, tiering), [the cascade](/architecture/cascade/) (the scope cascade), workers (the rule-engine worker), [alarms and actions](/architecture/alarms-actions/) (alarm lifecycle, actions), and [the architecture overview](/architecture/) (the spine).

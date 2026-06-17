@@ -91,11 +91,11 @@ days), with whole-history the explicit, heavier option.
 ## Reconcile: the desired-state control loop
 
 Reconcile is another worklist consumer: it projects **declared desired state** onto the things that
-drift, the system-level form of a [variable](/architecture/variables/)'s `reconcile: enforce`
+drift, the system-level form of [config](/architecture/variables/)'s `reconcile: enforce`
 policy.
 
-- **Inputs**: the desired declarations (templates, component assignments, variable
-  `declared_value`s) plus the observed state. Variable changes arrive as `audit_log` rows
+- **Inputs**: the desired declarations (templates, component assignments, config
+  declared values) plus the observed state. Config changes arrive as `audit_log` rows
   ([audit](/architecture/audit/)), so reconcile is an audit-log consumer plus the current
   projections.
 - **Output**: it asserts the delta as **node config** (which tasks and commands each node runs,

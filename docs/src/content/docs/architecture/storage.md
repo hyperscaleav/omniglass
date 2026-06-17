@@ -28,7 +28,7 @@ here. This page shows the tables and how they relate, but points back to each ow
   the ground-truth record that produced it. observed: `source_rule` (+ version) + `telemetry_id`;
   calculated: `source_rule`, no `telemetry_id`; intended: `event_id` (the command). A CHECK
   constraint enforces which lineage column is populated. Declared config is not a datapoint
-  provenance; it lives on a [variable](/architecture/variables/).
+  provenance; it lives in [config](/architecture/variables/), keyed to the same signal.
 - **Ownership is the exclusive-arc** on every datapoint table, `event`, `alarm`, and `variable`:
   `owner_kind` enum plus the matching typed FK (`component_id` / `system_id` / `location_id`) plus a
   CHECK that exactly the matching column is set. System- and location-level datapoints are
@@ -57,12 +57,12 @@ erDiagram
 |---|---|---|
 | `telemetry` | id, ts, **task**, **raw** (jsonb/bytea, the verbatim collected payload; large raw tiers to a blob hash-ref, see [files](/architecture/files/)), received_at | the raw collected payload, a **TTL'd debug sidecar**, one row per collection emission. Datapoints are emitted at the edge, not re-derived from it, so it has no transform worklist. Owns nothing, no owner arc; carries `collection_id` as its source. |
 | `metric_datapoint` | id, ts, **owner_kind, component_id/system_id/location_id**, key, **instance**, **value float8**, provenance, source, **source_rule, source_rule_version, telemetry_id, event_id** | the firehose; BRIN on ts; numeric aggregation. `instance` (`''` default) discriminates many values of one canonical key on one owner ([taxonomy](/architecture/taxonomy/)) |
-| `state_datapoint` | id, ts, owner arc, key, instance, **value text/jsonb**, provenance, source, + same lineage cols | sparse, transition-only; time-in-state and dwell. A [variable](/architecture/variables/) may link one as its observed side |
+| `state_datapoint` | id, ts, owner arc, key, instance, **value text/jsonb**, provenance, source, + same lineage cols | sparse, transition-only; time-in-state and dwell. [Config](/architecture/variables/) is keyed to one as its observed side |
 | `log_datapoint` | id, ts, owner arc, key, instance, **value text/jsonb (the line)**, level, provenance, source, + same lineage cols | GIN / tsvector full-text; also the holding pen for un-normalized occurrences |
 | `event` | id, ts, key, **origin** (caught/caused/derived/scheduled), owner arc, payload (jsonb), correlation_id, **alarm_id** (nullable), + lineage | the semantic-occurrence log; a momentary event has null `alarm_id`, an alarm edge carries it. A schedule fire is an event with `origin=scheduled` (no separate schedule table) |
 | `alarm` | **id**, event_rule, owner arc, **status, severity, opened_at, resolved_at, acked_by** | a stateful entity, **one incident, new row per open** ([taxonomy](/architecture/taxonomy/)); holds current state directly (not event-sourced); the ITSM anchor. History = events + audit by `id` |
 | `action` | id, **steps (ordered: notify/command/wait/branch)**, status, current_step | a stateful entity; delivery and step state; driven by events/alarms ([alarms and actions](/architecture/alarms-actions/)) |
-| `audit_log` | id, ts, actor, verb, resource_kind, resource_id, old, new (jsonb) | ground truth; the lineage target for operator writes (including variable changes); secret decrypts always recorded |
+| `audit_log` | id, ts, actor, verb, resource_kind, resource_id, old, new (jsonb) | ground truth; the lineage target for operator writes (including config changes); secret decrypts always recorded |
 | `session_log` | id, ts, session_id, node, interface, transition (connect/auth/drop/close/reconnect/error), detail | ground truth, node-reported; the connection log |
 | `internal_log` | id, ts, kind (startup/reconcile/migration/node-reg/config-sync), detail | ground truth; the platform narrating itself |
 
@@ -156,12 +156,13 @@ erDiagram
 A command is **not a table**: it is a `component_template_version.spec` declaration (the interface
 `commands` block); a command instance is an `action` row with `kind=command`.
 
-## Config and cascade: variables
+## Config, credentials, and variables
 
-Operator-set config (an IP, a serial, a locked input, a credential) is **not** a datapoint and not a
-separate prop-table family; it is a [variable](/architecture/variables/), resolved through the
-cascade. Secrets are variable fields, encrypted at rest by the pluggable **`SecretProvider`** (an
-envvar key by default, KMS or Vault behind the same interface); every decrypt is audited.
+Operator-set values are **not** datapoints and not a separate prop-table family; they resolve through
+the cascade ([config and credentials](/architecture/variables/)). Three kinds share that home:
+**config** keyed to a signal (declared + observed, drift, reconcile), **credentials** (secret-bearing
+shapes, encrypted at rest by the pluggable **`SecretProvider`** with every decrypt audited), and free
+**variables** (macros). Whether they share one table or split is open.
 
 | Table | Key columns | Notes |
 |---|---|---|
@@ -190,7 +191,7 @@ envvar key by default, KMS or Vault behind the same interface); every decrypt is
 
 | Table | Key columns | Notes |
 |---|---|---|
-| `principal` (+ per-kind `human` / `service` / `node`) | id, kind, ... | subjects ([identity and access](/architecture/identity-access/)); a `node` carries labels, last_heartbeat_at, and its bound credential variable |
+| `principal` (+ per-kind `human` / `service` / `node`) | id, kind, ... | subjects ([identity and access](/architecture/identity-access/)); a `node` carries labels, last_heartbeat_at, and its bound credential |
 | `role` | (namespace, name), permissions (jsonb: `<resource>:<action>`) | RBAC capability set; ship viewer/operator/admin/owner + custom |
 | `principal_grant` | (principal_id, role, **scope**) | role x scope; scope = a structural node, an entity-group, or `all`; additive |
 
