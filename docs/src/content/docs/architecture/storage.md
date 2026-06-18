@@ -31,9 +31,9 @@ here. This page shows the tables and how they relate, but points back to each ow
   the `provenance` value itself**, not a column-presence trick. Declared config is not a datapoint
   provenance; it lives in [config](/architecture/variables/), keyed to the same signal.
 - **Ownership is the exclusive-arc** on every datapoint table, `event`, `alarm`, and `variable`:
-  `owner_kind` enum plus the matching typed FK (`component_id` / `system_id` / `location_id`) plus a
-  CHECK that exactly the matching column is set. System- and location-level datapoints are
-  first-class.
+  `owner_kind` enum plus the matching typed FK (`component_id` / `system_id` / `location_id`, or none
+  for the singleton `global`) plus a CHECK that exactly the matching column is set (or all null for
+  `global`). System-, location-, and global-level datapoints are first-class.
 - **Keys**: datapoints and events use a surrogate id plus `ts`; the key registry `datapoint_type`
   uses the composite natural key `(namespace, name)`; structural entities are name-keyed; a `task`
   is **content-addressed** (`hash(interface, kind, schedule, params)`); a `node` by name.

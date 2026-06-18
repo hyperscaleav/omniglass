@@ -45,7 +45,7 @@ export default defineConfig({
             { label: 'Taxonomy (the model + glossary)', slug: 'architecture/taxonomy' },
             { label: 'Config & credentials', slug: 'architecture/variables' },
             { label: 'Cascade', slug: 'architecture/cascade' },
-            { label: 'Health, SLI, and SLA', slug: 'architecture/health' },
+            { label: 'Health & KPIs', slug: 'architecture/health' },
             { label: 'Alarms and actions', slug: 'architecture/alarms-actions' },
             { label: 'UI', slug: 'architecture/ui' },
             // the foundations underneath

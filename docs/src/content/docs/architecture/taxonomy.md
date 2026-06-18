@@ -43,7 +43,7 @@ Treating log as a datapoint removes the usual special case: an alarm on a log li
 
 ### Ownership: the exclusive-arc
 
-A datapoint attaches to a **structural entity**, not only a component. The owner is the **exclusive-arc**: an `owner_kind` enum plus the matching typed FK (`component_id` / `system_id` / `location_id`) with a CHECK that exactly the column matching `owner_kind` is set. The same arc owns `event` and `alarm` rows. This makes **system-level and location-level datapoints first-class** (e.g. `health` is a `state_datapoint` owned by a system), the fix for Zabbix's inability to put state on a group of hosts. See Ownership on the spine for the full pattern and the storage DDL.
+A datapoint attaches to a **structural entity**, not only a component. The owner is the **exclusive-arc**: an `owner_kind` enum plus the matching typed FK (`component_id` / `system_id` / `location_id`, or none for the singleton **`global`** estate root) with a CHECK that exactly the column matching `owner_kind` is set. The same arc owns `event` and `alarm` rows. This makes **system-, location-, and global-level datapoints first-class** (e.g. `health` is a `state_datapoint` owned by a system, and estate-wide availability is owned by `global`), the fix for Zabbix's inability to put state on a group of hosts. See Ownership on the spine for the full pattern and the storage DDL.
 
 ### The instance dimension: many values of one key on one owner
 
@@ -310,7 +310,7 @@ This is the **authoritative glossary**: every official term in the architecture,
 | **kind** | What a key is: metric, state, or log. Fixed per key at definition. |
 | **key** | The identity of what is measured or asserted; registered in `datapoint_type`. |
 | **canonical signal** | A registered, owner-agnostic measurement name (`power.state`, not `room.power`); one comparable signal across every vendor. |
-| **owner / owner_kind** | A datapoint/event/alarm's subject, the exclusive-arc: `owner_kind` + the matching typed FK (`component_id`/`system_id`/`location_id`) + CHECK. |
+| **owner / owner_kind** | A datapoint/event/alarm's subject, the exclusive-arc: `owner_kind` + the matching typed FK (`component_id`/`system_id`/`location_id`), or the singleton `global` (no FK), + CHECK. |
 | **datapoint_type** | Registry for datapoint keys: namespace, name, kind, value_type, unit, fusion_policy. Official/private shadow. |
 | **event_type** | Registry for event keys: namespace, name, display_name, payload_schema. Official/private shadow. |
 | **provenance** | How we know a value: observed, calculated, intended. Per row. Declared intent is [config](/architecture/variables/). |
@@ -347,6 +347,8 @@ This is the **authoritative glossary**: every official term in the architecture,
 | **system** | A composition of components/subsystems (the service tree); pins a system_template_version; located at a location; classified by system_type. |
 | **system_template / _version** | The system shape; the immutable version is the snapshot instances pin. Carries a frozen BOM of member roles + health_role. |
 | **location** | A place tree; classified by location_type; no template. |
+| **global** | The singleton estate root: the top owner above every location where estate-wide health and KPIs roll up, and the top of the cascade. One per deployment, no FK. |
+| **KPI** | A shipped derived datapoint (a calc / SLI) owned at system / location / global: availability (health over time) and the utilization family (occupancy, time, booking, ghost). An official default set with an escape hatch. |
 | **tag** | Operator label (registry + bindings); union + override. |
 | **group** | A named set (component/system/location/user), static or dynamic, weighted; a cascade overlay + access scope. |
 | **health** | The first-class operational state of every entity (up/degraded/down/unknown), carried as a *calculated* state_datapoint: `worst` over its open health-impacting alarms, rolled up the system tree role-aware. A model, not just a rule. See [health](/architecture/health/). |

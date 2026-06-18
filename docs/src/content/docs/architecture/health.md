@@ -1,6 +1,6 @@
 ---
-title: Health, SLI, and SLA
-description: "The first-class health model: an opinionated, role-aware operational-state rollup carried on the datapoint pipeline, with SLI and SLA on top."
+title: Health, KPIs, and service levels
+description: "Health as a first-class state rolled up to a global estate top, the KPIs every estate should track (availability, utilization), and SLI / SLO / SLA."
 ---
 
 Leaf of the [architecture spine](/architecture/). Omniglass is **opinionated about health**: it is a
@@ -78,18 +78,20 @@ Health composes recursively, always **up the structural tree** (which has no cyc
 component health   (worst over the component's own open health-impacting alarms)
    -> system health      (role-aware rollup of members + the system's own health-impacting alarms)
       -> location health  (role-aware rollup of its systems)
+         -> global health  (rollup of every location: the estate top)
 ```
 
-The headline is the **system's `health`**, the rollup of its members, which is the service view
-operators care about.
+The headline is the **system's `health`**, the rollup of its members, the service view operators
+care about; the **`global`** rollup is the estate-wide view leadership cares about.
 
 **One owner-agnostic `health` key.** Following the measurement-not-owner naming model
 ([taxonomy](/architecture/taxonomy/)), there is a single registered `health` datapoint_type; a
-component owns its own `health`, a system owns the rollup of its members, a location owns the rollup
-of its systems. The owner gives the reading its level, so the same key flows up the tree. The calc
+component owns its own `health`, a system the rollup of its members, a location the rollup of its
+systems, and the singleton **`global`** owner the estate-wide rollup (the top of the tree, above
+every location). The owner gives the reading its level, so the same key flows up the tree. The calc
 engine routes a changed `health` by the owner's level against each rule's source (a component's
-`health` only feeds the system rollup, a system's only feeds the location rollup), so the shared key
-never cross-triggers.
+`health` only feeds the system rollup, a system's only the location, a location's only the global),
+so the shared key never cross-triggers.
 
 ## System health: rollup plus the system's own alarms
 
@@ -134,11 +136,11 @@ so it never expires under an instance. It is shared with KPI calcs.
 For the rare case the role logic still gets wrong, an **Expr override at the system-template level**
 over the member health states is the escape hatch, reached for rarely.
 
-The rollup **runs over the calc engine** (no parallel evaluator) and is **seeded for every system
-and location**, so health rolls up out of the box without per-system authoring: `system-health`
-reduces a system's members' `health`, `location-health` reduces a location's systems' `health`
-(systems carry no `health_role` within a location, so each is treated as required: any system down
-sinks the location). It is the model's behavior, not a rule operators rewrite.
+The rollup **runs over the calc engine** (no parallel evaluator) and is **seeded for every system,
+location, and the global top**, so health rolls up out of the box without per-system authoring:
+`system-health` reduces a system's members' `health`, `location-health` a location's systems',
+`global-health` every location's into the estate top (each treated as required above the system
+level: any down child sinks the parent). It is the model's behavior, not a rule operators rewrite.
 
 ## SLI: indicator over a window
 
@@ -155,22 +157,53 @@ when: "value.up / value.total"        # an Expr leaf shapes it into a ratio
 
 An SLI is therefore just another derived datapoint, queryable and trendable like any other.
 
-## SLA: a target plus a breach alarm
+## SLO and SLA: the target, and meeting it
 
-A **Service Level Agreement** is a **target on an SLI plus an alarm on breach**, no new machinery:
-an `event_rule` whose datapoint is the SLI:
+Three terms, not two. The **SLI** is the *measured indicator* (the `system.availability` calc above).
+The **SLO** (Service Level Objective) is the **target**: the number you intend to hold
+(availability >= 99.9%), a [config](/architecture/variables/) value on the entity or template, not
+machinery. The **SLA** (Service Level Agreement) is **meeting the SLO**: an `event_rule` fires when
+the SLI breaches the target, and compliance over the contractual window (the fraction of the period
+the SLO held) is itself an SLI.
 
 ```yaml
 event_rule:
   scope: 'system.template == "standard-boardroom"'
   datapoint: system.availability
-  when: "value < 0.999"               # 99.9% target
+  when: "value < $var:availability.slo"   # the SLO target, a config value
   severity: 40
 ```
 
-Windowing is the SLI's concern: a **rolling** window (last 30d) for trends, or a **calendar** window
-(the billing month) for a contractual SLA. The calendar-window reset is the one piece that leans on
-the time primitive.
+So the target is config (the SLO), the breach is an event/alarm (the SLA edge), and compliance is a
+calc (an SLI over the SLA). No new machinery. Windowing is the SLI's concern: a **rolling** window
+(last 30d) for trends, or a **calendar** window (the billing month) for a contractual SLA; the
+calendar reset is the one piece that leans on the time primitive.
+
+## KPIs: what every estate should track
+
+A **KPI** is a derived datapoint (a calc or SLI), registered as a canonical `datapoint_type` and
+owned at the level it describes (system, location, or **global**). It is no new primitive: a KPI is a
+shipped calc the same way health is. Omniglass ships an opinionated **default set** so the data is
+there out of the box, with the escape hatch to author your own.
+
+**Availability** is health over time: the SLI `time_in_state(up)` above. Health is the substance,
+availability is its ratio, so it ships free at every level up to global.
+
+**Utilization** is the AV-native family, over occupancy and booking data:
+
+- **occupancy** -- current people / capacity (an instant ratio);
+- **time-utilization** -- used vs idle minutes;
+- **booking-utilization** -- booked vs unbooked minutes;
+- **ghost** -- occupied vs booked: booked, but nobody showed (the wasted-room signal).
+
+Both inputs are **ordinary components**, no special integration: an occupancy sensor (a component
+template emitting `occupancy.*`) and the booking system (a component template whose interface is the
+calendar / room-booking API, emitting `booking.*`). The KPIs are then `calc_rule`s over those
+datapoints, owned at room / system / location / global like any rollup. A booking API is just an
+interface; a ghost meeting is just `occupied < booked`.
+
+The point is a small, opinionated set of the measurements every estate should watch, computed and
+rolled up for free.
 
 ## Why this is the Zabbix service tree, done right
 
@@ -190,3 +223,7 @@ understands datapoints and alarms already understands health and SLAs.
 - Whether a system-template binding may narrow the built-in rollup (a scoped-precedence refinement)
   or only the roles and the Expr override are the knobs.
 - SLA calendar-window boundaries and timezone (co-design with the time primitive).
+- The full default KPI set and each one's exact calc (availability and the utilization family are
+  named; the precise reducers and windows are still to pin down).
+- The `occupancy.*` and `booking.*` canonical signals and the occupancy-sensor / booking-system
+  component templates (the utilization inputs).
