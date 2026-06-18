@@ -181,7 +181,7 @@ defaults), not scattered through the template body, and the template stays reusa
 value of the right shape. Each input `type` is a `variable_type`, so per-field secrecy comes
 from the shape.
 
-## Execution: parse at the edge, raw as a debug sidecar
+## Execution: parse at the edge
 
 A function runs the parse at the **edge**, not server-side:
 
@@ -189,9 +189,9 @@ A function runs the parse at the **edge**, not server-side:
   straight to the typed tables. The compiler bakes each datapoint's `kind` into the runtime
   unit, so the edge writes to `metric_datapoint` versus `state_datapoint` with no runtime
   registry lookup.
-- **Raw payloads are a debugging aid**, not the datapoint source: a raw mode you turn on while
-  developing, plus failure logging on collection. How much of that to persist, and for how long,
-  is still being settled.
+- **Raw payloads are not stored**, the datapoint is the source: a dev raw-mode taps the wire bytes
+  live while developing, and a parse or validation failure emits a `collection.failed` event
+  carrying the raw. There is no telemetry table.
 - **Single owner (first phase):** datapoints land on the function's own component, identity
   stamped at the edge (the component is known, the function runs for it). Fan-out to multiple
   owners (a management platform reporting for many devices) is a later phase.

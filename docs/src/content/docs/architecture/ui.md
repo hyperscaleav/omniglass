@@ -73,8 +73,7 @@ Coded pages with rich interaction, all reading through views:
   ack / snooze / resolve controls.
 - **Inventory and topology**: the location / system / component trees, navigable, with
   [health](/architecture/health/) (`status-grid`) at each level.
-- **Event exploration**: query the event log by entity / time / category, the audit and telemetry
-  trails.
+- **Event exploration**: query the event log by entity / time / category, with the audit trail.
 
 ## Information architecture
 
@@ -91,7 +90,7 @@ The IA has two layers, deliberately decoupled:
    presentation: a cluster is not a destination and carries no route of its own. It can be
    rearranged, and eventually made user-customizable, without touching a single route.
 
-**Home is distinct from Dashboards.** Dashboards monitor the *fleet* (telemetry views over the
+**Home is distinct from Dashboards.** Dashboards monitor the *fleet* (datapoint views over the
 inventory). Home monitors the *monitor*: the operator and admin situation room for config lifecycle
 (stale or out-of-date templates), control-plane health (rules failing to evaluate, datapoints
 dropped with no matching rule), and proactive suggestions. A dashboard cannot model that, so Home

@@ -146,7 +146,7 @@ verify TLS, bound timeouts, control redirects.
 
 ## Cycle safety in the action layer
 
-The `telemetry -> datapoint -> alarm` core is acyclic by construction (hub *Cycle
+The `collection -> datapoint -> alarm` core is acyclic by construction (hub *Cycle
 safety*), and **only data authors events**: an `event_rule` over datapoints (plus the
 clock's `origin=scheduled`) is the *only* way an event enters the log. Flows and
 actions never manufacture events, so the response layer cannot inject into the event

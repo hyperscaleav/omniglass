@@ -33,9 +33,9 @@ A blob is keyed by the hash of its bytes, not a UUID, which buys:
 So **rows reference a hash, never inline bytes.** Inline `bytea` would kill the narrow-replayable
 property and bloat the firehose row. Small structured values (a datapoint, its labels) stay inline
 in the row's jsonb; **large or opaque payloads become a blob hash-ref**: a big `log_datapoint`
-body, a trace's bulky attributes, and especially **`telemetry.raw`** when the wire payload is
-large (a full SNMP walk, a big HTTP body, a capture). Raw stays inline when small; the size
-threshold is the switch.
+body, a trace's bulky attributes, and especially a **`collection.failed` event's raw** when the
+wire payload is large (a full SNMP walk, a big HTTP body, a capture). Raw stays inline when small;
+the size threshold is the switch.
 
 ## Dedup is database-scoped
 
@@ -67,7 +67,7 @@ References come from:
 
 - a **`file`** handle;
 - a large `log_datapoint` body or trace payload;
-- a `telemetry.raw` hash-ref;
+- a `collection.failed` raw hash-ref;
 - an **attach event** (a `state_datapoint` or `audit_log` recording "this component was attached
   to this file at T").
 

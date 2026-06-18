@@ -14,20 +14,21 @@ here. This page shows the tables and how they relate, but points back to each ow
   `variable_type`, and the official namespace of `datapoint_type`) are the namespace-null shared
   layer, shadowed by private rows (the namespace shadow pattern).
 - **Three storage shapes.** **Ground-truth records** are append-only and immutable, each named for
-  what it is: `telemetry` (the raw collected payload, a TTL'd debug sidecar, *not* a log),
-  `log_datapoint` (a datapoint kind), `audit_log` (operator actions), and the standing `*_log`
-  ground-truth logs (`session_log`, `internal_log`, plus the deferred `collection_log` /
-  `node_log`). A schedule fire is not a record here: it is an `event` with `origin=scheduled`.
+  what it is: `log_datapoint` (a datapoint kind), `audit_log` (operator actions), and the standing
+  `*_log` ground-truth logs (`session_log`, `internal_log`, plus the deferred `collection_log` /
+  `node_log`). There is **no `telemetry` table**: datapoints are emitted at the edge, so the raw
+  payload is not persisted in steady state; raw appears only on a `collection.failed` event or a
+  dev raw-mode tap ([taxonomy](/architecture/taxonomy/)). A schedule fire is not a record here: it is an `event` with `origin=scheduled`.
   There is no separate rule-execution table: derived rows carry their lineage on the row.
   **Datapoints** (`metric_datapoint` / `state_datapoint` / `log_datapoint`) are the typed
   observation firehose. **Stateful entities and projections** (`alarm`, `action`, current-value)
   hold state directly or are rebuildable read models, **views by default**. The model is **not
   event-sourced**.
 - **Provenance and lineage on every datapoint**: `provenance` (observed / calculated / intended),
-  `source` (which sensor or path, for observed), and exactly one lineage pointer per provenance, to
-  the ground-truth record that produced it. observed: `source_rule` (+ version) + `telemetry_id`;
-  calculated: `source_rule`, no `telemetry_id`; intended: `event_id` (the command). A CHECK
-  constraint enforces which lineage column is populated. Declared config is not a datapoint
+  `source` (which sensor or path, for observed), and a lineage pointer. observed and calculated both
+  carry `source_rule` (+ version), the function or calc_rule that produced the row; intended carries
+  `event_id` (the command). A CHECK enforces the pointer per provenance; **observed vs calculated is
+  the `provenance` value itself**, not a column-presence trick. Declared config is not a datapoint
   provenance; it lives in [config](/architecture/variables/), keyed to the same signal.
 - **Ownership is the exclusive-arc** on every datapoint table, `event`, `alarm`, and `variable`:
   `owner_kind` enum plus the matching typed FK (`component_id` / `system_id` / `location_id`) plus a
@@ -41,9 +42,6 @@ here. This page shows the tables and how they relate, but points back to each ow
 
 ```mermaid
 erDiagram
-  telemetry ||--o{ metric_datapoint : "edge parse · telemetry_id (debug)"
-  telemetry ||--o{ state_datapoint  : ""
-  telemetry ||--o{ log_datapoint    : ""
   metric_datapoint ||--o{ metric_datapoint : "calc_rule"
   state_datapoint  ||--o{ event     : "event_rule"
   event ||--o{ alarm : "fire opens · clear resolves"
@@ -55,8 +53,7 @@ erDiagram
 
 | Table | Key columns | Notes |
 |---|---|---|
-| `telemetry` | id, ts, **task**, **raw** (jsonb/bytea, the verbatim collected payload; large raw tiers to a blob hash-ref, see [files](/architecture/files/)), received_at | the raw collected payload, a **TTL'd debug sidecar**, one row per collection emission. Datapoints are emitted at the edge, not re-derived from it, so it has no transform worklist. Owns nothing, no owner arc; carries `collection_id` as its source. |
-| `metric_datapoint` | id, ts, **owner_kind, component_id/system_id/location_id**, key, **instance**, **value float8**, provenance, source, **source_rule, source_rule_version, telemetry_id, event_id** | the firehose; BRIN on ts; numeric aggregation. `instance` (`''` default) discriminates many values of one canonical key on one owner ([taxonomy](/architecture/taxonomy/)) |
+| `metric_datapoint` | id, ts, **owner_kind, component_id/system_id/location_id**, key, **instance**, **value float8**, provenance, source, **source_rule, source_rule_version, event_id** | the firehose; BRIN on ts; numeric aggregation. `instance` (`''` default) discriminates many values of one canonical key on one owner ([taxonomy](/architecture/taxonomy/)) |
 | `state_datapoint` | id, ts, owner arc, key, instance, **value text/jsonb**, provenance, source, + same lineage cols | sparse, transition-only; time-in-state and dwell. [Config](/architecture/variables/) is keyed to one as its observed side |
 | `log_datapoint` | id, ts, owner arc, key, instance, **value text/jsonb (the line)**, level, provenance, source, + same lineage cols | GIN / tsvector full-text; also the holding pen for un-normalized occurrences |
 | `event` | id, ts, key, **origin** (caught/caused/derived/scheduled), owner arc, payload (jsonb), correlation_id, **alarm_id** (nullable), + lineage | the semantic-occurrence log; a momentary event has null `alarm_id`, an alarm edge carries it. A schedule fire is an event with `origin=scheduled` (no separate schedule table) |
@@ -68,25 +65,26 @@ erDiagram
 
 Common datapoint columns (all three kind-tables): `ts`, the **owner arc** (`owner_kind` plus
 `component_id` / `system_id` / `location_id`), `key, provenance, source`, plus the on-row lineage
-`source_rule, source_rule_version, telemetry_id, event_id`; only the value column differs (float8 /
+`source_rule, source_rule_version, event_id`; only the value column differs (float8 /
 text-jsonb / line). A `datapoint` view UNIONs the common columns for "all datapoints for owner X".
 
 ### The lineage CHECK
 
 Lineage lives on the datapoint row, no separate execution table. `source_rule` (+ version) is set
-for observed and calculated (what produced the row); the mutually-exclusive pointer per provenance
-is enforced so e.g. "intended with no command event" is impossible at the storage layer:
+for observed and calculated (the function or calc_rule that produced the row); intended carries the
+command `event_id`. The pointer per provenance is enforced so e.g. "intended with no command event"
+is impossible at the storage layer:
 
 ```sql
 CHECK (
-     (provenance = 'observed'   AND telemetry_id IS NOT NULL AND source_rule IS NOT NULL AND event_id IS NULL)
-  OR (provenance = 'calculated' AND telemetry_id IS NULL     AND source_rule IS NOT NULL AND event_id IS NULL)
-  OR (provenance = 'intended'   AND event_id IS NOT NULL     AND telemetry_id IS NULL AND source_rule IS NULL)
+     (provenance IN ('observed','calculated') AND source_rule IS NOT NULL AND event_id IS NULL)
+  OR (provenance = 'intended'                 AND event_id IS NOT NULL AND source_rule IS NULL)
 )
 ```
 
-Observed and calculated are distinguished *by the CHECK itself* (`telemetry_id` set versus null).
-This is one of three layers: the CHECK enforces *which pointers are populated*, foreign keys enforce
+Observed and calculated both carry `source_rule`; they are distinguished by the **`provenance`
+column**, not a pointer-presence trick (an edge function versus a calc_rule). The intended split is
+the one the CHECK enforces. This is one of three layers: the CHECK enforces *which pointers are populated*, foreign keys enforce
 *the ids are real*, and the app enforces *the value type matches the key's kind*.
 
 ## Current value and projections: views by default
@@ -202,9 +200,7 @@ shapes, encrypted at rest by the pluggable **`SecretProvider`** with every decry
   (`metric_datapoint`) is the partitioning-critical one.
 - **Retention is per table**, set by policy, not one global TTL: `metric_datapoint` short,
   `state_datapoint` / `log_datapoint` longer, `audit_log` longest (compliance), `internal_log`
-  short. On-row lineage ages out with its datapoint. `telemetry` retention is the debug-window
-  budget (a short holding pen, around 15 days), kept long enough to inspect a recent raw payload,
-  then dropped.
+  short. On-row lineage ages out with its datapoint.
 - **Views are not partitioned** (bounded by fleet size, not time) and are computed from the
   underlying tables, never the source of truth.
 
@@ -218,7 +214,7 @@ the physical backend is swappable beneath it:
 - **default**: Postgres for everything (datapoints, ground-truth records, views, registries), the
   single-binary BYO-Postgres story.
 - **tiering (direction, details TBD)**: the firehose does not stay in hot Postgres forever. Aged
-  `metric_datapoint` / `log_datapoint` / `telemetry` partitions tier out to a **columnar or object
+  `metric_datapoint` / `log_datapoint` partitions tier out to a **columnar or object
   store** (Parquet on S3-compatible, or an embedded columnar engine) behind the same gateway, so
   historical queries fan across hot and cold with no model change. The cold tier is partitioned by
   `ts`.

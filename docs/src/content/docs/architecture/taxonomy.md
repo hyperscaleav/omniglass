@@ -1,21 +1,21 @@
 ---
 title: Taxonomy
-description: "The authoritative telemetry data model: datapoints, provenance, rules, events, alarms, and actions, and how they fit together."
+description: "The authoritative data model: datapoints, provenance, rules, events, alarms, and actions, and how they fit together."
 ---
 
 This is the authoritative data model: the meaning of the data. The physical layout (tables, partitioning, the lineage CHECK, tiering) lives in storage; the spine is [the architecture overview](/architecture/).
 
 ## The model in two sentences
 
-Functions collect from devices and **parse at the edge** into typed **datapoints** (metric, state, log) owned by a structural entity, keeping the raw payload in **telemetry** as a debug sidecar; **calc_rules** derive more datapoints, and **event_rules** evaluate datapoints into **events** (and the **alarms** they open and close); **actions** respond. Every datapoint carries a **provenance** (how we know it: observed, calculated, intended) and a **source**, and any two provenances (or sources) of one key disagreeing is the single universal divergence signal. Declared config (operator intent) lives in [config](/architecture/variables/), keyed to the same signal as its observed side but resolved down the cascade, never as a datapoint provenance.
+Functions collect from devices and **parse at the edge** into typed **datapoints** (metric, state, log) owned by a structural entity; **calc_rules** derive more datapoints, and **event_rules** evaluate datapoints into **events** (and the **alarms** they open and close); **actions** respond. Every datapoint carries a **provenance** (how we know it: observed, calculated, intended) and a **source**, and any two provenances (or sources) of one key disagreeing is the single universal divergence signal. Declared config (operator intent) lives in [config](/architecture/variables/), keyed to the same signal as its observed side but resolved down the cascade, never as a datapoint provenance.
 
 ```text
 function (edge) --parse--> datapoint (metric / state / log)
-                                  |  |   (raw payload --> telemetry, a debug sidecar)
                                   |  +--- calc_rule --> datapoint        (calculated)
                                   +----- event_rule --> event --> alarm
                                                           |
                                                        actions (notify / command / ...)
+   (parse / validation failure --> collection.failed event, carries the raw)
 ```
 
 The pipeline is a **DAG**: rules read observed and calculated values as truth, only *compare* intended values (and config's declared value) against observed, and never infer a new fact from an intended value treated as truth. See [The DAG invariant](#the-dag-invariant).
@@ -71,7 +71,7 @@ The naming convention is consistent: a `_type` registry defines what a thing *is
 
 **Datapoint key naming is owner-agnostic.** A key names a *measurement*, never its owner: `temperature` is a Celsius reading whether a codec's thermals or a room's ambient sensor produced it, and the owner (component / system / location / node) plus a template's labels and the function that collected it give it context. So there is no `system.` / `device.` / `room.` prefix; keys group by measurement domain (`cpu.utilization`, `power.state`, `video.input`, `audio.level`, `network.icmp.rtt`). This is the normalization the product hinges on: one canonical path means one comparable signal across every vendor, which is what makes cross-fleet dashboards and AI useful. The official set is seeded from `internal/registry/defaults.yaml` following OpenTelemetry semantic conventions for the IT leaves (`cpu.utilization`, `memory.usage`; semconv's own `system.` prefix is dropped to avoid colliding with the `system` entity type) and the [OpenAV minimum-device-functionality guidelines](https://github.com/OpenAVCloud/specifications/blob/main/min-device-functionality/OAVC-AV-Device-Minimum-Functionality-Guidelines.md) for AV signals. Templates *reference* these registered keys; a template can never mint one.
 
-**Validation is enforced on ingest, under a policy.** A datapoint_type's `validation` (`{min,max}` for a metric, `{values:[...]}` for a state) is checked when an observed value lands, governed by a `validation_policy` config mode: **bypass** (skip), **audit** (the default: write the value but emit a `datapoint.validation_failed` event), or **enforce** (hold the value back from the typed series, emit the event). The raw telemetry row always persists, so an enforced-out value is never lost, it stays backfillable once the registry or the template is corrected. The point is visibility: an out-of-range or unmapped value means a template author declared a type the device disagrees with, so the violation surfaces as an owner-attributed event operators and admins see. The mode is a single global setting today; resolving it per-entity down the cascade (global, location, system, component) is the follow-on, gated on the cascade resolver.
+**Validation is enforced on ingest, under a policy.** A datapoint_type's `validation` (`{min,max}` for a metric, `{values:[...]}` for a state) is checked when an observed value lands, governed by a `validation_policy` config mode: **bypass** (skip), **audit** (the default: write the value but emit a `datapoint.validation_failed` event), or **enforce** (hold the value back from the typed series, emit the event). A validation-enforce reject emits a `collection.failed` event carrying the raw, so the value is never lost, it stays backfillable once the registry or the template is corrected. The point is visibility: an out-of-range or unmapped value means a template author declared a type the device disagrees with, so the violation surfaces as an owner-attributed event operators and admins see. The mode is a single global setting today; resolving it per-entity down the cascade (global, location, system, component) is the follow-on, gated on the cascade resolver.
 
 ## Namespaces: official and local
 
@@ -100,7 +100,7 @@ These are orthogonal. All four cells are real:
 
 Waiting for a frame is a single mode (**listen**) regardless of transport; a held-open connection is a property of the interface, not a separate mode. So there are two task modes, and statefulness lives on the interface.
 
-**Native push.** First-class data pushed by smart senders (control-system programmers instrumenting directly) is self-describing (it carries its key), so its edge parse is a near-identity pass-through, marked `shape=native`. As with any function, the raw payload is kept as a debug aid.
+**Native push.** First-class data pushed by smart senders (control-system programmers instrumenting directly) is self-describing (it carries its key), so its edge parse is a near-identity pass-through, marked `shape=native`. As with any function, a failed parse keeps the raw on a `collection.failed` event.
 
 ## Provenance: how we know a value
 
@@ -108,8 +108,8 @@ Provenance is the second axis, stamped per datapoint row. The same key, with the
 
 | Provenance | How we know it | Lineage points at |
 |---|---|---|
-| **observed** | measured from a component | on-row: `source_rule` (+ version) and `telemetry_id` (the source telemetry) |
-| **calculated** | derived from other datapoints | on-row: `source_rule` (+ version), `telemetry_id` null |
+| **observed** | measured from a component | on-row: `source_rule` (+ version), the edge function that parsed it |
+| **calculated** | derived from other datapoints | on-row: `source_rule` (+ version), the calc_rule |
 | **intended** | the declared effect of a command we issued, pending reconciliation | `event_id` (the command event) |
 
 A value of any provenance is still a metric/state/log (the kind is fixed by the key); provenance only records *how it got there*. All three land in the same datapoint tables, side by side for the same key, which is what makes divergence detection free. Declared intent is the fourth value an operator can assert, but it lives in [config](/architecture/variables/), not in the datapoint tables, and can be compared against an observed datapoint for drift.
@@ -118,11 +118,11 @@ A separate **`source`** column records *which sensor or path* produced an observ
 
 ### observed: from a component, via a transform
 
-"Measured from a component," not "from a device", every device is a component, but not every component is a device. The observed datapoint carries its own lineage on the row: `source_rule` + `source_rule_version` (which function and template version made it, the backtest hinge) and `telemetry_id` (the raw payload it parsed, kept as a debug aid). There is no separate execution table, a derived datapoint is itself the evidence of the function's run, exactly as an event/alarm/action row self-describes.
+"Measured from a component," not "from a device", every device is a component, but not every component is a device. The observed datapoint carries its own lineage on the row: `source_rule` + `source_rule_version` (which function and template version made it, the backtest hinge). The verbatim payload it parsed is **not** kept (no telemetry table); raw surfaces only on a `collection.failed` event or a dev raw-mode tap. There is no separate execution table, a derived datapoint is itself the evidence of the function's run, exactly as an event/alarm/action row self-describes.
 
 ### calculated: derived by a calc rule
 
-A calculated value (a 5-minute average, a system rollup, a fused consensus) is parallel to observed: both are machine-derived. The difference is the input. An edge function parses a raw payload (so the observed row's `telemetry_id` points at the debug payload); a calc rule reads **other datapoints** (so `telemetry_id` is null). Both carry `source_rule` + `source_rule_version` on the row. So observed and calculated differ on the row by `telemetry_id` set-or-null, which is also how the lineage CHECK tells them apart, and the exact inputs a calc read are reconstructable from the rule version (that is what backtest does); if an immutable input snapshot is ever needed it is a nullable `inputs jsonb` column, not a table.
+A calculated value (a 5-minute average, a system rollup, a fused consensus) is parallel to observed: both are machine-derived. The difference is the input: an edge function parses a device payload, a calc rule reads **other datapoints**. Both carry `source_rule` + `source_rule_version` on the row, so they are distinguished by the **`provenance` column** (an edge function versus a calc_rule), not by a pointer. The exact inputs a calc read are reconstructable from the rule version (that is what backtest does); if an immutable input snapshot is ever needed it is a nullable `inputs jsonb` column, not a table.
 
 ### intended: the declared effect of a command
 
@@ -144,12 +144,12 @@ Not every log-to-state path goes through a command. The split is measured fact v
 
 | The source says | Means | Path |
 |---|---|---|
-| "eth0 **is** down" | a component reporting measured reality | telemetry, transform, then **observed** state, directly |
+| "eth0 **is** down" | a component reporting measured reality | edge parse, then **observed** state, directly |
 | we sent "**power on**" | intent in progress, not yet confirmed | command, event, then **intended** state |
 
 ### declared values are config
 
-mac, ip, serial, locked-input, anything an operator *sets* is declared intent, and declared intent is **not** a datapoint provenance. It lives in [config](/architecture/variables/): keyed to the same canonical signal as its observed side, resolved through the scope cascade, never in the datapoint tables. There is no separate property store: config is the declared side of a signal plus the cascade. Ownership resolution reads the resolved identity (a declared identity config value, or the observed identity datapoint that shares its key) to bind telemetry to components.
+mac, ip, serial, locked-input, anything an operator *sets* is declared intent, and declared intent is **not** a datapoint provenance. It lives in [config](/architecture/variables/): keyed to the same canonical signal as its observed side, resolved through the scope cascade, never in the datapoint tables. There is no separate property store: config is the declared side of a signal plus the cascade. Ownership resolution reads the resolved identity (a declared identity config value, or the observed identity datapoint that shares its key) to bind observed data to components.
 
 ### Precedence: spec versus status lives in config
 
@@ -164,11 +164,11 @@ Among datapoint provenances there is no precedence contest: intended is a pendin
 
 Distinguished by a property of the table, not a naming suffix.
 
-- **Raw debug sidecar**: **telemetry** is the raw collected payload, *not* a log: schema defined by its payload, one row per collection emission, TTL'd, bound to no owner, carrying `collection_id` as its source. Datapoints are emitted at the edge, not re-derived from telemetry, so replay and backfill from it are not guaranteed.
-- **Ground truth, logs** (immutable, append-only, the actor's own record): **`log_datapoint`** (a component's words, a datapoint kind), **`audit_log`** (an operator), **`session_log`** (connection lifecycle, node-reported), **`internal_log`** (platform self-narration), and the deferred **`collection_log`** / **`node_log`** companions. Each named for what it is. There is no separate rule-execution table: a derived row *is* the evidence of its rule's run, carrying `source_rule` + `source_rule_version` (and `telemetry_id` for observed) on the row itself.
+- **Raw payload: not stored.** Datapoints are emitted at the edge, so the verbatim wire payload is **not persisted** (no `telemetry` table). Raw surfaces only on a **`collection.failed`** event when a parse or validation rejects (diagnosis, and the one backfill-after-fix case) and via a **dev raw-mode** tap; the datapoint is authoritative, its lineage is `source_rule` + version.
+- **Ground truth, logs** (immutable, append-only, the actor's own record): **`log_datapoint`** (a component's words, a datapoint kind), **`audit_log`** (an operator), **`session_log`** (connection lifecycle, node-reported), **`internal_log`** (platform self-narration), and the deferred **`collection_log`** / **`node_log`** companions. Each named for what it is. There is no separate rule-execution table: a derived row *is* the evidence of its rule's run, carrying `source_rule` + `source_rule_version` on the row itself.
 - **Derived** (produced by rules, reconstructable in principle from ground truth): **`metric_datapoint`**, **`state_datapoint`**, **event**, **alarm**, **action**.
 
-The full collection provenance chain (when the companions land): `datapoint -> telemetry_id -> telemetry -> collection_id -> collection_log -> node -> node_log`. `telemetry` stays clean (only passing collections); `collection_log` records every run including failures; `node_log` is the node's operational narration. See the architecture overview on the spine.
+A datapoint's lineage is `source_rule` + version (the function that made it). The deferred companions extend it: `collection_log` is the cheap per-run execution record (every run, including failures), `node_log` the node's operational narration. A failed parse rides a `collection.failed` event carrying the raw; there is no telemetry table in the chain. See the architecture overview on the spine.
 
 ## Rules: calc, event, action
 
@@ -253,8 +253,8 @@ flowchart TD
     TASK --> FLOW
   end
 
-  FLOW -->|"raw payload"| TEL["telemetry<br/>TTL debug sidecar"]
-  FLOW -->|"observed · lineage on row<br/>(source_rule, telemetry_id)"| M["metric_datapoint"]
+  FLOW -->|"observed · lineage on row<br/>(source_rule)"| M["metric_datapoint"]
+  FLOW -.->|"parse / validation fail"| CF["collection.failed<br/>(carries raw)"]
   FLOW --> S["state_datapoint"]
   FLOW --> L["log_datapoint"]
 
@@ -284,10 +284,10 @@ flowchart TD
   ACT -.->|"command + adaptive poll"| TASK
 
   classDef gt fill:#21CAB9,stroke:#080c16,color:#080c16;
-  class TEL,AU gt;
+  class AU gt;
 ```
 
-Teal nodes are ground-truth records: `telemetry` (the raw debug sidecar an observed row references via `telemetry_id`) and `audit_log` (operator writes, including variable changes); observed and calculated carry `source_rule` on the row, intended points at the command `event` (via `event_id`). The three datapoint tables (`metric_datapoint`, `state_datapoint`, `log_datapoint`) are emitted at the edge or derived; [config](/architecture/variables/) holds declared intent, keyed to a state datapoint as its observed side.
+The teal node is `audit_log`, the ground-truth record of operator writes (including config changes); observed and calculated carry `source_rule` on the row, intended points at the command `event` (via `event_id`). The raw payload is not stored: a parse or validation failure rides a `collection.failed` event. The three datapoint tables (`metric_datapoint`, `state_datapoint`, `log_datapoint`) are emitted at the edge or derived; [config](/architecture/variables/) holds declared intent, keyed to a state datapoint as its observed side.
 
 ## Glossary
 
@@ -302,7 +302,7 @@ This is the **authoritative glossary**: every official term in the architecture,
 | **interface** | A connection to a component, declared once per protocol; transport stateless or stateful (to a session). |
 | **interface_type** | Protocol-and-style registry (ssh, https, snmp, mqtt, webhook...); built-flag + param schema. |
 | **session** | A stateful interface's live held-open connection; a current-state view over `session_log`. |
-| **telemetry** | The raw collected payload (not a log): schema by payload, one row per collection emission, a TTL'd debug sidecar, owns nothing; carries `collection_id` as its source. Datapoints are emitted at the edge, not re-derived from it. |
+| **collection.failed** | The event emitted when a parse or validation rejects; carries the raw payload for diagnosis and backfill-after-fix. There is no stored telemetry table; raw is not otherwise persisted (a dev raw-mode taps it live). |
 | **datapoint** | An observation: a key's value on one owning entity at one time, with provenance + source + on-row lineage. Kinds: metric, state, log. |
 | **metric_datapoint** | Numeric (float8) datapoint. Continuous, aggregatable. The firehose. |
 | **state_datapoint** | Categorical/text/object datapoint. Discrete, dwell-measurable. [Config](/architecture/variables/) is keyed to one as its observed side. |
@@ -314,8 +314,8 @@ This is the **authoritative glossary**: every official term in the architecture,
 | **datapoint_type** | Registry for datapoint keys: namespace, name, kind, value_type, unit, fusion_policy. Official/private shadow. |
 | **event_type** | Registry for event keys: namespace, name, display_name, payload_schema. Official/private shadow. |
 | **provenance** | How we know a value: observed, calculated, intended. Per row. Declared intent is [config](/architecture/variables/). |
-| **observed** | Measured from a component. On-row lineage: `source_rule` (+ version) + `telemetry_id`. |
-| **calculated** | Derived from other datapoints by a calc_rule. On-row lineage: `source_rule`; `telemetry_id` null. |
+| **observed** | Measured from a component. On-row lineage: `source_rule` (+ version), the edge function. |
+| **calculated** | Derived from other datapoints by a calc_rule. On-row lineage: `source_rule` (+ version), the calc_rule. Distinguished from observed by the `provenance` column. |
 | **intended** | A command's declared effect, pending reconciliation. Lineage: the command `event_id`. Only commands set it. |
 | **source** | Which sensor/path produced an observed value; distinct from provenance; enables multi-source rows + fusion. A `source` registry carries default weights. |
 | **fusion_policy** | Per-key, built-in multi-source reconciliation (mode + tie-break + source weights), applied on read. |
@@ -357,7 +357,7 @@ This is the **authoritative glossary**: every official term in the architecture,
 | **audit_log** | Who-did-what ground truth; one row per operator write, same-tx; the lineage target for operator writes, including config changes. |
 | **session_log** | Connection-lifecycle transitions (node-reported, diagnostic). |
 | **internal_log** | Platform self-narration (startup, reconcile, migration, node-reg, config-sync). |
-| **ground truth** | Immutable append-only records: telemetry, log_datapoint, audit_log, session_log, internal_log. |
+| **ground truth** | Immutable append-only records: log_datapoint, audit_log, session_log, internal_log. |
 | **principal / role / grant** | IAM subject; an RBAC capability set crossed with a scope. |
 | **secret:read** | The IAM permission to read a credential in plaintext; gated per role, and every decrypt is audited. |
 | **file / blob** | Searchable metadata over content-addressed bytes (pgblobs/S3/disk); dedup. |

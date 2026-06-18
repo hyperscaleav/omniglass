@@ -39,7 +39,7 @@ unboundedly in one transaction; a cross-producing stage hands off to a worklist,
 makes it independently durable and ordered. Calc re-entry **terminates by write-on-change** (a
 recompute that lands the same value enqueues nothing, the fixpoint) with a depth cap as a
 cyclic-rule backstop, carrying a rollup (component -> system -> location health) one hop per drain
-pass. Parsing telemetry into datapoints is **not** a worker stage; it happens at the edge
+pass. Parsing into datapoints is **not** a worker stage; it happens at the edge
 ([collection](/architecture/collection/)).
 
 ## The stateless / stateful fork
@@ -75,8 +75,8 @@ diff its output against what the old version produced, without touching live sta
 **calculated** and **event-derived** slices are server-rule-derived, so only they re-derive.
 Everything else does not:
 
-- **observed** datapoints are parsed at the edge and are not re-derived server-side (telemetry is a
-  short debug window, not a replay source);
+- **observed** datapoints are parsed at the edge and are not re-derived server-side (the raw payload
+  is not stored, so there is no server-side re-parse);
 - **operator alarm transitions** (ack, snooze) come from `audit_log`;
 - **action delivery status** comes from the outbox (the real-world send is not re-done);
 - **no-data staleness** re-derives from the datapoint gaps ([time](/architecture/time/)).

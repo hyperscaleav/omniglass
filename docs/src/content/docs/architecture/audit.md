@@ -17,7 +17,7 @@ recorded once, at the source.
 - **The actor** is resolved by IAM ([identity and access](/architecture/identity-access/)): the
   user, service account, or node.
 - **Ground truth and replay source.** Operator-driven transitions and config changes are not
-  recomputable from telemetry, so the audit log is what replay reads for them: alarm ack and
+  recomputable from collected data, so the audit log is what replay reads for them: alarm ack and
   snooze ([alarms and actions](/architecture/alarms-actions/)), and every config change a
   reconcile consumes.
 

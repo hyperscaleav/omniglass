@@ -103,8 +103,8 @@ Every fixed built-in name (`icmp.reachable`/`icmp.rtt_avg`, `tcp.open`/
 `tcp.connect_time`, `udp.open`, `snmp.reachable`, `http.reachable`/
 `http.status_code`/`http.response_time`, and `<proto>.reachable`/`<proto>.response_time`
 for the text family) is a **registered canonical `datapoint_type`** in the ship-with registry,
-so probe/liveness results persist as datapoints, not only on the telemetry row's
-`raw`. They are owner-agnostic measurements like any other: unregistered,
+so probe/liveness results persist as datapoints, not only as raw wire
+bytes. They are owner-agnostic measurements like any other: unregistered,
 reject-not-project would drop them at ingest. `registry.seed_validation_test`'s
 `liveness_builtins_present` locks the registry to exactly the names the node
 emits, so a rename on either side fails the build instead of silently going
@@ -240,10 +240,9 @@ Generic lifecycle (exact enum deferred to the ssh slice):
 
 **Where failures land.** `session_log` owns **connection health** (cannot connect,
 auth rejected, dropped, timeout). The **data event owns parse health**: a parse
-failure (connected, got bytes, the extraction did not match) lands on the record
-being produced (`telemetry` for polls and listener frames, the caused `event` + the
-`action` row for commands), with `raw` kept for debug, and surfaces as a collection-health
-datapoint so it is alertable. A command timeout can touch both.
+failure (connected, got bytes, the extraction did not match) emits a `collection.failed`
+event carrying the `raw` (the caused `event` + the `action` row for commands), and surfaces
+as a collection-health datapoint so it is alertable. A command timeout can touch both.
 
 ## Inbound handling on a shared connection
 
@@ -268,7 +267,7 @@ matcher set**:
 
 The node's work is the **component job queue** (distinct from the central
 **rule engine's work queue** that processes derivation; see workers). It
-holds **poll jobs** (produce `telemetry`) and **command jobs** (from `run`
+holds **poll jobs** (produce datapoints) and **command jobs** (from `run`
 actions, produce a caused `event` + `action`-row status), and splits work by shape:
 
 - **discrete jobs** (pollers, commands): scheduled or triggered, request/response,
@@ -356,27 +355,29 @@ A down interface's gate datapoints all ship in **one** batched call. L5 (socket)
 L6 (TLS), and further L7 handshakes slot in by extending the check stack: one
 `append` in `ifaceChecks`, gated by its own `_check` param.
 
-## Shipping telemetry
+## Shipping datapoints
 
-The node ships a native `Event`: `{ datapoints, raw, labels }` plus an envelope
+The node ships a native `Event`: `{ datapoints, labels }` plus an envelope
 (`task`, batch `ts`), as **native protobuf over gRPC**, buffered with
-retry/backoff. `raw` is the original wire bytes, kept in the telemetry sidecar for a
-TTL'd debug window so a bad extraction can be inspected. An **OTLP adapter** at the edge accepts OTLP from
+retry/backoff. On a parse or validation failure it also ships the **raw** wire bytes so the
+server can emit a `collection.failed` event; on success raw is omitted (there is no telemetry
+table), unless a **dev raw-mode** is on. An **OTLP adapter** at the edge accepts OTLP from
 third-party tools and translates to the native shape.
 
 ```mermaid
 flowchart LR
   W["pull worklist<br/>(placed tasks + commands)"] --> X["execute:<br/>protocol + locate/Expr extraction"]
-  X --> N["normalize: datapoints + labels + raw"]
+  X --> N["normalize: datapoints + labels<br/>(+ raw on failure)"]
   N --> S["buffer + ship<br/>native protobuf gRPC"]
   S --> WK["server: validate + bind owner<br/>+ persist datapoints"]
-  S -.->|"raw"| TE["telemetry<br/>(raw, debug sidecar, TTL'd)"]
+  S -.->|"raw on failure"| CF["collection.failed<br/>(event, carries raw)"]
 ```
 
 The node has already produced the datapoints at the edge; the server **validates and
-binds owner** (registry lookup, owner attribution) and **persists** them, and writes the
-raw payload to `telemetry` as a TTL'd debug sidecar. The server does not re-derive observed
-datapoints; only calc and event rules derive. The node's job ends at the ship.
+binds owner** (registry lookup, owner attribution) and **persists** them. On a parse or
+validation failure it emits a `collection.failed` event carrying the raw; on success there is
+no raw to store. The server does not re-derive observed datapoints; only calc and event rules
+derive. The node's job ends at the ship.
 
 ## Tick scheduling, concurrency, and self-observability
 
