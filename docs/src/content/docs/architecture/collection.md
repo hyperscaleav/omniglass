@@ -199,3 +199,29 @@ A function runs the parse at the **edge**, not server-side:
   is the template's fan-out, and cross-entity rollups are [calc](/architecture/taxonomy/#rules-calc-event-action)
   datapoints on system and location templates. The server-side work that remains is
   shared-interface owner-binding and untemplated raw ingress.
+
+## Shared-API collection: one component, many owners
+
+Some sources describe **many entities at once**: a SaaS / UCC platform (Zoom, Teams), a controller
+fronting many devices, a building gateway. Modeling each described entity as its own component is the
+legacy-platform reflex. Here the API is **one component** (one interface, one credential) and its data
+**fans out** to the entities it describes.
+
+- The API component's function pulls the batch (all rooms, all devices) in one call and **labels each
+  emitted datapoint with the external identity** it belongs to (a Zoom Room ID).
+- The function does **not** stamp the owner, it is the conduit, not the owner. Ownership is **resolved
+  server-side**: the identity is matched against a declared **identity config** (`zoom.room_id` on the
+  target) and the datapoint is bound to that entity. This is the same shared-ingress owner-binding the
+  model uses for webhooks and traps; a pull-side batch is the same shape.
+- **The owner can be a system, not only a component.** SaaS state that is telemetry *of* a room (no
+  physical device) maps to **system-owned datapoints** directly. Reserve a virtual component for the
+  genuine *member* case (its own node in the topology, a `health_role`, a lifecycle). Rule of thumb:
+  **member -> component, telemetry -> system.**
+- **Unmatched identities are orphans**, a discovery candidate. The deferred `discovery_rule` is the
+  onboarding win: point it at the API and it auto-creates the entities and sets their identity, so you
+  never hand-map.
+
+**Best practice.** Map SaaS / cloud telemetry to **system-owned datapoints**, and **wire it into
+system health** with a system-scoped `event_rule`. Treat the vendor's own status as an **input to that
+judgment, not the verdict**: a UCC platform reporting "offline" is one source's opinion, so corroborate
+it (against the codec, occupancy) before downing the room. See [health](/architecture/health/).

@@ -108,6 +108,13 @@ be on input 1") opens a **system-level alarm** with a health impact, dropping sy
 display's own health stays `up`. The system template owns the conditions only the system cares about;
 the component stays generic.
 
+The same discipline governs **SaaS and vendor status** (a UCC platform like Zoom, mapped to
+system-owned datapoints, [shared-API collection](/architecture/collection/)): a vendor's reported
+"offline" or "in a meeting" is an *observed signal from one source*, not a verdict on the room. Author
+the system condition over it, **corroborated** where you can (against the codec, occupancy), rather
+than trusting it. The vendor's opinion is an input to health, not health itself, the same way no
+single component's state is.
+
 This is the symmetry: **component-level events and alarms** and **system-level events and alarms**,
 the same machinery on each arc, distinguished by which entity owns the arc (the exclusive-arc owner,
 [alarms and actions](/architecture/alarms-actions/)).
