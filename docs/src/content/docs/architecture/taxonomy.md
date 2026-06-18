@@ -73,6 +73,17 @@ The naming convention is consistent: a `_type` registry defines what a thing *is
 
 **Validation is enforced on ingest, under a policy.** A datapoint_type's `validation` (`{min,max}` for a metric, `{values:[...]}` for a state) is checked when an observed value lands, governed by a `validation_policy` config mode: **bypass** (skip), **audit** (the default: write the value but emit a `datapoint.validation_failed` event), or **enforce** (hold the value back from the typed series, emit the event). The raw telemetry row always persists, so an enforced-out value is never lost, it stays backfillable once the registry or the template is corrected. The point is visibility: an out-of-range or unmapped value means a template author declared a type the device disagrees with, so the violation surfaces as an owner-attributed event operators and admins see. The mode is a single global setting today; resolving it per-entity down the cascade (global, location, system, component) is the follow-on, gated on the cascade resolver.
 
+## Namespaces: official and local
+
+Every key is `(namespace, name)`, and there are only **two** namespaces, separated by where trust comes from:
+
+- **official** (the shipped, signed canonical set): trusted because it is **in the distribution**, not because of a label. You cannot spoof "official" any more than you can fake being in the release. This is the namespace normalization rides on, the same `video.input` across every vendor.
+- **org** (the registry's local / `private` namespace): everything a deployment authors or imports, plus any datatypes an imported template drags in. Per-database isolation makes `org` unambiguous, since one database is one tenant.
+
+**Sharing happens at the template level**, a repo or marketplace of templates, not a federated signal namespace. An imported template is either **linked** (it tracks its upstream and updates) or **copied** (forked into `org`, diverged); either way the datatypes it introduces land in **org**. There is deliberately no `vendor:` or `community:` trust tier: a namespace string is not a trust primitive, so without signing or a central authority it would be spoofable theater. A vendor pack earns trust the one real way, by being **blessed into the official distribution** (shipped and signed by us), which is also the promotion path for any widely useful local signal.
+
+**Governance is curation, not runtime enforcement.** Omniglass is a Postgres database an operator runs, so nothing stops a self-hoster inserting into `org` or editing an official row in their own database. We vouch only for what we **ship**; you vet what you import, it lands in your `org`, and you own the risk. Commands use the same namespace model in their own registry.
+
 ## Collection: how telemetry arrives
 
 A **task** is a node's unit of collection work. Two independent axes describe it, and keeping them separate is what keeps the model clean.
