@@ -66,16 +66,19 @@ registered callback URL resolves to the placed listener's address, not a hardcod
 
 For each task the node runs the protocol over the interface's connection,
 then **normalizes at the edge**: it applies the locate + Expr extraction
-([components](/architecture/components/)) to produce datapoints, stamps labels (cascading
-union + override), and keeps the original wire bytes as `raw`. The three types
-differ only in trigger:
+([components](/architecture/components/)) to produce datapoints and stamps labels (cascading
+union + override); it keeps the original wire bytes as `raw` only on a parse or validation
+failure (for `collection.failed`) or under dev raw-mode, and drops them on success. A task
+runs in one of **two modes** ([collection](/architecture/collection/)); a held-open connection
+is a **stateful interface transport**, not a third task type:
 
-- **poller**: on the resolved `interval`, send the command/request, read the
-  response;
-- **stream**: connect, subscribe, receive a stream of events;
-- **listener**: receive data pushed to the endpoint it exposes.
+- **poll**: we ask. On the resolved `interval`, send the command/request, read the
+  response (SNMP get, HTTP GET, an SSH-exec or xAPI `xStatus` on a held session);
+- **listen**: we wait. Receive data pushed to us, whether to an endpoint we expose
+  (webhook, syslog) or as feedback on a held connection (MQTT subscribe, xAPI feedback on
+  a stateful interface).
 
-All three assemble the same telemetry payload (below).
+Both assemble the same telemetry payload (below).
 
 ### Built poll protocols and their config
 
@@ -276,7 +279,7 @@ actions, produce a caused `event` + `action`-row status), and splits work by sha
   interfaces, so a per-host lane would run parallel work against the box you just
   rebooted. A shared poller that fans to many components runs once on its parent and
   fans out at binding.
-- **standing receivers** (listeners, streams): always-on, event-driven, **not
+- **standing receivers** (listen tasks): always-on, event-driven, **not
   lane-serialized**; they normalize as events arrive, sharing a held session with
   pollers (demuxed) or owning their connection.
 
@@ -410,9 +413,9 @@ operator-authored template; its telemetry shape is **built into the binary** (th
 seeded `node.*` datapoint types and node-health rules), and the `node.self` shape
 is what selects that built-in template at derive time. The one node-specific
 piece is owner resolution: `ProcessTelemetry` **pre-binds** a `node.self` envelope to
-the reporting node (`owner_kind = node`, the fourth exclusive-arc alongside
-component/system/location), the node-arc analogue of a per-component interface
-pre-binding its telemetry to its component. So node datapoints land node-owned
+the reporting node (`owner_kind = node`, a `node` owner arc, the `node_id` arm of the
+exclusive arc alongside component/system/location/global), the node-arc analogue of a
+per-component interface pre-binding its telemetry to its component. So node datapoints land node-owned
 with no server-side parse, no inline derivation, and the worker's batching +
 concurrency + amortized rule refresh apply for free. This is the operator-visible
 health of the collection layer itself. Self-telemetry is best-effort (a failed

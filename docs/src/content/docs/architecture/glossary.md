@@ -22,7 +22,7 @@ This is the **authoritative glossary**: every official term in the architecture,
 | **kind** | What a key is: metric, state, or log. Fixed per key at definition. |
 | **key** | The identity of what is measured or asserted; registered in `datapoint_type`. |
 | **canonical signal** | A registered, owner-agnostic measurement name (`power.state`, not `room.power`); one comparable signal across every vendor. |
-| **owner / owner_kind** | A datapoint/event/alarm's subject, the exclusive-arc: `owner_kind` + the matching typed FK (`component_id`/`system_id`/`location_id`), or the singleton `global` (no FK), + CHECK. |
+| **owner / owner_kind** | A datapoint/event/alarm's subject, the exclusive-arc: `owner_kind` + the matching typed FK (`component_id`/`system_id`/`location_id`/`node_id`), or the singleton `global` (no FK), + CHECK. |
 | **datapoint_type** | Registry for datapoint keys: namespace, name, kind, value_type, unit, fusion_policy. Official/private shadow. |
 | **event_type** | Registry for event keys: namespace, name, display_name, payload_schema. Official/private shadow. |
 | **provenance** | How we know a value: observed, calculated, intended. Per row. Declared intent is [config](/architecture/variables/). |
@@ -37,7 +37,7 @@ This is the **authoritative glossary**: every official term in the architecture,
 | **variable** | A free interpolated value (a macro): `$var:<name>`, resolved global→template→instance down the cascade; org-keyed, not signal-bound, no observed side. |
 | **drift** | The gap between config's declared value and its observed datapoint, on one signal key. |
 | **reconcile** | Per-[config](/architecture/variables/) item: spec-vs-status when declared and observed disagree (`alert` / `enforce` / `accept`). |
-| **cascade** | Resolves the effective config / variable value (declared or template default): global, type, template, location, system, component, group (weighted); most specific wins. |
+| **cascade** | Resolves the effective config / variable value (declared or template default): global, component_template, system_template, then the location / system / component trees (weight-free, pure depth); most-specific (deepest) wins. Type is not a layer (it resolves via a group filter); groups are placed by weight on the same specificity scale. |
 | **edge parse** | A function parses a raw payload into datapoints on the node, the edge half of [collection](/architecture/collection/). There is no server-side transform rule. |
 | **calc_rule** | datapoint(s) to datapoint (calculated): cross-key / system-level derivation. (Same-key multi-source reconcile is the key's fusion_policy.) |
 | **event_rule** | datapoint change to event: fire_criteria + optional clear_criteria (clear makes events alarm-paired); an optional `health` impact lets its alarm move the owner's health. No separate alarm or condition rule. |
@@ -46,7 +46,7 @@ This is the **authoritative glossary**: every official term in the architecture,
 | **event** | A discrete semantic occurrence the action layer reacts to. Keyed, point-in-time, owned via the arc. Not a datapoint. |
 | **origin** | How an event arose: caught, caused, derived, scheduled. |
 | **alarm** | One open-to-close incident: a stateful row driven by an event_rule's paired events; new row per open; keyed (event_rule, owner); optionally health-impacting while open. Not event-sourced. The ITSM anchor. |
-| **action** | An ordered sequence of steps (notify, command in v1; wait/branch deferred). The canned remediate-verify-escalate ships v1. |
+| **action** | An ordered sequence of steps (notify, command in v1; wait/branch deferred). Single-step `notify` / `command` actions ship v1; multi-step flows (including remediate-verify-escalate) are deferred. |
 | **command** | A `run`-action declaration in a component_template version (not a table); an instance is an `action` with `kind=command`. |
 | **disagree(A,B)** | A condition operator comparing two provenances or sources of one key. Drift, config drift, conflict. Keeps the DAG. |
 | **divergence** | Any two provenances or sources of one key that disagree. The universal anomaly signal. |
@@ -61,6 +61,9 @@ This is the **authoritative glossary**: every official term in the architecture,
 | **location** | A place tree; classified by location_type; no template. |
 | **global** | The singleton estate root: the top owner above every location where estate-wide health and KPIs roll up, and the top of the cascade. One per deployment, no FK. |
 | **KPI** | A shipped derived datapoint (a calc / SLI) owned at system / location / global: availability (health over time) and the utilization family (occupancy, time, booking, ghost). An official default set with an escape hatch. |
+| **SLI** | Service Level Indicator: a `time_in_state` calc datapoint over a window (e.g. `system.availability`). See [health](/architecture/health/). |
+| **SLO** | Service Level Objective: the target config value the SLI must hold (availability >= 99.9%). See [health](/architecture/health/). |
+| **SLA** | Service Level Agreement: meeting the SLO, an `event_rule` firing on breach; compliance over the window is itself an SLI. See [health](/architecture/health/). |
 | **tag** | Operator label (registry + bindings); union + override. |
 | **group** | A named set (component/system/location/user), static or dynamic, weighted; a cascade overlay + access scope. |
 | **health** | The first-class operational state of every entity (up/degraded/down/unknown), carried as a *calculated* state_datapoint: `worst` over its open health-impacting alarms, rolled up the system tree role-aware. A model, not just a rule. See [health](/architecture/health/). |

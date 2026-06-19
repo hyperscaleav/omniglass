@@ -31,9 +31,9 @@ here. This page shows the tables and how they relate, but points back to each ow
   the `provenance` value itself**, not a column-presence trick. Declared config is not a datapoint
   provenance; it lives in [config](/architecture/variables/), keyed to the same signal.
 - **Ownership is the exclusive-arc** on every datapoint table, `event`, `alarm`, and `variable`:
-  `owner_kind` enum plus the matching typed FK (`component_id` / `system_id` / `location_id`, or none
-  for the singleton `global`) plus a CHECK that exactly the matching column is set (or all null for
-  `global`). System-, location-, and global-level datapoints are first-class.
+  `owner_kind` enum plus the matching typed FK (`component_id` / `system_id` / `location_id` /
+  `node_id`, or none for the singleton `global`) plus a CHECK that exactly the matching column is set
+  (or all null for `global`). System-, location-, node-, and global-level datapoints are first-class.
 - **Keys**: datapoints and events use a surrogate id plus `ts`; the key registry `datapoint_type`
   uses the composite natural key `(namespace, name)`; structural entities are name-keyed; a `task`
   is **content-addressed** (`hash(interface, kind, schedule, params)`); a `node` by name.
@@ -53,7 +53,7 @@ erDiagram
 
 | Table | Key columns | Notes |
 |---|---|---|
-| `metric_datapoint` | id, ts, **owner_kind, component_id/system_id/location_id**, key, **instance**, **value float8**, provenance, source, **source_rule, source_rule_version, event_id** | the firehose; BRIN on ts; numeric aggregation. `instance` (`''` default) discriminates many values of one canonical key on one owner ([datapoints](/architecture/datapoints/)) |
+| `metric_datapoint` | id, ts, **owner_kind, component_id/system_id/location_id/node_id**, key, **instance**, **value float8**, provenance, source, **source_rule, source_rule_version, event_id** | the firehose; BRIN on ts; numeric aggregation. `instance` (`''` default) discriminates many values of one canonical key on one owner ([datapoints](/architecture/datapoints/)) |
 | `state_datapoint` | id, ts, owner arc, key, instance, **value text/jsonb**, provenance, source, + same lineage cols | sparse, transition-only; time-in-state and dwell. [Config](/architecture/variables/) is keyed to one as its observed side |
 | `log_datapoint` | id, ts, owner arc, key, instance, **value text/jsonb (the line)**, level, provenance, source, + same lineage cols | GIN / tsvector full-text; also the holding pen for un-normalized occurrences |
 | `event` | id, ts, key, **origin** (caught/caused/derived/scheduled), owner arc, payload (jsonb), correlation_id, **alarm_id** (nullable), + lineage | the semantic-occurrence log; a momentary event has null `alarm_id`, an alarm edge carries it. A schedule fire is an event with `origin=scheduled` (no separate schedule table) |
@@ -64,7 +64,7 @@ erDiagram
 | `internal_log` | id, ts, kind (startup/reconcile/migration/node-reg/config-sync), detail | ground truth; the platform narrating itself |
 
 Common datapoint columns (all three kind-tables): `ts`, the **owner arc** (`owner_kind` plus
-`component_id` / `system_id` / `location_id`), `key, provenance, source`, plus the on-row lineage
+`component_id` / `system_id` / `location_id` / `node_id`), `key, provenance, source`, plus the on-row lineage
 `source_rule, source_rule_version, event_id`; only the value column differs (float8 /
 text-jsonb / line). A `datapoint` view UNIONs the common columns for "all datapoints for owner X".
 

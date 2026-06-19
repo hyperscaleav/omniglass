@@ -157,7 +157,7 @@ collection); how much of that to persist, and for how long, is still being settl
 A handful of patterns hold everywhere, and they are why the model stays coherent:
 
 - **Exclusive-arc ownership**: every datapoint, event, and alarm names exactly one owner (component,
-  system, or location), so system- and location-level signals are first-class.
+  system, location, node, or global), so system- and location-level signals are first-class.
 - **Immutable template versions**: an instance pins a frozen template version (or tracks `latest`);
   editing mints a new version; re-pointing is explicit.
 - **On-row lineage**: a derived row carries its own evidence; there is no separate execution table.

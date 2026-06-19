@@ -43,11 +43,11 @@ full schema; this page covers the rest of the device shape.
 
 ## The rest of the shape
 
-- **Config (props).** The template declares the [config](/architecture/variables/) a
+- **Config.** The template declares the [config](/architecture/variables/) a
   component *requires* (connection and inventory facts, e.g. `ip-addr`, `serial`) and
   their defaults. Effective values resolve through the cascade ([cascade](/architecture/cascade/)).
 - **Credential shapes.** The template declares the *kinds* of credential the device needs
-  (`username_password`, `snmp_community`, `header_token`); these are
+  (`basic_auth`, `snmp_community`, `bearer_token`); these are
   [`variable_type`](/architecture/variables/) shapes, bound to actual secret values at
   assignment (credentials).
 - **Tags.** Default org labels seeded onto the component (`category: audio-dsp`).

@@ -22,9 +22,11 @@ kinds share that resolution but differ in what they are keyed to and what lifecy
 | lifecycle | drift → reconcile (a set function) | provider + refresh + rotation + expiry | none; resolved and interpolated |
 | example | `video.input = HDMI1` | an `ssh_credential`, an `oauth2` token | `poll_interval = 30s`, a base URL, a label |
 
-The common thread is the cascade and the exclusive-arc scope (exactly one of
-`global | template | location | system | component`, the same arc datapoints use). The three are
-not three subsystems; they are three uses of one "set a value, resolve it down a scope" idea.
+The common thread is the cascade and an exclusive-arc scope (exactly one of
+`global | template | location | system | component`): the same exclusive-arc ownership as
+datapoints, plus a `template`-scoped default the datapoint arc lacks (and unlike datapoints,
+config is not `node`-owned). The three are not three subsystems; they are three uses of one
+"set a value, resolve it down a scope" idea.
 
 ## config: declared device state, keyed to a signal
 
@@ -162,7 +164,9 @@ has no lifecycle.
 
 - **The cascade.** All three resolve most-specific-wins down `global → … → component`, with a
   template-scoped value as a shipped default. One resolver ([cascade](/architecture/cascade/)).
-- **The exclusive-arc scope.** Each value is owned at exactly one scope, the same arc datapoints use.
+- **The exclusive-arc scope.** Each value is owned at exactly one scope: the same exclusive-arc
+  ownership as datapoints, plus a `template`-scoped default the datapoint arc lacks (and config is
+  not `node`-owned).
 - **`variable_type` shapes** back credentials (structured secrets) and variables (scalars); config
   instead borrows the `datapoint_type`'s domain, because its key *is* a signal.
 - **`$var:` interpolation** renders variables and credential fields into requests; config is read by

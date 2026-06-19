@@ -26,8 +26,8 @@ row is the live state.
 
 Transitions, by who drives them:
 
-- **opened / resolved** are **rule-driven** (the `event_rule`'s fire / clear
-  criterion), each emitting an `event` carrying the `alarm_id`;
+- **opened / resolved** are **rule-driven** (the `event_rule`'s `fire_criteria` /
+  `clear_criteria`), each emitting an `event` carrying the `alarm_id`;
 - **acked / snoozed** are **operator-driven**, recorded in `audit_log` (also carrying
   the `alarm_id`) and applied to the alarm row.
 
@@ -39,8 +39,8 @@ back into the datapoint layer (hub *Cycle safety*).
 
 ## The `event_rule`
 
-An `event_rule` carries a required `fire` criterion and an optional `clear`
-criterion. With a `clear` criterion the fire event **opens** an alarm and the clear
+An `event_rule` carries a required `fire_criteria` and an optional `clear_criteria`.
+With a `clear_criteria` the fire event **opens** an alarm and the clear
 event **resolves** it; without one the rule is momentary (a one-shot event, no
 alarm). There is no separate `alarm_rule`.
 
@@ -49,16 +49,16 @@ event_rule:
   scope: 'component.template == "polaris-dsp-16"'   # the shared selector (expressions)
   datapoint: dsp.temperature
   window: { reduce: avg, over: 10m }                 # machinery (optional)
-  fire: "value > 65"                                 # opens the alarm
-  clear: "value < 60"                                # resolves it (defaults to !fire)
+  fire_criteria: "value > 65"                        # opens the alarm
+  clear_criteria: "value < 60"                       # resolves it (defaults to !fire_criteria)
   for: 0                                             # sustained span (optional)
   severity: 30
   health: degraded                                   # optional: degrade the owner's health while open
 ```
 
 `scope` selects the entities (fan-out, one alarm per match); `datapoint` is the
-input; `window` / `for` are the aggregation machinery; `fire` / `clear` are the Expr
-leaves; `severity` is the integer (below). A rule is **suppressible by name through
+input; `window` / `for` are the aggregation machinery; `fire_criteria` / `clear_criteria`
+are the Expr leaves; `severity` is the integer (below). A rule is **suppressible by name through
 the cascade** ([cascade](/architecture/cascade/)): a high-weight group can remove a
 false-firing rule without editing it (the firmware-bug workaround).
 
@@ -76,7 +76,7 @@ no single component can.
 ## Severity: an open integer, not an enum
 
 The alarm carries a **severity integer (0-999)**. A **`severity_levels` lookup**
-(the `configuration` store, official defaults) renders the integer to a **label +
+(official-registry defaults, operator-relabelable) renders the integer to a **label +
 color**; the integer is the sortable, comparable value. Official defaults are
 **spaced by 10** so operators can insert without renumbering:
 
