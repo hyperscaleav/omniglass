@@ -5,7 +5,7 @@ description: The schema, the ERD, and the tiering model. Every other leaf define
 
 Leaf of the [architecture spine](/architecture/). Every other leaf defines entities that land
 here. This page shows the tables and how they relate, but points back to each owning leaf (and to
-[taxonomy](/architecture/taxonomy/) for the data-model semantics) rather than re-explaining them.
+[datapoints](/architecture/datapoints/) for the data-model semantics) rather than re-explaining them.
 
 ## Conventions
 
@@ -18,7 +18,7 @@ here. This page shows the tables and how they relate, but points back to each ow
   `*_log` ground-truth logs (`session_log`, `internal_log`, plus the deferred `collection_log` /
   `node_log`). There is **no `telemetry` table**: datapoints are emitted at the edge, so the raw
   payload is not persisted in steady state; raw appears only on a `collection.failed` event or a
-  dev raw-mode tap ([taxonomy](/architecture/taxonomy/)). A schedule fire is not a record here: it is an `event` with `origin=scheduled`.
+  dev raw-mode tap ([datapoints](/architecture/datapoints/)). A schedule fire is not a record here: it is an `event` with `origin=scheduled`.
   There is no separate rule-execution table: derived rows carry their lineage on the row.
   **Datapoints** (`metric_datapoint` / `state_datapoint` / `log_datapoint`) are the typed
   observation firehose. **Stateful entities and projections** (`alarm`, `action`, current-value)
@@ -53,11 +53,11 @@ erDiagram
 
 | Table | Key columns | Notes |
 |---|---|---|
-| `metric_datapoint` | id, ts, **owner_kind, component_id/system_id/location_id**, key, **instance**, **value float8**, provenance, source, **source_rule, source_rule_version, event_id** | the firehose; BRIN on ts; numeric aggregation. `instance` (`''` default) discriminates many values of one canonical key on one owner ([taxonomy](/architecture/taxonomy/)) |
+| `metric_datapoint` | id, ts, **owner_kind, component_id/system_id/location_id**, key, **instance**, **value float8**, provenance, source, **source_rule, source_rule_version, event_id** | the firehose; BRIN on ts; numeric aggregation. `instance` (`''` default) discriminates many values of one canonical key on one owner ([datapoints](/architecture/datapoints/)) |
 | `state_datapoint` | id, ts, owner arc, key, instance, **value text/jsonb**, provenance, source, + same lineage cols | sparse, transition-only; time-in-state and dwell. [Config](/architecture/variables/) is keyed to one as its observed side |
 | `log_datapoint` | id, ts, owner arc, key, instance, **value text/jsonb (the line)**, level, provenance, source, + same lineage cols | GIN / tsvector full-text; also the holding pen for un-normalized occurrences |
 | `event` | id, ts, key, **origin** (caught/caused/derived/scheduled), owner arc, payload (jsonb), correlation_id, **alarm_id** (nullable), + lineage | the semantic-occurrence log; a momentary event has null `alarm_id`, an alarm edge carries it. A schedule fire is an event with `origin=scheduled` (no separate schedule table) |
-| `alarm` | **id**, event_rule, owner arc, **status, severity, opened_at, resolved_at, acked_by** | a stateful entity, **one incident, new row per open** ([taxonomy](/architecture/taxonomy/)); holds current state directly (not event-sourced); the ITSM anchor. History = events + audit by `id` |
+| `alarm` | **id**, event_rule, owner arc, **status, severity, opened_at, resolved_at, acked_by** | a stateful entity, **one incident, new row per open** ([datapoints](/architecture/datapoints/)); holds current state directly (not event-sourced); the ITSM anchor. History = events + audit by `id` |
 | `action` | id, **steps (ordered: notify/command/wait/branch)**, status, current_step | a stateful entity; delivery and step state; driven by events/alarms ([alarms and actions](/architecture/alarms-actions/)) |
 | `audit_log` | id, ts, actor, verb, resource_kind, resource_id, old, new (jsonb) | ground truth; the lineage target for operator writes (including config changes); secret decrypts always recorded |
 | `session_log` | id, ts, session_id, node, interface, transition (connect/auth/drop/close/reconnect/error), detail | ground truth, node-reported; the connection log |
@@ -148,7 +148,7 @@ erDiagram
 | `interface_type` | name, **built**, direction (in/out), param_schema (jsonb) | the protocol-and-style registry (`ssh`, `https`, `snmp`, `mqtt`, `webhook`, ...); generates the template config schema |
 | `interface` | name (per component), interface_type, **component** (nullable: set = pre-bound, null = shared/match-key), params (jsonb), **node** (server-assigned placement) | the connection, declared once ([collection](/architecture/collection/), [nodes](/architecture/nodes/)) |
 | `task` | **id = content hash**, interface, **mode (poll/listen)**, spec (jsonb), enabled | a node's unit of collection work; dedupes identical work. Parsing to datapoints is the **edge function** ([collection](/architecture/collection/)), not the task's job |
-| `datapoint_type` | (namespace, name), kind (metric/state/log), value_type, unit, **fusion_policy**, validation (jsonb) | the one key registry across all datapoint kinds; official namespace null, private shadow on assignment; referenced by templates ([taxonomy](/architecture/taxonomy/)) |
+| `datapoint_type` | (namespace, name), kind (metric/state/log), value_type, unit, **fusion_policy**, validation (jsonb) | the one key registry across all datapoint kinds; official namespace null, private shadow on assignment; referenced by templates ([datapoints](/architecture/datapoints/#the-datapoint_type-registry)) |
 | `event_type` | (namespace, name), display_name, **payload_schema (jsonb)** | the event-key registry; lets an event_rule promote a raw log line into a registered event. Official namespace null, private shadow |
 
 A command is **not a table**: it is a `component_template_version.spec` declaration (the interface
@@ -169,7 +169,7 @@ shapes, encrypted at rest by the pluggable **`SecretProvider`** with every decry
 | `tag` | name, applies_to, propagates | operator-label registry (no `_type`, no namespace) |
 | `tag_binding` | (scope_kind, scope_id, tag), value | union + override combinator |
 | `group` | id, kind (component/system/location/user), membership (static list or dynamic filter), **weight** | cascade band and access scope ([cascade](/architecture/cascade/), [identity and access](/architecture/identity-access/)) |
-| `calc_rule` / `event_rule` / `action_rule` | **(id, version)**, scope, spec (jsonb: Expr + params) | config, named for function ([taxonomy](/architecture/taxonomy/)); versioned so a backtest can pin the rule version. `calc_rule` = cross-key/system-level derivation; `event_rule` = fire_criteria + optional clear_criteria; `action_rule` = a subscription (an Expr predicate over events). Parsing is the edge function, not a rule; a deferred `discovery_rule` is not yet in schema |
+| `calc_rule` / `event_rule` / `action_rule` | **(id, version)**, scope, spec (jsonb: Expr + params) | config, named for function ([calculations](/architecture/calculations/)); versioned so a backtest can pin the rule version. `calc_rule` = cross-key/system-level derivation; `event_rule` = fire_criteria + optional clear_criteria; `action_rule` = a subscription (an Expr predicate over events). Parsing is the edge function, not a rule; a deferred `discovery_rule` is not yet in schema |
 
 ## Files and blobs
 

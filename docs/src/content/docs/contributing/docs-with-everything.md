@@ -27,7 +27,7 @@ a genuine internal change, not as a routine escape hatch.
 
 - **Architecture pages** (`/architecture/`) hold the model: the spine plus leaf
   documents, and the current decisions. Each official term is defined once in the
-  [glossary](/architecture/taxonomy/#glossary) and not redefined in the leaves.
+  [glossary](/architecture/glossary/) and not redefined in the leaves.
 - **Concept and learning pages** teach a concept interactively (see
   [the learning-tool restriction](/contributing/learning-tool/)). When a feature introduces a concept
   an operator must understand, the teaching surface ships with it.

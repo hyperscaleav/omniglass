@@ -20,7 +20,7 @@ credentials; the Expr and Go-template machinery in
 state directly** (`status`, `severity`, `opened_at`, `resolved_at`, `acked_by`); it
 is **not** event-sourced. It is **one incident, a new row per open**, keyed by
 `(event_rule, owner)` (the exclusive-arc owner, so a system- or location-owned datapoint
-yields a system/location-owned alarm), the ITSM correlation anchor ([taxonomy](/architecture/taxonomy/)).
+yields a system/location-owned alarm), the ITSM correlation anchor ([datapoints](/architecture/datapoints/)).
 The open and resolve **events** carry the `alarm_id` and are the edge log; the alarm
 row is the live state.
 

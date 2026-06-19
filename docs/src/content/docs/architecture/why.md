@@ -126,7 +126,7 @@ Read it as a journey, and each stop is a page:
 
 1. **[Collection](/architecture/collection/)** goes and gets the data from gear that never wanted to
    give it, and parses it at the edge.
-2. **[Taxonomy](/architecture/taxonomy/)** types every reading into one owned, canonical signal, the
+2. **[Datapoints](/architecture/datapoints/)** type every reading into one owned, canonical signal, the
    same measurement across every vendor.
 3. **[Config](/architecture/variables/)** holds what a device *should* be, so drift becomes
    a signal you can see and a fix you can push.

@@ -12,7 +12,7 @@ deceptively simple:
 Omniglass is built around that question. This page follows a **single reading through its whole
 life**, top to bottom, from the gear to the answer and the action on it. Each **bold word** is an
 official term; the linked ones open their deep dive, and every one is defined in the
-[glossary](/architecture/taxonomy/#glossary).
+[glossary](/architecture/glossary/).
 
 ## The estate
 
@@ -59,7 +59,7 @@ That normalized reading is a **datapoint**.
 
 ## The datapoint
 
-A **[datapoint](/architecture/taxonomy/)** is one value of one **canonical signal** (`power.state`,
+A **[datapoint](/architecture/datapoints/)** is one value of one **canonical signal** (`power.state`,
 `audio.level`), owned by exactly one entity through the **exclusive arc**: one owner, a component or
 a system or a location, never more than one. It carries a **provenance** (how we know it: **observed**
 from the device, **calculated** by Omniglass, or **intended** by a command we sent) and a **source**
@@ -170,7 +170,7 @@ A handful of patterns hold everywhere, and they are why the model stays coherent
 
 ## Look up any term
 
-Every official term is defined once in the **[glossary](/architecture/taxonomy/#glossary)**. The deep
+Every official term is defined once in the **[glossary](/architecture/glossary/)**. The deep
 pages in the sidebar follow this same journey: collection, the device shape, the data model,
 config and credentials, the cascade, health, alarms and actions, then the foundations underneath.
 

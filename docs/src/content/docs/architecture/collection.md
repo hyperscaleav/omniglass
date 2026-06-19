@@ -29,7 +29,7 @@ ComponentTemplate (apiVersion, kind, metadata.labels)
 - **Edge-local execution.** A function runs per component on the node, in one tick, with zero
   server round trips: every interface sits on the one component, all reachable from the node,
   so a step can branch on a value a prior step just collected, straight from node memory.
-- **Two data planes, split by access pattern.** Timeseries [datapoints](/architecture/taxonomy/)
+- **Two data planes, split by access pattern.** Timeseries [datapoints](/architecture/datapoints/)
   (observed and calculated) are append-heavy and history-bearing. Current-value config and
   credentials live in the separate [config and credentials](/architecture/variables/) store (sargable
   point-lookups); config is keyed to a datapoint as its observed side.
@@ -98,6 +98,35 @@ on a device, and how a reconcile pushes a declared config back (the **set** func
 `triggers` is modeled as a list; the first phase enforces exactly one. The foreseeable
 multi-trigger case is a scheduled function that is also command-invocable for a targeted refetch.
 
+### Two axes: task mode and interface transport
+
+A **task** is a node's unit of collection work. Two independent axes describe it, and keeping them
+separate is what keeps the model clean.
+
+- **Task mode** (a property of the task): **poll** (we ask for each datum) or **listen** (we wait
+  for it to arrive). Stated from *our* perspective on purpose: "pull/push" inverts depending on
+  whose frame you take, because the component pushes exactly when we pull. `poll` and `listen` are
+  verbs *we* perform.
+- **Transport** (a property of the interface): **stateless** (a throwaway connection per shot) or
+  **stateful** (a held-open connection, which becomes a `session` and emits `session_log` rows for
+  connect/auth/drop/reconnect).
+
+These are orthogonal. All four cells are real:
+
+| | **poll** (we ask) | **listen** (we wait) |
+|---|---|---|
+| **stateless** | SNMP get, HTTP GET | webhook, SNMP trap, syslog |
+| **stateful** | SSH-exec or xAPI `xStatus` on a held session | MQTT subscribe, xAPI feedback |
+
+Waiting for a frame is a single mode (**listen**) regardless of transport; a held-open connection
+is a property of the interface, not a separate mode. So there are two task modes, and statefulness
+lives on the interface.
+
+**Native push.** First-class data pushed by smart senders (control-system programmers instrumenting
+directly) is self-describing (it carries its key), so its edge parse is a near-identity
+pass-through, marked `shape=native`. As with any function, a failed parse keeps the raw on a
+`collection.failed` event.
+
 ## Steps: the DAG
 
 A step is a typed **operation**: a `kind` (the operation it performs) that runs on a referenced
@@ -152,7 +181,7 @@ datapoints:
 ```
 
 The extractor names a `key`. What that key *means* (kind, value type, unit, validation,
-fusion) lives on the [`datapoint_type`](/architecture/taxonomy/) registry, not the template:
+fusion) lives on the [`datapoint_type`](/architecture/datapoints/#the-datapoint_type-registry) registry, not the template:
 the template references a registered key and never mints one. Save-time validation rejects any
 unregistered key, so a template can never collect a measurement the registry does not know.
 
@@ -196,7 +225,7 @@ A function runs the parse at the **edge**, not server-side:
   stamped at the edge (the component is known, the function runs for it). Fan-out to multiple
   owners (a management platform reporting for many devices) is a later phase.
 - Because parsing is the edge step, there is **no separately authored transform rule**. Routing
-  is the template's fan-out, and cross-entity rollups are [calc](/architecture/taxonomy/#rules-calc-event-action)
+  is the template's fan-out, and cross-entity rollups are [calc](/architecture/calculations/)
   datapoints on system and location templates. The server-side work that remains is
   shared-interface owner-binding and untemplated raw ingress.
 

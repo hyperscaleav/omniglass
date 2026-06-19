@@ -61,13 +61,13 @@ Each piece of a config item has one home, joined by the canonical key:
 ### Drift and reconcile
 
 When a config item has both a declared and an observed value, their gap is **drift**: the same
-[`disagree(declared, observed)`](/architecture/taxonomy/#disagree-and-divergence) comparison used
+[`disagree(declared, observed)`](/architecture/datapoints/#disagree-and-divergence) comparison used
 everywhere, with the declared side sourced from config. A per-item `reconcile` policy turns drift
 into action:
 
 - **`alert`** (default): surface the drift, change nothing.
 - **`enforce`**: declared wins. Call the template's **set** function to push the value back; that
-  issues a command, writes an [`intended`](/architecture/taxonomy/#intended-the-declared-effect-of-a-command)
+  issues a command, writes an [`intended`](/architecture/datapoints/#intended-the-declared-effect-of-a-command)
   datapoint, and reconciles against the next observation. Desired-state convergence, the controller
   half of spec-and-status.
 - **`accept`**: observed wins, write the observation into the declared value (reality becomes intent).
@@ -191,7 +191,7 @@ flowchart LR
 
 Modeling declared state as **config** (and secrets as **credentials**) keeps **declared** out of the
 datapoint provenances. Datapoints carry three ([observed, calculated,
-intended](/architecture/taxonomy/#provenance-how-we-know-a-value)); declared intent lives in config,
+intended](/architecture/datapoints/#provenance-how-we-know-a-value)); declared intent lives in config,
 keyed to the same signal but stored down the cascade rather than as a row. The `state` **kind** is
 unchanged: an observed `power.state = on` is still a `state_datapoint`, and a config item is keyed to
 it. What moved is the *declared* value, out of the datapoint tables and into config resolved by the

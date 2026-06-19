@@ -85,7 +85,7 @@ The headline is the **system's `health`**, the rollup of its members, the servic
 care about; the **`global`** rollup is the estate-wide view leadership cares about.
 
 **One owner-agnostic `health` key.** Following the measurement-not-owner naming model
-([taxonomy](/architecture/taxonomy/)), there is a single registered `health` datapoint_type; a
+([datapoints](/architecture/datapoints/)), there is a single registered `health` datapoint_type; a
 component owns its own `health`, a system the rollup of its members, a location the rollup of its
 systems, and the singleton **`global`** owner the estate-wide rollup (the top of the tree, above
 every location). The owner gives the reading its level, so the same key flows up the tree. The calc

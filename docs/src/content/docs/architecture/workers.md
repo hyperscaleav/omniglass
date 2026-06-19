@@ -62,7 +62,7 @@ This is the axis that decides almost everything else about a subsystem.
 
 Every derived datapoint carries its lineage **on the row** (a `provenance`, `source_rule` plus
 version, and the one provenance pointer; see [storage](/architecture/storage/),
-[taxonomy](/architecture/taxonomy/)). There is no separate execution table: a derived row is itself
+[datapoints](/architecture/datapoints/)). There is no separate execution table: a derived row is itself
 the evidence of its rule's run, and a fan-out (one execution to N datapoints) stamps the same
 `source_rule` on each. The rule version is the hinge for backtest.
 

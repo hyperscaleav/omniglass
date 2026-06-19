@@ -24,7 +24,7 @@ template ships items, triggers, macros, and tags, ours ships:
 - **commands** (command-triggered functions the device supports, e.g. `reboot`, `set-input`),
   detail in [collection](/architecture/collection/);
 - **`datapoint_type` references** (kind / unit / validation live on the registry, see
-  [taxonomy](/architecture/taxonomy/); a template references a key, never mints one);
+  [datapoints](/architecture/datapoints/#the-datapoint_type-registry); a template references a key, never mints one);
 - required **[config](/architecture/variables/)** and defaults, and the **credential shapes**
   it needs (see [cascade](/architecture/cascade/), credentials);
 - default **tags**;

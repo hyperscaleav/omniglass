@@ -125,7 +125,7 @@ name may carry a trailing **`key[instance]`** suffix to distinguish several valu
 of the *same* canonical key on one owner (`fan.speed[intake]=<oid>`,
 `fan.speed[exhaust]=<oid2>`). The bracket is stripped into the datapoint's
 reserved `instance` label, so the canonical registry still matches the bare key
-and the value lands in the `instance` column ([the instance dimension](/architecture/taxonomy/#the-instance-dimension-many-values-of-one-key-on-one-owner)). A name without a bracket is a singleton (`instance = ''`).
+and the value lands in the `instance` column ([the instance dimension](/architecture/datapoints/#the-instance-dimension-many-values-of-one-key-on-one-owner)). A name without a bracket is a singleton (`instance = ''`).
 
 For `http`, `http.reachable` is `1` whenever the request completes a round trip
 (`0` on a transport failure: DNS, refused, timeout, TLS), and `http.status_code`

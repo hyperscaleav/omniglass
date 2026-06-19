@@ -1,0 +1,77 @@
+---
+title: Glossary
+description: "The authoritative glossary: every official term in the architecture, defined once."
+---
+
+This is the **authoritative glossary**: every official term in the architecture, defined once. The other pages introduce these terms in **bold** as the story reaches them; this is where you look any of them up.
+
+| Term | Definition |
+|---|---|
+| **node** | Edge process (`--mode node`); pulls and runs tasks and commands over interfaces; carries placement, heartbeat, bound credential. |
+| **function** | A trigger plus a DAG of steps, declared in a component template; the unit of edge collection. Triggered by a schedule (poll), incoming data (listen), or a command. See [collection](/architecture/collection/). |
+| **flow** | A multi-step **action** (branching, parallel steps, waits); an escalation is the canonical case. See [alarms and actions](/architecture/alarms-actions/). |
+| **task** | A node's unit of collection: **poll** (we ask) or **listen** (we wait), over a stateless or stateful (session) interface. Content-addressed. |
+| **interface** | A connection to a component, declared once per protocol; transport stateless or stateful (to a session). |
+| **interface_type** | Protocol-and-style registry (ssh, https, snmp, mqtt, webhook...); built-flag + param schema. |
+| **session** | A stateful interface's live held-open connection; a current-state view over `session_log`. |
+| **collection.failed** | The event emitted when a parse or validation rejects; carries the raw payload for diagnosis and backfill-after-fix. There is no stored telemetry table; raw is not otherwise persisted (a dev raw-mode taps it live). |
+| **datapoint** | An observation: a key's value on one owning entity at one time, with provenance + source + on-row lineage. Kinds: metric, state, log. |
+| **metric_datapoint** | Numeric (float8) datapoint. Continuous, aggregatable. The firehose. |
+| **state_datapoint** | Categorical/text/object datapoint. Discrete, dwell-measurable. [Config](/architecture/variables/) is keyed to one as its observed side. |
+| **log_datapoint** | A component's own log lines; value = the line. A stream; also the holding pen for un-normalized occurrences. |
+| **kind** | What a key is: metric, state, or log. Fixed per key at definition. |
+| **key** | The identity of what is measured or asserted; registered in `datapoint_type`. |
+| **canonical signal** | A registered, owner-agnostic measurement name (`power.state`, not `room.power`); one comparable signal across every vendor. |
+| **owner / owner_kind** | A datapoint/event/alarm's subject, the exclusive-arc: `owner_kind` + the matching typed FK (`component_id`/`system_id`/`location_id`), or the singleton `global` (no FK), + CHECK. |
+| **datapoint_type** | Registry for datapoint keys: namespace, name, kind, value_type, unit, fusion_policy. Official/private shadow. |
+| **event_type** | Registry for event keys: namespace, name, display_name, payload_schema. Official/private shadow. |
+| **provenance** | How we know a value: observed, calculated, intended. Per row. Declared intent is [config](/architecture/variables/). |
+| **observed** | Measured from a component. On-row lineage: `source_rule` (+ version), the edge function. |
+| **calculated** | Derived from other datapoints by a calc_rule. On-row lineage: `source_rule` (+ version), the calc_rule. Distinguished from observed by the `provenance` column. |
+| **intended** | A command's declared effect, pending reconciliation. Lineage: the command `event_id`. Only commands set it. |
+| **source** | Which sensor/path produced an observed value; distinct from provenance; enables multi-source rows + fusion. A `source` registry carries default weights. |
+| **fusion_policy** | Per-key, built-in multi-source reconciliation (mode + tie-break + source weights), applied on read. |
+| **fusion** | Reconciling multiple observations: same-key multi-source = the key's fusion_policy (read-time); cross-key/system-level = a calc_rule. |
+| **config** | The declared side of a canonical signal: an operator-set value keyed to a `datapoint_type`, reconciled against the observed datapoint via the template's get/set functions and a per-item `reconcile` policy. See [config and credentials](/architecture/variables/). |
+| **credential** | An access secret with a structured shape, a pluggable `SecretProvider` (inline or external), and a lifecycle (refresh / rotation / expiry); read is `secret:read`-gated and every decrypt audited. Template-driven. |
+| **variable** | A free interpolated value (a macro): `$var:<name>`, resolved global→template→instance down the cascade; org-keyed, not signal-bound, no observed side. |
+| **drift** | The gap between config's declared value and its observed datapoint, on one signal key. |
+| **reconcile** | Per-[config](/architecture/variables/) item: spec-vs-status when declared and observed disagree (`alert` / `enforce` / `accept`). |
+| **cascade** | Resolves the effective config / variable value (declared or template default): global, type, template, location, system, component, group (weighted); most specific wins. |
+| **edge parse** | A function parses a raw payload into datapoints on the node, the edge half of [collection](/architecture/collection/). There is no server-side transform rule. |
+| **calc_rule** | datapoint(s) to datapoint (calculated): cross-key / system-level derivation. (Same-key multi-source reconcile is the key's fusion_policy.) |
+| **event_rule** | datapoint change to event: fire_criteria + optional clear_criteria (clear makes events alarm-paired); an optional `health` impact lets its alarm move the owner's health. No separate alarm or condition rule. |
+| **action_rule** | A subscription (Expr over events; alarms via edge events) wiring occurrences to actions. |
+| **discovery_rule** | *(deferred)* observed data creates components/systems/locations + their identity config; official/private. |
+| **event** | A discrete semantic occurrence the action layer reacts to. Keyed, point-in-time, owned via the arc. Not a datapoint. |
+| **origin** | How an event arose: caught, caused, derived, scheduled. |
+| **alarm** | One open-to-close incident: a stateful row driven by an event_rule's paired events; new row per open; keyed (event_rule, owner); optionally health-impacting while open. Not event-sourced. The ITSM anchor. |
+| **action** | An ordered sequence of steps (notify, command in v1; wait/branch deferred). The canned remediate-verify-escalate ships v1. |
+| **command** | A `run`-action declaration in a component_template version (not a table); an instance is an `action` with `kind=command`. |
+| **disagree(A,B)** | A condition operator comparing two provenances or sources of one key. Drift, config drift, conflict. Keeps the DAG. |
+| **divergence** | Any two provenances or sources of one key that disagree. The universal anomaly signal. |
+| **lineage (on-row)** | A derived row carries its own lineage; no execution table. The rule version is the backtest hinge. |
+| **schedule** | Config: a recurring definition (cron/rrule + IANA tz + what it triggers). |
+| **timer** | The clock worker's pending-fire working set (schedule-tick / for-sustain / runbook-wait / watchdog); drained SKIP-LOCKED; not history. |
+| **component** | A deployed instance (device/app/service); owns datapoints; a variable-depth tree; pins a component_template_version; classified by component_type. |
+| **component_type** | Classification + field schema + type-level defaults. Official/private. |
+| **component_template / _version** | The device shape (collection, commands, datapoint_types, defaults, alarms); the **immutable version** instances pin. |
+| **system** | A composition of components/subsystems (the service tree); pins a system_template_version; located at a location; classified by system_type. |
+| **system_template / _version** | The system shape; the immutable version is the snapshot instances pin. Carries a frozen BOM of member roles + health_role. |
+| **location** | A place tree; classified by location_type; no template. |
+| **global** | The singleton estate root: the top owner above every location where estate-wide health and KPIs roll up, and the top of the cascade. One per deployment, no FK. |
+| **KPI** | A shipped derived datapoint (a calc / SLI) owned at system / location / global: availability (health over time) and the utilization family (occupancy, time, booking, ghost). An official default set with an escape hatch. |
+| **tag** | Operator label (registry + bindings); union + override. |
+| **group** | A named set (component/system/location/user), static or dynamic, weighted; a cascade overlay + access scope. |
+| **health** | The first-class operational state of every entity (up/degraded/down/unknown), carried as a *calculated* state_datapoint: `worst` over its open health-impacting alarms, rolled up the system tree role-aware. A model, not just a rule. See [health](/architecture/health/). |
+| **health impact** | An optional `down`/`degraded` tag on an `event_rule`: while the alarm it opens is open, it moves its owner's health by that much. What makes health alarm-sourced. |
+| **health_role** | A member's role in its system's health rollup (required / redundant / informational), declared on the system_template_member; the knob for the built-in role-aware rollup. |
+| **view** | A named query returning a uniform `{columns, rows}`; the read side, executed through the scoped gateway. |
+| **Storage Gateway** | The single door to the database; every read and write goes through it, and scope is injected here. |
+| **audit_log** | Who-did-what ground truth; one row per operator write, same-tx; the lineage target for operator writes, including config changes. |
+| **session_log** | Connection-lifecycle transitions (node-reported, diagnostic). |
+| **internal_log** | Platform self-narration (startup, reconcile, migration, node-reg, config-sync). |
+| **ground truth** | Immutable append-only records: log_datapoint, audit_log, session_log, internal_log. |
+| **principal / role / grant** | IAM subject; an RBAC capability set crossed with a scope. |
+| **secret:read** | The IAM permission to read a credential in plaintext; gated per role, and every decrypt is audited. |
+| **file / blob** | Searchable metadata over content-addressed bytes (pgblobs/S3/disk); dedup. |

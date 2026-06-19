@@ -42,9 +42,11 @@ export default defineConfig({
             // the journey, in the order the data travels
             { label: 'Collection', slug: 'architecture/collection' },
             { label: 'Components', slug: 'architecture/components' },
-            { label: 'Taxonomy (the model + glossary)', slug: 'architecture/taxonomy' },
+            { label: 'Datapoints', slug: 'architecture/datapoints' },
+            { label: 'Events', slug: 'architecture/events' },
             { label: 'Config & credentials', slug: 'architecture/variables' },
             { label: 'Cascade', slug: 'architecture/cascade' },
+            { label: 'Calculations', slug: 'architecture/calculations' },
             { label: 'Health & KPIs', slug: 'architecture/health' },
             { label: 'Alarms and actions', slug: 'architecture/alarms-actions' },
             { label: 'UI', slug: 'architecture/ui' },
@@ -58,6 +60,7 @@ export default defineConfig({
             { label: 'Files and blobs', slug: 'architecture/files' },
             { label: 'AI', slug: 'architecture/ai' },
             { label: 'Expressions', slug: 'architecture/expressions' },
+            { label: 'Glossary', slug: 'architecture/glossary' },
           ],
         },
         {
