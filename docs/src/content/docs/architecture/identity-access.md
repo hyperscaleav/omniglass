@@ -1,6 +1,10 @@
 ---
 title: Identity and access
 description: How principals authenticate, how grants combine roles with scopes, and how the app enforces RBAC and ABAC entirely in the Storage Gateway.
+sidebar:
+  badge:
+    text: Spec
+    variant: caution
 ---
 
 Component document of [the architecture spine](/architecture/). Who may call the platform, and what each caller can see and do. Enforcement lives entirely in the app (the Storage Gateway is the only path to the database); scope is built on the cascade's groups ([cascade](/architecture/cascade/)). This doc says what IAM **is**.
@@ -222,6 +226,16 @@ Bob is an AV support tech. SCIM syncs him into the **`AV-Support`** user-group (
 - He can **operate** (create / update / ack alarms) on AV devices fleet-wide (the cross-cutting entity-group), and **read** everything at HQ (the location node + its subtree).
 - The gateway's scope filter hides every row outside those scopes; the API middleware blocks him from, say, creating a user (no `principal:create` capability in `operator`).
 - The day a device joins the `AV-devices` dynamic group, it enters Bob's scope; the day he leaves `AV-Support` in the IdP, SCIM removes the grant.
+
+## Storage
+
+The IAM subjects and their grants; the physical layout lives on [storage](/architecture/storage/).
+
+| Table | Key columns | Notes |
+|---|---|---|
+| `principal` (+ per-kind `human` / `service` / `node`) | id, kind, ... | subjects; a `node` carries labels, last_heartbeat_at, and its bound credential |
+| `role` | (namespace, name), permissions (jsonb: `<resource>:<action>`) | RBAC capability set; ship viewer/operator/admin/owner + custom |
+| `principal_grant` | (principal_id, role, **scope**) | role x scope; scope = a structural node, an entity-group, or `all`; additive |
 
 ## Open items
 

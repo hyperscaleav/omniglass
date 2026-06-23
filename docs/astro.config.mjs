@@ -39,14 +39,17 @@ export default defineConfig({
           items: [
             { label: 'Why Omniglass', slug: 'architecture/why' },
             { label: 'Overview', slug: 'architecture' },
+            // the estate model, then the shapes it pins
+            { label: 'Core entities', slug: 'architecture/core-entities' },
+            { label: 'Templates', slug: 'architecture/templates' },
             // the journey, in the order the data travels
             { label: 'Collection', slug: 'architecture/collection' },
-            { label: 'Components', slug: 'architecture/components' },
             { label: 'Datapoints', slug: 'architecture/datapoints' },
             { label: 'Events', slug: 'architecture/events' },
+            { label: 'Calculations', slug: 'architecture/calculations' },
             { label: 'Config & credentials', slug: 'architecture/variables' },
             { label: 'Cascade', slug: 'architecture/cascade' },
-            { label: 'Calculations', slug: 'architecture/calculations' },
+            { label: 'Groups', slug: 'architecture/groups' },
             { label: 'Health & KPIs', slug: 'architecture/health' },
             { label: 'Alarms and actions', slug: 'architecture/alarms-actions' },
             { label: 'UI', slug: 'architecture/ui' },

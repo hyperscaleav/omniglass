@@ -1,6 +1,10 @@
 ---
 title: Cascade
 description: How effective settings (config, variables, tags, rule-sets) are resolved for any entity and how the resolve view explains why a given value won.
+sidebar:
+  badge:
+    text: Spec
+    variant: caution
 ---
 
 Component document of
@@ -27,22 +31,13 @@ What the cascade is for, in operator terms:
 - **Composition tightens the part.** My "Standard Huddle Room" template polls codecs
   every 30s, tighter than the codec's own 60s default, and every codec placed in a
   huddle room picks that up. *(system_template beats component_template)*
-- **A fleet-wide fix that auto-clears.** Cisco firmware 11.2 has a memory leak, so I
-  make a dynamic group `model == "Room Kit Pro" && firmware < "11.5"` at high weight,
-  slow its poll and suppress the false high-memory alarm; the 23 affected codecs
-  across 6 floors get it at once, and each drops out the moment it upgrades.
-  *(dynamic group above deployment, live membership, rule suppression)*
-- **A broad policy as a floor, not a ceiling.** I put baseline stricter thresholds
-  on a low-weight "PCI-scope" group, so a lab on Floor 3 that needs its own values
-  still wins; the policy is a default the specific deployment overrides. *(low-weight
-  group below deployment, the shared specificity scale)*
-- **A hand-picked set no filter can name.** I drop the 5 executive briefing rooms
-  into a static "Exec Rooms" group for premium escalation, and grant the exec-support
-  team visibility to that same group. *(static membership; groups double as the
-  access scope)*
 - **"Why did it get this?"** RM204 polls every 5 minutes and I don't know why; the
   resolve view shows it is the "Old-firmware Room Kits" group (weight 450) shadowing
   the template's 30s. *(the effective-config resolve view)*
+
+The cross-cutting cases (a fleet-wide fix that auto-clears, a broad policy as a floor, a hand-picked
+set) are the [group](/architecture/groups/) stories, where the group is placed by weight on this same
+scale.
 
 ## The structural chain
 
@@ -68,12 +63,6 @@ component tree         chassis -> card -> ...                    (deepest wins, 
 - The three structural segments are **variable-depth trees** (parent-reference
   nesting, arbitrary depth); the deepest node wins. Weight-free, pure depth.
 
-## Types are not layers
-
-A `_type` (device/app, AV-System, room) is a classification attribute, resolved by
-a **group** filter (`type == X`), never a tree position. The tree is structural;
-attributes are groups.
-
 ## Combinators (by what is resolved)
 
 - **config / variables -> scalar override**: the deepest/highest source wins; one value.
@@ -83,44 +72,28 @@ attributes are groups.
   accumulation + explicit suppression**: a leaf is governed by the union of rules
   from every layer; a layer removes one by name with a suppression.
 
-## Groups (cross-cutting, placed by weight)
+## Groups overlay the cascade, placed by weight
 
-The structural tree handles config by position and kind. **Groups** handle config
-by attribute or by a hand-picked set, cutting across the tree. A group:
+The structural tree handles config by position and kind. **[Groups](/architecture/groups/)** handle
+config by attribute or by a hand-picked set, cutting across the tree. The cascade does not define
+groups (see [groups](/architecture/groups/) for the primitive); it consumes them by **weight** on the
+one specificity scale.
 
-- is **component / system / location** kind (matching the structural levels);
-- has **static** membership (an explicit list) or **dynamic** membership (a
-  filter, re-evaluated live as attributes change, so a device leaves the moment it
-  stops matching);
-- has a **weight** (its specificity on the shared scale, see *Placement*; the only weights in the system);
-- carries **variable / tag / rule** bindings, with the same per-kind combinators;
-- is also the unit of **access control**: a visibility / permission scope (see
-  [identity-access](/architecture/identity-access/)). One "set of entities" primitive serves both config and
-  authZ, which an anonymous predicate never could.
+**One specificity scale.** Structural layers auto-derive a specificity from position, weight-free, the
+operator never tunes it: `global` lowest, then the templates, then the location / system / component
+trees by depth, then the entity's own **instance** at the ceiling. A **group's weight is its
+specificity on that same scale**, so a group sits wherever its weight lands relative to the structural
+bands: a high weight beats deployment (a must-apply override), a low weight loses to it (a default that
+deployment overrides). The instance ceiling beats any group; equal specificity breaks by creation
+order. A typed group applies at its own level: a component-group to components directly; a system-group
+reaches a component **through the system layer** of its cascade.
 
-**Placement: one specificity scale.** Structural layers auto-derive a specificity
-from position, weight-free, the operator never tunes it: `global` lowest, then the
-templates, then the location / system / component trees by depth, then the entity's
-own **instance** at the ceiling. A **group's weight is its specificity on that same
-scale**, so a group sits wherever its weight lands relative to the structural
-bands: a high weight beats deployment (a must-apply override), a low weight loses
-to it (a default that deployment overrides). The instance ceiling beats any group;
-equal specificity breaks by creation order. A typed group applies at its own level:
-a component-group to components directly; a system-group reaches a component
-**through the system layer** of its cascade.
+So however many groups an entity is in, the group band collapses to one weighted list on the shared
+scale, fully predictable, and the resolve view names the winner.
 
-**Multiple membership.** An entity belongs to a flat **set** of groups. Collect all
-their bindings and fold by specificity (weight): highest wins for variables and
-tag-values; rules accumulate, with weight resolving any add-vs-suppress conflict;
-equal weights break by creation order. There is no second precedence axis.
-
-**No nesting.** Groups do not contain groups. A dynamic filter already expresses a
-union (`type in (codec, display)`) and multiple membership covers the rest, so
-nesting would earn only a narrow "DRY union of static sets" case, not worth its
-transitive-membership and cycle-guard cost. Add it later if that case ever bites.
-
-So however many groups an entity is in, the group band collapses to one weighted
-list on the shared scale, fully predictable, and the resolve view names the winner.
+A **`_type`** (device/app, AV-System, room) is not a cascade layer: it is a classification attribute,
+resolved by a [group](/architecture/groups/) filter (`type == X`) placed by weight, never a tree
+position. The tree is structural; attributes are groups.
 
 ## The registry is outside the cascade
 

@@ -1,6 +1,10 @@
 ---
 title: Calculations
 description: "The rule families that run server-side over typed datapoints, and calc_rule in detail: cross-key and system-level derivation."
+sidebar:
+  badge:
+    text: Spec
+    variant: caution
 ---
 
 Parsing a raw payload into datapoints is the **edge function** ([collection](/architecture/collection/)), not a server-side rule: a function extracts, keys, and normalizes on the node and emits resolved datapoints. The rules that run server-side over the typed datapoints are two derivation families plus a subscription, and this page is the home of the calc family.
@@ -26,5 +30,13 @@ Calc is one half of [fusion](/architecture/datapoints/#fusion): cross-key / syst
 ## The DAG invariant
 
 Calc rules read observed and calculated values as truth; they never treat an intended value as truth to infer a new fact. That is what keeps the pipeline acyclic. The invariant is stated in full on [datapoints](/architecture/datapoints/#the-dag-invariant).
+
+## Storage
+
+The three rule families share one config shape, versioned so a backtest can pin the rule version; the physical layout lives on [storage](/architecture/storage/).
+
+| Table | Key columns | Notes |
+|---|---|---|
+| `calc_rule` / `event_rule` / `action_rule` | **(id, version)**, scope, spec (jsonb: Expr + params) | config, named for function; versioned so a backtest can pin the rule version. `calc_rule` = cross-key/system-level derivation; `event_rule` = fire_criteria + optional clear_criteria ([events](/architecture/events/), [alarms and actions](/architecture/alarms-actions/)); `action_rule` = a subscription (an Expr predicate over events). Parsing is the edge function, not a rule; a deferred `discovery_rule` is not yet in schema |
 
 Related: [datapoints](/architecture/datapoints/) (the data model calc reads and writes), [events](/architecture/events/) (the `event_rule`), [alarms and actions](/architecture/alarms-actions/) (the `action_rule` and the response layer), and [the glossary](/architecture/glossary/).

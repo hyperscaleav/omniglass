@@ -1,6 +1,10 @@
 ---
 title: AI
 description: "The day-one AI seam and its guardrails: assistive, never authoritative, with mandatory provenance."
+sidebar:
+  badge:
+    text: Spec
+    variant: caution
 ---
 
 Leaf of the [architecture spine](/architecture/). The day-one AI seam and its guardrails. The

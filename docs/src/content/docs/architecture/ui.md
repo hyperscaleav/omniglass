@@ -1,11 +1,31 @@
 ---
 title: UI
 description: "The operator console: one renderer library in two composition modes, reads through views, and an identity-based information architecture."
+sidebar:
+  badge:
+    text: Spec
+    variant: caution
 ---
 
 Leaf of the [architecture spine](/architecture/). The operator console: the renderer / page /
-dashboard model and the information architecture. The stack, the typed client, and the reusable
-primitives are the [design system](/contributing/design-system/).
+dashboard model and the information architecture. The stack, the typed client, the build pipeline, and
+the concrete reusable primitives are the [design system](/contributing/design-system/).
+
+## The renderer contract: ViewResult and the views BFF
+
+The whole console rests on one contract. **All UI reads go through [views](/contributing/api-first/)**
+(the read-side BFF), CRUD for writes; the operator never queries raw tables. Every view returns a
+uniform **`ViewResult`** (`{columns, rows}`), and the SPA renders any view through **one renderer per
+view**: adding a view does not add a bespoke renderer. This is what decouples the render layer from any
+specific query and keeps the read contract uniform whether a page is coded or a dashboard widget is
+configured.
+
+The **dense-ops layout is an architectural pattern**, not a one-off page: list surfaces follow one
+shape (a summary of donut facets over the full set, then a keyboard chip filter, then a group-by table,
+then a click-row detail drawer plus a full detail page), and the facets drive the filter while the
+summary stays whole so click-to-filter is stable. The concrete extracted primitives that realize the
+pattern (`DensePage`, `FilterBar`, `Donut`, `SummaryFacet`, `Drawer`, `HealthBadge`, `Actor`,
+`Sparkline`) live in the [design system](/contributing/design-system/); the pattern is the model.
 
 ## One renderer library, two composition modes
 

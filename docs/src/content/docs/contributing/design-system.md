@@ -48,3 +48,11 @@ The SPA builds with Vite and is embedded into the Go binary (served under `/web`
 docs/learning site is embedded and served under `/docs`. One artifact serves the API, the
 console, and the docs. Component-level tests (Vitest) run in CI; user-observable behavior
 gets an e2e (browser-driven) test per the test-first doctrine.
+
+## How this relates to the UI architecture
+
+This page is the **build and dev guide** for the console: the stack, the generated typed client, the
+reusable primitives, and the build-and-embed pipeline. The **architecture** the console implements,
+the `ViewResult` renderer contract, the views BFF (read side), one renderer per view, the dense-ops
+layout as a pattern, the information architecture, and the live-update model, is
+[UI](/architecture/ui/) on the architecture spine. Build mechanics live here; the model lives there.

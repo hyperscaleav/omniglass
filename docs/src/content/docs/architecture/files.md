@@ -1,6 +1,10 @@
 ---
 title: Files and blobs
 description: A searchable file handle over a content-addressed blob store, behind the Storage Gateway.
+sidebar:
+  badge:
+    text: Spec
+    variant: caution
 ---
 
 Leaf of the [architecture spine](/architecture/). The opaque-bytes layer that closes the data
@@ -81,6 +85,15 @@ reference is collected. A **maintained refcount column or `blob_ref` table is a 
 optimization**, added only if the per-blob probes profile too expensive (the same
 ship-the-simple-thing discipline as the storage projections). The grace floor is the safety
 margin against an in-flight reference, so GC never races a just-written event.
+
+## Storage
+
+The handle and the content-addressed bytes; the physical layout (the gateway, GC) is above and on [storage](/architecture/storage/).
+
+| Table | Key columns | Notes |
+|---|---|---|
+| `file` | id, name, content_type, size, **sha256**, tags | searchable metadata handle; points at a blob by hash |
+| `blob` | **sha256**, bytes / storage_ref, size, content_type | content-addressed bytes; dedup; backend pgblobs / S3 / disk behind the gateway; reference-counted GC |
 
 ## Open items
 

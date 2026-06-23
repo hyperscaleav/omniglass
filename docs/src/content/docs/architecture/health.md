@@ -1,6 +1,10 @@
 ---
 title: Health, KPIs, and service levels
 description: "Health as a first-class state rolled up to a global estate top, the KPIs every estate should track (availability, utilization), and SLI / SLO / SLA."
+sidebar:
+  badge:
+    text: Spec
+    variant: caution
 ---
 
 Leaf of the [architecture spine](/architecture/). Omniglass is **opinionated about health**: it is a

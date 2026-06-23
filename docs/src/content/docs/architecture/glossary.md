@@ -1,6 +1,10 @@
 ---
 title: Glossary
 description: "The authoritative glossary: every official term in the architecture, defined once."
+sidebar:
+  badge:
+    text: Spec
+    variant: caution
 ---
 
 This is the **authoritative glossary**: every official term in the architecture, defined once. The other pages introduce these terms in **bold** as the story reaches them; this is where you look any of them up.

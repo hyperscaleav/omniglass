@@ -1,6 +1,10 @@
 ---
 title: Workers
 description: One worker machinery over several worklists, plus the backtest capability and the reconcile desired-state loop.
+sidebar:
+  badge:
+    text: Spec
+    variant: caution
 ---
 
 Leaf of the [architecture spine](/architecture/). How background processing is structured: one

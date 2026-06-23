@@ -1,6 +1,10 @@
 ---
 title: Audit
 description: The who-did-what record, written once in the same transaction as the change it describes.
+sidebar:
+  badge:
+    text: Spec
+    variant: caution
 ---
 
 Leaf of the [architecture spine](/architecture/). The who-did-what record: every mutation

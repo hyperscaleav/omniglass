@@ -1,6 +1,10 @@
 ---
 title: Expressions
 description: One pluggable expression engine, Expr first, behind every operator-authored expression leaf.
+sidebar:
+  badge:
+    text: Spec
+    variant: caution
 ---
 
 Omniglass evaluates small operator-authored expressions in many places: a transform's

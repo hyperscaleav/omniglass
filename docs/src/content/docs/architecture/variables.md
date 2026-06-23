@@ -1,6 +1,10 @@
 ---
 title: "Config, credentials, and variables"
 description: "Three kinds of operator-set value resolved by one cascade: config keyed to a signal, credentials with a lifecycle, and free variables."
+sidebar:
+  badge:
+    text: Spec
+    variant: caution
 ---
 
 Everything an operator **sets** resolves the same way: a typed value, owned at a scope, resolved
@@ -45,7 +49,7 @@ governed key, not a collision. Config reuses the `datapoint_type`'s value domain
 is validated against the same `{values: […]}` the observed side uses.
 
 **The template is the source of truth for configurability.** A signal becomes settable on a device
-class when that class's [component template](/architecture/components/) binds a **get** function (an
+class when that class's [component template](/architecture/templates/) binds a **get** function (an
 ordinary collection function that emits the observed datapoint) and a **set** function (a
 command-triggered function that writes it). The registry may carry a soft `settable` hint, but the
 binding is authoritative: no set function, not enforceable here.
@@ -202,6 +206,17 @@ it. What moved is the *declared* value, out of the datapoint tables and into con
 cascade. There is no separate property or vault store; config, credentials, and variables are one
 resolution model, and the spec-and-status loop gets a real home instead of overloading datapoint
 provenance with operator intent.
+
+## Storage
+
+The shape registry, the config / variable cell, and the operator-label tables; the physical layout (the owner arc, the cascade key) lives on [storage](/architecture/storage/). Whether config, credentials, and variables share one table or split is open.
+
+| Table | Key columns | Notes |
+|---|---|---|
+| `variable_type` | (namespace, name), schema (fields + **per-field secret**), refresh, validation | the **shape** registry (a scalar, or structured like `oauth2` / `ssh_credential` / `snmp_community`); official namespace null, private shadow |
+| `variable` | (name, **owner arc**), type, **declared_value** (secret fields encrypted), **linked_state** (-> state_datapoint, nullable), **observed_value**, reconcile | the config cell and the `$var:` cascade key; scope is the exclusive arc (template/component/system/location/global). Holds declared intent, optionally mirrors an observed datapoint for drift |
+| `tag` | name, applies_to, propagates | operator-label registry (no `_type`, no namespace) |
+| `tag_binding` | (scope_kind, scope_id, tag), value | union + override combinator ([cascade](/architecture/cascade/)) |
 
 ## Open items
 

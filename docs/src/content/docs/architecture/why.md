@@ -1,6 +1,10 @@
 ---
 title: Why Omniglass
 description: "What Omniglass is, what it is for, and why AV needs its own observability platform instead of an IT monitoring tool."
+sidebar:
+  badge:
+    text: Spec
+    variant: caution
 ---
 
 Run AV at scale and you know the feeling. You find out a room is broken when someone walks out

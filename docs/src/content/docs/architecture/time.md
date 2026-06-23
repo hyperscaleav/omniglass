@@ -1,6 +1,10 @@
 ---
 title: Time
 description: "The one primitive that manufactures events from the passage of time, so the rest of the pipeline stays purely event-driven."
+sidebar:
+  badge:
+    text: Spec
+    variant: caution
 ---
 
 Leaf of the [architecture spine](/architecture/). The one primitive that manufactures events
@@ -123,6 +127,15 @@ A digest is a **schedule that fires an aggregating action**: the `origin=schedul
 an `action_rule` whose action queries (open alarms, the day's events), renders a Go-template body
 ([alarms and actions](/architecture/alarms-actions/)), and sends. No new machinery: schedule plus
 action, composed.
+
+## Storage
+
+The recurring trigger config and the clock worker's pending-fire working set; the physical layout lives on [storage](/architecture/storage/).
+
+| Table | Key columns | Notes |
+|---|---|---|
+| `schedule` | id, rrule/cron, **tz (IANA)**, target, enabled | config: a recurring trigger |
+| `timer` | id, **fire_at (timestamptz)**, kind (schedule-tick / for-sustain / runbook-wait / watchdog), ref, payload, claimed_at | the clock worker's pending-fire **working-set** (mutable, drained `SKIP LOCKED`), not a history log; fires are logged on the entity they produce |
 
 ## Open items
 

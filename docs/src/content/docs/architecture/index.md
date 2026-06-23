@@ -1,6 +1,10 @@
 ---
 title: Architecture
 description: "The architecture told as one journey, following a single reading from the gear through its whole life to the answer and the action on it."
+sidebar:
+  badge:
+    text: Spec
+    variant: caution
 ---
 
 Monitoring, stripped down, is one shape: **collect the data, evaluate it, see it, act on it.** The
@@ -18,7 +22,7 @@ official term; the linked ones open their deep dive, and every one is defined in
 
 Three nouns describe what you operate.
 
-- A **[component](/architecture/components/)** is a deployed device, app, or service: a display, a
+- A **[component](/architecture/core-entities/)** is a deployed device, app, or service: a display, a
   codec, a DSP, a control processor, a cloud UCC service.
 - A **system** is a set of components that work together to do one job. A meeting room is a system.
   So is a classroom, a video wall, a broadcast chain. The word is deliberately universal: a system

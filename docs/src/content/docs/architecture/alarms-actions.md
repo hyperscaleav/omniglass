@@ -1,6 +1,10 @@
 ---
 title: Alarms and actions
 description: How Omniglass detects a condition with a stateful alarm and responds with an action, which is a flow when it has more than one step.
+sidebar:
+  badge:
+    text: Spec
+    variant: caution
 ---
 
 Component document of the
@@ -99,7 +103,7 @@ What an `action_rule` raises and runs. Like an alarm it is **stateful** and hold
 its own state directly (status, current step, delivery), not event-sourced:
 
 - **kinds**: `notify` (in-app), `webhook`, `email`, `run` (execute a command; the
-  edge realization is in [components](/architecture/components/) / [nodes](/architecture/nodes/)).
+  edge realization is in [templates](/architecture/templates/) / [nodes](/architecture/nodes/)).
 - a **simple** action carries delivery state (`queued / sent / failed / retried`,
   the at-least-once outbox);
 - a **multistep** action is a **flow**: it carries workflow state (current step, waiting,
@@ -190,12 +194,23 @@ namespacing and `UpsertOfficial` as the rest of the registries. Official ships
 vetted; private is operator-authored and central to component templates (the
 concrete way to notify or to run a command against a given device class).
 
+## Storage
+
+`alarm` and `action` are **stateful entities that hold their current state directly** (not event-sourced); the physical layout (the owner arc, partitioning) lives on [storage](/architecture/storage/).
+
+| Table | Key columns | Notes |
+|---|---|---|
+| `alarm` | **id**, event_rule, owner arc, **status, severity, opened_at, resolved_at, acked_by** | a stateful entity, **one incident, new row per open**; holds current state directly (not event-sourced); the ITSM anchor. History = events + audit by `id` |
+| `action` | id, **steps (ordered: notify/command/wait/branch)**, status, current_step | a stateful entity; delivery and step state; driven by events/alarms |
+
+A command is **not a table**: it is a `component_template_version.spec` declaration (the interface `commands` block); a command instance is an `action` row with `kind=command`. The `event_rule` / `action_rule` config rows live with the [rule families](/architecture/calculations/).
+
 ## Deferred
 
 - **Model-keyed command cascade**: an abstract action (`reboot`)
   resolving to different concrete commands by component type / model through the
   cascade (the edge dispatch and the `command` declaration already exist in
-  [components](/architecture/components/) / [nodes](/architecture/nodes/); this is the abstract-to-concrete resolution layer above them).
+  [templates](/architecture/templates/) / [nodes](/architecture/nodes/); this is the abstract-to-concrete resolution layer above them).
 - **Flows** (above), the multi-step action, behind the leaf step kinds and the time primitive.
 
 ## Open items

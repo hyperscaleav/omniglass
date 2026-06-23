@@ -1,6 +1,10 @@
 ---
 title: Datapoints
 description: "The core data model: datapoints and their three kinds, provenance, the registries, namespaces, divergence, fusion, and how a value reads back."
+sidebar:
+  badge:
+    text: Spec
+    variant: caution
 ---
 
 This is the heart of the authoritative data model: what a datapoint is, the two axes that define it, how we know a value (provenance), and how values reconcile, diverge, and read back. The physical layout (tables, partitioning, the lineage CHECK, tiering) lives in storage; the spine is [the architecture overview](/architecture/). Events, calc rules, and the response layer get their own pages: [events](/architecture/events/), [calculations](/architecture/calculations/), and [alarms and actions](/architecture/alarms-actions/).
@@ -168,6 +172,24 @@ Conflict detection (`disagree(observed, observed)`) is the complementary operati
 ## Reads: current value is a view
 
 Current value (latest per owner / key / **instance** / **provenance**, fused across sources per the key's `fusion_policy`) is a **view**, correct and zero-maintenance. It is keyed per-provenance because "current observed power" and "current intended power" are different values for the same key, and the divergence model depends on seeing both. A materialized `current_value` table is a deferred optimization, earned only when a fleet-dashboard read profile proves the view too slow (the same view-by-default discipline as storage). Ownership resolution reads resolved identity config (the declared value, else the observed datapoint) by targeted indexed lookup, not a full scan, so it does not by itself justify the materialized table.
+
+## The datapoint tables
+
+The three kinds are three physical tables only because they index and retain differently; the [physical layout, partitioning, and the lineage CHECK](/architecture/storage/) live on storage.
+
+| Table | Key columns | Notes |
+|---|---|---|
+| `metric_datapoint` | id, ts, **owner_kind, component_id/system_id/location_id/node_id**, key, **instance**, **value float8**, provenance, source, **source_rule, source_rule_version, event_id** | the firehose; BRIN on ts; numeric aggregation. `instance` (`''` default) discriminates many values of one canonical key on one owner |
+| `state_datapoint` | id, ts, owner arc, key, instance, **value text/jsonb**, provenance, source, + same lineage cols | sparse, transition-only; time-in-state and dwell. [Config](/architecture/variables/) is keyed to one as its observed side |
+| `log_datapoint` | id, ts, owner arc, key, instance, **value text/jsonb (the line)**, level, provenance, source, + same lineage cols | GIN / tsvector full-text; also the holding pen for un-normalized occurrences |
+
+Common datapoint columns (all three kind-tables): `ts`, the **owner arc** (`owner_kind` plus `component_id` / `system_id` / `location_id` / `node_id`), `key, provenance, source`, plus the on-row lineage `source_rule, source_rule_version, event_id`; only the value column differs (float8 / text-jsonb / line). A `datapoint` view UNIONs the common columns for "all datapoints for owner X".
+
+The key registry that types these tables is `datapoint_type` (one registry across all three kinds), detailed at [the datapoint_type registry](#the-datapoint_type-registry):
+
+| Table | Key columns | Notes |
+|---|---|---|
+| `datapoint_type` | (namespace, name), kind (metric/state/log), value_type, unit, **fusion_policy**, validation (jsonb) | the one key registry across all datapoint kinds; official namespace null, private shadow on assignment; referenced by templates |
 
 ## The pipeline, end to end
 

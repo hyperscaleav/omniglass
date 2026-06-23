@@ -1,6 +1,10 @@
 ---
 title: Collection
 description: "Collection is built from functions: a versioned component template declares interfaces and a set of functions, each a trigger plus a DAG of steps that runs at the edge and parses on the spot."
+sidebar:
+  badge:
+    text: Spec
+    variant: caution
 ---
 
 Collection is built from **functions**. A versioned `ComponentTemplate` declares how to reach a
@@ -126,6 +130,141 @@ lives on the interface.
 directly) is self-describing (it carries its key), so its edge parse is a near-identity
 pass-through, marked `shape=native`. As with any function, a failed parse keeps the raw on a
 `collection.failed` event.
+
+## Built interface types and their config
+
+The built poll types and listeners (`interface_type.built = true`) and the operator config they read.
+The node translates each stored task + interface into a poller the collection engine runs; how the
+node *executes* these (tick scheduling, reachability gating, the job queue) is [nodes](/architecture/nodes/).
+
+### Built poll protocols and their config
+
+| interface type | shape | host/target | per-task params | datapoints |
+|---|---|---|---|---|
+| `icmp` | inline probe | `task.params.target` | `count`, `timeout` | `icmp.reachable`, `icmp.rtt_avg` (fixed) |
+| `tcp` | inline probe | `task.params.target` (`host:port`) | `timeout` | `tcp.open`, `tcp.connect_time` (fixed) |
+| `snmp` | held connection | `interface.endpoint` (`host[:port]`, port defaults 161) | `task.params.oids` (comma-separated `name=oid`); `interface.params.version` (default `2c`), `interface.params.community` | one datapoint per OID, `name` = the datapoint key |
+| `http` | held connection | `interface.endpoint` (base URL) | `task.params.path` (joined onto the base URL), `method` (default `GET`), `timeout` (default `5s`), `body`, `extract` (comma-separated `name=json:<dot.path>`); `interface.params.header_*` (request headers, prefix stripped) | `http.reachable`, `http.status_code`, `http.response_time` (fixed) + one per `extract` entry |
+| `raw-tcp` | held connection | `interface.endpoint` (`host:port`) | `task.params.command` (sent verbatim + line ending), `timeout`, `extract` (comma-separated `name=re:<pattern>`); `interface.params.line_ending` (default `\r\n`), `read_delim` (default `\n`), `connect_timeout`, `read_timeout` | `rawtcp.reachable`, `rawtcp.response_time` (fixed) + one per `extract` entry |
+| `telnet` | held connection | `interface.endpoint` (`host:port`) | as `raw-tcp`, plus `interface.params.username`/`password` (drive the default `login:` / `Password:` chain; `login_expect`/`password_expect` override the prompts) | `telnet.reachable`, `telnet.response_time` (fixed) + one per `extract` entry |
+| `ssh` | held connection | `interface.endpoint` (`host:port`) | as `raw-tcp` (the command runs as a one-shot `exec`), plus `interface.params.username` and `password` and/or `private_key` (inline PEM) | `ssh.reachable`, `ssh.response_time` (fixed) + one per `extract` entry |
+
+`icmp`/`tcp` are inline probes (the target rides the task); `snmp`, `http`, and
+the text transports (`raw-tcp`/`telnet`/`ssh`) are held connections, so the
+connection (host/port/version/community for snmp, base URL + headers for http,
+address + framing + auth for the text family) lives on the interface and the task
+names what to read.
+
+Every fixed built-in name (`icmp.reachable`/`icmp.rtt_avg`, `tcp.open`/
+`tcp.connect_time`, `udp.open`, `snmp.reachable`, `http.reachable`/
+`http.status_code`/`http.response_time`, and `<proto>.reachable`/`<proto>.response_time`
+for the text family) is a **registered canonical `datapoint_type`** in the ship-with registry,
+so probe/liveness results persist as datapoints, not only as raw wire
+bytes. They are owner-agnostic measurements like any other: unregistered,
+reject-not-project would drop them at ingest. `registry.seed_validation_test`'s
+`liveness_builtins_present` locks the registry to exactly the names the node
+emits, so a rename on either side fails the build instead of silently going
+un-derived.
+
+For `snmp`, each OID is carried in its **native SNMP type**: numeric OIDs as
+numbers, string OIDs (OctetString / IPAddress / OID) as text, so a string-valued
+OID (an enum or label) lands as a `state` datapoint and a numeric one as
+`metric`. The owning table is decided at ingest from the key's `datapoint_type`
+kind. Per-OID declared typing and richer collection specs move to the component
+template with authorship (the template declares the OID set, demoting
+`task.params.oids` to an override).
+v2c plaintext community only this slice; SNMPv3 and credential-backed
+(`auth_secret`) community resolution are deferred.
+
+Every extract spec (`oids`, the http/text `extract`) shares one name grammar: a
+name may carry a trailing **`key[instance]`** suffix to distinguish several values
+of the *same* canonical key on one owner (`fan.speed[intake]=<oid>`,
+`fan.speed[exhaust]=<oid2>`). The bracket is stripped into the datapoint's
+reserved `instance` label, so the canonical registry still matches the bare key
+and the value lands in the `instance` column ([the instance dimension](/architecture/datapoints/#the-instance-dimension-many-values-of-one-key-on-one-owner)). A name without a bracket is a singleton (`instance = ''`).
+
+For `http`, `http.reachable` is `1` whenever the request completes a round trip
+(`0` on a transport failure: DNS, refused, timeout, TLS), and `http.status_code`
+carries the HTTP status separately, so reachability and a `>= 500` status are
+distinct alarm signals (a non-2xx response is still reachable). `extract` pulls
+values from a JSON body by dot-path (`name=json:data.0.temp`): a number or bool
+leaf becomes a `metric`, a string leaf a `state`; a missing path, a
+container/`null` leaf, or an unreachable endpoint yields no datapoint. Auth rides
+as plaintext `header_*` interface params this slice (e.g.
+`header_authorization: Bearer ...`); `auth_secret`-backed credential resolution
+is deferred, the same posture as snmp's plaintext community. Carry auth in
+`header_*`, never in the URL or body: the request `body` param is **not** stamped
+as a datapoint label, and the `target` label is the request URL with its query
+string (and any userinfo) stripped, so a token placed in the path query does not
+leak into attributes (but is still a bad idea). `method`/`body` support POST/PUT;
+richer extraction (response headers, regex, JSONPath wildcards), object keys that
+contain a literal dot (the extract path separator), and an http liveness probe
+are deferred.
+
+For the **text family** (`raw-tcp`/`telnet`/`ssh`), the poll is one ephemeral
+round trip: connect, optionally authenticate, send `task.params.command` followed
+by the line ending, read the reply (to the `read_delim` for raw-tcp/telnet, to
+EOF for ssh's `exec`, bounded by `read_timeout`), extract, close. `<proto>.reachable`
+is `1` once the transport opened and the command round-tripped (`0` on a transport
+failure: refused, timeout, or rejected credentials, which are connection health, not
+errors), and `<proto>.response_time` is absent when unreachable. `extract` pulls
+values by **regex named capture** (`name=re:<pattern>`, parallel to http's
+`json:`): each named group routes to the datapoint of the same name, or to the lone
+datapoint when the pattern has exactly one group; a captured value that parses as a
+number becomes a `metric`, otherwise a `state`; a non-matching pattern (or an
+unreachable endpoint) yields no datapoint, while a pattern that fails to compile is
+a configuration error. Auth rides plaintext this slice (telnet/ssh `password`,
+ssh inline `private_key`), the same posture as snmp's community and http's
+`header_*`; `auth_secret`-backed credential resolution and ssh host-key pinning are
+deferred. Credentials live on the interface and are never labelled; the `target`
+label is the command. The transport is swappable behind one boundary, so a future
+`raw-udp` request/response poll (datagram in, reply out) slots in as a fourth kind
+without new machinery; UDP **listen** (unsolicited inbound: syslog, snmp-trap) is a
+different shape and belongs to the deferred listener runtime. Deferred for the text
+family: persistent held sessions, multi-line prompt-expect beyond the first
+delimiter, command echo handling, Q-SYS-style frame/checksum framing, and ssh shell
+/ pty (`exec` only).
+
+### Built listeners and their config
+
+A **listener** is inbound: an external system POSTs to an endpoint we expose,
+rather than us polling it (`mode: listen`, the stateless-listen cell of the
+collection matrix). `webhook` is the first built listener and is
+**server-hosted**: `placement: central` makes the server the endpoint for
+inbound external webhooks, so a webhook listen-task is **server-executed and
+unassigned** (`node_name IS NULL`); the server's `POST /webhooks/{path}` route is
+its runtime, not a node tick.
+
+| field | where | meaning |
+|---|---|---|
+| `path` | `interface.params.path` | the opaque, unguessable token in the inbound URL (`/webhooks/{path}`); a bearer locator, not the interface name |
+| `secret` | `interface.params.secret` | shared secret the sender presents in the `X-Omniglass-Token` header (or `?token=`), constant-time compared |
+| `component` | `interface.component` | when set, datapoints pre-bind to that component (trivial owner); when empty, shared-interface ingress is owner-bound server-side by labels |
+| `extract` | `task.params.extract` | comma-separated `name=json:dot.path`; number/bool -> metric, string -> state (same extractor as the http poller) |
+| `raw_log` | `task.params.raw_log` | optional key to store the whole raw frame under (as JSON when the body parses, else text), the holding-pen an event_rule can later promote |
+
+One or more `mode: listen` tasks bind to a webhook interface; each inbound POST
+runs every enabled one, ingesting its points under that task's id through the
+server-side ingress path (so owner attribution, parsing, event rules, and calc
+rollups all apply).
+
+**Response contract** (webhook senders retry on non-2xx): **202** = durably
+accepted; **401** bad/absent secret, **404** unknown path, **413** body over the
+1 MiB cap (4xx = sender fault, don't retry); **5xx** = our fault, please retry. A
+`GET`/`HEAD` to the path answers the endpoint-verification ping some providers
+send, echoing a `?challenge=` value. The body cap, JSON-only parsing, and
+"non-JSON body makes declared extractions absent (not an error)" mirror the http
+poller.
+
+**Auth and spoofing**: the secret is plaintext in `interface.params` this slice
+(same posture as snmp's plaintext community); `auth_secret`-backed resolution and
+HMAC-signature verification are deferred behind the auth seam. The route stamps a
+trusted, server-set `interface` label on every datapoint and copies body fields
+into attributes **only** via the declared `extract` set, so a body field cannot
+impersonate another interface; shared-interface ingress should scope on
+`event.labels.interface`, and per-component interfaces (server-assigned owner)
+are preferred for high-trust sources. Node-hosted listeners (LAN-local sources),
+idempotency/dedup, and form-encoded bodies are deferred.
 
 ## Steps: the DAG
 
@@ -254,3 +393,13 @@ legacy-platform reflex. Here the API is **one component** (one interface, one cr
 system health** with a system-scoped `event_rule`. Treat the vendor's own status as an **input to that
 judgment, not the verdict**: a UCC platform reporting "offline" is one source's opinion, so corroborate
 it (against the codec, occupancy) before downing the room. See [health](/architecture/health/).
+
+## Storage
+
+The connection registry, the declared connections, and the node's units of work; the physical layout lives on [storage](/architecture/storage/).
+
+| Table | Key columns | Notes |
+|---|---|---|
+| `interface_type` | name, **built**, direction (in/out), param_schema (jsonb) | the protocol-and-style registry (`ssh`, `https`, `snmp`, `mqtt`, `webhook`, ...); generates the template config schema |
+| `interface` | name (per component), interface_type, **component** (nullable: set = pre-bound, null = shared/match-key), params (jsonb), **node** (server-assigned placement) | the connection, declared once ([nodes](/architecture/nodes/)) |
+| `task` | **id = content hash**, interface, **mode (poll/listen)**, spec (jsonb), enabled | a node's unit of collection work; dedupes identical work. Parsing to datapoints is the **edge function**, not the task's job |
