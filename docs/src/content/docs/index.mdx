@@ -1,26 +1,14 @@
 ---
 title: Omniglass
 description: Open observability and control plane for AV and IT estates, and a place to learn how one is built.
-template: splash
-hero:
-  tagline: An open observability and control plane for AV and IT estates, and a place to learn how one is built.
-  actions:
-    - text: Read the architecture
-      link: /architecture/
-      icon: right-arrow
-      variant: primary
-    - text: View on GitHub
-      link: https://github.com/hyperscaleav/omniglass
-      icon: external
-      variant: minimal
 ---
 
-import { Card, CardGrid } from '@astrojs/starlight/components';
+import { LinkCard, CardGrid } from '@astrojs/starlight/components';
 
-Omniglass collects telemetry from devices, types it into owned datapoints, models
-health across systems and locations, alarms on it, and acts. It is a single Go binary
-over a BYO PostgreSQL database, and it is two things at once on purpose: a working tool,
-and a learning tool for how one is built.
+Omniglass collects telemetry from devices, types it into owned datapoints, models health
+across systems and locations, alarms on it, and acts. It is a single Go binary over a BYO
+PostgreSQL database, and it is two things at once on purpose: a working tool, and a learning
+tool for how one is built. [View it on GitHub](https://github.com/hyperscaleav/omniglass).
 
 :::note[Early, and public from the first commit]
 Omniglass is being rebuilt in the open, one vertical slice at a time. The architecture is
@@ -29,21 +17,24 @@ it lands. Expect the surface to move.
 :::
 
 <CardGrid>
-  <Card title="Architecture" icon="open-book">
-    The model of record: the datapoint to event to action taxonomy, identity and access,
-    components and the cascade, nodes, and the expression engine.
-    [Start with the overview](/architecture/).
-  </Card>
-  <Card title="Contributing" icon="puzzle">
-    How a change gets in: API first, test first, docs with everything, the learning-tool
-    restriction, and the design system. [Read the doctrine](/contributing/api-first/).
-  </Card>
-  <Card title="One binary, run modes" icon="rocket">
-    A single artifact runs as server, node, or migrate, over standard managed PostgreSQL.
-    No bespoke datastore.
-  </Card>
-  <Card title="Functional and pedagogical" icon="approve-check">
-    Every operator surface should also teach the concept it operates on, interactively,
-    against real or simulated data.
-  </Card>
+  <LinkCard
+    title="Why Omniglass"
+    href="/architecture/why/"
+    description="The problem AV has, and why it needs its own observability platform instead of an IT monitoring tool."
+  />
+  <LinkCard
+    title="Architecture overview"
+    href="/architecture/"
+    description="The data-lifecycle spine: collect, type a signal, model health, detect, act, and see it the whole time."
+  />
+  <LinkCard
+    title="Contributing"
+    href="/contributing/api-first/"
+    description="The five doctrines (API first, test first, docs with everything) and the design system."
+  />
+  <LinkCard
+    title="Glossary"
+    href="/architecture/glossary/"
+    description="Every official term in the architecture, defined once."
+  />
 </CardGrid>
