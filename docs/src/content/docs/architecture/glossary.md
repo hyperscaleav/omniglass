@@ -75,7 +75,7 @@ This is the **authoritative glossary**: every official term in the architecture,
 | **SLO** | Service Level Objective: the target config value the SLI must hold (availability >= 99.9%). See [health](/architecture/health/). |
 | **SLA** | Service Level Agreement: meeting the SLO, an `event_rule` firing on breach; compliance over the window is itself an SLI. See [health](/architecture/health/). |
 | **tag** | Operator label (registry + bindings); union + override. |
-| **group** | A named set (component/system/location/user), static or dynamic, weighted; a cascade overlay + access scope. |
+| **group** | A named set (component/system/location/principal), static or dynamic, weighted; a cascade overlay + access scope. A `principal_group` is the principal-subject case. |
 | **health** | The first-class operational state of every entity (up/degraded/down/unknown), carried as a *calculated* state_datapoint: `worst` over its open health-impacting alarms, rolled up the system tree role-aware. A model, not just a rule. See [health](/architecture/health/). |
 | **health impact** | An optional `down`/`degraded` tag on an `event_rule`: while the alarm it opens is open, it moves its owner's health by that much. What makes health alarm-sourced. |
 | **health_role** | A member's role in its system's health rollup (required / redundant / informational), declared on the system_template_member; the knob for the built-in role-aware rollup. |
@@ -85,6 +85,6 @@ This is the **authoritative glossary**: every official term in the architecture,
 | **session_log** | Connection-lifecycle transitions (node-reported, diagnostic). |
 | **internal_log** | Platform self-narration (startup, reconcile, migration, node-reg, config-sync). |
 | **ground truth** | Immutable append-only records: log_datapoint, audit_log, session_log, internal_log. |
-| **principal / role / grant** | IAM subject; an RBAC capability set crossed with a scope. |
+| **principal / role / grant** | IAM subject (kind `human` / `service` / `node`; identity is an opaque uuid, never a name); an RBAC capability set crossed with a scope. The base `principal` holds identity + kind only; a human's `display_name` lives on the `human` per-kind table. A `principal_group` is a group of principals used as a grant subject. AI is not a principal kind; it acts via OAuth on-behalf-of delegation. See [identity and access](/architecture/identity-access/). |
 | **secret:read** | The IAM permission to read a credential in plaintext; gated per role, and every decrypt is audited. |
 | **file / blob** | Searchable metadata over content-addressed bytes (pgblobs/S3/disk); dedup. |

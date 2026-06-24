@@ -1,49 +1,42 @@
 ---
 title: AI
-description: "The day-one AI seam and its guardrails: assistive, never authoritative, with mandatory provenance."
+description: "AI as a governed capability along an assistive-to-agentic spectrum: same seams, OAuth delegation, provenance, and human-in-the-loop gating."
 sidebar:
   badge:
     text: Spec
     variant: caution
 ---
 
-AI gives an operator a second opinion that is always traceable and never acts on its own, and this page is the seam and the guardrails that hold that line. The
-contract exists **before any model ships**, because retrofitting provenance and the approval
-boundary is the expensive part. This page grows as AI features land; the principles below are
-the fixed frame.
+AI in Omniglass is a **capability that grows along an assistive-to-agentic spectrum**, governed exactly like any other actor. At the assistive end it enriches and explains; at the agentic end it proposes and (eventually) acts. The capabilities expand over time; the governance does not move. This page is the architecture of that governance: how AI plugs into the same seams as any principal, why it acts through delegation rather than its own broad identity, and what keeps it assistive-not-authoritative and always traceable.
 
-## Assistive, never authoritative
+## The capability spectrum
 
-AI **suggests**, an operator **approves**. It proposes a rule, a config, a root-cause
-hypothesis, a runbook draft; it **never auto-acts**: it does not silently fire actions, mutate
-config, or resolve alarms. Acceptance is an ordinary operator action, so it lands in `audit_log`
-with the human actor ([audit](/architecture/audit/)). The approval boundary is the safety
-property: there is always a human between an AI suggestion and a live change.
+What AI does, grouped from the assistive end toward the agentic end. Earlier groups land first; later groups depend on the governance below being real.
 
-## The provider seam
+- **Enrichment.** Event and alarm enrichment: attaching context, a likely cause, and a suggested next step to an occurrence the operator is already looking at. Read-only, surfaced inline.
+- **Diagnosis and reporting.** Troubleshooting support, root-cause analysis across correlated signals, and report generation (health summaries, incident write-ups, period reviews).
+- **Natural-language surfaces.** NL business query ("which rooms had the most ghost meetings last month"), NL configuration (authoring dashboards, rules, and alarms from a description), and NL template development (drafting a component template from a device's behavior).
+- **Operational actions.** Acting on the platform on an operator's behalf: room and meeting rebooking, and general platform configuration.
+- **Autonomous agents.** Diagnose-and-fix agents that close the loop on a known failure class. **Human-in-the-loop first, fully autonomous later**: every agentic action is gated until the class has earned autonomy.
 
-A provider interface with **`local | hosted | BYO`** behind it, swappable. The seam exists day
-one even before a model ships; the implementation is **slice-driven** (build the subsystem when
-a slice consumes it, not on spec).
+## AI acts through the same seams as any principal
 
-## Mandatory provenance
+AI is **not a side channel**. It reaches the estate through the same three seams every actor uses:
 
-Every AI-produced artifact carries **`provider / model / version`** plus a reference to its
-inputs, so a suggestion is always traceable, auditable, and reproducible. An accepted
-suggestion's resulting create records **both** the AI provenance and the approving operator.
+- the **API** (no private back door, no direct database path),
+- **IAM permissions** (the `<resource>:<action>` capability checked on every route), and
+- the **Storage Gateway scope** (the ABAC visible-set injected on every applicable query).
 
-## Where AI output flows
+If a permission or a scope would stop a human from doing something, it stops the AI doing it too. There is no elevated AI lane.
 
-As **suggestions surfaced to the operator** (a proposed rule in the authoring UI, a draft
-runbook, a triage hypothesis on an alarm), tagged with provenance, requiring an explicit,
-audited operator action to become live. AI is an **input to human decisions**, not a parallel
-actor, so it never bypasses the audit and approval boundary.
+## AI-on-behalf-of-a-user is OAuth delegation
 
-## Open items
+When AI acts for a user, it uses **that user's delegated authority**, not an identity of its own. This is the **delegation seam**: OAuth on-behalf-of (delegation), where an agent holds a delegated, scoped, audited credential and operates strictly within the granting user's permissions and scope. The agent cannot exceed the user who delegated to it, and the action is attributable to both. AI does **not** get its own broad principal kind. See [identity and access](/architecture/identity-access/) for the principal model and the delegation mechanism.
 
-- The input-reference shape (prompt plus context snapshot, versus a hash) for reproducibility
-  without storing sensitive context.
-- Which surfaces get AI suggestions first (rule authoring, triage, runbook drafting).
-- Local versus hosted default for self-hosted deployments (a local model keeps telemetry
-  on-prem).
-- Guardrails on AI reading secret material (it must not).
+## Provenance and audit
+
+Every AI-produced output, an enrichment, a calculated value, a configuration change, is **marked as AI-sourced and audited**. The marking is what makes the capability assistive-not-authoritative: a reader can always tell what came from AI, weigh it accordingly, and trace it. The audit half ties into the existing model ([audit](/architecture/audit/)): an AI-influenced write records both the AI provenance and the human in whose authority it ran, so the trail names a responsible actor on every move. Nothing AI touches is anonymous or unattributable.
+
+## Human-in-the-loop gating
+
+Autonomous action is **gated before it is allowed**: propose -> approve -> act. The agent surfaces a proposed change, a human approves it, then it executes, and the approval lands in the audit trail. Full autonomy for a given failure class is a deliberate later promotion of a class that has run under the gate long enough to earn it, never the starting state. The gate is the safety boundary that lets the capability move toward agentic without the governance moving with it.

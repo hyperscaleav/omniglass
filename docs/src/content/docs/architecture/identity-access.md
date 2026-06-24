@@ -21,12 +21,11 @@ A principal carries a `kind` value; the same role machinery works across all kin
 |---|---|---|---|
 | `human` | a person | local password + session | OIDC, SAML |
 | `service` | scripts, integrations, SDKs, bots | bearer token | (same) |
-| `ai` | AI / LLM actor with its own identity | bearer token | (same) |
 | `node` | the edge daemon running in the field | bearer token | + mTLS |
 
-`ai` is for an AI agent that has its own principal and its own role grants (the Twenty model: the AI is its own account). AI-on-behalf-of-a-user (OAuth delegation) is a distinct shape and a separate deferred slice.
+There is **no `ai` principal kind**. AI does not get its own broad identity; it acts on a user's behalf via **OAuth on-behalf-of (delegation)**, scoped and audited to the granting user (see [AI acts via delegation](#ai-acts-via-delegation) below and the [AI](/architecture/ai/) page).
 
-Each kind that needs structured domain attributes gets a **1:1 per-kind table** linked by `principal_id`: `human` (slice 1), `service_account` and `ai_actor` (slice 2+, when there's something to put in them), `node` (already exists; slice 2 adds a `principal_id` FK). The principal table holds identity + kind; per-kind tables hold the rest.
+Each kind that needs structured domain attributes gets a **1:1 per-kind table** linked by `principal_id`: `human` (slice 1), `service` (slice 2+, when there's something to put in it), `node` (already exists; slice 2 adds a `principal_id` FK). The base `principal` table holds identity + kind only; the per-kind tables hold the rest, including the kind's human-facing label (a human's `display_name`, a service's label, the node's name).
 
 ## Credentials
 
@@ -36,23 +35,29 @@ One `credential` row per authN method per principal. A principal can hold many (
 |---|---|---|---|
 | `password` | `principal.id` (uuid) | argon2id of the password | humans, slice 1 |
 | `oidc` | `iss\|sub` (issuer + subject) | null (IdP verifies) | humans, slice 3 |
-| `token` | `sha256(token)` | null (identifier IS the verifier) | service / ai / node, slice 1 |
+| `token` | `sha256(token)` | null (identifier IS the verifier) | service / node, slice 1 |
 | `mtls` | client-cert subject | null (TLS verifies) | nodes, slice 2 |
 
-The password identifier is the `principal.id` (not the username), so a username change does not invalidate the credential. Bearer tokens are 256-bit `crypto/rand` payloads with a human-readable prefix (`ogs_` for service /ai, `ogn_` for nodes) for secret-scanners and audit clarity; the server only ever stores `sha256(token)`. Cleartext is returned exactly once at mint time.
+The password identifier is the `principal.id` (not the username), so a username change does not invalidate the credential. Bearer tokens are 256-bit `crypto/rand` payloads with a human-readable prefix (`ogs_` for services, `ogn_` for nodes) for secret-scanners and audit clarity; the server only ever stores `sha256(token)`. Cleartext is returned exactly once at mint time.
 
 ## Subjects
 
-`human`, `service`, `ai`, `node`, and **user-groups**. Roles attach to principals regardless of kind; the same `principal_grant` rows mean the same thing whether the principal is a person, a bot, or a daemon.
+`human`, `service`, `node`, and **`principal_group`s**. Roles attach to principals regardless of kind; the same `principal_grant` rows mean the same thing whether the principal is a person, a service, or a daemon.
 
 ## Group kinds
 
 The `group` membership mechanism (static list or dynamic filter) is shared across kinds, but the kinds are kept **distinct** (not one polymorphic primitive yet, because their usage differs):
 
 - **`component` / `system` / `location` groups** are **entity-groups**: they carry config bindings (the cascade) and serve as ABAC **scopes**.
-- **`user` group** is a collection of principals (SCIM-synced or local): a grant **subject**, carrying no config. (Despite the name, members can be any principal kind in principle; in practice it is humans synced from the IdP.)
+- **`principal_group`** is a collection of principals (SCIM-synced or local): a grant **subject**, carrying no config. It groups over principals, not just humans (members can be any principal kind); in practice it is humans synced from the IdP.
 
-So `group` appears on **both sides of authZ**: user-groups as subjects, entity-groups as object scopes. (Unifying all kinds into a single polymorphic `group` is deferred; revisit if they converge.)
+So `group` appears on **both sides of authZ**: `principal_group`s as subjects, entity-groups as object scopes. (Unifying all kinds into a single polymorphic `group` is deferred; revisit if they converge.)
+
+## AI acts via delegation
+
+AI is **not** a principal kind. When an agent acts, it acts **on behalf of a user** via **OAuth on-behalf-of (delegation)**: it holds a delegated, scoped, audited credential and operates strictly within the granting user's permissions and scope. It cannot exceed the user who delegated to it, and the resulting write names both the agent and that user, so accountability lands on a human.
+
+This is the **chosen mechanism** for AI acting, not a deferred curiosity. The full build (Omniglass acting as an OAuth OP, delegated credentials, dual-actor audit) is phased, but the architecture is fixed: AI = delegation, not a broad identity of its own. The [AI](/architecture/ai/) page covers the capability spectrum this governs.
 
 ## Roles and the role hierarchy
 
@@ -121,7 +126,7 @@ canDo(P, action, E)  iff  exists grant g in grants(P) such that
                             AND E in expand(g.scope_kind, g.scope_id)
 ```
 
-So the same role applied at different scopes composes naturally; mixing roles (e.g., `operator @ HQ` + `viewer @ all` for a site lead who needs read-only visibility outside her primary site) is the intended pattern. Grants from user-group memberships compose the same way.
+So the same role applied at different scopes composes naturally; mixing roles (e.g., `operator @ HQ` + `viewer @ all` for a site lead who needs read-only visibility outside their primary site) is the intended pattern. Grants from `principal_group` memberships compose the same way.
 
 ### Scopes
 
@@ -181,8 +186,8 @@ The web app (and any CLI client) gets the principal + their effective permission
 ```json
 GET /api/v1/auth/me
 {
-  "principal": { "id": "...", "kind": "human", "display_name": "Alice Ops" },
-  "human":     { "username": "alice", "email": "alice@example.com", ... },
+  "principal": { "id": "...", "kind": "human" },
+  "human":     { "username": "jordan", "email": "jordan@example.com", "display_name": "Jordan Rivera", ... },
   "permissions": [
     "component:read", "component:create", "component:update",
     "alarm:read", "alarm:ack", "alarm:snooze", "alarm:resolve",
@@ -217,15 +222,15 @@ Every API operation records the resolved **actor** (the principal id) in `audit_
 
 ## Bootstrap
 
-The first install runs `og iam create-owner --username alice --email alice@example.com`. This creates a `human` principal, a password credential (argon2id), and an `owner @ all` grant in one transaction. Alice logs in via the web UI or CLI and begins minting other principals. There is no implicit default principal; the bootstrap is the only path to the first owner.
+The first install runs `og iam create-owner --username ops --email ops@example.com`. This creates the first operator as a `human` principal, a password credential (argon2id), and an `owner @ all` grant in one transaction. That operator logs in via the web UI or CLI and begins minting other principals. There is no implicit default principal; the bootstrap is the only path to the first owner.
 
 ## Worked example
 
-Bob is an AV support tech. SCIM syncs him into the **`AV-Support`** user-group (slice 3+; today he is a local `human` principal). The group holds one grant: `operator @ "AV-devices" (component-group), viewer @ "HQ" (location)`. Result:
+Sam is an AV support tech. SCIM syncs Sam into the **`AV-Support`** `principal_group` (slice 3+; today Sam is a local `human` principal). The group holds one grant: `operator @ "AV-devices" (component-group), viewer @ "HQ" (location)`. Result:
 
-- He can **operate** (create / update / ack alarms) on AV devices fleet-wide (the cross-cutting entity-group), and **read** everything at HQ (the location node + its subtree).
-- The gateway's scope filter hides every row outside those scopes; the API middleware blocks him from, say, creating a user (no `principal:create` capability in `operator`).
-- The day a device joins the `AV-devices` dynamic group, it enters Bob's scope; the day he leaves `AV-Support` in the IdP, SCIM removes the grant.
+- Sam can **operate** (create / update / ack alarms) on AV devices fleet-wide (the cross-cutting entity-group), and **read** everything at HQ (the location node + its subtree).
+- The gateway's scope filter hides every row outside those scopes; the API middleware blocks Sam from, say, creating a principal (no `principal:create` capability in `operator`).
+- The day a device joins the `AV-devices` dynamic group, it enters Sam's scope; the day Sam leaves `AV-Support` in the IdP, SCIM removes the grant.
 
 ## Storage
 
@@ -233,7 +238,7 @@ The IAM subjects and their grants; the physical layout lives on [storage](/archi
 
 | Table | Key columns | Notes |
 |---|---|---|
-| `principal` (+ per-kind `human` / `service` / `node`) | id, kind, ... | subjects; a `node` carries labels, last_heartbeat_at, and its bound credential |
+| `principal` (+ per-kind `human` / `service` / `node`) | id, kind | base `principal` is identity (opaque uuid) + kind only; per-kind tables hold the rest, including each kind's label: `human.display_name` (the person's real name) + username + email, the `service` label, the `node` name (+ labels, last_heartbeat_at, bound credential) |
 | `role` | id, **official**, permissions (jsonb: `<resource>:<action>`) | RBAC capability set; ship viewer/operator/admin/owner + custom |
 | `principal_grant` | (principal_id, role, **scope**) | role x scope; scope = a structural node, an entity-group, or `all`; additive |
 
@@ -241,7 +246,7 @@ The IAM subjects and their grants; the physical layout lives on [storage](/archi
 
 - Custom-role permission granularity beyond `(resource x action)` (e.g., Zoom-style data-claim suffix `<resource>:<action>:<modifier>`), defer until a use case forces it.
 - Unifying the group kinds into one polymorphic primitive (deferred).
-- SCIM mapping detail (which IdP attributes drive user-group membership and grants).
+- SCIM mapping detail (which IdP attributes drive `principal_group` membership and grants).
 - Whether a scope may mix include and exclude (e.g., "all except group X").
 - Local-account MFA (TOTP). Slice 1 delegates MFA to the IdP via OIDC (slice 3); local-account MFA is a later add for installs that need it before OIDC lands.
-- The OAuth on-behalf-of (delegation) shape for AI-acts-as-user agents. Requires us to be an OAuth OP, not just an RP, plus delegated credentials and dual-actor audit.
+- The phasing of the delegation build for AI acting on behalf of a user: the architecture is settled ([AI acts via delegation](#ai-acts-via-delegation)), but standing up Omniglass as an OAuth OP (not just an RP), the delegated-credential lifecycle, and dual-actor audit roll out over later slices.
