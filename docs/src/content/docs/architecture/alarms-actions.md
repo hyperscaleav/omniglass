@@ -54,13 +54,13 @@ event_rule:
   fire_criteria: "value > 65"                        # opens the alarm
   clear_criteria: "value < 60"                       # resolves it (defaults to !fire_criteria)
   for: 0                                             # sustained span (optional)
-  severity: 30
+  severity: average
   health: degraded                                   # optional: degrade the owner's health while open
 ```
 
 `scope` selects the entities (fan-out, one alarm per match); `datapoint` is the
 input; `window` / `for` are the aggregation machinery; `fire_criteria` / `clear_criteria`
-are the Expr leaves; `severity` is the integer (below). A rule is **suppressible by name through
+are the Expr leaves; `severity` names a level by id (below). A rule is **suppressible by name through
 the cascade** ([cascade](/architecture/cascade/)): a high-weight group can remove a
 false-firing rule without editing it (the firmware-bug workaround).
 
@@ -75,25 +75,29 @@ system-owned alarm for a condition only the system cares about (a display on inp
 is fine for the display but wrong for the room), which is how system health sees what
 no single component can.
 
-## Severity: an open integer, not an enum
+## Severity: a registry of named levels
 
-The alarm carries a **severity integer (0-999)**. A **`severity_levels` lookup**
-(official-registry defaults, operator-relabelable) renders the integer to a **label +
-color**; the integer is the sortable, comparable value. Official defaults are
-**spaced by 10** so operators can insert without renumbering:
+Severity is a **registry of named levels**, not a bare integer. Each level has an
+**`id`** (`info`, `warning`, `average`, `high`, `disaster`), a **`label`**, a **`color`**,
+and an integer **`order`** used only for comparison. Operators and rules reference a level
+**by id**; the order ranks them. Official defaults ship, **spaced** so a new level inserts
+by picking an order between two others, no renumbering:
 
-| value | label | color |
-|---|---|---|
-| 10 | info | gray |
-| 20 | warning | yellow |
-| 30 | average | orange |
-| 40 | high | red |
-| 50 | disaster | dark red |
+| id | label | color | order |
+|---|---|---|---|
+| info | info | gray | 10 |
+| warning | warning | yellow | 20 |
+| average | average | orange | 30 |
+| high | high | red | 40 |
+| disaster | disaster | dark red | 50 |
 
-Higher is more severe. An operator can relabel to P1/P2/P3, define three levels or
-seven, or slot a 25 between warning and average, all config, no code. Rules and
-`action_rule` predicates compare the integer (`alarm.severity >= 40`); the UI renders
-via the lookup.
+Severity is **distinct from health**: severity is alert importance, health is entity
+operational state ([health](/architecture/health/)), different axes. Higher order is
+more severe. The level set is **operator-customizable**: an operator can relabel to
+P1/P2/P3, recolor, add a level between two others, or define three levels or seven, all
+config, no code. Rules and `action_rule` predicates compare **by level**, resolved through
+the order (`alarm.severity >= "high"` matches `high` and `disaster`); the UI renders the
+label and color from the level.
 
 ## The action (a stateful entity)
 
@@ -124,7 +128,7 @@ rule family (the derivation rules, calc and event, produce data; the
 ```yaml
 action_rule:
   on: alarm
-  when: 'transition == "open" && alarm.severity >= 40 && component.type == "device"'
+  when: 'transition == "open" && alarm.severity >= "high" && component.type == "device"'
   action: pagerduty-notify
 ```
 
@@ -215,7 +219,7 @@ A command is **not a table**: it is a `component_template_version.spec` declarat
 
 - The depth bound and lineage-detector shape for the data-mediated control loop (an action whose
   effect re-opens its own alarm).
-- Whether `severity_levels` is purely a render lookup or also carries policy (e.g. a
+- Whether a severity level is purely a label/color/order or also carries policy (e.g. a
   default ack-timeout per level).
 - The dead-letter surface and operator retry of failed actions.
 - Observed-use auth-failure feedback from actions into credential health

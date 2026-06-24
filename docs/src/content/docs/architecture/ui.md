@@ -60,8 +60,8 @@ unchanged.
 
 Live data is **query polling** (a refetch interval; slow-changing config uses a long stale time). An
 **SSE or stream subscription is deferred** until latency or fan-out forces it, the same
-earn-it-with-a-profile discipline. Presentation that depends on config (the severity integer to a
-label-and-color band) resolves client-side from the config view.
+earn-it-with-a-profile discipline. Presentation that depends on config (a severity level's id to its
+label and color) resolves client-side from the config view.
 
 ## Configuration UIs
 

@@ -16,12 +16,12 @@ expressions**, built on **Expr** ([expr-lang/expr](https://github.com/expr-lang/
 
 ## One engine, built on Expr and extended
 
-There is one expression engine. It is **Expr** at the core, chosen for its **transform
-strength**: it is expression-oriented, has a rich built-in function and operator set well
-suited to reshaping collected values (arithmetic, string ops, slicing, mapping over arrays,
-null handling), compiles to a fast program, and is straightforward to sandbox. CEL is
-predicate-oriented and weaker at the value-reshaping that collection extractors do constantly
-(`raw / 100.0`, `int(groups[1])`, `node.gain`, `groups[2] == 'true'`), so Expr is the base.
+There is one expression engine. It is **Expr** at the core, chosen because it is
+transform-oriented, fast, and sandboxable: it is expression-oriented with a rich built-in
+function and operator set well suited to reshaping collected values (arithmetic, string ops,
+slicing, mapping over arrays, null handling, things collection extractors do constantly like
+`raw / 100.0`, `int(groups[1])`, `node.gain`, `groups[2] == 'true'`), it compiles to a fast
+program, and it is straightforward to sandbox.
 
 On top of that base we add **Omniglass functions**: helpers the platform needs that Expr does
 not ship, including frame **`encode` / `decode`** and the output-format helpers (**hex /

@@ -71,18 +71,22 @@ When a config item has both a declared and an observed value, their gap is **dri
 everywhere, with the declared side sourced from config. A per-item `reconcile` policy turns drift
 into action:
 
-- **`alert`** (default): surface the drift, change nothing.
+- **`observe`** (default): detect and record the drift, raise **no** alarm. Drift stays visible
+  through [`disagree`](/architecture/datapoints/#disagree-and-divergence) and the config view, silently.
+- **`warn`**: raise an alarm for the drift, at **warning** severity. Surface it, change nothing.
 - **`enforce`**: declared wins. Call the template's **set** function to push the value back; that
   issues a command, writes an [`intended`](/architecture/datapoints/#intended-the-declared-effect-of-a-command)
-  datapoint, and reconciles against the next observation. Desired-state convergence, the controller
-  half of spec-and-status.
-- **`accept`**: observed wins, write the observation into the declared value (reality becomes intent).
+  datapoint, and reconciles against the next observation (desired-state convergence, the controller
+  half of spec-and-status). If the set **fails**, raise a real alarm (enforcement failure).
+
+Adopting the observed value as the declared one (reality becomes intent) is **not** an ongoing mode;
+it is a separate **one-shot import action** an operator runs deliberately.
 
 The power here is that **remediation needs no rule**. You do not author an `event_rule` or a flow to
 fix a setting; you declare the value, set the policy to `enforce`, and the cascade plus drift plus
 the set function close the loop. Reconcile runs **per item**, so one reconciled setting is better than
 none; the capability of any item is simply which of its get/set functions the template has bound (get
-only gives alert-on-drift; a set too makes it enforceable). The data-mediated loop (set → device →
+only gives observe or warn on drift; a set too makes it enforceable). The data-mediated loop (set → device →
 observe → drift clears) is the one guarded at action dispatch
 ([alarms and actions](/architecture/alarms-actions/)), with a per-item backoff so a device that
 refuses a write does not hammer.
@@ -225,7 +229,8 @@ The shape registry, the config / variable cell, and the operator-label tables; t
   component filling the role), and the per-item get/set binding shape on the template.
 - Whether config, credentials, and variables are **one table with a discriminator or three**; they
   share the cascade and scope either way.
-- `reconcile: enforce` / `accept` execution (the set-function push and observed-becomes-intent); the
-  policy reserves the seam, the controller is a later slice.
+- `reconcile: enforce` execution (the set-function push, and the enforcement-failure alarm) plus the
+  separate one-shot import action (observed-becomes-declared); the policy reserves the seam, the
+  controller is a later slice.
 - The external `SecretProvider` implementations (KMS / Vault / secrets managers) behind the existing
   seam.

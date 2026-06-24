@@ -67,10 +67,10 @@ Health is a **state** with a small **fixed ordered** value domain, declared as i
 up  <  degraded  <  down            unknown = no signal (not on the order)
 ```
 
-It is **distinct from severity**. Severity is alert importance (an open integer plus lookup,
+It is **distinct from severity**. Severity is alert importance (a named level by id,
 [alarms and actions](/architecture/alarms-actions/)); health is entity operational state. They map
-(a `down` health typically raises a high or disaster alarm) but they are different axes, so health
-is not the severity integer. The order exists so the `worst` reducer can pick the worst member;
+(a `down` health typically raises a `high` or `disaster` alarm) but they are different axes, so health
+is not a severity level. The order exists so the `worst` reducer can pick the worst member;
 `unknown` is off the order (stale or no data, ties to the no-data machinery in
 [time](/architecture/time/)) and is surfaced, not silently folded as `down`.
 
@@ -182,7 +182,7 @@ event_rule:
   scope: 'system.template == "standard-boardroom"'
   datapoint: system.availability
   when: "value < $var:availability.slo"   # the SLO target, a config value
-  severity: 40
+  severity: high
 ```
 
 So the target is config (the SLO), the breach is an event/alarm (the SLA edge), and compliance is a
