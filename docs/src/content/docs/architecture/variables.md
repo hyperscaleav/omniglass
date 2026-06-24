@@ -71,7 +71,7 @@ When a config item has both a declared and an observed value, their gap is **dri
 everywhere, with the declared side sourced from config. A per-item `reconcile` policy turns drift
 into action:
 
-- **`audit`** (default): record the drift, raise **no** alarm. Log that it differs and go get the
+- **`observe`** (default): record the drift, raise **no** alarm. Log that it differs and go get the
   info; drift stays visible through [`disagree`](/architecture/datapoints/#disagree-and-divergence)
   and the config view, silently.
 - **`warn`**: raise an alarm for the drift, at **warning** severity. Surface it, change nothing.

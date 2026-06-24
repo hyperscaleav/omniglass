@@ -134,7 +134,7 @@ mac, ip, serial, locked-input, anything an operator *sets* is declared intent, a
 
 When declared intent and observed reality disagree, which one wins is a **per-config-item `reconcile` policy** ([config](/architecture/variables/#drift-and-reconcile)), not a per-key datapoint attribute:
 
-- **observed wins** is `reconcile: audit` (or `warn`): the declaration was a hint or stale guess, reality is truth. A device reporting a different MAC than the declared one is a divergence to surface (silently under `audit`, as an alarm under `warn`); adopting the observed value as declared is a separate one-shot import action.
+- **observed wins** is `reconcile: observe` (or `warn`): the declaration was a hint or stale guess, reality is truth. A device reporting a different MAC than the declared one is a divergence to surface (silently under `observe`, as an alarm under `warn`); adopting the observed value as declared is a separate one-shot import action.
 - **declared wins** is `reconcile: enforce`: the declaration is the spec, reality should conform. Observed input HDMI2 against a declared HDMI1 means the world is wrong, converge via the set function (self-healing, the Kubernetes spec-and-status pattern), and alarm if the set fails.
 
 Among datapoint provenances there is no precedence contest: intended is a pending bet that observed confirms or refutes (reconciliation, see [intended](#intended-the-declared-effect-of-a-command)), and observed supersedes it on arrival. The spec-versus-status decision is config's reconcile policy, not a per-key datapoint attribute. Device-swap (where a declared MAC is briefly authoritative before the device reports it) is handled by a future component "maintenance mode" that suppresses drift.
