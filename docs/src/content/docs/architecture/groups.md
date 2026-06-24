@@ -29,7 +29,7 @@ A group:
 
 | Table | Key columns | Notes |
 |---|---|---|
-| `group` | id, kind (component/system/location/user), membership (static list or dynamic filter), **weight** | cascade band and access scope ([cascade](/architecture/cascade/), [identity and access](/architecture/identity-access/)) |
+| `group` | id, kind (component/system/location/principal), membership (static list or dynamic filter), **weight** | cascade band and access scope ([cascade](/architecture/cascade/), [identity and access](/architecture/identity-access/)) |
 
 ## Placement: one specificity scale
 

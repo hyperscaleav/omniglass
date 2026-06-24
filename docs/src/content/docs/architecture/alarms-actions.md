@@ -37,7 +37,7 @@ The full timeline assembles by `alarm_id` across events + audit; the alarm row i
 never reconstructed from them.
 
 Alarms are **terminal upstream**: they never write datapoints, so they cannot feed
-back into the datapoint layer (hub *Cycle safety*).
+back into the datapoint layer (see *Cycle safety*).
 
 ## The `event_rule`
 
@@ -152,7 +152,7 @@ verify TLS, bound timeouts, control redirects.
 
 ## Cycle safety in the action layer
 
-The `collection -> datapoint -> alarm` core is acyclic by construction (hub *Cycle
+The `collection -> datapoint -> alarm` core is acyclic by construction (see *Cycle
 safety*), and **only data authors events**: an `event_rule` over datapoints (plus the
 clock's `origin=scheduled`) is the *only* way an event enters the log. Flows and
 actions never manufacture events, so the response layer cannot inject into the event

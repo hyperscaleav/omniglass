@@ -30,7 +30,7 @@ triggers, macros, and tags, ours ships:
 - required **[config](/architecture/variables/)** and defaults, and the **credential shapes** it needs
   (see [config and credentials](/architecture/variables/));
 - default **tags**;
-- default **alarms / health** (the trigger mirror; the [alarm spoke](/architecture/alarms-actions/)
+- default **alarms / health** (the trigger mirror; [alarms and actions](/architecture/alarms-actions/)
   owns the detail).
 
 A template is authored once and **assigned to an existing component**; the node then executes the
@@ -78,8 +78,8 @@ promotion ladder, deferred.
   `datapoint_type`: a `datapoint_type` is pure identity (kind / unit / domain / validation / fusion)
   and carries no event rules. A *truly universal* default (e.g. `cpu.utilization > 0.9` everywhere) is
   an official **rule-set scoped by a group or key filter**, resolved through the cascade (the rule
-  accumulation mechanism), not a `datapoint_type` attribute. Owned in detail by the
-  [alarm spoke](/architecture/alarms-actions/).
+  accumulation mechanism), not a `datapoint_type` attribute. Owned in detail by
+  [alarms and actions](/architecture/alarms-actions/).
 - **Function trigger params are cascade bases.** A function's `interval: 30s` is the floor of the
   cascade, overridable by a location, group, or the instance (the `poll_interval` example in
   [cascade](/architecture/cascade/)), not a hard value.
@@ -153,6 +153,6 @@ Locations have no template: the `location_type` is the only shape-definer
 - The `args` typing vocabulary for commands (scalar types first, structured args later) and how
   command results beyond `success-when` map to the `action` row fields.
 - Whether a template's default `event_rule`s are declared inline on the version or referenced (the
-  policy is template-authored either way; this is the storage shape, co-designed with the alarm spoke).
+  policy is template-authored either way; this is the storage shape, co-designed with the alarms-and-actions model).
 - Whether a `LocationTemplate` (`kind` is reserved in the collection apiVersion) is ever introduced,
   or locations stay template-less.

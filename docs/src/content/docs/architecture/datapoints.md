@@ -59,7 +59,7 @@ The naming convention is consistent: a `_type` registry defines what a thing *is
 
 **Datapoint key naming is owner-agnostic.** A key names a *measurement*, never its owner: `temperature` is a Celsius reading whether a codec's thermals or a room's ambient sensor produced it, and the owner (component / system / location / node / global) plus a template's labels and the function that collected it give it context. So there is no `system.` / `device.` / `room.` prefix; keys group by measurement domain (`cpu.utilization`, `power.state`, `video.input`, `audio.level`, `network.icmp.rtt`). This is the normalization the product hinges on: one canonical path means one comparable signal across every vendor, which is what makes cross-fleet dashboards and AI useful. The official set is seeded from `internal/registry/defaults.yaml` following OpenTelemetry semantic conventions for the IT leaves (`cpu.utilization`, `memory.usage`; semconv's own `system.` prefix is dropped to avoid colliding with the `system` entity type) and the [OpenAV minimum-device-functionality guidelines](https://github.com/OpenAVCloud/specifications/blob/main/min-device-functionality/OAVC-AV-Device-Minimum-Functionality-Guidelines.md) for AV signals. A template declares its datapoints at **template** scope, or references an **org** or **official** key: the distro mints **official** keys, the deployment mints **org** keys, and a template mints its own **template**-scoped keys (the Zabbix model, where two templates can both declare an `input` with no collision).
 
-**Validation on insert, under a policy.** Every datapoint is typed by a `datapoint_type` row (the FK is **non-null**: a template-scoped key is a real `datapoint_type` row at `scope=template`, not an inline-only shape), so insert checks two things. **(1) The key resolves** to a `datapoint_type` at a reachable scope: a template-scoped key self-resolves; a referenced org or official key must exist, checked at template compile time. An unresolved key is **reject-not-project**: kept out of the typed series, a `datapoint.validation_failed` event raised, the raw carried on a `collection.failed` event so nothing is lost (backfillable once the registry or template is corrected). **(2) The value conforms** to the type's kind and domain: the type's `validation` (`{min,max}` for a metric, `{values:[...]}` for a state). Optionally **(3) the owner kind** must be one the type allows. All three are governed by the `validation_policy` config mode: **bypass** (skip), **audit** (the default: write the value but emit the event), or **enforce** (hold the value back from the typed series, emit the event). The point is visibility: an out-of-range or unmapped value means a template author declared a type the device disagrees with, so the violation surfaces as an owner-attributed event operators and admins see. The mode is a single global setting today; resolving it per-entity down the cascade (global, location, system, component) is the follow-on, gated on the cascade resolver.
+**Validation on insert, under a policy.** Every datapoint is typed by a `datapoint_type` row (the FK is **non-null**: a template-scoped key is a real `datapoint_type` row at `scope=template`, not an inline-only shape), so insert checks two things, plus an optional third. **(1) The key resolves** to a `datapoint_type` at a reachable scope: a template-scoped key self-resolves; a referenced org or official key must exist, checked at template compile time. An unresolved key is **reject-not-project**: kept out of the typed series, a `datapoint.validation_failed` event raised, the raw carried on a `collection.failed` event so nothing is lost (backfillable once the registry or template is corrected). **(2) The value conforms** to the type's kind and domain: the type's `validation` (`{min,max}` for a metric, `{values:[...]}` for a state). Optionally **(3) the owner kind** must be one the type allows. All three are governed by the `validation_policy` config mode: **bypass** (skip), **audit** (the default: write the value but emit the event), or **enforce** (hold the value back from the typed series, emit the event). The point is visibility: an out-of-range or unmapped value means a template author declared a type the device disagrees with, so the violation surfaces as an owner-attributed event operators and admins see. The mode is a single global setting today; resolving it per-entity down the cascade (global, location, system, component) is the follow-on, gated on the cascade resolver.
 
 ## Key scope: template, org, official
 
@@ -206,14 +206,14 @@ The key registry that types these tables is `datapoint_type` (one registry acros
 flowchart TD
   subgraph edge["Edge (node)"]
     TASK["task<br/>poll · listen<br/>stateless / stateful"]
-    FLOW["function<br/>extract → key → normalize"]
-    TASK --> FLOW
+    FN["function<br/>extract → key → normalize"]
+    TASK --> FN
   end
 
-  FLOW -->|"observed · lineage on row<br/>(source_rule)"| M["metric_datapoint"]
-  FLOW -.->|"parse / validation fail"| CF["collection.failed<br/>(carries raw)"]
-  FLOW --> S["state_datapoint"]
-  FLOW --> L["log_datapoint"]
+  FN -->|"observed · lineage on row<br/>(source_rule)"| M["metric_datapoint"]
+  FN -.->|"parse / validation fail"| CF["collection.failed<br/>(carries raw)"]
+  FN --> S["state_datapoint"]
+  FN --> L["log_datapoint"]
 
   M --> CALC["calc_rule<br/>cross-key · system-level"]
   S --> CALC

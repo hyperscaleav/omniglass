@@ -16,7 +16,7 @@ This is the **authoritative glossary**: every official term in the architecture,
 | **flow** | A multi-step **action** (branching, parallel steps, waits); an escalation is the canonical case. See [alarms and actions](/architecture/alarms-actions/). |
 | **task** | A node's unit of collection: **poll** (we ask) or **listen** (we wait), over a stateless or stateful (session) interface. Content-addressed. |
 | **interface** | A connection to a component, declared once per protocol; transport stateless or stateful (to a session). |
-| **interface_type** | Protocol-and-style registry (ssh, https, snmp, mqtt, webhook...); built-flag + param schema. |
+| **interface_type** | Protocol-and-style registry (ssh, http, snmp, mqtt, webhook...); built-flag + param schema. |
 | **session** | A stateful interface's live held-open connection; a current-state view over `session_log`. |
 | **collection.failed** | The event emitted when a parse or validation rejects; carries the raw payload for diagnosis and backfill-after-fix. There is no stored telemetry table; raw is not otherwise persisted (a dev raw-mode taps it live). |
 | **datapoint** | An observation: a key's value on one owning entity at one time, with provenance + source + on-row lineage. Kinds: metric, state, log. |

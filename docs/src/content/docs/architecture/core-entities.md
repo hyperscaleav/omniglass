@@ -114,3 +114,8 @@ Keep it a **tree with a primary-system pointer** (which system chain feeds the c
 device **skips the system layer**. The genuine "config differs per system" case is answered by
 **per-system effective views** on demand, not by merging chains into the resolution
 ([cascade](/architecture/cascade/)).
+
+The binding itself is the **`system_member`** table: the **instance assignment** that ties a
+`component` to a `system` under a specific role, satisfying a `system_template_member` from the frozen
+`system_template_version` (key columns: `system_id`, `component_id`, `role`, plus the pin to the
+`system_template_member` it satisfies).

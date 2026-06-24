@@ -24,23 +24,23 @@ config of its own: it pulls what to do, runs it, and ships results.
 The node pulls a **worklist**: the tasks and commands resolved for the
 components **placed on it**, over a gRPC config pull, and **heartbeats** so the
 server tracks liveness. The server, not the template, decides placement (next), and
-resolves the cascade (`${component.state.*}`, effective `interval`, credentials)
+resolves the cascade (config / `$var:` values, effective `interval`, credentials)
 before handing the node concrete work. The node never sees a template; it sees
 materialized, resolved task and command instances.
 
 ### Config propagation (declared change to running node)
 
 An interface's connection config (endpoint, snmp community, http auth header) is a
-**projection** of the component's declared state through its template. The node
+**projection** of the component's declared config through its template. The node
 re-pulls the worklist (tasks) every tick, but **caches interface config for its
 process lifetime**, so a changed connection input must be propagated, not just
 written:
 
-- **Reconcile on the server.** Changing a declared input (via `:apply`, or a
-  direct write to `/components/{name}/datapoints/state`) re-renders the affected
-  interfaces from the component's *current* declared state and upserts them,
-  preserving placement. So the materialized interface always reflects the latest
-  declared config, regardless of which path changed it.
+- **Reconcile on the server.** Changing a declared input (via
+  `/components/{name}:apply`, or a direct write to the component's config)
+  re-renders the affected interfaces from the component's *current* declared
+  config and upserts them, preserving placement. So the materialized interface
+  always reflects the latest declared config, regardless of which path changed it.
 - **Invalidate on the node.** The worklist response carries a per-node **config
   generation** (`X-Og-Config-Generation`): the max `updated_at` across the
   interfaces the node polls. When it advances, an interface's rendered config
@@ -102,7 +102,7 @@ runtime: one connection keyed by `(node, interface)`, shared by every task and
 command under it, so the handshake and auth are paid once. The live socket is
 ephemeral and lives on the node; the node **reports lifecycle transitions as
 `session_log` rows** to the server, where the `session` entity projects current state
-(a current-state view over `session_log`, ground-truth side; see the storage spoke).
+(a current-state view over `session_log`, ground-truth side; see [storage](/architecture/storage/)).
 
 Generic lifecycle (exact enum deferred to the ssh slice):
 
@@ -328,4 +328,4 @@ location-owned alarms.
 - A durable node-side queue (today the worklist is server-pulled per tick;
   backpressure is concurrency + deadlines, not persistence).
 - The node-server config-pull and heartbeat protocol detail (co-design with
-  the API spoke and the node auth path in [identity-access](/architecture/identity-access/)).
+  the API and the node auth path in [identity-access](/architecture/identity-access/)).

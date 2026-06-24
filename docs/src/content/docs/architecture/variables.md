@@ -87,7 +87,7 @@ The power here is that **remediation needs no rule**. You do not author an `even
 fix a setting; you declare the value, set the policy to `enforce`, and the cascade plus drift plus
 the set function close the loop. Reconcile runs **per item**, so one reconciled setting is better than
 none; the capability of any item is simply which of its get/set functions the template has bound (get
-only gives audit or warn on drift; a set too makes it enforceable). The data-mediated loop (set -> device ->
+only gives observe or warn on drift; a set too makes it enforceable). The data-mediated loop (set -> device ->
 observe -> drift clears) is the one guarded at action dispatch
 ([alarms and actions](/architecture/alarms-actions/)), with a per-item backoff so a device that
 refuses a write does not hammer.

@@ -7,8 +7,8 @@ sidebar:
     variant: caution
 ---
 
-Expressions let an operator reshape and judge collected values in plain text wherever the platform needs a small computation, and there is exactly one language to learn for all of them. Omniglass evaluates these small operator-authored expressions in many places: a transform's
-`value` and `normalize` leaves, a step's `when` guard, an `event_rule`'s fire/clear
+Expressions let an operator reshape and judge collected values in plain text wherever the platform needs a small computation, and there is exactly one language to learn for all of them. Omniglass evaluates these small operator-authored expressions in many places: an extractor's
+`value` leaf, a step's `when` guard, an `event_rule`'s fire/clear
 criteria, a `calc_rule`'s reduce escape, a rule's `scope` predicate, a view/list `filter`,
 and a dynamic group's membership filter. All of these go through **one engine, Omniglass
 expressions**, built on **Expr** ([expr-lang/expr](https://github.com/expr-lang/expr)) and
@@ -35,7 +35,7 @@ straightforward native path over reaching for the engine at all.
 
 | Site | Leaf | What it evaluates |
 |---|---|---|
-| transform extractor | `value`, `normalize` | reshape a located raw value into the typed datapoint value |
+| extractor | `value` | reshape a located raw value into the typed datapoint value |
 | step | `when` | the explicit branch guard (a false guard skips the step and dependents) |
 | `event_rule` | `fire_criteria`, `clear_criteria` | open/close an alarm-paired event off a datapoint change |
 | `calc_rule` | `reduce` (escape), `filter` | the named-reducer escape hatch and per-input filters |

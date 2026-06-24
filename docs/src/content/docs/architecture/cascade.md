@@ -100,11 +100,12 @@ Ship-with **default policy** lives at `global`, the floor of the chain.
 
 ## Structural multi-membership (a component in N systems)
 
-Distinct from group membership: a shared device in N systems would make the system
-layer a DAG. Keep it a tree with a **primary-system pointer** (which system chain
-feeds the cascade); a truly shared device **skips the system layer**. The genuine
-"config differs per system" case is answered by **per-system effective views** on
-demand, not by merging chains into the resolution.
+Distinct from group membership. On the resolution side, the **primary-system
+pointer** is the single system chain that feeds the cascade for a component that
+sits in more than one system; the genuine "config differs per system" case is
+answered by **per-system effective views** computed on demand, not by merging
+chains into the resolution. See [core entities](/architecture/core-entities/) for
+the membership model.
 
 ## The resolve view
 
