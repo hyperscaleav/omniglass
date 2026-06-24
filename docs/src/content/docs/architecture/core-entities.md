@@ -74,13 +74,22 @@ the card keeps its own template ([cascade](/architecture/cascade/)).
 
 ### Sub-components and sub-systems
 
-The `parent_id` self-reference is **same-kind nesting**: a component may have a parent component, and a
-system may have a parent system. A chassis with line cards is a parent component over child
+The `parent_id` self-reference is **same-kind nesting**: a **system may have a parent system**
+(sub-system nesting) and a **component a parent component** (sub-component nesting), both over the same
+variable-depth `parent_id` trees. A chassis with line cards is a parent component over child
 components; a building-wide AV system composed of room subsystems is a parent system over child
-systems. This nesting is what will feed the cascade (deepest wins down the component and system trees)
-and the **health rollup** (a child's health composes up into its parent). This page introduces the
-concept only; the depth resolution and rollup semantics live in [cascade](/architecture/cascade/) and
-[health](/architecture/health/).
+systems.
+
+This nesting feeds two mechanisms. It feeds the **cascade**, where the **deeper node wins** down the
+component and system trees (a sub-system's bindings override its parent's, a sub-component's override
+the chassis'). And it feeds the **health rollup**: a **sub-system's health rolls into its parent
+system**, and a **sub-component's into its parent component**, the same role-aware composition that
+runs up the rest of the tree.
+
+The **practical starting depth is 3 levels** (parent / child / grandchild) for both trees, a guidance
+default, **not a hard cap**: the `parent_id` trees support arbitrary depth, and we revisit the
+guidance if a use case needs more. The depth-resolution and rollup semantics themselves live in
+[cascade](/architecture/cascade/) and [health](/architecture/health/).
 
 ## Ownership: the exclusive-arc
 

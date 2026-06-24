@@ -174,20 +174,45 @@ So no edge can close a loop: events come only from data, alarms are terminal tow
 datapoints, the response layer cannot author events, operator transitions never
 re-trigger, and the one real-world control loop is lineage-bounded.
 
-## Flows: the multi-step action (deferred, defined)
+### Correlation id: the trace of a causal chain
 
-A **flow** is a multi-step action: a DAG of steps that can branch, run in parallel, and wait. The
-canonical case is an **escalation**: "on this alarm, check X, wait 10m, if still open run Y, wait
-1h, page a human." A flow is **instantiated per open alarm**, gated on the alarm still being open,
-and **cancelled on resolve or ack**. It depends on a durable per-incident timer
-([time](/architecture/time/)), so it lands after the leaf step kinds and time exist.
+The same causation lineage the cycle guard walks also powers a read-side **trace**: a
+**correlation id** that threads a whole causal chain end to end. A datapoint fires an
+**event**, which opens an **alarm**, which triggers a **flow / action**, which runs a
+**function / command**, which may change a value and clear the alarm. The `alarm_id` links
+one alarm's own open / clear events; the **correlation id** links the *entire* chain, the
+originating event through every downstream event and action it caused. It is built on the
+existing causation lineage (an id stamped at the head and propagated along each caused
+edge), pure DX and observability sugar: it lets an operator see the chain at a glance and
+query "everything this one event set in motion."
 
-This is the platform's programmable layer: branching, parallel steps, `wait`, and acting (`notify`,
-`command` a device, page a human). A flow does **not** author events; it acts, and any effect it has
-on the world returns as ordinary data. It is a **bounded** workflow engine, not a Turing-complete
-one: finite steps, lineage-guarded (above), with a depth/step cap as defense. That is enough for the
-real cases, an escalation, a time-bound access grant, an AI-troubleshooting flow that fetches more
-data and analyzes it, while staying safe to run. A future drag-and-drop editor edits flows.
+It is **not** a datapoint kind and **not** a stored span subsystem, just an id carried on
+the chain and queryable. No new tables, no tracing backend.
+
+## Flows: the multi-step action
+
+A **flow** is a bounded multi-step action: a **DAG of steps** (`notify`, `command`, `wait`, `branch`,
+`parallel`) over one alarm. It is **instantiated per open alarm**, gated on the alarm staying open,
+**cancelled on resolve or ack**, **cycle-guarded** by the same causation-lineage walk documented
+above, and **finite** by a depth / step cap. It depends on the durable per-incident timer
+([time](/architecture/time/)) for its `wait` steps.
+
+The canonical case is an **escalation**: remediate, `wait`, re-check the **real datapoint** the alarm
+is built on, and escalate if it is unchanged ("run the fix, wait 10m, if the datapoint still trips
+page a human, wait 1h, page the next tier"). Two more cases fall out of the same engine: a **time-bound
+access grant** (grant, `wait`, revoke) and an **AI-troubleshooting flow** that fetches more data, has
+the model analyze it, and routes on the verdict.
+
+This is the platform's programmable layer, and it is deliberately a **bounded** workflow engine, not a
+Turing-complete one: a finite step list, lineage-guarded (above), with a depth / step cap as defense.
+A flow does **not** author events; it acts, and any effect it has on the world returns as ordinary
+data (which is the only edge that could re-open its alarm, and that edge is lineage-bounded). A future
+drag-and-drop editor edits flows.
+
+**Build phasing.** The architecture above is **complete and decided now**; only the *build* is phased.
+**v1 ships single-step actions**: one `notify` or one `command` per action, the cases that cover most
+of the value. **Multi-step flows are built shortly after**, once the leaf step kinds and the time
+primitive exist; nothing in the design changes when they land, the step list simply grows past one.
 
 ## Namespacing
 
@@ -213,7 +238,8 @@ A command is **not a table**: it is a `component_template_version.spec` declarat
   resolving to different concrete commands by component type / model through the
   cascade (the edge dispatch and the `command` declaration already exist in
   [templates](/architecture/templates/) / [nodes](/architecture/nodes/); this is the abstract-to-concrete resolution layer above them).
-- **Flows** (above), the multi-step action, behind the leaf step kinds and the time primitive.
+- **Flows** (above): fully designed now, **build** phased behind the leaf step kinds and the time
+  primitive (v1 ships single-step actions).
 
 ## Open items
 

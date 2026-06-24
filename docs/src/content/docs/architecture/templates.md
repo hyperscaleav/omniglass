@@ -7,11 +7,12 @@ sidebar:
     variant: caution
 ---
 
-Templates let an operator define a device or system class once and stamp it onto many instances, with each instance pinned to a frozen version so its keys and roles never shift underneath it. Templates are the **immutable, versioned shapes**
+Templates let an operator define a device or system class once and stamp it onto many instances, with each instance pinned to a frozen version so its keys and roles never shift underneath it. Templates are the **immutable, versioned, content-hashable shapes**
 that instances pin. A [component](/architecture/core-entities/) pins a `component_template_version`;
 a [system](/architecture/core-entities/) pins a `system_template_version`. Editing a template mints a
-**new version**; an instance pins one frozen version (or tracks `latest`) and re-pointing is explicit,
-so the keys and roles never change under an instance.
+**new version**; an instance pins one frozen version, or tracks `latest`, or follows a channel
+(`stable` / `beta`), and re-pointing is explicit, so the keys and roles never change under a pinned
+instance.
 
 ## The component_template: the device shape
 
@@ -71,8 +72,14 @@ promotion ladder, deferred.
   [`variable_type`](/architecture/variables/) shapes, bound to actual secret values at assignment
   (credentials).
 - **Tags.** Default org labels seeded onto the component (`category: audio-dsp`).
-- **Alarms / health.** Default `event_rule`s the template ships (the Zabbix-trigger mirror: fan
-  stalled, sustained high temp), owned in detail by the [alarm spoke](/architecture/alarms-actions/).
+- **Alarms / health.** Default `event_rule`s the template ships, the conditions worth catching for
+  its device class (the Zabbix-trigger mirror: a fan-stall on a DSP template, a person-entered event
+  on an occupancy template). The alarming policy lives on the **template**, not on the
+  `datapoint_type`: a `datapoint_type` is pure identity (kind / unit / domain / validation / fusion)
+  and carries no event rules. A *truly universal* default (e.g. `cpu.utilization > 0.9` everywhere) is
+  an official **rule-set scoped by a group or key filter**, resolved through the cascade (the rule
+  accumulation mechanism), not a `datapoint_type` attribute. Owned in detail by the
+  [alarm spoke](/architecture/alarms-actions/).
 - **Function trigger params are cascade bases.** A function's `interval: 30s` is the floor of the
   cascade, overridable by a location, group, or the instance (the `poll_interval` example in
   [cascade](/architecture/cascade/)), not a hard value.
@@ -88,15 +95,26 @@ is one action, as cheap as "add host".
 
 ## The system_template: the composition shape
 
-A **`system_template`** is the parallel shape for a [system](/architecture/core-entities/): it
-declares a system's composition, its members and their roles, and the system-level rules and KPIs that
-only the system can see. Like a component template it is mutable, and **editing mints a new version**;
-a system pins the **immutable** `system_template_version` snapshot.
+A **`system_template`** is first-class and **fully parallel to the component_template**: it declares a
+system's composition, its members and their roles, and the system-level rules and KPIs that only the
+system can see. Like a component template it is mutable, **versioned**, and **content-hashable** (each
+`system_template_version` is a stable artifact, addressable by a content hash); **editing mints a new
+version** and a system pins the **immutable** `system_template_version` snapshot.
 
-- **The frozen bill of materials.** A `system_template_version` carries a **`system_template_member`**
-  for each role: the `(role, component_template_version, health_role)` tuple that pins which device
-  shape fills each role and how it counts in the health rollup. The role validates against the
-  system's frozen version so an instance assignment never expires under it.
+- **The frozen bill of materials.** A `system_template_version` pins **specific
+  `component_template_version`s**: it carries a **`system_template_member`** for each role, the
+  `(role, component_template_version, health_role)` tuple that freezes which exact device shape (down
+  to the version) fills each role and how it counts in the health rollup. The whole BOM (members +
+  roles + `health_role`s) is frozen into the version, so the role validates against the system's frozen
+  version and an instance assignment never expires under it.
+- **Pin, latest, or a channel.** A system (the instance) either pins a **specific
+  `system_template_version`**, or tracks **`latest`**, or follows a **channel** (e.g. `stable` /
+  `beta`). This is the same pin-vs-channel choice a component makes.
+- **Edits never silently change a pinned system.** An edit **mints a new version** and does **not**
+  move a pinned system or its pinned component versions; only instances tracking `latest` or a channel
+  pick the change up (and a channel only when the new version is promoted into it). The immutability
+  guarantee is explicit: a frozen system and its frozen BOM stay exactly as pinned until an operator
+  re-points them.
 - **`health_role` rides the frozen version.** Each member declares `required` / `redundant` /
   `informational`, the knob for the built-in role-aware health rollup ([health](/architecture/health/)).
   It lives on the `system_template_member` (not on the component) because the same device can be
@@ -134,7 +152,7 @@ Locations have no template: the `location_type` is the only shape-definer
 
 - The `args` typing vocabulary for commands (scalar types first, structured args later) and how
   command results beyond `success-when` map to the `action` row fields.
-- Whether a template may declare default `event_rule`s inline or only reference them (co-design with
-  the alarm spoke).
+- Whether a template's default `event_rule`s are declared inline on the version or referenced (the
+  policy is template-authored either way; this is the storage shape, co-designed with the alarm spoke).
 - Whether a `LocationTemplate` (`kind` is reserved in the collection apiVersion) is ever introduced,
   or locations stay template-less.

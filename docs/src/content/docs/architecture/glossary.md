@@ -43,7 +43,7 @@ This is the **authoritative glossary**: every official term in the architecture,
 | **credential** | An access secret with a structured shape, a pluggable `SecretProvider` (inline or external), and a lifecycle (refresh / rotation / expiry); read is `secret:read`-gated and every decrypt audited. Template-driven. |
 | **variable** | A free interpolated value (a macro): `$var:<name>`, resolved global→template→instance down the cascade; org-keyed, not signal-bound, no observed side. |
 | **drift** | The gap between config's declared value and its observed datapoint, on one signal key. |
-| **reconcile** | Per-[config](/architecture/variables/) item policy for drift, one of three modes: `observe` (record drift, no alarm), `warn` (alarm at warning severity), `enforce` (call the set function to converge, alarm on set failure). Adopting the observed value as declared is a separate one-shot import action, not a mode. |
+| **reconcile** | Per-[config](/architecture/variables/) item policy for drift, one of three modes: `audit` (record drift, no alarm), `warn` (alarm at warning severity), `enforce` (call the set function to converge, alarm on set failure). Adopting the observed value as declared is a separate one-shot import action, not a mode. |
 | **cascade** | Resolves the effective config / variable value (declared or template default): global, component_template, system_template, then the location / system / component trees (weight-free, pure depth); most-specific (deepest) wins. Type is not a layer (it resolves via a group filter); groups are placed by weight on the same specificity scale. |
 | **edge parse** | A function parses a raw payload into datapoints on the node, the edge half of [collection](/architecture/collection/). There is no server-side transform rule. |
 | **calc_rule** | datapoint(s) to datapoint (calculated): cross-key / system-level derivation. (Same-key multi-source reconcile is the key's fusion_policy.) |
@@ -60,6 +60,7 @@ This is the **authoritative glossary**: every official term in the architecture,
 | **disagree(A,B)** | A condition operator comparing two provenances or sources of one key. Drift, config drift, conflict. Keeps the DAG. |
 | **divergence** | Any two provenances or sources of one key that disagree. The universal anomaly signal. |
 | **lineage (on-row)** | A derived row carries its own lineage; no execution table. The rule version is the backtest hinge. |
+| **correlation id** | A read-side trace id threading one causal chain end to end: the originating event through every downstream event and action it caused (event -> alarm -> flow/action -> command). Built on the causation lineage; `alarm_id` links one alarm's open/clear events, the correlation id links the whole chain. DX/observability sugar, not a datapoint kind or a stored span subsystem. |
 | **schedule** | Config: a recurring definition (cron/rrule + IANA tz + what it triggers). |
 | **timer** | The clock worker's pending-fire working set (schedule-tick / for-sustain / runbook-wait / watchdog); drained SKIP-LOCKED; not history. |
 | **component** | A deployed instance (device/app/service); owns datapoints; a variable-depth tree; pins a component_template_version; classified by component_type. |

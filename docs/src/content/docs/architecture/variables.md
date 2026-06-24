@@ -71,8 +71,9 @@ When a config item has both a declared and an observed value, their gap is **dri
 everywhere, with the declared side sourced from config. A per-item `reconcile` policy turns drift
 into action:
 
-- **`observe`** (default): detect and record the drift, raise **no** alarm. Drift stays visible
-  through [`disagree`](/architecture/datapoints/#disagree-and-divergence) and the config view, silently.
+- **`audit`** (default): record the drift, raise **no** alarm. Log that it differs and go get the
+  info; drift stays visible through [`disagree`](/architecture/datapoints/#disagree-and-divergence)
+  and the config view, silently.
 - **`warn`**: raise an alarm for the drift, at **warning** severity. Surface it, change nothing.
 - **`enforce`**: declared wins. Call the template's **set** function to push the value back; that
   issues a command, writes an [`intended`](/architecture/datapoints/#intended-the-declared-effect-of-a-command)
@@ -86,8 +87,8 @@ The power here is that **remediation needs no rule**. You do not author an `even
 fix a setting; you declare the value, set the policy to `enforce`, and the cascade plus drift plus
 the set function close the loop. Reconcile runs **per item**, so one reconciled setting is better than
 none; the capability of any item is simply which of its get/set functions the template has bound (get
-only gives observe or warn on drift; a set too makes it enforceable). The data-mediated loop (set → device →
-observe → drift clears) is the one guarded at action dispatch
+only gives audit or warn on drift; a set too makes it enforceable). The data-mediated loop (set -> device ->
+observe -> drift clears) is the one guarded at action dispatch
 ([alarms and actions](/architecture/alarms-actions/)), with a per-item backoff so a device that
 refuses a write does not hammer.
 
