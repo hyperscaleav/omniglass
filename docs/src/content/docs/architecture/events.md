@@ -13,9 +13,9 @@ An **event** is *our semantic assertion that something happened*, in our vocabul
 
 A datapoint and an event are different shapes (a datapoint has a value; an event is an occurrence), so each gets a registry named for what it holds. The datapoint half is [`datapoint_type`](/architecture/datapoints/#the-datapoint_type-registry); the event half is `event_type`. We do **not** force them into one universal registry, that would be the false unification the rest of the model avoids.
 
-**`event_type`** describes every event key: `(namespace, name, display_name, payload_schema, ...)`, with the same official/private shadow as the datapoint registry (namespace shadow pattern). Declaring event types (`call.started`, `cable.unplugged`, `command.sent`) is first-class and valuable: it gives events a known schema, makes them inspectable, and is what lets an event rule promote a raw log line into a *registered* event. An event key is registered here; an unregistered occurrence stays a `log_datapoint` line until a rule promotes it.
+**`event_type`** describes every event key: `(name, display_name, payload_schema, official, ...)`, with the same **`official` boolean** as the datapoint registry marking shipped-canonical versus org-local rows. Declaring event types (`call.started`, `cable.unplugged`, `command.sent`) is first-class and valuable: it gives events a known schema, makes them inspectable, and is what lets an event rule promote a raw log line into a *registered* event. An event key is registered here; an unregistered occurrence stays a `log_datapoint` line until a rule promotes it.
 
-The naming convention is consistent: a `_type` registry defines what a thing *is*, named for the thing (`datapoint_type`, `event_type`, like `component_type`, `interface_type`). Events get their own registry because an event is a different shape from a datapoint. Namespaces work the same way as for datapoints: see [official and local](/architecture/datapoints/#namespaces-official-and-local).
+The naming convention is consistent: a `_type` registry defines what a thing *is*, named for the thing (`datapoint_type`, `event_type`, like `component_type`, `interface_type`). Events get their own registry because an event is a different shape from a datapoint. The `official` boolean works the same way as for datapoints: see [the `official` boolean](/architecture/datapoints/#the-official-boolean-shipped-canonical-versus-org-local).
 
 ## Events: caught, caused, derived, scheduled
 
@@ -35,6 +35,6 @@ The `event` row is the semantic-occurrence log; `event_type` is its key registry
 | Table | Key columns | Notes |
 |---|---|---|
 | `event` | id, ts, key, **origin** (caught/caused/derived/scheduled), owner arc, payload (jsonb), correlation_id, **alarm_id** (nullable), + lineage | the semantic-occurrence log; a momentary event has null `alarm_id`, an alarm edge carries it. A schedule fire is an event with `origin=scheduled` (no separate schedule table) |
-| `event_type` | (namespace, name), display_name, **payload_schema (jsonb)** | the event-key registry; lets an event_rule promote a raw log line into a registered event. Official namespace null, private shadow |
+| `event_type` | name, display_name, **payload_schema (jsonb)**, **official** | the event-key registry; lets an event_rule promote a raw log line into a registered event. The `official` boolean marks shipped-canonical versus org-local |
 
 Related: [calculations](/architecture/calculations/) (the `event_rule` that produces events), [alarms and actions](/architecture/alarms-actions/) (alarms and the response layer), [datapoints](/architecture/datapoints/) (the data events read), and [the glossary](/architecture/glossary/).

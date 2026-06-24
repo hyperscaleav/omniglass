@@ -7,7 +7,7 @@ sidebar:
     variant: caution
 ---
 
-Leaf of the [architecture spine](/architecture/). A **group** is a named set of entities that cuts
+A group lets an operator gather entities that the structural trees keep apart, so you can configure or grant access to "all AV displays" or "everything in this pilot" by attribute or by hand. A **group** is a named set of entities that cuts
 across the structural trees. The structural tree handles config by position and kind; groups handle
 config by attribute or by a hand-picked set. One "set of entities" primitive serves two jobs: a
 [cascade](/architecture/cascade/) overlay and an [access](/architecture/identity-access/) scope, which

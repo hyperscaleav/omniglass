@@ -7,9 +7,8 @@ sidebar:
     variant: caution
 ---
 
-Leaf of the [architecture spine](/architecture/). The structural entities you operate, how they
-nest, and how everything else (datapoints, events, alarms, config) names exactly one of them as its
-owner. The shapes these entities pin are [templates](/architecture/templates/); the data they own is
+Core entities are the things an operator actually manages, the component, system, location, and node, and giving each its own identity is what lets every datapoint, event, alarm, and config name exactly one of them as its owner. This page covers the structural entities, how they
+nest, and how everything else names one of them as owner. The shapes these entities pin are [templates](/architecture/templates/); the data they own is
 [datapoints](/architecture/datapoints/); the physical tables are [storage](/architecture/storage/).
 
 ## The estate: four structural entities

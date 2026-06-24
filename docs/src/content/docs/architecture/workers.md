@@ -7,8 +7,7 @@ sidebar:
     variant: caution
 ---
 
-Leaf of the [architecture spine](/architecture/). How background processing is structured: one
-worker machinery, several worklists, no bespoke loops.
+Workers are how Omniglass does the steady background work, deriving datapoints, sending actions, firing timers, reconciling drift, on one machinery instead of a pile of bespoke loops, so the operator gets crash recovery and exactly-once behavior for free everywhere.
 
 ## One machinery, several worklists
 
@@ -51,7 +50,7 @@ pass. Parsing into datapoints is **not** a worker stage; it happens at the edge
 This is the axis that decides almost everything else about a subsystem.
 
 - **Stateless** (owner resolution, calc): output is a pure function of (input, rules, snapshot).
-  Order-free, replayable for free, no cross-event state. Write pattern: **append** (a batched
+  Order-free, safe to backtest for free, no cross-event state. Write pattern: **append** (a batched
   multi-row INSERT).
 - **Stateful** (the alarm lifecycle): maintains persisted state across events (the open alarm), so
   open and resolve depend on prior state. Consequences:
@@ -60,7 +59,7 @@ This is the axis that decides almost everything else about a subsystem.
     worklist by state key.
   - Write pattern: **guarded conditional upsert** (`INSERT ... ON CONFLICT` / `UPDATE ... WHERE`),
     with a **partial unique index** as the concurrency-correctness backstop.
-  - **Replay is harder**: it must process each entity's series in order.
+  - **Backtest is harder**: it must process each entity's series in order.
 
 ## Lineage the engine stamps
 
@@ -73,11 +72,12 @@ the evidence of its rule's run, and a fan-out (one execution to N datapoints) st
 ## Backtest: re-run a changed rule over retained datapoints
 
 The model is **not event-sourced**: current state lives in the datapoint tables and the `alarm` /
-`action` rows directly, not reconstructed by replaying a log. But a changed `calc_rule` or
-`event_rule` can be **backtested**: re-run the new rule version over the **retained datapoints** and
-diff its output against what the old version produced, without touching live state. Only the
-**calculated** and **event-derived** slices are server-rule-derived, so only they re-derive.
-Everything else does not:
+`action` rows directly, never reconstructed from a log. Omniglass does **not** re-run history to rebuild
+events or state. But a changed `calc_rule` or `event_rule` can be **backtested**: a read-only
+what-if that re-runs the new rule version over the **retained datapoints** and diffs its output
+against what the old version produced, purely as DX sugar, without writing a new event or touching
+live state. Only the **calculated** and **event-derived** slices are server-rule-derived, so only
+they re-derive. Everything else does not:
 
 - **observed** datapoints are parsed at the edge and are not re-derived server-side (the raw payload
   is not stored, so there is no server-side re-parse);
@@ -86,10 +86,10 @@ Everything else does not:
 - **no-data staleness** re-derives from the datapoint gaps ([time](/architecture/time/)).
 
 Two modes, switched by the `source_rule` version: **historical** uses the original rule versions
-recorded on each derived row (reconstructing what the system actually computed, for audit), and
+recorded on each derived row (showing what the system actually computed, for audit), and
 **prospective** uses the current rule versions (re-deriving as if today's rules had always applied,
-for testing a rule change). **Replay writes to a shadow, never live**: promoting a result to live is
-a separate, explicit, audited step. Prospective replay is **windowed by default** (over the last 30
+for testing a rule change). **A backtest writes to a shadow, never live**: promoting a result to live is
+a separate, explicit, audited step. A prospective backtest is **windowed by default** (over the last 30
 days), with whole-history the explicit, heavier option.
 
 ## Reconcile: the desired-state control loop

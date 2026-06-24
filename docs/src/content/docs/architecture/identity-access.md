@@ -7,7 +7,7 @@ sidebar:
     variant: caution
 ---
 
-Component document of [the architecture spine](/architecture/). Who may call the platform, and what each caller can see and do. Enforcement lives entirely in the app (the Storage Gateway is the only path to the database); scope is built on the cascade's groups ([cascade](/architecture/cascade/)). This doc says what IAM **is**.
+Identity and access is how an operator controls who may call the platform and which slice of the estate each caller can see and act on, enforced entirely in the app so "forgot to filter" cannot happen. Enforcement lives in the Storage Gateway (the only path to the database); scope is built on the cascade's groups ([cascade](/architecture/cascade/)). This doc says what IAM **is**.
 
 ## The model in one breath
 
@@ -54,14 +54,14 @@ The `group` membership mechanism (static list or dynamic filter) is shared acros
 
 So `group` appears on **both sides of authZ**: user-groups as subjects, entity-groups as object scopes. (Unifying all kinds into a single polymorphic `group` is deferred; revisit if they converge.)
 
-## Roles, namespaces, and the role hierarchy
+## Roles and the role hierarchy
 
-A role is a **capability set**: permissions per `(resource, action)`. Roles live in a `role` table with `(namespace, id)` primary key, where namespace is one of:
+A role is a **capability set**: permissions per `(resource, action)`. Roles live in a `role` table keyed by a globally unique `id`, each carrying an **`official` boolean**:
 
-- **`official`**: ship-with the binary, seeded via the boot phase. A release can patch a default permission via `ON CONFLICT DO UPDATE` on the seed.
-- **`private`**: operator-created via the IAM API.
+- **`official: true`**: ship-with the binary, seeded via the boot phase. A release can patch a default permission via `ON CONFLICT DO UPDATE` on the seed.
+- **`official: false`**: operator-created via the IAM API.
 
-**No overrides**: role ids are globally unique in practice (the create paths refuse `private:X` if `official:X` exists, and the seed phase fails-safe with a loud warning if it would collide with an existing `private:X`). This is a deliberate divergence from `datapoint_type` (which permits override): role override risks lockout with no compensating use case.
+**No overrides**: a role id is globally unique across both kinds (the create paths refuse an `official: false` role whose id matches an `official: true` one, and the seed phase fails-safe with a loud warning if it would collide with an existing operator role). This is a deliberate divergence from `datapoint_type` (where an `official: false` row may shadow an `official: true` one): role override risks lockout with no compensating use case, so a role id resolves to exactly one row.
 
 ### The four official roles
 
@@ -80,12 +80,12 @@ Linear inheritance (transitive): each role's effective permissions are the union
 
 ### Custom roles
 
-Operators create `private:<id>` roles via the IAM API with a chosen permission set, optionally inheriting from `official:viewer` (or any other role). Inheritance namespace rules:
+Operators create `official: false` roles via the IAM API with a chosen permission set, optionally inheriting from `viewer` (or any other role). Inheritance rules:
 
-- `official` roles may inherit only from `official` roles (enforced at seed time).
-- `private` roles may inherit from `private` or `official` roles.
+- An `official: true` role may inherit only from other `official: true` roles (enforced at seed time).
+- An `official: false` role may inherit from any role.
 
-Because of the no-override rule, `inherits: [viewer]` is unambiguous (every id resolves to exactly one namespace).
+Because of the no-override rule, `inherits: [viewer]` is unambiguous (every id resolves to exactly one role).
 
 ### Permission format
 
@@ -234,7 +234,7 @@ The IAM subjects and their grants; the physical layout lives on [storage](/archi
 | Table | Key columns | Notes |
 |---|---|---|
 | `principal` (+ per-kind `human` / `service` / `node`) | id, kind, ... | subjects; a `node` carries labels, last_heartbeat_at, and its bound credential |
-| `role` | (namespace, name), permissions (jsonb: `<resource>:<action>`) | RBAC capability set; ship viewer/operator/admin/owner + custom |
+| `role` | id, **official**, permissions (jsonb: `<resource>:<action>`) | RBAC capability set; ship viewer/operator/admin/owner + custom |
 | `principal_grant` | (principal_id, role, **scope**) | role x scope; scope = a structural node, an entity-group, or `all`; additive |
 
 ## Open items

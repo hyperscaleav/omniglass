@@ -1,6 +1,6 @@
 ---
 title: Datapoints
-description: "The core data model: datapoints and their three kinds, provenance, the registries, namespaces, divergence, fusion, and how a value reads back."
+description: "The core data model: datapoints and their three kinds, provenance, the registries, the official boolean, divergence, fusion, and how a value reads back."
 sidebar:
   badge:
     text: Spec
@@ -53,7 +53,7 @@ A raw occurrence we have not normalized (a syslog line, a raw webhook frame) lan
 
 A datapoint and an event are different shapes (a datapoint has a value; an event is an occurrence), so each gets a registry named for what it holds. The event half is [`event_type`](/architecture/events/); the datapoint half is `datapoint_type`. We do **not** force them into one universal registry, that would be the false unification the rest of this model avoids.
 
-**`datapoint_type`** describes every datapoint key: `(namespace, name, kind, value_type, unit, fusion_policy)`, with the official/private shadow (namespace shadow pattern). One registry across all three datapoint kinds (metric/state/log). The kind is decided by the key, not at runtime: the compiler bakes each key's kind into the edge unit, so a value routes to the right table with no runtime lookup. `fusion_policy` is the built-in, read-time multi-source reconcile carried on the key (see [Fusion](#fusion)). A key names a **measurement, never its owner** (`temperature`, not `room.temperature`), with snake_case segments in a dot hierarchy and the unit in the `unit` field (`fan.speed` + `unit: rpm`, not `fan_rpm`); the ship-with official set lives in `internal/registry/defaults.yaml`. Adding or naming one: the `canonical-datapoint` skill.
+**`datapoint_type`** describes every datapoint key: `(name, kind, value_type, unit, fusion_policy, official)`, with the **`official` boolean** marking shipped-canonical versus org-local rows. One registry across all three datapoint kinds (metric/state/log). The kind is decided by the key, not at runtime: the compiler bakes each key's kind into the edge unit, so a value routes to the right table with no runtime lookup. `fusion_policy` is the built-in, read-time multi-source reconcile carried on the key (see [Fusion](#fusion)). A key names a **measurement, never its owner** (`temperature`, not `room.temperature`), with snake_case segments in a dot hierarchy and the unit in the `unit` field (`fan.speed` + `unit: rpm`, not `fan_rpm`); the ship-with official set lives in `internal/registry/defaults.yaml`. Adding or naming one: the `canonical-datapoint` skill.
 
 The naming convention is consistent: a `_type` registry defines what a thing *is*, named for the thing (`datapoint_type`, `event_type`, like `component_type`, `interface_type`). `datapoint_type` spans the three datapoint kinds, and events get their own registry because an event is a different shape.
 
@@ -61,16 +61,16 @@ The naming convention is consistent: a `_type` registry defines what a thing *is
 
 **Validation is enforced on ingest, under a policy.** A datapoint_type's `validation` (`{min,max}` for a metric, `{values:[...]}` for a state) is checked when an observed value lands, governed by a `validation_policy` config mode: **bypass** (skip), **audit** (the default: write the value but emit a `datapoint.validation_failed` event), or **enforce** (hold the value back from the typed series, emit the event). A validation-enforce reject emits a `collection.failed` event carrying the raw, so the value is never lost, it stays backfillable once the registry or the template is corrected. The point is visibility: an out-of-range or unmapped value means a template author declared a type the device disagrees with, so the violation surfaces as an owner-attributed event operators and admins see. The mode is a single global setting today; resolving it per-entity down the cascade (global, location, system, component) is the follow-on, gated on the cascade resolver.
 
-## Namespaces: official and local
+## The `official` boolean: shipped-canonical versus org-local
 
-Every key is `(namespace, name)`, and there are only **two** namespaces, separated by where trust comes from:
+Every registry row carries an **`official` boolean**, separating the two by where trust comes from:
 
-- **official** (the shipped, signed canonical set): trusted because it is **in the distribution**, not because of a label. You cannot spoof "official" any more than you can fake being in the release. This is the namespace normalization rides on, the same `video.input` across every vendor.
-- **org** (the registry's local / `private` namespace): everything a deployment authors or imports, plus any datatypes an imported template drags in. Per-database isolation makes `org` unambiguous, since one database is one tenant.
+- **`official: true`** (the shipped, signed canonical set): trusted because it is **in the distribution**, not because of a label. You cannot spoof being official any more than you can fake being in the release. This is what normalization rides on, the same `video.input` across every vendor.
+- **`official: false`** (operator- or org-authored): everything a deployment authors or imports, plus any datatypes an imported template drags in. Per-database isolation makes these unambiguous, since one database is one tenant.
 
-**Sharing happens at the template level**, a repo or marketplace of templates, not a federated signal namespace. An imported template is either **linked** (it tracks its upstream and updates) or **copied** (forked into `org`, diverged); either way the datatypes it introduces land in **org**. There is deliberately no `vendor:` or `community:` trust tier: a namespace string is not a trust primitive, so without signing or a central authority it would be spoofable theater. A vendor pack earns trust the one real way, by being **blessed into the official distribution** (shipped and signed by us), which is also the promotion path for any widely useful local signal.
+**Sharing happens at the template level**, a repo or marketplace of templates, not a federated signal trust tier. An imported template is either **linked** (it tracks its upstream and updates) or **copied** (forked locally, diverged); either way the datatypes it introduces land as **`official: false`** rows. There is deliberately no `vendor:` or `community:` trust tier: a flag an operator can set is not a trust primitive, so without signing or a central authority it would be spoofable theater. A vendor pack earns trust the one real way, by being **blessed into the official distribution** (shipped and signed by us, `official: true`), which is also the promotion path for any widely useful local signal.
 
-**Governance is curation, not runtime enforcement.** Omniglass is a Postgres database an operator runs, so nothing stops a self-hoster inserting into `org` or editing an official row in their own database. We vouch only for what we **ship**; you vet what you import, it lands in your `org`, and you own the risk. Commands use the same namespace model in their own registry.
+**Governance is curation, not runtime enforcement.** Omniglass is a Postgres database an operator runs, so nothing stops a self-hoster inserting an `official: false` row or editing an `official: true` row in their own database. We vouch only for what we **ship**; you vet what you import, it lands as `official: false`, and you own the risk. Commands use the same `official` boolean in their own registry.
 
 ## Provenance: how we know a value
 
@@ -189,7 +189,7 @@ The key registry that types these tables is `datapoint_type` (one registry acros
 
 | Table | Key columns | Notes |
 |---|---|---|
-| `datapoint_type` | (namespace, name), kind (metric/state/log), value_type, unit, **fusion_policy**, validation (jsonb) | the one key registry across all datapoint kinds; official namespace null, private shadow on assignment; referenced by templates |
+| `datapoint_type` | name, kind (metric/state/log), value_type, unit, **fusion_policy**, validation (jsonb), **official** | the one key registry across all datapoint kinds; the `official` boolean marks shipped-canonical versus org-local; referenced by templates |
 
 ## The pipeline, end to end
 

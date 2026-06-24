@@ -7,7 +7,7 @@ sidebar:
     variant: caution
 ---
 
-Leaf of the [architecture spine](/architecture/). The day-one AI seam and its guardrails. The
+AI gives an operator a second opinion that is always traceable and never acts on its own, and this page is the seam and the guardrails that hold that line. The
 contract exists **before any model ships**, because retrofitting provenance and the approval
 boundary is the expensive part. This page grows as AI features land; the principles below are
 the fixed frame.

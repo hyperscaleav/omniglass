@@ -7,7 +7,7 @@ sidebar:
     variant: caution
 ---
 
-Leaf of the [architecture spine](/architecture/). Templates are the **immutable, versioned shapes**
+Templates let an operator define a device or system class once and stamp it onto many instances, with each instance pinned to a frozen version so its keys and roles never shift underneath it. Templates are the **immutable, versioned shapes**
 that instances pin. A [component](/architecture/core-entities/) pins a `component_template_version`;
 a [system](/architecture/core-entities/) pins a `system_template_version`. Editing a template mints a
 **new version**; an instance pins one frozen version (or tracks `latest`) and re-pointing is explicit,

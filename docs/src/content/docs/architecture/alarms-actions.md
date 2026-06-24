@@ -7,9 +7,7 @@ sidebar:
     variant: caution
 ---
 
-Component document of the
-[architecture overview](/architecture/). The response half of the
-pipeline: an **alarm** detects a condition and holds it; an **action** does
+Alarms and actions are how Omniglass turns a detected condition into a held incident and then into a response, so an operator gets paged, a ticket opens, or a device gets fixed without anyone watching a dashboard. An **alarm** detects a condition and holds it; an **action** does
 something about it. A simple action is a single step (a `notify`); a multi-step action is a
 **flow** (it branches, waits, and runs steps in parallel). Both alarm and action are **stateful
 entities that hold their state directly** (not event-sourced). The credentials an action uses to reach a sink live in
@@ -189,9 +187,9 @@ data and analyzes it, while staying safe to run. A future drag-and-drop editor e
 
 ## Namespacing
 
-Event rules, actions, and severity levels get the same **official / private**
-namespacing and `UpsertOfficial` as the rest of the registries. Official ships
-vetted; private is operator-authored and central to component templates (the
+Event rules, actions, and severity levels carry the same **`official` boolean**
+and `UpsertOfficial` as the rest of the registries. `official: true` rows ship
+vetted; `official: false` rows are operator-authored and central to component templates (the
 concrete way to notify or to run a command against a given device class).
 
 ## Storage
@@ -219,6 +217,6 @@ A command is **not a table**: it is a `component_template_version.spec` declarat
   effect re-opens its own alarm).
 - Whether `severity_levels` is purely a render lookup or also carries policy (e.g. a
   default ack-timeout per level).
-- The dead-letter surface and operator replay of failed actions.
+- The dead-letter surface and operator retry of failed actions.
 - Observed-use auth-failure feedback from actions into credential health
   (credentials open item).

@@ -7,7 +7,7 @@ sidebar:
     variant: caution
 ---
 
-Leaf of the [architecture spine](/architecture/). Omniglass is **opinionated about health**: it is a
+Health gives an operator the one answer that matters most, "is this system working right now?", as a first-class state on every entity that rolls up the service tree, not something you have to assemble out of raw rules. Omniglass is **opinionated about health**: it is a
 **first-class capability**, not a byproduct of a customizable rules engine. The *model* is
 deliberate (an ordered state, a health impact on alarms, a role-aware rollup up the system tree);
 the *carrier* is the ordinary datapoint pipeline, so health is stored, queried, trended, and alarmed
@@ -33,7 +33,7 @@ What is **first-class about the model** (not ordinary):
   reducer.
 
 What is **reused from the carrier**: storage, history, `current_value` projection, the SLI
-(`time_in_state` over health history), alarming (an `event_rule` on `health`), and replay. An
+(`time_in_state` over health history), alarming (an `event_rule` on `health`), and backtest. An
 operator who understands datapoints and alarms already understands health.
 
 ## Health is built from alarms

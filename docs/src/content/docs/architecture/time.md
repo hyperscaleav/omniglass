@@ -7,8 +7,7 @@ sidebar:
     variant: caution
 ---
 
-Leaf of the [architecture spine](/architecture/). The one primitive that manufactures events
-from the passage of time, so the rest of the pipeline can stay purely event-driven.
+Time lets an operator alarm on things that produce no event of their own, "10 minutes elapsed", "it is 8am Monday", "the data stopped", by turning the passage of time into events the rest of the pipeline consumes.
 
 ## Why time needs a primitive
 
@@ -61,15 +60,15 @@ So every schedule fire is an `event` with `origin=scheduled`, and every other ti
 the entity it advances. No untracked fires, no double-logging, and the high-churn watchdog never
 floods an event log with its resets.
 
-## The replay split
+## The backtest split
 
-Time divides cleanly across the replay boundary:
+Time divides cleanly across the backtest boundary:
 
 - **Schedules and armed timers are ground truth.** The wall clock genuinely advanced and a digest
-  genuinely went out at 8am; you do not re-run the clock on replay, you replay the recorded
+  genuinely went out at 8am; a backtest does not re-run the clock, it reads the recorded
   `origin=scheduled` events as-is.
 - **No-data is derived.** The gap is *already in the recorded data* (the absence of datapoint rows
-  in a window), so replay re-detects the same gaps and re-emits the same staleness, no clock
+  in a window), so a backtest re-detects the same gaps and would re-emit the same staleness, no clock
   needed. At runtime it needs a real watchdog (you cannot know data is missing until the deadline
   passes), but logically it is a `calc_rule` reading arrival times.
 

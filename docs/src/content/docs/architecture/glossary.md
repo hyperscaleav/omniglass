@@ -27,8 +27,8 @@ This is the **authoritative glossary**: every official term in the architecture,
 | **key** | The identity of what is measured or asserted; registered in `datapoint_type`. |
 | **canonical signal** | A registered, owner-agnostic measurement name (`power.state`, not `room.power`); one comparable signal across every vendor. |
 | **owner / owner_kind** | A datapoint/event/alarm's subject, the exclusive-arc: `owner_kind` + the matching typed FK (`component_id`/`system_id`/`location_id`/`node_id`), or the singleton `global` (no FK), + CHECK. |
-| **datapoint_type** | Registry for datapoint keys: namespace, name, kind, value_type, unit, fusion_policy. Official/private shadow. |
-| **event_type** | Registry for event keys: namespace, name, display_name, payload_schema. Official/private shadow. |
+| **datapoint_type** | Registry for datapoint keys: name, kind, value_type, unit, fusion_policy, `official`. The `official` boolean marks shipped-canonical versus org-local. |
+| **event_type** | Registry for event keys: name, display_name, payload_schema, `official`. The `official` boolean marks shipped-canonical versus org-local. |
 | **provenance** | How we know a value: observed, calculated, intended. Per row. Declared intent is [config](/architecture/variables/). |
 | **observed** | Measured from a component. On-row lineage: `source_rule` (+ version), the edge function. |
 | **calculated** | Derived from other datapoints by a calc_rule. On-row lineage: `source_rule` (+ version), the calc_rule. Distinguished from observed by the `provenance` column. |
@@ -46,7 +46,7 @@ This is the **authoritative glossary**: every official term in the architecture,
 | **calc_rule** | datapoint(s) to datapoint (calculated): cross-key / system-level derivation. (Same-key multi-source reconcile is the key's fusion_policy.) |
 | **event_rule** | datapoint change to event: fire_criteria + optional clear_criteria (clear makes events alarm-paired); an optional `health` impact lets its alarm move the owner's health. No separate alarm or condition rule. |
 | **action_rule** | A subscription (Expr over events; alarms via edge events) wiring occurrences to actions. |
-| **discovery_rule** | *(deferred)* observed data creates components/systems/locations + their identity config; official/private. |
+| **discovery_rule** | *(deferred)* observed data creates components/systems/locations + their identity config; carries the `official` boolean. |
 | **event** | A discrete semantic occurrence the action layer reacts to. Keyed, point-in-time, owned via the arc. Not a datapoint. |
 | **origin** | How an event arose: caught, caused, derived, scheduled. |
 | **alarm** | One open-to-close incident: a stateful row driven by an event_rule's paired events; new row per open; keyed (event_rule, owner); optionally health-impacting while open. Not event-sourced. The ITSM anchor. |
@@ -58,7 +58,7 @@ This is the **authoritative glossary**: every official term in the architecture,
 | **schedule** | Config: a recurring definition (cron/rrule + IANA tz + what it triggers). |
 | **timer** | The clock worker's pending-fire working set (schedule-tick / for-sustain / runbook-wait / watchdog); drained SKIP-LOCKED; not history. |
 | **component** | A deployed instance (device/app/service); owns datapoints; a variable-depth tree; pins a component_template_version; classified by component_type. |
-| **component_type** | Classification + field schema + type-level defaults. Official/private. |
+| **component_type** | Classification + field schema + type-level defaults. Carries the `official` boolean. |
 | **component_template / _version** | The device shape (collection, commands, datapoint_types, defaults, alarms); the **immutable version** instances pin. |
 | **system** | A composition of components/subsystems (the service tree); pins a system_template_version; located at a location; classified by system_type. |
 | **system_template / _version** | The system shape; the immutable version is the snapshot instances pin. Carries a frozen BOM of member roles + health_role. |

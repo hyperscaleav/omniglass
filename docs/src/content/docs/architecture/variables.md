@@ -114,7 +114,8 @@ private_key}`.
 supplied by a pluggable **`SecretProvider`**: an env-var key by default, with **KMS, Vault, or an
 external secrets manager** behind the same seam and no model change (the off-platform-storage case is
 just an external provider). It is the same seam pattern as the
-[expression engine](/architecture/expressions/): one interface, swappable implementation.
+[storage backend](/architecture/files/#backends-swappable-behind-the-gateway): one interface, a
+swappable implementation, no caller changes when the provider does.
 
 **Read is permissioned and audited.** Sometimes a secret must be read in plaintext; that is a
 privileged, audited action. `secret:read` is an [IAM](/architecture/identity-access/) permission you
@@ -213,7 +214,7 @@ The shape registry, the config / variable cell, and the operator-label tables; t
 
 | Table | Key columns | Notes |
 |---|---|---|
-| `variable_type` | (namespace, name), schema (fields + **per-field secret**), refresh, validation | the **shape** registry (a scalar, or structured like `oauth2` / `ssh_credential` / `snmp_community`); official namespace null, private shadow |
+| `variable_type` | name, schema (fields + **per-field secret**), refresh, validation, **official** | the **shape** registry (a scalar, or structured like `oauth2` / `ssh_credential` / `snmp_community`); the `official` boolean marks shipped-canonical versus org-local |
 | `variable` | (name, **owner arc**), type, **declared_value** (secret fields encrypted), **linked_state** (-> state_datapoint, nullable), **observed_value**, reconcile | the config cell and the `$var:` cascade key; scope is the exclusive arc (template/component/system/location/global). Holds declared intent, optionally mirrors an observed datapoint for drift |
 | `tag` | name, applies_to, propagates | operator-label registry (no `_type`, no namespace) |
 | `tag_binding` | (scope_kind, scope_id, tag), value | union + override combinator ([cascade](/architecture/cascade/)) |

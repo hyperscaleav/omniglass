@@ -7,10 +7,8 @@ sidebar:
     variant: caution
 ---
 
-Component document of
-[the architecture overview](/architecture/). How the edge runtime gets
-its instructions and runs them: worklist pull, placement, executing tasks and
-commands, sessions, inbound demux, the job queue, reachability, and shipping
+A node is the edge runtime that lets an operator collect from and control gear no matter where it sits, by pulling its worklist from the server, running it on the spot, and shipping results back. This page covers how it gets its instructions and runs them: worklist pull, placement, executing tasks and
+commands, sessions, inbound demux, the task queue, reachability, and shipping
 telemetry. The declarative shape it executes lives in [templates](/architecture/templates/) and [collection](/architecture/collection/).
 
 ## The node
@@ -55,11 +53,11 @@ read-side aggregate over interface config, and the high-volume datapoint-write
 path never touches `interface.updated_at`. A no-op re-apply (identical rendered
 config) does not advance it, so nodes are never woken for nothing.
 
-## Placement (ELT, cascaded)
+## Placement (ETL, cascaded)
 
-Collection follows **ELT**: extract and load-shaping (including the extractor's Expr
-transform) default to the **edge**; resolve / bind / calc / evaluate default to
-**central**. Placement is a **cascaded property** ([cascade](/architecture/cascade/)), not a
+Collection follows **ETL**: extract **and transform** (including the extractor's Expr
+transform) default to the **edge**, then the shaped datapoints are **loaded** to the
+server, where resolve / bind / calc / evaluate default to **central**. Placement is a **cascaded property** ([cascade](/architecture/cascade/)), not a
 special mode: `placement: central` makes the **server itself the node target**, for
 cloud APIs, SaaS pollers, and inbound webhooks from external sources. A listener
 endpoint lives where placement puts it: the on-site node for LAN devices (lower
@@ -88,7 +86,7 @@ The built interface types (poll protocols and listeners), their per-task params,
 datapoints each emits are the collection **type catalog**: see
 [built interface types and their config](/architecture/collection/#built-interface-types-and-their-config).
 This page covers how the node *executes* them; the rest of this section is the runtime that wraps that
-catalog (reachability gating, sessions, the job queue, tick scheduling).
+catalog (reachability gating, sessions, the task queue, tick scheduling).
 
 ## Sessions
 
@@ -143,14 +141,14 @@ matcher set**:
 - an **unmatched** frame lands as `raw` (orphan, logged), so a
   missing matcher is a fixable gap that surfaces rather than failing silently.
 
-## The component job queue
+## The component task queue
 
-The node's work is the **component job queue** (distinct from the central
+The node's work is the **component task queue** (distinct from the central
 **rule engine's work queue** that processes derivation; see workers). It
-holds **poll jobs** (produce datapoints) and **command jobs** (from `run`
+holds **poll tasks** (produce datapoints) and **command tasks** (from `run`
 actions, produce a caused `event` + `action`-row status), and splits work by shape:
 
-- **discrete jobs** (pollers, commands): scheduled or triggered, request/response,
+- **discrete tasks** (pollers, commands): scheduled or triggered, request/response,
   **serialized into per-component lanes**. Component, not host, is the contention
   key: a server with two IPs is one component, and a reboot takes out both
   interfaces, so a per-host lane would run parallel work against the box you just
@@ -161,7 +159,7 @@ actions, produce a caused `event` + `action`-row status), and splits work by sha
   pollers (demuxed) or owning their connection.
 
 **Smart-wait gate.** After a disruptive command, the lane blocks until reachability
-reports the host back up, then releases the next job. The gate is a condition over
+reports the host back up, then releases the next task. The gate is a condition over
 live reachability read from the node's **local** copy, not a round-trip to the
 datapoint store; a fixed timeout is only the backstop.
 

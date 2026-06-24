@@ -7,8 +7,7 @@ sidebar:
     variant: caution
 ---
 
-Leaf of the [architecture spine](/architecture/). The who-did-what record: every mutation
-recorded once, at the source.
+The audit log is how an operator answers "who changed this, and to what?" without trusting memory: every mutation is recorded once, at the source.
 
 ## The model
 
@@ -20,8 +19,8 @@ recorded once, at the source.
   be forgotten or bypassed.
 - **The actor** is resolved by IAM ([identity and access](/architecture/identity-access/)): the
   user, service account, or node.
-- **Ground truth and replay source.** Operator-driven transitions and config changes are not
-  recomputable from collected data, so the audit log is what replay reads for them: alarm ack and
+- **Ground truth a backtest reads.** Operator-driven transitions and config changes are not
+  recomputable from collected data, so the audit log is what a rule backtest reads for them: alarm ack and
   snooze ([alarms and actions](/architecture/alarms-actions/)), and every config change a
   reconcile consumes.
 
@@ -40,7 +39,7 @@ high-assurance deployments is an open item.
 
 ## Who consumes it
 
-- **Replay**: operator transitions and config changes are replayed from here, not recomputed.
+- **Backtest**: a rule backtest reads operator transitions and config changes from here, since they are not recomputable.
 - **Reconcile**: config changes arrive as `audit_log` rows, so reconcile reacts to them.
 - **The alarm projection**: ack and snooze come from audit.
 

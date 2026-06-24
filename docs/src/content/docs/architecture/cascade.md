@@ -7,10 +7,7 @@ sidebar:
     variant: caution
 ---
 
-Component document of
-[architecture overview](/architecture/). How effective settings
-(config, variables, tags, rule-sets) are resolved for any entity, and how to explain why a
-given value won.
+The cascade lets an operator set a value once, high up, and have it apply everywhere below while still being overridable on any one entity, and then explain exactly why a given value won. It resolves the effective settings (config, variables, tags, rule-sets) for any entity.
 
 ## What it resolves
 

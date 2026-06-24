@@ -7,7 +7,7 @@ sidebar:
     variant: caution
 ---
 
-Leaf of the [architecture spine](/architecture/). This page describes **how storage works**, the
+Storage is the set of patterns every entity in Omniglass lands on, so an operator can trust that scope, audit, retention, and lineage behave the same way no matter which table the data lives in. This page describes **how storage works**, the
 patterns every other leaf's entities land on, not a per-table column dump. The column schemas live
 with each owning feature: [datapoints](/architecture/datapoints/#the-datapoint-tables) (the three
 kind-tables), [events](/architecture/events/#storage) (the `event` row), [alarms and
@@ -21,9 +21,10 @@ template tables), [collection](/architecture/collection/#storage) (interfaces an
 ## Conventions
 
 - **No `tenant_id`.** Isolation is per-database (a database per tenant); there is no tenant column
-  anywhere. The ship-with **official registries** (`interface_type`, `component_type`, `event_type`,
-  `variable_type`, and the official namespace of `datapoint_type`) are the namespace-null shared
-  layer, shadowed by private rows (the namespace shadow pattern).
+  anywhere. Every registry row (`datapoint_type`, `interface_type`, `component_type`, `event_type`,
+  `variable_type`) carries an **`official` boolean**: `official: true` rows are the ship-with
+  canonical set distributed with the binary, and `official: false` rows are operator- or
+  org-authored, local to this deployment.
 - **Three storage shapes.** **Ground-truth records** are append-only and immutable, each named for
   what it is: `log_datapoint` (a datapoint kind), `audit_log` (operator actions), and the standing
   `*_log` ground-truth logs (`session_log`, `internal_log`, plus the deferred `collection_log` /
@@ -47,8 +48,9 @@ template tables), [collection](/architecture/collection/#storage) (interfaces an
   (or all null for `global`). System-, location-, node-, and global-level datapoints are first-class.
   The full pattern is on [core entities](/architecture/core-entities/#ownership-the-exclusive-arc).
 - **Keys**: datapoints and events use a surrogate id plus `ts`; the key registry `datapoint_type`
-  uses the composite natural key `(namespace, name)`; structural entities are name-keyed; a `task`
-  is **content-addressed** (`hash(interface, kind, schedule, params)`); a `node` by name.
+  is keyed by `name` with an **`official` boolean** marking shipped-canonical versus org-local;
+  structural entities are name-keyed; a `task` is **content-addressed**
+  (`hash(interface, kind, schedule, params)`); a `node` by name.
 
 ## How the records relate
 
@@ -73,8 +75,8 @@ collection entities (`interface_type` / `interface` / `task`) on
 
 ## Ground-truth records
 
-The immutable, append-only records, each named for what it is. They are the lineage targets and the
-replay source; none is derived. The detailed columns of `audit_log` live on
+The immutable, append-only records, each named for what it is. They are the lineage targets and what
+a backtest reads; none is derived. The detailed columns of `audit_log` live on
 [audit](/architecture/audit/), `session_log` on [nodes](/architecture/nodes/#sessions); the rest is a
 compact list here because storage is their natural architectural home:
 

@@ -165,8 +165,8 @@ A handful of patterns hold everywhere, and they are why the model stays coherent
 - **Immutable template versions**: an instance pins a frozen template version (or tracks `latest`);
   editing mints a new version; re-pointing is explicit.
 - **On-row lineage**: a derived row carries its own evidence; there is no separate execution table.
-- **Official and private namespaces**: every registry and rule ships a curated official set, shadowed
-  by private operator rows; the URL never exposes the namespace.
+- **The `official` boolean**: every registry and rule row carries an `official` flag; `official: true`
+  is the curated ship-with set, `official: false` is operator-authored and local to a deployment.
 - **Views by default**: current-state reads are plain views, materialized only when a profile proves
   it necessary.
 - **Not event-sourced**: stateful entities (alarm, action) hold their state directly.

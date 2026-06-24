@@ -1,54 +1,37 @@
 ---
 title: Expressions
-description: One pluggable expression engine, Expr first, behind every operator-authored expression leaf.
+description: "Omniglass expressions: one engine built on Expr and extended with Omniglass functions, behind every operator-authored expression leaf."
 sidebar:
   badge:
     text: Spec
     variant: caution
 ---
 
-Omniglass evaluates small operator-authored expressions in many places: a transform's
+Expressions let an operator reshape and judge collected values in plain text wherever the platform needs a small computation, and there is exactly one language to learn for all of them. Omniglass evaluates these small operator-authored expressions in many places: a transform's
 `value` and `normalize` leaves, a step's `when` guard, an `event_rule`'s fire/clear
 criteria, a `calc_rule`'s reduce escape, a rule's `scope` predicate, a view/list `filter`,
-and a dynamic group's membership filter. All of these go through **one pluggable expression
-engine**, and the default engine is **Expr** ([expr-lang/expr](https://github.com/expr-lang/expr)).
+and a dynamic group's membership filter. All of these go through **one engine, Omniglass
+expressions**, built on **Expr** ([expr-lang/expr](https://github.com/expr-lang/expr)) and
+**extended** with Omniglass functions.
 
-## Pluggable from day one
+## One engine, built on Expr and extended
 
-The expression slot is **engine-typed**, not dialect-hardcoded. A single small interface
-sits between the platform and whatever evaluates the string, so the engine can be swapped or
-extended without touching the dozens of call sites or the authoring schema:
+There is one expression engine. It is **Expr** at the core, chosen for its **transform
+strength**: it is expression-oriented, has a rich built-in function and operator set well
+suited to reshaping collected values (arithmetic, string ops, slicing, mapping over arrays,
+null handling), compiles to a fast program, and is straightforward to sandbox. CEL is
+predicate-oriented and weaker at the value-reshaping that collection extractors do constantly
+(`raw / 100.0`, `int(groups[1])`, `node.gain`, `groups[2] == 'true'`), so Expr is the base.
 
-```go
-// Engine is the seam. One implementation ships as the default (Expr); others
-// register alongside it. The schema shape never changes when the dialect does.
-type Engine interface {
-    Name() string                                  // e.g. "expr"
-    Compile(src string, opts CompileOpts) (Program, error)
-    // Program.Eval(env) runs the compiled expression against a bound environment.
-}
-```
+On top of that base we add **Omniglass functions**: helpers the platform needs that Expr does
+not ship, including frame **`encode` / `decode`** and the output-format helpers (**hex /
+ascii / base64**) that binary and raw-TCP protocols need to pack and unpack wire bytes. The
+engine is **not pluggable**: there is one dialect everyone authors in, and a compiled program
+is cached by `(source, env-shape)` so compile cost is paid once. Keeping it to one engine is
+deliberate (YAGNI on multiple engines); where an expression is not even needed, prefer a
+straightforward native path over reaching for the engine at all.
 
-Every expression leaf carries an optional `engine` selector that defaults to `expr`. A
-compiled `Program` is cached by `(engine, source, env-shape)`, so compile cost is paid once.
-A dialect hardcoded across the compile sites makes a swap an N-site edit; this seam keeps it
-to exactly **one** swap point.
-
-## Why Expr is engine #1
-
-Expr is chosen for its **transform strength**: it is expression-oriented, has a rich
-built-in function and operator set well suited to reshaping collected values (arithmetic,
-string ops, slicing, mapping over arrays, null handling), compiles to a fast program, and is
-straightforward to sandbox. CEL is predicate-oriented and weaker at the value-reshaping that
-collection extractors do constantly (`raw / 100.0`, `int(groups[1])`, `node.gain`,
-`groups[2] == 'true'`). **All transforms use Expr.** Where an expression is not even needed,
-prefer a straightforward native path over reaching for an engine at all.
-
-CEL is not the standard dialect. If a real case ever wants a second dialect, it
-registers as another `Engine` implementation behind the same interface; it does not become
-the default and it does not change the schema.
-
-## Where the engine is used
+## Where expressions are used
 
 | Site | Leaf | What it evaluates |
 |---|---|---|

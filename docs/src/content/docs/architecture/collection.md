@@ -135,7 +135,7 @@ pass-through, marked `shape=native`. As with any function, a failed parse keeps 
 
 The built poll types and listeners (`interface_type.built = true`) and the operator config they read.
 The node translates each stored task + interface into a poller the collection engine runs; how the
-node *executes* these (tick scheduling, reachability gating, the job queue) is [nodes](/architecture/nodes/).
+node *executes* these (tick scheduling, reachability gating, the task queue) is [nodes](/architecture/nodes/).
 
 ### Built poll protocols and their config
 
@@ -227,12 +227,13 @@ delimiter, command echo handling, Q-SYS-style frame/checksum framing, and ssh sh
 
 ### Built listeners and their config
 
-A **listener** is inbound: an external system POSTs to an endpoint we expose,
-rather than us polling it (`mode: listen`, the stateless-listen cell of the
-collection matrix). `webhook` is the first built listener and is
-**server-hosted**: `placement: central` makes the server the endpoint for
-inbound external webhooks, so a webhook listen-task is **server-executed and
-unassigned** (`node_name IS NULL`); the server's `POST /webhooks/{path}` route is
+A **listener** is inbound: rather than us polling, **we wait for pushed data**
+(`mode: listen`). That data can arrive several ways, a webhook POST, an
+MQTT/subscribe stream, an SNMP trap or syslog line, or a line on a held stateful
+session; a webhook is one transport, not the definition. `webhook` is the first
+built listener and is **server-hosted**: `placement: central` makes the server the
+endpoint for inbound external webhooks, so a webhook listen-task is **server-executed
+and unassigned** (`node_name IS NULL`); the server's `POST /webhooks/{path}` route is
 its runtime, not a node tick.
 
 | field | where | meaning |
@@ -308,6 +309,12 @@ Each extractor is a typed section that locates a raw value with its protocol-spe
 then optionally transforms it with a single [Expr](/architecture/expressions/) expression in
 `value` (default identity).
 
+**One interpolation convention.** Wherever a config, label, or template field could hold either a
+computed value or a fixed one, an **interpolated** value (an expression evaluated against the
+in-scope context) is wrapped `${...}`, and a **literal** is a bare string. So `${node.index}` reads
+the current element's index, while `"main-display"` is the literal text. The `value` leaf is always
+an Expr expression by definition, so it needs no wrapper.
+
 ```yaml
 datapoints:
   oid:
@@ -316,7 +323,7 @@ datapoints:
     - { key: fan.speed, match: 'fan \(rpm\)\s*:\s*(\d+)', value: "int(groups[1])" }
   jsonpath:
     - { key: channel.gain, each: $.channels[*], value: "node.gain",
-        labels: { channel: "node.index", name: "node.name" } }
+        labels: { channel: ${node.index}, name: ${node.name}, role: "main-display" } }
 ```
 
 The extractor names a `key`. What that key *means* (kind, value type, unit, validation,

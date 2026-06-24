@@ -7,9 +7,7 @@ sidebar:
     variant: caution
 ---
 
-Leaf of the [architecture spine](/architecture/). The opaque-bytes layer that closes the data
-model: a searchable **`file`** handle over a content-addressed **blob** store, behind the same
-Storage Gateway as everything else.
+Files let an operator keep the opaque bytes that go with an estate, a firmware image, a config dump, a runbook, a packet capture, searchable and deduplicated, with a searchable **`file`** handle over a content-addressed **blob** store, behind the same Storage Gateway as everything else.
 
 ## Two layers: the file handle and the blob
 
@@ -31,10 +29,10 @@ A blob is keyed by the hash of its bytes, not a UUID, which buys:
 - **integrity**: the hash verifies the bytes on read, tamper-evident by construction;
 - **immutability**: bytes cannot change without changing the key, like the append-only
   ground-truth logs;
-- **replay-stability**: a replayed event referencing a hash still resolves, because the hash is
-  stable across replay.
+- **backtest-stability**: an event referencing a hash still resolves under a backtest, because the hash is
+  stable across a backtest.
 
-So **rows reference a hash, never inline bytes.** Inline `bytea` would kill the narrow-replayable
+So **rows reference a hash, never inline bytes.** Inline `bytea` would kill the hash-ref stability
 property and bloat the firehose row. Small structured values (a datapoint, its labels) stay inline
 in the row's jsonb; **large or opaque payloads become a blob hash-ref**: a big `log_datapoint`
 body, and especially a **`collection.failed` event's raw** when the
@@ -99,7 +97,7 @@ The handle and the content-addressed bytes; the physical layout (the gateway, GC
 
 - The inline-versus-blob **size threshold** (one global cutoff, or per-kind: `raw` versus log
   body versus operator upload).
-- The grace-floor duration relative to the replay window (long enough that a prospective replay
+- The grace-floor duration relative to the backtest window (long enough that a prospective backtest
   re-deriving over the window cannot reference a collected blob).
 - Whether `file` tags reuse the `tag` registry and cascade or are a flat per-file set.
 - Chunking and streaming for very large blobs (firmware images, captures) on the `pgblobs`

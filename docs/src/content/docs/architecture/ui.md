@@ -7,8 +7,7 @@ sidebar:
     variant: caution
 ---
 
-Leaf of the [architecture spine](/architecture/). The operator console: the renderer / page /
-dashboard model and the information architecture. The stack, the typed client, the build pipeline, and
+The UI is where an operator actually does the work, so it is built as one renderer over the same views the rest of the platform reads, with an information architecture organized around the entities you care about. This page covers the renderer / page / dashboard model and the information architecture. The stack, the typed client, the build pipeline, and
 the concrete reusable primitives are the [design system](/contributing/design-system/).
 
 ## The renderer contract: ViewResult and the views BFF
@@ -125,6 +124,6 @@ The theme is **dark-first** (the NOC aesthetic) on the brand palette (teal `#21C
   engine is built.
 - The field-mapping contract between a view result and each renderer (column roles per renderer
   type).
-- Whether dashboards are themselves resources (default / private namespace, saved like views) or a
+- Whether dashboards are themselves resources (carrying the `official` boolean, saved like views) or a
   thin layer over saved views.
 - SSE or streaming for the high-frequency surfaces, if polling proves insufficient.
