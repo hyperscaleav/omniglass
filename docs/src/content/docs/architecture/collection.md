@@ -327,9 +327,12 @@ datapoints:
 ```
 
 The extractor names a `key`. What that key *means* (kind, value type, unit, validation,
-fusion) lives on the [`datapoint_type`](/architecture/datapoints/#the-datapoint_type-registry) registry, not the template:
-the template references a registered key and never mints one. Save-time validation rejects any
-unregistered key, so a template can never collect a measurement the registry does not know.
+fusion) lives on the [`datapoint_type`](/architecture/datapoints/#the-datapoint_type-registry) registry at some
+[scope](/architecture/datapoints/#key-scope-template-org-official): a template declares its own keys at
+**template** scope (no registry friction), or references an **org** / **official** key. Compile-time
+validation resolves every key to a reachable scope (template keys self-resolve; referenced org/official
+keys must exist); an unresolved key is reject-not-project at ingest, so a template never silently
+collects a measurement no scope knows.
 
 ## Inputs: the template's typed parameters
 

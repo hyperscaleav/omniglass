@@ -61,7 +61,7 @@ A role is a **capability set**: permissions per `(resource, action)`. Roles live
 - **`official: true`**: ship-with the binary, seeded via the boot phase. A release can patch a default permission via `ON CONFLICT DO UPDATE` on the seed.
 - **`official: false`**: operator-created via the IAM API.
 
-**No overrides**: a role id is globally unique across both kinds (the create paths refuse an `official: false` role whose id matches an `official: true` one, and the seed phase fails-safe with a loud warning if it would collide with an existing operator role). This is a deliberate divergence from `datapoint_type` (where an `official: false` row may shadow an `official: true` one): role override risks lockout with no compensating use case, so a role id resolves to exactly one row.
+**No overrides**: a role id is globally unique across both kinds (the create paths refuse an `official: false` role whose id matches an `official: true` one, and the seed phase fails-safe with a loud warning if it would collide with an existing operator role). This is a deliberate divergence from `datapoint_type` (where an org-scoped key may shadow an official one of the same name): role override risks lockout with no compensating use case, so a role id resolves to exactly one row.
 
 ### The four official roles
 

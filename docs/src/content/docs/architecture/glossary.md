@@ -27,8 +27,10 @@ This is the **authoritative glossary**: every official term in the architecture,
 | **key** | The identity of what is measured or asserted; registered in `datapoint_type`. |
 | **canonical signal** | A registered, owner-agnostic measurement name (`power.state`, not `room.power`); one comparable signal across every vendor. |
 | **owner / owner_kind** | A datapoint/event/alarm's subject, the exclusive-arc: `owner_kind` + the matching typed FK (`component_id`/`system_id`/`location_id`/`node_id`), or the singleton `global` (no FK), + CHECK. |
-| **datapoint_type** | Registry for datapoint keys: name, kind, value_type, unit, fusion_policy, `official`. The `official` boolean marks shipped-canonical versus org-local. |
-| **event_type** | Registry for event keys: name, display_name, payload_schema, `official`. The `official` boolean marks shipped-canonical versus org-local. |
+| **datapoint_type** | Registry for datapoint keys: name, `scope`, kind, value_type, unit, fusion_policy, validation. `scope` (template / org / official) decides where the name is unique: `(template_id, name)` at template scope, `name` at org/official. Every datapoint is typed by one (the FK is non-null). Promotes template -> org -> official by re-scope/re-point. |
+| **scope** | A key's uniqueness-and-trust axis on `datapoint_type`: **template** (`(template_id, name)`, the template author's, local), **org** (`name` within the deployment, the operator's custom canonical), **official** (`name` globally, shipped with the distro). `official` = the top scope (folds in the prior `official` boolean). |
+| **template-scoped / org-scoped** | A key minted at `scope=template` (local to one template, `(template_id, name)`) or `scope=org` (a deployment's own canonical, unique by `name`). The promotion ladder lifts template -> org -> official. |
+| **event_type** | Registry for event keys: name, display_name, payload_schema, `scope`. Supports the same template / org / official `scope` as `datapoint_type` (a template can define a template-local event). |
 | **provenance** | How we know a value: observed, calculated, intended. Per row. Declared intent is [config](/architecture/variables/). |
 | **observed** | Measured from a component. On-row lineage: `source_rule` (+ version), the edge function. |
 | **calculated** | Derived from other datapoints by a calc_rule. On-row lineage: `source_rule` (+ version), the calc_rule. Distinguished from observed by the `provenance` column. |

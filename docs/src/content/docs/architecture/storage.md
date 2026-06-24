@@ -21,9 +21,11 @@ template tables), [collection](/architecture/collection/#storage) (interfaces an
 ## Conventions
 
 - **No `tenant_id`.** Isolation is per-database (a database per tenant); there is no tenant column
-  anywhere. Every registry row (`datapoint_type`, `interface_type`, `component_type`, `event_type`,
-  `variable_type`) carries an **`official` boolean**: `official: true` rows are the ship-with
-  canonical set distributed with the binary, and `official: false` rows are operator- or
+  anywhere. The key registries `datapoint_type` and `event_type` carry a **`scope`** (template / org /
+  official) deciding where the name is unique ([key scope](/architecture/datapoints/#key-scope-template-org-official)),
+  and the non-template registries (`interface_type`, `component_type`, `variable_type`) carry an
+  **`official` boolean**, the same axis minus the template layer: `official: true` rows are the
+  ship-with canonical set distributed with the binary, and `official: false` rows are operator- or
   org-authored, local to this deployment.
 - **Three storage shapes.** **Ground-truth records** are append-only and immutable, each named for
   what it is: `log_datapoint` (a datapoint kind), `audit_log` (operator actions), and the standing
@@ -48,8 +50,8 @@ template tables), [collection](/architecture/collection/#storage) (interfaces an
   (or all null for `global`). System-, location-, node-, and global-level datapoints are first-class.
   The full pattern is on [core entities](/architecture/core-entities/#ownership-the-exclusive-arc).
 - **Keys**: datapoints and events use a surrogate id plus `ts`; the key registry `datapoint_type`
-  is keyed by `name` with an **`official` boolean** marking shipped-canonical versus org-local;
-  structural entities are name-keyed; a `task` is **content-addressed**
+  carries a **`scope`** (template / org / official) deciding where the name is unique (`(template_id, name)`
+  at template scope, `name` at org/official); structural entities are name-keyed; a `task` is **content-addressed**
   (`hash(interface, kind, schedule, params)`); a `node` by name.
 
 ## How the records relate

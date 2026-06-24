@@ -165,8 +165,10 @@ A handful of patterns hold everywhere, and they are why the model stays coherent
 - **Immutable template versions**: an instance pins a frozen template version (or tracks `latest`);
   editing mints a new version; re-pointing is explicit.
 - **On-row lineage**: a derived row carries its own evidence; there is no separate execution table.
-- **The `official` boolean**: every registry and rule row carries an `official` flag; `official: true`
-  is the curated ship-with set, `official: false` is operator-authored and local to a deployment.
+- **Scope and the `official` boolean**: the key registries (`datapoint_type`, `event_type`) carry a
+  `scope` (template / org / official) deciding where a name is unique; the other registries and rule
+  rows carry an `official` boolean (the same axis minus the template layer). `official` is the curated
+  ship-with set, the rest is operator-authored and local to a deployment.
 - **Views by default**: current-state reads are plain views, materialized only when a profile proves
   it necessary.
 - **Not event-sourced**: stateful entities (alarm, action) hold their state directly.
