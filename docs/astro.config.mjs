@@ -23,6 +23,11 @@ export default defineConfig({
         replacesTitle: true,
       },
       favicon: '/favicon.svg',
+      components: {
+        // Render the page's sidebar.badge next to the H1 too, so the
+        // built-vs-theory status shows on the page, not just in the nav.
+        PageTitle: './src/components/PageTitle.astro',
+      },
       social: [
         {
           icon: 'github',
