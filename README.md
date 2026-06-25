@@ -43,11 +43,19 @@ make run          # start the server; docs served at http://localhost:PORT/docs
 
 ## Repository layout
 
+Today the repo is the docs site plus project meta:
+
+```
+docs/             the Astro Starlight docs + learning site (published; later embedded)
+go.mod            the Go module
+```
+
+The code lands one vertical slice at a time, into this target shape:
+
 ```
 cmd/omniglass     entrypoint (server | node | migrate)
 internal/         the application (storage gateway, collection, rules, api, ...)
 db/migrations/    dbmate schema migrations (pure DDL)
-docs/             the Astro Starlight docs + learning site (published; later embedded)
 web/              the operator SPA
 ```
 
@@ -61,7 +69,9 @@ Start with the architecture spine.
 
 All work happens through pull requests against `main`, tracked as GitHub issues under
 epics. Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a PR. The short version:
-test-first, ship the docs, conventional-commit PR title, green CI, one reviewer.
+test-first, ship the docs, conventional-commit PR title, squash-merge. `main` is
+protected by a ruleset (squash-only, no direct pushes); the automated CI gates land
+with the toolchain.
 
 ## License
 
