@@ -137,6 +137,11 @@ reducer's guts. Each member carries a **`health_role`**, and the rollup respects
 - **redundant** member `down` -> system `degraded` (only `down` if *all* redundant peers are down);
 - **informational** member -> does not affect system health.
 
+:::caution[Open question]
+The exact `redundant`-group semantics when a system has several independent redundant sets (per-set
+quorum versus one pool), and whether `degraded` is one rung or graduated.
+:::
+
 A redundant deployment needs exactly this: a failed backup mic must not down the room. **Member
 `health_role`** (required / redundant / informational) is declared on the **system_template_member**
 (the frozen BOM, where the system template composes component-template versions by role), not on the
@@ -147,11 +152,21 @@ so it never expires under an instance. It is shared with KPI calcs.
 For the rare case the role logic still gets wrong, an **Expr override at the system-template level**
 over the member health states is the escape hatch, reached for rarely.
 
+:::caution[Open question]
+Whether a system-template binding may narrow the built-in rollup (a scoped-precedence refinement),
+or only the roles and the Expr override are the knobs.
+:::
+
 The rollup **runs over the calc engine** (no parallel evaluator) and is **seeded for every system,
 location, and the global top**, so health rolls up out of the box without per-system authoring:
 `system-health` reduces a system's members' `health`, `location-health` a location's systems',
 `global-health` every location's into the estate top (each treated as required above the system
 level: any down child sinks the parent). It is the model's behavior, not a rule operators rewrite.
+
+:::caution[Open question]
+How the rollup treats an all-`unknown` system: gray, or the parent's prior state. The `unknown`
+versus `stale` distinction itself is settled in [time](/architecture/time/).
+:::
 
 ## SLI: indicator over a window
 
@@ -190,6 +205,10 @@ calc (an SLI over the SLA). No new machinery. Windowing is the SLI's concern: a 
 (last 30d) for trends, or a **calendar** window (the billing month) for a contractual SLA; the
 calendar reset is the one piece that leans on the time primitive.
 
+:::caution[Open question]
+The SLA calendar-window boundaries and timezone, co-designed with the time primitive.
+:::
+
 ## KPIs: what every estate should track
 
 A **KPI** is a derived datapoint (a calc or SLI), registered as a canonical `datapoint_type` and
@@ -216,6 +235,16 @@ interface; a ghost meeting is just `occupied < booked`.
 The point is a small, opinionated set of the measurements every estate should watch, computed and
 rolled up for free.
 
+:::caution[Open question]
+The full default KPI set and each one's exact calc. Availability and the utilization family are
+named, but the precise reducers and windows are unsettled.
+:::
+
+:::caution[Open question]
+The `occupancy.*` and `booking.*` canonical signals, and the occupancy-sensor and booking-system
+component templates that feed the utilization KPIs.
+:::
+
 ## Why this is the Zabbix service tree, done right
 
 Zabbix bolts services, SLA, and the service tree on as a separate subsystem. Omniglass does the
@@ -225,16 +254,3 @@ health-impacting alarms, a role-aware rollup) and it rides the one datapoint pip
 calc, the SLA is an alarm. One model, composed, instead of a parallel feature. An operator who
 understands datapoints and alarms already understands health and SLAs.
 
-## Open items
-
-- The rollup's treatment of an all-`unknown` system (gray versus the parent's prior state). The
-  `unknown` versus `stale` distinction itself is settled in [time](/architecture/time/).
-- The exact `redundant`-group semantics when a system has several independent redundant sets
-  (per-set quorum versus one pool), and whether `degraded` is one rung or graduated.
-- Whether a system-template binding may narrow the built-in rollup (a scoped-precedence refinement)
-  or only the roles and the Expr override are the knobs.
-- SLA calendar-window boundaries and timezone (co-design with the time primitive).
-- The full default KPI set and each one's exact calc (availability and the utilization family are
-  named; the precise reducers and windows are still to pin down).
-- The `occupancy.*` and `booking.*` canonical signals and the occupancy-sensor / booking-system
-  component templates (the utilization inputs).

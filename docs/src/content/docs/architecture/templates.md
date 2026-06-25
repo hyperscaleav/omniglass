@@ -62,6 +62,11 @@ most templates align by referencing one. Commands are template-scoped (the funct
 the template); a canonical **command type** (the abstract `reboot` to per-model layer) follows the same
 promotion ladder.
 
+:::caution[Open question]
+The `args` typing vocabulary for commands (which scalar and structured arg types it admits) and how
+command results beyond `success-when` map to the `action` row fields.
+:::
+
 ### The rest of the shape
 
 - **Config.** The template declares the [config](/architecture/variables/) a component *requires*
@@ -83,6 +88,12 @@ promotion ladder.
 - **Function trigger params are cascade bases.** A function's `interval: 30s` is the floor of the
   cascade, overridable by a location, group, or the instance (the `poll_interval` example in
   [cascade](/architecture/cascade/)), not a hard value.
+
+:::caution[Open question]
+Whether a template's default `event_rule`s are declared inline on the version or referenced (the
+policy is template-authored either way; this is the storage shape, co-designed with the
+alarms-and-actions model).
+:::
 
 ### Deploy: assign a template to an existing component
 
@@ -148,11 +159,8 @@ erDiagram
 Locations have no template: the `location_type` is the only shape-definer
 ([core entities](/architecture/core-entities/)).
 
-## Open items
+:::caution[Open question]
+Whether a `LocationTemplate` (`kind` is reserved in the collection apiVersion) is ever introduced, or
+locations stay template-less.
+:::
 
-- The `args` typing vocabulary for commands (which scalar and structured arg types it admits) and how
-  command results beyond `success-when` map to the `action` row fields.
-- Whether a template's default `event_rule`s are declared inline on the version or referenced (the
-  policy is template-authored either way; this is the storage shape, co-designed with the alarms-and-actions model).
-- Whether a `LocationTemplate` (`kind` is reserved in the collection apiVersion) is ever introduced,
-  or locations stay template-less.

@@ -28,6 +28,11 @@ resolves the cascade (config / `$var:` values, effective `interval`, credentials
 before handing the node concrete work. The node never sees a template; it sees
 materialized, resolved task and command instances.
 
+:::caution[Open question]
+The node-server config-pull and heartbeat protocol detail, co-designed with the API and the node
+auth path in [identity-access](/architecture/identity-access/).
+:::
+
 ### Config propagation (declared change to running node)
 
 An interface's connection config (endpoint, snmp community, http auth header) is a
@@ -99,6 +104,11 @@ node; the node **reports lifecycle transitions as `session_log` rows** to the se
 where the `session` entity projects current state (a current-state view over
 `session_log`, ground-truth side; see [storage](/architecture/storage/)).
 
+:::caution[Open question]
+The exact `session` lifecycle state enum and pooling parameters (idle timeout, max lifetime, pool
+size per interface, a shared versus dedicated session for a stream).
+:::
+
 Generic lifecycle:
 
 - **establish**: connect, authenticate, **subscribe** if a stream rides this
@@ -157,6 +167,19 @@ actions, produce a caused `event` + `action`-row status), and splits work by sha
 reports the host back up, then releases the next task. The gate is a condition over
 live reachability read from the node's **local** copy, not a round-trip to the
 datapoint store; a fixed timeout is only the backstop.
+
+Tasks within a single interface run serially (one probe, then its tasks in order); only distinct
+interfaces run concurrently.
+
+:::caution[Open question]
+Whether to add intra-interface concurrency, given that connection and order semantics differ per
+protocol.
+:::
+
+:::caution[Open question]
+Whether the node-side queue should be made durable; today the worklist is server-pulled per tick,
+and backpressure is concurrency plus deadlines, not persistence.
+:::
 
 ## Implicit reachability
 
@@ -267,6 +290,11 @@ the serial sum of every probe timeout (a dead SNMP get costs `timeout *
 Each poll task additionally runs under a per-task deadline (`--task-deadline`,
 default 30s).
 
+:::caution[Open question]
+Per-task schedule dispatch: the resolved `interval` exists, but honoring distinct per-task cadences
+within one node tick is unsettled.
+:::
+
 The loop is **overrun-aware**: instead of a fixed ticker that silently drops
 ticks when one runs long, it reschedules relative to each tick's finish. A tick
 that exceeds its interval is flagged and the next fires immediately, so a node
@@ -311,17 +339,3 @@ owner-general: `Evaluate` opens and resolves alarms for the datapoint's actual
 owner (component, system, location, or node), which also unlocks system- and
 location-owned alarms.
 
-## Open items
-
-- The exact `session` lifecycle state enum and pooling parameters (idle timeout, max
-  lifetime, pool size per interface, shared vs dedicated session for a stream).
-- Per-task schedule dispatch (the resolved `interval` exists; honoring distinct
-  per-task cadences within one node tick).
-- Tasks within a single interface run serially (one probe, then its
-  tasks in order); only distinct interfaces run concurrently. Whether to add
-  intra-interface concurrency is an open question (connection/order semantics
-  differ per protocol).
-- A durable node-side queue (the worklist is server-pulled per tick;
-  backpressure is concurrency + deadlines, not persistence).
-- The node-server config-pull and heartbeat protocol detail (co-design with
-  the API and the node auth path in [identity-access](/architecture/identity-access/)).

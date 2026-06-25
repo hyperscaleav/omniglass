@@ -141,6 +141,11 @@ a read profile, not assumed. **Never a materialized view**: a PG MV is stale bet
 has no incremental refresh, so a refresh is a full firehose recompute. The choice is plain view
 (default) versus inline table (profiled).
 
+:::caution[Open question]
+If `current_value` is ever materialized, is it one wide table or a table per kind, keyed per (owner,
+key, instance, provenance)?
+:::
+
 ## Partitioning and retention
 
 - **Append-only tables are range-partitioned by `ts`** (native declarative partitioning;
@@ -151,6 +156,15 @@ has no incremental refresh, so a refresh is a full firehose recompute. The choic
   short. On-row lineage ages out with its datapoint.
 - **Views are not partitioned** (bounded by fleet size, not time) and are computed from the
   underlying tables, never the source of truth.
+
+:::caution[Open question]
+The index strategy per datapoint table beyond the obvious (BRIN on metric `ts`, GIN on log body),
+tuned against real volume.
+:::
+
+:::caution[Open question]
+The append-only id type under partitioning: bigint identity versus uuid v7.
+:::
 
 ## The Storage Gateway and tiering
 
@@ -166,15 +180,8 @@ the physical backend is swappable beneath it:
   store** (Parquet on S3-compatible, or an embedded columnar engine) behind the same gateway, so
   historical queries fan across hot and cold with no model change. The cold tier is partitioned by
   `ts`.
-  - **Open**: the specific cold engine, the tier-out trigger (age versus partition-detach hook), the
-    query-federation mechanism, and whether projections ever tier. The gateway abstraction is
-    designed for it, but the cold engine is not yet chosen.
 
-## Open items
-
-- The tiering specifics above (cold engine, tier-out trigger, federation).
-- Whether `current_value` (if materialized) is one wide table or per-kind, keyed per (owner, key,
-  instance, provenance).
-- Index strategy per datapoint table beyond the obvious (BRIN on metric ts, GIN on log body), tuned
-  against real volume.
-- The append-only id type (bigint identity versus uuid v7) under partitioning.
+:::caution[Open question]
+Which cold engine backs the tier, what triggers tier-out (age versus a partition-detach hook), how
+queries federate across hot and cold, and whether projections ever tier.
+:::

@@ -40,6 +40,11 @@ One `credential` row per authN method per principal. A principal can hold many (
 
 The password identifier is the `principal.id` (not the username), so a username change does not invalidate the credential. Bearer tokens are 256-bit `crypto/rand` payloads with a human-readable prefix (`ogs_` for services, `ogn_` for nodes) for secret-scanners and audit clarity; the server only ever stores `sha256(token)`. Cleartext is returned exactly once at mint time.
 
+:::caution[Open question]
+OIDC delegates MFA to the IdP; whether to add a local-account TOTP path for installs not on OIDC is
+undecided.
+:::
+
 ## Subjects
 
 `human`, `service`, `node`, and **`principal_group`s**. Roles attach to principals regardless of kind; the same `principal_grant` rows mean the same thing whether the principal is a person, a service, or a daemon.
@@ -51,7 +56,12 @@ The `group` membership mechanism (static list or dynamic filter) is shared acros
 - **`component` / `system` / `location` groups** are **entity-groups**: they carry config bindings (the cascade) and serve as ABAC **scopes**.
 - **`principal_group`** is a collection of principals (SCIM-synced or local): a grant **subject**, carrying no config. It groups over principals, not just humans (members can be any principal kind); in practice it is humans synced from the IdP.
 
-So `group` appears on **both sides of authZ**: `principal_group`s as subjects, entity-groups as object scopes. (Whether to unify all kinds into a single polymorphic `group` is an open question; revisit if they converge.)
+So `group` appears on **both sides of authZ**: `principal_group`s as subjects, entity-groups as object scopes.
+
+:::caution[Open question]
+Whether to unify the group kinds into a single polymorphic `group` primitive; revisit if their usage
+converges.
+:::
 
 ## AI acts via delegation
 
@@ -116,6 +126,11 @@ child effective:  component:{create, update, delete}
 
 There are no negative permissions. To narrow a parent's capability set, define a fresh role rather than inherit.
 
+:::caution[Open question]
+Whether to add custom-role permission granularity beyond `(resource x action)` (e.g. a Zoom-style
+data-claim suffix `<resource>:<action>:<modifier>`), pending a use case.
+:::
+
 ## Authorization: grants = role x scope
 
 A principal holds grants in `principal_grant`. Each grant is a `(role, scope_kind, scope_id)` triple. A principal can hold many grants; they are **additive**:
@@ -139,6 +154,10 @@ So the same role applied at different scopes composes naturally; mixing roles (e
 | `group` | group id | members(G) at resolution time (dynamic groups re-resolve) |
 
 `scope_kind` is enumerated (`all`, `location`, `system`, `component`, `group`); adding a new kind requires a schema change (CHECK constraint) and a new case in the gateway's `expand` function. `scope_id` is operator data.
+
+:::caution[Open question]
+Whether a scope may mix include and exclude (e.g. "all except group X").
+:::
 
 ## Visibility cascades down the structural tree
 
@@ -232,6 +251,10 @@ Sam is an AV support tech. SCIM syncs Sam into the **`AV-Support`** `principal_g
 - The gateway's scope filter hides every row outside those scopes; the API middleware blocks Sam from, say, creating a principal (no `principal:create` capability in `operator`).
 - The day a device joins the `AV-devices` dynamic group, it enters Sam's scope; the day Sam leaves `AV-Support` in the IdP, SCIM removes the grant.
 
+:::caution[Open question]
+The SCIM mapping detail: which IdP attributes drive `principal_group` membership and grants.
+:::
+
 ## Storage
 
 The IAM subjects and their grants; the physical layout lives on [storage](/architecture/storage/).
@@ -242,10 +265,3 @@ The IAM subjects and their grants; the physical layout lives on [storage](/archi
 | `role` | id, **official**, permissions (jsonb: `<resource>:<action>`) | RBAC capability set; ship viewer/operator/admin/owner + custom |
 | `principal_grant` | (principal_id, role, **scope**) | role x scope; scope = a structural node, an entity-group, or `all`; additive |
 
-## Open items
-
-- Custom-role permission granularity beyond `(resource x action)` (e.g., Zoom-style data-claim suffix `<resource>:<action>:<modifier>`): whether to add it is an open question, pending a use case.
-- Whether to unify the group kinds into one polymorphic primitive.
-- SCIM mapping detail (which IdP attributes drive `principal_group` membership and grants).
-- Whether a scope may mix include and exclude (e.g., "all except group X").
-- Local-account MFA (TOTP): OIDC delegates MFA to the IdP, so whether to add a local-account TOTP path for installs not on OIDC is an open question.

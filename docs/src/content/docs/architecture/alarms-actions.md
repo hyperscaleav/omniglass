@@ -99,6 +99,11 @@ config, no code. Rules and `action_rule` predicates compare **by level**, resolv
 the order (`alarm.severity >= "high"` matches `high` and `disaster`); the UI renders the
 label and color from the level.
 
+:::caution[Open question]
+Whether a severity level is purely a label, color, and order, or also carries policy such as a
+default ack-timeout per level.
+:::
+
 ## The action (a stateful entity)
 
 What an `action_rule` raises and runs. Like an alarm it is **stateful** and holds
@@ -150,6 +155,15 @@ dupes or we add an **idempotency key** (alarm + action + transition). Pipeline o
 body), then send. **Egress safety** is always on: block internal / metadata IPs,
 verify TLS, bound timeouts, control redirects.
 
+:::caution[Open question]
+The dead-letter surface and the operator retry of failed actions.
+:::
+
+:::caution[Open question]
+The observed-use auth-failure feedback from actions into credential health (paired with the
+credential-health model in [config and credentials](/architecture/variables/)).
+:::
+
 ## Cycle safety in the action layer
 
 The `collection -> datapoint -> alarm` core is acyclic by construction (see *Cycle
@@ -169,6 +183,11 @@ opens an alarm, which fires the action again), closed with three rules:
    same `(action, owner)` already appears upstream it is suppressed, with a depth bound
    as a backstop. Flows are finite by construction (a step list, per-open-alarm, gated
    on open, cancelled on resolve / ack).
+
+:::caution[Open question]
+The depth bound and the lineage-detector shape for the data-mediated control loop (an action whose
+effect re-opens its own alarm).
+:::
 
 So no edge can close a loop: events come only from data, alarms are terminal toward
 datapoints, the response layer cannot author events, operator transitions never
@@ -240,12 +259,3 @@ through the cascade. The edge dispatch and the `command` declaration live in
 abstract-to-concrete resolution layer above them, so one `reboot` action targets a heterogeneous
 fleet and each device runs the command its model declares.
 
-## Open items
-
-- The depth bound and lineage-detector shape for the data-mediated control loop (an action whose
-  effect re-opens its own alarm).
-- Whether a severity level is purely a label/color/order or also carries policy (e.g. a
-  default ack-timeout per level).
-- The dead-letter surface and operator retry of failed actions.
-- Observed-use auth-failure feedback from actions into credential health
-  (credentials open item).

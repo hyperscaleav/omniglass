@@ -35,12 +35,27 @@ The factoring avoids both "every screen is hand-coded" and "everything must be a
   label / time / series key), so a renderer is decoupled from any specific view, and any view of the
   right shape can feed it. The set is closed but grown reactively, the same discipline as the
   reducer vocabulary.
+
+  :::caution[Open question]
+  The field-mapping contract between a view result and each renderer (the column roles per renderer
+  type).
+  :::
 - **Coded pages** compose renderers plus custom interaction: the built-in information architecture
   (overview, drill-downs, config forms, exploration).
 - **Composable dashboards** (config-driven): operator-built grids where each
   **widget = a view ref + a renderer + a field-mapping + params**, no code per dashboard.
   Dashboard-level params flow into widget view-params, so one "system overview" dashboard works for
   any system.
+
+  :::caution[Open question]
+  The composable-dashboard schema: the widget placement grid, the view binding, and the dashboard
+  params.
+  :::
+
+  :::caution[Open question]
+  Whether dashboards are themselves resources (carrying the `official` boolean, saved like views) or
+  a thin layer over saved views.
+  :::
 
 The contract underneath both: **all UI reads go through [views](/contributing/api-first/)**, CRUD
 for writes. The renderer library serves coded pages and dashboard widgets identically; the only
@@ -60,6 +75,10 @@ Live data is **query polling** (a refetch interval; slow-changing config uses a 
 read can also **stream over the view layer (SSE or a stream subscription)** where latency or fan-out
 earns it, the same earn-it-with-a-profile discipline. Presentation that depends on config (a severity
 level's id to its label and color) resolves client-side from the config view.
+
+:::caution[Open question]
+Whether the high-frequency surfaces move to SSE or streaming, if polling proves insufficient.
+:::
 
 ## Configuration UIs
 
@@ -116,11 +135,3 @@ earns its own slot; "Overview" is the name of the default dashboard, not the lan
 The theme is **dark-first** (the NOC aesthetic) on the brand palette (teal `#21CAB9`, navy
 `#080c16`), semantic tokens only, no hardcoded colors in components.
 
-## Open items
-
-- The composable-dashboard schema (widget placement grid, view binding, dashboard params).
-- The field-mapping contract between a view result and each renderer (column roles per renderer
-  type).
-- Whether dashboards are themselves resources (carrying the `official` boolean, saved like views) or a
-  thin layer over saved views.
-- SSE or streaming for the high-frequency surfaces, if polling proves insufficient.

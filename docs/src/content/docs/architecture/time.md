@@ -20,6 +20,11 @@ job is to turn the passage of time into events the normal pipeline consumes.
 
 - **`schedule`** (config): a recurring definition, a cron or rrule plus an IANA timezone and what
   it triggers. Config, like a rule.
+
+:::caution[Open question]
+The recurrence surface a `schedule` accepts: a full iCalendar rrule, or a cron subset plus calendar
+anchors like month-start and month-end.
+:::
 - **`timer`** (mechanism, working-set): every *pending* fire, kind-discriminated
   (`schedule-tick | for-sustain | runbook-wait | watchdog`), with a `fire_at` and a pointer to
   what it is for. The clock worker drains it (`FOR UPDATE SKIP LOCKED`); rows are consumed and
@@ -43,6 +48,15 @@ sorted by `fire_at`, woken by a ticker with a crash-recovery backstop):
   lapses. No-data and staleness.
 
 Durable (a table, survives restart), single-fire across replicas (the SKIP-LOCKED claim).
+
+:::caution[Open question]
+Whether a runbook's per-step waits each get their own `timer` row, or one row is advanced per step.
+:::
+
+:::caution[Open question]
+The clock worker's wake strategy: wake-on-insert for near-term fires plus a coarse backstop ticker,
+so a far-future schedule needs no frequent ticks.
+:::
 
 ## A fire is recorded once, on the log of what it produces
 
@@ -112,6 +126,11 @@ policy**: the datapoint_type declares its staleness tolerance.
 an expected heartbeat interval (an MQTT keepalive, a source that pings); silence on a listener
 with no declared heartbeat is normal and unwatched.
 
+:::caution[Open question]
+The watchdog tolerance defaults (the multiplier on a poller's `interval`) and whether to debounce a
+missed-poll burst before declaring stale.
+:::
+
 ## Timezones
 
 Every stored instant is a **`timestamptz`** (UTC, tz-aware), universal everywhere. A **`schedule`
@@ -135,13 +154,3 @@ The recurring trigger config and the clock worker's pending-fire working set; th
 |---|---|---|
 | `schedule` | id, rrule/cron, **tz (IANA)**, target, enabled | config: a recurring trigger |
 | `timer` | id, **fire_at (timestamptz)**, kind (schedule-tick / for-sustain / runbook-wait / watchdog), ref, payload, claimed_at | the clock worker's pending-fire **working-set** (mutable, drained `SKIP LOCKED`), not a history log; fires are logged on the entity they produce |
-
-## Open items
-
-- The `rrule` / cron surface (full iCalendar rrule versus a cron subset plus calendar anchors like
-  month-start and month-end).
-- Watchdog tolerance defaults (the multiplier on a poller's `interval`) and debouncing a
-  missed-poll burst before declaring stale.
-- Whether a runbook's per-step waits each get a `timer` row or one row is advanced per step.
-- The clock worker's wake strategy (wake-on-insert for near-term fires plus a coarse backstop
-  ticker, so a far-future schedule needs no frequent ticks).

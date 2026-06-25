@@ -83,6 +83,12 @@ into action:
 Adopting the observed value as the declared one (reality becomes intent) is **not** an ongoing mode;
 it is a separate **one-shot import action** an operator runs deliberately.
 
+:::caution[Open question]
+The `reconcile: enforce` execution (the set-function push and the enforcement-failure alarm) and the
+separate one-shot import action (observed-becomes-declared): the controller shape behind the reserved
+seam.
+:::
+
 The power here is that **remediation needs no rule**. You do not author an `event_rule` or a flow to
 fix a setting; you declare the value, set the policy to `enforce`, and the cascade plus drift plus
 the set function close the loop. Reconcile runs **per item**, so one reconciled setting is better than
@@ -97,9 +103,13 @@ refuses a write does not hammer.
 Because config rides the standard cascade, you rarely declare on the device. Declare
 `video.input = HDMI1` for the **main-display role** on the system template, and the cascade resolves it
 onto whichever display fills that role; the display's own template declared nothing. Drift and
-reconcile then *just happen*, no per-device authoring. (Resolving a value scoped to a role slot, the
-`system_template_member` where `health_role` already lives, may need a new cascade level between
-system and component; that is an open refinement.)
+reconcile then *just happen*, no per-device authoring.
+
+:::caution[Open question]
+Resolving a value scoped to a role slot (the `system_template_member` where `health_role` already
+lives) may need a new cascade level between system and component, alongside the per-item get/set
+binding shape on the template.
+:::
 
 ## credential: a secret with a lifecycle
 
@@ -215,7 +225,12 @@ provenance with operator intent.
 
 ## Storage
 
-The shape registry, the config / variable cell, and the operator-label tables; the physical layout (the owner arc, the cascade key) lives on [storage](/architecture/storage/). Whether config, credentials, and variables share one table or split is open.
+The shape registry, the config / variable cell, and the operator-label tables; the physical layout (the owner arc, the cascade key) lives on [storage](/architecture/storage/).
+
+:::caution[Open question]
+Whether config, credentials, and variables are one table with a discriminator or three; they share
+the cascade and scope either way.
+:::
 
 | Table | Key columns | Notes |
 |---|---|---|
@@ -224,14 +239,3 @@ The shape registry, the config / variable cell, and the operator-label tables; t
 | `tag` | name, applies_to, propagates | operator-label registry (no `_type`, no namespace) |
 | `tag_binding` | (scope_kind, scope_id, tag), value | union + override combinator ([cascade](/architecture/cascade/)) |
 
-## Open items
-
-- **The role-slot cascade scope** (declaring config on a `system_template_member`, resolved onto the
-  component filling the role), and the per-item get/set binding shape on the template.
-- Whether config, credentials, and variables are **one table with a discriminator or three**; they
-  share the cascade and scope either way.
-- `reconcile: enforce` execution (the set-function push, and the enforcement-failure alarm) plus the
-  separate one-shot import action (observed-becomes-declared); the controller shape behind the
-  reserved seam.
-- The external `SecretProvider` implementations (KMS / Vault / secrets managers) behind the existing
-  seam.

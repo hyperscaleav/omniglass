@@ -19,6 +19,11 @@ The audit log is how an operator answers "who changed this, and to what?" withou
   be forgotten or bypassed.
 - **The actor** is resolved by IAM ([identity and access](/architecture/identity-access/)): the
   user, service account, or node.
+
+:::caution[Open question]
+Whether an AI-accepted suggestion records the AI provenance and the approving operator in one row or
+two linked rows ([AI](/architecture/ai/)).
+:::
 - **Ground truth a backtest reads.** Operator-driven transitions and config changes are not
   recomputable from collected data, so the audit log is what a rule backtest reads for them: alarm ack and
   snooze ([alarms and actions](/architecture/alarms-actions/)), and every config change a
@@ -31,11 +36,18 @@ The audit log is how an operator answers "who changed this, and to what?" withou
 - **Other reads are not audited at the storage layer.** Optional read-audit is config-driven at
   the API layer (per-resource opt-in or a verbosity setting), off by default.
 
+:::caution[Open question]
+The read-audit granularity: per-resource opt-in versus a global verbosity setting.
+:::
+
 ## Retention and integrity
 
 Audit carries the **longest retention** of any ground-truth log (compliance), range-partitioned
-by `ts` like the others. It is append-only by construction; a hash-chain or signed audit for
-high-assurance deployments is an open item.
+by `ts` like the others. It is append-only by construction.
+
+:::caution[Open question]
+Tamper-evidence (a hash-chain or signed audit) for high-assurance deployments.
+:::
 
 ## Who consumes it
 
@@ -43,9 +55,3 @@ high-assurance deployments is an open item.
 - **Reconcile**: config changes arrive as `audit_log` rows, so reconcile reacts to them.
 - **The alarm projection**: ack and snooze come from audit.
 
-## Open items
-
-- Tamper-evidence (a hash-chain or signed audit) for high-assurance deployments.
-- Read-audit granularity (per-resource opt-in versus a global verbosity setting).
-- Whether an AI-accepted suggestion records the AI provenance and the approving operator in one
-  row or two linked rows ([AI](/architecture/ai/)).

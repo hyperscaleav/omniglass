@@ -20,6 +20,10 @@ Files let an operator keep the opaque bytes that go with an estate, a firmware i
 Splitting them means search and inventory operations (list, filter, tag) never touch bytes, and
 the same blob can back many file handles.
 
+:::caution[Open question]
+Whether `file` tags reuse the `tag` registry and cascade, or are a flat per-file set.
+:::
+
 ## Content-addressing earns four properties
 
 A blob is keyed by the hash of its bytes, not a UUID, which buys:
@@ -38,6 +42,11 @@ in the row's jsonb; **large or opaque payloads become a blob hash-ref**: a big `
 body, and especially a **`collection.failed` event's raw** when the
 wire payload is large (a full SNMP walk, a big HTTP body, a capture). Raw stays inline when small;
 the size threshold is the switch.
+
+:::caution[Open question]
+The inline-versus-blob size threshold: one global cutoff, or per-kind (`raw` versus log body versus
+operator upload).
+:::
 
 ## Dedup is database-scoped
 
@@ -59,6 +68,10 @@ seam as the columnar and object tiers):
 
 The `file` and the hash reference are identical across backends; only `storage_ref` resolution
 differs.
+
+:::caution[Open question]
+Chunking and streaming for very large blobs (firmware images, captures) on the `pgblobs` backend.
+:::
 
 ## Reference-counted GC, not age-based
 
@@ -84,6 +97,11 @@ optimization**, earned only if the per-blob probes profile too expensive (the sa
 ship-the-simple-thing discipline as the storage projections). The grace floor is the safety
 margin against an in-flight reference, so GC never races a just-written event.
 
+:::caution[Open question]
+The grace-floor duration relative to the backtest window (long enough that a prospective backtest
+re-deriving over the window cannot reference a collected blob).
+:::
+
 ## Storage
 
 The handle and the content-addressed bytes; the physical layout (the gateway, GC) is above and on [storage](/architecture/storage/).
@@ -93,12 +111,3 @@ The handle and the content-addressed bytes; the physical layout (the gateway, GC
 | `file` | id, name, content_type, size, **sha256**, tags | searchable metadata handle; points at a blob by hash |
 | `blob` | **sha256**, bytes / storage_ref, size, content_type | content-addressed bytes; dedup; backend pgblobs / S3 / disk behind the gateway; reference-counted GC |
 
-## Open items
-
-- The inline-versus-blob **size threshold** (one global cutoff, or per-kind: `raw` versus log
-  body versus operator upload).
-- The grace-floor duration relative to the backtest window (long enough that a prospective backtest
-  re-deriving over the window cannot reference a collected blob).
-- Whether `file` tags reuse the `tag` registry and cascade or are a flat per-file set.
-- Chunking and streaming for very large blobs (firmware images, captures) on the `pgblobs`
-  backend before S3 is configured.
