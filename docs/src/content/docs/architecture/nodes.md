@@ -90,21 +90,16 @@ catalog (reachability gating, sessions, the task queue, tick scheduling).
 
 ## Sessions
 
-> Status: the built `ssh`/`telnet`/`raw-tcp` poll adapters are **ephemeral** today,
-> a fresh connect-auth-command-close per poll (above). The persistent held-session
-> model in this section, where the handshake and auth are paid once and reused, is
-> the deferred stateful-collection slice (session pool + listener runtime +
-> reconnect/backoff/keepalive + `session_log`). It is described here as the target,
-> not what slice 1 ships.
-
 A stateful interface (`ssh`, `mqtt`, anything held open) becomes a **session** at
 runtime: one connection keyed by `(node, interface)`, shared by every task and
-command under it, so the handshake and auth are paid once. The live socket is
-ephemeral and lives on the node; the node **reports lifecycle transitions as
-`session_log` rows** to the server, where the `session` entity projects current state
-(a current-state view over `session_log`, ground-truth side; see [storage](/architecture/storage/)).
+command under it, so the handshake and auth are paid once and reused. A session pool
+holds the connection open across poll ticks (reconnect, backoff, keepalive), and a
+listener runtime wakes on its inbound. The live socket is ephemeral and lives on the
+node; the node **reports lifecycle transitions as `session_log` rows** to the server,
+where the `session` entity projects current state (a current-state view over
+`session_log`, ground-truth side; see [storage](/architecture/storage/)).
 
-Generic lifecycle (exact enum deferred to the ssh slice):
+Generic lifecycle:
 
 - **establish**: connect, authenticate, **subscribe** if a stream rides this
   session;
@@ -173,7 +168,7 @@ to check opt out or override the probe). The results come back as `reachable` /
 smart-wait gate from the node's local copy, so the connection detector and the
 dashboard signal are the same always-on probe.
 
-**Built today (the layered availability gate).** The gate is an **OSI-layered**
+**The layered availability gate.** The gate is an **OSI-layered**
 set of cheap checks run as a **concurrent pre-pass** (its own high concurrency,
 short timeouts) before a connection-interface's poll tasks. All applicable checks
 run (they are cheap), each ships a built-in datapoint, instanced (the ping by
@@ -322,10 +317,11 @@ location-owned alarms.
   lifetime, pool size per interface, shared vs dedicated session for a stream).
 - Per-task schedule dispatch (the resolved `interval` exists; honoring distinct
   per-task cadences within one node tick).
-- Tasks within a single interface still run serially (one probe, then its
-  tasks in order); only distinct interfaces run concurrently. Intra-interface
-  concurrency is deferred (connection/order semantics per protocol).
-- A durable node-side queue (today the worklist is server-pulled per tick;
+- Tasks within a single interface run serially (one probe, then its
+  tasks in order); only distinct interfaces run concurrently. Whether to add
+  intra-interface concurrency is an open question (connection/order semantics
+  differ per protocol).
+- A durable node-side queue (the worklist is server-pulled per tick;
   backpressure is concurrency + deadlines, not persistence).
 - The node-server config-pull and heartbeat protocol detail (co-design with
   the API and the node auth path in [identity-access](/architecture/identity-access/)).

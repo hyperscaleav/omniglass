@@ -7,17 +7,17 @@ sidebar:
     variant: caution
 ---
 
-AI in Omniglass is a **capability that grows along an assistive-to-agentic spectrum**, governed exactly like any other actor. At the assistive end it enriches and explains; at the agentic end it proposes and (eventually) acts. The capabilities expand over time; the governance does not move. This page is the architecture of that governance: how AI plugs into the same seams as any principal, why it acts through delegation rather than its own broad identity, and what keeps it assistive-not-authoritative and always traceable.
+AI in Omniglass is a **capability that spans an assistive-to-agentic spectrum**, governed exactly like any other actor. At the assistive end it enriches and explains; at the agentic end it proposes and acts. The capabilities differ across the spectrum; the governance does not move. This page is the architecture of that governance: how AI plugs into the same seams as any principal, why it acts through delegation rather than its own broad identity, and what keeps it assistive-not-authoritative and always traceable.
 
 ## The capability spectrum
 
-What AI does, grouped from the assistive end toward the agentic end. Earlier groups land first; later groups depend on the governance below being real.
+What AI does, grouped from the assistive end toward the agentic end. The agentic groups rest on the governance below.
 
 - **Enrichment.** Event and alarm enrichment: attaching context, a likely cause, and a suggested next step to an occurrence the operator is already looking at. Read-only, surfaced inline.
 - **Diagnosis and reporting.** Troubleshooting support, root-cause analysis across correlated signals, and report generation (health summaries, incident write-ups, period reviews).
 - **Natural-language surfaces.** NL business query ("which rooms had the most ghost meetings last month"), NL configuration (authoring dashboards, rules, and alarms from a description), and NL template development (drafting a component template from a device's behavior).
 - **Operational actions.** Acting on the platform on an operator's behalf: room and meeting rebooking, and general platform configuration.
-- **Autonomous agents.** Diagnose-and-fix agents that close the loop on a known failure class. **Human-in-the-loop first, fully autonomous later**: every agentic action is gated until the class has earned autonomy.
+- **Autonomous agents.** Diagnose-and-fix agents that close the loop on a known failure class. **Human-in-the-loop is the default; autonomy is per-class and earned**: every agentic action is gated until the class has earned it.
 
 ## AI acts through the same seams as any principal
 
@@ -39,4 +39,4 @@ Every AI-produced output, an enrichment, a calculated value, a configuration cha
 
 ## Human-in-the-loop gating
 
-Autonomous action is **gated before it is allowed**: propose -> approve -> act. The agent surfaces a proposed change, a human approves it, then it executes, and the approval lands in the audit trail. Full autonomy for a given failure class is a deliberate later promotion of a class that has run under the gate long enough to earn it, never the starting state. The gate is the safety boundary that lets the capability move toward agentic without the governance moving with it.
+Autonomous action is **gated before it is allowed**: propose -> approve -> act. The agent surfaces a proposed change, a human approves it, then it executes, and the approval lands in the audit trail. Full autonomy for a given failure class is a deliberate promotion that a class earns by its track record under the gate, never the starting state. The gate is the safety boundary that lets the capability span toward agentic without the governance moving with it.

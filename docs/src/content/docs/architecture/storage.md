@@ -29,8 +29,8 @@ template tables), [collection](/architecture/collection/#storage) (interfaces an
   org-authored, local to this deployment.
 - **Three storage shapes.** **Ground-truth records** are append-only and immutable, each named for
   what it is: `log_datapoint` (a datapoint kind), `audit_log` (operator actions), and the standing
-  `*_log` ground-truth logs (`session_log`, `internal_log`, plus the deferred `collection_log` /
-  `node_log`). There is **no `telemetry` table**: datapoints are emitted at the edge, so the raw
+  `*_log` ground-truth logs (`session_log`, `internal_log`, plus the `collection_log` /
+  `node_log` companions). There is **no `telemetry` table**: datapoints are emitted at the edge, so the raw
   payload is not persisted in steady state; raw appears only on a `collection.failed` event or a
   dev raw-mode tap ([datapoints](/architecture/datapoints/)). A schedule fire is not a record here: it is an `event` with `origin=scheduled`.
   There is no separate rule-execution table: derived rows carry their lineage on the row.
@@ -89,7 +89,7 @@ compact list here because storage is their natural architectural home:
   [nodes](/architecture/nodes/#sessions));
 - **`internal_log`** (platform self-narration: startup / reconcile / migration / node-reg /
   config-sync, [workers](/architecture/workers/));
-- the deferred **`collection_log`** / **`node_log`** companions (the cheap per-run execution record
+- the **`collection_log`** / **`node_log`** companions (the cheap per-run execution record
   and the node's operational narration).
 
 There is **no separate rule-execution table**: a derived row *is* the evidence of its rule's run,
@@ -120,11 +120,11 @@ the one the CHECK enforces. This is one of three layers: the CHECK enforces *whi
 `alarm` and `action` are **stateful entities** that hold their own current state in a real table
 (not event-sourced). Everything else that is "current state" is a **read model**, and the default is
 a **plain SQL view** (always-correct, never stale, zero maintenance). A worker-maintained table is a
-**deferred, measured optimization**, earned only when a read profile shows a view too slow.
+**measured optimization**, earned only when a read profile shows a view too slow.
 
-| Read model | Of | Day-one shape | Notes |
+| Read model | Of | Shape | Notes |
 |---|---|---|---|
-| `current_value` | latest datapoint per (owner, key, **instance**, **provenance**), fused across sources per the key's `fusion_policy` | **view** | the dashboard read; per-provenance so observed and intended are both visible (the divergence model needs both), per-instance so siblings of one key stay distinct, fusion applied on read. The only later table candidate, metric kind only |
+| `current_value` | latest datapoint per (owner, key, **instance**, **provenance**), fused across sources per the key's `fusion_policy` | **view** | the dashboard read; per-provenance so observed and intended are both visible (the divergence model needs both), per-instance so siblings of one key stay distinct, fusion applied on read. The one table candidate if a profile earns it, metric kind only |
 | `session` | `session_log` | **view** | low-volume; node, interface, status, opened_at, last_activity_at, command/error counts |
 
 **When the view stops scaling.** A latest-per-key view's cost scales with the number of **distinct
@@ -161,14 +161,14 @@ the physical backend is swappable beneath it:
 
 - **default**: Postgres for everything (datapoints, ground-truth records, views, registries), the
   single-binary BYO-Postgres story.
-- **tiering (direction, details TBD)**: the firehose does not stay in hot Postgres forever. Aged
+- **tiering**: the firehose does not stay in hot Postgres forever. Aged
   `metric_datapoint` / `log_datapoint` partitions tier out to a **columnar or object
   store** (Parquet on S3-compatible, or an embedded columnar engine) behind the same gateway, so
   historical queries fan across hot and cold with no model change. The cold tier is partitioned by
   `ts`.
-  - **TBD**: the specific cold engine, the tier-out trigger (age versus partition-detach hook), the
-    query-federation mechanism, and whether projections ever tier. Captured here so the gateway
-    abstraction is designed for it from day one even though the cold engine is not chosen.
+  - **Open**: the specific cold engine, the tier-out trigger (age versus partition-detach hook), the
+    query-federation mechanism, and whether projections ever tier. The gateway abstraction is
+    designed for it, but the cold engine is not yet chosen.
 
 ## Open items
 

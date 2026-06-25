@@ -54,8 +54,8 @@ scale, fully predictable, and the [resolve view](/architecture/cascade/) names t
 
 Groups do not contain groups. A dynamic filter already expresses a union (`type in (codec, display)`)
 and multiple membership covers the rest, so nesting would earn only a narrow "DRY union of static
-sets" case, not worth its transitive-membership and cycle-guard cost. Add it later if that case ever
-bites.
+sets" case, not worth its transitive-membership and cycle-guard cost. Whether to add it is an open
+question, gated on that case actually biting.
 
 ## Types are not layers
 

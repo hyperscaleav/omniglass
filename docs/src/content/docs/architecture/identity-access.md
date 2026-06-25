@@ -17,15 +17,15 @@ A **principal** is the polymorphic subject of authN/authZ. Identity is the princ
 
 A principal carries a `kind` value; the same role machinery works across all kinds. Identity is uniform; authN methods and per-kind domain attributes differ.
 
-| kind | what it represents | slice-1 authN | later authN |
-|---|---|---|---|
-| `human` | a person | local password + session | OIDC, SAML |
-| `service` | scripts, integrations, SDKs, bots | bearer token | (same) |
-| `node` | the edge daemon running in the field | bearer token | + mTLS |
+| kind | what it represents | authN |
+|---|---|---|
+| `human` | a person | local password + session, OIDC, SAML |
+| `service` | scripts, integrations, SDKs, bots | bearer token |
+| `node` | the edge daemon running in the field | bearer token, mTLS |
 
 There is **no `ai` principal kind**. AI does not get its own broad identity; it acts on a user's behalf via **OAuth on-behalf-of (delegation)**, scoped and audited to the granting user (see [AI acts via delegation](#ai-acts-via-delegation) below and the [AI](/architecture/ai/) page).
 
-Each kind that needs structured domain attributes gets a **1:1 per-kind table** linked by `principal_id`: `human` (slice 1), `service` (slice 2+, when there's something to put in it), `node` (already exists; slice 2 adds a `principal_id` FK). The base `principal` table holds identity + kind only; the per-kind tables hold the rest, including the kind's human-facing label (a human's `display_name`, a service's label, the node's name).
+Each kind that needs structured domain attributes gets a **1:1 per-kind table** linked by `principal_id`: `human`, `service`, and `node`. The base `principal` table holds identity + kind only; the per-kind tables hold the rest, including the kind's human-facing label (a human's `display_name`, a service's label, the node's name).
 
 ## Credentials
 
@@ -33,10 +33,10 @@ One `credential` row per authN method per principal. A principal can hold many (
 
 | method | identifier | secret_hash | who uses it |
 |---|---|---|---|
-| `password` | `principal.id` (uuid) | argon2id of the password | humans, slice 1 |
-| `oidc` | `iss\|sub` (issuer + subject) | null (IdP verifies) | humans, slice 3 |
-| `token` | `sha256(token)` | null (identifier IS the verifier) | service / node, slice 1 |
-| `mtls` | client-cert subject | null (TLS verifies) | nodes, slice 2 |
+| `password` | `principal.id` (uuid) | argon2id of the password | humans |
+| `oidc` | `iss\|sub` (issuer + subject) | null (IdP verifies) | humans |
+| `token` | `sha256(token)` | null (identifier IS the verifier) | service / node |
+| `mtls` | client-cert subject | null (TLS verifies) | nodes |
 
 The password identifier is the `principal.id` (not the username), so a username change does not invalidate the credential. Bearer tokens are 256-bit `crypto/rand` payloads with a human-readable prefix (`ogs_` for services, `ogn_` for nodes) for secret-scanners and audit clarity; the server only ever stores `sha256(token)`. Cleartext is returned exactly once at mint time.
 
@@ -51,13 +51,13 @@ The `group` membership mechanism (static list or dynamic filter) is shared acros
 - **`component` / `system` / `location` groups** are **entity-groups**: they carry config bindings (the cascade) and serve as ABAC **scopes**.
 - **`principal_group`** is a collection of principals (SCIM-synced or local): a grant **subject**, carrying no config. It groups over principals, not just humans (members can be any principal kind); in practice it is humans synced from the IdP.
 
-So `group` appears on **both sides of authZ**: `principal_group`s as subjects, entity-groups as object scopes. (Unifying all kinds into a single polymorphic `group` is deferred; revisit if they converge.)
+So `group` appears on **both sides of authZ**: `principal_group`s as subjects, entity-groups as object scopes. (Whether to unify all kinds into a single polymorphic `group` is an open question; revisit if they converge.)
 
 ## AI acts via delegation
 
 AI is **not** a principal kind. When an agent acts, it acts **on behalf of a user** via **OAuth on-behalf-of (delegation)**: it holds a delegated, scoped, audited credential and operates strictly within the granting user's permissions and scope. It cannot exceed the user who delegated to it, and the resulting write names both the agent and that user, so accountability lands on a human.
 
-This is the **chosen mechanism** for AI acting, not a deferred curiosity. The full build (Omniglass acting as an OAuth OP, delegated credentials, dual-actor audit) is phased, but the architecture is fixed: AI = delegation, not a broad identity of its own. The [AI](/architecture/ai/) page covers the capability spectrum this governs.
+This is the **chosen mechanism** for AI acting. Omniglass acts as an OAuth OP, issuing delegated credentials with dual-actor audit: AI = delegation, not a broad identity of its own. The [AI](/architecture/ai/) page covers the capability spectrum this governs.
 
 ## Roles and the role hierarchy
 
@@ -138,7 +138,7 @@ So the same role applied at different scopes composes naturally; mixing roles (e
 | `component` | component id | exactly { C } |
 | `group` | group id | members(G) at resolution time (dynamic groups re-resolve) |
 
-Slice 1 has only `all` populated; the structural-entity scopes (`location`, `system`, `component`, `group`) light up with the cascade slice (the entities do not exist yet). `scope_kind` is enumerated; adding a new kind requires a schema change (CHECK constraint) and a new case in the gateway's `expand` function. `scope_id` is operator data.
+`scope_kind` is enumerated (`all`, `location`, `system`, `component`, `group`); adding a new kind requires a schema change (CHECK constraint) and a new case in the gateway's `expand` function. `scope_id` is operator data.
 
 ## Visibility cascades down the structural tree
 
@@ -204,7 +204,7 @@ GET /api/v1/auth/me
 
 ## The node path
 
-Nodes do not use general role x scope. A node authenticates with a credential bound to its `node.name` (slice 1: bearer token; slice 2: mTLS or stronger bearer) and is authorized only to **its own assignments**: pull my worklist, heartbeat, push for my tasks. It is an identity-scoped narrow path at the API:
+Nodes do not use general role x scope. A node authenticates with a credential bound to its `node.name` (a bearer token or mTLS) and is authorized only to **its own assignments**: pull my worklist, heartbeat, push for my tasks. It is an identity-scoped narrow path at the API:
 
 - The middleware resolves the principal (kind=`node`) as usual.
 - The node-route group (`/api/v1/nodes/{name}/*`, gRPC ingest) is wrapped in a narrow authorizer: `principal.kind == 'node'` AND `principal.credential.identifier == {name}` from the URL. The general RBAC permission matrix does not apply to this group.
@@ -226,7 +226,7 @@ The first install runs `og iam create-owner --username ops --email ops@example.c
 
 ## Worked example
 
-Sam is an AV support tech. SCIM syncs Sam into the **`AV-Support`** `principal_group` (slice 3+; today Sam is a local `human` principal). The group holds one grant: `operator @ "AV-devices" (component-group), viewer @ "HQ" (location)`. Result:
+Sam is an AV support tech. SCIM syncs Sam into the **`AV-Support`** `principal_group` (or Sam is a local `human` principal). The group holds one grant: `operator @ "AV-devices" (component-group), viewer @ "HQ" (location)`. Result:
 
 - Sam can **operate** (create / update / ack alarms) on AV devices fleet-wide (the cross-cutting entity-group), and **read** everything at HQ (the location node + its subtree).
 - The gateway's scope filter hides every row outside those scopes; the API middleware blocks Sam from, say, creating a principal (no `principal:create` capability in `operator`).
@@ -244,9 +244,8 @@ The IAM subjects and their grants; the physical layout lives on [storage](/archi
 
 ## Open items
 
-- Custom-role permission granularity beyond `(resource x action)` (e.g., Zoom-style data-claim suffix `<resource>:<action>:<modifier>`), defer until a use case forces it.
-- Unifying the group kinds into one polymorphic primitive (deferred).
+- Custom-role permission granularity beyond `(resource x action)` (e.g., Zoom-style data-claim suffix `<resource>:<action>:<modifier>`): whether to add it is an open question, pending a use case.
+- Whether to unify the group kinds into one polymorphic primitive.
 - SCIM mapping detail (which IdP attributes drive `principal_group` membership and grants).
 - Whether a scope may mix include and exclude (e.g., "all except group X").
-- Local-account MFA (TOTP). Slice 1 delegates MFA to the IdP via OIDC (slice 3); local-account MFA is a later add for installs that need it before OIDC lands.
-- The phasing of the delegation build for AI acting on behalf of a user: the architecture is settled ([AI acts via delegation](#ai-acts-via-delegation)), but standing up Omniglass as an OAuth OP (not just an RP), the delegated-credential lifecycle, and dual-actor audit roll out over later slices.
+- Local-account MFA (TOTP): OIDC delegates MFA to the IdP, so whether to add a local-account TOTP path for installs not on OIDC is an open question.

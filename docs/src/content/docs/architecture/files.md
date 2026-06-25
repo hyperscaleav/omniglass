@@ -79,8 +79,8 @@ references, after which a now-unreferenced blob past the grace floor is collecta
 
 **Mechanism: index-probe mark-sweep by default.** GC enumerates blobs past the grace floor and,
 for each, probes the indexed hash-ref columns on the referencing tables; a blob with no live
-reference is collected. A **maintained refcount column or `blob_ref` table is a deferred
-optimization**, added only if the per-blob probes profile too expensive (the same
+reference is collected. A **maintained refcount column or `blob_ref` table is a measured
+optimization**, earned only if the per-blob probes profile too expensive (the same
 ship-the-simple-thing discipline as the storage projections). The grace floor is the safety
 margin against an in-flight reference, so GC never races a just-written event.
 

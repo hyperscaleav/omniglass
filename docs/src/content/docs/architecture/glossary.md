@@ -37,7 +37,7 @@ This is the **authoritative glossary**: every official term in the architecture,
 | **intended** | A command's declared effect, pending reconciliation. Lineage: the command `event_id`. Only commands set it. |
 | **source** | Which sensor/path produced an observed value; distinct from provenance; enables multi-source rows + fusion. A `source` registry carries default weights. |
 | **perspectives** | The source-tagged observed rows for one signal: multiple sources reporting one value, all preserved; a reduce-on-read policy produces the effective value, while every perspective stays queryable. |
-| **fusion_policy** | Per-key reduce-on-read **default/hint** for multi-source observations (mode + tie-break + source weights), not a mandate: a policy may default from the type but can be source-weighted, per-instance, or deferred to read time. Applied on read. |
+| **fusion_policy** | Per-key reduce-on-read **default/hint** for multi-source observations (mode + tie-break + source weights), not a mandate: a policy may default from the type but can be source-weighted, per-instance, or left to read time (keep all perspectives, decide on read). Applied on read. |
 | **fusion** | Reading one effective value from multiple **perspectives** on a signal: same-key multi-source reduces by a policy (read-time, defaulting from the key's fusion_policy); cross-key/system-level = a calc_rule. Perspectives are always preserved. |
 | **config** | The declared side of a canonical signal: an operator-set value keyed to a `datapoint_type`, reconciled against the observed datapoint via the template's get/set functions and a per-item `reconcile` policy. See [config and credentials](/architecture/variables/). |
 | **credential** | An access secret with a structured shape, a pluggable `SecretProvider` (inline or external), and a lifecycle (refresh / rotation / expiry); read is `secret:read`-gated and every decrypt audited. Template-driven. |
@@ -49,13 +49,13 @@ This is the **authoritative glossary**: every official term in the architecture,
 | **calc_rule** | datapoint(s) to datapoint (calculated): cross-key / system-level derivation. (Same-key multi-source reconcile is the key's fusion_policy.) |
 | **event_rule** | datapoint change to event: fire_criteria + optional clear_criteria (clear makes events alarm-paired); an optional `health` impact lets its alarm move the owner's health. No separate alarm or condition rule. |
 | **action_rule** | A subscription (Expr over events; alarms via edge events) wiring occurrences to actions. |
-| **discovery_rule** | *(deferred)* observed data creates components/systems/locations + their identity config; carries the `official` boolean. |
+| **discovery_rule** | observed data creates components/systems/locations + their identity config; carries the `official` boolean. |
 | **event** | A discrete semantic occurrence the action layer reacts to. Keyed, point-in-time, owned via the arc. Not a datapoint. |
 | **origin** | How an event arose: caught, caused, derived, scheduled. |
 | **alarm** | One open-to-close incident: a stateful row driven by an event_rule's paired events; new row per open; keyed (event_rule, owner); optionally health-impacting while open. Not event-sourced. The ITSM anchor. |
 | **severity** | An alarm's alert importance, set to a **severity level** by id; distinct from health (a different axis). Rules and action_rule predicates compare by level (resolved via the level's order). |
 | **severity level** | A registry row: `id`, `label`, `color`, and an integer `order` (for comparison only). Official defaults ship spaced; an operator can add, relabel, or recolor. Carries the `official` boolean. |
-| **action** | An ordered sequence of steps (notify, command in v1; wait/branch deferred). Single-step `notify` / `command` actions ship v1; multi-step flows (including remediate-verify-escalate) are deferred. |
+| **action** | An ordered sequence of steps (`notify`, `command`, `wait`, `branch`). A single-step `notify` or `command` is the simple case; a multi-step shape (including remediate-verify-escalate) is a **flow**. |
 | **command** | A `run`-action declaration in a component_template version (not a table); an instance is an `action` with `kind=command`. |
 | **disagree(A,B)** | A condition operator comparing two provenances or sources of one key. Drift, config drift, conflict. Keeps the DAG. |
 | **divergence** | Any two provenances or sources of one key that disagree. The universal anomaly signal. |

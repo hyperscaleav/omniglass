@@ -15,7 +15,7 @@ Parsing a raw payload into datapoints is the **edge function** ([collection](/ar
 - **event_rule**: datapoint change to event. Lives on [events](/architecture/events/) and [alarms and actions](/architecture/alarms-actions/): it carries a required `fire_criteria` and an optional `clear_criteria`, with the fire/clear pair opening and resolving an alarm.
 - **action_rule**: a subscription wiring events and alarms to actions. Lives on [alarms and actions](/architecture/alarms-actions/).
 
-An alarm is not produced by a different rule; it is an event rule whose events are paired (open, close), so there is no `alarm_rule` and no `condition_rule`. Ownership for a templated function is stamped at the edge (the component is known); shared-interface ingress is owner-bound server-side. A deferred **`discovery_rule`** (observed data creates entities) rounds out the family; see the spine's rules section.
+An alarm is not produced by a different rule; it is an event rule whose events are paired (open, close), so there is no `alarm_rule` and no `condition_rule`. Ownership for a templated function is stamped at the edge (the component is known); shared-interface ingress is owner-bound server-side. A **`discovery_rule`** (observed data creates entities) rounds out the family; see the spine's rules section.
 
 ## calc_rule: cross-key and system-level derivation
 
@@ -23,7 +23,7 @@ A **calc_rule** reads datapoints and writes a datapoint (provenance **calculated
 
 The calculated value it writes is parallel to observed: both are machine-derived, distinguished by the **`provenance` column**, both carrying `source_rule` + `source_rule_version` on the row. See [calculated](/architecture/datapoints/#calculated-derived-by-a-calc-rule) for how the row records its lineage.
 
-Calc folds **every** instance of an input key into the reduce: a rule reading `fan.speed` from a component gets one candidate per fan, so `worst` / `average` / `count` / Expr aggregate across all of them. Calc **outputs** stay aggregate (`instance = ''`); per-instance outputs are a deferred capability. See [the instance dimension](/architecture/datapoints/#the-instance-dimension-many-values-of-one-key-on-one-owner) for the full instance model.
+Calc folds **every** instance of an input key into the reduce: a rule reading `fan.speed` from a component gets one candidate per fan, so `worst` / `average` / `count` / Expr aggregate across all of them. Calc **outputs** stay aggregate (`instance = ''`); per-instance outputs (one health per fan, a group-by) are a separate capability, output owners default to the singleton. See [the instance dimension](/architecture/datapoints/#the-instance-dimension-many-values-of-one-key-on-one-owner) for the full instance model.
 
 Calc is one half of [fusion](/architecture/datapoints/#fusion): cross-key / system-level fusion is the only fusion that authors a rule (a `calc_rule`), deriving a higher-order fact (a new key) rather than reconciling one key across sources.
 
@@ -37,6 +37,6 @@ The three rule families share one config shape, versioned so a backtest can pin 
 
 | Table | Key columns | Notes |
 |---|---|---|
-| `calc_rule` / `event_rule` / `action_rule` | **(id, version)**, scope, spec (jsonb: Expr + params) | config, named for function; versioned so a backtest can pin the rule version. `calc_rule` = cross-key/system-level derivation; `event_rule` = fire_criteria + optional clear_criteria ([events](/architecture/events/), [alarms and actions](/architecture/alarms-actions/)); `action_rule` = a subscription (an Expr predicate over events). Parsing is the edge function, not a rule; a deferred `discovery_rule` is not yet in schema |
+| `calc_rule` / `event_rule` / `action_rule` | **(id, version)**, scope, spec (jsonb: Expr + params) | config, named for function; versioned so a backtest can pin the rule version. `calc_rule` = cross-key/system-level derivation; `event_rule` = fire_criteria + optional clear_criteria ([events](/architecture/events/), [alarms and actions](/architecture/alarms-actions/)); `action_rule` = a subscription (an Expr predicate over events). Parsing is the edge function, not a rule; `discovery_rule` rounds out the family |
 
 Related: [datapoints](/architecture/datapoints/) (the data model calc reads and writes), [events](/architecture/events/) (the `event_rule`), [alarms and actions](/architecture/alarms-actions/) (the `action_rule` and the response layer), and [the glossary](/architecture/glossary/).

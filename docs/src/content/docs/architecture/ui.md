@@ -37,7 +37,7 @@ The factoring avoids both "every screen is hand-coded" and "everything must be a
   reducer vocabulary.
 - **Coded pages** compose renderers plus custom interaction: the built-in information architecture
   (overview, drill-downs, config forms, exploration).
-- **Composable dashboards** (config-driven, **deferred**): operator-built grids where each
+- **Composable dashboards** (config-driven): operator-built grids where each
   **widget = a view ref + a renderer + a field-mapping + params**, no code per dashboard.
   Dashboard-level params flow into widget view-params, so one "system overview" dashboard works for
   any system.
@@ -46,22 +46,20 @@ The contract underneath both: **all UI reads go through [views](/contributing/ap
 for writes. The renderer library serves coded pages and dashboard widgets identically; the only
 difference is whether the composition is code or config.
 
-## Staging: coded pages now, dashboard engine later
+## Coded pages and dashboards share one view layer
 
-Build the **renderer library plus coded pages** first; the **composable-dashboard engine** (grid
-editor, widget config, the view-binding UI) is **deferred** until operators need to compose their
-own. Coded pages give a complete operator console; dashboards are the customization layer on top,
-and the view layer is what makes them cheap when they arrive. A built-in page **queries a default
-view, not a raw resource** (the Alarms page reads the `firing-now` view, not `GET /alarms`
-directly), so the read contract is uniform and the same view can later back a dashboard widget
-unchanged.
+Coded pages give the complete operator console; composable dashboards are the customization layer on
+top (a grid editor, widget config, and the view-binding UI), and the view layer is what makes them
+cheap. A built-in page **queries a default view, not a raw resource** (the Alarms page reads the
+`firing-now` view, not `GET /alarms` directly), so the read contract is uniform and the same view
+backs a dashboard widget unchanged.
 
 ## Live updates: polling by default
 
-Live data is **query polling** (a refetch interval; slow-changing config uses a long stale time). An
-**SSE or stream subscription is deferred** until latency or fan-out forces it, the same
-earn-it-with-a-profile discipline. Presentation that depends on config (a severity level's id to its
-label and color) resolves client-side from the config view.
+Live data is **query polling** (a refetch interval; slow-changing config uses a long stale time). A
+read can also **stream over the view layer (SSE or a stream subscription)** where latency or fan-out
+earns it, the same earn-it-with-a-profile discipline. Presentation that depends on config (a severity
+level's id to its label and color) resolves client-side from the config view.
 
 ## Configuration UIs
 
@@ -107,7 +105,7 @@ The IA has two layers, deliberately decoupled:
    Inventory (systems, components, locations, interfaces, nodes, tasks), Catalog (templates, types,
    tags, rules), Explore, Settings (config, secrets, identity, audit). Grouping is pure
    presentation: a cluster is not a destination and carries no route of its own. It can be
-   rearranged, and eventually made user-customizable, without touching a single route.
+   rearranged, and is user-customizable, without touching a single route.
 
 **Home is distinct from Dashboards.** Dashboards monitor the *fleet* (datapoint views over the
 inventory). Home monitors the *monitor*: the operator and admin situation room for config lifecycle
@@ -120,8 +118,7 @@ The theme is **dark-first** (the NOC aesthetic) on the brand palette (teal `#21C
 
 ## Open items
 
-- The composable-dashboard schema (widget placement grid, view binding, dashboard params) when the
-  engine is built.
+- The composable-dashboard schema (widget placement grid, view binding, dashboard params).
 - The field-mapping contract between a view result and each renderer (column roles per renderer
   type).
 - Whether dashboards are themselves resources (carrying the `official` boolean, saved like views) or a

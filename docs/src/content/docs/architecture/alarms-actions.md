@@ -206,13 +206,13 @@ the model analyze it, and routes on the verdict.
 This is the platform's programmable layer, and it is deliberately a **bounded** workflow engine, not a
 Turing-complete one: a finite step list, lineage-guarded (above), with a depth / step cap as defense.
 A flow does **not** author events; it acts, and any effect it has on the world returns as ordinary
-data (which is the only edge that could re-open its alarm, and that edge is lineage-bounded). A future
+data (which is the only edge that could re-open its alarm, and that edge is lineage-bounded). A
 drag-and-drop editor edits flows.
 
-**Build phasing.** The architecture above is **complete and decided now**; only the *build* is phased.
-**v1 ships single-step actions**: one `notify` or one `command` per action, the cases that cover most
-of the value. **Multi-step flows are built shortly after**, once the leaf step kinds and the time
-primitive exist; nothing in the design changes when they land, the step list simply grows past one.
+**The single-step and multi-step shapes are one model.** An action is one or many steps: a
+single `notify` or `command` is the simple case, and a multi-step **flow** is the same step list
+grown past one over the same engine. Nothing in the design distinguishes them but the length of the
+list.
 
 ## Namespacing
 
@@ -232,14 +232,13 @@ concrete way to notify or to run a command against a given device class).
 
 A command is **not a table**: it is a `component_template_version.spec` declaration (the interface `commands` block); a command instance is an `action` row with `kind=command`. The `event_rule` / `action_rule` config rows live with the [rule families](/architecture/calculations/).
 
-## Deferred
+## Model-keyed command cascade
 
-- **Model-keyed command cascade**: an abstract action (`reboot`)
-  resolving to different concrete commands by component type / model through the
-  cascade (the edge dispatch and the `command` declaration already exist in
-  [templates](/architecture/templates/) / [nodes](/architecture/nodes/); this is the abstract-to-concrete resolution layer above them).
-- **Flows** (above): fully designed now, **build** phased behind the leaf step kinds and the time
-  primitive (v1 ships single-step actions).
+An abstract action (`reboot`) resolves to different concrete commands by component type / model
+through the cascade. The edge dispatch and the `command` declaration live in
+[templates](/architecture/templates/) / [nodes](/architecture/nodes/); the cascade is the
+abstract-to-concrete resolution layer above them, so one `reboot` action targets a heterogeneous
+fleet and each device runs the command its model declares.
 
 ## Open items
 

@@ -231,7 +231,7 @@ The shape registry, the config / variable cell, and the operator-label tables; t
 - Whether config, credentials, and variables are **one table with a discriminator or three**; they
   share the cascade and scope either way.
 - `reconcile: enforce` execution (the set-function push, and the enforcement-failure alarm) plus the
-  separate one-shot import action (observed-becomes-declared); the policy reserves the seam, the
-  controller is a later slice.
+  separate one-shot import action (observed-becomes-declared); the controller shape behind the
+  reserved seam.
 - The external `SecretProvider` implementations (KMS / Vault / secrets managers) behind the existing
   seam.

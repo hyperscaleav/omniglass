@@ -38,8 +38,8 @@ ComponentTemplate (apiVersion, kind, metadata.labels)
   credentials live in the separate [config and credentials](/architecture/variables/) store (sargable
   point-lookups); config is keyed to a datapoint as its observed side.
 - **Kubernetes-style versioning.** `apiVersion: collection.omniglass.dev/v1alpha1` plus a
-  `kind` (`ComponentTemplate`, later `SystemTemplate` / `LocationTemplate`). The parser gates
-  on `apiVersion` and converts older versions forward.
+  `kind` (`ComponentTemplate`, with `SystemTemplate` / `LocationTemplate` reserved in the same
+  apiVersion). The parser gates on `apiVersion` and converts older versions forward.
 
 A **function** is the device-level unit. The platform-level workflow that *responds* to data,
 the thing that opens tickets, notifies, and orchestrates, is a [flow](/architecture/alarms-actions/);
@@ -56,7 +56,7 @@ attach to a connection established once.
 ```yaml
 interfaces:
   - id: snmp
-    type: snmp                     # interface_type registry entry (built flag + param schema)
+    type: snmp                     # interface_type registry entry (param schema)
     host: ${input.ip}              # references INPUTS, not $var: directly (see Inputs)
     version: "2c"
     auth: ${input.snmp}            # snmp_community shape; community field is secret (masked, audited)
@@ -68,9 +68,10 @@ interfaces:
     persistent: true               # stateful session, outlives function runs
 ```
 
-- **Type is an `interface_type` registry entry** with a `built` flag (`snmp`, `http`, `ssh`,
-  `telnet`, `tcp`, `icmp`, `webhook` built; `mqtt`, `syslog`, `websocket` coming). The per-type
-  connection-param schema is registry-driven, so config lints against exactly what is built.
+- **Type is an `interface_type` registry entry**: the registry knows which protocol adapters exist
+  and carries each one's connection-param schema. It covers `snmp`, `http`, `ssh`, `telnet`, `tcp`,
+  `icmp`, `webhook`, `mqtt`, `syslog`, and `websocket`. The per-type schema is registry-driven, so
+  config lints against exactly the adapter the registry holds.
 - **`liveness`** is the per-interface reachability gate; it decides whether the interface's
   functions run. See [nodes](/architecture/nodes/).
 - **`persistent: true`** keeps a session open across function runs (interface lifecycle contains
@@ -78,8 +79,8 @@ interfaces:
   wake on its inbound.
 - **Codec and framing.** Raw-TCP AV control planes wrap payloads non-trivially (line
   terminators, length prefixes, NUL framing, JSON-RPC or TTP envelopes). An interface carries
-  encode/decode controls to lock raw to shape; basic framing ships first, the richer codec
-  layer extends over time.
+  encode/decode controls that lock raw to shape: the codec frames outbound payloads and parses
+  inbound ones to the declared envelope, so a step sees structured content, not wire bytes.
 - **Node placement is not declared here.** It is server-assigned from the component's location.
 
 ## Functions: a trigger plus a step DAG
@@ -99,8 +100,8 @@ primitives, a poller, a listener, and a command:
 
 A `command` function takes typed `args` and is the imperative path: it is how the platform *acts*
 on a device, and how a reconcile pushes a declared config back (the **set** function, see [config](/architecture/variables/)).
-`triggers` is modeled as a list; the first phase enforces exactly one. The foreseeable
-multi-trigger case is a scheduled function that is also command-invocable for a targeted refetch.
+A function has exactly one trigger. `triggers` is modeled as a list to admit the multi-trigger
+case, a scheduled function that is also command-invocable for a targeted refetch.
 
 ### Two axes: task mode and interface transport
 
@@ -133,7 +134,7 @@ pass-through, marked `shape=native`. As with any function, a failed parse keeps 
 
 ## Built interface types and their config
 
-The built poll types and listeners (`interface_type.built = true`) and the operator config they read.
+The poll types and listeners in the `interface_type` registry and the operator config they read.
 The node translates each stored task + interface into a poller the collection engine runs; how the
 node *executes* these (tick scheduling, reachability gating, the task queue) is [nodes](/architecture/nodes/).
 
@@ -170,11 +171,11 @@ For `snmp`, each OID is carried in its **native SNMP type**: numeric OIDs as
 numbers, string OIDs (OctetString / IPAddress / OID) as text, so a string-valued
 OID (an enum or label) lands as a `state` datapoint and a numeric one as
 `metric`. The owning table is decided at ingest from the key's `datapoint_type`
-kind. Per-OID declared typing and richer collection specs move to the component
-template with authorship (the template declares the OID set, demoting
-`task.params.oids` to an override).
-v2c plaintext community only this slice; SNMPv3 and credential-backed
-(`auth_secret`) community resolution are deferred.
+kind. Per-OID declared typing and richer collection specs live on the component
+template (the template declares the OID set, demoting `task.params.oids` to an
+override). SNMP runs v2c with a plaintext community or v3 with auth/priv; the
+community resolves from the interface params directly or through an `auth_secret`
+credential.
 
 Every extract spec (`oids`, the http/text `extract`) shares one name grammar: a
 name may carry a trailing **`key[instance]`** suffix to distinguish several values
@@ -190,16 +191,12 @@ distinct alarm signals (a non-2xx response is still reachable). `extract` pulls
 values from a JSON body by dot-path (`name=json:data.0.temp`): a number or bool
 leaf becomes a `metric`, a string leaf a `state`; a missing path, a
 container/`null` leaf, or an unreachable endpoint yields no datapoint. Auth rides
-as plaintext `header_*` interface params this slice (e.g.
-`header_authorization: Bearer ...`); `auth_secret`-backed credential resolution
-is deferred, the same posture as snmp's plaintext community. Carry auth in
+as `header_*` interface params (e.g. `header_authorization: Bearer ...`), resolved
+from a plaintext param or an `auth_secret` credential. Carry auth in
 `header_*`, never in the URL or body: the request `body` param is **not** stamped
 as a datapoint label, and the `target` label is the request URL with its query
 string (and any userinfo) stripped, so a token placed in the path query does not
-leak into attributes (but is still a bad idea). `method`/`body` support POST/PUT;
-richer extraction (response headers, regex, JSONPath wildcards), object keys that
-contain a literal dot (the extract path separator), and an http liveness probe
-are deferred.
+leak into attributes (but is still a bad idea). `method`/`body` support POST/PUT.
 
 For the **text family** (`raw-tcp`/`telnet`/`ssh`), the poll is one ephemeral
 round trip: connect, optionally authenticate, send `task.params.command` followed
@@ -213,25 +210,25 @@ values by **regex named capture** (`name=re:<pattern>`, parallel to http's
 datapoint when the pattern has exactly one group; a captured value that parses as a
 number becomes a `metric`, otherwise a `state`; a non-matching pattern (or an
 unreachable endpoint) yields no datapoint, while a pattern that fails to compile is
-a configuration error. Auth rides plaintext this slice (telnet/ssh `password`,
-ssh inline `private_key`), the same posture as snmp's community and http's
-`header_*`; `auth_secret`-backed credential resolution and ssh host-key pinning are
-deferred. Credentials live on the interface and are never labelled; the `target`
-label is the command. The transport is swappable behind one boundary, so a future
-`raw-udp` request/response poll (datagram in, reply out) slots in as a fourth kind
-without new machinery; UDP **listen** (unsolicited inbound: syslog, snmp-trap) is a
-different shape and belongs to the deferred listener runtime. Deferred for the text
-family: persistent held sessions, multi-line prompt-expect beyond the first
-delimiter, command echo handling, Q-SYS-style frame/checksum framing, and ssh shell
-/ pty (`exec` only).
+a configuration error. Auth resolves from interface params (telnet/ssh `password`,
+ssh inline `private_key`) or an `auth_secret` credential, the same posture as snmp's
+community and http's `header_*`, and ssh pins the host key. Credentials live on the
+interface and are never labelled; the `target` label is the command. The transport is
+swappable behind one boundary, so a `raw-udp` request/response poll (datagram in,
+reply out) slots in as a fourth kind without new machinery; UDP **listen**
+(unsolicited inbound: syslog, snmp-trap) is a different shape and belongs to the
+listener runtime. A held session (the stateful transport) carries the same text
+family over a persistent connection, with multi-line prompt-expect beyond the first
+delimiter, command echo handling, and Q-SYS-style frame/checksum framing; ssh runs
+its commands as a one-shot `exec`.
 
 ### Built listeners and their config
 
 A **listener** is inbound: rather than us polling, **we wait for pushed data**
 (`mode: listen`). That data can arrive several ways, a webhook POST, an
 MQTT/subscribe stream, an SNMP trap or syslog line, or a line on a held stateful
-session; a webhook is one transport, not the definition. `webhook` is the first
-built listener and is **server-hosted**: `placement: central` makes the server the
+session; a webhook is one transport, not the definition. A `webhook` listener is
+**server-hosted**: `placement: central` makes the server the
 endpoint for inbound external webhooks, so a webhook listen-task is **server-executed
 and unassigned** (`node_name IS NULL`); the server's `POST /webhooks/{path}` route is
 its runtime, not a node tick.
@@ -257,15 +254,15 @@ send, echoing a `?challenge=` value. The body cap, JSON-only parsing, and
 "non-JSON body makes declared extractions absent (not an error)" mirror the http
 poller.
 
-**Auth and spoofing**: the secret is plaintext in `interface.params` this slice
-(same posture as snmp's plaintext community); `auth_secret`-backed resolution and
-HMAC-signature verification are deferred behind the auth seam. The route stamps a
-trusted, server-set `interface` label on every datapoint and copies body fields
-into attributes **only** via the declared `extract` set, so a body field cannot
+**Auth and spoofing**: the shared secret resolves from a plaintext `interface.params`
+value or an `auth_secret` credential (same posture as snmp's community), and the
+sender may instead present an HMAC signature verified behind the auth seam. The route
+stamps a trusted, server-set `interface` label on every datapoint and copies body
+fields into attributes **only** via the declared `extract` set, so a body field cannot
 impersonate another interface; shared-interface ingress should scope on
 `event.labels.interface`, and per-component interfaces (server-assigned owner)
-are preferred for high-trust sources. Node-hosted listeners (LAN-local sources),
-idempotency/dedup, and form-encoded bodies are deferred.
+are preferred for high-trust sources. A listener also runs node-hosted for
+LAN-local sources, with idempotency/dedup and form-encoded bodies.
 
 ## Steps: the DAG
 
@@ -296,7 +293,7 @@ steps:
 - **`kind` is interface-gated and registry-driven.** Valid kinds depend on the target
   `interface_type` (`snmp.get`, `snmp.walk`, `http.request`, `ssh.send`, `ssh.subscribe`, the
   interface-agnostic `extract` and `blend`). Each kind's param schema lives in the registry,
-  built one kind per increment as adapters ship.
+  one entry per adapter.
 
 In-scope reference namespaces within a function run: `$var:<key>` (config and secret values,
 resolved through the [cascade](/architecture/cascade/)), `$dp.<key>` (datapoints), `$steps.<id>.*`
@@ -370,9 +367,10 @@ A function runs the parse at the **edge**, not server-side:
 - **Raw payloads are not stored**, the datapoint is the source: a dev raw-mode taps the wire bytes
   live while developing, and a parse or validation failure emits a `collection.failed` event
   carrying the raw. There is no telemetry table.
-- **Single owner (first phase):** datapoints land on the function's own component, identity
-  stamped at the edge (the component is known, the function runs for it). Fan-out to multiple
-  owners (a management platform reporting for many devices) is a later phase.
+- **Owner attribution:** a single-owner function lands its datapoints on its own component,
+  identity stamped at the edge (the component is known, the function runs for it). A function
+  that reports for many devices (a management platform) fans out to multiple owners, resolved
+  server-side from the emitted identity labels (below).
 - Because parsing is the edge step, there is **no separately authored transform rule**. Routing
   is the template's fan-out, and cross-entity rollups are [calc](/architecture/calculations/)
   datapoints on system and location templates. The server-side work that remains is
@@ -395,7 +393,7 @@ legacy-platform reflex. Here the API is **one component** (one interface, one cr
   physical device) maps to **system-owned datapoints** directly. Reserve a virtual component for the
   genuine *member* case (its own node in the topology, a `health_role`, a lifecycle). Rule of thumb:
   **member -> component, telemetry -> system.**
-- **Unmatched identities are orphans**, a discovery candidate. The deferred `discovery_rule` is the
+- **Unmatched identities are orphans**, a discovery candidate. The `discovery_rule` is the
   onboarding win: point it at the API and it auto-creates the entities and sets their identity, so you
   never hand-map.
 
