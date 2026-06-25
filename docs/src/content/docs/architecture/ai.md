@@ -1,13 +1,13 @@
 ---
 title: AI
-description: "AI as a governed capability along an assistive-to-agentic spectrum: same seams, OAuth delegation, provenance, and human-in-the-loop gating."
+description: "AI as a governed capability along an assistive-to-agentic spectrum: the sponsored agent principal, same seams, provenance, and human-in-the-loop gating."
 sidebar:
   badge:
     text: Spec
     variant: caution
 ---
 
-AI in Omniglass is a **capability that spans an assistive-to-agentic spectrum**, governed exactly like any other actor. At the assistive end it enriches and explains; at the agentic end it proposes and acts. The capabilities differ across the spectrum; the governance does not move. This page is the architecture of that governance: how AI plugs into the same seams as any principal, why it acts through delegation rather than its own broad identity, and what keeps it assistive-not-authoritative and always traceable.
+AI in Omniglass is a **capability that spans an assistive-to-agentic spectrum**, governed exactly like any other actor. At the assistive end it enriches and explains; at the agentic end it proposes and acts. The capabilities differ across the spectrum; the governance does not move. This page is the architecture of that governance: how AI acts as the **`agent` principal kind**, sponsored by a human and scope-bounded to a strict subset of that sponsor's authority, how it plugs into the same seams as any principal, and what keeps it assistive-not-authoritative and always traceable.
 
 ## The capability spectrum
 
@@ -29,14 +29,20 @@ AI is **not a side channel**. It reaches the estate through the same three seams
 
 If a permission or a scope would stop a human from doing something, it stops the AI doing it too. There is no elevated AI lane.
 
-## AI-on-behalf-of-a-user is OAuth delegation
+## AI is the sponsored `agent` principal
 
-When AI acts for a user, it uses **that user's delegated authority**, not an identity of its own. This is the **delegation seam**: OAuth on-behalf-of (delegation), where an agent holds a delegated, scoped, audited credential and operates strictly within the granting user's permissions and scope. The agent cannot exceed the user who delegated to it, and the action is attributable to both. AI does **not** get its own broad principal kind. See [identity and access](/architecture/identity-access/) for the principal model and the delegation mechanism.
+An AI actor is its own principal: the **`agent`** kind, alongside human, service, and node. It carries its own identity, its own credential, and its own audit trail, so an agent's actions are first-class facts rather than a borrowed human session.
+
+Every agent is **mandatorily sponsored by a human**. The sponsor is the accountable human behind the agent, recorded as a relationship on the agent principal itself. An agent's authority is the **upper boundary set by its sponsor**: its permissions and ABAC scope are a **strict subset of the sponsor's**, enforced at grant time and **clamped to the intersection** if the sponsor's scope later shrinks. An agent can never exceed, and never outlive, its sponsor's authority. Because the agent is a distinct principal, its credential has its own lifecycle: revoke or rotate the agent independently of the human.
+
+**OAuth on-behalf-of is the auth mechanism backing the agent**, how an external AI proves it is acting for its sponsor. It is the credential the agent presents, not a shortcut that clones the sponsor's scope: the subset-and-clamp invariant is what bounds the agent, not the OAuth grant. This is symmetric with the other bounded kinds: a node is bounded by its placement, an agent is bounded by its sponsor.
+
+See [identity and access](/architecture/identity-access/) for the principal-kinds model, the per-kind `agent` table, and the subset/clamp invariant.
 
 ## Provenance and audit
 
-Every AI-produced output, an enrichment, a calculated value, a configuration change, is **marked as AI-sourced and audited**. The marking is what makes the capability assistive-not-authoritative: a reader can always tell what came from AI, weigh it accordingly, and trace it. The audit half ties into the existing model ([audit](/architecture/audit/)): an AI-influenced write records both the AI provenance and the human in whose authority it ran, so the trail names a responsible actor on every move. Nothing AI touches is anonymous or unattributable.
+Every AI-produced output, an enrichment, a calculated value, a configuration change, is **marked as AI-sourced and audited**. The marking is what makes the capability assistive-not-authoritative: a reader can always tell what came from AI, weigh it accordingly, and trace it. The audit half is native to the principal model ([audit](/architecture/audit/)): an AI-influenced write attributes to the **agent** as the actor and names its **sponsor** as the accountable human, both as plain principal facts, so the trail names a responsible actor on every move. Nothing AI touches is anonymous or unattributable.
 
 ## Human-in-the-loop gating
 
-Autonomous action is **gated before it is allowed**: propose -> approve -> act. The agent surfaces a proposed change, a human approves it, then it executes, and the approval lands in the audit trail. Full autonomy for a given failure class is a deliberate promotion that a class earns by its track record under the gate, never the starting state. The gate is the safety boundary that lets the capability span toward agentic without the governance moving with it.
+**propose -> approve** is an agent-level policy. Mutating actions can require **sponsor sign-off**: the agent surfaces a proposed change, its sponsor approves it, then it executes, and the approval lands in the audit trail. Read and diagnostic actions run **autonomously within the agent's scope**, no approval gate. Full autonomy for a given mutating failure class is a deliberate promotion that a class earns by its track record under the gate, never the starting state. The gate is the safety boundary that lets the capability span toward agentic without the governance moving with it.

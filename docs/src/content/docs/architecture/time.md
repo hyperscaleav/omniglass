@@ -121,6 +121,10 @@ member* is gray and does not down the system. Whether stale means "last value st
 slow config signal) or "lost visibility, alarm" (a liveness signal) is **per-datapoint-type
 policy**: the datapoint_type declares its staleness tolerance.
 
+These two absences surface on the [health](/architecture/health/) side as `unknown` reasons:
+a went-stale datapoint is the `stale` reason, and a covered-but-never-reported datapoint is the
+`no-data` reason (distinct from `uncovered`, where no health-impacting rule resolves at all).
+
 **Cadence is inferred for pollers, declared for heartbeats.** A poller's expected interval is its
 `interval` times a tolerance. A listen-triggered function is **opt-in**: watched only if it declares
 an expected heartbeat interval (an MQTT keepalive, a source that pings); silence on a listener

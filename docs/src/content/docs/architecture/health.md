@@ -24,9 +24,9 @@ pulling health off the datapoint stream is exactly the Zabbix services bolt-on t
 
 What is **first-class about the model** (not ordinary):
 
-- **Intrinsic.** Every component, system, and location *has* health, automatically: `up` by
-  default, moved only by its open health-impacting alarms. No entity is health-less, and none waits
-  on someone authoring a rule.
+- **Intrinsic.** Every component, system, and location *has* health, automatically, moved by its
+  open health-impacting alarms when it is covered and `unknown` until then (below). No entity is
+  health-less, and none waits on someone authoring a rule.
 - **A built-in ordered domain** (below), not a user-defined value type.
 - **Alarm-sourced.** Health is computed from open **alarms**, not measured or extracted (below).
 - **A built-in role-aware rollup** up the structural tree (below): engine behavior, not an editable
@@ -49,15 +49,43 @@ An `event_rule` (the alarm's definition) declares an optional **`health` impact*
 `degraded`, or none (the default). Most alarms carry none, because a lamp-hours warning is worth an
 alert but does not down the device; the few that do are the device's actual failure conditions.
 
-- A **component's health** is the **worst** over its **open health-impacting alarms** (and `up` if
-  none). Reachability is just one such alarm (an "unreachable" trigger, impact `down`): everything
-  is an alarm, with no parallel datapoint-calc.
+- A **component's health** is the **worst** over its **open health-impacting alarms**. Reachability
+  is just one such alarm (an "unreachable" trigger, impact `down`): everything is an alarm, with no
+  parallel datapoint-calc.
 - Health is **ack-independent**, because ack is not close. An alarm stays open (acknowledged) while
   its condition holds; only the **clear event** (the data recovered) closes it. Acking annotates; it
   never makes a down room look healthy.
 
 So "twelve alarms open, system fine" falls out for free: if none of the twelve is health-impacting,
 health never moved.
+
+### No firing alarm splits by coverage
+
+When **no** health-impacting alarm is open, the honest answer depends on whether anything would have
+caught a failure. **Coverage** is the question "does any health-impacting `event_rule` resolve
+against this entity's datapoint_types?":
+
+- **covered, none firing, data fresh -> `up`.** Something measures what "down" means here, it is
+  watching, and it is silent: genuinely healthy.
+- **not covered -> `unknown`.** No health-impacting rule resolves, so nothing here knows what failure
+  looks like. Reporting `up` would be a false green; the entity is `unknown`, not healthy.
+
+`unknown` carries a **reason** discriminator as metadata, so an operator can tell a measurement gap
+from a coverage gap. The ordered value domain (below) is **unchanged**: `unknown` stays off the
+order, and the reason is descriptive metadata, not a new state. The reasons:
+
+- **`stale`** -- the entity had data and it went stale (the no-data machinery in
+  [time](/architecture/time/)).
+- **`uncovered`** -- no health-impacting rule resolves against its datapoint_types (this concern).
+- **`no-data`** -- a rule covers it, but it has never reported, so the rule has nothing to evaluate.
+
+To keep `uncovered` the rare, honest resting state rather than the default, every **collected
+component** is **seeded with a baseline reachability health-impacting alarm** (an "unreachable"
+trigger, impact `down`, via the collection / template default). A freshly-collected device is
+therefore covered the moment it is collected, and resolves `unknown -> up` or `unknown -> down` on
+its first poll. Bare `unknown(uncovered)` then means exactly one thing: "you have collected this, but
+you have not told me what failure looks like beyond reachability," a deliberate gap to fill, not a
+silent hole.
 
 ## The health-state vocabulary
 
@@ -71,8 +99,8 @@ It is **distinct from severity**. Severity is alert importance (a named level by
 [alarms and actions](/architecture/alarms-actions/)); health is entity operational state. They map
 (a `down` health typically raises a `high` or `disaster` alarm) but they are different axes, so health
 is not a severity level. The order exists so the `worst` reducer can pick the worst member;
-`unknown` is off the order (stale or no data, ties to the no-data machinery in
-[time](/architecture/time/)) and is surfaced, not silently folded as `down`.
+`unknown` is off the order (carrying a reason of `stale`, `uncovered`, or `no-data`, above) and is
+surfaced, not silently folded as `down`.
 
 ## Rollup up the structural tree
 
@@ -134,8 +162,11 @@ built in and the same everywhere; what an operator tunes is **roles and threshol
 reducer's guts. Each member carries a **`health_role`**, and the rollup respects it:
 
 - **required** member `down` -> system `down`;
+- **required** member `unknown` -> system `unknown` (the system cannot be called healthy when a
+  member it depends on is unmeasured);
 - **redundant** member `down` -> system `degraded` (only `down` if *all* redundant peers are down);
-- **informational** member -> does not affect system health.
+- **informational** member -> does not affect system health, including an `informational` member that
+  is `unknown` (an unmeasured member that never mattered does not sink the parent).
 
 :::caution[Open question]
 The exact `redundant`-group semantics when a system has several independent redundant sets (per-set
@@ -164,8 +195,10 @@ location, and the global top**, so health rolls up out of the box without per-sy
 level: any down child sinks the parent). It is the model's behavior, not a rule operators rewrite.
 
 :::caution[Open question]
-How the rollup treats an all-`unknown` system: gray, or the parent's prior state. The `unknown`
-versus `stale` distinction itself is settled in [time](/architecture/time/).
+A single `required` `unknown` member already makes the system `unknown` (above). The remaining
+question is the all-`unknown` system with no forcing required member (every member `unknown`, or only
+`informational` ones reporting): gray, or the parent's prior state. The `unknown` versus `stale`
+distinction itself is settled in [time](/architecture/time/).
 :::
 
 ## SLI: indicator over a window

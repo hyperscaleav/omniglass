@@ -104,6 +104,41 @@ gate, a 422 lists any unmet required fields), writes the supplied inputs as the 
 functions to the per-node runtime unit at the server-chosen node. Re-applying converges. The 80% case
 is one action, as cheap as "add host".
 
+### Integrity, authenticity, and the capability gate
+
+A template carries two distinct trust properties, and they are not the same property.
+
+- **Integrity** is the **content hash** every version already carries: it answers "is this the exact
+  bytes that were authored", and it makes a `component_template_version` a stable, addressable artifact.
+  It says nothing about *who* authored those bytes.
+- **Authenticity** is a separate, **optional author signature / attestation** on the
+  `component_template_version`. The signature is over the content hash, so a verified signature binds an
+  authoring identity to those exact bytes. The signature is **verified on import**: an unsigned template
+  imports as unattributed (the operator owns the risk), a signed template imports with its author
+  identity and verification result recorded, and a signature that does not verify against the content it
+  claims to cover is rejected.
+
+A template also declares a **capability manifest**: the set of **write-commands** it exercises and the
+**credential shapes** it requires (the `reboot` / `set-input` commands it issues, the `basic_auth` /
+`snmp_community` / `bearer_token` shapes it binds). The manifest is derived from the template, not
+operator-asserted, so it cannot understate what the template does. At [`:apply`](#deploy-assign-a-template-to-an-existing-component)
+the manifest is **shown and approved**: an operator sees exactly which device-mutating commands and
+credential shapes they are authorizing before the template materializes onto a component. Approving the
+manifest is the consent record for that capability set.
+
+A **device-mutating** template (one whose manifest declares any write-command) does **not** silently
+follow `latest` or a channel into a new capability set. Tracking `latest` or a channel still moves a
+read-only template forward automatically, but a new version of a device-mutating template that changes
+its capability manifest is gated behind an **explicit operator re-pin**: the operator re-approves the
+manifest at the new version before it takes effect. Auto-update never expands what commands run against a
+device without a human approving the expansion.
+
+The **hosted / marketplace** path verifies author signatures and enforces the capability gate on every
+import regardless of the self-host runtime stance. Self-hosters still own the risk of what they import
+(governance is curation, [collection](/architecture/collection/)): the runtime does not refuse an
+unsigned self-hosted template, but the signature state and the approved capability manifest are recorded
+either way.
+
 ## The system_template: the composition shape
 
 A **`system_template`** is first-class and **fully parallel to the component_template**: it declares a
@@ -140,11 +175,42 @@ version** and a system pins the **immutable** `system_template_version` snapshot
   whichever component fills the role, so `video.input = HDMI1` for the main-display role applies to
   whatever display is assigned ([config and credentials](/architecture/variables/)).
 
+### How a member binds a role: three escalating tiers
+
+A `system_template_member` binds a role to a device shape three ways, escalating in flexibility. Most
+members use the first; the third exists for cross-vendor substitutability, not routine matching.
+
+- **Tier 0, exact version (the default).** The member pins a specific `component_template_version`, the
+  `(role, component_template_version, health_role)` tuple described above. This is the deterministic,
+  reproducible BOM: a frozen role fills with exactly one device shape down to the version, and nothing
+  drifts.
+- **Tier 1, version range over one lineage.** The member binds a **semver range** over a **single**
+  template lineage (e.g. `>=2.1 <3.0`), reusing the **existing channel / `latest` mechanism** bounded by
+  that range. It resolves to a concrete version at bind, or tracks latest-in-range. This absorbs
+  same-vendor patch and minor drift (a display vendor ships `2.1.4` to fix a bug) without re-pinning the
+  system by hand, and it adds no new machinery: a range is `latest` with an upper and lower fence.
+- **Tier 2, capability contract for cross-vendor substitutability.** When an LG and a Sony display both
+  legitimately fill the `display` role, the member binds a **capability contract** instead of a lineage.
+  A contract is a **static interface**: the **required commands**, the **required canonical
+  `datapoint_type`s**, and a `health_role`. Conformance is a **set-containment** check: a component's
+  template conforms when its capability set is a **superset** of the contract's required set (it exposes
+  at least the required commands and emits at least the required canonical signals). This works precisely
+  because canonical alignment already exists (a template declares the commands it exposes and the
+  canonical signals it emits, [Template-scoped keys](#template-scoped-keys-and-optional-alignment)), so
+  the contract is written in canonical terms and checked against canonical declarations.
+
+  A version range is the **degenerate contract over one lineage**; the capability contract is the general
+  form. Conformance is evaluated at **bind / re-pin time** and re-checked **only** when the component's
+  template version changes or the contract changes. It is **not continuous evaluation**, **not** a fleet
+  matching engine, and **not** an [Expr](/architecture/alarms-actions/) predicate. Expr stays the rare
+  escape hatch only (the same role it plays in the health-rollup override, [health](/architecture/health/)),
+  never routine role matching.
+
 | Table | Key columns | Notes |
 |---|---|---|
 | `system_template` | name, type, **spec (jsonb)** | the mutable system shape; editing mints a new version |
 | `system_template_version` | (template, **version**), frozen **spec** | the **immutable** snapshot a system pins; roles never change under it |
-| `system_template_member` | (system_template_version, **role**, component_template_version, **health_role**) | the frozen **bill of materials**: role -> pinned `component_template_version` + health role (required / redundant / informational, [health](/architecture/health/)) |
+| `system_template_member` | (system_template_version, **role**, component_template_version, **health_role**) | the frozen **bill of materials**: role -> pinned `component_template_version` + health role (required / redundant / informational, [health](/architecture/health/)); the binding may be an exact version, a version range over one lineage, or a capability contract ([three tiers](#how-a-member-binds-a-role-three-escalating-tiers)) |
 
 ```mermaid
 erDiagram

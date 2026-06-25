@@ -53,16 +53,25 @@ event_rule:
   window: { reduce: avg, over: 10m }                 # machinery (optional)
   fire_criteria: "value > 65"                        # opens the alarm
   clear_criteria: "value < 60"                       # resolves it (defaults to !fire_criteria)
-  for: 0                                             # sustained span (optional)
+  for: 0                                             # fire-side sustain (optional)
+  for_clear: 0                                       # clear-side sustain (optional)
   severity: average
   health: degraded                                   # optional: degrade the owner's health while open
 ```
 
 `scope` selects the entities (fan-out, one alarm per match); `datapoint` is the
-input; `window` / `for` are the aggregation machinery; `fire_criteria` / `clear_criteria`
+input; `window` / `for` / `for_clear` are the aggregation machinery; `fire_criteria` / `clear_criteria`
 are the Expr leaves; `severity` names a level by id (below). A rule is **suppressible by name through
 the cascade** ([cascade](/architecture/cascade/)): a high-weight group can remove a
 false-firing rule without editing it (the firmware-bug workaround).
+
+`for` and `for_clear` are **symmetric sustains** on the two edges. `for` is the
+fire-side sustain: the `fire_criteria` must hold for `for` before the alarm opens.
+`for_clear` mirrors it on the recovery edge: the `clear_criteria` must hold for
+`for_clear` before the alarm resolves, so a source flapping at the cadence boundary
+does not churn the alarm open and clear. Both default to `0` (immediate), and a rule
+can set them independently (a long `for_clear` over a short `for` holds an incident
+through a noisy recovery without delaying the page).
 
 An event_rule also carries an optional **`health` impact** (`down` / `degraded`,
 default none): while the alarm it opens is open, it moves its owner's
@@ -144,6 +153,33 @@ the declarative runbook step-list. Bodies are **Go templates** and sink auth is 
 **credential reference**, both per [expressions](/architecture/expressions/) and
 credentials.
 
+## Storm and dependency suppression
+
+The alarm grain stays **`(event_rule, owner)`**: one upstream fault still fans out to
+one alarm per affected owner. Two primitives keep that fan-out from becoming a page
+storm without collapsing the grain.
+
+**Dependency suppression** mutes a child alarm whose owner's **parent entity on the
+[exclusive-arc](/architecture/datapoints/) structural tree** is itself down. When the
+parent is in a `down` health state, the child alarms beneath it are held suppressed
+(open, but not dispatched), so one upstream failure does not emit N child pages. It is
+expressed over the exclusive-arc tree: the same arc that owns a datapoint and its
+alarm gives the parent walk for free, no separate dependency graph.
+
+**Action-level grouping** coalesces alarms sharing **owner / label / `correlation_id`**
+into one **action dispatch**: one ticket with N members, not N tickets. The alarms stay
+distinct rows at the `(event_rule, owner)` grain; grouping happens at the dispatch edge
+in the `action_rule`, so a storm becomes one notification carrying the member list.
+
+A **system-scoped `event_rule`** is the sanctioned upstream-cause dedup lever. Because a
+system-scoped rule reads member data and fires a **system-owned** alarm for the
+room-level cause (above), it names the actual fault once at the level that owns it.
+Worked example: a switch reboot downs 20 endpoints. A system-scoped rule owns the
+room-level cause as a single system-owned alarm; dependency suppression mutes the 20
+child endpoint alarms whose parent (the room or switch) is down; action-level grouping
+coalesces whatever child alarms remain into one dispatch. The operator sees the cause,
+not 20 symptoms.
+
 ## Durability and egress
 
 A transactional **outbox** row is written with the action's step transition; an
@@ -184,10 +220,12 @@ opens an alarm, which fires the action again), closed with three rules:
    as a backstop. Flows are finite by construction (a step list, per-open-alarm, gated
    on open, cancelled on resolve / ack).
 
-:::caution[Open question]
-The depth bound and the lineage-detector shape for the data-mediated control loop (an action whose
-effect re-opens its own alarm).
-:::
+The walk crosses the command-to-device round trip because the command **stamps its
+originating `correlation_id` onto the intended write and onto the adaptive-poll's
+observed datapoint** ([datapoints](/architecture/datapoints/)). The `event_rule` that
+fires off that observed datapoint inherits the id, so the lineage walk follows a real
+carried id across the device edge rather than an assumed lineage; the depth bound stays
+as the backstop.
 
 So no edge can close a loop: events come only from data, alarms are terminal toward
 datapoints, the response layer cannot author events, operator transitions never
@@ -204,6 +242,12 @@ originating event through every downstream event and action it caused. It is bui
 existing causation lineage (an id stamped at the head and propagated along each caused
 edge), pure DX and observability sugar: it lets an operator see the chain at a glance and
 query "everything this one event set in motion."
+
+The caused edge that crosses the device is carried explicitly: when an action runs a
+command, the command **stamps its `correlation_id` onto the intended write and onto the
+adaptive-poll's observed datapoint** ([datapoints](/architecture/datapoints/)), so the
+chain stays threaded through the device round trip and the `event_rule` that fires off
+the returned datapoint inherits the id.
 
 It is **not** a datapoint kind and **not** a stored span subsystem, just an id carried on
 the chain and queryable. No new tables, no tracing backend.

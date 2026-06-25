@@ -17,7 +17,10 @@ The node is the edge process (`omniglass --mode node`), one per site, or the
 **server itself** for work with no site-local edge (see *Placement*). Its identity
 is **bound to `node.name`**; a compromised node cannot impersonate another (see
 [identity-access](/architecture/identity-access/) for the node auth path). It holds no
-config of its own: it pulls what to do, runs it, and ships results.
+config of its own: it pulls what to do, runs it, and ships results. A node's writes
+are confined to its **placement-derived `visible_set`** (the owners of the tasks
+assigned to it), so a node ingests in **node mode**, not all-visibility system mode
+(see [identity-access](/architecture/identity-access/)).
 
 ## Getting its instructions
 

@@ -22,10 +22,11 @@ A principal carries a `kind` value; the same role machinery works across all kin
 | `human` | a person | local password + session, OIDC, SAML |
 | `service` | scripts, integrations, SDKs, bots | bearer token |
 | `node` | the edge daemon running in the field | bearer token, mTLS |
+| `agent` | an AI actor, sponsored by a human | bearer token, OAuth on-behalf-of |
 
-There is **no `ai` principal kind**. AI does not get its own broad identity; it acts on a user's behalf via **OAuth on-behalf-of (delegation)**, scoped and audited to the granting user (see [AI acts via delegation](#ai-acts-via-delegation) below and the [AI](/architecture/ai/) page).
+An **`agent`** is a first-class principal kind representing an AI actor. It is **mandatorily sponsored by a human** (a `sponsor` FK to a human principal on the per-kind `agent` table), and its authority is bounded by that sponsor: an agent's permissions plus ABAC scope are a **strict subset of its sponsor's**, so it can never exceed, and never outlive, the human who stands behind it (see [The agent principal](#the-agent-principal) below and the [AI](/architecture/ai/) page).
 
-Each kind that needs structured domain attributes gets a **1:1 per-kind table** linked by `principal_id`: `human`, `service`, and `node`. The base `principal` table holds identity + kind only; the per-kind tables hold the rest, including the kind's human-facing label (a human's `display_name`, a service's label, the node's name).
+Each kind that needs structured domain attributes gets a **1:1 per-kind table** linked by `principal_id`: `human`, `service`, `node`, and `agent`. The base `principal` table holds identity + kind only; the per-kind tables hold the rest, including the kind's human-facing label (a human's `display_name`, a service's label, the node's name, an agent's label and its `sponsor`).
 
 ## Credentials
 
@@ -47,7 +48,7 @@ undecided.
 
 ## Subjects
 
-`human`, `service`, `node`, and **`principal_group`s**. Roles attach to principals regardless of kind; the same `principal_grant` rows mean the same thing whether the principal is a person, a service, or a daemon.
+`human`, `service`, `node`, `agent`, and **`principal_group`s**. Roles attach to principals regardless of kind; the same `principal_grant` rows mean the same thing whether the principal is a person, a service, a daemon, or an AI agent.
 
 ## Group kinds
 
@@ -63,11 +64,19 @@ Whether to unify the group kinds into a single polymorphic `group` primitive; re
 converges.
 :::
 
-## AI acts via delegation
+## The agent principal
 
-AI is **not** a principal kind. When an agent acts, it acts **on behalf of a user** via **OAuth on-behalf-of (delegation)**: it holds a delegated, scoped, audited credential and operates strictly within the granting user's permissions and scope. It cannot exceed the user who delegated to it, and the resulting write names both the agent and that user, so accountability lands on a human.
+AI acts as an **`agent` principal**: a real, named identity with its own credentials and grants, **mandatorily sponsored by a human**. The per-kind `agent` table carries a `sponsor` FK to a human principal; an agent cannot exist without one.
 
-This is the **chosen mechanism** for AI acting. Omniglass acts as an OAuth OP, issuing delegated credentials with dual-actor audit: AI = delegation, not a broad identity of its own. The [AI](/architecture/ai/) page covers the capability spectrum this governs.
+The sponsor is the **upper boundary on the agent's authority**, enforced not implicit:
+
+- **Subset invariant**: an agent's permissions plus ABAC scope are a **strict subset of its sponsor's**, checked at grant time. A grant that would let the agent see or do something its sponsor cannot is refused.
+- **Clamp on shrink**: if the sponsor's own permissions or scope later shrink, the agent's effective authority is **clamped to the intersection** with the sponsor's current authority. The agent can never exceed, and never outlive, its sponsor's authority.
+- **Own credential lifecycle**: the agent holds its own credentials, revocable and rotatable **independently of the human**, so retiring an agent does not disturb the sponsor and vice versa.
+- **propose -> approve**: an agent-level policy governs autonomy. Read and diagnostic actions run autonomously within scope; mutating actions can require sponsor sign-off (the agent proposes, the sponsor approves), set per agent.
+- **Audit**: an action attributes to the **agent** as the actor, with the **sponsor** as the accountable human, recorded natively as a principal relationship. No special two-row case is needed.
+
+**OAuth on-behalf-of** survives as the **backing auth mechanism** for the agent principal: it is how an external AI proves it acts for its sponsor at authentication time, not a scope-cloning shortcut that hands the agent the sponsor's grants wholesale. The agent's authority comes from its own clamped grants, not from the OAuth token. This is symmetric with the other bounded kinds: a `node` is bounded by its placement, an `agent` is bounded by its sponsor. The [AI](/architecture/ai/) page covers the capability spectrum this governs.
 
 ## Roles and the role hierarchy
 
@@ -182,7 +191,7 @@ There is **no RLS and no direct database access** (no PostgREST). The **Storage 
 
 - **Capability (RBAC) in the API middleware** -> can this principal perform this action on this resource kind at all? Answered from an in-process cache of the principal's effective permissions, rejected before the gateway. Routes declare their required permission with `rbac.Require("component:create")`.
 - **Scope (ABAC) in the Storage Gateway** -> every query carries the principal's resolved scope, and the gateway filters rows by their exclusive-arc owner against the visible set (the owning `component`/`system`/`location` in the `visible_set`) on reads and the same predicate on writes. The visible set is bounded by **fleet size (entities), not data volume**, so it stays an indexed membership filter even on the firehose; and because it is an owner filter in app code, not a DB policy, it works identically on Postgres, the columnar tier, or object storage.
-- The gateway has two query **modes**: **scoped** (an API request carrying a principal's visible set) and **system** (trusted internal work: ingest / engine / reconcile / migrate / seed, all-visibility). System mode is an explicit, audited choice, never the default. There is no third path: any storage caller is one of these two.
+- The gateway has three query **modes**: **scoped** (an API request carrying a principal's visible set), **node** (a node-driven write confined to the node's placement-derived `visible_set`, the owners of the tasks assigned to it from its materialized worklist), and **system** (trusted internal work: engine / reconcile / migrate / seed, all-visibility). Node mode sits between scoped and system: a node is trusted to write platform internals on behalf of itself, but only for the owners it actually covers, so a compromised node cannot write arbitrary owners intra-tenant. System mode is an explicit, audited choice, never the default. There is no fourth path: any storage caller is one of these three.
 - **Scope is structural, not per-handler**: the principal's scope is a required input to the gateway's query layer, so no code path can query unscoped by accident. With no RLS backstop for in-database scope the gateway is the sole guarantor, so "forgot to filter" must be impossible by construction, not by discipline.
 - **Non-entity resources** (the `datapoint_type` registries, roles, principals, groups) are **capability-gated globally**, no entity scope applies (typically admin only).
 
@@ -227,7 +236,7 @@ Nodes do not use general role x scope. A node authenticates with a credential bo
 
 - The middleware resolves the principal (kind=`node`) as usual.
 - The node-route group (`/api/v1/nodes/{name}/*`, gRPC ingest) is wrapped in a narrow authorizer: `principal.kind == 'node'` AND `principal.credential.identifier == {name}` from the URL. The general RBAC permission matrix does not apply to this group.
-- Behind the gateway, node-driven writes run in **system mode** (since the node is operating on platform internals on behalf of itself).
+- Behind the gateway, node-driven writes run in **node mode**: the node operates on platform internals on behalf of itself, but the gateway confines its writes to the node's placement-derived `visible_set` (the owners of the tasks assigned to it). A node is not all-visibility system mode, so a compromised node cannot write owners outside its placement. At ingest, an emitted owner label outside that set is treated as an orphan / discovery candidate, never an authoritative write (see [collection](/architecture/collection/)).
 
 A `node` principal attempting any general API route returns 403; a non-`node` principal hitting a node route returns 403.
 
@@ -237,7 +246,7 @@ TLS on the HTTP API and the gRPC ingest, terminated at the binary (it serves HTT
 
 ## Audit
 
-Every API operation records the resolved **actor** (the principal id) in `audit_log`. Secret decrypts are always audited, never filterable. System-mode writes record `actor = 'system'` (or `'bootstrap'` for the seed phase) so the audit trail distinguishes operator action from platform internals.
+Every API operation records the resolved **actor** (the principal id) in `audit_log`. Secret decrypts are always audited, never filterable. Node-mode writes record the node principal as actor; system-mode writes record `actor = 'system'` (or `'bootstrap'` for the seed phase) so the audit trail distinguishes operator action from platform internals. An `agent` action records the agent as actor with its sponsor as the accountable human.
 
 ## Bootstrap
 
@@ -261,7 +270,7 @@ The IAM subjects and their grants; the physical layout lives on [storage](/archi
 
 | Table | Key columns | Notes |
 |---|---|---|
-| `principal` (+ per-kind `human` / `service` / `node`) | id, kind | base `principal` is identity (opaque uuid) + kind only; per-kind tables hold the rest, including each kind's label: `human.display_name` (the person's real name) + username + email, the `service` label, the `node` name (+ labels, last_heartbeat_at, bound credential) |
+| `principal` (+ per-kind `human` / `service` / `node` / `agent`) | id, kind | base `principal` is identity (opaque uuid) + kind only; per-kind tables hold the rest, including each kind's label: `human.display_name` (the person's real name) + username + email, the `service` label, the `node` name (+ labels, last_heartbeat_at, bound credential), the `agent` label + `sponsor` (FK to a human principal; agent permissions + scope are clamped to a subset of the sponsor's) |
 | `role` | id, **official**, permissions (jsonb: `<resource>:<action>`) | RBAC capability set; ship viewer/operator/admin/owner + custom |
 | `principal_grant` | (principal_id, role, **scope**) | role x scope; scope = a structural node, an entity-group, or `all`; additive |
 

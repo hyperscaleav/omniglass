@@ -88,6 +88,17 @@ reaches a component **through the system layer** of its cascade.
 So however many groups an entity is in, the group band collapses to one weighted list on the shared
 scale, fully predictable, and the resolve view names the winner.
 
+**The comparison key is segmented, not a single number.** Precedence is a lexicographic key
+`(segment_rank, depth, group_weight, creation_order)`, compared field by field in that order. The
+`segment_rank` orders the structural bands (global, templates, location / system / component trees, the
+instance ceiling); `depth` orders within a variable-depth tree (deepest wins); `group_weight` places a
+group relative to the structural bands; `creation_order` breaks an exact tie. Because the segment is the
+first field, a structural segment never overruns into another regardless of how deep a tree runs or how
+many group weights stack: a deeper node or a heavier group raises a later field, never the leading
+`segment_rank`. The single specificity numbers shown elsewhere on this page (e.g. `0`, `100`, the `300s`,
+the `400s`) are a **presentation-only** flattening of that key for the resolve view, not the comparison
+key itself.
+
 A **`_type`** (device/app, AV-System, room) is not a cascade layer: it is a classification attribute,
 resolved by a [group](/architecture/groups/) filter (`type == X`) placed by weight, never a tree
 position. The tree is structural; attributes are groups.
@@ -125,7 +136,9 @@ RM204 codec (Room Kit Pro, fw 11.2) at Room RM204 -> Floor 3 -> HQ Building ->
 HQ Campus, in the Huddle Room AV system. Member of two groups: **Old-firmware
 Room Kits** (weight 450) and **PCI-scope** (weight 250). Specificity bands are
 illustrative: `0` global, `100/200` templates, `300s` location by depth, `400s`
-system by depth, `500` the instance.
+system by depth, `500` the instance. These single numbers are a presentation
+flattening of the segmented key `(segment_rank, depth, group_weight, creation_order)`,
+not the comparison itself.
 
 ```text
 RM204 - cascade precedence            most-specific (highest) wins

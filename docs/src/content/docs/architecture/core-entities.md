@@ -119,3 +119,7 @@ The binding itself is the **`system_member`** table: the **instance assignment**
 `component` to a `system` under a specific role, satisfying a `system_template_member` from the frozen
 `system_template_version` (key columns: `system_id`, `component_id`, `role`, plus the pin to the
 `system_template_member` it satisfies).
+
+A `system_template_member` itself pins a role one of three escalating ways: an **exact version**, a
+**version range** over one template lineage, or a **capability contract** for cross-vendor
+substitutability. The three pinning tiers are detailed on [templates](/architecture/templates/).

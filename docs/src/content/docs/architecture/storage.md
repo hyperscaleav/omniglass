@@ -115,6 +115,12 @@ column**, not a pointer-presence trick (an edge function versus a calc_rule). Th
 the one the CHECK enforces. This is one of three layers: the CHECK enforces *which pointers are populated*, foreign keys enforce
 *the ids are real*, and the app enforces *the value type matches the key's kind*.
 
+The datapoint tables also carry nullable **`correlation_id`** and **`caused_by_event_id`** trace
+columns. These are orthogonal to the lineage pointers above: they are not lineage pointers, so they
+do not participate in the exclusive-lineage CHECK. They carry causation across the command -> device
+-> observed-datapoint round trip so the cycle guard walks a real id ([datapoints](/architecture/datapoints/),
+[alarms and actions](/architecture/alarms-actions/)).
+
 ## Current value and projections: views by default
 
 `alarm` and `action` are **stateful entities** that hold their own current state in a real table
@@ -154,6 +160,9 @@ key, instance, provenance)?
 - **Retention is per table**, set by policy, not one global TTL: `metric_datapoint` short,
   `state_datapoint` / `log_datapoint` longer, `audit_log` longest (compliance), `internal_log`
   short. On-row lineage ages out with its datapoint.
+- **The `raw_sample` buffer** (the opt-in raw-retention policy, [collection](/architecture/collection/))
+  is range-partitioned by `ts` and cold-tierable like the metric partitions, on a short retention. It
+  is bounded, sampled, and short-lived; it is not a telemetry table.
 - **Views are not partitioned** (bounded by fleet size, not time) and are computed from the
   underlying tables, never the source of truth.
 
