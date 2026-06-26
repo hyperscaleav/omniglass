@@ -197,6 +197,17 @@ There is **no RLS and no direct database access** (no PostgREST). The **Storage 
 
 Both layers operate **within one database**. Tenant isolation is **per-database** (CNPG-per-tenant): there is no `tenant_id` column anywhere, so the cross-tenant boundary is the database boundary itself, not a row predicate. Intra-database scope (above) is the only app-enforced layer; there is no RLS backstop.
 
+:::caution[Open question]
+Whether to add a **third authorization lever**: a declarative **tenant-level policy** layer, evaluated at
+the **highest priority** above RBAC and ABAC, expressing **negative guardrails** an admin declares
+centrally, the things that must **never** happen. A grant plus scope might permit `system:delete`, yet a
+tenant policy ("no member of the `integrator` group may ever delete a system") **denies** it, and the
+deny wins. This is where negative authorization would live, keeping [roles](#roles-and-the-role-hierarchy)
+additive and positive (a role still carries no negative permissions). Open: whether to add it at all, the
+policy shape (deny rules over resource + action + subject / scope conditions), the evaluation order, and
+whether it is deny-only or can also force-allow.
+:::
+
 ## Caching strategy
 
 The hot path must not hit the DB for RBAC. Three layers, in-process, no persisted "effective permissions" projection (which would invite cache-coherence bugs):
