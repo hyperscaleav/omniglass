@@ -9,3 +9,17 @@
   --sl-color-accent: #0f8d83;
   --sl-color-accent-high: #0a3b38;
 }
+
+/* Status badges. "Design" rides the caution variant; restyle it to a refined amber
+   that stays legible in both themes and reads distinct from Partial (blue) and Built
+   (green). The :::caution asides are a different element, so they are untouched. */
+.sl-badge.caution {
+  background-color: rgba(231, 168, 58, 0.16);
+  border-color: rgba(231, 168, 58, 0.55);
+  color: #e6c36a;
+}
+:root[data-theme='light'] .sl-badge.caution {
+  background-color: #fbf0d6;
+  border-color: #d9a64a;
+  color: #7a571a;
+}
