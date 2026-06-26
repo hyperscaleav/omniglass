@@ -67,6 +67,14 @@ The naming convention is consistent: a `_type` registry defines what a thing *is
 
 **The `unit` registry.** Units live in a `unit` registry grouped by **family** (dimension): temperature, data-size, bitrate, ratio, and so on. Each family declares one **canonical unit** plus zero or more **alternate units**, and each alternate carries a **`to_canonical`** and a **`from_canonical`** transform: **affine** (a factor plus offset) for the common case, or an **Expr** for the rare nonlinear one (dB). The registry is **official / org scoped** like the other registries. Example: the temperature family is canonical `celsius`; `fahrenheit` carries `to_canonical: (v - 32) * 5/9` and `from_canonical: v * 9/5 + 32`.
 
+**Dimensionless is still a unit.** A **ratio** is not "a number with no unit", it is the `ratio`
+family: canonical `ratio` (`0..1`) with `percent` as an alternate (`ratio * 100`), so `cpu.utilization`
+is **stored** as `0.9` and authored or shown as `90%` through the same convert path, never stored as a
+percentage. A bare **count** (people, error tallies) is a cardinal `count`, distinct from a ratio. So the
+`unit` field is exactly what separates a ratio from a quantity carrying a physical unit (`celsius`,
+`rpm`, `bps`): both are `metric` kind, and the **unit (its family)** is the discriminator, dimensionless
+or dimensioned. (`kind` answers *metric / state / log*; `unit` answers *which dimension, if any*.)
+
 Conversion happens only at the two edges and in expressions; the rows in between stay canonical.
 
 **Normalize-in at the edge.** When a device reports a non-canonical unit, the component template's **alignment value-transform** (the existing "align to a canonical key, plus an optional value transform") converts native to canonical **before** the datapoint is emitted. A Fahrenheit display's template emits `celsius`. The device's native unit is a [collection](/architecture/collection/)-time fact carried by the [template](/architecture/templates/), never a storage fact.
