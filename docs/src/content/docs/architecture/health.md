@@ -175,7 +175,7 @@ quorum versus one pool), and whether `degraded` is one rung or graduated.
 
 A redundant deployment needs exactly this: a failed backup mic must not down the room. **Member
 `health_role`** (required / redundant / informational) is declared on the **system_template_member**
-(the frozen BOM, where the system template composes component-template versions by role), not on the
+(the frozen BOM, where the system template lists the allowed component templates by role), not on the
 component itself, since the same device can be required in one system and redundant in another. The
 instance assignment is the `system_member` row; the `health_role` rides the frozen template version,
 so it never expires under an instance. It is shared with KPI calcs.

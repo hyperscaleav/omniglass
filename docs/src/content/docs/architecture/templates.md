@@ -147,17 +147,17 @@ system can see. Like a component template it is mutable, **versioned**, and **co
 `system_template_version` is a stable artifact, addressable by a content hash); **editing mints a new
 version** and a system pins the **immutable** `system_template_version` snapshot.
 
-- **The frozen bill of materials.** A `system_template_version` pins **specific
-  `component_template_version`s**: it carries a **`system_template_member`** for each role, the
-  `(role, component_template_version, health_role)` tuple that freezes which exact device shape (down
-  to the version) fills each role and how it counts in the health rollup. The whole BOM (members +
-  roles + `health_role`s) is frozen into the version, so the role validates against the system's frozen
-  version and an instance assignment never expires under it.
+- **The frozen bill of materials.** A `system_template_version` carries a **`system_template_member`**
+  for each role: the role, the **component templates allowed to fill it** (one or more), an **optional
+  version acceptability** per allowed template, and the `health_role` (how it counts in the rollup). The
+  role list, the allowed templates, and the health roles are **frozen into the version**; what an
+  instance actually assigns is its choice **within** that frozen allow-list, so the role validates
+  against the system's frozen version and an assignment never expires under it.
 - **Pin, latest, or a channel.** A system (the instance) either pins a **specific
   `system_template_version`**, or tracks **`latest`**, or follows a **channel** (e.g. `stable` /
   `beta`). This is the same pin-vs-channel choice a component makes.
 - **Edits never silently change a pinned system.** An edit **mints a new version** and does **not**
-  move a pinned system or its pinned component versions; only instances tracking `latest` or a channel
+  move a pinned system or its frozen role allow-list; only instances tracking `latest` or a channel
   pick the change up (and a channel only when the new version is promoted into it). The immutability
   guarantee is explicit: a frozen system and its frozen BOM stay exactly as pinned until an operator
   re-points them.
@@ -175,49 +175,38 @@ version** and a system pins the **immutable** `system_template_version` snapshot
   whichever component fills the role, so `video.input = HDMI1` for the main-display role applies to
   whatever display is assigned ([config and credentials](/architecture/variables/)).
 
-### How a member binds a role: three escalating tiers
+### Allowed templates per role
 
-A `system_template_member` binds a role to a device shape three ways, escalating in flexibility. Most
-members use the first; the third exists for cross-vendor substitutability, not routine matching.
+A `system_template_member` says, for one role, **which component templates may fill it**, explicitly:
 
-- **Tier 0, exact version (the default).** The member pins a specific `component_template_version`, the
-  `(role, component_template_version, health_role)` tuple described above. This is the deterministic,
-  reproducible BOM: a frozen role fills with exactly one device shape down to the version, and nothing
-  drifts.
-- **Tier 1, version range over one lineage.** The member binds a **semver range** over a **single**
-  template lineage (e.g. `>=2.1 <3.0`), reusing the **existing channel / `latest` mechanism** bounded by
-  that range. It resolves to a concrete version at bind, or tracks latest-in-range. This absorbs
-  same-vendor patch and minor drift (a display vendor ships `2.1.4` to fix a bug) without re-pinning the
-  system by hand, and it adds no new machinery: a range is `latest` with an upper and lower fence.
-- **Tier 2, capability contract for cross-vendor substitutability.** When an LG and a Sony display both
-  legitimately fill the `display` role, the member binds a **capability contract** instead of a lineage.
-  A contract is a **static interface**: the **required commands**, the **required canonical
-  `datapoint_type`s**, and a `health_role`. Conformance is a **set-containment** check: a component's
-  template conforms when its capability set is a **superset** of the contract's required set (it exposes
-  at least the required commands and emits at least the required canonical signals). This works precisely
-  because canonical alignment already exists (a template declares the commands it exposes and the
-  canonical signals it emits, [Template-scoped keys](#template-scoped-keys-and-optional-alignment)), so
-  the contract is written in canonical terms and checked against canonical declarations.
+- **One or more allowed component templates.** Usually one: the main-display role uses the Cisco-codec
+  template. For a mixed-vendor estate, list several: the `display` role may be filled by the LG template
+  **or** the Sony template. The system **names the device shapes it accepts**; there is no abstract
+  capability to infer or match against.
+- **Optional version acceptability per allowed template.** By default any version of an allowed template
+  is acceptable. A member may **limit** an allowed template to a specific version or a version range
+  (e.g. `>=2.1 <3.0`), reusing the same version / channel mechanism a component uses. Pin a version for a
+  strict, reproducible BOM; leave it open to absorb a vendor's patch releases without re-pinning the
+  system.
 
-  A version range is the **degenerate contract over one lineage**; the capability contract is the general
-  form. Conformance is evaluated at **bind / re-pin time** and re-checked **only** when the component's
-  template version changes or the contract changes. It is **not continuous evaluation**, **not** a fleet
-  matching engine, and **not** an [Expr](/architecture/alarms-actions/) predicate. Expr stays the rare
-  escape hatch only (the same role it plays in the health-rollup override, [health](/architecture/health/)),
-  never routine role matching.
+The instance assignment (the `system_member` row) picks a concrete component for the role; its template
+and version must be in the role's allowed set, or the assignment is refused. So a role is an explicit
+allow-list of `(component template, optional version constraint)` frozen in the system template version,
+and the instance chooses within it. This is deliberately simpler than an abstract capability contract:
+you say exactly which templates a system accepts, against templates the deployment already knows.
 
 | Table | Key columns | Notes |
 |---|---|---|
 | `system_template` | name, type, **spec (jsonb)** | the mutable system shape; editing mints a new version |
 | `system_template_version` | (template, **version**), frozen **spec** | the **immutable** snapshot a system pins; roles never change under it |
-| `system_template_member` | (system_template_version, **role**, component_template_version, **health_role**) | the frozen **bill of materials**: role -> pinned `component_template_version` + health role (required / redundant / informational, [health](/architecture/health/)); the binding may be an exact version, a version range over one lineage, or a capability contract ([three tiers](#how-a-member-binds-a-role-three-escalating-tiers)) |
+| `system_template_member` | (system_template_version, **role**, **allowed component_template(s)** + optional version constraint, **health_role**) | the frozen **role allow-list**: role -> one or more permitted component templates, each optionally limited to a version or range, + health role (required / redundant / informational, [health](/architecture/health/)). The instance assigns a component from this set ([allowed templates per role](#allowed-templates-per-role)) |
 
 ```mermaid
 erDiagram
   component_template ||--o{ component_template_version : versions
   system_template    ||--o{ system_template_version    : versions
   system_template_version ||--o{ system_template_member : "frozen BOM (role + health_role)"
-  component_template_version ||--o{ system_template_member : "pinned by"
+  component_template }o--o{ system_template_member : "allowed for role (opt. version)"
   component }o--|| component_template_version : pins
   system    }o--|| system_template_version    : pins
 ```
