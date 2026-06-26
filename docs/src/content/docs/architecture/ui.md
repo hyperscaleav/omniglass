@@ -12,7 +12,7 @@ the concrete reusable primitives are the [design system](/contributing/design-sy
 
 ## The renderer contract: ViewResult and the views BFF
 
-The whole console rests on one contract. **All UI reads go through [views](/contributing/api-first/)**
+The whole console rests on one contract. **All UI reads go through [views](/architecture/views/)**
 (the read-side BFF), CRUD for writes; the operator never queries raw tables. Every view returns a
 uniform **`ViewResult`** (`{columns, rows}`), and the SPA renders any view through **one renderer per
 view**: adding a view does not add a bespoke renderer. This is what decouples the render layer from any
@@ -57,7 +57,7 @@ The factoring avoids both "every screen is hand-coded" and "everything must be a
   a thin layer over saved views.
   :::
 
-The contract underneath both: **all UI reads go through [views](/contributing/api-first/)**, CRUD
+The contract underneath both: **all UI reads go through [views](/architecture/views/)**, CRUD
 for writes. The renderer library serves coded pages and dashboard widgets identically; the only
 difference is whether the composition is code or config.
 

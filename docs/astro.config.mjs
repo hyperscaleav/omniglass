@@ -59,6 +59,7 @@ export default defineConfig({
             { label: 'Health & KPIs', slug: 'architecture/health' },
             { label: 'Alarms and actions', slug: 'architecture/alarms-actions' },
             { label: 'UI', slug: 'architecture/ui' },
+            { label: 'Views', slug: 'architecture/views' },
             { label: 'API', slug: 'architecture/api' },
             // the foundations underneath
             { label: 'Nodes', slug: 'architecture/nodes' },

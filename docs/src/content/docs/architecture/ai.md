@@ -27,6 +27,8 @@ AI is **not a side channel**. It reaches the estate through the same three seams
 - **IAM permissions** (the `<resource>:<action>` capability checked on every route), and
 - the **Storage Gateway scope** (the ABAC visible-set injected on every applicable query).
 
+The agentic end of that API seam is a **generated [MCP server](/architecture/api/)**: an MCP tool call is a call to a real API operation, so an external model drives Omniglass through the same routes, permissions, scope, and [audit](/architecture/audit/) as the SPA or the CLI. It is a generated client like the others (a curated tool catalog, the [views](/architecture/views/) exposed as search tools, not a raw one-method-per-tool dump), carrying this agent's scoped, delegated credential, never a parallel surface.
+
 If a permission or a scope would stop a human from doing something, it stops the AI doing it too. There is no elevated AI lane.
 
 ## AI is the sponsored `agent` principal

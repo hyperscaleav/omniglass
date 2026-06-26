@@ -104,7 +104,7 @@ device never holds the connection open.
 ## Reads beyond one resource are views
 
 A single resource reads through its typed `GET`. Anything richer, a dashboard, an explorer, the cascade
-"why did this value win" view, goes through a **[view](/architecture/ui/)**: a named query returning a
+"why did this value win" view, goes through a **[view](/architecture/views/)**: a named query returning a
 uniform `ViewResult` (`{columns, rows}`), bound by declared params at `/views/{id}:run`, executed through
 the same scoped gateway. Views are part of the public API; an operator never gets raw SQL.
 
@@ -115,6 +115,21 @@ fields, new optional params, new resources, never a removal or a meaning change;
 new major version, not a silent edit. Because the [OpenAPI 3.1 document is generated](/contributing/api-first/)
 from the Go structs and the clients are generated from that, the contract cannot drift from the
 implementation: a drift check fails the PR if a route changed without regenerating.
+
+## Also an MCP surface
+
+The same OpenAPI document that generates the typed SPA client and the CLI also generates an **MCP
+server**, one more [generated client](/contributing/api-first/) over the same gateway, so an AI
+[agent](/architecture/ai/) drives the platform through the exact seams a human does: every tool call is
+the same route permission, the same gateway scope, the same same-transaction [audit](/architecture/audit/).
+It is **not a side channel**.
+
+The binding is mechanical, but the **tool catalog is curated, not a raw one-method-per-tool dump**:
+task-oriented tools, the [views](/architecture/views/) exposed as search and query tools (the richest
+reads), pagination and the problem+json errors shaped for a model to consume. The MCP server carries the
+**agent principal's** scoped, delegated, audited credential ([identity and access](/architecture/identity-access/)),
+so its reach is its sponsor's subset and nothing more; read and diagnostic tools are autonomous within
+scope, and mutating tools run under the agent's **propose -> approve** policy ([AI](/architecture/ai/)).
 
 ## Self-describing
 
