@@ -3,7 +3,7 @@ title: Glossary
 description: "The authoritative glossary: every official term in the architecture, defined once."
 sidebar:
   badge:
-    text: Spec
+    text: Design
     variant: caution
 ---
 

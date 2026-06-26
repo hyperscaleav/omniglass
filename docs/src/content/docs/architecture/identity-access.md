@@ -3,7 +3,7 @@ title: Identity and access
 description: How principals authenticate, how grants combine roles with scopes, and how the app enforces RBAC and ABAC entirely in the Storage Gateway.
 sidebar:
   badge:
-    text: Spec
+    text: Design
     variant: caution
 ---
 

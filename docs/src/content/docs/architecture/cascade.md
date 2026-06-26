@@ -3,7 +3,7 @@ title: Cascade
 description: How effective settings (config, variables, tags, rule-sets) are resolved for any entity and how the resolve view explains why a given value won.
 sidebar:
   badge:
-    text: Spec
+    text: Design
     variant: caution
 ---
 

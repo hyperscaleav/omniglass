@@ -3,7 +3,7 @@ title: Calculations
 description: "The rule families that run server-side over typed datapoints, and calc_rule in detail: cross-key and system-level derivation."
 sidebar:
   badge:
-    text: Spec
+    text: Design
     variant: caution
 ---
 

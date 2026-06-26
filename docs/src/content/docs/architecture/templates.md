@@ -3,7 +3,7 @@ title: Templates
 description: "The immutable, versioned shapes that instances pin: the component_template (the device shape) and the system_template (the composition shape with its frozen BOM)."
 sidebar:
   badge:
-    text: Spec
+    text: Design
     variant: caution
 ---
 

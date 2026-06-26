@@ -3,7 +3,7 @@ title: Alarms and actions
 description: How Omniglass detects a condition with a stateful alarm and responds with an action, which is a flow when it has more than one step.
 sidebar:
   badge:
-    text: Spec
+    text: Design
     variant: caution
 ---
 

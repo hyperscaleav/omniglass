@@ -3,7 +3,7 @@ title: UI
 description: "The operator console: one renderer library in two composition modes, reads through views, and an identity-based information architecture."
 sidebar:
   badge:
-    text: Spec
+    text: Design
     variant: caution
 ---
 

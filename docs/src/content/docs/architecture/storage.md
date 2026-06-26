@@ -3,7 +3,7 @@ title: Storage
 description: "How storage works: the Storage Gateway, views by default, per-database isolation, append-only partitioning and tiering, and the on-row lineage pattern."
 sidebar:
   badge:
-    text: Spec
+    text: Design
     variant: caution
 ---
 

@@ -3,7 +3,7 @@ title: Datapoints
 description: "The core data model: datapoints and their three kinds, provenance, the registries, key scope, divergence, fusion, and how a value reads back."
 sidebar:
   badge:
-    text: Spec
+    text: Design
     variant: caution
 ---
 

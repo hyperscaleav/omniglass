@@ -3,7 +3,7 @@ title: Groups
 description: "Named sets of component, system, location, or principal: static or dynamic membership, weighted, a cascade overlay and an access scope."
 sidebar:
   badge:
-    text: Spec
+    text: Design
     variant: caution
 ---
 

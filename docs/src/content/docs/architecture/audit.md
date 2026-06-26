@@ -3,7 +3,7 @@ title: Audit
 description: The who-did-what record, written once in the same transaction as the change it describes.
 sidebar:
   badge:
-    text: Spec
+    text: Design
     variant: caution
 ---
 

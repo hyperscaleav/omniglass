@@ -3,7 +3,7 @@ title: Time
 description: "The one primitive that manufactures events from the passage of time, so the rest of the pipeline stays purely event-driven."
 sidebar:
   badge:
-    text: Spec
+    text: Design
     variant: caution
 ---
 

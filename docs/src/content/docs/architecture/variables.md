@@ -3,7 +3,7 @@ title: "Config, credentials, and variables"
 description: "Three kinds of operator-set value resolved by one cascade: config keyed to a signal, credentials with a lifecycle, and free variables."
 sidebar:
   badge:
-    text: Spec
+    text: Design
     variant: caution
 ---
 

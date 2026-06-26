@@ -3,7 +3,7 @@ title: Expressions
 description: "Omniglass expressions: one engine built on Expr and extended with Omniglass functions, behind every operator-authored expression leaf."
 sidebar:
   badge:
-    text: Spec
+    text: Design
     variant: caution
 ---
 

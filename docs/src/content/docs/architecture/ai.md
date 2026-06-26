@@ -3,7 +3,7 @@ title: AI
 description: "AI as a governed capability along an assistive-to-agentic spectrum: the sponsored agent principal, same seams, provenance, and human-in-the-loop gating."
 sidebar:
   badge:
-    text: Spec
+    text: Design
     variant: caution
 ---
 

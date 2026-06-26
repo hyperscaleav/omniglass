@@ -3,7 +3,7 @@ title: Architecture
 description: "The architecture told as one journey, following a single reading from the gear through its whole life to the answer and the action on it."
 sidebar:
   badge:
-    text: Spec
+    text: Design
     variant: caution
 ---
 
@@ -17,6 +17,15 @@ Omniglass is built around that question. This page follows a **single reading th
 life**, top to bottom, from the gear to the answer and the action on it. Each **bold word** is an
 official term; the linked ones open their deep dive, and every one is defined in the
 [glossary](/architecture/glossary/).
+
+:::note[Design vs Built]
+These pages describe the **target architecture** in present tense: the design, not a snapshot of the
+code. Each page carries a status badge, **Design** (specified, little or none built yet), **Partial**
+(some capabilities shipped), or **Built** (all of it shipped and tested), and the badge is the page's
+floor. The per-capability breakdown and what is shipped lives on
+[implementation status](/architecture/status/); undecided design points are flagged inline as
+`Open question` asides.
+:::
 
 ## The estate
 

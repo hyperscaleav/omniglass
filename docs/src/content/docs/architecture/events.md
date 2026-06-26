@@ -3,7 +3,7 @@ title: Events
 description: "Events: our semantic assertion that something happened, the event_type registry, and the four ways an event arrives."
 sidebar:
   badge:
-    text: Spec
+    text: Design
     variant: caution
 ---
 

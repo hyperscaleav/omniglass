@@ -3,7 +3,7 @@ title: Workers
 description: One worker machinery over several worklists, plus the backtest capability and the reconcile desired-state loop.
 sidebar:
   badge:
-    text: Spec
+    text: Design
     variant: caution
 ---
 

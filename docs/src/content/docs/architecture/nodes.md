@@ -3,7 +3,7 @@ title: Nodes
 description: How the edge runtime pulls its worklist, runs tasks and commands, manages sessions, gates reachability, and ships telemetry.
 sidebar:
   badge:
-    text: Spec
+    text: Design
     variant: caution
 ---
 

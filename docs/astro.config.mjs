@@ -44,6 +44,7 @@ export default defineConfig({
           items: [
             { label: 'Why Omniglass', slug: 'architecture/why' },
             { label: 'Overview', slug: 'architecture' },
+            { label: 'Implementation status', slug: 'architecture/status' },
             // the estate model, then the shapes it pins
             { label: 'Core entities', slug: 'architecture/core-entities' },
             { label: 'Templates', slug: 'architecture/templates' },

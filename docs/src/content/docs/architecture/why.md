@@ -3,7 +3,7 @@ title: Why Omniglass
 description: "What Omniglass is, what it is for, and why AV needs its own observability platform instead of an IT monitoring tool."
 sidebar:
   badge:
-    text: Spec
+    text: Design
     variant: caution
 ---
 

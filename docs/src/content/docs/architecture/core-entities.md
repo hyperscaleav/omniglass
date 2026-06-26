@@ -3,7 +3,7 @@ title: Core entities
 description: "The estate model: component, system, location, and node as the structural entities, the variable-depth trees, and the exclusive-arc owner."
 sidebar:
   badge:
-    text: Spec
+    text: Design
     variant: caution
 ---
 

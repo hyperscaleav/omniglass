@@ -3,7 +3,7 @@ title: Files and blobs
 description: A searchable file handle over a content-addressed blob store, behind the Storage Gateway.
 sidebar:
   badge:
-    text: Spec
+    text: Design
     variant: caution
 ---
 
