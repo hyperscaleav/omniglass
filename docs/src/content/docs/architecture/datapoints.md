@@ -13,7 +13,7 @@ This is the heart of the authoritative data model: what a datapoint is, the two 
 
 A **datapoint** is an observation: a value of one key, on one owning entity (component, system, or location), at one time. The row shape is the same for all three kinds: `(owner, key, instance, ts, value, provenance, source, lineage)`. They are three physical tables only because they index and retain differently, not because they are different concepts.
 
-- **metric** (`metric_datapoint`): numeric (float). Continuous, aggregatable. Has a current value.
+- **metric** (`metric_datapoint`): numeric (float), carries a **unit**. Continuous, aggregatable. Has a current value.
 - **state** (`state_datapoint`): categorical, text, or a structured object. Discrete, dwell-measurable. Has a current value (`last()` is meaningful).
 - **log** (`log_datapoint`): a component's own words, the value is the log line (text or jsonb), keyed by log type (`log.system`, `log.os`, `log.app.<name>`). A stream, not a current value, but still an observation with a value at a time, so it is a datapoint, not a separate primitive. In practice only components emit logs.
 
@@ -63,7 +63,7 @@ The naming convention is consistent: a `_type` registry defines what a thing *is
 
 ## Units: one canonical unit per key
 
-**Storage is canonical-at-rest.** Every `datapoint_type` declares **one canonical unit** in its `unit` field (a registered unit, see below), and stored values are **always** in that unit. The firehose is single-unit, so every threshold, calc, and fusion compares like with like. We never store mixed units, and we never put the unit in the `instance` dimension: `instance` discriminates co-existing values of one key on one owner (three fan speeds), not the unit those values are expressed in. A genuinely different measurement is a different `datapoint_type`, not a unit variant: units only convert **within one family**.
+**Unit is a metric concept.** Only a **metric** carries a unit (and the display `precision` below): a number needs a unit to mean anything, and even a dimensionless metric has one (`ratio` or `count`). A **state** (categorical) and a **log** (text) have **neither**. For metrics, **storage is canonical-at-rest**: every metric `datapoint_type` declares **one canonical unit** in its `unit` field (a registered unit, see below), and stored values are **always** in that unit. The firehose is single-unit, so every threshold, calc, and fusion compares like with like. We never store mixed units, and we never put the unit in the `instance` dimension: `instance` discriminates co-existing values of one key on one owner (three fan speeds), not the unit those values are expressed in. A genuinely different measurement is a different `datapoint_type`, not a unit variant: units only convert **within one family**.
 
 **The `unit` registry.** Units live in a `unit` registry grouped by **family** (dimension): temperature, data-size, bitrate, ratio, and so on. Each family declares one **canonical unit** plus zero or more **alternate units**, and each alternate carries a **`to_canonical`** and a **`from_canonical`** transform: **affine** (a factor plus offset) for the common case, or an **Expr** for the rare nonlinear one (dB). The registry is **official / org scoped** like the other registries. Example: the temperature family is canonical `celsius`; `fahrenheit` carries `to_canonical: (v - 32) * 5/9` and `from_canonical: v * 9/5 + 32`.
 
@@ -81,8 +81,8 @@ Conversion happens only at the two edges and in expressions; the rows in between
 
 **Convert-out on read.** Showing a non-canonical unit to an operator is a **presentation** concern: the [UI](/architecture/ui/) and [views](/architecture/views/) convert canonical to the operator's display unit (a per-user / per-locale preference), looked up from the `unit` registry, exactly as a severity level's label and color resolve client-side. Storage is untouched: one operator reads Celsius, another reads Fahrenheit, off the same rows. Because the `datapoint_type` declares the canonical unit, this conversion is automatic.
 
-**Display precision is part of the type.** Alongside the unit, a `datapoint_type` carries an optional
-**`precision`** (significant digits to render), a presentation default the same way the canonical unit is:
+**Display precision is part of the type.** Alongside the unit (and, like the unit, only on a metric), a
+`datapoint_type` carries an optional **`precision`** (significant digits to render), a presentation default the same way the canonical unit is:
 a temperature shows `21.5`, a utilization `90%`, a link `1.2 Gbps`. It governs **rendering only**. The
 stored `value_type` (float8) keeps full precision, `precision` never truncates a stored value, and the
 [UI](/architecture/ui/) or a locale can override the default. (Dropping noise at *ingest* is a separate
@@ -231,7 +231,7 @@ The key registry that types these tables is `datapoint_type` (one registry acros
 
 | Table | Key columns | Notes |
 |---|---|---|
-| `datapoint_type` | name, **scope** (template/org/official), **template_id?**, kind (metric/state/log), value_type, unit, **precision**, **fusion_policy**, validation (jsonb) | the one key registry across all datapoint kinds; `scope` decides where the name is unique (`(template_id, name)` at template scope, `name` at org/official); referenced by templates, which also mint their own template-scoped rows. `unit` is the **canonical** unit, a row in the `unit` registry below; `precision` is a display hint (significant digits), not a storage truncation |
+| `datapoint_type` | name, **scope** (template/org/official), **template_id?**, kind (metric/state/log), value_type, unit, **precision**, **fusion_policy**, validation (jsonb) | the one key registry across all datapoint kinds; `scope` decides where the name is unique (`(template_id, name)` at template scope, `name` at org/official); referenced by templates, which also mint their own template-scoped rows. `unit` is the **canonical** unit, a row in the `unit` registry below; `precision` is a display hint (significant digits), not a storage truncation. Both apply to **metrics**; a **state** or **log** has neither |
 | `unit` | name, **family** (temperature/data-size/bitrate/...), **canonical** (bool), **to_canonical**, **from_canonical** (affine factor+offset, or Expr), **scope** (official/org) | the unit registry: one canonical unit per family plus alternates each carrying its conversion transforms; the `datapoint_type.unit` canonical unit references it, and `convert(value, "<unit>")` resolves same-family targets through it |
 
 ## The pipeline, end to end
