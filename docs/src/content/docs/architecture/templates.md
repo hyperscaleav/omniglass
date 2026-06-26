@@ -148,16 +148,16 @@ system can see. Like a component template it is mutable, **versioned**, and **co
 version** and a system pins the **immutable** `system_template_version` snapshot.
 
 - **The frozen bill of materials.** A `system_template_version` carries a **`system_template_member`**
-  for each role: the role, the **component templates allowed to fill it** (one or more), an **optional
-  version acceptability** per allowed template, and the `health_role` (how it counts in the rollup). The
-  role list, the allowed templates, and the health roles are **frozen into the version**; what an
-  instance actually assigns is its choice **within** that frozen allow-list, so the role validates
-  against the system's frozen version and an assignment never expires under it.
+  for each role: the role, its **requirement** (the canonical datapoints and commands a member must
+  provide), and the `health_role` (how it counts in the rollup). The role list, the requirements, and
+  the health roles are **frozen into the version**; what an instance actually assigns is any component
+  whose template meets the role's requirement, so the role validates against the system's frozen version
+  and an assignment never expires under it.
 - **Pin, latest, or a channel.** A system (the instance) either pins a **specific
   `system_template_version`**, or tracks **`latest`**, or follows a **channel** (e.g. `stable` /
   `beta`). This is the same pin-vs-channel choice a component makes.
 - **Edits never silently change a pinned system.** An edit **mints a new version** and does **not**
-  move a pinned system or its frozen role allow-list; only instances tracking `latest` or a channel
+  move a pinned system or its frozen role requirements; only instances tracking `latest` or a channel
   pick the change up (and a channel only when the new version is promoted into it). The immutability
   guarantee is explicit: a frozen system and its frozen BOM stay exactly as pinned until an operator
   re-points them.
@@ -175,38 +175,61 @@ version** and a system pins the **immutable** `system_template_version` snapshot
   whichever component fills the role, so `video.input = HDMI1` for the main-display role applies to
   whatever display is assigned ([config and credentials](/architecture/variables/)).
 
-### Allowed templates per role
+### Role requirements
 
-A `system_template_member` says, for one role, **which component templates may fill it**, explicitly:
+A role declares **what a member must provide**, in canonical terms; any component whose template meets it
+can fill the role:
 
-- **One or more allowed component templates.** Usually one: the main-display role uses the Cisco-codec
-  template. For a mixed-vendor estate, list several: the `display` role may be filled by the LG template
-  **or** the Sony template. The system **names the device shapes it accepts**; there is no abstract
-  capability to infer or match against.
-- **Optional version acceptability per allowed template.** By default any version of an allowed template
-  is acceptable. A member may **limit** an allowed template to a specific version or a version range
-  (e.g. `>=2.1 <3.0`), reusing the same version / channel mechanism a component uses. Pin a version for a
-  strict, reproducible BOM; leave it open to absorb a vendor's patch releases without re-pinning the
-  system.
+```yaml
+role: main-display
+requires:
+  datapoints: [display.power, video.input]   # canonical datapoint_types
+  commands:   [set-input, power]             # canonical command types
+health_role: required
+```
 
-The instance assignment (the `system_member` row) picks a concrete component for the role; its template
-and version must be in the role's allowed set, or the assignment is refused. So a role is an explicit
-allow-list of `(component template, optional version constraint)` frozen in the system template version,
-and the instance chooses within it. This is deliberately simpler than an abstract capability contract:
-you say exactly which templates a system accepts, against templates the deployment already knows.
+- **A checklist, not a matching engine.** A component's template **qualifies** when it aligns the
+  required canonical [datapoint_types](/architecture/datapoints/) and command types (its set is a
+  superset of the requirement). The requirement is stated in **canonical** keys, because it only means
+  the same thing across templates when it names a canonical signal, not a template-local one.
+- **Qualify, then assign.** Pairing a component to a role **filters the picker to qualifying templates**,
+  and the [API](/architecture/api/) **validates on assign** (a clean 422 if the component's template is
+  missing a required datapoint or command). Mixed-vendor falls out for free: an LG and a Sony display
+  both qualify for `display` if both align the required signals, with nothing to enumerate.
+- **No allow-list of templates.** A role names *what it needs*, never *which templates*. Declare the
+  requirement on the system template, and any qualifying component, today's or a future vendor's, fills
+  it.
+
+**Removing a capability is gated at adoption, not authoring.** Dropping a required datapoint from a
+component template means **minting a new `component_template_version`** without it, which is never
+blocked. The old version is **immutable**, so every live assignment pinned to it keeps working. The new
+version simply **no longer qualifies** for any role requiring the dropped signal, so it cannot be adopted
+into that role (the same validate-on-assign check fires at re-point), and a role tracking `latest` or a
+channel will not auto-jump to it. Removal surfaces at adoption against frozen versions, never as a silent
+break. (Deleting an org-canonical `datapoint_type` a requirement references is a registry-governance warn
+or block, the same surfaced-not-silent pattern.)
+
+**The runtime backstop.** Validate-on-assign is prevention; detection covers anything it misses (an
+optional input, a drifted alignment). A system calc that reads a datapoint it cannot find **fails
+loudly**, a `calc.failed` event and a health-impacting "misconfigured" alarm, never a silent empty
+result. Two layers: gate at assignment, shout at runtime.
+
+This resolves **flexibility versus reliability** without trading either: templates evolve freely and any
+qualifying component fills a role (flexibility), while the requirement gates adoption against immutable
+versions with a noisy backstop (reliability).
 
 | Table | Key columns | Notes |
 |---|---|---|
 | `system_template` | name, type, **spec (jsonb)** | the mutable system shape; editing mints a new version |
 | `system_template_version` | (template, **version**), frozen **spec** | the **immutable** snapshot a system pins; roles never change under it |
-| `system_template_member` | (system_template_version, **role**, **allowed component_template(s)** + optional version constraint, **health_role**) | the frozen **role allow-list**: role -> one or more permitted component templates, each optionally limited to a version or range, + health role (required / redundant / informational, [health](/architecture/health/)). The instance assigns a component from this set ([allowed templates per role](#allowed-templates-per-role)) |
+| `system_template_member` | (system_template_version, **role**, **requires** (canonical datapoints + commands), **health_role**) | the frozen **role requirement**: role -> the canonical datapoints and commands a member must provide + health role (required / redundant / informational, [health](/architecture/health/)). Any component whose template meets it can fill the role, validated on assign ([role requirements](#role-requirements)) |
 
 ```mermaid
 erDiagram
   component_template ||--o{ component_template_version : versions
   system_template    ||--o{ system_template_version    : versions
   system_template_version ||--o{ system_template_member : "frozen BOM (role + health_role)"
-  component_template }o--o{ system_template_member : "allowed for role (opt. version)"
+  datapoint_type }o--o{ system_template_member : "required by role"
   component }o--|| component_template_version : pins
   system    }o--|| system_template_version    : pins
 ```

@@ -120,6 +120,6 @@ The binding itself is the **`system_member`** table: the **instance assignment**
 `system_template_version` (key columns: `system_id`, `component_id`, `role`, plus the pin to the
 `system_template_member` it satisfies).
 
-A `system_template_member` lists, per role, **one or more allowed component templates**, each optionally
-limited to a specific version or a version range; the instance assigns a component from that allow-list.
-Detailed on [templates](/architecture/templates/).
+A `system_template_member` declares, per role, a **requirement** (the canonical datapoints and commands a
+member must provide) plus its `health_role`; any component whose template meets the requirement can fill
+the role, validated on assignment. Detailed on [templates](/architecture/templates/).
