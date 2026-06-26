@@ -18,11 +18,13 @@ life**, top to bottom, from the gear to the answer and the action on it. Each **
 official term; the linked ones open their deep dive, and every one is defined in the
 [glossary](/architecture/glossary/).
 
-:::note[Design vs Built]
-These pages describe the **target architecture** in present tense: the design, not a snapshot of the
-code. Each page carries a status badge, **Design** (specified, little or none built yet), **Partial**
-(some capabilities shipped), or **Built** (all of it shipped and tested), and the badge is the page's
-floor. The per-capability breakdown and what is shipped lives on
+:::note[A proposed architecture]
+This is a **proposed, forward-looking architecture**: where we intend to take Omniglass, written in
+present tense as the target design, not a promise that every detail ships unchanged. Expect it to adjust
+as we build. Each page carries a status badge, **Design** (specified, little or none built), **Partial**
+(some capabilities shipped), **Built** (all shipped and tested), or **Diverged** (built, but the
+implementation differs from this design, see the page's note); the badge is the page's floor. The
+per-capability breakdown and what is actually shipped live on
 [implementation status](/architecture/status/); undecided design points are flagged inline as
 `Open question` asides.
 :::
@@ -160,6 +162,9 @@ The journey rides on a few foundations, named once:
   ground truth: the record of who changed what and what the platform did.
 - **[time](/architecture/time/)** is the one primitive that turns the passage of time into events, so
   the rest of the pipeline stays purely event-driven.
+- **[scaling and deployment](/architecture/scaling/)**: the single binary is a modular monolith with run
+  modes, deployed as one container for a small estate or scaled out on Kubernetes with a distributed
+  edge. One binary is the packaging, not a scale ceiling.
 
 Datapoints are parsed and emitted at the edge, so they are not re-derived from a raw store. Raw
 payloads are a debugging aid (a raw mode you turn on while developing, plus failure logging on

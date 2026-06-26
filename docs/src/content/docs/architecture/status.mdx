@@ -32,11 +32,21 @@ capability it describes is shipped, so a page with one unbuilt corner stays `Par
     <tr><td><Badge text="Design" variant="caution" /></td><td>The model is specified; little or none of it is coded yet.</td></tr>
     <tr><td><Badge text="Partial" variant="note" /></td><td>Some capabilities on the page are built and tested; others are still Design.</td></tr>
     <tr><td><Badge text="Built" variant="success" /></td><td>Every capability the page describes is implemented and tested.</td></tr>
+    <tr><td><Badge text="Diverged" variant="danger" /></td><td>Built, but the implementation differs from the design on this page. The page carries a note pointing to what shipped and why; this is a **proposed** architecture, and building it sometimes changes it.</td></tr>
   </tbody>
 </table>
 
 Today the repository is **public and published ahead of the code**, so the whole architecture is
-`Design`. As a page's badge flips to `Partial` or `Built`, the grid below follows automatically.
+`Design`. As a page's badge flips to `Partial`, `Built`, or `Diverged`, the grid below follows
+automatically.
+
+:::caution[Open question]
+How architectural divergence and decision history are tracked as the code catches up: a lightweight **ADR
+log** (decision, date, status proposed / accepted / superseded, the why) for reversals and superseded
+calls, a per-page "what shipped" note when a page goes `Diverged`, or both. The architecture has already
+reversed a few calls in the open (the `agent` principal, role requirements over an allow-list, health
+`ok` over `up`), which is the kind of history an ADR captures.
+:::
 
 ## The grid
 
