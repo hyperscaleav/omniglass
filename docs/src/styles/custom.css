@@ -23,3 +23,27 @@
   border-color: #d9a64a;
   color: #7a571a;
 }
+
+/* Partial (the note variant): blue, same per-theme treatment as Design. */
+.sl-badge.note {
+  background-color: rgba(74, 144, 217, 0.16);
+  border-color: rgba(74, 144, 217, 0.55);
+  color: #8fbce8;
+}
+:root[data-theme='light'] .sl-badge.note {
+  background-color: #e4eefb;
+  border-color: #6aa0d8;
+  color: #1d4e80;
+}
+
+/* Built (the success variant): green, same per-theme treatment as Design. */
+.sl-badge.success {
+  background-color: rgba(74, 168, 95, 0.16);
+  border-color: rgba(74, 168, 95, 0.55);
+  color: #80cf95;
+}
+:root[data-theme='light'] .sl-badge.success {
+  background-color: #e1f3e7;
+  border-color: #5aa86c;
+  color: #246b38;
+}
