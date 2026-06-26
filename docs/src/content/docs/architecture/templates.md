@@ -42,7 +42,7 @@ result.
 | `component_template` | the **device shape**: everything about a class of device | Polaris DSP 16, Cisco Room Kit Pro, Q-SYS Core |
 | `component` | a deployed instance | `dsp-boardroom-3` |
 
-### Collection is functions
+### Collection is built from functions
 
 A template's collection is authored as [functions](/architecture/collection/): `inputs` (typed
 parameters), `interfaces` (connections declared once, possibly persistent), and `functions` (each a
