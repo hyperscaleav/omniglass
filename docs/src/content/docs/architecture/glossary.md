@@ -87,7 +87,7 @@ This is the **authoritative glossary**: every official term in the architecture,
 | **SLI** | Service Level Indicator: a `time_in_state` calc datapoint over a window (e.g. `system.availability`). See [health](/architecture/health/). |
 | **SLO** | Service Level Objective: the target config value the SLI must hold (availability >= 99.9%). See [health](/architecture/health/). |
 | **SLA** | Service Level Agreement: meeting the SLO, an `event_rule` firing on breach; compliance over the window is itself an SLI. See [health](/architecture/health/). |
-| **tag** | Operator label (registry + bindings); union + override. |
+| **tag** | An operator `key: value` label. The key is a tenant-wide governed vocabulary (the `tag` registry; new keys need `tag:create`, autocompleted in the UI); values bind per entity (`tag_binding`) and resolve **union on key, override on value** down the cascade. See [config and credentials](/architecture/variables/). |
 | **group** | A named set (component/system/location/principal), static or dynamic, weighted; a cascade overlay + access scope. A `principal_group` is the principal-subject case. |
 | **health** | The first-class operational state of every entity (up/degraded/down/unknown), carried as a *calculated* state_datapoint: `worst` over its open health-impacting alarms, rolled up the system tree role-aware. A model, not just a rule. See [health](/architecture/health/). |
 | **health impact** | An optional `down`/`degraded` tag on an `event_rule`: while the alarm it opens is open, it moves its owner's health by that much. What makes health alarm-sourced. |

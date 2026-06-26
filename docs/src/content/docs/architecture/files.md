@@ -20,9 +20,10 @@ Files let an operator keep the opaque bytes that go with an estate, a firmware i
 Splitting them means search and inventory operations (list, filter, tag) never touch bytes, and
 the same blob can back many file handles.
 
-:::caution[Open question]
-Whether `file` tags reuse the `tag` registry and cascade, or are a flat per-file set.
-:::
+`file` tags reuse the `tag` **key** registry (the same tenant-wide governed vocabulary, so `category`
+means the same thing on a firmware image as on a component, [config and credentials](/architecture/variables/)),
+but bind as a **flat per-file set**: a file is not on the structural exclusive-arc, so there is no parent
+to cascade from. The vocabulary is shared; the cascade is not.
 
 ## Content-addressing earns four properties
 

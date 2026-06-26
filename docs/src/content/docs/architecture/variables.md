@@ -180,10 +180,47 @@ Scalar shapes (`string`, `int`, `float`, `bool`, `json`) cover the common case; 
 flagged secret (a free secret like a webhook signing token) without being a full credential, since it
 has no lifecycle.
 
+## tag: a normalized label vocabulary
+
+A **tag** is an operator **`key: value`** label attached to an entity to organize, filter, and scope by
+dimensions Omniglass does not model natively (`category: audio-dsp`, `environment: prod`,
+`cost_center: 4021`). A tag is not a signal and carries no lifecycle; it rides the cascade with a
+**union-on-key, override-on-value** combinator, so keys accumulate down the tree while the
+most-specific binding wins each value.
+
+**The key is a tenant-wide governed vocabulary.** A tag **key** is a row in the `tag` registry, shared
+across the whole tenant (one registry per database, which is the tenant boundary). Minting a new key is
+**permissioned**: it takes a `tag:create` grant ([identity and access](/architecture/identity-access/)),
+an admin or curator action. *Setting a value* on an existing key is the ordinary entity write
+(`component:update` and friends), open to operators. That split is the point: the vocabulary stays
+**normalized** (no one inventing `env` beside `environment` beside `Environment`) while binding values
+stays routine. The UI **autocompletes keys from the registry** as you type, so you reach for the
+existing key instead of coining a near-duplicate.
+
+**Values bind down the cascade.** A `tag_binding` sets a value for a key at any scope
+(`global | template | location | system | component`) and through [groups](/architecture/groups/),
+exactly like config and variables. Keys **union** (an entity surfaces every tag bound at or above it);
+values **override** most-specific-wins. A [template](/architecture/templates/) seeds default tags onto
+its component (`category: audio-dsp`). Because resolution is cascaded, you tag a location once and every
+system and component beneath it inherits it, which is what makes tags a practical scoping dimension: a
+high-weight [group](/architecture/groups/) can key a rule-set off `compliance: pci`, an action can read
+a `maintenance_window`.
+
+:::caution[Open question]
+Value-domain normalization. Key normalization is settled (the governed registry plus the `tag:create`
+gate). The open part is the **value** side: whether a tag key may **constrain** its values (an enum or
+`value_type` on the key, so `environment` accepts only its allowed set, validated and autocompleted like
+a `datapoint_type` domain), and whether it may **normalize** them on input through an Expr transform
+(lowercase, trim whitespace, fold synonyms) so `Prod`, `prod `, and `PROD` resolve to one value.
+Free-text values ship either way; the question is how much governance a key places on its values.
+:::
+
 ## What's shared
 
-- **The cascade.** All three resolve most-specific-wins down `global → … → component`, with a
-  template-scoped value as a shipped default. One resolver ([cascade](/architecture/cascade/)).
+- **The cascade.** Config, credentials, and variables resolve most-specific-wins down
+  `global → … → component`, with a template-scoped value as a shipped default; **tags** resolve down
+  the same cascade with a union-on-key, override-on-value combinator. One resolver
+  ([cascade](/architecture/cascade/)).
 - **The exclusive-arc scope.** Each value is owned at exactly one scope: the same exclusive-arc
   ownership as datapoints, plus a `template`-scoped default the datapoint arc lacks (and config is
   not `node`-owned).
@@ -236,6 +273,6 @@ the cascade and scope either way.
 |---|---|---|
 | `variable_type` | name, schema (fields + **per-field secret**), refresh, validation, **official** | the **shape** registry (a scalar, or structured like `oauth2` / `ssh_credential` / `snmp_community`); the `official` boolean marks shipped-canonical versus org-local |
 | `variable` | (name, **owner arc**), type, **declared_value** (secret fields encrypted), **linked_state** (-> state_datapoint, nullable), **observed_value**, reconcile | the config cell and the `$var:` cascade key; scope is the exclusive arc (template/component/system/location/global). Holds declared intent, optionally mirrors an observed datapoint for drift |
-| `tag` | name, applies_to, propagates | operator-label registry (no `_type`, no namespace) |
-| `tag_binding` | (scope_kind, scope_id, tag), value | union + override combinator ([cascade](/architecture/cascade/)) |
+| `tag` | name, applies_to, propagates | the **tenant-wide governed key vocabulary**; minting a key needs `tag:create` ([identity and access](/architecture/identity-access/)). No `_type`, no namespace; values bind via `tag_binding` |
+| `tag_binding` | (scope_kind, scope_id, tag), value | the `key: value` binding: **union on key, override on value** down the [cascade](/architecture/cascade/), bindable at any scope and via groups |
 
