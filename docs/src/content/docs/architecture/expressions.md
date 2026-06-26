@@ -31,6 +31,22 @@ is cached by `(source, env-shape)` so compile cost is paid once. Keeping it to o
 deliberate (YAGNI on multiple engines); where an expression is not even needed, prefer a
 straightforward native path over reaching for the engine at all.
 
+## Unit conversion: `convert(value, "<unit>")`
+
+Stored values are always in their `datapoint_type`'s **canonical unit**, so an operator who
+wants to author against a non-canonical unit converts at the expression. **`convert(value,
+"<unit>")`** is the stdlib function for this: the **source unit is inferred** from the bound
+datapoint's canonical unit, and the **target** is a registered unit that must be in the
+**same family** (a compile error otherwise, since units only convert within one dimension).
+The conversion itself comes from the [unit registry](/architecture/datapoints/#units-one-canonical-unit-per-key): the target's
+`to_canonical` and `from_canonical` transforms, **affine** (a factor plus offset) for the
+common case or an **Expr** for the rare nonlinear one. So an operator can write
+`convert(value, "fahrenheit") > 100` while storage stays in canonical celsius: the threshold
+reads in Fahrenheit, the firehose never changes unit. The function form is chosen over a
+per-unit method like `value.toFahrenheit()` (which would need a method per unit); it is
+data-driven and general, available wherever expressions run, including `event_rule` /
+`alarm` criteria, `calc_rule` leaves, and view/list filters.
+
 ## Where expressions are used
 
 | Site | Leaf | What it evaluates |

@@ -74,7 +74,11 @@ backs a dashboard widget unchanged.
 Live data is **query polling** (a refetch interval; slow-changing config uses a long stale time). A
 read can also **stream over the view layer (SSE or a stream subscription)** where latency or fan-out
 earns it, the same earn-it-with-a-profile discipline. Presentation that depends on config (a severity
-level's id to its label and color) resolves client-side from the config view.
+level's id to its label and color) resolves client-side from the config view. A datapoint
+value resolves the same way: on read the UI converts canonical to the operator's preferred
+display unit, looked up from the unit registry by the [datapoints](/architecture/datapoints/)
+datapoint_type's canonical unit, so storage stays single-unit while one operator sees
+Celsius and another Fahrenheit.
 
 :::caution[Open question]
 Whether the high-frequency surfaces move to SSE or streaming, if polling proves insufficient.

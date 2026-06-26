@@ -58,7 +58,9 @@ with no collision ([key scope](/architecture/datapoints/#key-scope-template-org-
 **optionally align** each datapoint to an org or official canonical key. Alignment is just
 **referencing** a canonical `datapoint_type` (plus an optional value transform), which is what buys
 cross-fleet comparability, dashboards, and AI; the shipped official set covers the common signals, so
-most templates align by referencing one. Commands are template-scoped (the functions live on
+most templates align by referencing one. That value transform is also where the device's **native
+unit** is normalized to the key's **canonical unit** before the datapoint is emitted (a Fahrenheit
+display's template emits celsius), so storage stays single-unit ([datapoints](/architecture/datapoints/)). Commands are template-scoped (the functions live on
 the template); a canonical **command type** (the abstract `reboot` to per-model layer) follows the same
 promotion ladder.
 
