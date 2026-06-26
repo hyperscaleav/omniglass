@@ -49,7 +49,7 @@ export default defineConfig({
             { label: 'Core entities', slug: 'architecture/core-entities' },
             { label: 'Templates', slug: 'architecture/templates' },
             // the journey, in the order the data travels
-            { label: 'Collection', slug: 'architecture/collection' },
+            { label: 'Data collection', slug: 'architecture/collection' },
             { label: 'Datapoints', slug: 'architecture/datapoints' },
             { label: 'Events', slug: 'architecture/events' },
             { label: 'Calculations', slug: 'architecture/calculations' },

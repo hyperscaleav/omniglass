@@ -9,15 +9,6 @@ sidebar:
 
 This is the heart of the authoritative data model: what a datapoint is, the two axes that define it, how we know a value (provenance), and how values reconcile, diverge, and read back. The physical layout (tables, partitioning, the lineage CHECK, tiering) lives in storage; the spine is [the architecture overview](/architecture/). Events, calc rules, and the response layer get their own pages: [events](/architecture/events/), [calculations](/architecture/calculations/), and [alarms and actions](/architecture/alarms-actions/).
 
-## Two orthogonal axes
-
-The model has exactly two independent questions, and conflating them is the only thing that makes it feel fuzzy.
-
-- **Kind** answers *what kind of thing is this?* It is fixed per **key**, forever, decided once when the key is defined. `power.state` is always a state.
-- **Provenance** answers *how do we know this particular value?* It varies per **row**. The same `power.state` can be observed or intended at different moments. A *declared* desired value lives in [config](/architecture/variables/) (keyed to the signal), not on the datapoint.
-
-Kind is a property of the key. Provenance is a property of the row.
-
 ## Datapoints: one family, three kinds
 
 A **datapoint** is an observation: a value of one key, on one owning entity (component, system, or location), at one time. The row shape is the same for all three kinds: `(owner, key, instance, ts, value, provenance, source, lineage)`. They are three physical tables only because they index and retain differently, not because they are different concepts.
@@ -48,6 +39,15 @@ A datapoint records a value; an event records an occurrence.
 - `"call started"` is an occurrence, "what is call-started now?" is meaningless, so it is an **event**. See [events](/architecture/events/).
 
 A raw occurrence we have not normalized (a syslog line, a raw webhook frame) lands as a **`log_datapoint`** (observed, value = the line). An event rule can then **promote** it into a normalized event. So the log table is also the holding pen for un-normalized occurrences until a rule recognizes them.
+
+## Kind and provenance: the two axes
+
+Every datapoint sits on two independent axes:
+
+- **Kind** answers *what kind of thing is this?* It is fixed per **key**, decided once when the key is defined (`power.state` is always a state), so kind is a property of the **key**, the three kinds above.
+- **Provenance** answers *how do we know this particular value?* It varies per **row**: the same `power.state` can be observed or intended at different moments. (A *declared* desired value is not a provenance; it lives in [config](/architecture/variables/), keyed to the signal.) Provenance is a property of the **row**, detailed below.
+
+Kind is set by the key, provenance by the row, and the two never depend on each other.
 
 ## The datapoint_type registry
 

@@ -1,6 +1,6 @@
 ---
-title: Collection
-description: "Collection is built from functions: a versioned component template declares interfaces and a set of functions, each a trigger plus a DAG of steps that runs at the edge and parses on the spot."
+title: Data collection
+description: "Data collection is built from functions: a versioned component template declares interfaces and a set of functions, each a trigger plus a DAG of steps that runs at the edge and parses on the spot."
 sidebar:
   badge:
     text: Design
