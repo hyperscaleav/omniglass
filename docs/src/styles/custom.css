@@ -14,9 +14,9 @@
    that stays legible in both themes and reads distinct from Partial (blue) and Built
    (green). The :::caution asides are a different element, so they are untouched. */
 .sl-badge.caution {
-  background-color: rgba(231, 168, 58, 0.16);
-  border-color: rgba(231, 168, 58, 0.55);
-  color: #e6c36a;
+  background-color: #3a2e16;
+  border-color: #7a5e25;
+  color: #ecc873;
 }
 :root[data-theme='light'] .sl-badge.caution {
   background-color: #fbf0d6;
@@ -26,8 +26,8 @@
 
 /* Partial (the note variant): blue, same per-theme treatment as Design. */
 .sl-badge.note {
-  background-color: rgba(74, 144, 217, 0.16);
-  border-color: rgba(74, 144, 217, 0.55);
+  background-color: #1e2c42;
+  border-color: #3a5f8f;
   color: #8fbce8;
 }
 :root[data-theme='light'] .sl-badge.note {
@@ -38,9 +38,9 @@
 
 /* Built (the success variant): green, same per-theme treatment as Design. */
 .sl-badge.success {
-  background-color: rgba(74, 168, 95, 0.16);
-  border-color: rgba(74, 168, 95, 0.55);
-  color: #80cf95;
+  background-color: #1d3325;
+  border-color: #3a6b48;
+  color: #84d199;
 }
 :root[data-theme='light'] .sl-badge.success {
   background-color: #e1f3e7;
