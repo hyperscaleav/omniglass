@@ -31,6 +31,10 @@ contributor build without protoc or a running server.
 
 ## Conventions (AIP-style)
 
+These are the conventions a route follows while you write it; the complete [API
+contract](/architecture/api/) (the error envelope, idempotency, long-running operations,
+versioning, and the authorization status mapping) is the architecture of record.
+
 Every operation lives under `/api/v1/*`. The path shape is derivable, not special-cased:
 
 - **Plural collections**, standard CRUD by primary key: `POST` creates (409 on PK
