@@ -159,7 +159,9 @@ key, instance, provenance)?
   (`metric_datapoint`) is the partitioning-critical one.
 - **Retention is per table**, set by policy, not one global TTL: `metric_datapoint` short,
   `state_datapoint` / `log_datapoint` longer, `audit_log` longest (compliance), `internal_log`
-  short. On-row lineage ages out with its datapoint.
+  short. On-row lineage ages out with its datapoint. The per-table defaults are **cascade-resolved**
+  ([cascade](/architecture/cascade/)) with global defaults, so a class or entity can hold longer or
+  shorter without a global change.
 - **The `raw_sample` buffer** (the opt-in raw-retention policy, [collection](/architecture/collection/))
   is range-partitioned by `ts` and cold-tierable like the metric partitions, on a short retention. It
   is bounded, sampled, and short-lived; it is not a telemetry table.

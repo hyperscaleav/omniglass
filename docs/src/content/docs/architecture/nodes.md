@@ -31,10 +31,8 @@ resolves the cascade (config / `$var:` values, effective `interval`, credentials
 before handing the node concrete work. The node never sees a template; it sees
 materialized, resolved task and command instances.
 
-:::caution[Open question]
-The node-server config-pull and heartbeat protocol detail, co-designed with the API and the node
-auth path in [identity-access](/architecture/identity-access/).
-:::
+The full wire contract, the channels, the command queue, delivery, buffering, credentials, and
+enrollment, is **[the node-server protocol](#the-node-server-protocol)** below.
 
 ### Config propagation (declared change to running node)
 
@@ -60,6 +58,78 @@ The generation moves at **operator-config pace, not telemetry pace**: it is a
 read-side aggregate over interface config, and the high-volume datapoint-write
 path never touches `interface.updated_at`. A no-op re-apply (identical rendered
 config) does not advance it, so nodes are never woken for nothing.
+
+## The node-server protocol
+
+The edge is **outbound-only**: a node sits behind NAT at a site, so the server never dials it. Every
+channel is **node-initiated** over one authenticated gRPC connection (mTLS or the `ogn_` token bound to
+`node.name`, [identity and access](/architecture/identity-access/)), and anything server-to-node rides a
+stream the node holds open. Three channels share the connection:
+
+- **Telemetry up** (node to server): a client-streaming flow of `Event` batches (`{datapoints, labels}`
+  plus the `(task, ts)` envelope, [below](#shipping-datapoints)); the node ships and the server **acks by
+  sequence**. The firehose from the edge.
+- **Control down** (server to node): a node-held server-stream carrying **worklist-change signals** (the
+  config-generation bump, so the node re-pulls) and **commands to run**. Streaming is the model; a
+  polling fallback can come later.
+- **Control up** (node to server): heartbeat (liveness, feeding the `node.down` sweep), command-execution
+  results (the `action`-row status), `session_log` transitions, and the `:report` self-telemetry, all
+  folded into gRPC rather than a separate HTTP path.
+
+### Commands: a durable server queue, a stateless edge
+
+A command is **issued server-side** (the action layer records it and writes intended state,
+[alarms and actions](/architecture/alarms-actions/)) into a **durable command queue in the database**.
+The **edge holds nothing durable**: the node is a worker that receives the next command over its
+control-down stream (and on reconnect drains whatever the queue still holds), runs it, and reports the
+result back up, which updates the `action` row. Durability lives where the source of truth is, the
+server, so a node restart loses no command. A telemetry-push response can also carry a "command pending"
+flag as an efficient nudge, but the held stream is the primary path.
+
+### Delivery: at-least-once, idempotent by nature
+
+The node ships **at-least-once** and reconnects by **replaying unacked batches**; the server makes replay
+safe **without a separate idempotency layer**, because everything the edge ships is idempotent by its own
+key:
+
+- **datapoints** dedup on **`(series, ts)`**: a replayed point at the same timestamp is the same point,
+  an idempotent upsert. The edge stamps `ts`, so the server is **ts-authoritative** and reorders
+  out-of-order arrivals for free, so there is **no strict-ordering requirement** on the wire.
+- **command results** are an **idempotent status update** on a known `action` row (by id): applying
+  "done" twice is "done".
+
+**Events are not shipped from the edge**, so there is nothing to dedup for them: an event is **derived
+server-side** (an `event_rule` over datapoints, or a `log_datapoint` promoted by a rule,
+[events](/architecture/events/)). The edge produces datapoints (including log lines) and command status;
+the server derives the events. "We do not re-raise the same event next poll" is the **alarm** model's job
+(one stateful open alarm, fire and clear), not a delivery concern.
+
+### Buffering and retention are cascade settings
+
+When the server is unreachable the node **buffers in memory**, bounded; the buffer is **not durable at
+the edge** (the edge is a worker, the durable side is the server). Both the **buffer** (size, shed
+policy) and **retention** are **cascade-resolved** ([cascade](/architecture/cascade/)) with **global
+defaults**, overridable down the tree, so a chatty site gets a bigger buffer and a sensitive class a
+longer retention, tuned like any other setting rather than per-node flags. When the buffer fills the node
+**sheds oldest metrics first and surfaces it** as a `node.buffer` datapoint (depth, drops), so shedding
+is visible, never silent.
+
+### Credentials at the edge
+
+The worklist materialization resolves credentials server-side, so **device secrets travel to the node**
+(over TLS). They are held **decrypt-on-use**: in memory, or encrypted at rest in a scratch dir with the
+key from the [`SecretProvider`](/architecture/variables/), **never persisted in plaintext**, scoped to
+the node's placement, and re-fetched on the config-generation bump. A field node is physically less
+trusted, so a secret never lands on edge disk in the clear.
+
+### Enrollment
+
+Day one, a node is **created server-side first** (its `node.name` and properties), and the UI mints a
+**per-node enrollment token**; the token is handed to the edge deployment, and the node **claims its
+identity** on first connect (the token is exchanged for its `ogn_` credential or mTLS cert,
+[identity and access](/architecture/identity-access/)). Later, a **shared enrollment token** plus a
+**`discovery_rule`** can auto-enroll a fleet: the node's **own properties** (stable facts, selected ENV)
+derive its name, editable server-side after deploy, so a rollout mints no per-node token.
 
 ## Placement (ETL, cascaded)
 
@@ -179,10 +249,10 @@ Whether to add intra-interface concurrency, given that connection and order sema
 protocol.
 :::
 
-:::caution[Open question]
-Whether the node-side queue should be made durable; today the worklist is server-pulled per tick,
-and backpressure is concurrency plus deadlines, not persistence.
-:::
+The node-side queue is **not** durable: the edge is a stateless worker, and durability lives
+**server-side** (the durable command queue, and the cascade-configurable telemetry buffer). On reconnect
+the node re-pulls its worklist, drains the server command queue, and replays its unacked telemetry buffer
+(idempotent on `(series, ts)`). See [the node-server protocol](#the-node-server-protocol).
 
 ## Implicit reachability
 
