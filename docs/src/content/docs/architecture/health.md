@@ -65,10 +65,10 @@ When **no** health-impacting alarm is open, the honest answer depends on whether
 caught a failure. **Coverage** is the question "does any health-impacting `event_rule` resolve
 against this entity's datapoint_types?":
 
-- **covered, none firing, data fresh -> `up`.** Something measures what "down" means here, it is
+- **covered, none firing, data fresh -> `ok`.** Something measures what "down" means here, it is
   watching, and it is silent: genuinely healthy.
 - **not covered -> `unknown`.** No health-impacting rule resolves, so nothing here knows what failure
-  looks like. Reporting `up` would be a false green; the entity is `unknown`, not healthy.
+  looks like. Reporting `ok` would be a false green; the entity is `unknown`, not healthy.
 
 `unknown` carries a **reason** discriminator as metadata, so an operator can tell a measurement gap
 from a coverage gap. The ordered value domain (below) is **unchanged**: `unknown` stays off the
@@ -82,7 +82,7 @@ order, and the reason is descriptive metadata, not a new state. The reasons:
 To keep `uncovered` the rare, honest resting state rather than the default, every **collected
 component** is **seeded with a baseline reachability health-impacting alarm** (an "unreachable"
 trigger, impact `down`, via the collection / template default). A freshly-collected device is
-therefore covered the moment it is collected, and resolves `unknown -> up` or `unknown -> down` on
+therefore covered the moment it is collected, and resolves `unknown -> ok` or `unknown -> down` on
 its first poll. Bare `unknown(uncovered)` then means exactly one thing: "you have collected this, but
 you have not told me what failure looks like beyond reachability," a deliberate gap to fill, not a
 silent hole.
@@ -92,7 +92,7 @@ silent hole.
 Health is a **state** with a small **fixed ordered** value domain, declared as its datapoint_type:
 
 ```text
-up  <  degraded  <  down            unknown = no signal (not on the order)
+ok  <  degraded  <  down            unknown = no signal (not on the order)
 ```
 
 It is **distinct from severity**. Severity is alert importance (a named level by id,
@@ -137,7 +137,7 @@ The second input is what lets a system see what no single component can. The can
 display sitting on **input 2** is a perfectly normal state *for the display* (no alarm), but in a
 specific room it means the wrong source is on screen. A system-scoped event_rule ("this display must
 be on input 1") opens a **system-level alarm** with a health impact, dropping system health while the
-display's own health stays `up`. The system template owns the conditions only the system cares about;
+display's own health stays `ok`. The system template owns the conditions only the system cares about;
 the component stays generic.
 
 The same discipline governs **SaaS and vendor status** (a UCC platform like Zoom, mapped to
@@ -207,10 +207,10 @@ A **Service Level Indicator** is a `time_in_state` calc over a window, emitted a
 (the temporal reducer, [expressions](/architecture/expressions/)):
 
 ```yaml
-# availability = fraction of the last 30 days the system was up
+# availability = fraction of the last 30 days the system was ok
 source: { datapoint: health, over: 30d }
 reduce: time_in_state
-when: "value.up / value.total"        # an Expr leaf shapes it into a ratio
+when: "value.ok / value.total"        # an Expr leaf shapes it into a ratio
 # -> emits system.availability
 ```
 
@@ -249,7 +249,7 @@ owned at the level it describes (system, location, or **global**). It is no new 
 shipped calc the same way health is. Omniglass ships an opinionated **default set** so the data is
 there out of the box, with the escape hatch to author your own.
 
-**Availability** is health over time: the SLI `time_in_state(up)` above. Health is the substance,
+**Availability** is health over time: the SLI `time_in_state(ok)` above. Health is the substance,
 availability is its ratio, so it ships free at every level up to global.
 
 **Utilization** is the AV-native family, over occupancy and booking data:
