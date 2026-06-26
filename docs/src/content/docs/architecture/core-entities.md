@@ -123,3 +123,62 @@ The binding itself is the **`system_member`** table: the **instance assignment**
 A `system_template_member` declares, per role, a **requirement** (the canonical datapoints and commands a
 member must provide) plus its `health_role`; any component whose template meets the requirement can fill
 the role, validated on assignment. Detailed on [templates](/architecture/templates/).
+
+## Operational mode: active, maintenance, disabled
+
+Every entity has an **operational mode**, a cascade-resolved state that says how much the platform backs
+off, set on the entity or inherited from a parent ([cascade](/architecture/cascade/)):
+
+- **active** (default): collect, evaluate, act, enforce drift, count toward SLA. Normal.
+- **maintenance**: **keep collecting**, but **suppress the consequences** of what is seen. Planned work:
+  watch, but do not act.
+- **disabled**: **stop collecting and interacting** with the device entirely (the Zabbix host-disable).
+  The entity stays in the model, dormant, until re-enabled.
+
+Maintenance and disabled are the **same suppression**, differing on one knob, **collection**: maintenance
+suppresses consequences but keeps watching (so an operator can verify the work); disabled also goes dark
+(no polling, no commands). Both suppress the same four consequences:
+
+- **action dispatch is held**: an alarm may still open (you see it), but no `action_rule` pages or opens a
+  ticket ([alarms and actions](/architecture/alarms-actions/)).
+- **drift is observed, not enforced**: the set function never fires, so a tech mid-swap is not fought
+  ([config](/architecture/variables/)). The device-swap case (a brief declared-identity authority,
+  [datapoints](/architecture/datapoints/)) is just maintenance suppressing drift.
+- **health rolls up no impact**: a member in maintenance or disabled does not sink its parent's
+  [health](/architecture/health/); it surfaces as "down (maintenance)", the truth plus the mode, not a
+  fifth health value.
+- **SLA does not count it**: the window is excluded from availability and the SLO.
+
+Maintenance is **time-bound**: a window (start / end, [time](/architecture/time/)) that **auto-exits**, or
+open-ended until cleared, with a recurring window expressed as a schedule. Disabled is held until
+re-enabled. Entering or exiting either is an **audited** operator action ([audit](/architecture/audit/)),
+so "no page at 2am, it was in the patch window" is always explainable. Because the mode is
+cascade-resolved, maintenance on a system covers its components.
+
+## Decommission and delete
+
+"Delete" is **decommission** by default, a **soft delete**: the entity is tombstoned, drops out of
+placement, worklists, and default views, but its **history is retained** (datapoints, events, alarms,
+audit), attributed to the tombstone and aging out by [retention](/architecture/storage/). An observability
+and control plane must not let "remove this projector" erase the incident record, and a decommissioned
+entity can be **re-commissioned** if the device returns. **Purge** is the privileged, audited hard erase
+for a genuine mistake (a test component); for a high-volume entity it runs as a background job over the
+partitions, while the cheap path is decommission plus letting retention age the firehose out.
+
+Decommissioning runs the **in-flight cleanup**, reusing mechanisms that already exist: collection stops
+(the worklist drops it, sessions close), **open alarms auto-resolve** (reason "decommissioned"),
+**pending commands and running flows cancel** (the durable command queue, and flows are already gated on
+their alarm staying open), and config / tag / credential / group bindings drop. The entity leaves its
+parent's health rollup.
+
+The cascade is **not** "delete everything below", because containers do not own their members:
+
+- a **component** (leaf) decommissions as above;
+- a **system** delete **unbinds its members** (the `system_member` rows) but **does not delete the
+  components**; they become standalone, re-homeable;
+- a **location** delete is **refused by the API while occupied** (it returns what is placed there); the
+  console offers re-homing before the delete (move the systems and components, then delete the empty
+  location);
+- a **node** delete **re-places its tasks** (to the server or another node, or surfaces the components as
+  uncollected) and revokes the node credential ([identity and access](/architecture/identity-access/));
+  `node.*` history is retained.
