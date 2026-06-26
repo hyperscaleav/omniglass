@@ -1,0 +1,39 @@
+---
+title: Implementation status
+description: "What is designed versus built: the live map from the timeless architecture to shipped, tested code."
+---
+
+import ImplementationStatus from '../../../components/ImplementationStatus.astro';
+
+The architecture pages describe the **target model** in present tense: the design, not a snapshot of
+the code. This page is the other axis, **what is actually built**, tracked per capability. The split is
+deliberate: the architecture stays a stable reference, and build progress lives here instead of rotting
+the design prose with "shipped in vX" notes.
+
+## Two axes, kept separate
+
+- **Design certainty** ("is this decided?") lives **inline** on each page as `Open question` asides.
+  A page can be almost fully settled yet still carry a few open points.
+- **Implementation state** ("is this built?") lives **here**, and as each page's status badge. A page
+  can be fully designed and entirely unbuilt, or anywhere in between.
+
+Neither axis is page-binary, and they do not move together.
+
+## Badge legend
+
+Each architecture page carries one status badge, and the grid below is **sourced live from those
+badges**, so it never drifts. The badge is the page's **floor**: a page is only `Built` once *every*
+capability it describes is shipped, so a page with one unbuilt corner stays `Partial`.
+
+| Badge | Meaning |
+|---|---|
+| **Design** (amber) | The model is specified; little or none of it is coded yet. |
+| **Partial** (blue) | Some capabilities on the page are built and tested; others are still Design. |
+| **Built** (green) | Every capability the page describes is implemented and tested. |
+
+Today the repository is **public and published ahead of the code**, so the whole architecture is
+`Design`. As a page's badge flips to `Partial` or `Built`, the grid below follows automatically.
+
+## The grid
+
+<ImplementationStatus />
