@@ -248,46 +248,57 @@ The key registry that types these tables is `datapoint_type` (one registry acros
 
 ## The pipeline, end to end
 
-```mermaid
-flowchart TD
-  subgraph edge["Edge (node)"]
-    TASK["task<br/>poll · listen<br/>stateless / stateful"]
-    FN["function<br/>extract → key → normalize"]
-    TASK --> FN
-  end
-
-  FN -->|"observed · lineage on row<br/>(source_rule)"| M["metric_datapoint"]
-  FN -.->|"parse / validation fail"| CF["collection.failed<br/>(carries raw)"]
-  FN --> S["state_datapoint"]
-  FN --> L["log_datapoint"]
-
-  M --> CALC["calc_rule<br/>cross-key · system-level"]
-  S --> CALC
-  CALC -->|"calculated · lineage on row<br/>(source_rule)"| M
-  CALC --> S
-
-  M --> ER["event_rule<br/>fire_criteria (+ optional clear_criteria)"]
-  S --> ER
-  L --> ER
-  SCH["schedule + timer"] -->|"origin=scheduled"| EV
-  ER --> EV["event<br/>caught · caused · derived · scheduled"]
-
-  EV -->|"fire = open · clear = resolve"| AL["alarm<br/>one incident · new row per open<br/>(event_rule, owner)"]
-  EV -->|"command's effect · provenance=intended"| S
-
-  HUMAN["operator"] -->|"declares"| VAR["config<br/>declared (spec)"]
-  VAR -. "links · drift" .- S
-  HUMAN -.->|"audit"| AU["audit_log"]
-
-  EV -. "disagree(A,B): drift / conflict" .- DIV{{"divergence"}}
-
-  EV --> ACT["actions<br/>notify · command<br/>remediate-verify-escalate"]
-  AL --> ACT
-  ACT -.->|"ITSM: open→ticket · update→comment · resolve→close"| ITSM["ITSM (action target)"]
-  ACT -.->|"command + adaptive poll"| TASK
-
-  classDef gt fill:#21CAB9,stroke:#080c16,color:#080c16;
-  class AU gt;
+```d2
+direction: down
+classes: {
+  node: { style.border-radius: 8 }
+  key: { style: { border-radius: 8; bold: true } }
+  group: { style.border-radius: 8 }
+}
+edge: "Edge (node)" {
+  class: group
+  task: "task\npoll · listen\nstateless / stateful" { class: node }
+  fn: "function\nextract → key → normalize" { class: node }
+  task -> fn
+}
+metric: metric_datapoint { class: node }
+state: state_datapoint { class: node }
+log: log_datapoint { class: node }
+failed: "collection.failed\n(carries raw)" { class: node }
+calc: "calc_rule\ncross-key · system-level" { class: node }
+erule: "event_rule\nfire_criteria (+ optional clear_criteria)" { class: node }
+event: "event\ncaught · caused · derived · scheduled" { class: node }
+sched: "schedule + timer" { class: node }
+alarm: "alarm\none incident · new row per open\n(event_rule, owner)" { class: node }
+operator: operator { class: node }
+config: "config\ndeclared (spec)" { class: node }
+audit: audit_log { class: key }
+divergence: divergence { class: node }
+actions: "actions\nnotify · command\nremediate-verify-escalate" { class: node }
+itsm: "ITSM (action target)" { class: node }
+edge.fn -> metric: "observed · lineage on row\n(source_rule)"
+edge.fn -> failed: "parse / validation fail" { style.stroke-dash: 4 }
+edge.fn -> state
+edge.fn -> log
+metric -> calc
+state -> calc
+calc -> metric: "calculated · lineage on row\n(source_rule)"
+calc -> state
+metric -> erule
+state -> erule
+log -> erule
+sched -> event: origin=scheduled
+erule -> event
+event -> alarm: fire = open · clear = resolve
+event -> state: command's effect · provenance=intended
+operator -> config: declares
+config -- state: "links · drift" { style.stroke-dash: 4 }
+operator -> audit: audit { style.stroke-dash: 4 }
+event -- divergence: "disagree(A,B): drift / conflict" { style.stroke-dash: 4 }
+event -> actions
+alarm -> actions
+actions -> itsm: "ITSM: open→ticket · update→comment · resolve→close" { style.stroke-dash: 4 }
+actions -> edge.task: "command + adaptive poll" { style.stroke-dash: 4 }
 ```
 
 The teal node is `audit_log`, the ground-truth record of operator writes (including config changes); observed and calculated carry `source_rule` on the row, intended points at the command `event` (via `event_id`). The raw payload is not stored: a parse or validation failure rides a `collection.failed` event. The three datapoint tables (`metric_datapoint`, `state_datapoint`, `log_datapoint`) are emitted at the edge or derived; [config](/architecture/variables/) holds declared intent, keyed to a state datapoint as its observed side.

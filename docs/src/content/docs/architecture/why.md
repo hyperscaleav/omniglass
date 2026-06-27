@@ -92,14 +92,18 @@ role-aware: a *required* display down takes the room down, a *redundant* mic onl
 *informational* sensor does not touch it. That is what turns a wall of red dots into one honest
 answer, and it is what makes a real uptime SLA possible at all.
 
-```mermaid
-flowchart BT
-  C1["Display: up"] --> S["Boardroom A<br/><b>degraded</b>"]
-  C2["Video bar: not in call"] --> S
-  C3["Backup mic: down<br/>(redundant)"] --> S
-  S --> L["Floor 3<br/>1 room degraded"]
-  classDef d fill:#f0b429,stroke:#080c16,color:#080c16;
-  class S d;
+```d2
+direction: up
+classes: { node: { style.border-radius: 8 }; warn: { style: { border-radius: 8; bold: true } } }
+c1: "Display: up" { class: node }
+c2: "Video bar: not in call" { class: node }
+c3: "Backup mic: down\n(redundant)" { class: node }
+system: "Boardroom A\ndegraded" { class: warn }
+floor: "Floor 3\n1 room degraded" { class: node }
+c1 -> system
+c2 -> system
+c3 -> system
+system -> floor
 ```
 
 And then it acts: notify the right person, run remediate-verify-escalate (send the command, wait,
@@ -116,14 +120,20 @@ Every monitoring system is the same shape: **collect, evaluate, raise an event, 
 act, and see it the whole time.** Omniglass is that shape, built AV-native, and the architecture
 follows it end to end.
 
-```mermaid
-flowchart LR
-  G["AV gear<br/>SNMP · HTTP · SSH · raw AV control"] -->|"collect: functions, parse at the edge"| DP["datapoint<br/>one canonical signal"]
-  DP -->|"evaluate: event_rule"| EV["event"] -->|"fire opens / clear resolves"| AL["alarm<br/>room degraded"]
-  AL -->|"act"| AC["notify · remediate · ticket"]
-  V["config<br/>desired: input = HDMI1"] -. "drift?" .- DP
-  classDef k fill:#21CAB9,stroke:#080c16,color:#080c16;
-  class DP k;
+```d2
+direction: right
+classes: { node: { style.border-radius: 8 }; key: { style: { border-radius: 8; bold: true } } }
+gear: "AV gear\nSNMP · HTTP · SSH · raw AV control" { class: node }
+datapoint: "datapoint\none canonical signal" { class: key }
+event: event { class: node }
+alarm: "alarm\nroom degraded" { class: node }
+act: "notify · remediate · ticket" { class: node }
+config: "config\ndesired: input = HDMI1" { class: node }
+gear -> datapoint: collect: functions, parse at the edge
+datapoint -> event: evaluate: event_rule
+event -> alarm: fire opens / clear resolves
+alarm -> act: act
+config -- datapoint: "drift?" { style.stroke-dash: 4 }
 ```
 
 Read it as a journey, and each stop is a page:

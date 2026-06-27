@@ -226,14 +226,23 @@ versions with a noisy backstop (reliability).
 | `system_template_version` | (template, **version**), frozen **spec** | the **immutable** snapshot a system pins; roles never change under it |
 | `system_template_member` | (system_template_version, **role**, **requires** (canonical datapoints + commands), **health_role**) | the frozen **role requirement**: role -> the canonical datapoints and commands a member must provide + health role (required / redundant / informational, [health](/architecture/health/)). Any component whose template meets it can fill the role, validated on assign ([role requirements](#role-requirements)) |
 
-```mermaid
-erDiagram
-  component_template ||--o{ component_template_version : versions
-  system_template    ||--o{ system_template_version    : versions
-  system_template_version ||--o{ system_template_member : "frozen BOM (role + health_role)"
-  datapoint_type }o--o{ system_template_member : "required by role"
-  component }o--|| component_template_version : pins
-  system    }o--|| system_template_version    : pins
+```d2
+direction: right
+classes: { node: { style.border-radius: 8 } }
+ct: component_template { class: node }
+ctv: component_template_version { class: node }
+st: system_template { class: node }
+stv: system_template_version { class: node }
+stm: system_template_member { class: node }
+dt: datapoint_type { class: node }
+component: component { class: node }
+system: system { class: node }
+ct -> ctv: versions
+st -> stv: versions
+stv -> stm: frozen BOM (role + health_role)
+dt -> stm: required by role
+component -> ctv: pins
+system -> stv: pins
 ```
 
 Locations have no template: the `location_type` is the only shape-definer

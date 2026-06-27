@@ -58,15 +58,23 @@ template tables), [collection](/architecture/collection/#storage) (interfaces an
 
 The relationships, not the columns. The columns of each table live on its owning leaf (linked above).
 
-```mermaid
-erDiagram
-  metric_datapoint ||--o{ metric_datapoint : "calc_rule"
-  state_datapoint  ||--o{ event     : "event_rule"
-  event ||--o{ alarm : "fire opens · clear resolves"
-  event ||--o{ action : "action_rule"
-  alarm ||--o{ action : ""
-  metric_datapoint }o--|| current_value : "view: latest per key+provenance"
-  state_datapoint  }o--|| variable : "linked_state (observed side)"
+```d2
+direction: right
+classes: { node: { style.border-radius: 8 } }
+metric: metric_datapoint { class: node }
+state: state_datapoint { class: node }
+event: event { class: node }
+alarm: alarm { class: node }
+action: action { class: node }
+current: current_value { class: node }
+variable: variable { class: node }
+metric -> metric: calc_rule
+state -> event: event_rule
+event -> alarm: fire opens · clear resolves
+event -> action: action_rule
+alarm -> action
+metric -> current: view: latest per key+provenance
+state -> variable: linked_state (observed side)
 ```
 
 The structural and template entities (`component` / `system` / `location` and the `*_template` /

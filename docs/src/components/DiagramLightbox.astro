@@ -1,0 +1,249 @@
+---
+// Diagram lightbox: click any rendered D2 diagram to open it
+// full-screen, scaled to fit, with scroll-to-zoom and drag-to-pan. Injected on
+// every page through the Head component override. Vanilla JS + global CSS; the
+// docs site is Starlight (not the Solid SPA), so no framework runtime here.
+---
+
+<style is:global>
+  /* Custom magnifier cursor with a zoom-in fallback. Linux/X11 Chrome cursor themes
+     often lack a `zoom-in` glyph and fall back to an ugly default, so ship the image. */
+  svg[data-d2-version] {
+    cursor: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAzklEQVR4nO2VUQ7EIAhEYbNHqPc/IHsH+rM2BLFQMWk36/xVofNqRwVY+ndhtJCZuWlGDPcPA1jGM0FOG6U5In6M+S0L0W2q5pZxD2QEwmzomBejlLIQr2BdNacvHKnxYTUAxtd7JkXWR0Ir9Q7W0clYahVCADLt+jl7FIQAZBiZeYvsjKkAMoTGWEpNCOs2Ests/X8pgsQ2vBLCAgBFvd+Dc/XMk1BD9EA6dwHNyscB4UmU65Nynhzjw1zMzYcIaEEsiAXxUxC3iO40f6Z2pzsX9JUGU9cAAAAASUVORK5CYII=") 12 12, zoom-in;
+  }
+
+  .diagram-lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 999;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    background: color-mix(in srgb, var(--sl-color-bg, #080c16) 92%, transparent);
+    backdrop-filter: blur(3px);
+  }
+  .diagram-lightbox.open {
+    display: flex;
+  }
+
+  .diagram-lightbox .dl-stage {
+    /* Anchored at the viewport origin so the JS transform is the single source of
+       position. Without this the flex centering on the overlay and the translate()
+       stack, pushing the diagram off-center. */
+    position: absolute;
+    top: 0;
+    left: 0;
+    transform-origin: 0 0;
+    cursor: grab;
+    will-change: transform;
+    user-select: none;
+    touch-action: none;
+  }
+  .diagram-lightbox .dl-stage:active {
+    cursor: grabbing;
+  }
+  /* Override the inline sizing the renderers set so the diagram can scale up. */
+  .diagram-lightbox .dl-stage svg {
+    max-width: none !important;
+    max-height: none !important;
+    width: auto;
+    height: auto;
+    display: block;
+  }
+
+  .diagram-lightbox .dl-close {
+    position: fixed;
+    top: 0.85rem;
+    right: 0.85rem;
+    width: 2.25rem;
+    height: 2.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.4rem;
+    line-height: 1;
+    border-radius: 0.5rem;
+    border: 1px solid var(--sl-color-gray-5, #2a3142);
+    background: var(--sl-color-gray-6, #11151f);
+    color: var(--sl-color-white, #fff);
+    cursor: pointer;
+  }
+  .diagram-lightbox .dl-hint {
+    position: fixed;
+    bottom: 0.85rem;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 0.3rem 0.7rem;
+    border-radius: 0.5rem;
+    font-size: 0.75rem;
+    color: var(--sl-color-gray-2, #c2c8d4);
+    background: var(--sl-color-gray-6, #11151f);
+    border: 1px solid var(--sl-color-gray-5, #2a3142);
+    pointer-events: none;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .diagram-lightbox {
+      transition: opacity 0.15s ease;
+    }
+  }
+</style>
+
+<script>
+  // Idempotent: a SPA-style navigation could re-run this; guard against it.
+  if (!(window as any).__omniglassDiagramLightbox) {
+    (window as any).__omniglassDiagramLightbox = true;
+
+    const DIAGRAM_SELECTOR = 'svg[data-d2-version]';
+    const MIN_SCALE = 0.2;
+    const MAX_SCALE = 12;
+
+    const overlay = document.createElement('div');
+    overlay.className = 'diagram-lightbox';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.setAttribute('aria-label', 'Expanded diagram');
+
+    const stage = document.createElement('div');
+    stage.className = 'dl-stage';
+
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'dl-close';
+    closeBtn.type = 'button';
+    closeBtn.setAttribute('aria-label', 'Close diagram');
+    closeBtn.textContent = '×';
+
+    const hint = document.createElement('div');
+    hint.className = 'dl-hint';
+    hint.textContent = 'scroll to zoom · drag to pan · esc to close';
+
+    overlay.append(stage, closeBtn, hint);
+    document.body.appendChild(overlay);
+
+    let scale = 1;
+    let tx = 0;
+    let ty = 0;
+    let dragging = false;
+    let startX = 0;
+    let startY = 0;
+    let current: SVGElement | null = null;
+    let baseW = 0;
+    let baseH = 0;
+
+    // Zoom by resizing the SVG element so the vector re-rasterizes crisply at the new
+    // size; pan with a translate transform only. Scaling via `transform: scale()` would
+    // rasterize the layer once at the base size and blur as it grows.
+    const render = () => {
+      if (current) {
+        current.style.width = `${baseW * scale}px`;
+        current.style.height = `${baseH * scale}px`;
+      }
+      stage.style.transform = `translate(${tx}px, ${ty}px)`;
+    };
+
+    const open = (source: SVGElement) => {
+      const clone = source.cloneNode(true) as SVGElement;
+      clone.style.cursor = '';
+
+      // D2 masks each connection to gap the line behind its label. That mask
+      // rasterizes at the diagram's native resolution, so it blurs the lines when the
+      // SVG is enlarged for zoom (the unmasked nodes stay crisp). Drop it on the clone
+      // for sharp lines; the page-size original keeps the gap, which is fine at 1x.
+      clone.querySelectorAll('[mask]').forEach((el) => el.removeAttribute('mask'));
+
+      stage.replaceChildren(clone);
+      current = clone;
+
+      // Fit the diagram to ~92% of the viewport on open, then let the user zoom.
+      const vb = clone.getAttribute('viewBox');
+      let w = parseFloat(clone.getAttribute('width') || '0');
+      let h = parseFloat(clone.getAttribute('height') || '0');
+      if ((!w || !h) && vb) {
+        const parts = vb.split(/[ ,]+/).map(Number);
+        w = parts[2];
+        h = parts[3];
+      }
+      if (!w || !h) {
+        const r = source.getBoundingClientRect();
+        w = r.width;
+        h = r.height;
+      }
+      baseW = w;
+      baseH = h;
+
+      // D2 emits a nested <svg data-d2-version> with a viewBox but no width/height.
+      // render() sizes the clone explicitly (inline style outranks the stage's
+      // `width:auto` rule), so it never collapses to 0x0 behind the backdrop.
+      const fit = Math.min((window.innerWidth * 0.92) / w, (window.innerHeight * 0.92) / h);
+      scale = Number.isFinite(fit) && fit > 0 ? fit : 1;
+      tx = (window.innerWidth - w * scale) / 2;
+      ty = (window.innerHeight - h * scale) / 2;
+      render();
+
+      overlay.classList.add('open');
+      document.documentElement.style.overflow = 'hidden';
+    };
+
+    const close = () => {
+      overlay.classList.remove('open');
+      document.documentElement.style.overflow = '';
+      stage.replaceChildren();
+      current = null;
+    };
+
+    // Event delegation: one document-level listener covers every diagram on the page.
+    document.addEventListener('click', (e) => {
+      const target = e.target as Element | null;
+      if (!target || overlay.contains(target)) return;
+      const svg = target.closest(DIAGRAM_SELECTOR) as SVGElement | null;
+      if (svg) {
+        e.preventDefault();
+        open(svg);
+      }
+    });
+
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) close();
+    });
+    closeBtn.addEventListener('click', close);
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && overlay.classList.contains('open')) close();
+    });
+
+    overlay.addEventListener(
+      'wheel',
+      (e) => {
+        if (!overlay.classList.contains('open')) return;
+        e.preventDefault();
+        const factor = Math.exp(-e.deltaY * 0.0015);
+        const next = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale * factor));
+        // Zoom toward the cursor: keep the point under the pointer fixed.
+        tx = e.clientX - (e.clientX - tx) * (next / scale);
+        ty = e.clientY - (e.clientY - ty) * (next / scale);
+        scale = next;
+        render();
+      },
+      { passive: false },
+    );
+
+    stage.addEventListener('pointerdown', (e) => {
+      dragging = true;
+      startX = e.clientX - tx;
+      startY = e.clientY - ty;
+      stage.setPointerCapture(e.pointerId);
+    });
+    stage.addEventListener('pointermove', (e) => {
+      if (!dragging) return;
+      tx = e.clientX - startX;
+      ty = e.clientY - startY;
+      render();
+    });
+    const endDrag = () => {
+      dragging = false;
+    };
+    stage.addEventListener('pointerup', endDrag);
+    stage.addEventListener('pointercancel', endDrag);
+  }
+</script>

@@ -333,13 +333,20 @@ server can emit a `collection.failed` event; on success raw is omitted (there is
 table), unless a **dev raw-mode** is on. An **OTLP adapter** at the edge accepts OTLP from
 third-party tools and translates to the native shape.
 
-```mermaid
-flowchart LR
-  W["pull worklist<br/>(placed tasks + commands)"] --> X["execute:<br/>protocol + locate/Expr extraction"]
-  X --> N["normalize: datapoints + labels<br/>(+ raw on failure)"]
-  N --> S["buffer + ship<br/>native protobuf gRPC"]
-  S --> WK["server: validate + bind owner<br/>+ persist datapoints"]
-  S -.->|"raw on failure"| CF["collection.failed<br/>(event, carries raw)"]
+```d2
+direction: right
+classes: { node: { style.border-radius: 8 } }
+worklist: "pull worklist\n(placed tasks + commands)" { class: node }
+execute: "execute:\nprotocol + locate/Expr extraction" { class: node }
+normalize: "normalize: datapoints + labels\n(+ raw on failure)" { class: node }
+ship: "buffer + ship\nnative protobuf gRPC" { class: node }
+server: "server: validate + bind owner\n+ persist datapoints" { class: node }
+failed: "collection.failed\n(event, carries raw)" { class: node }
+worklist -> execute
+execute -> normalize
+normalize -> ship
+ship -> server
+ship -> failed: "raw on failure" { style.stroke-dash: 4 }
 ```
 
 The node has already produced the datapoints at the edge; the server **validates and

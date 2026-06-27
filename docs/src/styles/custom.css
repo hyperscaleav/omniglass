@@ -10,6 +10,61 @@
   --sl-color-accent-high: #0a3b38;
 }
 
+/* D2 diagrams render to inline SVG at build time. The baked SVG only switches on
+   the OS color-scheme, so instead we drive its colors from the brand tokens above,
+   which already flip on Starlight's [data-theme]. CSS beats D2's presentation-attribute
+   fills (no !important needed), so the diagram follows the light/dark toggle and stays
+   on palette. Target the semantic classes assigned in the D2 source (node, key). */
+
+/* The canvas: D2 emits a full-size background rect (fill-N7 = white in the light theme) that
+   only darkens under @media (prefers-color-scheme), so the manual toggle would leave a white
+   box behind a dark page. Pin it to the page background. :first-of-type beats D2's `.fill-N7`
+   rule on specificity (0,2,1 vs 0,2,0) without depending on which neutral slot D2 picks. */
+.d2-svg > rect:first-of-type {
+  fill: var(--sl-color-bg);
+}
+.d2-svg .node > .shape > rect {
+  fill: var(--sl-color-accent-low);
+  stroke: var(--sl-color-accent);
+}
+.d2-svg .key > .shape > rect {
+  fill: var(--sl-color-accent);
+  stroke: var(--sl-color-accent-high);
+}
+.d2-svg .node > text {
+  fill: var(--sl-color-text);
+}
+.d2-svg .key > text {
+  fill: var(--sl-color-accent-high);
+}
+.d2-svg path.connection,
+.d2-svg .connection {
+  stroke: var(--sl-color-accent);
+}
+.d2-svg text.text-italic {
+  fill: var(--sl-color-text);
+}
+
+/* Container boxes (D2 nested groups, e.g. the "Edge (node)" grouping): transparent so
+   the children sit on the themed canvas, with a subtle accent outline and a muted label. */
+.d2-svg .group > .shape > rect {
+  fill: transparent;
+  stroke: var(--sl-color-accent);
+}
+.d2-svg .group > text {
+  fill: var(--sl-color-text);
+}
+
+/* Degraded/warning nodes: a fixed status amber (semantic, not theme-tinted, like an alert
+   color) that stays legible on both the light and dark canvas, with dark text. */
+.d2-svg .warn > .shape > rect {
+  fill: #e0a32a;
+  stroke: #f6c453;
+}
+.d2-svg .warn > text {
+  fill: #1a1205;
+}
+
 /* Status badges. "Design" rides the caution variant; restyle it to a refined amber
    that stays legible in both themes and reads distinct from Partial (blue) and Built
    (green). The :::caution asides are a different element, so they are untouched. */
