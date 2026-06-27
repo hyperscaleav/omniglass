@@ -3,7 +3,7 @@
 Open observability and control plane for AV/IT estates, and a learning tool for how one
 is built. Single Go binary (run modes: server, node, migrate), BYO PostgreSQL. The
 architecture of record is the docs site under [docs/](docs/) (published at
-omniglass.hyperscaleav.com/docs); read the architecture spine before non-trivial changes.
+docs.omniglass.hyperscaleav.com); read the [architecture spine](docs/src/content/docs/architecture/index.md) before non-trivial changes.
 
 This repo is **public from the first commit** and built **one vertical slice per PR**.
 Treat every change as portfolio-quality and externally visible.
@@ -13,24 +13,25 @@ Treat every change as portfolio-quality and externally visible.
 1. **API first.** The Go API (Huma structs) is the source of truth; OpenAPI 3.1 is
    generated from it, and the typed SPA client, the cobra CLI, and the YAML JSONSchema are
    generated from that (`make gen`). Routes are AIP-style with `:verb` custom methods; the
-   read side is the **views** BFF. [docs/contributing/api-first.md](docs/contributing/api-first.md).
+   read side is the **views** BFF. [docs/contributing/api-first.md](docs/src/content/docs/contributing/api-first.md).
 2. **Test first.** Build the test before the feature. A behavior change is incomplete
    without a test that failed before it and passes after; a bug fix starts with a
-   failing regression test. Full loop: [docs/contributing/test-driven.md](docs/contributing/test-driven.md).
+   failing regression test. Full loop: [docs/contributing/test-driven.md](docs/src/content/docs/contributing/test-driven.md).
 3. **Docs with everything.** A feature is not done until the docs that teach it ship in
-   the same PR. [docs/contributing/docs-with-everything.md](docs/contributing/docs-with-everything.md).
+   the same PR. [docs/contributing/docs-with-everything.md](docs/src/content/docs/contributing/docs-with-everything.md).
 4. **Functional and pedagogical.** Omniglass is both a tool and a learning tool. Operator
    surfaces should also teach the concept they operate on, interactively, against real or
-   simulated data. [docs/contributing/learning-tool.md](docs/contributing/learning-tool.md).
+   simulated data. [docs/contributing/learning-tool.md](docs/src/content/docs/contributing/learning-tool.md).
 5. **Primitive first.** Build the reusable primitive, then consume it. Do not inline a
-   one-off where a primitive belongs.
+   one-off where a primitive belongs (the expression engine, the `ViewResult` contract, the
+   Storage Gateway, the cascade, the timer). [docs/contributing/primitive-first.md](docs/src/content/docs/contributing/primitive-first.md).
 
 The UI is SolidJS + daisyUI + Tailwind, a generated typed client over the `ViewResult`
 renderer contract; learning surfaces render the real engine, not static diagrams.
-[docs/contributing/design-system.md](docs/contributing/design-system.md). Authorization is
+[docs/contributing/design-system.md](docs/src/content/docs/contributing/design-system.md). Authorization is
 two layers, both in the app: a `<resource>:<action>` permission checked on **every** route,
 and ABAC **scope** injected by the Storage Gateway on **every** applicable query. These are
-invariants, not conventions; see the architecture spine.
+invariants, not conventions; see [identity and access](docs/src/content/docs/architecture/identity-access.md) and [storage](docs/src/content/docs/architecture/storage.md).
 
 ## Design for testability
 
@@ -113,3 +114,6 @@ Procedural workflows live under [.claude/skills/](.claude/skills/). Invoke with
   testcontainer round-trip RED->GREEN.
 - **`/canonical-datapoint`**, **`/add-collection-primitive`** - ported with the registry and
   collection-engine slices.
+- **`/docs-diagram`** - authoring docs diagrams in D2 (build-time inline SVG via astro-d2):
+  the d2-binary prerequisite, the colors-live-in-CSS theming contract that tracks Starlight's
+  light/dark toggle, the class to CSS-hook vocabulary, and the build/preview/verify loop.

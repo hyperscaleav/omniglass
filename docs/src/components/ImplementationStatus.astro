@@ -1,0 +1,42 @@
+---
+// Live implementation-status grid: sourced from each architecture page's status
+// badge (the single source of truth), so it never drifts from the badges.
+import { getCollection } from 'astro:content';
+import { Badge } from '@astrojs/starlight/components';
+
+// Meta / narrative pages that are not capabilities to track.
+const META = new Set([
+  'architecture',
+  'architecture/why',
+  'architecture/glossary',
+  'architecture/status',
+]);
+
+const rows = (await getCollection('docs'))
+  .filter((e) => e.id.startsWith('architecture/') && !META.has(e.id))
+  .map((e) => {
+    const raw = e.data.sidebar?.badge;
+    const badge = raw
+      ? typeof raw === 'string'
+        ? { text: raw, variant: 'default' }
+        : raw
+      : null;
+    return { title: e.data.title, id: e.id, badge };
+  })
+  .filter((r) => r.badge)
+  .sort((a, b) => a.title.localeCompare(b.title));
+---
+
+<table>
+  <thead>
+    <tr><th>Capability</th><th>Status</th></tr>
+  </thead>
+  <tbody>
+    {rows.map((r) => (
+      <tr>
+        <td><a href={`/${r.id}/`}>{r.title}</a></td>
+        <td><Badge text={r.badge.text} variant={r.badge.variant} /></td>
+      </tr>
+    ))}
+  </tbody>
+</table>

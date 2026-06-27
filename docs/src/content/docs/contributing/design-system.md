@@ -1,11 +1,14 @@
-# UI and the design system
+---
+title: UI and the design system
+description: The SolidJS and daisyUI console, a generated typed client over the ViewResult renderer contract.
+---
 
 The operator console is a **SolidJS** SPA styled with **daisyUI** on **Tailwind CSS**. It
 is a generated client of the API (typed via `openapi-fetch` off the committed
 `openapi.json`) and a renderer over the views BFF. The same surfaces are also the
-**learning surfaces** (see [the learning-tool restriction](learning-tool.md)).
+**learning surfaces** (see [the learning-tool restriction](/contributing/learning-tool/)).
 
-## The stack (carried from the scratch repo)
+## The stack
 
 | Concern | Choice |
 |---|---|
@@ -13,7 +16,7 @@ is a generated client of the API (typed via `openapi-fetch` off the committed
 | Components / theme | daisyUI on Tailwind CSS v4 |
 | Data fetching | `@tanstack/solid-query` over a typed `openapi-fetch` client |
 | Tables | `@tanstack/solid-table` (group-by, sub-rows) |
-| Flow / graph viz | `solid-flow` (collection flows, pipelines, DAGs) |
+| Flow / graph viz | `solid-flow` (collection functions, pipelines, DAGs) |
 | Dashboards | `gridstack` (12-column widget grid) |
 | Build / test | Vite, Vitest, `@solidjs/testing-library` |
 
@@ -31,11 +34,11 @@ error in the SPA.
 - **The dense ops layout / `DensePage` primitive.** List pages follow one shape: summary
   (donut facets over the full set) then filter (keyboard chip `FilterBar`) then a group-by
   table then a click-row detail `Drawer` plus a full detail page. Facets drive the filter;
-  the summary stays whole so click-to-filter is stable. The primitives extracted in the
-  scratch repo (`DensePage`, `FilterBar`, `Donut`, `SummaryFacet`, `Drawer`, `HealthBadge`,
+  the summary stays whole so click-to-filter is stable. The extracted primitives
+  (`DensePage`, `FilterBar`, `Donut`, `SummaryFacet`, `Drawer`, `HealthBadge`,
   `Actor`, `Sparkline`) are the reuse target.
-- **Learning surfaces ride the real engine.** A concept page (a collection flow, a
-  transform, a calc rollup, an alarm lifecycle) renders the actual pipeline against real or
+- **Learning surfaces ride the real engine.** A concept page (a collection function, a
+  edge parse step, a calc rollup, an alarm lifecycle) renders the actual pipeline against real or
   lab-simulated data, not a static diagram. `solid-flow` is the workhorse for rendering the
   DAGs the engine actually runs.
 
@@ -45,3 +48,11 @@ The SPA builds with Vite and is embedded into the Go binary (served under `/web`
 docs/learning site is embedded and served under `/docs`. One artifact serves the API, the
 console, and the docs. Component-level tests (Vitest) run in CI; user-observable behavior
 gets an e2e (browser-driven) test per the test-first doctrine.
+
+## How this relates to the UI architecture
+
+This page is the **build and dev guide** for the console: the stack, the generated typed client, the
+reusable primitives, and the build-and-embed pipeline. The **architecture** the console implements,
+the `ViewResult` renderer contract, the views BFF (read side), one renderer per view, the dense-ops
+layout as a pattern, the information architecture, and the live-update model, is
+[UI](/architecture/ui/) on the architecture spine. Build mechanics live here; the model lives there.

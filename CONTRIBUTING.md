@@ -2,17 +2,19 @@
 
 Omniglass is built in the open, one vertical slice at a time. This document is the
 contract for how a change gets in. The deeper doctrine lives in the docs site
-([API first](docs/contributing/api-first.md),
-[Test-driven](docs/contributing/test-driven.md),
-[Docs with everything](docs/contributing/docs-with-everything.md),
-[The learning-tool restriction](docs/contributing/learning-tool.md),
-[The design system](docs/contributing/design-system.md)); this is the
+([API first](docs/src/content/docs/contributing/api-first.md),
+[Test-driven](docs/src/content/docs/contributing/test-driven.md),
+[Docs with everything](docs/src/content/docs/contributing/docs-with-everything.md),
+[The learning-tool restriction](docs/src/content/docs/contributing/learning-tool.md),
+[The design system](docs/src/content/docs/contributing/design-system.md)); this is the
 operational checklist.
 
 ## The cardinal rules
 
-1. **Everything is a pull request.** No direct commits to `main`. `main` is protected:
-   PRs require a passing CI run and one review.
+1. **Everything is a pull request.** No direct commits to `main`. `main` is protected by
+   a ruleset: squash-merge only, no direct pushes. CI gates and required review land with
+   the toolchain; today the only automated PR check is the docs-site deploy, and no
+   approving review is required during solo bootstrap.
 2. **Everything is an issue.** Work is tracked as GitHub issues grouped under epics.
    We do not keep TODO docs in the tree and we do not write `// TODO` without an issue
    reference (`// TODO(#123): ...`). If it is worth doing later, it is worth an issue.
@@ -34,14 +36,19 @@ git push -u origin <type>/<short-name>
 ```
 
 - **Branch prefix and PR title** use the conventional-commit type: `feat`, `fix`,
-  `docs`, `ci`, `chore`, `refactor`, `test`, `perf`. CI enforces the PR-title format.
+  `docs`, `ci`, `chore`, `refactor`, `test`, `perf`. CI will enforce the PR-title format
+  once the toolchain lands; today it is convention.
 - **Squash merge only.** The PR title becomes the commit on `main` and drives
   semantic-release: `feat:` = minor, `fix:`/`perf:` = patch, `BREAKING CHANGE:` in the
   body = major; `chore`/`docs`/`ci`/`test`/`refactor` produce no release.
-- **Validate locally before pushing.** `make test-short` for fast iteration,
-  `make test` before opening the PR. Do not lean on CI to find what a local run would.
+- **Validate locally before pushing.** Once the Go toolchain lands, `make test-short`
+  for fast iteration and `make test` before opening the PR. Do not lean on CI to find
+  what a local run would.
 
-## The per-PR gate (what CI checks)
+## The per-PR gate (what CI will check)
+
+These gates are the target contract; they activate as the toolchain lands. Today the
+only automated PR check is the docs-site deploy.
 
 | Gate | What it means |
 |---|---|
@@ -49,7 +56,7 @@ git push -u origin <type>/<short-name>
 | **Docs touched** | A feature PR changes `docs/`, or carries the `no-docs` label with a one-line justification. |
 | **Conventions** | gofmt, lint, naming, no em-dashes in written artifacts, API-drift + route coverage (once the API exists). |
 | **PR title** | Conventional-commit format. |
-| **Review** | At least one approving review. Heavy jobs (image build, CVE scan, preview env) are label-gated. |
+| **Review** | Not required during solo bootstrap (the `main` ruleset enforces zero approvals); the target is at least one approving review as the project grows. Heavy jobs (image build, CVE scan, preview env) are label-gated. |
 
 A label-gated trigger can also invoke **Claude Code** on a PR for review or assist
 (apply the `claude` label).

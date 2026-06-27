@@ -1,0 +1,4 @@
+# public/d2/ holds the pre-rendered diagram SVGs and IS committed: the build runs
+# astro-d2 with skipGeneration, so Cloudflare Pages inlines these instead of rendering.
+# They are generated, never hand-edited: run `pnpm diagrams` after changing any ```d2
+# block (the D2 in the Markdown is the source of truth).

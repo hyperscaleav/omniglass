@@ -16,7 +16,7 @@ Closes #
 
 ## Checklist
 
-- [ ] Tests added/updated; failed before the change, pass after (`make test` green)
+- [ ] Tests added/updated; failed before the change, pass after (`make test` green, once the toolchain lands)
 - [ ] Docs updated in `docs/` (or `no-docs` label with justification)
 - [ ] Operator-facing surface also teaches its concept (learning-tool restriction), if applicable
 - [ ] Conventions: gofmt, lint, no em-dashes, no AI attribution

@@ -1,0 +1,40 @@
+---
+title: Omniglass
+description: Open observability and control plane for AV and IT estates, and a place to learn how one is built.
+---
+
+import { LinkCard, CardGrid } from '@astrojs/starlight/components';
+
+Omniglass collects telemetry from devices, types it into owned datapoints, models health
+across systems and locations, alarms on it, and acts. It is a single Go binary over a BYO
+PostgreSQL database, and it is two things at once on purpose: a working tool, and a learning
+tool for how one is built. [View it on GitHub](https://github.com/hyperscaleav/omniglass).
+
+:::note[Early, and public from the first commit]
+Omniglass is being rebuilt in the open, one vertical slice at a time. The architecture is
+published ahead of the code, so the design is readable before the feature that implements
+it lands. Expect the surface to move.
+:::
+
+<CardGrid>
+  <LinkCard
+    title="Why Omniglass"
+    href="/architecture/why/"
+    description="The problem AV has, and why it needs its own observability platform instead of an IT monitoring tool."
+  />
+  <LinkCard
+    title="Architecture overview"
+    href="/architecture/"
+    description="The data-lifecycle spine: collect, type a signal, model health, detect, act, and see it the whole time."
+  />
+  <LinkCard
+    title="Contributing"
+    href="/contributing/api-first/"
+    description="The five doctrines and the design system."
+  />
+  <LinkCard
+    title="Glossary"
+    href="/architecture/glossary/"
+    description="Every official term in the architecture, defined once."
+  />
+</CardGrid>

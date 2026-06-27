@@ -15,7 +15,7 @@ It is two things at once, on purpose:
 > **Status: early, and public from the first commit.** Omniglass is being rebuilt in
 > the open, one vertical slice at a time. Expect the surface to move. The architecture
 > is published ahead of the code at
-> [omniglass.hyperscaleav.com/docs](https://omniglass.hyperscaleav.com/docs).
+> [docs.omniglass.hyperscaleav.com](https://docs.omniglass.hyperscaleav.com).
 
 ## Design principles
 
@@ -43,25 +43,35 @@ make run          # start the server; docs served at http://localhost:PORT/docs
 
 ## Repository layout
 
+Today the repo is the docs site plus project meta:
+
+```
+docs/             the Astro Starlight docs + learning site (published; later embedded)
+go.mod            the Go module
+```
+
+The code lands one vertical slice at a time, into this target shape:
+
 ```
 cmd/omniglass     entrypoint (server | node | migrate)
 internal/         the application (storage gateway, collection, rules, api, ...)
 db/migrations/    dbmate schema migrations (pure DDL)
-docs/             the Hugo (Hextra) docs + learning site, embedded into the binary
 web/              the operator SPA
 ```
 
 ## Documentation
 
 The architecture, concepts, and contributor guide live in [`docs/`](docs/) and are
-published at [omniglass.hyperscaleav.com/docs](https://omniglass.hyperscaleav.com/docs).
+published at [docs.omniglass.hyperscaleav.com](https://docs.omniglass.hyperscaleav.com).
 Start with the architecture spine.
 
 ## Contributing
 
 All work happens through pull requests against `main`, tracked as GitHub issues under
 epics. Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a PR. The short version:
-test-first, ship the docs, conventional-commit PR title, green CI, one reviewer.
+test-first, ship the docs, conventional-commit PR title, squash-merge. `main` is
+protected by a ruleset (squash-only, no direct pushes); the automated CI gates land
+with the toolchain.
 
 ## License
 

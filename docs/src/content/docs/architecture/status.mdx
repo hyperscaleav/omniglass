@@ -1,0 +1,53 @@
+---
+title: Implementation status
+description: "What is designed versus built: the live map from the timeless architecture to shipped, tested code."
+---
+
+import ImplementationStatus from '../../../components/ImplementationStatus.astro';
+import { Badge } from '@astrojs/starlight/components';
+
+The architecture pages describe the **target model** in present tense: the design, not a snapshot of
+the code. This page is the other axis, **what is actually built**, tracked per capability. The split is
+deliberate: the architecture stays a stable reference, and build progress lives here instead of rotting
+the design prose with "shipped in vX" notes.
+
+## Two axes, kept separate
+
+- **Design certainty** ("is this decided?") lives **inline** on each page as `Open question` asides.
+  A page can be almost fully settled yet still carry a few open points.
+- **Implementation state** ("is this built?") lives **here**, and as each page's status badge. A page
+  can be fully designed and entirely unbuilt, or anywhere in between.
+
+Neither axis is page-binary, and they do not move together.
+
+## Badge legend
+
+Each architecture page carries one status badge, and the grid below is **sourced live from those
+badges**, so it never drifts. The badge is the page's **floor**: a page is only `Built` once *every*
+capability it describes is shipped, so a page with one unbuilt corner stays `Partial`.
+
+<table>
+  <thead><tr><th>Badge</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td><Badge text="Design" variant="caution" /></td><td>The model is specified; little or none of it is coded yet.</td></tr>
+    <tr><td><Badge text="Partial" variant="note" /></td><td>Some capabilities on the page are built and tested; others are still Design.</td></tr>
+    <tr><td><Badge text="Built" variant="success" /></td><td>Every capability the page describes is implemented and tested.</td></tr>
+    <tr><td><Badge text="Diverged" variant="danger" /></td><td>Built, but the implementation differs from the design on this page. The page carries a note pointing to what shipped and why; this is a **proposed** architecture, and building it sometimes changes it.</td></tr>
+  </tbody>
+</table>
+
+Today the repository is **public and published ahead of the code**, so the whole architecture is
+`Design`. As a page's badge flips to `Partial`, `Built`, or `Diverged`, the grid below follows
+automatically.
+
+:::caution[Open question]
+How architectural divergence and decision history are tracked as the code catches up: a lightweight **ADR
+log** (decision, date, status proposed / accepted / superseded, the why) for reversals and superseded
+calls, a per-page "what shipped" note when a page goes `Diverged`, or both. The architecture has already
+reversed a few calls in the open (deferring first-class AI-agent identity, role requirements over an
+allow-list, health `ok` over `up`), which is the kind of history an ADR captures.
+:::
+
+## The grid
+
+<ImplementationStatus />

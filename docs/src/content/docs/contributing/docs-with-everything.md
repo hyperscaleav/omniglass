@@ -1,8 +1,12 @@
-# Docs with everything
+---
+title: Docs with everything
+description: A feature is not done until the docs that teach it ship in the same PR.
+---
 
 Omniglass ships its documentation *as part of the product*. The docs are not an
-afterthought in a separate wiki; they are Hugo (Hextra) content under `docs/`, compiled
-to a static site and embedded into the Go binary, served at `/docs`. The architecture is
+afterthought in a separate wiki; they are Astro Starlight content under `docs/`, compiled
+to a static site and published at docs.omniglass.hyperscaleav.com (and, in time, embedded
+into the Go binary to serve at `/docs`). The architecture is
 published ahead of the code, so the design is visible (and reviewable) before, or
 alongside, the feature that implements it.
 
@@ -21,13 +25,13 @@ a genuine internal change, not as a routine escape hatch.
 
 ## What "the docs" means here
 
-- **Architecture pages** (`docs/architecture/`) hold the model: the spine plus leaf
-  documents, the glossary, the locked decisions. Terms are defined once in the spine and
-  not redefined in leaves.
+- **Architecture pages** (`/architecture/`) hold the model: the spine plus leaf
+  documents, and the current decisions. Each official term is defined once in the
+  [glossary](/architecture/glossary/) and not redefined in the leaves.
 - **Concept and learning pages** teach a concept interactively (see
-  [the learning-tool restriction](learning-tool.md)). When a feature introduces a concept
+  [the learning-tool restriction](/contributing/learning-tool/)). When a feature introduces a concept
   an operator must understand, the teaching surface ships with it.
-- **Contributor pages** (`docs/contributing/`) are this doctrine set.
+- **Contributor pages** (`/contributing/`) are this doctrine set.
 
 ## Style
 
@@ -39,4 +43,4 @@ a genuine internal change, not as a routine escape hatch.
 ## Publishing
 
 Docs build in CI on every PR (so a broken docs build fails the PR) and are embedded into
-the binary at release. The published site is omniglass.hyperscaleav.com/docs.
+the binary at release. The published site is docs.omniglass.hyperscaleav.com.
