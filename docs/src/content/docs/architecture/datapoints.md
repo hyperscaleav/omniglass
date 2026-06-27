@@ -71,7 +71,7 @@ The naming convention is consistent: a `_type` registry defines what a thing *is
 
 These shapes ride **inline** on the one row today: kind-conditional columns (unit / precision, on metrics) and the `validation` jsonb that reads as a range for a metric and a domain for a state. The kind is decided once and compiled into the edge unit, and the registry is cached in-process, so reading a type's shape is a map lookup, never a per-datapoint join.
 
-If the metric and state shapes grow, they may later move to **1:1 per-kind sidecar tables** (`metric_type`, `state_type`) keyed by the `datapoint_type` id, exactly as the IAM [`principal`](/architecture/identity-access/) splits into per-kind `human` / `service` / `node` / `agent` tables (`log` keeps no sidecar). That is a cold-path normalization, one cheap PK join when reading the shape, and the registry is cached either way, not a hot-path change: the firehose never joins the type registry.
+If the metric and state shapes grow, they may later move to **1:1 per-kind sidecar tables** (`metric_type`, `state_type`) keyed by the `datapoint_type` id, exactly as the IAM [`principal`](/architecture/identity-access/) splits into per-kind `human` / `service` / `node` tables (`log` keeps no sidecar). That is a cold-path normalization, one cheap PK join when reading the shape, and the registry is cached either way, not a hot-path change: the firehose never joins the type registry.
 
 **Validation on insert, under a policy.** Every datapoint is typed by a `datapoint_type` row (the FK is **non-null**: a template-scoped key is a real `datapoint_type` row at `scope=template`, not an inline-only shape), so insert checks two things, plus an optional third. **(1) The key resolves** to a `datapoint_type` at a reachable scope: a template-scoped key self-resolves; a referenced org or official key must exist, checked at template compile time. An unresolved key is **reject-not-project**: kept out of the typed series, a `datapoint.validation_failed` event raised, the raw carried on a `collection.failed` event so nothing is lost (backfillable once the registry or template is corrected). **(2) The value conforms** to the type's kind and domain: the type's `validation` (`{min,max}` for a metric, `{values:[...]}` for a state). Optionally **(3) the owner kind** must be one the type allows. All three are governed by the `validation_policy` config mode: **bypass** (skip), **audit** (the default: write the value but emit the event), or **enforce** (hold the value back from the typed series, emit the event). The point is visibility: an out-of-range or unmapped value means a template author declared a type the device disagrees with, so the violation surfaces as an owner-attributed event operators and admins see. The mode resolves per-entity down the cascade (global, location, system, component), so a noisy device class can run in `audit` while the rest of the fleet enforces.
 
@@ -146,11 +146,11 @@ A separate **`source`** column records *which sensor or path* produced an observ
 
 ### calculated: derived by a calc rule
 
-A calculated value (a 5-minute average, a system rollup, a fused consensus) is parallel to observed: both are machine-derived. The difference is the input: an edge function parses a device payload, a calc rule reads **other datapoints**. A calc consumer reads datapoints **off the JetStream `datapoints` stream** and **publishes its derived datapoint back onto the same stream**, so calculated values re-enter the data lane exactly like observed ones (and are themselves available to downstream calc and to the rule engine). Both carry `source_rule` + `source_rule_version` on the row, so they are distinguished by the **`provenance` column** (an edge function versus a calc_rule), not by a pointer. The exact inputs a calc read are reconstructable from the rule version (that is what backtest does); if an immutable input snapshot is ever needed it is a nullable `inputs jsonb` column, not a table. The rule itself lives on [calculations](/architecture/calculations/).
+A calculated value (a 5-minute average, a system rollup, a fused consensus) is parallel to observed: both are machine-derived. The difference is the input: an edge function parses a device payload, a calc rule reads **other datapoints**. A calc consumer reads datapoints **off the trusted JetStream `datapoints` stream** and **publishes its derived datapoint back onto it directly** (a trusted server producer, no admission pass), so calculated values re-enter the data lane exactly like observed ones (and are themselves available to downstream calc and to the rule engine). Both carry `source_rule` + `source_rule_version` on the row, so they are distinguished by the **`provenance` column** (an edge function versus a calc_rule), not by a pointer. The exact inputs a calc read are reconstructable from the rule version (that is what backtest does); if an immutable input snapshot is ever needed it is a nullable `inputs jsonb` column, not a table. The rule itself lives on [calculations](/architecture/calculations/).
 
 ### intended: the declared effect of a command
 
-When the action layer issues a command, it records the command as an **event** and writes the **intended** state it expects, in one step. The command and its event are born in the record/state lane (PG-first, CDC-out); the intended datapoint **re-enters the data lane** on the `datapoints` stream **under the command's target owner** (the target was scope-checked at dispatch, so the re-entry carries that owner and clears the admission consumer), so the command's expected effect rides the same stream as observed and calculated values and reconciles against the observed value that the device round trip produces. The intended datapoint's lineage is that command event. The name is deliberate: **intended vs observed** is the central razor, intent-in-progress versus measured reality.
+When the action layer issues a command, it records the command as an **event** and writes the **intended** state it expects, in one step. The command and its event are born in the record/state lane (PG-first, CDC-out); the intended datapoint **re-enters the data lane** on the `datapoints` stream **under the command's target owner** (the target was scope-checked at dispatch; the action layer is trusted server-internal, so it publishes to the trusted stream directly, no admission pass), so the command's expected effect rides the same stream as observed and calculated values and reconciles against the observed value that the device round trip produces. The intended datapoint's lineage is that command event. The name is deliberate: **intended vs observed** is the central razor, intent-in-progress versus measured reality.
 
 ```text
 1. command issued:  "power on display-5"  -> recorded as an event
@@ -264,7 +264,9 @@ edge: "Edge (node)" {
   fn: "function\nextract → key → normalize" { class: node }
   task -> fn
 }
-ds: "JetStream\ndatapoints stream" { class: node; shape: queue }
+raw: "raw ingress\nnode · webhook (untrusted)" { class: node }
+admit: "admission consumer\nowner-confine per class\n(system mode)" { class: node }
+ds: "JetStream\ntrusted datapoints stream" { class: node; shape: queue }
 failed: "collection.failed\n(carries raw)" { class: node }
 calc: "calc_rule consumer\ncross-key · system-level" { class: node }
 erule: "event_rule consumer\nfire_criteria (+ optional clear_criteria)" { class: node }
@@ -280,10 +282,12 @@ operator: operator { class: node }
 config: "config\ndeclared (spec)" { class: node }
 audit: audit_log { class: key }
 divergence: divergence { class: node; shape: hexagon }
-edge.fn -> ds: "observed · lineage on row\n(source_rule)"
+edge.fn -> raw: "observed · lineage on row\n(source_rule)"
 edge.fn -> failed: "parse / validation fail" { style.stroke-dash: 4 }
+raw -> admit
+admit -> ds: "confined"
 ds -> calc
-calc -> ds: "calculated · lineage on row\n(source_rule)"
+calc -> ds: "calculated · trusted producer\n(direct, no admission)"
 ds -> erule
 ds -> persist
 persist -> tables: "durable copy"
@@ -292,7 +296,7 @@ erule -> pg: "PG-first: event + alarm in one tx"
 pg -> alarm: "alarm transition"
 pg -> cdc: "CDC (logical decoding)\nleader-elected publisher" { style.stroke-width: 3 }
 cdc -> actions
-actions -> ds: "command's effect · provenance=intended" { style.stroke-dash: 4 }
+actions -> ds: "command's effect · provenance=intended\n(trusted, direct)" { style.stroke-dash: 4 }
 actions -> itsm: "ITSM: open->ticket · update->comment · resolve->close" { style.stroke-dash: 4 }
 actions -> edge.task: "command + adaptive poll" { style.stroke-dash: 4 }
 operator -> config: "declares (PG-first)"
@@ -301,6 +305,6 @@ operator -> audit: "audit" { style.stroke-dash: 4 }
 cdc -- divergence: "disagree(A,B): drift / conflict" { style.stroke-dash: 4 }
 ```
 
-Two lanes, one bus. The **data lane** is the JetStream `datapoints` stream: the edge publishes observed datapoints, calc consumers publish calculated datapoints back onto it, the `event_rule` consumer evaluates against it live, and a **persistence consumer** batch-writes the three datapoint tables (`metric_datapoint`, `state_datapoint`, `log_datapoint`) as an async sink (datapoints never go through CDC). The **record/state lane** is PG-first: an `event_rule` fire writes the event and alarm transition to PG in one transaction, and a leader-elected **CDC publisher** (logical decoding of the WAL) fans those committed changes onto JetStream, where `action_rule` consumers react. A command's intended datapoint re-enters the data lane (the device round trip). The teal node is `audit_log`, the ground-truth record of operator writes (including config changes); observed and calculated carry `source_rule` on the row, intended points at the command `event` (via `event_id`). The raw payload is not stored: a parse or validation failure rides a `collection.failed` event. [config](/architecture/variables/) holds declared intent (PG-first), keyed to a state datapoint as its observed side.
+Two lanes, one bus. The **data lane** is the JetStream **trusted** `datapoints` stream. Untrusted publishers (the edge node, an external webhook) land on a **raw ingress** subject; an **admission consumer** owner-confines each datapoint against the publisher's placement (or the webhook interface's declared owner) and re-publishes only confined points to the trusted stream, so a forged owner is dropped before the live `event_rule` can act on it ([identity and access](/architecture/identity-access/)). **Trusted server producers** (calc output, a command's intended write) publish to the trusted stream directly, no admission pass. The `event_rule` consumer evaluates against the trusted stream live, and a **persistence consumer** batch-writes the three datapoint tables (`metric_datapoint`, `state_datapoint`, `log_datapoint`) as an async sink (datapoints never go through CDC). The **record/state lane** is PG-first: an `event_rule` fire writes the event and alarm transition to PG in one transaction, and a leader-elected **CDC publisher** (logical decoding of the WAL) fans those committed changes onto JetStream, where `action_rule` consumers react. A command's intended datapoint re-enters the data lane (the device round trip). The teal node is `audit_log`, the ground-truth record of operator writes (including config changes); observed and calculated carry `source_rule` on the row, intended points at the command `event` (via `event_id`). The raw payload is not stored: a parse or validation failure rides a `collection.failed` event. [config](/architecture/variables/) holds declared intent (PG-first), keyed to a state datapoint as its observed side.
 
 Related: [events](/architecture/events/) (the event family and `event_type`), [calculations](/architecture/calculations/) (calc rules and the rule families), [config and credentials](/architecture/variables/) (declared config, drift, reconcile), [collection](/architecture/collection/) (how telemetry arrives), [alarms and actions](/architecture/alarms-actions/) (alarm lifecycle, actions), and [the glossary](/architecture/glossary/) (every term defined once).

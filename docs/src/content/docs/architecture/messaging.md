@@ -17,15 +17,22 @@ inter-service diagram are on [scaling](/architecture/scaling/).
 
 Internal traffic splits by what is moving:
 
-- **Data lane (NATS-native): datapoints.** Observed datapoints arrive on a **raw ingress subject** (the
-  edge and the central node publish them); an **admission consumer** at the head of the lane confines each
-  datapoint's payload owner to the publisher's placement `visible_set` and re-publishes only confined
-  datapoints to the **trusted** datapoints stream. Calc consumers publish calculated ones to that trusted
-  stream. The rule engine consumes it directly, and a **persistence consumer** batch-writes it to the
-  Postgres datapoint tables as an async sink. Confinement is at **consume time, ahead of evaluation**,
-  because the rule engine reacts live: a forged owner must be dropped before it can open an alarm, not just
-  before it is persisted ([identity and access](/architecture/identity-access/)). Datapoints do not go
-  through CDC, they are already on the bus, idempotent on `(series, ts)`.
+- **Data lane (NATS-native): datapoints.** Untrusted publishers (a node, an external webhook sender)
+  publish to a **raw ingress subject**; an **admission consumer** at the head of the lane owner-confines
+  each datapoint and re-publishes only confined ones to the **trusted** datapoints stream. The confinement
+  set is **per publisher class**: a **node**'s payload owner is checked against its placement `visible_set`;
+  a **central webhook**'s against the interface's declared owner (from the trusted server-set `interface`
+  label). The republish copies the original `Nats-Msg-Id`, `correlation_id`, and `caused_by_event_id`
+  headers verbatim, so dedup survives the hop. **Trusted server-internal producers publish straight to the
+  trusted stream**, no admission pass: calc output (owner from the validated `calc_rule` scope) and the
+  action layer's intended write (owner from the command target) are already inside the trust boundary. The
+  rule engine consumes the trusted stream directly, and a **persistence consumer** batch-writes it to
+  Postgres as an async sink. Confinement is at **consume time, ahead of evaluation**, because the rule
+  engine reacts live: a forged owner must be dropped before it can open an alarm, not just before it is
+  persisted. The admission consumer itself runs in **system mode** (its owner lookup is a system-mode
+  gateway read; a dropped datapoint is logged as a discovery candidate,
+  [identity and access](/architecture/identity-access/)). Datapoints do not go through CDC, they are
+  already on the bus, idempotent on `(series, ts)`.
 - **Record / state lane (Postgres-first, CDC-out): events, alarms, actions, operator mutations.** Born in
   a Postgres transaction (a firing `event_rule` writes the event plus the alarm transition atomically; the
   API writes config, ack, settings). A **leader-elected CDC publisher** (logical decoding of the WAL)
@@ -34,14 +41,16 @@ Internal traffic splits by what is moving:
 
 ## Streams and consumers
 
-- **datapoints** (data lane): the edge and central node publish to a **raw ingress** subject; the
-  **admission consumer** owner-confines and re-publishes to the **trusted** datapoints stream that the rule
-  engine, calc, and the persistence consumer read. A **work-queue consumer group** scales horizontally
-  (each message to exactly one consumer), so adding worker replicas adds throughput with no leader.
+- **datapoints** (data lane): untrusted publishers (node, external webhook) publish to a **raw ingress**
+  subject; the **admission consumer** owner-confines per publisher class and re-publishes to the **trusted**
+  datapoints stream that the rule engine, calc, and the persistence consumer read. Trusted server producers
+  (calc, the action layer's intended write) publish to the trusted stream directly. A **work-queue consumer
+  group** scales horizontally (each message to exactly one consumer), so adding worker replicas adds
+  throughput with no leader.
 - **records** (events, alarms, actions): published by the CDC publisher from Postgres commits; consumed by
   `action_rule`, reconcile, and projection consumers.
 - **commands**: a durable, per-node **command queue** the edge holds a consumer on ([nodes](/architecture/nodes/)).
-- **telemetry**: the edge publishes `node.self`, `session_log`, and command results.
+- **telemetry** (control-plane, not the datapoint firehose, which lands on raw ingress above): the edge publishes `node.self`, `session_log`, and command results.
 
 Durable consumers track their own position; delivery is at-least-once with `Nats-Msg-Id` dedup plus double
 ack, which with the idempotent sinks (a datapoint on `(series, ts)`, an action transition on

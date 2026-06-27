@@ -245,10 +245,10 @@ One or more `mode: listen` tasks bind to a webhook interface; each inbound POST
 runs every enabled one, parsing its points under that task's id and **publishing**
 them to the JetStream [datapoints](/architecture/datapoints/) stream, the same data
 lane the node publishes to (so owner attribution resolves server-side, and the rule
-engine and calc rollups react from the stream). The ingest is **scoped to the
-interface's declared owner / cascade scope** (not all-visibility system mode) and
-passes the same **admission consumer** as node telemetry, so a leaked path secret can
-publish only under that interface's owner, never an arbitrary one
+engine and calc rollups react from the stream). The ingest is **owner-confined by the
+admission consumer** against the interface's **declared owner**, keyed off the trusted
+server-set `interface` label (not a payload claim), so a leaked path secret can publish
+only under that interface's owner, never an arbitrary one
 ([identity and access](/architecture/identity-access/)).
 
 **Response contract** (webhook senders retry on non-2xx): **202** = durably

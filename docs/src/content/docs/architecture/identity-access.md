@@ -22,11 +22,10 @@ A principal carries a `kind` value; the same role machinery works across all kin
 | `human` | a person | local password + session, OIDC, SAML |
 | `service` | scripts, integrations, SDKs, bots | bearer token |
 | `node` | the edge daemon running in the field | NATS JWT/nkey credential |
-| `agent` | an AI actor, sponsored by a human | bearer token, OAuth on-behalf-of |
 
-An **`agent`** is a first-class principal kind representing an AI actor. It is **mandatorily sponsored by a human** (a `sponsor` FK to a human principal on the per-kind `agent` table), and its authority is bounded by that sponsor: an agent's permissions plus ABAC scope are a **strict subset of its sponsor's**, so it can never exceed, and never outlive, the human who stands behind it (see [The agent principal](#the-agent-principal) below and the [AI](/architecture/ai/) page).
+**AI actors act as a user today; a first-class `agent` principal is deferred.** An AI tool authenticates via **OAuth as a `human` or `service` principal** and acts with exactly that principal's grants, no separate identity. A dedicated `agent` principal kind (first-class AI identity, bounded by a sponsoring human, with a propose -> approve gate on mutations) may be added when the capability matures; it is deliberately deferred so the platform does not carry that authorization machinery for a feature a year out. This note is the one place that direction is recorded; everywhere else AI is simply a scoped, audited user ([AI](/architecture/ai/)).
 
-Each kind that needs structured domain attributes gets a **1:1 per-kind table** linked by `principal_id`: `human`, `service`, `node`, and `agent`. The base `principal` table holds identity + kind only; the per-kind tables hold the rest, including the kind's human-facing label (a human's `display_name`, a service's label, the node's name, an agent's label and its `sponsor`).
+Each kind that needs structured domain attributes gets a **1:1 per-kind table** linked by `principal_id`: `human`, `service`, and `node`. The base `principal` table holds identity + kind only; the per-kind tables hold the rest, including the kind's human-facing label (a human's `display_name`, a service's label, the node's name).
 
 ## Credentials
 
@@ -48,7 +47,7 @@ undecided.
 
 ## Subjects
 
-`human`, `service`, `node`, `agent`, and **`principal_group`s**. Roles attach to principals regardless of kind; the same `principal_grant` rows mean the same thing whether the principal is a person, a service, a daemon, or an AI agent.
+`human`, `service`, `node`, and **`principal_group`s**. Roles attach to principals regardless of kind; the same `principal_grant` rows mean the same thing whether the principal is a person, a service, a daemon, or an AI tool acting as one.
 
 ## Group kinds
 
@@ -63,20 +62,6 @@ So `group` appears on **both sides of authZ**: `principal_group`s as subjects, e
 Whether to unify the group kinds into a single polymorphic `group` primitive; revisit if their usage
 converges.
 :::
-
-## The agent principal
-
-AI acts as an **`agent` principal**: a real, named identity with its own credentials and grants, **mandatorily sponsored by a human**. The per-kind `agent` table carries a `sponsor` FK to a human principal; an agent cannot exist without one.
-
-The sponsor is the **upper boundary on the agent's authority**, enforced not implicit:
-
-- **Subset invariant**: an agent's permissions plus ABAC scope are a **strict subset of its sponsor's**, checked at grant time. The subset holds **per action**: for every action, the agent's `visible_set(agent, action)` is contained in the sponsor's, so the clamp cannot be sidestepped by pairing an action from one grant with a scope from another. A grant that would let the agent see or do something its sponsor cannot is refused.
-- **Clamp on shrink**: the agent's effective authority for any action is computed **live at request time** as `visible_set(agent, action)` intersect `visible_set(sponsor, action)`, and the agent's principal cache **watches the sponsor's** `principal_grant` / `principal` / `role` keys. So a sponsor shrink re-clamps the agent immediately, without waiting for the agent's own grants to change (they never do). The agent can never exceed, and never outlive, its sponsor's authority.
-- **Own credential lifecycle**: the agent holds its own credentials, revocable and rotatable **independently of the human**, so retiring an agent does not disturb the sponsor and vice versa.
-- **propose -> approve**: governs autonomy **structurally**, not by convention. Read and diagnostic actions run autonomously within scope; for a non-promoted agent a mutating call writes a `pending-approval` **action row** that the gateway **refuses to advance** until a **sponsor-attributed approval row** exists. The gate is held by the gateway, not the application, so an in-scope mutation cannot slip past it, set per agent.
-- **Audit**: an action attributes to the **agent** as the actor, with the **sponsor** as the accountable human, recorded natively as a principal relationship. No special two-row case is needed.
-
-**OAuth on-behalf-of** survives as the **backing auth mechanism** for the agent principal: it is how an external AI proves it acts for its sponsor at authentication time, not a scope-cloning shortcut that hands the agent the sponsor's grants wholesale. The agent's authority comes from its own clamped grants, not from the OAuth token. This is symmetric with the other bounded kinds: a `node` is bounded by its placement, an `agent` is bounded by its sponsor. The [AI](/architecture/ai/) page covers the capability spectrum this governs.
 
 ## Roles and the role hierarchy
 
@@ -99,7 +84,7 @@ Linear inheritance (transitive): each role's effective permissions are the union
 |---|---|
 | `viewer` | Read every operator-facing resource within scope. |
 | `operator` | viewer + create/update on components, interfaces, tasks, rules, config; ack/snooze/resolve alarms. |
-| `admin` | operator + delete on managed resources + manage IAM (principals, credentials, grants, custom roles). Cannot delete `official` roles. |
+| `admin` | operator + delete on managed resources + manage IAM (principals, credentials, grants, custom roles) + curate registries (`<registry>:create`). IAM management is meaningful only from an `@ all` grant (a scoped `admin @ subtree` keeps the operator powers within its subtree but gets no IAM); registry curation is a plain capability, so a custom role can carry `<registry>:create` alone for a non-admin curator. Cannot delete `official` roles. |
 | `owner` | god mode (`*:*`). The unkillable role: at least one active `owner@all` grant must exist at all times (enforced by DB trigger). The bootstrap creates the first owner; only an owner can revoke another owner. |
 
 ### Custom roles
@@ -119,6 +104,7 @@ Permissions are strings: `<resource>:<action>`. One entry per resource per role;
 component:read                <- single action
 component:create,update       <- multiple actions, one resource
 alarm:ack,snooze,resolve      <- domain verbs alongside CRUD
+datapoint_type:create         <- a registry curator capability (tag/unit/event_type/severity/source likewise)
 principal:*                   <- any action on this resource
 *:*                           <- any action on any resource (owner only)
 ```
@@ -174,7 +160,7 @@ Whether a scope may mix include and exclude (e.g. "all except group X").
 
 ## Visibility cascades down the structural tree
 
-A scope of entity E includes E **and everything structurally beneath it** (a location -> its systems -> their components -> their datapoints and alarms). The visible set is **parameterized by action**: `visible_set(P, action)` = the union, over **only the grants whose role carries `action`**, of each scope entity plus its descendants. There is no single global visible set. **`:read` is an implicit floor on every grant**: holding any grant on an entity confers `read` on it, so `visible_set(P, read)` is always the widest set and `visible_set(P, action)` is always a subset of it. The asymmetry runs one way only: a principal can **read** an entity it cannot **act** on (in `visible_set(P, read)` but outside `visible_set(P, ack)`, via a read-only grant), but never the reverse. So there is no "actionable but not readable" case, and the status split below stays three-way. Dynamic-group scopes recompute as membership changes. Each per-action set is bounded by **fleet size (entities)**, not data volume.
+A scope of entity E includes E **and everything structurally beneath it** (a location -> its systems -> their components -> their datapoints and alarms). The visible set is **parameterized by action**: `visible_set(P, action)` = the union, over **only the grants whose role carries `action`**, of each scope entity plus its descendants. There is no single global visible set. **`:read` is an implicit floor on every grant**: holding any grant on an entity confers `read` on it, so `visible_set(P, read)` is always the widest set and `visible_set(P, action)` is always a subset of it. The floor is realized as a **capability injection at role-index build** (next): every `<resource>:<action>` permission implies `<resource>:read`, so the implied reads are present in the fast-reject union, in `canDo`'s `perms`, and in `/auth/me.permissions`, not only in the scope layer. A verb-only role (`alarm:ack` without `alarm:read`, no `viewer` inheritance) is therefore **not** hard-403'd on the read. The asymmetry runs one way only: a principal can **read** an entity it cannot **act** on (in `visible_set(P, read)` but outside `visible_set(P, ack)`, via a read-only grant), but never the reverse. So there is no "actionable but not readable" case, and the status split below stays three-way. Dynamic-group scopes recompute as membership changes. Each per-action set is bounded by **fleet size (entities)**, not data volume.
 
 ## The owner invariant
 
@@ -248,7 +234,11 @@ The capability check is **necessary not sufficient** (it only rejects), the `can
 4. **Backstop**: had the handler skipped step 2, the gateway's `:ack` write carries `visible_set(P, ack)`, X is outside it, the UPDATE matches 0 rows, and the gateway returns the same 403, never a silent success.
 
 The flattened-set model would have wrongly allowed this: `ack` is "in the permission set" and X is "in the global visible set", so the per-grant binding is exactly what stops estate-wide ack.
-- **Non-entity resources** (the `datapoint_type` registries, roles, principals, groups) have no entity `E`, so `canDo` resolves against the **`all` scope**: the action must appear in a grant whose `scope_kind` is `all`. A scoped grant (a role `@ group-A`) confers **no** global capability, so `role:create` carried by an `operator @ HQ` grant does not let you create roles. The fast-reject still only rejects; the all-scope grant check is the authorization, the one documented place the decision is capability-shaped because there is no entity to scope. These are typically admin-tier (`owner @ all`).
+- **Non-entity resources** have no entity `E`, so `canDo` cannot scope by owner. Two governance classes:
+  - **IAM subjects** (`principal`, `role`, `principal_grant`, and the credential-definition verbs `create` / `rotate` / `delete`): the action must appear in a grant whose `scope_kind` is `all`. A scoped grant confers **no** IAM capability, so `role:create` carried by an `operator @ HQ` grant does not let you create roles. Typically `owner @ all` / `admin @ all`. (Reading a specific credential in plaintext, `secret:read`, is by contrast an ordinary **entity-scoped** action against that credential's owner, [config and credentials](/architecture/variables/).)
+  - **Data registries** (`datapoint_type`, `tag`, `unit`, `event_type`, severity, source): governed by a distinct **`<registry>:create` curator capability** (`datapoint_type:create`, `tag:create`, `unit:create`, `event_type:create`, `severity:create`, `source:create`). A registry entry has no owner entity, so the grant's `scope_kind` is irrelevant: the check is simply whether the principal holds the capability. Granting it to a curator role lets a principal mint registry entries **without** IAM admin; a minted entry carries its own `scope` (an org-scoped entry shadows an official one, the [namespace-shadow pattern](/architecture/api/)), and `official`-scoped entries are reserved to `owner` and the boot seed.
+
+  The fast-reject still only rejects; for these resources the authorization is the grant-class check (an `all`-scoped grant for IAM, the `<registry>:create` capability for registries), the one place the decision is capability-shaped because there is no entity to scope.
 
 Both layers operate **within one database**. Tenant isolation is **per-deployment**: a tenant is one database plus one **NATS account** plus one deployment, so per-database isolation (storage) and per-account isolation (messaging) are the same boundary. There is no `tenant_id` column anywhere, so the cross-tenant boundary is the database / account boundary itself, not a row predicate. Intra-database scope (above) is the only app-enforced layer; there is no RLS backstop.
 
@@ -267,13 +257,13 @@ whether it is deny-only or can also force-allow.
 
 The hot path must not hit the DB for RBAC. Three layers, in-process, no persisted "effective permissions" projection (which would invite the stale-join class of cache-coherence bug; the grant and role caches below still carry a bounded staleness, the contract for which is stated at the end):
 
-1. **Role index**: at boot, the `role` table is loaded into a Go map with `inherits` resolved transitively and wildcards expanded. Refreshed on a NATS KV watch keyed on `role` changes.
+1. **Role index**: at boot, the `role` table is loaded into a Go map with `inherits` resolved transitively, wildcards expanded, and the **`:read` floor injected** (each `<resource>:<action>` adds the implied `<resource>:read`, so the floor is in the flattened union the fast-reject reads, not only the scope layer). Refreshed on a NATS KV watch keyed on `role` changes.
 2. **Principal cache**: at session establish (or first token-auth), the principal's **grants** and the `role -> perms` index are cached by `principal_id`; the flattened `Set[resource:action]` (used only for the fast-reject and `/auth/me`) is derived from them. Invalidated on a NATS KV watch keyed on `principal_grant`, `principal`, or `role` changes. **Group membership is resolved live in-query** (no materialized member-set cache), so a dynamic group's expansion is always current.
 3. **Per-request**: the per-action authorization is **composed at request time** from the cached grants + `role -> perms`. The middleware does an O(1) Set-membership fast-reject on the flattened permissions; the gateway builds `visible_set(P, action)` for the **specific action** by unioning the scopes of only the grants whose role carries it. The flattened set never authorizes; it only fast-rejects. Both O(1)-with-a-prefactor in the common case.
 
 The DB is the source of truth; caches are derived views with explicit invalidation events. The principal/permission cache, config, and distributed locks live in **NATS KV** (not Postgres `LISTEN/NOTIFY`): a committed change to `role` / `principal` / `principal_grant` reaches NATS through the leader-elected CDC publisher, which updates the KV keys those watches observe. The same KV contract holds whether the design runs single-binary (embedded NATS) or against an external NATS cluster at scale.
 
-**Staleness contract.** Both the handler `canDo` and the gateway predicate read the **same** cached grants, so the gateway backstops a *forgotten* check, not a *stale* one: a revoked-but-not-yet-invalidated grant authorizes at both layers. The grant cache therefore carries a **bounded max-staleness**, a TTL floor independent of CDC invalidation, so a CDC-publisher outage or failover cannot extend the revoke-lag window unbounded. For **high-sensitivity mutations** (IAM changes, deletes) the gateway **re-resolves grants in the transaction** against source-of-truth, trading a round trip for zero revoke-lag. An open SSE session **re-checks on every grant-cache invalidation** for its principal (next section's relay) and closes if `:read` is lost. The freshness asymmetry is deliberate: grant membership (the **subject** side) is cached and is the binding staleness constraint, while group membership (the **object** side) is resolved live in-query, so it can only tighten, never loosen, a stale grant.
+**Staleness contract.** Both the handler `canDo` and the gateway predicate read the **same** cached grants, so the gateway backstops a *forgotten* check, not a *stale* one: a revoked-but-not-yet-invalidated grant authorizes at both layers. The grant cache therefore carries a **bounded max-staleness**, a TTL floor independent of CDC invalidation, so a CDC-publisher outage or failover cannot extend the revoke-lag window unbounded. For **high-sensitivity mutations** (IAM changes and deletes of IAM objects) the gateway **re-resolves grants in the transaction** against source-of-truth, trading a round trip for zero revoke-lag; that round trip is off the read and firehose **hot path** (which never hits the DB for RBAC). Other control-plane mutations (`:ack`, `:command`, a config `PATCH`) take the cached path and so accept a **bounded revoke-lag** (the TTL floor above): documented and bounded, not closed. An open SSE session **re-checks on every grant-cache invalidation** for its principal (next section's relay) and closes if `:read` is lost. The freshness asymmetry is deliberate: grant membership (the **subject** side) is cached and is the binding staleness constraint, while group membership (the **object** side) is resolved live in-query, so it can only tighten, never loosen, a stale grant.
 
 ## The /auth/me contract
 
@@ -304,7 +294,7 @@ Nodes do not use general role x scope. A node authenticates with a per-tenant **
 
 - A node is a NATS client over the WAN (outbound only). The connection resolves the principal (kind=`node`) from the nkey, and the JWT's subject permissions are the node's placement-derived `visible_set`: it may publish only to its own telemetry subjects and consume only from its own durable command queue. The general RBAC permission matrix does not apply.
 - Telemetry lands on the JetStream datapoints stream; the node receives commands from a durable, server-side JetStream command queue rather than polling a route. Placement (the [cascade](/architecture/cascade/)) compiles directly into the account's subject grants, so a node can address only the owners it actually covers.
-- A node's published datapoints are owner-bound at **stream-consume time, ahead of any evaluation**, by an **admission consumer** at the head of the data lane: it checks each datapoint's payload owner label against the node's placement-derived `visible_set` and re-publishes only confined datapoints to the trusted stream the rule engine, calc, and persistence sink consume. An owner outside that set is treated as an orphan / discovery candidate, never an authoritative datapoint (see [collection](/architecture/collection/)). The fence cannot live only at the durable write, because the rule engine consumes the stream **live**: a forged owner must be caught **before** it can open an alarm or fire an action, not just before it is persisted. The persistence sink is then a trusted, all-visibility **system mode** `COPY` that relies on the admission consumer having confined owners upstream; it applies no per-row scope predicate of its own (see [messaging](/architecture/messaging/)).
+- A node's published datapoints are owner-bound at **stream-consume time, ahead of any evaluation**, by the **admission consumer** at the head of the data lane: for a node it checks the payload owner against the node's placement-derived `visible_set`; for a central webhook, against the interface's declared owner (the per-class confinement is specified in [messaging](/architecture/messaging/)). It re-publishes only confined datapoints to the trusted stream the rule engine, calc, and persistence sink consume; an owner outside the set is an orphan / discovery candidate, never an authoritative datapoint (see [collection](/architecture/collection/)). The fence cannot live only at the durable write, because the rule engine consumes the stream **live**: a forged owner must be caught **before** it can open an alarm or fire an action. **Trusted server-internal producers** (calc, the action layer's intended write) publish to the trusted stream directly, no admission pass. The admission consumer itself runs in **system mode** (its owner lookup is a system-mode gateway read); the persistence sink is then a trusted **system mode** `COPY` relying on confined owners upstream, with no per-row scope predicate of its own.
 
 A `node` credential whose subject permissions do not cover a subject is rejected by NATS at publish/subscribe time; a non-`node` principal cannot hold a node account's subject grants.
 
@@ -313,7 +303,7 @@ A `node` credential whose subject permissions do not cover a subject is rejected
 Authorization is **two in-app layers, each enforced in one place and re-derived nowhere else**: the `<resource>:<action>` **capability** check runs as API route middleware before the handler, and the **ABAC scope** filter is injected by the Storage Gateway on every query (a row filter belongs at the data path, where it holds by construction; the gateway also writes the in-transaction `audit_log`). The gateway owns **scope and audit**, not capability. The invariant is that no third surface re-implements either:
 
 - **The live UI relay calls these, it does not copy them.** Operators never connect to NATS. The SSE subscribe is a normal route, **capability fast-rejected** at open (not authorized there); the server-side [SSE relay](/architecture/messaging/) then runs each candidate message through the **same** gateway scope a read uses, filtering by `visible_set(P, read)` against each message's exclusive-arc owner, so a live tile gets exactly the rows the operator could have fetched. The session **re-checks on every grant-cache invalidation** for its principal and closes if `:read` is lost, so a mid-stream scope shrink tears the stream down rather than leaking.
-- **Node subject permissions gate the subject; the admission consumer gates the owner.** A node's NATS grants are mechanically derived from its placement as a coarse transport gate on the WAN edge. But subject permissions constrain the subject **string**, while a datapoint's owner lives in the **payload** (a multi-owner function resolves owner from labels server-side), so the subject grant is **not** a redundant copy of the owner fence: the **admission consumer** (above) is the authoritative owner fence, checking the payload owner against placement at consume time. Subject perms keep a node off subjects it has no business on; the admission consumer keeps a forged owner label out of the trusted stream. The bus carries no operator (`kind=human` or `kind=agent`) clients at all.
+- **Node subject permissions gate the subject; the admission consumer gates the owner.** A node's NATS grants are mechanically derived from its placement as a coarse transport gate on the WAN edge. But subject permissions constrain the subject **string**, while a datapoint's owner lives in the **payload** (a multi-owner function resolves owner from labels server-side), so the subject grant is **not** a redundant copy of the owner fence: the **admission consumer** (above) is the authoritative owner fence, checking the payload owner against placement at consume time. Subject perms keep a node off subjects it has no business on; the admission consumer keeps a forged owner label out of the trusted stream. The bus carries no operator (`kind=human`) clients at all; an AI tool acting as one reaches the platform only through the API.
 
 ## Encryption in transit
 
@@ -321,7 +311,7 @@ TLS on the HTTP API (terminated at the binary when given a cert + key, or at the
 
 ## Audit
 
-Every API operation records the resolved **actor** (the principal id) in `audit_log`. Secret decrypts are always audited, never filterable. Node-mode writes record the node principal as actor; system-mode writes record `actor = 'system'` (or `'bootstrap'` for the seed phase) so the audit trail distinguishes operator action from platform internals. An `agent` action records the agent as actor with its sponsor as the accountable human.
+Every API operation records the resolved **actor** (the principal id) in `audit_log`. Secret decrypts are always audited, never filterable. Node-mode writes record the node principal as actor; system-mode writes record `actor = 'system'` (or `'bootstrap'` for the seed phase) so the audit trail distinguishes operator action from platform internals. An AI tool acts via OAuth as a `human` or `service` principal, so its writes record that principal as actor.
 
 ## Bootstrap
 
@@ -345,7 +335,7 @@ The IAM subjects and their grants; the physical layout lives on [storage](/archi
 
 | Table | Key columns | Notes |
 |---|---|---|
-| `principal` (+ per-kind `human` / `service` / `node` / `agent`) | id, kind | base `principal` is identity (opaque uuid) + kind only; per-kind tables hold the rest, including each kind's label: `human.display_name` (the person's real name) + username + email, the `service` label, the `node` name (+ labels, last_heartbeat_at, bound credential), the `agent` label + `sponsor` (FK to a human principal; agent permissions + scope are clamped to a subset of the sponsor's) |
+| `principal` (+ per-kind `human` / `service` / `node`) | id, kind | base `principal` is identity (opaque uuid) + kind only; per-kind tables hold the rest, including each kind's label: `human.display_name` (the person's real name) + username + email, the `service` label, the `node` name (+ labels, last_heartbeat_at, bound credential) |
 | `role` | id, **official**, permissions (jsonb: `<resource>:<action>`) | RBAC capability set; ship viewer/operator/admin/owner + custom |
 | `principal_grant` | (principal_id, role, **scope**) | role x scope; scope = a structural node, an entity-group, or `all`; additive |
 
