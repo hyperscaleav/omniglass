@@ -16,13 +16,17 @@ pool (pull a message, do work, ack, with at-least-once delivery plus `Nats-Msg-I
 idempotent sink so it inherits crash recovery, exactly-once outcomes, and event-time semantics for
 free). It is instantiated over several consumers rather than separate loops:
 
-- **the rule engine** (datapoint consumers): consume arriving datapoints directly from the
+- **the admission consumer**: owner-confines raw-ingress datapoints (node and webhook) against the
+  publisher's placement, preserving `Nats-Msg-Id`, and republishes to the **trusted** datapoints stream,
+  so the rule engine and persistence read only confined points (system mode, [messaging](/architecture/messaging/));
+- **the rule engine** (datapoint consumers): consume arriving datapoints from the **trusted**
   JetStream datapoints stream, apply `calc_rule`s and `event_rule`s, publish derived datapoints back
-  onto the data lane, and write events and alarm transitions to Postgres in one transaction;
+  onto the trusted stream (a trusted producer, no admission pass), and write events and alarm transitions
+  to Postgres in one transaction;
 - **the action sender** ([alarms and actions](/architecture/alarms-actions/)): consumes
   action work fanned out by CDC, sends at-least-once, advances action step state (PG-first, CDC-out);
-- **the persistence consumer**: a batch sink that consumes the datapoints stream and writes datapoints
-  to the Postgres metric/state/log tables asynchronously, so rules never wait on PG;
+- **the persistence consumer**: a batch sink that consumes the **trusted** datapoints stream and writes
+  datapoints to the Postgres metric/state/log tables asynchronously, so rules never wait on PG;
 - **the clock** ([time](/architecture/time/)): fires schedules and armed timers (a leader-elected
   singleton, below);
 - **reconcile**: the desired-state loop (below).

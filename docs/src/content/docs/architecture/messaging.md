@@ -50,7 +50,7 @@ Internal traffic splits by what is moving:
 - **records** (events, alarms, actions): published by the CDC publisher from Postgres commits; consumed by
   `action_rule`, reconcile, and projection consumers.
 - **commands**: a durable, per-node **command queue** the edge holds a consumer on ([nodes](/architecture/nodes/)).
-- **telemetry**: the edge publishes `node.self`, `session_log`, and command results.
+- **telemetry** (control-plane, not the datapoint firehose, which lands on raw ingress above): the edge publishes `node.self`, `session_log`, and command results.
 
 Durable consumers track their own position; delivery is at-least-once with `Nats-Msg-Id` dedup plus double
 ack, which with the idempotent sinks (a datapoint on `(series, ts)`, an action transition on

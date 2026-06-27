@@ -72,8 +72,9 @@ migrations run exactly once.
 Service-to-service traffic rides **two lanes on the one JetStream bus**, by what is moving:
 
 - **Data lane (NATS-native).** Observed and calculated **datapoints** live on NATS. The edge and central
-  nodes publish observed datapoints to a JetStream datapoints stream, calc consumers publish derived
-  datapoints back onto the same stream, and the rule engine consumes them **directly from NATS**. A
+  nodes publish observed datapoints to a **raw ingress** subject; an **admission consumer** owner-confines
+  them per publisher class and republishes to the **trusted** datapoints stream, which the rule engine
+  consumes directly from NATS (calc publishes derived datapoints onto the trusted stream as a trusted producer). A
   **persistence consumer** batch-writes datapoints to the Postgres metric, state, and log tables as an async
   **sink**. Datapoints do not pass through CDC: they are already on NATS, idempotent on `(series, ts)`, and
   the firehose, so rules never wait on Postgres. Postgres is the durable record, NATS is the live signal.

@@ -84,7 +84,7 @@ Linear inheritance (transitive): each role's effective permissions are the union
 |---|---|
 | `viewer` | Read every operator-facing resource within scope. |
 | `operator` | viewer + create/update on components, interfaces, tasks, rules, config; ack/snooze/resolve alarms. |
-| `admin` | operator + delete on managed resources + manage IAM (principals, credentials, grants, custom roles). IAM management is meaningful only from an `@ all` grant; **registry curation** uses the tenant-scoped `<registry>:create` capability, not `@ all` (a scoped `admin @ subtree` keeps the operator powers within its subtree but gets no IAM). Cannot delete `official` roles. |
+| `admin` | operator + delete on managed resources + manage IAM (principals, credentials, grants, custom roles) + curate registries (`<registry>:create`). IAM management is meaningful only from an `@ all` grant (a scoped `admin @ subtree` keeps the operator powers within its subtree but gets no IAM); registry curation is a plain capability, so a custom role can carry `<registry>:create` alone for a non-admin curator. Cannot delete `official` roles. |
 | `owner` | god mode (`*:*`). The unkillable role: at least one active `owner@all` grant must exist at all times (enforced by DB trigger). The bootstrap creates the first owner; only an owner can revoke another owner. |
 
 ### Custom roles
@@ -104,6 +104,7 @@ Permissions are strings: `<resource>:<action>`. One entry per resource per role;
 component:read                <- single action
 component:create,update       <- multiple actions, one resource
 alarm:ack,snooze,resolve      <- domain verbs alongside CRUD
+datapoint_type:create         <- a registry curator capability (tag/unit/event_type/severity/source likewise)
 principal:*                   <- any action on this resource
 *:*                           <- any action on any resource (owner only)
 ```
@@ -219,10 +220,10 @@ The capability check is **necessary not sufficient** (it only rejects), the `can
 
 The flattened-set model would have wrongly allowed this: `ack` is "in the permission set" and X is "in the global visible set", so the per-grant binding is exactly what stops estate-wide ack.
 - **Non-entity resources** have no entity `E`, so `canDo` cannot scope by owner. Two governance classes:
-  - **IAM subjects** (`principal`, `role`, `principal_grant`, credentials): the action must appear in a grant whose `scope_kind` is `all`. A scoped grant confers **no** IAM capability, so `role:create` carried by an `operator @ HQ` grant does not let you create roles. Typically `owner @ all` / `admin @ all`.
-  - **Data registries** (`datapoint_type`, `tag`, `unit`, `event_type`, severity, source): governed by a **`<registry>:create` curator capability** held at the **tenant scope**, not `@ all`. A curator may mint **org-scoped** entries that shadow official ones (the [namespace-shadow pattern](/architecture/api/)), so registry curation is a deliberate, scoped capability distinct from IAM, not a global-admin-only act.
+  - **IAM subjects** (`principal`, `role`, `principal_grant`, and the credential-definition verbs `create` / `rotate` / `delete`): the action must appear in a grant whose `scope_kind` is `all`. A scoped grant confers **no** IAM capability, so `role:create` carried by an `operator @ HQ` grant does not let you create roles. Typically `owner @ all` / `admin @ all`. (Reading a specific credential in plaintext, `secret:read`, is by contrast an ordinary **entity-scoped** action against that credential's owner, [config and credentials](/architecture/variables/).)
+  - **Data registries** (`datapoint_type`, `tag`, `unit`, `event_type`, severity, source): governed by a distinct **`<registry>:create` curator capability** (`datapoint_type:create`, `tag:create`, `unit:create`, `event_type:create`, `severity:create`, `source:create`). A registry entry has no owner entity, so the grant's `scope_kind` is irrelevant: the check is simply whether the principal holds the capability. Granting it to a curator role lets a principal mint registry entries **without** IAM admin; a minted entry carries its own `scope` (an org-scoped entry shadows an official one, the [namespace-shadow pattern](/architecture/api/)), and `official`-scoped entries are reserved to `owner` and the boot seed.
 
-  The fast-reject still only rejects; for these resources the grant-class check (all-scope for IAM, the `<registry>:create` capability for registries) is the authorization, the one place the decision is capability-shaped because there is no entity to scope.
+  The fast-reject still only rejects; for these resources the authorization is the grant-class check (an `all`-scoped grant for IAM, the `<registry>:create` capability for registries), the one place the decision is capability-shaped because there is no entity to scope.
 
 Both layers operate **within one database**. Tenant isolation is **per-deployment**: a tenant is one database plus one **NATS account** plus one deployment, so per-database isolation (storage) and per-account isolation (messaging) are the same boundary. There is no `tenant_id` column anywhere, so the cross-tenant boundary is the database / account boundary itself, not a row predicate. Intra-database scope (above) is the only app-enforced layer; there is no RLS backstop.
 

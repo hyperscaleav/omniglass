@@ -70,9 +70,9 @@ server-to-node arrives as messages on subjects the node is permitted to consume.
 connection:
 
 - **Telemetry up** (node to server): the node **publishes** `Event` batches (`{datapoints, labels}` plus
-  the `(task, ts)` envelope, [below](#shipping-datapoints)) to a **JetStream telemetry stream**; JetStream
-  acknowledges each publish (at-least-once), and a `Nats-Msg-Id` lets the server dedup a replay. The
-  firehose from the edge.
+  the `(task, ts)` envelope, [below](#shipping-datapoints)) to a **JetStream raw ingress subject**;
+  JetStream acknowledges each publish (at-least-once), and a `Nats-Msg-Id` lets the server dedup a replay
+  (the admission consumer preserves it when it republishes to the trusted stream). The firehose from the edge.
 - **Control down** (server to node): the node holds a **durable JetStream consumer** on its
   **command queue** (commands to run) and subscribes to **worklist-change signals** (the config-generation
   bump, so the node re-pulls). Subjects the node may consume are scoped by its placement (next).
@@ -333,7 +333,7 @@ L6 (TLS), and further L7 handshakes slot in by extending the check stack: one
 ## Shipping datapoints
 
 The node ships a native `Event`: `{ datapoints, labels }` plus an envelope
-(`task`, batch `ts`), **published to the JetStream telemetry stream** (protobuf-encoded
+(`task`, batch `ts`), **published to the JetStream raw ingress subject** (protobuf-encoded
 message, the proto surviving as the NATS message schema), buffered with
 retry/backoff. On a parse or validation failure it also ships the **raw** wire bytes so the
 server can emit a `collection.failed` event; on success raw is omitted (there is no telemetry
@@ -344,13 +344,16 @@ third-party tools and translates to the native shape.
 flowchart LR
   W["pull worklist<br/>(placed tasks + commands)"] --> X["execute:<br/>protocol + locate/Expr extraction"]
   X --> N["normalize: datapoints + labels<br/>(+ raw on failure)"]
-  N --> S["buffer + publish<br/>JetStream telemetry stream"]
-  S --> WK["server: validate + bind owner<br/>+ persist datapoints"]
+  N --> S["buffer + publish<br/>raw ingress subject"]
+  S --> ADM["admission: bind owner<br/>(consume time) → trusted"]
+  ADM --> WK["rule engine + persistence<br/>(trusted stream)"]
   S -.->|"raw on failure"| CF["collection.failed<br/>(event, carries raw)"]
 ```
 
-The node has already produced the datapoints at the edge; the server **validates and
-binds owner** (registry lookup, owner attribution) and **persists** them. On a parse or
+The node has already produced the datapoints at the edge; an **admission consumer** binds
+owner (registry lookup, owner attribution against the node's placement) at **consume time**
+and republishes to the trusted stream the rule engine and persistence read, so a forged owner
+is dropped before evaluation, not at the durable write. On a parse or
 validation failure it emits a `collection.failed` event carrying the raw; on success there is
 no raw to store. The server does not re-derive observed datapoints; only calc and event rules
 derive. The node's job ends at the ship.
