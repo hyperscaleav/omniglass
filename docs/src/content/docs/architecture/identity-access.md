@@ -23,7 +23,7 @@ A principal carries a `kind` value; the same role machinery works across all kin
 | `service` | scripts, integrations, SDKs, bots | bearer token |
 | `node` | the edge daemon running in the field | NATS JWT/nkey credential |
 
-**AI actors act as a user today; a first-class `agent` principal is deferred.** An AI tool authenticates via **OAuth as a `human` or `service` principal** and acts with exactly that principal's grants, no separate identity. A dedicated `agent` principal kind (first-class AI identity, bounded by a sponsoring human, with a propose -> approve gate on mutations) may be added when the capability matures; it is deliberately deferred so the platform does not carry that authorization machinery for a feature a year out. This note is the one place that direction is recorded; everywhere else AI is simply a scoped, audited user ([AI](/architecture/ai/)).
+**AI acts as a user; a first-class `agent` principal is deferred.** An AI tool authenticates via **OAuth as a `human` or `service` principal** and acts with exactly that principal's grants, no separate identity. A dedicated `agent` principal kind may be added later; it is not in the initial architecture. Everywhere else AI is simply a scoped, audited user ([AI](/architecture/ai/)).
 
 Each kind that needs structured domain attributes gets a **1:1 per-kind table** linked by `principal_id`: `human`, `service`, and `node`. The base `principal` table holds identity + kind only; the per-kind tables hold the rest, including the kind's human-facing label (a human's `display_name`, a service's label, the node's name).
 
