@@ -54,7 +54,7 @@ data-driven and general, available wherever expressions run, including `event_ru
 | extractor | `value` | reshape a located raw value into the typed datapoint value |
 | step | `when` | the explicit branch guard (a false guard skips the step and dependents) |
 | `event_rule` | `fire_criteria`, `clear_criteria` | open/close an alarm-paired event off a datapoint change |
-| `calc_rule` | `reduce` (escape), `filter` | the named-reducer escape hatch and per-input filters |
+| `calc_rule` | `reduce` (escape), `filter` | the named reducers (`worst` / `majority` / `average`, plus windowed `time_in_state` for SLIs) and the Expr escape, with per-input filters |
 | rule | `scope` | which instances a rule fires for (the Expr scope escape) |
 | views / list | `filter` | the structured-query predicate operators compose |
 | dynamic group | membership `filter` | recomputed membership |

@@ -164,6 +164,9 @@ reducer's guts. Each member carries a **`health_role`**, and the rollup respects
 - **required** member `down` -> system `down`;
 - **required** member `unknown` -> system `unknown` (the system cannot be called healthy when a
   member it depends on is unmeasured);
+- a **`stale`** required member folds to `unknown` here under the lost-visibility policy (lost
+  visibility, so the system goes `unknown`), or keeps its last value's health under the
+  last-value-valid policy (per the datapoint_type's staleness tolerance, [time](/architecture/time/));
 - **redundant** member `down` -> system `degraded` (only `down` if *all* redundant peers are down);
 - **informational** member -> does not affect system health, including an `informational` member that
   is `unknown` (an unmeasured member that never mattered does not sink the parent).
@@ -203,7 +206,7 @@ distinction itself is settled in [time](/architecture/time/).
 
 ## SLI: indicator over a window
 
-A **Service Level Indicator** is a `time_in_state` calc over a window, emitted as its own datapoint
+A **Service Level Indicator** is a `time_in_state` calc over a window (`time_in_state(s)` = the fraction of the window the entity held state `s`, derived from the health-history transitions), emitted as its own datapoint
 (the temporal reducer, [expressions](/architecture/expressions/)):
 
 ```yaml

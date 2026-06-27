@@ -26,8 +26,8 @@ as we build. Each page carries a status badge, **Design** (specified, little or 
 implementation differs from this design, see the page's note); the badge is the page's floor. The
 per-capability breakdown and what is actually shipped live on
 [implementation status](/architecture/status/); undecided design points are flagged inline as
-`Open question` asides. The whole site is also published as one machine-readable file at
-[/llms-full.txt](/llms-full.txt) (with a curated index at [/llms.txt](/llms.txt)) for LLM tools.
+`Open question` asides. Every prose architecture page is also published as one machine-readable file at
+[/llms-full.txt](/llms-full.txt) (with a curated index at [/llms.txt](/llms.txt)) for LLM tools (the interactive `.mdx` pages are not included).
 :::
 
 ## The estate

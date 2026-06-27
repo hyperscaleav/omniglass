@@ -123,8 +123,8 @@ Absence of data is two conditions, and the why matters:
 
 `current_value` carries `value, as_of_ts, freshness (fresh | stale)`; staleness is a quality of
 the datapoint with the last value preserved. **[Health](/architecture/health/) treats them
-differently**: a *stale required member* defaults to a problem (lost visibility), an *unknown
-member* is gray and does not down the system. Whether stale means "last value still valid" (a
+differently**: a *stale required member* defaults to `unknown` (lost visibility, so the system
+rolls to `unknown`, [health](/architecture/health/)), an *unknown member* is gray and does not down the system. Whether stale means "last value still valid" (a
 slow config signal) or "lost visibility, alarm" (a liveness signal) is **per-datapoint-type
 policy**: the datapoint_type declares its staleness tolerance.
 
