@@ -8,7 +8,19 @@ sidebar:
 ---
 
 Storage is the set of patterns every entity in Omniglass lands on, so an operator can trust that scope, audit, retention, and lineage behave the same way no matter which table the data lives in. This page describes **how storage works**, the
-patterns every other leaf's entities land on, not a per-table column dump. The column schemas live
+patterns every other leaf's entities land on, not a per-table column dump.
+
+Postgres is the **relational system of record**: it holds the entities, events, alarms, actions,
+audit, config, and the platform settings store. It is the record/state/intent lane. It is **never a
+message bus**: the live signal travels on NATS JetStream, and Postgres earns its place as the durable
+record. Two writes paths land here, and only one is the request path. **Operator mutations and the
+record/state/intent lane** (config, ack/snooze, settings, manual commands, plus the `event` and
+`alarm` rows an `event_rule` consumer commits in one transaction) are written synchronously through
+the Storage Gateway. **The datapoint tables are an async SINK**: a NATS **persistence consumer**
+batch-writes datapoints off the data lane ([datapoints](/architecture/datapoints/)), idempotent on
+`(series, ts)`, so the rule engine never waits on a datapoint reaching Postgres. Committed changes on
+the record lane are fanned out by a leader-elected **CDC publisher** (logical decoding of the WAL) to
+JetStream; there is no dual-write, the change is born in the commit and CDC carries it. The column schemas live
 with each owning feature: [datapoints](/architecture/datapoints/#the-datapoint-tables) (the three
 kind-tables), [events](/architecture/events/#storage) (the `event` row), [alarms and
 actions](/architecture/alarms-actions/#storage) (`alarm` / `action`), [config and
@@ -30,9 +42,11 @@ template tables), [collection](/architecture/collection/#storage) (interfaces an
 - **Three storage shapes.** **Ground-truth records** are append-only and immutable, each named for
   what it is: `log_datapoint` (a datapoint kind), `audit_log` (operator actions), and the standing
   `*_log` ground-truth logs (`session_log`, `internal_log`, plus the `collection_log` /
-  `node_log` companions). There is **no `telemetry` table**: datapoints are emitted at the edge, so the raw
-  payload is not persisted in steady state; raw appears only on a `collection.failed` event or a
-  dev raw-mode tap ([datapoints](/architecture/datapoints/)). A schedule fire is not a record here: it is an `event` with `origin=scheduled`.
+  `node_log` companions). There is **no `telemetry` table**: datapoints are published to the
+  JetStream data lane, not synchronously inserted, so the raw payload is not persisted in steady
+  state; the persistence consumer sinks the typed datapoint, and raw appears only on a
+  `collection.failed` event or a dev raw-mode tap ([datapoints](/architecture/datapoints/)). A
+  schedule fire is not a record here: it is an `event` with `origin=scheduled`.
   There is no separate rule-execution table: derived rows carry their lineage on the row.
   **Datapoints** (`metric_datapoint` / `state_datapoint` / `log_datapoint`) are the typed
   observation firehose. **Stateful entities and projections** (`alarm`, `action`, current-value)
@@ -83,6 +97,34 @@ The structural and template entities (`component` / `system` / `location` and th
 collection entities (`interface_type` / `interface` / `task`) on
 [collection](/architecture/collection/#storage).
 
+## Two lanes land in Postgres differently
+
+Every row in Postgres arrives on one of two lanes, and the lane decides how the row is written and
+how the rest of the platform learns it changed.
+
+- **The data lane (a sink).** Observed and calculated datapoints live on the JetStream data lane.
+  The rule engine consumes them directly off NATS; Postgres is the durable record, not the live
+  signal. The **persistence consumer** is a durable JetStream consumer that batch-writes the
+  `metric_datapoint` / `state_datapoint` / `log_datapoint` tables as an async sink, idempotent on
+  `(series, ts)`, so a redelivery lands the same row and the firehose never blocks on the database.
+  Datapoints do **not** flow through CDC: they are already on NATS.
+- **The record/state/intent lane (PG-first, CDC-out).** Events, alarms, actions, and operator
+  mutations (config, ack/snooze, settings, manual commands) are born in a **Postgres transaction**.
+  When an `event_rule` consumer fires, it writes the `event` row and the `alarm` transition in one
+  transaction (the alarm transition is serialized per `(event_rule, owner)`); the API writes config,
+  acks, and settings the same way. There is no row-lock single-fire worklist and no
+  `LISTEN`/`NOTIFY` fan-out: the change is committed once, and the **CDC publisher** carries it
+  outward.
+
+The CDC publisher is **leader-elected** (exactly one active, fail over on death) via a NATS KV
+CAS lock, the same singleton pattern the clock uses ([time](/architecture/time/)). It reads the WAL
+by logical decoding and publishes each committed change to JetStream, where `action_rule`,
+reconcile, and projection consumers react. The replication **slot** and **publication** it reads are
+**ensured in the idempotent boot phase** (the same phase that upserts ship-with reference data),
+**not** a run-once migration: boot creates them if absent and leaves them untouched if present, so a
+fresh database and an existing one converge to the same state. Delivery is at-least-once with an
+idempotency key per change, so a consumer that sees a change twice is a no-op.
+
 ## Ground-truth records
 
 The immutable, append-only records, each named for what it is. They are the lineage targets and what
@@ -127,7 +169,10 @@ The datapoint tables also carry nullable **`correlation_id`** and **`caused_by_e
 columns. These are orthogonal to the lineage pointers above: they are not lineage pointers, so they
 do not participate in the exclusive-lineage CHECK. They carry causation across the command -> device
 -> observed-datapoint round trip so the cycle guard walks a real id ([datapoints](/architecture/datapoints/),
-[alarms and actions](/architecture/alarms-actions/)).
+[alarms and actions](/architecture/alarms-actions/)). On the wire these ride in **NATS message
+headers**: a datapoint published to the data lane carries its `correlation_id` / `caused_by_event_id`
+in the message header alongside the `Nats-Msg-Id` dedup key, and the persistence consumer lands them
+into these columns, so the trace is unbroken from the live signal to the durable record.
 
 ## Current value and projections: views by default
 
@@ -187,13 +232,25 @@ The append-only id type under partitioning: bigint identity versus uuid v7.
 
 ## The Storage Gateway and tiering
 
-The **Storage Gateway is the single path to the database** (no direct access, no PostgREST); it is
-also where IAM scope is injected ([identity and access](/architecture/identity-access/)). Isolation
-is per-database, so there is no tenant context to set. Because every read and write goes through it,
-the physical backend is swappable beneath it:
+The **Storage Gateway is the only door to the database** (no direct access, no
+PostgREST); it is also where IAM scope is injected, **per action**: every query carries
+`visible_set(P, action)` for the specific action it performs, so a read filters by read-scope and an
+`:ack` write filters by ack-scope. A write whose action-scoped predicate matches **0 rows** is surfaced to
+the handler as a 403 or 404, never a silent success, matching the up-front `canDo` decision
+([identity and access](/architecture/identity-access/)). Isolation is per-database (one database per
+tenant, paired one-to-one with one NATS account, [datapoints](/architecture/datapoints/)), so there
+is no tenant context to set. Every read and write lands here: the synchronous request path runs in
+**scoped** mode, and the persistence-consumer datapoint sink and the CDC publisher run in **system**
+mode (trusted internal work, all-visibility), the same three-mode contract identity and access
+describes. The CDC publisher reads committed changes by **logical decoding of the WAL**, a
+replication-protocol stream beneath the table surface; that is how it learns of a change without
+re-querying, not a second application path around the Gateway. Because every
+application read and write goes through the Gateway, the physical backend is swappable beneath it:
 
-- **default**: Postgres for everything (datapoints, ground-truth records, views, registries), the
-  single-binary BYO-Postgres story.
+- **default**: Postgres for everything (datapoints, ground-truth records, views, registries). In
+  single-binary mode the one binary embeds a real Postgres (the same code path runs an external
+  Postgres at scale); the data lane's persistence consumer and the record lane's CDC publisher both
+  target this one backend.
 - **tiering**: the firehose does not stay in hot Postgres forever. Aged
   `metric_datapoint` / `log_datapoint` partitions tier out to a **columnar or object
   store** (Parquet on S3-compatible, or an embedded columnar engine) behind the same gateway, so
@@ -204,3 +261,25 @@ the physical backend is swappable beneath it:
 Which cold engine backs the tier, what triggers tier-out (age versus a partition-detach hook), how
 queries federate across hot and cold, and whether projections ever tier.
 :::
+
+## Query construction: typed, parameterized, generated
+
+The gateway builds every query with **[jet](https://github.com/go-jet/jet)**, a type-safe SQL builder
+whose column and table types are **generated from the dbmate-managed schema** (dbmate stays the single
+schema authority; jet regenerates after `migrate`). The shape is dynamic (the per-action scope predicate,
+the [filter expression](/architecture/expressions/), order, pagination compose at runtime) but the safety
+is **structural, not by discipline**:
+
+- **Values are always bound parameters**, never interpolated into SQL text.
+- **Identifiers (columns, tables) are typed constants** from the generated schema, so a wrong or
+  attacker-supplied column name is a **compile error**, never a string. The filter language's field names
+  resolve against those same generated columns before they become a predicate.
+- **Operators are a closed set.**
+
+A wrong column or type fails the build, so the compiler and tests catch a bad query before runtime, which
+is what keeps the gateway safe to evolve and safe for an AI to edit. Because all dynamic construction
+lives in this one module, the injection-safe discipline is a single reviewable chokepoint. The one
+carve-out is the high-volume datapoint insert (the persistence consumer), which may use `pgx` `COPY` for
+throughput, still inside the gateway. It runs in all-visibility **system mode**, not per-row scoped: its
+safety rests on the typed column targets plus the upstream **admission consumer** having already confined
+owners ([identity and access](/architecture/identity-access/)), not on a per-write scope predicate.

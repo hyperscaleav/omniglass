@@ -141,7 +141,7 @@ machine-acquired token cache (below) is exempt to avoid audit-on-read noise on e
 behavior is a template-declared use of functions, time, and flows:
 
 - **refresh** (an `oauth2` access token) is **lazy**: refreshed on use when within a skew window of
-  expiry, coordinated across replicas by a row lock (the SKIP-LOCKED family). Idle credentials never
+  expiry, coordinated across replicas by a NATS KV lock (CAS on the credential key). Idle credentials never
   refresh; the refreshed token is a separate encrypted cache, not an operator secret.
 - **rotation** (a password on a schedule) is a **flow**: generate → set on the device (a set function)
   → update the store → verify → invalidate the old, driven by the [time](/architecture/time/) primitive.

@@ -23,11 +23,11 @@
 .d2-svg > rect:first-of-type {
   fill: var(--sl-color-bg);
 }
-.d2-svg .node > .shape > rect {
+.d2-svg .node > .shape > :where(rect, path, polygon, ellipse, circle) {
   fill: var(--sl-color-accent-low);
   stroke: var(--sl-color-accent);
 }
-.d2-svg .key > .shape > rect {
+.d2-svg .key > .shape > :where(rect, path, polygon, ellipse, circle) {
   fill: var(--sl-color-accent);
   stroke: var(--sl-color-accent-high);
 }
@@ -47,7 +47,7 @@
 
 /* Container boxes (D2 nested groups, e.g. the "Edge (node)" grouping): transparent so
    the children sit on the themed canvas, with a subtle accent outline and a muted label. */
-.d2-svg .group > .shape > rect {
+.d2-svg .group > .shape > :where(rect, path, polygon, ellipse, circle) {
   fill: transparent;
   stroke: var(--sl-color-accent);
 }
@@ -57,7 +57,7 @@
 
 /* Degraded/warning nodes: a fixed status amber (semantic, not theme-tinted, like an alert
    color) that stays legible on both the light and dark canvas, with dark text. */
-.d2-svg .warn > .shape > rect {
+.d2-svg .warn > .shape > :where(rect, path, polygon, ellipse, circle) {
   fill: #e0a32a;
   stroke: #f6c453;
 }

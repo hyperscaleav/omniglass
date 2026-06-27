@@ -67,6 +67,63 @@ outcomes downstream). **Postgres is never a message bus**; it only emits its cha
 **slot and publication are ensured idempotently in the boot phase, not a migration**, since dbmate
 migrations run exactly once.
 
+### Inter-service communication
+
+Service-to-service traffic rides **two lanes on the one JetStream bus**, by what is moving:
+
+- **Data lane (NATS-native).** Observed and calculated **datapoints** live on NATS. The edge and central
+  nodes publish observed datapoints to a JetStream datapoints stream, calc consumers publish derived
+  datapoints back onto the same stream, and the rule engine consumes them **directly from NATS**. A
+  **persistence consumer** batch-writes datapoints to the Postgres metric, state, and log tables as an async
+  **sink**. Datapoints do not pass through CDC: they are already on NATS, idempotent on `(series, ts)`, and
+  the firehose, so rules never wait on Postgres. Postgres is the durable record, NATS is the live signal.
+- **Record and state lane (Postgres-first, CDC-out).** **Events, alarms, actions, and operator mutations**
+  (config, ack, snooze, settings, manual commands) are **born in a Postgres transaction**: when an
+  `event_rule` fires, the consumer writes the event record and the alarm transition (serialized per
+  `(event_rule, owner)`) in one transaction, and the API writes config, ack, and settings the same way. The
+  leader-elected CDC publisher then fans those committed changes out to JetStream, where `action_rule`,
+  reconcile, and projection consumers react. **No dual-write**: born in the commit, CDC fans out.
+
+```d2
+direction: down
+classes: {
+  node: { style.border-radius: 8 }
+  key: { style: { border-radius: 8; bold: true } }
+  group: { style.border-radius: 8 }
+}
+north: "North plane: public API (HTTP / AIP)" {
+  class: group
+  direction: right
+  c1: "SPA" { class: node }
+  c2: "CLI" { class: node }
+  c3: "MCP / AI agent" { class: node }
+  c4: "integrations · webhooks" { class: node }
+}
+binary: "one Omniglass binary: modular monolith (1..N replicas)" {
+  class: group
+  api: "API / server (per-replica)" { class: node }
+  gw: "Storage Gateway (the only DB path)" { class: node }
+  wk: "JetStream consumers: rule engine · reconcile · notify · persistence (per-replica, competing)" { class: node }
+  clk: "clock (singleton)" { class: node }
+  cdc: "CDC publisher: WAL to JetStream (singleton)" { class: node }
+  nats: "embedded NATS: JetStream · KV · Object store" { class: key }
+}
+pg: "PostgreSQL: system of record" { class: node; shape: cylinder }
+edge_nodes: "edge nodes (distributed · NATS clients)" { class: node }
+ext: "external NATS cluster (optional BYO at scale)" { class: node }
+north -> binary.api: "HTTPS"
+binary.api -> binary.gw
+binary.gw <-> pg
+pg -> binary.cdc: "WAL (logical decoding)"
+binary.cdc -> binary.nats: "publish committed changes"
+binary.nats -> binary.wk: "east-west: work + events"
+binary.wk -> binary.gw
+binary.clk -> binary.nats: "schedule fires"
+binary.nats <-> edge_nodes: "South: telemetry up · commands down" { style.stroke-width: 3 }
+binary.nats -- binary.clk: "KV: config · locks · leader-elect" { style.stroke-dash: 4 }
+binary.nats -- ext: "swap embedded for BYO" { style.stroke-dash: 4 }
+```
+
 ## Horizontal scale: what replicates
 
 - **server** is **stateless**: replicate it behind a load balancer; state lives in Postgres.

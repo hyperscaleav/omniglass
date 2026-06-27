@@ -8,18 +8,20 @@ import { defineConfig } from 'astro/config';
 export default defineConfig({
   site: 'https://docs.omniglass.hyperscaleav.com',
   integrations: [
-    // Diagrams are authored in D2 and rendered to inline SVG at build time (no client
-    // JS). ELK layout; dark theme 200, light theme 0; inline so the SVG embeds in the
-    // page and the brand tokens in custom.css can theme it with the light/dark toggle.
-    // useD2js renders through the bundled D2 WASM, so the build is hermetic (pnpm only)
-    // and needs no `d2` binary on PATH; required for the Cloudflare Pages build env. See
-    // the /docs-diagram skill.
+    // Diagrams are authored in D2 and rendered to inline SVG. ELK layout; dark theme
+    // 200, light theme 0; inline so the SVG embeds in the page and the brand tokens in
+    // custom.css can theme it with the light/dark toggle.
+    //
+    // skipGeneration: the SVGs are pre-rendered with the d2 binary and committed under
+    // public/d2/, and the build only inlines them. This keeps the Cloudflare Pages build
+    // hermetic (no d2 binary, and the D2 WASM mis-parses our source). Regenerate after
+    // editing any diagram: `pnpm diagrams` (d2 binary on PATH). See /docs-diagram.
     d2({
       layout: 'elk',
       pad: 24,
       inline: true,
       theme: { default: '0', dark: '200' },
-      experimental: { useD2js: true },
+      skipGeneration: true,
     }),
     starlight({
       title: 'Omniglass',
@@ -72,6 +74,7 @@ export default defineConfig({
             { label: 'UI', slug: 'architecture/ui' },
             { label: 'Views', slug: 'architecture/views' },
             { label: 'API', slug: 'architecture/api' },
+            { label: 'Messaging', slug: 'architecture/messaging' },
             // the foundations underneath
             { label: 'Nodes', slug: 'architecture/nodes' },
             { label: 'Storage', slug: 'architecture/storage' },

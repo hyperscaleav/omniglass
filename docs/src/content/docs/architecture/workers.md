@@ -1,49 +1,64 @@
 ---
 title: Workers
-description: One worker machinery over several worklists, plus the backtest capability and the reconcile desired-state loop.
+description: "One worker machinery over several JetStream consumers, plus the backtest capability and the reconcile desired-state loop."
 sidebar:
   badge:
     text: Design
     variant: caution
 ---
 
-Workers are how Omniglass does the steady background work, deriving datapoints, sending actions, firing timers, reconciling drift, on one machinery instead of a pile of bespoke loops, so the operator gets crash recovery and exactly-once behavior for free everywhere.
+Workers are how Omniglass does the steady background work, deriving datapoints, sending actions, firing timers, reconciling drift, on one machinery instead of a pile of bespoke loops, so the operator gets crash recovery and exactly-once outcomes for free everywhere.
 
-## One machinery, several worklists
+## One machinery, several consumers
 
-There is one worker machinery, a **`SKIP LOCKED` worklist drain** over a configurable concurrency
-pool (claim, do work, mark, all in one transaction so it inherits crash recovery, exactly-once, and
-event-time semantics for free). It is instantiated over several worklists rather than separate
-loops:
+There is one worker machinery, a **JetStream work-queue consumer** over a configurable concurrency
+pool (pull a message, do work, ack, with at-least-once delivery plus `Nats-Msg-Id` dedup and an
+idempotent sink so it inherits crash recovery, exactly-once outcomes, and event-time semantics for
+free). It is instantiated over several consumers rather than separate loops:
 
-- **the rule engine** (the work queue): drains arriving datapoints, applies `calc_rule`s and
-  `event_rule`s, and writes derived datapoints, events, and alarm transitions;
-- **the outbox relay** ([alarms and actions](/architecture/alarms-actions/)): drains the action
-  `outbox`, sends at-least-once, advances action step state;
-- **the clock worker** ([time](/architecture/time/)): drains the `timer` table, fires schedules and
-  armed timers;
+- **the rule engine** (datapoint consumers): consume arriving datapoints directly from the
+  JetStream datapoints stream, apply `calc_rule`s and `event_rule`s, publish derived datapoints back
+  onto the data lane, and write events and alarm transitions to Postgres in one transaction;
+- **the action sender** ([alarms and actions](/architecture/alarms-actions/)): consumes
+  action work fanned out by CDC, sends at-least-once, advances action step state (PG-first, CDC-out);
+- **the persistence consumer**: a batch sink that consumes the datapoints stream and writes datapoints
+  to the Postgres metric/state/log tables asynchronously, so rules never wait on PG;
+- **the clock** ([time](/architecture/time/)): fires schedules and armed timers (a leader-elected
+  singleton, below);
 - **reconcile**: the desired-state loop (below).
 
-Each worklist is the "produces new events, needs independent durability" exception applied: a
-subsystem that consumes the same event is **a stage, not a second loop**. Alongside the drains, a
-**node-liveness sweep** runs on its own ticker. Unlike a worklist it is a *poll*, not a drain: a
-down node produces no row to claim, so it is found by scanning heartbeat freshness, raising and
-resolving the node-owned `node.down` alarm idempotently (the one-open index). There is no separate
-projector either: current state is **views by default** ([storage](/architecture/storage/)), and
-`alarm` / `action` hold their state directly.
+Each consumer is the "produces new work, needs independent durability" exception applied: a
+subsystem that consumes the same message is **a stage, not a second loop**. Competing consumers in a
+group scale horizontally with no leader: JetStream hands each message to exactly one member, and
+adding instances just adds throughput. Alongside the consumers, a **node-liveness sweep** runs on its
+own ticker. Unlike a consumer it is a *poll*, not a drain: a down node produces no message, so it is
+found by scanning heartbeat freshness, raising and resolving the node-owned `node.down` alarm
+idempotently (the one-open index). There is no separate projector either: current state is **views by
+default** ([storage](/architecture/storage/)), and `alarm` / `action` hold their state directly.
+
+## Consumer groups versus singletons
+
+Most of the machinery is competing consumers, but two pieces must run as exactly one active instance:
+the **CDC publisher** (logical decoding of the WAL, fanning committed events, alarms, actions, and
+operator mutations out to JetStream) and the **clock** (firing schedules and armed timers). These are
+**leader-elected singletons** via a **NATS KV CAS lock**: each candidate races to compare-and-set a
+KV key, the winner holds the lease, and on its death the lease expires and another candidate takes
+over. Same pattern for both, no separate election service and no SKIP-LOCKED row claim. A singleton
+that produces work still publishes onto the bus, where the competing consumers scale it out.
 
 ## Re-entry, not one mega-pass
 
-The pipeline `datapoint -> alarm -> action` is **not one transaction**. A datapoint arrives;
-`event_rule`s evaluate it (the stateless then stateful stages below); two edges re-enter:
-**calc** (a `calc_rule` produces *new* datapoints) re-enters via the `calc_work` worklist, and
-**actions** enqueue to the `outbox` drained by the relay. So the rule engine never recurses
-unboundedly in one transaction; a cross-producing stage hands off to a worklist, which is also what
-makes it independently durable and ordered. Calc re-entry **terminates by write-on-change** (a
-recompute that lands the same value enqueues nothing, the fixpoint) with a depth cap as a
-cyclic-rule backstop, carrying a rollup (component -> system -> location health) one hop per drain
-pass. Parsing into datapoints is **not** a worker stage; it happens at the edge
-([collection](/architecture/collection/)).
+The pipeline `datapoint -> alarm -> action` is **not one transaction**. A datapoint arrives on the
+datapoints stream; `event_rule`s evaluate it (the stateless then stateful stages below); two edges
+re-enter: **calc** (a `calc_rule` produces *new* datapoints) re-enters by publishing the derived
+datapoints back onto the data lane, where the consumers pick them up again, and **actions** are born
+when an `event_rule` writes the event and alarm to PG in one transaction, after which CDC fans the
+committed change out to the action sender. So the rule engine never recurses unboundedly in one
+transaction; a cross-producing stage hands off to the bus, which is also what makes it independently
+durable. Calc re-entry **terminates by write-on-change** (a recompute that lands the same value
+publishes nothing, the fixpoint) with a depth cap as a cyclic-rule backstop, carrying a rollup
+(component -> system -> location health) one hop per pass. Parsing into datapoints is **not** a
+worker stage; it happens at the edge ([collection](/architecture/collection/)).
 
 ## The stateless / stateful fork
 
@@ -54,9 +69,11 @@ This is the axis that decides almost everything else about a subsystem.
   multi-row INSERT).
 - **Stateful** (the alarm lifecycle): maintains persisted state across events (the open alarm), so
   open and resolve depend on prior state. Consequences:
-  - **Order-sensitive.** The parallel claim can reorder same-key events, so a stateful subsystem
-    must either be idempotent and tolerate reorder (an as-of conflict rule) or partition its
-    worklist by state key.
+  - **Order-sensitive.** JetStream does not promise strict ordering (the server is ts-authoritative)
+    and competing consumers can hand same-key messages to different members, so a stateful subsystem
+    must either be idempotent and tolerate reorder (an as-of conflict rule) or serialize per state
+    key. The alarm transition is serialized per `(event_rule, owner)`: that ordered write lands in
+    the same PG transaction as the event record.
   - Write pattern: **guarded conditional upsert** (`INSERT ... ON CONFLICT` / `UPDATE ... WHERE`),
     with a **partial unique index** as the concurrency-correctness backstop.
   - **Backtest is harder**: it must process each entity's series in order.
@@ -82,7 +99,7 @@ they re-derive. Everything else does not:
 - **observed** datapoints are parsed at the edge and are not re-derived server-side (the raw payload
   is not stored, so there is no server-side re-parse);
 - **operator alarm transitions** (ack, snooze) come from `audit_log`;
-- **action delivery status** comes from the outbox (the real-world send is not re-done);
+- **action delivery status** comes from the action rows (the real-world send is not re-done);
 - **no-data staleness** re-derives from the datapoint gaps ([time](/architecture/time/)).
 
 Two modes, switched by the `source_rule` version: **historical** uses the original rule versions
@@ -94,13 +111,14 @@ days), with whole-history the explicit, heavier option.
 
 ## Reconcile: the desired-state control loop
 
-Reconcile is another worklist consumer: it projects **declared desired state** onto the things that
+Reconcile is another JetStream consumer: it projects **declared desired state** onto the things that
 drift, the system-level form of [config](/architecture/variables/)'s `reconcile: enforce`
 policy.
 
 - **Inputs**: the desired declarations (templates, component assignments, config
-  declared values) plus the observed state. Config changes arrive as `audit_log` rows
-  ([audit](/architecture/audit/)), so reconcile is an audit-log consumer plus the current
+  declared values) plus the observed state. Config changes are operator mutations born in a PG
+  transaction; CDC publishes the committed change to JetStream
+  ([audit](/architecture/audit/)), so reconcile is a CDC consumer plus the current
   projections.
 - **Output**: it asserts the delta as **node config** (which tasks and commands each node runs,
   derived from placements) and as **reconciled `run` actions** (the desired-state commands that must

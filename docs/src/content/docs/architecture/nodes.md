@@ -25,8 +25,9 @@ assigned to it), so a node ingests in **node mode**, not all-visibility system m
 ## Getting its instructions
 
 The node pulls a **worklist**: the tasks and commands resolved for the
-components **placed on it**, over a gRPC config pull, and **heartbeats** so the
-server tracks liveness. The server, not the template, decides placement (next), and
+components **placed on it**, over a NATS request-reply config pull. It **heartbeats**
+separately, on its own subject (see [the protocol](#the-node-server-protocol)), so the
+server tracks liveness independently of the pull. The server, not the template, decides placement (next), and
 resolves the cascade (config / `$var:` values, effective `interval`, credentials)
 before handing the node concrete work. The node never sees a template; it sees
 materialized, resolved task and command instances.
@@ -47,8 +48,9 @@ written:
   re-renders the affected interfaces from the component's *current* declared
   config and upserts them, preserving placement. So the materialized interface
   always reflects the latest declared config, regardless of which path changed it.
-- **Invalidate on the node.** The worklist response carries a per-node **config
-  generation** (`X-Og-Config-Generation`): the max `updated_at` across the
+- **Invalidate on the node.** The worklist reply carries a per-node **config
+  generation** (a `config_generation` field on the reply, not an HTTP header: the
+  node path is NATS): the max `updated_at` across the
   interfaces the node polls. When it advances, an interface's rendered config
   changed, so the node drops its interface cache and re-fetches this tick. A
   steady generation serves from cache; a real change forces a refresh within one
@@ -61,36 +63,38 @@ config) does not advance it, so nodes are never woken for nothing.
 
 ## The node-server protocol
 
-The edge is **outbound-only**: a node sits behind NAT at a site, so the server never dials it. Every
-channel is **node-initiated** over one authenticated gRPC connection (mTLS or the `ogn_` token bound to
-`node.name`, [identity and access](/architecture/identity-access/)), and anything server-to-node rides a
-stream the node holds open. Three channels share the connection:
+The edge is **outbound-only**: a node sits behind NAT at a site, so the server never dials it. A node is a
+**NATS client over the WAN**: it opens one authenticated, outbound connection to the bus (an nkey/JWT
+credential bound to `node.name`, [identity and access](/architecture/identity-access/)), and everything
+server-to-node arrives as messages on subjects the node is permitted to consume. Three flows share that
+connection:
 
-- **Telemetry up** (node to server): a client-streaming flow of `Event` batches (`{datapoints, labels}`
-  plus the `(task, ts)` envelope, [below](#shipping-datapoints)); the node ships and the server **acks by
-  sequence**. The firehose from the edge.
-- **Control down** (server to node): a node-held server-stream carrying **worklist-change signals** (the
-  config-generation bump, so the node re-pulls) and **commands to run**. Streaming is the model; a
-  polling fallback can come later.
+- **Telemetry up** (node to server): the node **publishes** `Event` batches (`{datapoints, labels}` plus
+  the `(task, ts)` envelope, [below](#shipping-datapoints)) to a **JetStream telemetry stream**; JetStream
+  acknowledges each publish (at-least-once), and a `Nats-Msg-Id` lets the server dedup a replay. The
+  firehose from the edge.
+- **Control down** (server to node): the node holds a **durable JetStream consumer** on its
+  **command queue** (commands to run) and subscribes to **worklist-change signals** (the config-generation
+  bump, so the node re-pulls). Subjects the node may consume are scoped by its placement (next).
 - **Control up** (node to server): heartbeat (liveness, feeding the `node.down` sweep), command-execution
-  results (the `action`-row status), `session_log` transitions, and the `:report` self-telemetry, all
-  folded into gRPC rather than a separate HTTP path.
+  results (the `action`-row status), `session_log` transitions, and the `:report` self-telemetry, each
+  published on its own subject rather than a separate HTTP path.
 
 ### Commands: a durable server queue, a stateless edge
 
 A command is **issued server-side** (the action layer records it and writes intended state,
-[alarms and actions](/architecture/alarms-actions/)) into a **durable command queue in the database**.
-The **edge holds nothing durable**: the node is a worker that receives the next command over its
-control-down stream (and on reconnect drains whatever the queue still holds), runs it, and reports the
-result back up, which updates the `action` row. Durability lives where the source of truth is, the
-server, so a node restart loses no command. A telemetry-push response can also carry a "command pending"
-flag as an efficient nudge, but the held stream is the primary path.
+[alarms and actions](/architecture/alarms-actions/)) and dispatched onto a **durable server-side JetStream
+command queue**. The **edge holds nothing durable**: the node is a worker that pulls the next command from
+its durable consumer on that queue (and on reconnect resumes from its last ack, draining whatever the
+queue still holds), runs it, and reports the result back up, which updates the `action` row. Durability
+lives where the source of truth is, the server, so a node restart loses no command. The held consumer
+delivers commands as they arrive, so there is no poll latency.
 
 ### Delivery: at-least-once, idempotent by nature
 
-The node ships **at-least-once** and reconnects by **replaying unacked batches**; the server makes replay
-safe **without a separate idempotency layer**, because everything the edge ships is idempotent by its own
-key:
+The node publishes **at-least-once** and reconnects by **resuming unacked publishes** (JetStream ack plus
+`Nats-Msg-Id` dedup); the server makes replay safe **without a separate idempotency layer**, because
+everything the edge ships is idempotent by its own key:
 
 - **datapoints** dedup on **`(series, ts)`**: a replayed point at the same timestamp is the same point,
   an idempotent upsert. The edge stamps `ts`, so the server is **ts-authoritative** and reorders
@@ -126,10 +130,11 @@ trusted, so a secret never lands on edge disk in the clear.
 
 Day one, a node is **created server-side first** (its `node.name` and properties), and the UI mints a
 **per-node enrollment token**; the token is handed to the edge deployment, and the node **claims its
-identity** on first connect (the token is exchanged for its `ogn_` credential or mTLS cert,
-[identity and access](/architecture/identity-access/)). Later, a **shared enrollment token** plus a
-**`discovery_rule`** can auto-enroll a fleet: the node's **own properties** (stable facts, selected ENV)
-derive its name, editable server-side after deploy, so a rollout mints no per-node token.
+identity** on first connect (the token is exchanged for its **NATS credential**, a per-node JWT signed for
+its nkey, scoped to the subjects its placement allows, [identity and access](/architecture/identity-access/)).
+Later, a **shared enrollment token** plus a **`discovery_rule`** can auto-enroll a fleet: the node's **own
+properties** (stable facts, selected ENV) derive its name, editable server-side after deploy, so a rollout
+mints no per-node token.
 
 ## Placement (ETL, cascaded)
 
@@ -222,7 +227,8 @@ matcher set**:
 ## The component task queue
 
 The node's work is the **component task queue** (distinct from the central
-**rule engine's work queue** that processes derivation; see workers). It
+**rule engine** that consumes datapoints off NATS and does derivation; see
+[workers](/architecture/workers/)). It
 holds **poll tasks** (produce datapoints) and **command tasks** (from `run`
 actions, produce a caused `event` + `action`-row status), and splits work by shape:
 
@@ -250,9 +256,9 @@ protocol.
 :::
 
 The node-side queue is **not** durable: the edge is a stateless worker, and durability lives
-**server-side** (the durable command queue, and the cascade-configurable telemetry buffer). On reconnect
-the node re-pulls its worklist, drains the server command queue, and replays its unacked telemetry buffer
-(idempotent on `(series, ts)`). See [the node-server protocol](#the-node-server-protocol).
+**server-side** (the JetStream command queue, and the cascade-configurable telemetry buffer). On reconnect
+the node re-pulls its worklist, resumes its durable consumer on the command queue, and replays its unacked
+telemetry publishes (idempotent on `(series, ts)`). See [the node-server protocol](#the-node-server-protocol).
 
 ## Implicit reachability
 
@@ -327,7 +333,8 @@ L6 (TLS), and further L7 handshakes slot in by extending the check stack: one
 ## Shipping datapoints
 
 The node ships a native `Event`: `{ datapoints, labels }` plus an envelope
-(`task`, batch `ts`), as **native protobuf over gRPC**, buffered with
+(`task`, batch `ts`), **published to the JetStream telemetry stream** (protobuf-encoded
+message, the proto surviving as the NATS message schema), buffered with
 retry/backoff. On a parse or validation failure it also ships the **raw** wire bytes so the
 server can emit a `collection.failed` event; on success raw is omitted (there is no telemetry
 table), unless a **dev raw-mode** is on. An **OTLP adapter** at the edge accepts OTLP from
@@ -339,7 +346,7 @@ classes: { node: { style.border-radius: 8 } }
 worklist: "pull worklist\n(placed tasks + commands)" { class: node }
 execute: "execute:\nprotocol + locate/Expr extraction" { class: node }
 normalize: "normalize: datapoints + labels\n(+ raw on failure)" { class: node }
-ship: "buffer + ship\nnative protobuf gRPC" { class: node }
+ship: "buffer + publish\nJetStream telemetry stream" { class: node }
 server: "server: validate + bind owner\n+ persist datapoints" { class: node }
 failed: "collection.failed\n(event, carries raw)" { class: node }
 worklist -> execute
@@ -381,12 +388,12 @@ that exceeds its interval is flagged and the next fires immediately, so a node
 falling behind **surfaces** the overrun rather than stalling its cadence
 silently.
 
-Each tick the node reports its own execution via `POST /nodes/{name}:report`:
-tick duration, task attempted/ran/skipped/failed counts, interface probed/up/down
+Each tick the node reports its own execution by publishing a `node.self` envelope on its
+report subject: tick duration, task attempted/ran/skipped/failed counts, interface probed/up/down
 counts, and the `node.overrun` state. **Telemetry is telemetry**: the report is
-not special-cased: the handler appends it as a telemetry envelope through the
-same ingester every source uses (tagged the reserved `node.self` shape) and
-returns, and the queue worker derives it like any other event. A node carries no
+not special-cased: the persistence consumer appends it as a telemetry envelope through the
+same ingester every source uses (tagged the reserved `node.self` shape),
+and the rule engine derives it like any other event. A node carries no
 operator-authored template; its telemetry shape is **built into the binary** (the
 seeded `node.*` datapoint types and node-health rules), and the `node.self` shape
 is what selects that built-in template at derive time. The one node-specific
@@ -394,13 +401,13 @@ piece is owner resolution: `ProcessTelemetry` **pre-binds** a `node.self` envelo
 the reporting node (`owner_kind = node`, a `node` owner arc, the `node_id` arm of the
 exclusive arc alongside component/system/location/global), the node-arc analogue of a
 per-component interface pre-binding its telemetry to its component. So node datapoints land node-owned
-with no server-side parse, no inline derivation, and the worker's batching +
+with no server-side parse, no inline derivation, and the rule engine's batching +
 concurrency + amortized rule refresh apply for free. This is the operator-visible
 health of the collection layer itself. Self-telemetry is best-effort (a failed
 report is logged, never fatal; it must not break collection).
 
 A node that goes dark, though, reports nothing, so a degraded-but-alive signal
-is not enough. The server's queue worker runs a **node-liveness sweep**: a node
+is not enough. A **node-liveness sweep** runs server-side alongside the rule engine: a node
 whose last heartbeat (or its registration, if it has never checked in) predates
 the staleness window (`OMNIGLASS_NODE_DOWN_AFTER`, default 90s) gets a node-owned
 **`node.down` alarm**, auto-resolved the moment it heartbeats again. The alarm is
@@ -410,7 +417,7 @@ This is why the node owner arc reaches `event` and `alarm`, not just datapoints:
 "the node isn't working" is a first-class node-owned incident.
 
 A degraded-but-alive node, by contrast, *does* report, so it alarms through the
-ordinary **event_rule** path the worker runs over every derived datapoint, no
+ordinary **event_rule** path the rule engine runs over every arriving datapoint, no
 node-specific evaluation: a rule on a `node.*` key opens a node-owned alarm. Two
 are seeded by default: `node-overrun` (fires while `node.overrun` is true) and
 `node-tasks-failing` (fires while `node.tasks.failed > 0`), both resolving

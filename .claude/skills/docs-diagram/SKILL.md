@@ -9,30 +9,37 @@ Docs diagrams are authored in **D2** and rendered by **astro-d2** to **inline SV
 time**. No client-side JS, no layout shift, and the diagram is styled by the site's own CSS.
 This replaces mermaid (which rendered client-side and could only theme off the OS preference).
 
-## Rendering: WASM, no binary needed
+## Rendering: SVGs are pre-rendered and committed
 
-The build renders through D2's WebAssembly build (`experimental: { useD2js: true }` in
-`astro.config.mjs`), so `pnpm build` is hermetic (pnpm only) and needs **no `d2` binary** on
-PATH. This is what makes the Cloudflare Pages build work; do not remove it (a plain
-`d2()` integration shells out to a `d2` CLI the build host does not have, and the build fails
-with "Could not find D2"). ELK works under D2.js; TALA does not (we use ELK).
+The SVGs are rendered **ahead of time** with the `d2` binary and committed under
+`docs/public/d2/`; astro-d2 runs with `skipGeneration: true`, so `pnpm build` only **inlines**
+the committed SVGs. The build host (Cloudflare Pages) therefore needs no `d2` binary, and we
+do not depend on D2's WASM build, which mis-parses our source: the content layer turns the
+`\n` in labels into real newlines, and the bundled WASM D2 (older than the binary) rejects
+newlines inside double-quoted strings, so `useD2js` fails the build. The binary tolerates it.
 
-Installing the `d2` binary is optional, only for local convenience: it speeds up renders and
-lets you compile a single diagram from the CLI while iterating:
+Because the SVGs are committed, **regenerate and commit them whenever you touch a `d2` block**:
 
 ```bash
-go install oss.terrastruct.com/d2@latest         # this is a Go repo; lands in ~/go/bin
-~/go/bin/d2 --layout=elk --theme=200 x.d2 x.svg  # eyeball one block fast
+go install oss.terrastruct.com/d2@latest   # this is a Go repo; the binary lands in ~/go/bin
+PATH="$HOME/go/bin:$PATH" pnpm diagrams     # renders every ```d2 block -> public/d2/*.svg
+git add docs/public/d2                       # commit the artifacts with the diagram change
 ```
+
+`pnpm diagrams` (`scripts/gen-diagrams.mjs`) reads the raw `d2` blocks from the Markdown and
+shells out to the binary with the same flags as the integration, so the committed SVG is what
+the build expects. A diagram edit that forgets this ships a stale SVG; the build will not catch
+it (it does not render), so the regenerate-and-commit step is the discipline.
 
 ## Where it is wired
 
-- `docs/astro.config.mjs`: the `d2({ layout: 'elk', inline: true, theme: { default: '0', dark: '200' } })`
+- `docs/astro.config.mjs`: the `d2({ layout: 'elk', inline: true, skipGeneration: true, theme: { default: '0', dark: '200' } })`
   integration. `inline: true` is load-bearing: it embeds the SVG in the page so site CSS can
   theme it. ELK matches the layout heritage from mermaid; orthogonal routing reads best for
   architecture diagrams.
 - `docs/src/styles/custom.css`: the `.d2-svg` rules that color the diagrams from brand tokens.
-- `docs/public/d2/`: generated SVGs, **gitignored**. Source of truth is the D2 in the Markdown.
+- `docs/public/d2/`: the pre-rendered SVGs, **committed** (the build inlines them; see above).
+  The D2 in the Markdown is the source of truth, the SVGs are a build artifact kept in git.
 
 ## The theming contract (the one rule that matters)
 
@@ -104,10 +111,12 @@ config -- datapoint: drift { style.stroke-dash: 4 }        # undirected
 ## The loop
 
 1. Edit the ` ```d2 ` block (and `custom.css` if you introduced a new class).
-2. `pnpm build` (must be green; a D2 syntax error fails the build).
-3. `pnpm preview`, open the page.
+2. `PATH="$HOME/go/bin:$PATH" pnpm diagrams` to re-render the committed SVG (a D2 syntax error
+   fails here; the build itself will not catch it, since it only inlines).
+3. `pnpm build`, then `pnpm preview` and open the page.
 4. **Verify both themes.** Toggle light/dark and confirm the diagram recolors with the page and
    stays legible. This is the step that catches a missing CSS hook or a color hardcoded in source.
+5. `git add docs/public/d2` so the regenerated SVG ships with the diagram change.
 
 Validate locally; do not lean on CI. Diagrams ship in the same PR as the docs they teach
 (doctrine 3, docs with everything).

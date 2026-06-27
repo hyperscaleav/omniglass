@@ -9,6 +9,8 @@ sidebar:
 
 This is the heart of the authoritative data model: what a datapoint is, the two axes that define it, how we know a value (provenance), and how values reconcile, diverge, and read back. The physical layout (tables, partitioning, the lineage CHECK, tiering) lives in storage; the spine is [the architecture overview](/architecture/). Events, calc rules, and the response layer get their own pages: [events](/architecture/events/), [calculations](/architecture/calculations/), and [alarms and actions](/architecture/alarms-actions/).
 
+Datapoints are the **data lane**: observed and calculated datapoints are NATS-native, published to a JetStream `datapoints` stream and consumed live by the rule engine, with a persistence consumer batch-writing them to the PG tables as an async sink. Datapoints are the firehose and never wait on Postgres. Events, alarms, and actions are the **record/state lane**: born in a PG transaction and fanned out by change-data-capture (CDC). The two lanes share one bus (JetStream); this page is home for the data lane, and points at [events](/architecture/events/) and [alarms and actions](/architecture/alarms-actions/) for the record lane.
+
 ## Datapoints: one family, three kinds
 
 A **datapoint** is an observation: a value of one key, on one owning entity (component, system, or location), at one time. The row shape is the same for all three kinds: `(owner, key, instance, ts, value, provenance, source, lineage)`. They are three physical tables only because they index and retain differently, not because they are different concepts.
@@ -29,7 +31,7 @@ A datapoint attaches to a **structural entity**, not only a component. The owner
 
 One owner can hold several distinct values of the *same* canonical key: three fan speeds on a switch, per-port counters, per-channel audio levels. The canonical registry deliberately holds **one** `datapoint_type` per measurement (`fan.speed`, not `fan.speed.intake`), so the discriminator lives outside the key, as an `instance text NOT NULL DEFAULT ''` column on all three datapoint tables. Series identity is therefore **`(owner, datapoint_type, instance, provenance)`**: each instance is its own series, while a singleton (`instance = ''`) is the default. Aggregation stays clean (group by `key`, ignore `instance`); per-instance trends stay distinct.
 
-The instance rides the pipeline as a reserved **`instance` label** on the collected datapoint: the collection extract spec authors it as a `key[instance]` suffix (`fan.speed[intake]=<oid>`, `fan.speed[exhaust]=<oid2>`), the parser strips the bracket into the label so `registryAllows` / `kindFor` still match the bare canonical key, and the derive step reads `instance` into the column. Calc folds **every** instance of an input key into the reduce: a rule reading `fan.speed` from a component gets one candidate per fan, so `worst` / `average` / `count` / Expr aggregate across all of them (a singleton key yields one candidate). An input filter can select one instance (`instance == "intake"`). The worklist needs no instance granularity: `calc_work` collapses on `(owner, key)` and recompute re-reads current state of every instance, so two fan changes in one event coalesce to one correct recompute. Calc **outputs** stay aggregate (`instance = ''`); per-instance outputs (one health per fan, a group-by) are a separate capability, not a silent gap, output owners default to the singleton.
+The instance rides the pipeline as a reserved **`instance` label** on the collected datapoint: the collection extract spec authors it as a `key[instance]` suffix (`fan.speed[intake]=<oid>`, `fan.speed[exhaust]=<oid2>`), the parser strips the bracket into the label so `registryAllows` / `kindFor` still match the bare canonical key, and the derive step reads `instance` into the column. Calc folds **every** instance of an input key into the reduce: a rule reading `fan.speed` from a component gets one candidate per fan, so `worst` / `average` / `count` / Expr aggregate across all of them (a singleton key yields one candidate). An input filter can select one instance (`instance == "intake"`). Recompute needs no instance granularity: a calc consumer reacting to a `fan.speed` datapoint on the stream recomputes over the current state of every instance for `(owner, key)`, so two fan changes in close succession converge on one correct recompute. Calc **outputs** stay aggregate (`instance = ''`); per-instance outputs (one health per fan, a group-by) are a separate capability, not a silent gap, output owners default to the singleton.
 
 ### The has-a-value-now razor (datapoint vs event)
 
@@ -140,15 +142,15 @@ A separate **`source`** column records *which sensor or path* produced an observ
 
 ### observed: from a component, via an edge parse
 
-"Measured from a component," not "from a device", every device is a component, but not every component is a device. The observed datapoint carries its own lineage on the row: `source_rule` + `source_rule_version` (which function and template version made it, the backtest hinge). The verbatim payload it parsed is **not** kept (no telemetry table); raw surfaces only on a `collection.failed` event or a dev raw-mode tap, or is retained for a bounded window under the opt-in `raw_sample` policy ([collection](/architecture/collection/)), which is still not a telemetry table. There is no separate execution table, a derived datapoint is itself the evidence of the function's run, exactly as an event/alarm/action row self-describes.
+"Measured from a component," not "from a device", every device is a component, but not every component is a device. The node parses the payload at the edge and **publishes the observed datapoint to the JetStream `datapoints` stream**; it does not write to Postgres. The observed datapoint carries its own lineage on the row: `source_rule` + `source_rule_version` (which function and template version made it, the backtest hinge). The verbatim payload it parsed is **not** kept (no telemetry table); raw surfaces only on a `collection.failed` event or a dev raw-mode tap, or is retained for a bounded window under the opt-in `raw_sample` policy ([collection](/architecture/collection/)), which is still not a telemetry table. There is no separate execution table, a derived datapoint is itself the evidence of the function's run, exactly as an event/alarm/action row self-describes.
 
 ### calculated: derived by a calc rule
 
-A calculated value (a 5-minute average, a system rollup, a fused consensus) is parallel to observed: both are machine-derived. The difference is the input: an edge function parses a device payload, a calc rule reads **other datapoints**. Both carry `source_rule` + `source_rule_version` on the row, so they are distinguished by the **`provenance` column** (an edge function versus a calc_rule), not by a pointer. The exact inputs a calc read are reconstructable from the rule version (that is what backtest does); if an immutable input snapshot is ever needed it is a nullable `inputs jsonb` column, not a table. The rule itself lives on [calculations](/architecture/calculations/).
+A calculated value (a 5-minute average, a system rollup, a fused consensus) is parallel to observed: both are machine-derived. The difference is the input: an edge function parses a device payload, a calc rule reads **other datapoints**. A calc consumer reads datapoints **off the JetStream `datapoints` stream** and **publishes its derived datapoint back onto the same stream**, so calculated values re-enter the data lane exactly like observed ones (and are themselves available to downstream calc and to the rule engine). Both carry `source_rule` + `source_rule_version` on the row, so they are distinguished by the **`provenance` column** (an edge function versus a calc_rule), not by a pointer. The exact inputs a calc read are reconstructable from the rule version (that is what backtest does); if an immutable input snapshot is ever needed it is a nullable `inputs jsonb` column, not a table. The rule itself lives on [calculations](/architecture/calculations/).
 
 ### intended: the declared effect of a command
 
-When the action layer issues a command, it records the command as an **event** and writes the **intended** state it expects, in one step. The intended datapoint's lineage is that command event. The name is deliberate: **intended vs observed** is the central razor, intent-in-progress versus measured reality.
+When the action layer issues a command, it records the command as an **event** and writes the **intended** state it expects, in one step. The command and its event are born in the record/state lane (PG-first, CDC-out); the intended datapoint **re-enters the data lane** on the `datapoints` stream **under the command's target owner** (the target was scope-checked at dispatch, so the re-entry carries that owner and clears the admission consumer), so the command's expected effect rides the same stream as observed and calculated values and reconciles against the observed value that the device round trip produces. The intended datapoint's lineage is that command event. The name is deliberate: **intended vs observed** is the central razor, intent-in-progress versus measured reality.
 
 ```text
 1. command issued:  "power on display-5"  -> recorded as an event
@@ -187,6 +189,7 @@ Among datapoint provenances there is no precedence contest: intended is a pendin
 Distinguished by a property of the table, not a naming suffix.
 
 - **Raw payload: not stored.** Datapoints are emitted at the edge, so the verbatim wire payload is **not persisted** (no `telemetry` table). Raw surfaces only on a **`collection.failed`** event when a parse or validation rejects (diagnosis, and the one backfill-after-fix case) and via a **dev raw-mode** tap; the datapoint is authoritative, its lineage is `source_rule` + version. The opt-in `raw_sample` policy ([collection](/architecture/collection/)) can retain raw for a bounded, sampled, short-lived window, off by default, still not a telemetry table.
+- **Live on NATS, durable in PG.** The live datapoint is the message on the JetStream `datapoints` stream; the durable copy in the `metric_datapoint` / `state_datapoint` / `log_datapoint` tables is written by a **persistence consumer** that batch-writes off the stream as an **async sink**, idempotent on series identity. The sink never gates the rule engine: rules read datapoints from NATS, and a slow or paused persistence consumer holds up only the durable record, not the live signal. Datapoints are the firehose, so they reach Postgres through the sink and **do not go through CDC**, unlike the record/state lane (events, alarms, actions), which is born in a PG transaction and fanned out by CDC.
 - **Ground truth, logs** (immutable, append-only, the actor's own record): **`log_datapoint`** (a component's words, a datapoint kind), **`audit_log`** (an operator), **`session_log`** (connection lifecycle, node-reported), **`internal_log`** (platform self-narration), and the **`collection_log`** / **`node_log`** companions. Each named for what it is. There is no separate rule-execution table: a derived row *is* the evidence of its rule's run, carrying `source_rule` + `source_rule_version` on the row itself.
 - **Derived** (produced by rules, reconstructable in principle from ground truth): **`metric_datapoint`**, **`state_datapoint`**, **event**, **alarm**, **action**.
 
@@ -218,14 +221,14 @@ Command reconciliation, configuration drift, sensor conflict, and hardware-swap 
 
 When multiple sources report one signal, they land as **perspectives**: source-tagged observed rows differing only by `source`, **all preserved** (seeing multiple perspectives on one value is itself instructive). A reduce-on-read **policy** produces the effective value. Fusion splits by whether the inputs describe the same key:
 
-- **same-key, many sources** keeps every perspective and reduces on read. The key's **`fusion_policy`** on `datapoint_type` is a **default/hint, not a mandate**: the right reduce often is not knowable a priori at the `datapoint_type` level (for `display-5.power` from codec CEC, display LAN, and the control system, you cannot know how to fuse the value before considering the actual sources). So a policy may **default from the type**, but can be source-weighted, per-instance, or **left open**: keep all perspectives and decide at read time, by an operator, or by AI. When a policy reduces (`mode`: priority / weighted / majority / worst / average / latest, plus tie-break and optional per-source weights), the reduced value is what `current_value` and event_rule evaluation read; the source-tagged perspectives stay, so "which source is wrong" remains queryable. `event_rule` evaluation reads that per-key effective value via a **targeted indexed lookup** (latest-per-source over the bounded perspective set for the owner and key), never a firehose scan. This improves *confidence in a reading*. A `source` registry carries default trust weights, so the simplest case needs no config. Materialize a fused series only if a profile earns it.
+- **same-key, many sources** keeps every perspective and reduces on read. The key's **`fusion_policy`** on `datapoint_type` is a **default/hint, not a mandate**: the right reduce often is not knowable a priori at the `datapoint_type` level (for `display-5.power` from codec CEC, display LAN, and the control system, you cannot know how to fuse the value before considering the actual sources). So a policy may **default from the type**, but can be source-weighted, per-instance, or **left open**: keep all perspectives and decide at read time, by an operator, or by AI. When a policy reduces (`mode`: priority / weighted / majority / worst / average / latest, plus tie-break and optional per-source weights), the reduced value is what `current_value` and event_rule evaluation read; the source-tagged perspectives stay, so "which source is wrong" remains queryable. `event_rule` evaluation reduces over the **latest-per-source perspective set** for the owner and key, held from the live `datapoints` stream (a bounded, in-memory set), never a firehose scan of the durable tables. This improves *confidence in a reading*. A `source` registry carries default trust weights, so the simplest case needs no config. Materialize a fused series only if a profile earns it.
 - **cross-key / system-level** is a **`calc_rule`** (the only fusion that authors a rule): `room.in_use` derived from display power + codec call-state + occupancy. This *derives a higher-order fact*, a new key, not a same-key consensus. See [calculations](/architecture/calculations/).
 
 Conflict detection (`disagree(observed, observed)` across sources) is the complementary operation: even when an effective value is usable, a perspective disagreeing beyond tolerance is itself a signal.
 
 ## Reads: current value is a view
 
-Current value (latest per owner / key / **instance** / **provenance**, reduced across the source perspectives per the effective `fusion_policy`) is a **view**, correct and zero-maintenance. It is keyed per-provenance because "current observed power" and "current intended power" are different values for the same key, and the divergence model depends on seeing both. A materialized `current_value` table is a measured optimization, earned when a read profile proves the view too slow: the driver is `event_rule` evaluation throughput (every rule fire reads the effective value), not only fleet-dashboard reads, so the same view-by-default discipline as storage applies and the justification is the hotter of the two. Ownership resolution reads resolved identity config (the declared value, else the observed [identity datapoint](/architecture/collection/)) by targeted indexed lookup, not a full scan, so it does not by itself justify the materialized table.
+Current value (latest per owner / key / **instance** / **provenance**, reduced across the source perspectives per the effective `fusion_policy`) is a **view** over the persisted tables, correct and zero-maintenance. It is keyed per-provenance because "current observed power" and "current intended power" are different values for the same key, and the divergence model depends on seeing both. A materialized `current_value` table is a measured optimization, earned when a read profile proves the view too slow: the driver is **operator and fleet-dashboard reads**, not the rule engine, since the rule engine evaluates against datapoints live off the JetStream `datapoints` stream and never reads the view. The same view-by-default discipline as storage applies. Ownership resolution reads resolved identity config (the declared value, else the observed [identity datapoint](/architecture/collection/)) by targeted indexed lookup, not a full scan, so it does not by itself justify the materialized table.
 
 ## The datapoint tables
 
@@ -261,46 +264,43 @@ edge: "Edge (node)" {
   fn: "function\nextract → key → normalize" { class: node }
   task -> fn
 }
-metric: metric_datapoint { class: node }
-state: state_datapoint { class: node }
-log: log_datapoint { class: node }
+ds: "JetStream\ndatapoints stream" { class: node; shape: queue }
 failed: "collection.failed\n(carries raw)" { class: node }
-calc: "calc_rule\ncross-key · system-level" { class: node }
-erule: "event_rule\nfire_criteria (+ optional clear_criteria)" { class: node }
-event: "event\ncaught · caused · derived · scheduled" { class: node }
-sched: "schedule + timer" { class: node }
+calc: "calc_rule consumer\ncross-key · system-level" { class: node }
+erule: "event_rule consumer\nfire_criteria (+ optional clear_criteria)" { class: node }
+persist: "persistence consumer\nbatch sink (async)" { class: node }
+tables: "metric · state · log\ndatapoint tables" { class: node; shape: cylinder }
+sched: "schedule + timer\n(leader-elected clock)" { class: node }
+pg: "event · alarm\n(PG)" { class: node; shape: cylinder }
 alarm: "alarm\none incident · new row per open\n(event_rule, owner)" { class: node }
+cdc: "JetStream\nrecord/state lane" { class: node; shape: queue }
+actions: "action_rule consumer\nnotify · command\nremediate-verify-escalate" { class: node }
+itsm: "ITSM (action target)" { class: node }
 operator: operator { class: node }
 config: "config\ndeclared (spec)" { class: node }
 audit: audit_log { class: key }
-divergence: divergence { class: node }
-actions: "actions\nnotify · command\nremediate-verify-escalate" { class: node }
-itsm: "ITSM (action target)" { class: node }
-edge.fn -> metric: "observed · lineage on row\n(source_rule)"
+divergence: divergence { class: node; shape: hexagon }
+edge.fn -> ds: "observed · lineage on row\n(source_rule)"
 edge.fn -> failed: "parse / validation fail" { style.stroke-dash: 4 }
-edge.fn -> state
-edge.fn -> log
-metric -> calc
-state -> calc
-calc -> metric: "calculated · lineage on row\n(source_rule)"
-calc -> state
-metric -> erule
-state -> erule
-log -> erule
-sched -> event: origin=scheduled
-erule -> event
-event -> alarm: fire = open · clear = resolve
-event -> state: command's effect · provenance=intended
-operator -> config: declares
-config -- state: "links · drift" { style.stroke-dash: 4 }
-operator -> audit: audit { style.stroke-dash: 4 }
-event -- divergence: "disagree(A,B): drift / conflict" { style.stroke-dash: 4 }
-event -> actions
-alarm -> actions
-actions -> itsm: "ITSM: open→ticket · update→comment · resolve→close" { style.stroke-dash: 4 }
+ds -> calc
+calc -> ds: "calculated · lineage on row\n(source_rule)"
+ds -> erule
+ds -> persist
+persist -> tables: "durable copy"
+sched -> erule: "origin=scheduled"
+erule -> pg: "PG-first: event + alarm in one tx"
+pg -> alarm: "alarm transition"
+pg -> cdc: "CDC (logical decoding)\nleader-elected publisher" { style.stroke-width: 3 }
+cdc -> actions
+actions -> ds: "command's effect · provenance=intended" { style.stroke-dash: 4 }
+actions -> itsm: "ITSM: open->ticket · update->comment · resolve->close" { style.stroke-dash: 4 }
 actions -> edge.task: "command + adaptive poll" { style.stroke-dash: 4 }
+operator -> config: "declares (PG-first)"
+config -- tables: "links · drift" { style.stroke-dash: 4 }
+operator -> audit: "audit" { style.stroke-dash: 4 }
+cdc -- divergence: "disagree(A,B): drift / conflict" { style.stroke-dash: 4 }
 ```
 
-The teal node is `audit_log`, the ground-truth record of operator writes (including config changes); observed and calculated carry `source_rule` on the row, intended points at the command `event` (via `event_id`). The raw payload is not stored: a parse or validation failure rides a `collection.failed` event. The three datapoint tables (`metric_datapoint`, `state_datapoint`, `log_datapoint`) are emitted at the edge or derived; [config](/architecture/variables/) holds declared intent, keyed to a state datapoint as its observed side.
+Two lanes, one bus. The **data lane** is the JetStream `datapoints` stream: the edge publishes observed datapoints, calc consumers publish calculated datapoints back onto it, the `event_rule` consumer evaluates against it live, and a **persistence consumer** batch-writes the three datapoint tables (`metric_datapoint`, `state_datapoint`, `log_datapoint`) as an async sink (datapoints never go through CDC). The **record/state lane** is PG-first: an `event_rule` fire writes the event and alarm transition to PG in one transaction, and a leader-elected **CDC publisher** (logical decoding of the WAL) fans those committed changes onto JetStream, where `action_rule` consumers react. A command's intended datapoint re-enters the data lane (the device round trip). The teal node is `audit_log`, the ground-truth record of operator writes (including config changes); observed and calculated carry `source_rule` on the row, intended points at the command `event` (via `event_id`). The raw payload is not stored: a parse or validation failure rides a `collection.failed` event. [config](/architecture/variables/) holds declared intent (PG-first), keyed to a state datapoint as its observed side.
 
 Related: [events](/architecture/events/) (the event family and `event_type`), [calculations](/architecture/calculations/) (calc rules and the rule families), [config and credentials](/architecture/variables/) (declared config, drift, reconcile), [collection](/architecture/collection/) (how telemetry arrives), [alarms and actions](/architecture/alarms-actions/) (alarm lifecycle, actions), and [the glossary](/architecture/glossary/) (every term defined once).
