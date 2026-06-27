@@ -75,11 +75,11 @@ The web UI gets real-time data by **subscribing to the server, not to the bus**,
 polling loop on the API. **Operators do not connect to NATS** (the bus is internal-plus-nodes only), so the
 live path introduces **no second authorization model**:
 
-- **Server-side relay.** The server holds the internal JetStream subscription, runs every candidate
-  message through the **same Storage Gateway scope** a read would use (the one authoritative permission and
-  ABAC check, in-process), and streams only what passes down to the browser. Authorization executes in
-  exactly one place; the live path **calls** it per message instead of re-encoding it as subject
-  permissions.
+- **Server-side relay.** The SSE subscribe is a normal route, capability-checked before it opens. The
+  server then holds the internal JetStream subscription, runs every candidate message through the **same
+  Storage Gateway scope** a read would use (the one authoritative ABAC filter, in-process), and streams
+  only what passes down to the browser. The scope filter executes in exactly one place; the live path
+  **calls** it per message instead of re-encoding it as subject permissions.
 - **Transport is SSE.** The browser opens a **Server-Sent Events** stream on the same authenticated,
   same-origin HTTP seam as the rest of the API (same cookie or bearer, same proxy, same TLS), and the
   server pushes. One-way fits a live read: subscribe is one request, data flows down, and mutations and

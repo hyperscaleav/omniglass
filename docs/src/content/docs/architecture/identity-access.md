@@ -1,13 +1,13 @@
 ---
 title: Identity and access
-description: How principals authenticate, how grants combine roles with scopes, and how the app enforces RBAC and ABAC entirely in the Storage Gateway.
+description: How principals authenticate, how grants combine roles with scopes, and how the app enforces capability at the route and ABAC scope in the Storage Gateway.
 sidebar:
   badge:
     text: Design
     variant: caution
 ---
 
-Identity and access is how an operator controls who may call the platform and which slice of the estate each caller can see and act on, enforced entirely in the app so "forgot to filter" cannot happen. Enforcement lives in the Storage Gateway (the only path to the database); scope is built on the cascade's groups ([cascade](/architecture/cascade/)). This doc says what IAM **is**.
+Identity and access is how an operator controls who may call the platform and which slice of the estate each caller can see and act on, enforced entirely in the app so "forgot to filter" cannot happen. Enforcement is **two in-app layers**: the capability check (`<resource>:<action>`) runs as **API route middleware** before the handler, and the **ABAC scope** filter is injected by the **Storage Gateway** (the only path to the database), where a row-level filter holds by construction. Scope is built on the cascade's groups ([cascade](/architecture/cascade/)). This doc says what IAM **is**.
 
 ## The model in one breath
 
@@ -251,11 +251,11 @@ Nodes do not use general role x scope. A node authenticates with a per-tenant **
 
 A `node` credential whose subject permissions do not cover a subject is rejected by NATS at publish/subscribe time; a non-`node` principal cannot hold a node account's subject grants.
 
-## One enforcement point
+## One model, never duplicated
 
-Authorization is enforced in **exactly one place: the Storage Gateway** (the `<resource>:<action>` permission on every route, the ABAC scope on every query). Nothing re-implements it on another surface, so there is no parallel authorization model to drift:
+Authorization is **two in-app layers, each enforced in one place and re-derived nowhere else**: the `<resource>:<action>` **capability** check runs as API route middleware before the handler, and the **ABAC scope** filter is injected by the Storage Gateway on every query (a row filter belongs at the data path, where it holds by construction; the gateway also writes the in-transaction `audit_log`). The gateway owns **scope and audit**, not capability. The invariant is that no third surface re-implements either:
 
-- **The live UI relay calls the gateway, it does not copy it.** Operators never connect to NATS. The server-side [SSE relay](/architecture/messaging/) that streams live data to the browser runs each candidate message through the **same** gateway scope a read uses, so a live tile gets exactly the rows the operator could have fetched, with no second authorization path.
+- **The live UI relay calls these, it does not copy them.** Operators never connect to NATS. The SSE subscribe is a normal route (capability-checked like any route); the server-side [SSE relay](/architecture/messaging/) then runs each candidate message through the **same** gateway scope a read uses, so a live tile gets exactly the rows the operator could have fetched, with no second authorization path.
 - **Node subject permissions are a coarse transport gate, not the model.** A node's NATS grants are mechanically derived from its placement `visible_set` (above) as defense in depth on the WAN edge; the gateway still confines every node ingest to that same set, so the subject grant is a redundant outer fence, never the authority. The bus carries no operator (`kind=human` or `kind=agent`) clients at all.
 
 ## Encryption in transit
