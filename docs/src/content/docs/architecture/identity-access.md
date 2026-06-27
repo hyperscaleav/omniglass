@@ -22,11 +22,10 @@ A principal carries a `kind` value; the same role machinery works across all kin
 | `human` | a person | local password + session, OIDC, SAML |
 | `service` | scripts, integrations, SDKs, bots | bearer token |
 | `node` | the edge daemon running in the field | NATS JWT/nkey credential |
-| `agent` | an AI actor (reserved, deferred) | OAuth as a `human` / `service` today |
 
-**`agent` is reserved, not yet a distinct authorization model.** Today an AI actor authenticates via **OAuth as a `human` or `service` principal** and acts with exactly that principal's grants, no separate identity. First-class agent identity (a sponsor-bounded `agent` kind with its own clamped grants and a propose -> approve gate) is a **deferred feature** (see [The agent principal](#the-agent-principal) below and the [AI](/architecture/ai/) page); the role machinery already supports adding it later without disturbing the other kinds.
+**AI actors act as a user today; a first-class `agent` principal is deferred.** An AI tool authenticates via **OAuth as a `human` or `service` principal** and acts with exactly that principal's grants, no separate identity. A dedicated `agent` principal kind (first-class AI identity, bounded by a sponsoring human, with a propose -> approve gate on mutations) may be added when the capability matures; it is deliberately deferred so the platform does not carry that authorization machinery for a feature a year out. This note is the one place that direction is recorded; everywhere else AI is simply a scoped, audited user ([AI](/architecture/ai/)).
 
-Each kind that needs structured domain attributes gets a **1:1 per-kind table** linked by `principal_id`: `human`, `service`, and `node` today (the `agent` table lands with first-class agent identity). The base `principal` table holds identity + kind only; the per-kind tables hold the rest, including the kind's human-facing label (a human's `display_name`, a service's label, the node's name).
+Each kind that needs structured domain attributes gets a **1:1 per-kind table** linked by `principal_id`: `human`, `service`, and `node`. The base `principal` table holds identity + kind only; the per-kind tables hold the rest, including the kind's human-facing label (a human's `display_name`, a service's label, the node's name).
 
 ## Credentials
 
@@ -48,7 +47,7 @@ undecided.
 
 ## Subjects
 
-`human`, `service`, `node`, `agent`, and **`principal_group`s**. Roles attach to principals regardless of kind; the same `principal_grant` rows mean the same thing whether the principal is a person, a service, a daemon, or an AI agent.
+`human`, `service`, `node`, and **`principal_group`s**. Roles attach to principals regardless of kind; the same `principal_grant` rows mean the same thing whether the principal is a person, a service, a daemon, or an AI tool acting as one.
 
 ## Group kinds
 
@@ -63,12 +62,6 @@ So `group` appears on **both sides of authZ**: `principal_group`s as subjects, e
 Whether to unify the group kinds into a single polymorphic `group` primitive; revisit if their usage
 converges.
 :::
-
-## The agent principal (deferred)
-
-First-class agent identity is a **future feature**, not in the initial architecture. Today an **AI actor authenticates via OAuth as a `human` or `service` principal** and acts with that principal's grants, capability and scope, exactly like any other caller. There is no separate agent identity, sponsor clamp, or approval gate yet, so an AI tool is just a scoped, audited user of the existing API.
-
-When the feature matures, the intended shape is a sponsor-bounded `agent` kind: its authority a strict subset of a sponsoring human's, with a propose -> approve gate on mutations. The role-and-grant machinery already accommodates it (adding the `agent` per-kind table and a clamp does not disturb the other kinds), and the [AI](/architecture/ai/) page sketches that direction. It is deliberately deferred so the initial platform does not carry authorization machinery for a capability that is a year out.
 
 ## Roles and the role hierarchy
 
@@ -294,7 +287,7 @@ A `node` credential whose subject permissions do not cover a subject is rejected
 Authorization is **two in-app layers, each enforced in one place and re-derived nowhere else**: the `<resource>:<action>` **capability** check runs as API route middleware before the handler, and the **ABAC scope** filter is injected by the Storage Gateway on every query (a row filter belongs at the data path, where it holds by construction; the gateway also writes the in-transaction `audit_log`). The gateway owns **scope and audit**, not capability. The invariant is that no third surface re-implements either:
 
 - **The live UI relay calls these, it does not copy them.** Operators never connect to NATS. The SSE subscribe is a normal route, **capability fast-rejected** at open (not authorized there); the server-side [SSE relay](/architecture/messaging/) then runs each candidate message through the **same** gateway scope a read uses, filtering by `visible_set(P, read)` against each message's exclusive-arc owner, so a live tile gets exactly the rows the operator could have fetched. The session **re-checks on every grant-cache invalidation** for its principal and closes if `:read` is lost, so a mid-stream scope shrink tears the stream down rather than leaking.
-- **Node subject permissions gate the subject; the admission consumer gates the owner.** A node's NATS grants are mechanically derived from its placement as a coarse transport gate on the WAN edge. But subject permissions constrain the subject **string**, while a datapoint's owner lives in the **payload** (a multi-owner function resolves owner from labels server-side), so the subject grant is **not** a redundant copy of the owner fence: the **admission consumer** (above) is the authoritative owner fence, checking the payload owner against placement at consume time. Subject perms keep a node off subjects it has no business on; the admission consumer keeps a forged owner label out of the trusted stream. The bus carries no operator (`kind=human` or `kind=agent`) clients at all.
+- **Node subject permissions gate the subject; the admission consumer gates the owner.** A node's NATS grants are mechanically derived from its placement as a coarse transport gate on the WAN edge. But subject permissions constrain the subject **string**, while a datapoint's owner lives in the **payload** (a multi-owner function resolves owner from labels server-side), so the subject grant is **not** a redundant copy of the owner fence: the **admission consumer** (above) is the authoritative owner fence, checking the payload owner against placement at consume time. Subject perms keep a node off subjects it has no business on; the admission consumer keeps a forged owner label out of the trusted stream. The bus carries no operator (`kind=human`) clients at all; an AI tool acting as one reaches the platform only through the API.
 
 ## Encryption in transit
 
@@ -302,7 +295,7 @@ TLS on the HTTP API (terminated at the binary when given a cert + key, or at the
 
 ## Audit
 
-Every API operation records the resolved **actor** (the principal id) in `audit_log`. Secret decrypts are always audited, never filterable. Node-mode writes record the node principal as actor; system-mode writes record `actor = 'system'` (or `'bootstrap'` for the seed phase) so the audit trail distinguishes operator action from platform internals. An AI tool acts via OAuth as a `human` or `service` principal, so its writes record that principal as actor (first-class `agent` actor attribution is deferred).
+Every API operation records the resolved **actor** (the principal id) in `audit_log`. Secret decrypts are always audited, never filterable. Node-mode writes record the node principal as actor; system-mode writes record `actor = 'system'` (or `'bootstrap'` for the seed phase) so the audit trail distinguishes operator action from platform internals. An AI tool acts via OAuth as a `human` or `service` principal, so its writes record that principal as actor.
 
 ## Bootstrap
 
@@ -326,7 +319,7 @@ The IAM subjects and their grants; the physical layout lives on [storage](/archi
 
 | Table | Key columns | Notes |
 |---|---|---|
-| `principal` (+ per-kind `human` / `service` / `node` / `agent`) | id, kind | base `principal` is identity (opaque uuid) + kind only; per-kind tables hold the rest, including each kind's label: `human.display_name` (the person's real name) + username + email, the `service` label, the `node` name (+ labels, last_heartbeat_at, bound credential). The `agent` per-kind table (label + `sponsor`, clamp) is **deferred** with first-class agent identity |
+| `principal` (+ per-kind `human` / `service` / `node`) | id, kind | base `principal` is identity (opaque uuid) + kind only; per-kind tables hold the rest, including each kind's label: `human.display_name` (the person's real name) + username + email, the `service` label, the `node` name (+ labels, last_heartbeat_at, bound credential) |
 | `role` | id, **official**, permissions (jsonb: `<resource>:<action>`) | RBAC capability set; ship viewer/operator/admin/owner + custom |
 | `principal_grant` | (principal_id, role, **scope**) | role x scope; scope = a structural node, an entity-group, or `all`; additive |
 
