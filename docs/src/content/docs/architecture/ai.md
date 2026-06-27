@@ -1,13 +1,19 @@
 ---
 title: AI
-description: "AI as a governed capability along an assistive-to-agentic spectrum: the sponsored agent principal, same seams, provenance, and human-in-the-loop gating."
+description: "AI as a governed capability along an assistive-to-agentic spectrum. First-class agent identity is deferred; today AI acts via OAuth as a user. This page sketches the future governance model."
 sidebar:
   badge:
     text: Design
     variant: caution
 ---
 
-AI in Omniglass is a **capability that spans an assistive-to-agentic spectrum**, governed exactly like any other actor. At the assistive end it enriches and explains; at the agentic end it proposes and acts. The capabilities differ across the spectrum; the governance does not move. This page is the architecture of that governance: how AI acts as the **`agent` principal kind**, sponsored by a human and scope-bounded to a strict subset of that sponsor's authority, how it plugs into the same seams as any principal, and what keeps it assistive-not-authoritative and always traceable.
+AI in Omniglass is a **capability that spans an assistive-to-agentic spectrum**, governed exactly like any other actor. At the assistive end it enriches and explains; at the agentic end it proposes and acts.
+
+:::note[Deferred: first-class agent identity]
+The initial architecture does **not** ship the sponsored `agent` principal. Today an AI tool authenticates via **OAuth as a `human` or `service` principal** and acts with that principal's grants, scoped and audited like any caller ([identity and access](/architecture/identity-access/)). This page sketches the **future** governance model (a sponsor-bounded agent kind with a propose -> approve gate), deliberately deferred so the platform does not carry that machinery for a capability a year out.
+:::
+
+The capabilities differ across the spectrum; the governance does not move. The intended future architecture is how AI acts as the **`agent` principal kind**, sponsored by a human and scope-bounded to a strict subset of that sponsor's authority, plugged into the same seams as any principal, and kept assistive-not-authoritative and always traceable.
 
 ## The capability spectrum
 

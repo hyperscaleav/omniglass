@@ -22,11 +22,11 @@ A principal carries a `kind` value; the same role machinery works across all kin
 | `human` | a person | local password + session, OIDC, SAML |
 | `service` | scripts, integrations, SDKs, bots | bearer token |
 | `node` | the edge daemon running in the field | NATS JWT/nkey credential |
-| `agent` | an AI actor, sponsored by a human | bearer token, OAuth on-behalf-of |
+| `agent` | an AI actor (reserved, deferred) | OAuth as a `human` / `service` today |
 
-An **`agent`** is a first-class principal kind representing an AI actor. It is **mandatorily sponsored by a human** (a `sponsor` FK to a human principal on the per-kind `agent` table), and its authority is bounded by that sponsor: an agent's permissions plus ABAC scope are a **strict subset of its sponsor's**, so it can never exceed, and never outlive, the human who stands behind it (see [The agent principal](#the-agent-principal) below and the [AI](/architecture/ai/) page).
+**`agent` is reserved, not yet a distinct authorization model.** Today an AI actor authenticates via **OAuth as a `human` or `service` principal** and acts with exactly that principal's grants, no separate identity. First-class agent identity (a sponsor-bounded `agent` kind with its own clamped grants and a propose -> approve gate) is a **deferred feature** (see [The agent principal](#the-agent-principal) below and the [AI](/architecture/ai/) page); the role machinery already supports adding it later without disturbing the other kinds.
 
-Each kind that needs structured domain attributes gets a **1:1 per-kind table** linked by `principal_id`: `human`, `service`, `node`, and `agent`. The base `principal` table holds identity + kind only; the per-kind tables hold the rest, including the kind's human-facing label (a human's `display_name`, a service's label, the node's name, an agent's label and its `sponsor`).
+Each kind that needs structured domain attributes gets a **1:1 per-kind table** linked by `principal_id`: `human`, `service`, and `node` today (the `agent` table lands with first-class agent identity). The base `principal` table holds identity + kind only; the per-kind tables hold the rest, including the kind's human-facing label (a human's `display_name`, a service's label, the node's name).
 
 ## Credentials
 
@@ -64,19 +64,11 @@ Whether to unify the group kinds into a single polymorphic `group` primitive; re
 converges.
 :::
 
-## The agent principal
+## The agent principal (deferred)
 
-AI acts as an **`agent` principal**: a real, named identity with its own credentials and grants, **mandatorily sponsored by a human**. The per-kind `agent` table carries a `sponsor` FK to a human principal; an agent cannot exist without one.
+First-class agent identity is a **future feature**, not in the initial architecture. Today an **AI actor authenticates via OAuth as a `human` or `service` principal** and acts with that principal's grants, capability and scope, exactly like any other caller. There is no separate agent identity, sponsor clamp, or approval gate yet, so an AI tool is just a scoped, audited user of the existing API.
 
-The sponsor is the **upper boundary on the agent's authority**, enforced not implicit:
-
-- **Subset invariant**: an agent's permissions plus ABAC scope are a **strict subset of its sponsor's**, checked at grant time. The subset holds **per action**: for every action, the agent's `visible_set(agent, action)` is contained in the sponsor's, so the clamp cannot be sidestepped by pairing an action from one grant with a scope from another. A grant that would let the agent see or do something its sponsor cannot is refused.
-- **Clamp on shrink**: the agent's effective authority for any action is computed **live at request time** as `visible_set(agent, action)` intersect `visible_set(sponsor, action)`, and the agent's principal cache **watches the sponsor's** `principal_grant` / `principal` / `role` keys. So a sponsor shrink re-clamps the agent **on the next grant-cache invalidation** (bounded by the staleness contract below; a sponsor-side high-sensitivity mutation gets the in-transaction recheck), without waiting for the agent's own grants to change (they never do). The agent can never exceed, and never outlive, its sponsor's authority.
-- **Own credential lifecycle**: the agent holds its own credentials, revocable and rotatable **independently of the human**, so retiring an agent does not disturb the sponsor and vice versa.
-- **propose -> approve**: governs autonomy **structurally**, not by convention. Read and diagnostic actions run autonomously within scope; for a non-promoted agent a mutating call writes a `pending-approval` **action row** that the gateway **refuses to advance** until a **sponsor-attributed approval row** exists. The gate is held by the gateway, not the application, so an in-scope mutation cannot slip past it, set per agent.
-- **Audit**: an action attributes to the **agent** as the actor, with the **sponsor** as the accountable human, recorded natively as a principal relationship. No special two-row case is needed.
-
-**OAuth on-behalf-of** survives as the **backing auth mechanism** for the agent principal: it is how an external AI proves it acts for its sponsor at authentication time, not a scope-cloning shortcut that hands the agent the sponsor's grants wholesale. The agent's authority comes from its own clamped grants, not from the OAuth token. This is symmetric with the other bounded kinds: a `node` is bounded by its placement, an `agent` is bounded by its sponsor. The [AI](/architecture/ai/) page covers the capability spectrum this governs.
+When the feature matures, the intended shape is a sponsor-bounded `agent` kind: its authority a strict subset of a sponsoring human's, with a propose -> approve gate on mutations. The role-and-grant machinery already accommodates it (adding the `agent` per-kind table and a clamp does not disturb the other kinds), and the [AI](/architecture/ai/) page sketches that direction. It is deliberately deferred so the initial platform does not carry authorization machinery for a capability that is a year out.
 
 ## Roles and the role hierarchy
 
@@ -99,7 +91,7 @@ Linear inheritance (transitive): each role's effective permissions are the union
 |---|---|
 | `viewer` | Read every operator-facing resource within scope. |
 | `operator` | viewer + create/update on components, interfaces, tasks, rules, config; ack/snooze/resolve alarms. |
-| `admin` | operator + delete on managed resources + manage IAM (principals, credentials, grants, custom roles). IAM and registry management is meaningful only from an `@ all` grant (a scoped `admin @ subtree` keeps the operator powers within its subtree but gets no IAM, since non-entity actions resolve against the `all` scope). Cannot delete `official` roles. |
+| `admin` | operator + delete on managed resources + manage IAM (principals, credentials, grants, custom roles). IAM management is meaningful only from an `@ all` grant; **registry curation** uses the tenant-scoped `<registry>:create` capability, not `@ all` (a scoped `admin @ subtree` keeps the operator powers within its subtree but gets no IAM). Cannot delete `official` roles. |
 | `owner` | god mode (`*:*`). The unkillable role: at least one active `owner@all` grant must exist at all times (enforced by DB trigger). The bootstrap creates the first owner; only an owner can revoke another owner. |
 
 ### Custom roles
@@ -233,7 +225,11 @@ The capability check is **necessary not sufficient** (it only rejects), the `can
 4. **Backstop**: had the handler skipped step 2, the gateway's `:ack` write carries `visible_set(P, ack)`, X is outside it, the UPDATE matches 0 rows, and the gateway returns the same 403, never a silent success.
 
 The flattened-set model would have wrongly allowed this: `ack` is "in the permission set" and X is "in the global visible set", so the per-grant binding is exactly what stops estate-wide ack.
-- **Non-entity resources** (the `datapoint_type` registries, roles, principals, groups) have no entity `E`, so `canDo` resolves against the **`all` scope**: the action must appear in a grant whose `scope_kind` is `all`. A scoped grant (a role `@ group-A`) confers **no** global capability, so `role:create` carried by an `operator @ HQ` grant does not let you create roles. The fast-reject still only rejects; the all-scope grant check is the authorization, the one documented place the decision is capability-shaped because there is no entity to scope. These are typically admin-tier (`owner @ all`).
+- **Non-entity resources** have no entity `E`, so `canDo` cannot scope by owner. Two governance classes:
+  - **IAM subjects** (`principal`, `role`, `principal_grant`, credentials): the action must appear in a grant whose `scope_kind` is `all`. A scoped grant confers **no** IAM capability, so `role:create` carried by an `operator @ HQ` grant does not let you create roles. Typically `owner @ all` / `admin @ all`.
+  - **Data registries** (`datapoint_type`, `tag`, `unit`, `event_type`, severity, source): governed by a **`<registry>:create` curator capability** held at the **tenant scope**, not `@ all`. A curator may mint **org-scoped** entries that shadow official ones (the [namespace-shadow pattern](/architecture/api/)), so registry curation is a deliberate, scoped capability distinct from IAM, not a global-admin-only act.
+
+  The fast-reject still only rejects; for these resources the grant-class check (all-scope for IAM, the `<registry>:create` capability for registries) is the authorization, the one place the decision is capability-shaped because there is no entity to scope.
 
 Both layers operate **within one database**. Tenant isolation is **per-deployment**: a tenant is one database plus one **NATS account** plus one deployment, so per-database isolation (storage) and per-account isolation (messaging) are the same boundary. There is no `tenant_id` column anywhere, so the cross-tenant boundary is the database / account boundary itself, not a row predicate. Intra-database scope (above) is the only app-enforced layer; there is no RLS backstop.
 
@@ -306,7 +302,7 @@ TLS on the HTTP API (terminated at the binary when given a cert + key, or at the
 
 ## Audit
 
-Every API operation records the resolved **actor** (the principal id) in `audit_log`. Secret decrypts are always audited, never filterable. Node-mode writes record the node principal as actor; system-mode writes record `actor = 'system'` (or `'bootstrap'` for the seed phase) so the audit trail distinguishes operator action from platform internals. An `agent` action records the agent as actor with its sponsor as the accountable human.
+Every API operation records the resolved **actor** (the principal id) in `audit_log`. Secret decrypts are always audited, never filterable. Node-mode writes record the node principal as actor; system-mode writes record `actor = 'system'` (or `'bootstrap'` for the seed phase) so the audit trail distinguishes operator action from platform internals. An AI tool acts via OAuth as a `human` or `service` principal, so its writes record that principal as actor (first-class `agent` actor attribution is deferred).
 
 ## Bootstrap
 
@@ -330,7 +326,7 @@ The IAM subjects and their grants; the physical layout lives on [storage](/archi
 
 | Table | Key columns | Notes |
 |---|---|---|
-| `principal` (+ per-kind `human` / `service` / `node` / `agent`) | id, kind | base `principal` is identity (opaque uuid) + kind only; per-kind tables hold the rest, including each kind's label: `human.display_name` (the person's real name) + username + email, the `service` label, the `node` name (+ labels, last_heartbeat_at, bound credential), the `agent` label + `sponsor` (FK to a human principal; agent permissions + scope are clamped to a subset of the sponsor's) |
+| `principal` (+ per-kind `human` / `service` / `node` / `agent`) | id, kind | base `principal` is identity (opaque uuid) + kind only; per-kind tables hold the rest, including each kind's label: `human.display_name` (the person's real name) + username + email, the `service` label, the `node` name (+ labels, last_heartbeat_at, bound credential). The `agent` per-kind table (label + `sponsor`, clamp) is **deferred** with first-class agent identity |
 | `role` | id, **official**, permissions (jsonb: `<resource>:<action>`) | RBAC capability set; ship viewer/operator/admin/owner + custom |
 | `principal_grant` | (principal_id, role, **scope**) | role x scope; scope = a structural node, an entity-group, or `all`; additive |
 

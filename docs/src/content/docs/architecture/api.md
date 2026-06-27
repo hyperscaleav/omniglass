@@ -156,10 +156,11 @@ It is **not a side channel**.
 
 The binding is mechanical, but the **tool catalog is curated, not a raw one-method-per-tool dump**:
 task-oriented tools, the [views](/architecture/views/) exposed as search and query tools (the richest
-reads), pagination and the problem+json errors shaped for a model to consume. The MCP server carries the
-**agent principal's** scoped, delegated, audited credential ([identity and access](/architecture/identity-access/)),
-so its reach is its sponsor's subset and nothing more; read and diagnostic tools are autonomous within
-scope, and mutating tools run under the agent's **propose -> approve** policy ([AI](/architecture/ai/)).
+reads), pagination and the problem+json errors shaped for a model to consume. Today the MCP server runs
+under the **authenticated `human` or `service` principal's** credential
+([identity and access](/architecture/identity-access/)), so its reach is exactly that principal's grants,
+scoped and audited like any caller. First-class agent identity (a sponsor-bounded credential with a
+propose -> approve gate) is a deferred feature ([AI](/architecture/ai/)).
 
 ## The node path is the NATS contract
 

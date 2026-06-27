@@ -19,10 +19,10 @@ The audit log is how an operator answers "who changed this, and to what?" withou
   be forgotten or bypassed.
 - **The actor** is resolved by IAM ([identity and access](/architecture/identity-access/)): the
   human, service, node, or agent.
-- **An AI-accepted suggestion is one row.** The actor is the `agent` principal that performed the
-  write; its sponsoring human is the accountable operator. Both are native principal facts ([AI](/architecture/ai/)),
-  so the row names the agent actor and carries the sponsor as the accountable human, no special two-row
-  case needed.
+- **An AI-accepted suggestion is one row.** Today an AI tool acts via OAuth as a `human` or `service`
+  principal, so the actor is **that principal**, attributed and audited like any caller. (The deferred
+  agent-identity model would name a distinct `agent` actor with its sponsor as the accountable human,
+  [AI](/architecture/ai/).)
 - **Ground truth a backtest reads.** Operator-driven transitions and config changes are not
   recomputable from collected data, so the audit log is what a rule backtest reads for them: alarm ack and
   snooze ([alarms and actions](/architecture/alarms-actions/)), and every config change a
