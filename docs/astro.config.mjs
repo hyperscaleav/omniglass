@@ -96,6 +96,7 @@ export default defineConfig({
             { label: 'Test-driven', slug: 'contributing/test-driven' },
             { label: 'Docs with everything', slug: 'contributing/docs-with-everything' },
             { label: 'Learning tool', slug: 'contributing/learning-tool' },
+            { label: 'Primitive first', slug: 'contributing/primitive-first' },
             { label: 'Design system', slug: 'contributing/design-system' },
           ],
         },

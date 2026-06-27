@@ -3,7 +3,7 @@
 Open observability and control plane for AV/IT estates, and a learning tool for how one
 is built. Single Go binary (run modes: server, node, migrate), BYO PostgreSQL. The
 architecture of record is the docs site under [docs/](docs/) (published at
-docs.omniglass.hyperscaleav.com); read the architecture spine before non-trivial changes.
+docs.omniglass.hyperscaleav.com); read the [architecture spine](docs/src/content/docs/architecture/index.md) before non-trivial changes.
 
 This repo is **public from the first commit** and built **one vertical slice per PR**.
 Treat every change as portfolio-quality and externally visible.
@@ -23,14 +23,15 @@ Treat every change as portfolio-quality and externally visible.
    surfaces should also teach the concept they operate on, interactively, against real or
    simulated data. [docs/contributing/learning-tool.md](docs/src/content/docs/contributing/learning-tool.md).
 5. **Primitive first.** Build the reusable primitive, then consume it. Do not inline a
-   one-off where a primitive belongs.
+   one-off where a primitive belongs (the expression engine, the `ViewResult` contract, the
+   Storage Gateway, the cascade, the timer). [docs/contributing/primitive-first.md](docs/src/content/docs/contributing/primitive-first.md).
 
 The UI is SolidJS + daisyUI + Tailwind, a generated typed client over the `ViewResult`
 renderer contract; learning surfaces render the real engine, not static diagrams.
 [docs/contributing/design-system.md](docs/src/content/docs/contributing/design-system.md). Authorization is
 two layers, both in the app: a `<resource>:<action>` permission checked on **every** route,
 and ABAC **scope** injected by the Storage Gateway on **every** applicable query. These are
-invariants, not conventions; see the architecture spine.
+invariants, not conventions; see [identity and access](docs/src/content/docs/architecture/identity-access.md) and [storage](docs/src/content/docs/architecture/storage.md).
 
 ## Design for testability
 
