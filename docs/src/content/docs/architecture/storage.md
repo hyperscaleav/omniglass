@@ -253,3 +253,23 @@ application read and write goes through the Gateway, the physical backend is swa
 Which cold engine backs the tier, what triggers tier-out (age versus a partition-detach hook), how
 queries federate across hot and cold, and whether projections ever tier.
 :::
+
+## Query construction: typed, parameterized, generated
+
+The gateway builds every query with **[jet](https://github.com/go-jet/jet)**, a type-safe SQL builder
+whose column and table types are **generated from the dbmate-managed schema** (dbmate stays the single
+schema authority; jet regenerates after `migrate`). The shape is dynamic (the per-action scope predicate,
+the [filter expression](/architecture/expressions/), order, pagination compose at runtime) but the safety
+is **structural, not by discipline**:
+
+- **Values are always bound parameters**, never interpolated into SQL text.
+- **Identifiers (columns, tables) are typed constants** from the generated schema, so a wrong or
+  attacker-supplied column name is a **compile error**, never a string. The filter language's field names
+  resolve against those same generated columns before they become a predicate.
+- **Operators are a closed set.**
+
+A wrong column or type fails the build, so the compiler and tests catch a bad query before runtime, which
+is what keeps the gateway safe to evolve and safe for an AI to edit. Because all dynamic construction
+lives in this one module, the injection-safe discipline is a single reviewable chokepoint. The one
+carve-out is the high-volume datapoint insert (the persistence consumer), which may use `pgx` `COPY` for
+throughput, still inside the gateway and still scoped.
