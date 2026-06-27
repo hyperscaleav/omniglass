@@ -83,8 +83,9 @@ One read contract, three consumers:
 ## Live updates
 
 A view read is **query-polling by default** (a refetch interval; slow-changing config uses a long stale
-time). A view may **stream** (SSE or a subscription) where latency or fan-out earns it, the same
-earn-it-with-a-profile discipline ([UI](/architecture/ui/), [time](/architecture/time/)).
+time). A view may **stream** over a server-side [SSE](/architecture/messaging/) relay where latency or
+fan-out earns it, the same earn-it-with-a-profile discipline ([UI](/architecture/ui/),
+[time](/architecture/time/)).
 
 ## Versioning
 

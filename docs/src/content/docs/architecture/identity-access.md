@@ -251,6 +251,13 @@ Nodes do not use general role x scope. A node authenticates with a per-tenant **
 
 A `node` credential whose subject permissions do not cover a subject is rejected by NATS at publish/subscribe time; a non-`node` principal cannot hold a node account's subject grants.
 
+## One enforcement point
+
+Authorization is enforced in **exactly one place: the Storage Gateway** (the `<resource>:<action>` permission on every route, the ABAC scope on every query). Nothing re-implements it on another surface, so there is no parallel authorization model to drift:
+
+- **The live UI relay calls the gateway, it does not copy it.** Operators never connect to NATS. The server-side [SSE relay](/architecture/messaging/) that streams live data to the browser runs each candidate message through the **same** gateway scope a read uses, so a live tile gets exactly the rows the operator could have fetched, with no second authorization path.
+- **Node subject permissions are a coarse transport gate, not the model.** A node's NATS grants are mechanically derived from its placement `visible_set` (above) as defense in depth on the WAN edge; the gateway still confines every node ingest to that same set, so the subject grant is a redundant outer fence, never the authority. The bus carries no operator (`kind=human` or `kind=agent`) clients at all.
+
 ## Encryption in transit
 
 TLS on the HTTP API (terminated at the binary when given a cert + key, or at the operator's reverse proxy) and on the NATS connection that carries node telemetry and commands. **BYO PKI.** "TLS off" is a deliberate dev-mode flag, never a silent default.

@@ -116,9 +116,10 @@ A single resource reads through its typed `GET`. Anything richer, a dashboard, a
 "why did this value win" view, goes through a **[view](/architecture/views/)**: a named query returning a
 uniform `ViewResult` (`{columns, rows}`), bound by declared params at `/views/{id}:run`, executed through
 the same scoped gateway. Views are part of the public API; an operator never gets raw SQL. A **live** read
-(a tile that streams) may upgrade from polling `:run` to a **NATS-websocket subscription** over the same
-scoped, permission-gated seam: the client subscribes to the [messaging](/architecture/messaging/) subjects
-its scope permits, and the bus pushes updates instead of the client re-asking.
+(a tile that streams) may upgrade from polling `:run` to a **server-relayed [SSE](/architecture/messaging/)
+stream** over the same scoped, permission-gated seam: the server holds the internal subscription and
+re-runs the gateway scope per message, pushing only visible deltas. The operator never connects to the bus,
+so the live path adds no second authorization model.
 
 ## Versioning and evolution
 

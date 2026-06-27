@@ -1,6 +1,6 @@
 ---
 title: Messaging
-description: "The internal and edge NATS subject contract, the sibling to the public API: JetStream streams and consumers, the two lanes, request-reply, KV, live UI subscriptions, and per-tenant subject isolation."
+description: "The internal and edge NATS subject contract, the sibling to the public API: JetStream streams and consumers, the two lanes, request-reply, KV, the live UI relay, and per-tenant subject isolation."
 sidebar:
   badge:
     text: Design
@@ -48,10 +48,12 @@ Subjects are hierarchical and **scope is expressed in them**, not bolted on:
 
 - **Tenant = one NATS account.** Per-account isolation (messaging) is the same boundary as the
   per-database isolation (storage): no shared subjects, no shared rows ([identity and access](/architecture/identity-access/)).
-- **Placement and ABAC scope = subject permissions.** A node may only publish and subscribe the subjects
-  for the owners on its placement (its `visible_set`); a principal's live subscription is limited to the
-  subjects its visible set permits. The bus enforces the same scope the [Storage Gateway](/architecture/storage/)
-  enforces on reads, so there is no second authorization model to keep in sync.
+- **Subject permissions gate nodes and internal clients only.** A node may publish and subscribe only the
+  subjects for the owners on its placement (its `visible_set`); the grant is **mechanically derived from
+  placement**, a coarse transport gate, not a second copy of the ABAC model. Authorization stays
+  authoritative in the [Storage Gateway](/architecture/storage/), which confines every node ingest to that
+  same `visible_set`. **Operators never connect to the bus**, so there is no operator subject-permission
+  model to keep in sync (see the live UI relay below).
 
 ## Request-reply: service to service
 
@@ -67,24 +69,28 @@ HTTP); request-reply is the east-west wire only.
 - **Object store** holds internal artifacts (a compiled per-node runtime unit, for example). User files
   stay on the content-addressed [blob store](/architecture/files/), not here.
 
-## Live subscriptions: the reactive UI
+## The live UI relay
 
-The web UI gets real-time data by **subscribing, not polling**, and **not** through a polling loop on the
-API:
+The web UI gets real-time data by **subscribing to the server, not to the bus**, and never through a
+polling loop on the API. **Operators do not connect to NATS** (the bus is internal-plus-nodes only), so the
+live path introduces **no second authorization model**:
 
-- The SPA opens a **NATS WebSocket** connection (the `nats.ws` TypeScript client) and **subscribes to the
-  subjects its scope permits**; the bus **pushes** updates as data flows. The API is not in the live path.
-- **Auth** is a **short-lived, scoped NATS credential (JWT)** the API mints for the logged-in principal at
-  session establish; its subject permissions are exactly that principal's ABAC visible set. So a live
-  subscription is scope-enforced by the bus, the same boundary as every read, and it expires on its own.
-- **Seed then stream.** A [view](/architecture/views/) over HTTP seeds the current state; the subscription
-  keeps it live. Bulk reads stay on the views BFF; live deltas come over the subscription.
+- **Server-side relay.** The server holds the internal JetStream subscription, runs every candidate
+  message through the **same Storage Gateway scope** a read would use (the one authoritative permission and
+  ABAC check, in-process), and streams only what passes down to the browser. Authorization executes in
+  exactly one place; the live path **calls** it per message instead of re-encoding it as subject
+  permissions.
+- **Transport is SSE.** The browser opens a **Server-Sent Events** stream on the same authenticated,
+  same-origin HTTP seam as the rest of the API (same cookie or bearer, same proxy, same TLS), and the
+  server pushes. One-way fits a live read: subscribe is one request, data flows down, and mutations and
+  commands keep their own paths (the API action row, the internal bus). Over HTTP/2 the stream
+  multiplexes, so there is no connection-count ceiling. There is **no NATS-WebSocket path and no
+  fallback**: SSE is the one live transport.
+- **Seed then stream.** A [view](/architecture/views/) over HTTP paints current state; the SSE stream
+  keeps it live with deltas. Bulk reads stay on the views BFF; live deltas come over the relay.
 - **Where it shines:** a live fleet tile, the alarm console, and the **template-debug / dev-tap** surface,
   where an operator watches datapoints arrive in real time as a template runs (the learning-tool "render
   the real engine against live data" surface, [the learning tool](/contributing/learning-tool/)).
-- **SSE fallback.** Where a strict proxy or a simpler deployment rules out a browser-to-NATS WebSocket,
-  the server can SSE-relay (the API subscribes to NATS and streams to the browser). The NATS WebSocket is
-  the model; SSE is the fallback for the same scoped seam.
 
 Related: [API](/architecture/api/) (the public HTTP contract), [scaling](/architecture/scaling/) (the
 deployment topology and the diagram), [nodes](/architecture/nodes/) (the edge as a NATS client),
