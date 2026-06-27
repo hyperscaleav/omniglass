@@ -225,7 +225,10 @@ The append-only id type under partitioning: bigint identity versus uuid v7.
 ## The Storage Gateway and tiering
 
 The **Storage Gateway is the only door to the database** (no direct access, no
-PostgREST); it is also where IAM scope is injected
+PostgREST); it is also where IAM scope is injected, **per action**: every query carries
+`visible_set(P, action)` for the specific action it performs, so a read filters by read-scope and an
+`:ack` write filters by ack-scope. A write whose action-scoped predicate matches **0 rows** is surfaced to
+the handler as a 403 or 404, never a silent success, matching the up-front `canDo` decision
 ([identity and access](/architecture/identity-access/)). Isolation is per-database (one database per
 tenant, paired one-to-one with one NATS account, [datapoints](/architecture/datapoints/)), so there
 is no tenant context to set. Every read and write lands here: the synchronous request path runs in

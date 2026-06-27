@@ -64,21 +64,30 @@ status mapping:
 |---|---|
 | 400 | malformed request (bad JSON, an undeclared param) |
 | 401 | unauthenticated |
-| 403 | **permission denied**: the action is not allowed for this principal at all (a missing capability) |
-| 404 | not found, **including out-of-scope** (below) |
+| 403 | **action denied on this target**: the principal lacks the capability entirely, or can read the target but not perform this action on it (below) |
+| 404 | not found, **including out-of-read-scope** (below) |
 | 409 | conflict: PK collision, a stale conditional write, or an idempotency replay mismatch |
 | 422 | semantic validation (the `:apply` unmet-required-inputs case) |
 | 429 | throttled |
 
-**Out-of-scope reads return 404, not 403**, so the API never discloses that an entity exists outside the
-caller's [scope](/architecture/identity-access/). The distinction is deliberate: capability-denied (you
-cannot `ack` any alarm) is **403**; scope-denied (this alarm is real but not yours to see) is **404**.
+**The 403/404 split is three-way, by where the target sits in the caller's
+[per-action scope](/architecture/identity-access/).** (a) The action is in **no** grant the principal
+holds: **403**, capability missing entirely. (b) The target is in the caller's **read-scope** but outside
+`visible_set(P, action)` for the requested action (the principal can `GET` it but cannot `:ack` it):
+**403**, which leaks nothing because the caller can already read the row. (c) The target is **outside the
+caller's read-scope** entirely: **404**, so the API never discloses that an entity exists outside the
+caller's visible set. Out-of-read-scope is the only 404 case; a readable-but-not-actionable target is a
+403, never a 404.
 
 ## Idempotency and concurrency
 
 - **`Idempotency-Key`** is accepted on `POST` and on state-changing custom methods. The server records
-  the key with its result for a retention window; a retry with the same key returns the original
-  outcome, not a duplicate, so a flaky network never produces two components or a double `:ack`.
+  the key with its **effect** (the created or changed resource) for a retention window; a retry with the
+  same key returns the original outcome, not a duplicate, so a flaky network never produces two components
+  or a double `:ack`. **Only successful (2xx) outcomes are memoized.** An authorization result
+  (401 / 403 / 404) is **never** stored against the key; it is re-evaluated against current grants on every
+  call, so a denial recorded before an access change is not re-served, and a success is never replayed
+  after a grant is revoked.
 - **Optimistic concurrency**: a conditional update carries the resource version (an `ETag` / `If-Match`);
   a write against a stale version is a 409, never a silent last-writer-wins.
 
@@ -95,7 +104,9 @@ row** (its id and status), the same stateful entity the response layer already u
 `GET /actions/{id}` through `queued -> sent -> done` / `failed`. The action **is** the operation handle,
 so "fire and follow" is one model whether the trigger was a rule or an API call. A fast operation may
 inline its result when it finishes within the request, but the handle is always returned, so a slow
-device never holds the connection open.
+device never holds the connection open. The action row is ABAC-owned by its target's exclusive-arc owner,
+so polling `GET /actions/{id}` is read-scoped to whoever can see the target, independent of the per-action
+scope that launched it.
 
 The HTTP method is the front door; the **dispatch is over NATS**. The command stays HTTP-exposed (returns
 the handle, poll `GET /actions/{id}`), but the work is carried on the internal NATS contract: the action
