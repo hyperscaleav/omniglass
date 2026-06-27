@@ -28,13 +28,13 @@ two ways, the **same binary**, no fork:
 Splitting a mode onto its own pods is a **deployment choice, not a rewrite**, because the modules already
 talk over NATS and the gateway rather than in-process calls that would need untangling. The roles:
 
-- **server** — the public HTTP API ([API](/architecture/api/)) and the views read path; it serves the
+- **server**: the public HTTP API ([API](/architecture/api/)) and the views read path; it serves the
   **SPA embedded in the binary** (`go:embed`), so the web UI is not a separate service. Stateless.
-- **worker** — the **JetStream consumers** (rule engine, reconcile, notify, [workers](/architecture/workers/)).
+- **worker**: the **JetStream consumers** (rule engine, reconcile, notify, [workers](/architecture/workers/)).
   Stateless competing consumers; add replicas for throughput.
-- **controller** — the leader-elected **singletons** (the clock and the CDC publisher, below). A role, not
+- **controller**: the leader-elected **singletons** (the clock and the CDC publisher, below). A role, not
   necessarily its own pod.
-- **node** — collection; at the edge it runs **at the sites** (outside the cluster) and connects back, with
+- **node**: collection; at the edge it runs **at the sites** (outside the cluster) and connects back, with
   a central `node` for cloud-API and SaaS sources (`placement: central`, [nodes](/architecture/nodes/)).
 
 ## Embedded services (single-binary mode)
