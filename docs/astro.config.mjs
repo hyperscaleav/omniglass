@@ -2,21 +2,26 @@
 import mdx from '@astrojs/mdx';
 import sitemap from '@astrojs/sitemap';
 import starlight from '@astrojs/starlight';
-import mermaid from 'astro-mermaid';
+import d2 from 'astro-d2';
 import { defineConfig } from 'astro/config';
 
 export default defineConfig({
   site: 'https://docs.omniglass.hyperscaleav.com',
   integrations: [
-    mermaid({
-      theme: 'dark',
-      autoTheme: true,
-      mermaidConfig: {
-        look: 'neo',
-        layout: 'elk',
-        elk: { nodePlacementStrategy: 'NETWORK_SIMPLEX' },
-        flowchart: { curve: 'basis', padding: 16 },
-      },
+    // Diagrams are authored in D2 and rendered to inline SVG. ELK layout; dark theme
+    // 200, light theme 0; inline so the SVG embeds in the page and the brand tokens in
+    // custom.css can theme it with the light/dark toggle.
+    //
+    // skipGeneration: the SVGs are pre-rendered with the d2 binary and committed under
+    // public/d2/, and the build only inlines them. This keeps the Cloudflare Pages build
+    // hermetic (no d2 binary, and the D2 WASM mis-parses our source). Regenerate after
+    // editing any diagram: `pnpm diagrams` (d2 binary on PATH). See /docs-diagram.
+    d2({
+      layout: 'elk',
+      pad: 24,
+      inline: true,
+      theme: { default: '0', dark: '200' },
+      skipGeneration: true,
     }),
     starlight({
       title: 'Omniglass',
@@ -33,6 +38,8 @@ export default defineConfig({
         // Render the page's sidebar.badge next to the H1 too, so the
         // built-vs-theory status shows on the page, not just in the nav.
         PageTitle: './src/components/PageTitle.astro',
+        // Mount the diagram lightbox (click-to-expand) on every page.
+        Head: './src/components/Head.astro',
       },
       social: [
         {

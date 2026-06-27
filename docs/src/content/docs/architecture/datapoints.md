@@ -251,46 +251,58 @@ The key registry that types these tables is `datapoint_type` (one registry acros
 
 ## The pipeline, end to end
 
-```mermaid
-flowchart TD
-  subgraph edge["Edge (node)"]
-    TASK["task<br/>poll · listen<br/>stateless / stateful"]
-    FN["function<br/>extract → key → normalize"]
-    TASK --> FN
-  end
-
-  FN -->|"observed · lineage on row<br/>(source_rule)"| RAW["raw ingress<br/>node · webhook (untrusted)"]
-  FN -.->|"parse / validation fail"| CF["collection.failed<br/>(carries raw)"]
-
-  RAW --> ADMIT["admission consumer<br/>owner-confine per class<br/>(system mode)"]
-  ADMIT -->|"confined"| DS[["JetStream<br/>trusted datapoints stream"]]
-
-  DS --> CALC["calc_rule consumer<br/>cross-key · system-level"]
-  CALC -->|"calculated · trusted producer<br/>(direct, no admission)"| DS
-
-  DS --> ER["event_rule consumer<br/>fire_criteria (+ optional clear_criteria)"]
-  DS --> PERSIST["persistence consumer<br/>batch sink (async)"]
-  PERSIST -->|"durable copy"| M[("metric · state · log<br/>datapoint tables")]
-
-  SCH["schedule + timer<br/>(leader-elected clock)"] -->|"origin=scheduled"| ER
-  ER -->|"PG-first: event + alarm in one tx"| PG[("event · alarm<br/>(PG)")]
-
-  PG -->|"alarm transition"| AL["alarm<br/>one incident · new row per open<br/>(event_rule, owner)"]
-  PG ==>|"CDC (logical decoding)<br/>leader-elected publisher"| CDC[["JetStream<br/>record/state lane"]]
-
-  CDC --> ACT["action_rule consumer<br/>notify · command<br/>remediate-verify-escalate"]
-  ACT -.->|"command's effect · provenance=intended<br/>(trusted, direct)"| DS
-  ACT -.->|"ITSM: open→ticket · update→comment · resolve→close"| ITSM["ITSM (action target)"]
-  ACT -.->|"command + adaptive poll"| TASK
-
-  HUMAN["operator"] -->|"declares (PG-first)"| VAR["config<br/>declared (spec)"]
-  VAR -. "links · drift" .- M
-  HUMAN -.->|"audit"| AU["audit_log"]
-
-  CDC -. "disagree(A,B): drift / conflict" .- DIV{{"divergence"}}
-
-  classDef gt fill:#21CAB9,stroke:#080c16,color:#080c16;
-  class AU gt;
+```d2
+direction: down
+classes: {
+  node: { style.border-radius: 8 }
+  key: { style: { border-radius: 8; bold: true } }
+  group: { style.border-radius: 8 }
+}
+edge: "Edge (node)" {
+  class: group
+  task: "task\npoll · listen\nstateless / stateful" { class: node }
+  fn: "function\nextract → key → normalize" { class: node }
+  task -> fn
+}
+raw: "raw ingress\nnode · webhook (untrusted)" { class: node }
+admit: "admission consumer\nowner-confine per class\n(system mode)" { class: node }
+ds: "JetStream\ntrusted datapoints stream" { class: node; shape: queue }
+failed: "collection.failed\n(carries raw)" { class: node }
+calc: "calc_rule consumer\ncross-key · system-level" { class: node }
+erule: "event_rule consumer\nfire_criteria (+ optional clear_criteria)" { class: node }
+persist: "persistence consumer\nbatch sink (async)" { class: node }
+tables: "metric · state · log\ndatapoint tables" { class: node; shape: cylinder }
+sched: "schedule + timer\n(leader-elected clock)" { class: node }
+pg: "event · alarm\n(PG)" { class: node; shape: cylinder }
+alarm: "alarm\none incident · new row per open\n(event_rule, owner)" { class: node }
+cdc: "JetStream\nrecord/state lane" { class: node; shape: queue }
+actions: "action_rule consumer\nnotify · command\nremediate-verify-escalate" { class: node }
+itsm: "ITSM (action target)" { class: node }
+operator: operator { class: node }
+config: "config\ndeclared (spec)" { class: node }
+audit: audit_log { class: key }
+divergence: divergence { class: node; shape: hexagon }
+edge.fn -> raw: "observed · lineage on row\n(source_rule)"
+edge.fn -> failed: "parse / validation fail" { style.stroke-dash: 4 }
+raw -> admit
+admit -> ds: "confined"
+ds -> calc
+calc -> ds: "calculated · trusted producer\n(direct, no admission)"
+ds -> erule
+ds -> persist
+persist -> tables: "durable copy"
+sched -> erule: "origin=scheduled"
+erule -> pg: "PG-first: event + alarm in one tx"
+pg -> alarm: "alarm transition"
+pg -> cdc: "CDC (logical decoding)\nleader-elected publisher" { style.stroke-width: 3 }
+cdc -> actions
+actions -> ds: "command's effect · provenance=intended\n(trusted, direct)" { style.stroke-dash: 4 }
+actions -> itsm: "ITSM: open->ticket · update->comment · resolve->close" { style.stroke-dash: 4 }
+actions -> edge.task: "command + adaptive poll" { style.stroke-dash: 4 }
+operator -> config: "declares (PG-first)"
+config -- tables: "links · drift" { style.stroke-dash: 4 }
+operator -> audit: "audit" { style.stroke-dash: 4 }
+cdc -- divergence: "disagree(A,B): drift / conflict" { style.stroke-dash: 4 }
 ```
 
 Two lanes, one bus. The **data lane** is the JetStream **trusted** `datapoints` stream. Untrusted publishers (the edge node, an external webhook) land on a **raw ingress** subject; an **admission consumer** owner-confines each datapoint against the publisher's placement (or the webhook interface's declared owner) and re-publishes only confined points to the trusted stream, so a forged owner is dropped before the live `event_rule` can act on it ([identity and access](/architecture/identity-access/)). **Trusted server producers** (calc output, a command's intended write) publish to the trusted stream directly, no admission pass. The `event_rule` consumer evaluates against the trusted stream live, and a **persistence consumer** batch-writes the three datapoint tables (`metric_datapoint`, `state_datapoint`, `log_datapoint`) as an async sink (datapoints never go through CDC). The **record/state lane** is PG-first: an `event_rule` fire writes the event and alarm transition to PG in one transaction, and a leader-elected **CDC publisher** (logical decoding of the WAL) fans those committed changes onto JetStream, where `action_rule` consumers react. A command's intended datapoint re-enters the data lane (the device round trip). The teal node is `audit_log`, the ground-truth record of operator writes (including config changes); observed and calculated carry `source_rule` on the row, intended points at the command `event` (via `event_id`). The raw payload is not stored: a parse or validation failure rides a `collection.failed` event. [config](/architecture/variables/) holds declared intent (PG-first), keyed to a state datapoint as its observed side.

@@ -31,14 +31,18 @@ Three nouns describe what you operate, plus the edge process that collects for t
 
 A component belongs to a system; a system sits in a location.
 
-```mermaid
-flowchart TD
-  L["location"] --> S["system"]
-  S --> C1["component"]
-  S --> C2["component"]
-  S --> C3["component"]
-  classDef s fill:#21CAB9,stroke:#080c16,color:#080c16;
-  class S s;
+```d2
+direction: down
+classes: { node: { style.border-radius: 8 }; key: { style: { border-radius: 8; bold: true } } }
+location: location { class: node }
+system: system { class: key }
+c1: component { class: node }
+c2: component { class: node }
+c3: component { class: node }
+location -> system
+system -> c1
+system -> c2
+system -> c3
 ```
 
 Above the four sits the singleton **`global`** estate root: the top owner above every location where
@@ -59,13 +63,18 @@ that nests to arbitrary depth (campus -> building -> floor -> room; parent syste
 -> card). The trees are the structural backbone of the [cascade](/architecture/cascade/): resolution
 runs over an entity's containment path and the **deepest node wins**, weight-free, pure depth.
 
-```mermaid
-erDiagram
-  component }o--|| component_type : classifies
-  component ||--o{ component : "parent (tree)"
-  system    }o--|| location   : "located at"
-  system    ||--o{ system     : "parent (tree)"
-  location  ||--o{ location    : "parent (tree)"
+```d2
+direction: right
+classes: { node: { style.border-radius: 8 }; key: { style: { border-radius: 8; bold: true } } }
+component: component { class: node }
+component_type: component_type { class: node }
+location: location { class: node }
+system: system { class: node }
+component -> component_type: classified by (N:1)
+component -> component: parent (tree)
+system -> location: located at (N:1)
+system -> system: parent (tree)
+location -> location: parent (tree)
 ```
 
 A non-leaf node in a tree (a chassis, a floor, a parent system) contributes its **instance**

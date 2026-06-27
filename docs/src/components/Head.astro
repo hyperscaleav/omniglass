@@ -1,0 +1,9 @@
+---
+// Override Starlight's Head to render the default head, then mount the diagram
+// lightbox (its global CSS + client script) on every page.
+import Default from '@astrojs/starlight/components/Head.astro';
+import DiagramLightbox from './DiagramLightbox.astro';
+---
+
+<Default><slot /></Default>
+<DiagramLightbox />

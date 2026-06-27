@@ -85,38 +85,44 @@ Service-to-service traffic rides **two lanes on the one JetStream bus**, by what
   leader-elected CDC publisher then fans those committed changes out to JetStream, where `action_rule`,
   reconcile, and projection consumers react. **No dual-write**: born in the commit, CDC fans out.
 
-```mermaid
-flowchart TB
-  subgraph N["North plane: public API (HTTP / AIP)"]
-    direction LR
-    C1["SPA"]; C2["CLI"]; C3["MCP / AI agent"]; C4["integrations · webhooks"]
-  end
-  subgraph B["one Omniglass binary: modular monolith (1..N replicas)"]
-    API["API / server (per-replica)"]
-    GW["Storage Gateway (the only DB path)"]
-    WK["JetStream consumers: rule engine · reconcile · notify · persistence (per-replica, competing)"]
-    CLK["clock (singleton)"]
-    CDC["CDC publisher: WAL to JetStream (singleton)"]
-    NATS["embedded NATS: JetStream · KV · Object store"]
-  end
-  PG[("PostgreSQL: system of record")]
-  EDGE["edge nodes (distributed · NATS clients)"]
-  EXT["external NATS cluster (optional BYO at scale)"]
-  N -->|HTTPS| API
-  API --> GW
-  GW <--> PG
-  PG -->|"WAL (logical decoding)"| CDC
-  CDC -->|publish committed changes| NATS
-  NATS -->|"east-west: work + events"| WK
-  WK --> GW
-  CLK -->|schedule fires| NATS
-  NATS <==>|"South: telemetry up · commands down"| EDGE
-  NATS -. "KV: config · locks · leader-elect" .-> CLK
-  NATS -. "swap embedded for BYO" .-> EXT
-  classDef hub fill:#21CAB9,stroke:#080c16,color:#080c16
-  classDef db fill:#0c2b2e,stroke:#21CAB9,color:#e6fffb
-  class NATS hub
-  class PG db
+```d2
+direction: down
+classes: {
+  node: { style.border-radius: 8 }
+  key: { style: { border-radius: 8; bold: true } }
+  group: { style.border-radius: 8 }
+}
+north: "North plane: public API (HTTP / AIP)" {
+  class: group
+  direction: right
+  c1: "SPA" { class: node }
+  c2: "CLI" { class: node }
+  c3: "MCP / AI agent" { class: node }
+  c4: "integrations · webhooks" { class: node }
+}
+binary: "one Omniglass binary: modular monolith (1..N replicas)" {
+  class: group
+  api: "API / server (per-replica)" { class: node }
+  gw: "Storage Gateway (the only DB path)" { class: node }
+  wk: "JetStream consumers: rule engine · reconcile · notify · persistence (per-replica, competing)" { class: node }
+  clk: "clock (singleton)" { class: node }
+  cdc: "CDC publisher: WAL to JetStream (singleton)" { class: node }
+  nats: "embedded NATS: JetStream · KV · Object store" { class: key }
+}
+pg: "PostgreSQL: system of record" { class: node; shape: cylinder }
+edge_nodes: "edge nodes (distributed · NATS clients)" { class: node }
+ext: "external NATS cluster (optional BYO at scale)" { class: node }
+north -> binary.api: "HTTPS"
+binary.api -> binary.gw
+binary.gw <-> pg
+pg -> binary.cdc: "WAL (logical decoding)"
+binary.cdc -> binary.nats: "publish committed changes"
+binary.nats -> binary.wk: "east-west: work + events"
+binary.wk -> binary.gw
+binary.clk -> binary.nats: "schedule fires"
+binary.nats <-> edge_nodes: "South: telemetry up · commands down" { style.stroke-width: 3 }
+binary.nats -- binary.clk: "KV: config · locks · leader-elect" { style.stroke-dash: 4 }
+binary.nats -- ext: "swap embedded for BYO" { style.stroke-dash: 4 }
 ```
 
 ## Horizontal scale: what replicates

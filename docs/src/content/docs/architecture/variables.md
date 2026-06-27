@@ -236,16 +236,21 @@ that item's cached observed value, reverse-indexed so "is this datapoint a confi
 a sargable lookup, not a scan. It is the one controlled, one-directional crossing from the timeseries
 back into current-value config.
 
-```mermaid
-flowchart LR
-  OP["operator"] -->|"declares (cascade)"| DV["config<br/>declared (spec)"]
-  DEV["device"] -->|"observed (get fn)"| SD["state_datapoint"]
-  SD -->|"observed-value worker"| OV["config<br/>observed (status)"]
-  DV -. "disagree = drift" .- OV
-  DV -->|"reconcile: enforce (set fn)"| CMD["command (intended)"]
-  CMD --> DEV
-  classDef v fill:#21CAB9,stroke:#080c16,color:#080c16;
-  class DV,OV v;
+```d2
+direction: right
+classes: { node: { style.border-radius: 8 }; key: { style: { border-radius: 8; bold: true } } }
+operator: operator { class: node }
+declared: "config\ndeclared (spec)" { class: key }
+device: device { class: node }
+state: state_datapoint { class: node }
+observed: "config\nobserved (status)" { class: key }
+command: "command (intended)" { class: node }
+operator -> declared: declares (cascade)
+device -> state: observed (get fn)
+state -> observed: observed-value worker
+declared -- observed: "disagree = drift" { style.stroke-dash: 4 }
+declared -> command: reconcile: enforce (set fn)
+command -> device
 ```
 
 ## How this changes provenance

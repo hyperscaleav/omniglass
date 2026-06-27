@@ -43,14 +43,18 @@ Three nouns describe what you operate.
 
 A component belongs to a system; a system sits in a location.
 
-```mermaid
-flowchart TD
-  L["location"] --> S["system"]
-  S --> C1["component"]
-  S --> C2["component"]
-  S --> C3["component"]
-  classDef s fill:#21CAB9,stroke:#080c16,color:#080c16;
-  class S s;
+```d2
+direction: down
+classes: { node: { style.border-radius: 8 }; key: { style: { border-radius: 8; bold: true } } }
+location: location { class: node }
+system: system { class: key }
+c1: component { class: node }
+c2: component { class: node }
+c3: component { class: node }
+location -> system
+system -> c1
+system -> c2
+system -> c3
 ```
 
 ## Something happens
@@ -135,19 +139,36 @@ entire time.
 
 ## The journey, end to end
 
-```mermaid
-flowchart LR
-  G["gear"] -->|"collect (node + edge parse)"| DP["datapoint<br/>canonical signal"]
-  DP -->|"event_rule"| EV["event"] -->|"fire / clear"| AL["alarm"]
-  AL -->|"health impact"| H["health<br/>(rolls up the system)"]
-  AL -->|"action_rule"| AC["action<br/>notify · remediate · ticket"]
-  AC -.->|"command"| G
-  VAR["config<br/>declared"] -. "drift" .- DP
-  DP --> VW["views → console"]
-  AL --> VW
-  H --> VW
-  classDef k fill:#21CAB9,stroke:#080c16,color:#080c16;
-  class DP k;
+```d2
+direction: right
+
+# Shape colors are deliberately omitted: the inline SVG is themed from the site's
+# brand tokens in custom.css so it follows Starlight's light/dark toggle. Only
+# structure (rounding, dashes, the highlighted key node) lives here.
+classes: {
+  node: { style.border-radius: 8 }
+  key: { style: { border-radius: 8; bold: true } }
+}
+
+gear: gear { class: node }
+datapoint: "datapoint\ncanonical signal" { class: key }
+event: event { class: node }
+alarm: alarm { class: node }
+health: "health\nrolls up the system" { class: node }
+action: "action\nnotify · remediate · ticket" { class: node }
+config: "config\ndeclared" { class: node }
+views: "views → console" { class: node }
+
+gear -> datapoint: collect (node + edge parse)
+datapoint -> event: event_rule
+event -> alarm: fire / clear
+alarm -> health: health impact
+alarm -> action: action_rule
+action -> gear: command { style.stroke-dash: 4 }
+config -- datapoint: drift { style.stroke-dash: 4 }
+datapoint -> views
+alarm -> views
+health -> views
 ```
 
 ## Underneath

@@ -340,14 +340,22 @@ server can emit a `collection.failed` event; on success raw is omitted (there is
 table), unless a **dev raw-mode** is on. An **OTLP adapter** at the edge accepts OTLP from
 third-party tools and translates to the native shape.
 
-```mermaid
-flowchart LR
-  W["pull worklist<br/>(placed tasks + commands)"] --> X["execute:<br/>protocol + locate/Expr extraction"]
-  X --> N["normalize: datapoints + labels<br/>(+ raw on failure)"]
-  N --> S["buffer + publish<br/>raw ingress subject"]
-  S --> ADM["admission: bind owner<br/>(consume time) → trusted"]
-  ADM --> WK["rule engine + persistence<br/>(trusted stream)"]
-  S -.->|"raw on failure"| CF["collection.failed<br/>(event, carries raw)"]
+```d2
+direction: right
+classes: { node: { style.border-radius: 8 } }
+worklist: "pull worklist\n(placed tasks + commands)" { class: node }
+execute: "execute:\nprotocol + locate/Expr extraction" { class: node }
+normalize: "normalize: datapoints + labels\n(+ raw on failure)" { class: node }
+ship: "buffer + publish\nraw ingress subject" { class: node }
+admission: "admission: bind owner\n(consume time) → trusted" { class: node }
+worker: "rule engine + persistence\n(trusted stream)" { class: node }
+failed: "collection.failed\n(event, carries raw)" { class: node }
+worklist -> execute
+execute -> normalize
+normalize -> ship
+ship -> admission
+admission -> worker
+ship -> failed: "raw on failure" { style.stroke-dash: 4 }
 ```
 
 The node has already produced the datapoints at the edge; an **admission consumer** binds

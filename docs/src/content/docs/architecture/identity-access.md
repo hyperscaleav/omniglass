@@ -179,28 +179,43 @@ Attempting to remove the last owner (by grant delete, principal delete, principa
 
 There is **no RLS and no direct database access** (no PostgREST). The **Storage Gateway is the only door to the database** and the API is its only caller, so authz lives entirely in the app. A targeted mutation passes three checkpoints in order: the **capability fast-reject** at the route, the **`canDo` decision** in the handler, and the **per-action scope plus audit** injected by the gateway. Each is one code seam:
 
-```mermaid
-flowchart TD
-  C["Client: SPA / CLI / MCP"] -->|"POST /alarms/X:ack"| MW
-
-  subgraph API["API process (one binary)"]
-    MW["Route middleware<br/>rbac.Require('alarm:ack')"] --> MWQ{"action in<br/>ANY grant?"}
-    MWQ -->|"no"| E403a["403 capability missing"]
-    MWQ -->|"yes: fast-reject passed"| H["Handler"]
-    H --> HQ{"canDo(P, ack, X) ?"}
-    HQ -->|"readable, not ack-scope"| E403b["403 cannot act on target"]
-    HQ -->|"out of read-scope"| E404["404 non-disclosing"]
-    HQ -->|"yes"| GW
-  end
-
-  subgraph GWBOX["Storage Gateway: the only DB door"]
-    GW["inject visible_set(P, ack)<br/>plus audit_log in one txn"] -->|"parameterized predicate"| DB[("Postgres")]
-    DB -->|"0 rows: backstop fires"| E403b
-    DB -->|"1 row changed"| OK["200 plus action row"]
-  end
-
-  KV[("NATS KV cache<br/>grants plus role index<br/>CDC-invalidated")] -.->|"composed per request"| H
-  KV -.-> GW
+```d2
+direction: down
+classes: {
+  node: { style.border-radius: 8 }
+  group: { style.border-radius: 8 }
+}
+client: "Client: SPA / CLI / MCP" { class: node }
+api: "API process (one binary)" {
+  class: group
+  mw: "Route middleware\nrbac.Require('alarm:ack')" { class: node }
+  mwq: "action in\nANY grant?" { class: node; shape: diamond }
+  e403a: "403 capability missing" { class: node }
+  handler: "Handler" { class: node }
+  hq: "canDo(P, ack, X) ?" { class: node; shape: diamond }
+  e403b: "403 cannot act on target" { class: node }
+  e404: "404 non-disclosing" { class: node }
+  mw -> mwq
+  mwq -> e403a: "no"
+  mwq -> handler: "yes: fast-reject passed"
+  handler -> hq
+  hq -> e403b: "readable, not ack-scope"
+  hq -> e404: "out of read-scope"
+}
+gwbox: "Storage Gateway: the only DB door" {
+  class: group
+  gw: "inject visible_set(P, ack)\nplus audit_log in one txn" { class: node }
+  db: "Postgres" { class: node; shape: cylinder }
+  ok: "200 plus action row" { class: node }
+  gw -> db: "parameterized predicate"
+  db -> ok: "1 row changed"
+}
+kv: "NATS KV cache\ngrants plus role index\nCDC-invalidated" { class: node; shape: cylinder }
+client -> api.mw: "POST /alarms/X:ack"
+api.hq -> gwbox.gw: "yes"
+gwbox.db -> api.e403b: "0 rows: backstop fires"
+kv -- api.handler: "composed per request" { style.stroke-dash: 4 }
+kv -- gwbox.gw { style.stroke-dash: 4 }
 ```
 
 The capability check is **necessary not sufficient** (it only rejects), the `canDo` check is the **authoritative decision**, and the gateway predicate is the **enforce-by-construction backstop**: handler and gateway return the same status for the same input, so a forgotten handler check cannot leak a write. The detail of each:

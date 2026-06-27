@@ -113,3 +113,6 @@ Procedural workflows live under [.claude/skills/](.claude/skills/). Invoke with
   testcontainer round-trip RED->GREEN.
 - **`/canonical-datapoint`**, **`/add-collection-primitive`** - ported with the registry and
   collection-engine slices.
+- **`/docs-diagram`** - authoring docs diagrams in D2 (build-time inline SVG via astro-d2):
+  the d2-binary prerequisite, the colors-live-in-CSS theming contract that tracks Starlight's
+  light/dark toggle, the class to CSS-hook vocabulary, and the build/preview/verify loop.
