@@ -67,6 +67,57 @@ outcomes downstream). **Postgres is never a message bus**; it only emits its cha
 **slot and publication are ensured idempotently in the boot phase, not a migration**, since dbmate
 migrations run exactly once.
 
+### Inter-service communication
+
+Service-to-service traffic rides **two lanes on the one JetStream bus**, by what is moving:
+
+- **Data lane (NATS-native).** Observed and calculated **datapoints** live on NATS. The edge and central
+  nodes publish observed datapoints to a JetStream datapoints stream, calc consumers publish derived
+  datapoints back onto the same stream, and the rule engine consumes them **directly from NATS**. A
+  **persistence consumer** batch-writes datapoints to the Postgres metric, state, and log tables as an async
+  **sink**. Datapoints do not pass through CDC: they are already on NATS, idempotent on `(series, ts)`, and
+  the firehose, so rules never wait on Postgres. Postgres is the durable record, NATS is the live signal.
+- **Record and state lane (Postgres-first, CDC-out).** **Events, alarms, actions, and operator mutations**
+  (config, ack, snooze, settings, manual commands) are **born in a Postgres transaction**: when an
+  `event_rule` fires, the consumer writes the event record and the alarm transition (serialized per
+  `(event_rule, owner)`) in one transaction, and the API writes config, ack, and settings the same way. The
+  leader-elected CDC publisher then fans those committed changes out to JetStream, where `action_rule`,
+  reconcile, and projection consumers react. **No dual-write**: born in the commit, CDC fans out.
+
+```mermaid
+flowchart TB
+  subgraph N["North plane: public API (HTTP / AIP)"]
+    direction LR
+    C1["SPA"]; C2["CLI"]; C3["MCP / AI agent"]; C4["integrations · webhooks"]
+  end
+  subgraph B["one Omniglass binary: modular monolith (1..N replicas)"]
+    API["API / server (per-replica)"]
+    GW["Storage Gateway (the only DB path)"]
+    WK["JetStream consumers: rule engine · reconcile · notify · persistence (per-replica, competing)"]
+    CLK["clock (singleton)"]
+    CDC["CDC publisher: WAL to JetStream (singleton)"]
+    NATS["embedded NATS: JetStream · KV · Object store"]
+  end
+  PG[("PostgreSQL: system of record")]
+  EDGE["edge nodes (distributed · NATS clients)"]
+  EXT["external NATS cluster (optional BYO at scale)"]
+  N -->|HTTPS| API
+  API --> GW
+  GW <--> PG
+  PG -->|"WAL (logical decoding)"| CDC
+  CDC -->|publish committed changes| NATS
+  NATS -->|"east-west: work + events"| WK
+  WK --> GW
+  CLK -->|schedule fires| NATS
+  NATS <==>|"South: telemetry up · commands down"| EDGE
+  NATS -. "KV: config · locks · leader-elect" .-> CLK
+  NATS -. "swap embedded for BYO" .-> EXT
+  classDef hub fill:#21CAB9,stroke:#080c16,color:#080c16
+  classDef db fill:#0c2b2e,stroke:#21CAB9,color:#e6fffb
+  class NATS hub
+  class PG db
+```
+
 ## Horizontal scale: what replicates
 
 - **server** is **stateless**: replicate it behind a load balancer; state lives in Postgres.

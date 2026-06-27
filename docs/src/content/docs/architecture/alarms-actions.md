@@ -26,6 +26,13 @@ yields a system/location-owned alarm), the ITSM correlation anchor ([datapoints]
 The open and resolve **events** carry the `alarm_id` and are the edge log; the alarm
 row is the live state.
 
+The alarm is **PG-first**: the firing `event_rule` consumer writes the stateful alarm
+row in the **same Postgres transaction** as the event, with the alarm transition
+**serialized per `(event_rule, owner)`** so an incident never double-opens. A
+leader-elected CDC publisher (logical decoding of the WAL) then publishes the committed
+open / resolve transition to JetStream, where `action_rule` consumers react. Born in the
+commit, fanned out by CDC: there is no dual-write, and Postgres is never a message bus.
+
 Transitions, by who drives them:
 
 - **opened / resolved** are **rule-driven** (the `event_rule`'s `fire_criteria` /
@@ -121,7 +128,7 @@ its own state directly (status, current step, delivery), not event-sourced:
 - **kinds**: `notify` (in-app), `webhook`, `email`, `run` (execute a command; the
   edge realization is in [templates](/architecture/templates/) / [nodes](/architecture/nodes/)).
 - a **simple** action carries delivery state (`queued / sent / failed / retried`,
-  the at-least-once outbox);
+  the at-least-once JetStream consumer);
 - a **multistep** action is a **flow**: it carries workflow state (current step, waiting,
   branches), exactly like an alarm's lifecycle.
 
@@ -131,8 +138,8 @@ The `action` row carries identity, kind, config, and current status.
 
 Detection and response are kept **separate**, the discipline that avoids Zabbix's
 action/operation tangle: the `event_rule` does not contain its response. Instead an
-`action_rule` **subscribes to events and alarms** via an Expr predicate, so one action
-rule can serve many alarms. Subscriptions are **indexed by event key and label**, so dispatch
+`action_rule` is a **NATS consumer** on the CDC-published event / alarm stream, selecting
+with an Expr predicate, so one action rule can serve many alarms. Subscriptions are **indexed by event key and label**, so dispatch
 evaluates only the predicates whose key or label already matches, not every rule on every event;
 an action rule may carry **multiple triggers** and fires if any matches (including a label or
 wildcard trigger, e.g. any event labeled `room=boardroom-a`). It is a subscription, not a fourth datapoint-pipeline
@@ -182,14 +189,15 @@ not 20 symptoms.
 
 ## Durability and egress
 
-A transactional **outbox** row is written with the action's step transition; an
-**outbox relay** drains it (`SELECT ... FOR UPDATE SKIP LOCKED`, retry with
-backoff, dead-letter), the same pattern as the rule engine's work queue
-(workers). External sends are **at-least-once**; sinks tolerate
-dupes or we add an **idempotency key** (alarm + action + transition). Pipeline order:
-**render the body, then apply auth over the rendered bytes** (HMAC signs the rendered
-body), then send. **Egress safety** is always on: block internal / metadata IPs,
-verify TLS, bound timeouts, control redirects.
+Action state is **PG-first + CDC-out**: the action's step transition is written to the
+`action` row in a Postgres transaction, and the leader-elected CDC publisher fans the
+committed change onto JetStream. The **external send** is then a **JetStream consumer**
+(retry with backoff, dead-letter), not a Postgres `SELECT ... FOR UPDATE SKIP LOCKED`
+relay. External sends are **at-least-once**; sinks tolerate dupes or we add an
+**idempotency key** (alarm + action + transition) so the outcome is exactly-once.
+Pipeline order: **render the body, then apply auth over the rendered bytes** (HMAC signs
+the rendered body), then send. **Egress safety** is always on: block internal / metadata
+IPs, verify TLS, bound timeouts, control redirects.
 
 :::caution[Open question]
 The dead-letter surface and the operator retry of failed actions.
@@ -215,10 +223,11 @@ opens an alarm, which fires the action again), closed with three rules:
 2. **ack / snooze transitions do not match `action_rule`s** (only open / resolve do),
    which breaks the `action -> alarm(ack) -> action` loop.
 3. **The control loop is lineage-guarded at dispatch.** Before an `action_rule` runs
-   an action, the engine walks the triggering event's **causation lineage**; if the
-   same `(action, owner)` already appears upstream it is suppressed, with a depth bound
-   as a backstop. Flows are finite by construction (a step list, per-open-alarm, gated
-   on open, cancelled on resolve / ack).
+   an action, the engine walks the triggering event's **causation lineage** (carried on
+   **NATS message headers** across the bus); if the same `(action, owner)` already
+   appears upstream it is suppressed, with a depth bound as a backstop. Flows are finite
+   by construction (a step list, per-open-alarm, gated on open, cancelled on resolve /
+   ack).
 
 The walk crosses the command-to-device round trip because the command **stamps its
 originating `correlation_id` onto the intended write and onto the adaptive-poll's
@@ -240,8 +249,9 @@ The same causation lineage the cycle guard walks also powers a read-side **trace
 one alarm's own open / clear events; the **correlation id** links the *entire* chain, the
 originating event through every downstream event and action it caused. It is built on the
 existing causation lineage (an id stamped at the head and propagated along each caused
-edge), pure DX and observability sugar: it lets an operator see the chain at a glance and
-query "everything this one event set in motion."
+edge, riding **NATS message headers** across the bus), pure DX and observability sugar: it
+lets an operator see the chain at a glance and query "everything this one event set in
+motion."
 
 The caused edge that crosses the device is carried explicitly: when an action runs a
 command, the command **stamps its `correlation_id` onto the intended write and onto the

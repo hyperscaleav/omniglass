@@ -28,8 +28,8 @@ ComponentTemplate (apiVersion, kind, metadata.labels)
 - **Authoring compiles to a runtime unit.** The hand-authored template is the contract. A
   compiler lowers it to the per-node execution unit the node runs: it resolves inputs and
   variables, validates the DAG, and bakes each datapoint's `kind` into the unit so the edge
-  writes to the right table with no runtime registry lookup. The runtime unit is internal,
-  never hand-authored.
+  routes to the right table with no runtime registry lookup, the kind riding the published
+  datapoint. The runtime unit is internal, never hand-authored.
 - **Edge-local execution.** A function runs per component on the node, in one tick, with zero
   server round trips: every interface sits on the one component, all reachable from the node,
   so a step can branch on a value a prior step just collected, straight from node memory.
@@ -242,9 +242,10 @@ its runtime, not a node tick.
 | `raw_log` | `task.params.raw_log` | optional key to store the whole raw frame under (as JSON when the body parses, else text), the holding-pen an event_rule can later promote |
 
 One or more `mode: listen` tasks bind to a webhook interface; each inbound POST
-runs every enabled one, ingesting its points under that task's id through the
-server-side ingress path (so owner attribution, parsing, event rules, and calc
-rollups all apply).
+runs every enabled one, parsing its points under that task's id and **publishing**
+them to the JetStream [datapoints](/architecture/datapoints/) stream, the same data
+lane the node publishes to (so owner attribution resolves server-side, and the rule
+engine and calc rollups react from the stream).
 
 **Response contract** (webhook senders retry on non-2xx): **202** = durably
 accepted; **401** bad/absent secret, **404** unknown path, **413** body over the
@@ -360,19 +361,24 @@ from the shape.
 
 A function runs the parse at the **edge**, not server-side:
 
-- **Function steps parse, extract, and normalize on the node** and emit resolved datapoints
-  straight to the typed tables. The compiler bakes each datapoint's `kind` into the runtime
-  unit, so the edge writes to `metric_datapoint` versus `state_datapoint` with no runtime
-  registry lookup.
+- **Function steps parse, extract, and normalize on the node** and **publish** resolved
+  datapoints to the JetStream [datapoints](/architecture/datapoints/) stream (the data lane),
+  not to the typed tables directly. The node is a NATS client publishing observed datapoints;
+  a [persistence consumer](/architecture/datapoints/) batch-writes them to the typed tables as
+  an async sink, idempotent on `(series, ts)`, while the [rule engine](/architecture/alarms-actions/)
+  consumes the same stream live. The compiler still bakes each datapoint's `kind` into the
+  runtime unit, so the routing to `metric_datapoint` versus `state_datapoint` is decided at the
+  edge with no runtime registry lookup, and rides on the published message.
 - **Raw payloads are not stored**, the datapoint is the source: a dev raw-mode taps the wire bytes
   live while developing, and a parse or validation failure emits a `collection.failed` event
   carrying the raw. There is no telemetry table.
 - **Owner attribution:** a single-owner function lands its datapoints on its own component,
   identity stamped at the edge (the component is known, the function runs for it). A function
-  that reports for many devices (a management platform) fans out to multiple owners, resolved
-  server-side from the emitted identity labels (below).
-- **Placement-scoped writes.** A node writes only the owners in its **placement visible_set**
-  (the owners of the tasks assigned to it), the `node` gateway mode in
+  that reports for many devices (a management platform) publishes datapoints for multiple owners,
+  resolved server-side from the emitted identity labels (below).
+- **Placement-scoped writes.** A node publishes only the owners in its **placement visible_set**
+  (the owners of the tasks assigned to it). That visible_set expresses as **NATS subject
+  permissions** on the node's account, the `node` gateway mode in
   [identity and access](/architecture/identity-access/). At ingest, an emitted owner label
   **outside** that visible_set is **never an authoritative write**: it is treated as an
   **orphan / discovery candidate** and feeds the `discovery_rule` stream (below), so a

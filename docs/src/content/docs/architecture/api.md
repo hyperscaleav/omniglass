@@ -7,11 +7,15 @@ sidebar:
     variant: caution
 ---
 
-The API is the one contract: every operator action, every integration, the SPA, and the CLI go through
-it, and it is the only caller of the [Storage Gateway](/architecture/storage/). This page is the
-**contract every route honors**. The doctrine behind it (the API is the source of truth, the clients
-are generated from it) and the generation pipeline live in [API first](/contributing/api-first/); this
-page is the conventions that doctrine points at.
+The contract is **two typed surfaces, one source of truth**. The **public HTTP / OpenAPI contract** (this
+page) is the north face: every operator action, every integration, the SPA, the CLI, and the
+[MCP](#also-an-mcp-surface) server go through it, and it is the only caller of the
+[Storage Gateway](/architecture/storage/). The **internal and edge transport is a sibling NATS subject
+contract** (subjects, message schemas, request-reply, JetStream stream and consumer definitions), the
+service-to-service and node wire; it is typed and versioned the same way and lives in
+[messaging](/architecture/messaging/). This page is the **contract every HTTP route honors**. The doctrine
+behind it (the API is the source of truth, the clients are generated from it) and the generation pipeline
+live in [API first](/contributing/api-first/); this page is the conventions that doctrine points at.
 
 ## Shape: resources and `:verb` methods
 
@@ -20,7 +24,7 @@ Everything lives under `/api/v1`. The path shape is derivable, not special-cased
 - **Plural resource collections**, standard methods by primary key (AIP-style): `POST` creates (409 on
   PK collision), `GET` reads, `PATCH` partial-updates (AIP-134), `DELETE` removes. No upsert shortcuts.
 - **Custom methods carry a colon**, `:verb` not `/verb`, for anything that is not CRUD:
-  `/alarms/{id}:ack`, `/components/{name}:apply`, `/nodes/{name}:heartbeat`, `/views/{id}:run`. The verb
+  `/alarms/{id}:ack`, `/components/{name}:apply`, `/views/{id}:run`. The verb
   is also the **permission**: `:ack` is gated by `alarm:ack`, so the route and the
   [authorization](/architecture/identity-access/) check share one vocabulary.
 - **Singular kind sub-segments** for the typed families: `/rules/calc`, `/datapoints/metric`,
@@ -93,6 +97,11 @@ so "fire and follow" is one model whether the trigger was a rule or an API call.
 inline its result when it finishes within the request, but the handle is always returned, so a slow
 device never holds the connection open.
 
+The HTTP method is the front door; the **dispatch is over NATS**. The command stays HTTP-exposed (returns
+the handle, poll `GET /actions/{id}`), but the work is carried on the internal NATS contract: the action
+fans out through [messaging](/architecture/messaging/) to the responsible consumer or node, and the result
+flows back the same way to advance the row. The caller sees one model, the transport is the bus.
+
 ## Writes are audited and scoped
 
 - Every write emits an [`audit_log`](/architecture/audit/) row in the **same transaction** as the
@@ -106,7 +115,10 @@ device never holds the connection open.
 A single resource reads through its typed `GET`. Anything richer, a dashboard, an explorer, the cascade
 "why did this value win" view, goes through a **[view](/architecture/views/)**: a named query returning a
 uniform `ViewResult` (`{columns, rows}`), bound by declared params at `/views/{id}:run`, executed through
-the same scoped gateway. Views are part of the public API; an operator never gets raw SQL.
+the same scoped gateway. Views are part of the public API; an operator never gets raw SQL. A **live** read
+(a tile that streams) may upgrade from polling `:run` to a **NATS-websocket subscription** over the same
+scoped, permission-gated seam: the client subscribes to the [messaging](/architecture/messaging/) subjects
+its scope permits, and the bus pushes updates instead of the client re-asking.
 
 ## Versioning and evolution
 
@@ -131,12 +143,27 @@ reads), pagination and the problem+json errors shaped for a model to consume. Th
 so its reach is its sponsor's subset and nothing more; read and diagnostic tools are autonomous within
 scope, and mutating tools run under the agent's **propose -> approve** policy ([AI](/architecture/ai/)).
 
+## The node path is the NATS contract
+
+Nodes do **not** speak HTTP. The edge is a NATS client over the WAN: a node publishes telemetry to a
+JetStream stream, consumes its commands from a durable server-side JetStream command queue, and is enrolled by a NATS
+JWT/nkey, all on the sibling **NATS subject contract**, not this page's routes. The old node HTTP custom
+methods (the heartbeat, the telemetry post) are gone; their wire is now subjects and message schemas. The
+proto definitions survive **as the NATS message schema**, the typed shape on the bus. That contract,
+subjects, request-reply, stream and consumer definitions, JWT-scoped subject permissions, is documented in
+[messaging](/architecture/messaging/) and on the [node](/architecture/nodes/) page; the same AIP spirit,
+error envelope, and idempotency described here carry across to it (the idempotency key per message, the
+problem-shaped reply on request-reply).
+
 ## Self-describing
 
 The running server serves `GET /api/v1/openapi.json`, `/openapi.yaml`, and a human reference page, so the
-contract is discoverable live against any deployment, not only in these docs.
+public contract is discoverable live against any deployment, not only in these docs. The internal NATS
+subject contract is self-describing the same way: its subjects, message schemas, and stream and consumer
+definitions are published from the running server, the sibling of OpenAPI for the bus.
 
 Related: [API first](/contributing/api-first/) (the doctrine and the generation pipeline),
+[messaging](/architecture/messaging/) (the sibling NATS subject contract and the bus),
 [identity and access](/architecture/identity-access/) (permission + scope), [audit](/architecture/audit/)
 (the write-time record), [UI](/architecture/ui/) (the views BFF and the renderer contract), and
 [expressions](/architecture/expressions/) (the `filter` language).

@@ -74,7 +74,7 @@ This is the **authoritative glossary**: every official term in the architecture,
 | **lineage (on-row)** | A derived row carries its own lineage; no execution table. The rule version is the backtest hinge. |
 | **correlation id** | A read-side trace id threading one causal chain end to end: the originating event through every downstream event and action it caused (event -> alarm -> flow/action -> command). Built on the causation lineage; `alarm_id` links one alarm's open/clear events, the correlation id links the whole chain. DX/observability sugar, not a datapoint kind or a stored span subsystem. |
 | **schedule** | Config: a recurring definition (cron/rrule + IANA tz + what it triggers). |
-| **timer** | The clock worker's pending-fire working set (schedule-tick / for-sustain / runbook-wait / watchdog); drained SKIP-LOCKED; not history. |
+| **timer** | The clock singleton's pending-fire working set (schedule-tick / for-sustain / runbook-wait / watchdog); a Postgres table scanned by the leader-elected clock, each fire realized onto its lane; not history. |
 | **component** | A deployed instance (device/app/service); owns datapoints; a variable-depth tree; pins a component_template_version; classified by component_type. |
 | **component_type** | Classification + field schema + type-level defaults. Carries the `official` boolean. |
 | **component_template / _version** | The device shape (collection, commands, datapoint_types, defaults, alarms); the **immutable version** instances pin. |

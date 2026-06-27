@@ -9,6 +9,8 @@ sidebar:
 
 Parsing a raw payload into datapoints is the **edge function** ([collection](/architecture/collection/)), not a server-side rule: a function extracts, keys, and normalizes on the node and emits resolved datapoints. The rules that run server-side over the typed datapoints are two derivation families plus a subscription, and this page is the home of the calc family.
 
+The rule families run as **JetStream consumers on the data lane**: observed datapoints arrive on the NATS `datapoints` stream, and the calc and event families consume them directly from NATS (rules never wait on Postgres). A calc consumer reads datapoints and **publishes** its derived datapoints back onto the same stream; an event consumer reads datapoints and, on fire, writes the event and alarm transition to Postgres in one transaction (the record lane), which CDC then publishes. The two lanes share the one JetStream bus; see [datapoints](/architecture/datapoints/) for the data lane and [events](/architecture/events/) for the record lane.
+
 ## Rules: calc, event, action
 
 - **calc_rule**: datapoints to datapoint (calculated). The subject of this page (below).
@@ -19,7 +21,7 @@ An alarm is not produced by a different rule; it is an event rule whose events a
 
 ## calc_rule: cross-key and system-level derivation
 
-A **calc_rule** reads datapoints and writes a datapoint (provenance **calculated**). It owns inputs, a reduce (worst / majority / average / Expr), an output key, and a scope. It is for **cross-key** and **system-level** derivation: a 5-minute average, a system rollup, `room.in_use` derived from display power + codec call-state + occupancy. Same-key multi-source reconcile is the key's `fusion_policy`, not a calc (see [Fusion](/architecture/datapoints/#fusion)).
+A **calc_rule** runs as a calc consumer: it reads datapoints from the data lane (NATS) and publishes a datapoint back onto it (provenance **calculated**), where downstream calc and event consumers see it like any other datapoint. It owns inputs, a reduce (worst / majority / average / Expr), an output key, and a scope. It is for **cross-key** and **system-level** derivation: a 5-minute average, a system rollup, `room.in_use` derived from display power + codec call-state + occupancy. Same-key multi-source reconcile is the key's `fusion_policy`, not a calc (see [Fusion](/architecture/datapoints/#fusion)).
 
 The calculated value it writes is parallel to observed: both are machine-derived, distinguished by the **`provenance` column**, both carrying `source_rule` + `source_rule_version` on the row. See [calculated](/architecture/datapoints/#calculated-derived-by-a-calc-rule) for how the row records its lineage.
 

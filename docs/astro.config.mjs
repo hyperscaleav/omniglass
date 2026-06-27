@@ -67,6 +67,7 @@ export default defineConfig({
             { label: 'UI', slug: 'architecture/ui' },
             { label: 'Views', slug: 'architecture/views' },
             { label: 'API', slug: 'architecture/api' },
+            { label: 'Messaging', slug: 'architecture/messaging' },
             // the foundations underneath
             { label: 'Nodes', slug: 'architecture/nodes' },
             { label: 'Storage', slug: 'architecture/storage' },

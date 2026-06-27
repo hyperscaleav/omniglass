@@ -27,18 +27,23 @@ anchors like month-start and month-end.
 :::
 - **`timer`** (mechanism, working-set): every *pending* fire, kind-discriminated
   (`schedule-tick | for-sustain | runbook-wait | watchdog`), with a `fire_at` and a pointer to
-  what it is for. The clock worker drains it (`FOR UPDATE SKIP LOCKED`); rows are consumed and
-  rescheduled. A mutable working-set, like the outbox, **not** a history log.
+  what it is for. A PG row, the durable working set. The clock singleton scans due rows and
+  realizes each fire on its lane (a record-lane fire is written to PG and CDC fans it out to
+  JetStream; a watchdog's staleness enters the data lane as a derived datapoint); rows are then
+  consumed and rescheduled. A mutable working-set, like the outbox, **not** a history log.
 
 A schedule fire is **not** a separate log table: it is an ordinary **`event` with
-`origin=scheduled`**, manufactured by the clock. The history of schedule fires lives in the
-`event` log alongside caught, caused, and derived events, and an `action_rule` subscribes to it
-exactly as it subscribes to any other event.
+`origin=scheduled`**, manufactured by the clock into the `event` log. The event is born in a PG
+transaction (record plus any alarm transition) the same as any other event, never published
+directly (no dual-write), and the history of schedule fires lives in the `event` log alongside
+caught, caused, and derived events. The leader-elected CDC publisher fans the committed event out
+to JetStream, where an `action_rule` consumer reacts to it exactly as it reacts to any other event.
 
 ## One mechanism, three patterns
 
-All time behavior is the one `timer` table drained by a clock worker (the SKIP-LOCKED pattern,
-sorted by `fire_at`, woken by a ticker with a crash-recovery backstop):
+All time behavior is the one `timer` table scanned by the clock singleton (sorted by `fire_at`,
+woken by a ticker with a crash-recovery backstop), each due row's fire realized on its lane (a
+record-lane fire born in PG and CDC-fanned to JetStream, a watchdog's staleness onto the data lane):
 
 - **recurring** (a schedule): reschedule the next `fire_at` after firing. Digests, synthetic
   checks, SLA calendar resets.
@@ -47,15 +52,17 @@ sorted by `fire_at`, woken by a ticker with a crash-recovery backstop):
 - **reset-on-arrival** (a watchdog): pushed to `now + tolerance` on each datapoint, fires if it
   lapses. No-data and staleness.
 
-Durable (a table, survives restart), single-fire across replicas (the SKIP-LOCKED claim).
+Durable (a table, survives restart), single-fire across replicas: the clock is a leader-elected
+singleton, exactly one active at a time, held by a NATS KV CAS lock and failed over on death, so
+no replica races another to claim a row.
 
 :::caution[Open question]
 Whether a runbook's per-step waits each get their own `timer` row, or one row is advanced per step.
 :::
 
 :::caution[Open question]
-The clock worker's wake strategy: wake-on-insert for near-term fires plus a coarse backstop ticker,
-so a far-future schedule needs no frequent ticks.
+The clock singleton's wake strategy: wake-on-insert for near-term fires plus a coarse backstop
+ticker, so a far-future schedule needs no frequent ticks.
 :::
 
 ## A fire is recorded once, on the log of what it produces
@@ -88,7 +95,7 @@ Time divides cleanly across the backtest boundary:
 
 ## A schedule fire is the `origin=scheduled` event
 
-An `action_rule` subscribes to a schedule fire exactly as it subscribes to an alarm, so
+An `action_rule` consumer reacts to a schedule fire exactly as it reacts to an alarm, so
 `origin=scheduled` is the uniform "rules consume events" model, not special wiring:
 
 ```yaml
@@ -152,9 +159,9 @@ action, composed.
 
 ## Storage
 
-The recurring trigger config and the clock worker's pending-fire working set; the physical layout lives on [storage](/architecture/storage/).
+The recurring trigger config and the clock singleton's pending-fire working set; the physical layout lives on [storage](/architecture/storage/).
 
 | Table | Key columns | Notes |
 |---|---|---|
 | `schedule` | id, rrule/cron, **tz (IANA)**, target, enabled | config: a recurring trigger |
-| `timer` | id, **fire_at (timestamptz)**, kind (schedule-tick / for-sustain / runbook-wait / watchdog), ref, payload, claimed_at | the clock worker's pending-fire **working-set** (mutable, drained `SKIP LOCKED`), not a history log; fires are logged on the entity they produce |
+| `timer` | id, **fire_at (timestamptz)**, kind (schedule-tick / for-sustain / runbook-wait / watchdog), ref, payload | the clock singleton's pending-fire **working-set** (the durable PG working set, mutable, scanned for due rows and the fire realized on its lane: a record-lane fire born in PG and CDC-fanned to JetStream, a watchdog's staleness onto the data lane), not a history log; fires are logged on the entity they produce |

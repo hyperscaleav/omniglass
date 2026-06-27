@@ -24,13 +24,15 @@ An event arrives one of four ways; none is auto-manufactured from a state flip (
 1. **caught**: a structured occurrence arrives (xAPI Event channel, a webhook, a trap), or an event rule **promotes** a `log_datapoint` line into a normalized event.
 2. **caused**: we issued a command, recorded as an event; this is what opens an [intended](/architecture/datapoints/#intended-the-declared-effect-of-a-command) datapoint.
 3. **derived**: an event rule fuses signals into an operator-meaningful fact ("codec in-call + traffic spike + room booked, so meeting started"), inferred without instrumenting the control system.
-4. **scheduled**: the clock fired a schedule. A schedule fire *is* an event with `origin=scheduled`, manufactured by the clock worker; there is no separate schedule log table. So `action_rule` subscribes to events uniformly (**schedule to event to action**: digests, synthetic checks, SLA resets are all schedule fires an action subscribes to).
+4. **scheduled**: the clock fired a schedule. A schedule fire *is* an event with `origin=scheduled`, manufactured by the clock (a leader-elected singleton held via a NATS KV CAS lock, exactly one active, failing over on death); there is no separate schedule log table. So `action_rule` subscribes to events uniformly (**schedule to event to action**: digests, synthetic checks, SLA resets are all schedule fires an action subscribes to).
 
 Caught/caused/derived/scheduled is the event's **origin**, a small vocabulary on the event table; it is not the same enum as datapoint provenance. The discipline that keeps an event-driven system from rotting is that events are declared (registered event keys) and rules are inspectable (the blast-radius preview in the UI).
 
 ## Storage
 
 The `event` row is the semantic-occurrence log; `event_type` is its key registry. The physical layout (partitioning, the owner arc, lineage) lives on [storage](/architecture/storage/).
+
+An event is **born in a Postgres transaction**, on the record lane. When an `event_rule` fires, the consumer writes the `event` row and its paired alarm transition to PG in one transaction (the alarm edge is serialized per `(event_rule, owner)`); the event is the durable record, the alarm is the stateful edge. The event is **not** published directly from the rule (no dual-write): a leader-elected CDC publisher (logical decoding of the WAL) fans the committed change out to JetStream, where the `action_rule` consumers react. Postgres is the system of record; JetStream carries the committed event onward. This is the opposite lane from datapoints, which live on NATS and sink to PG asynchronously (see [datapoints](/architecture/datapoints/)).
 
 | Table | Key columns | Notes |
 |---|---|---|

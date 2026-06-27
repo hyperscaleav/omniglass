@@ -21,7 +21,7 @@ A principal carries a `kind` value; the same role machinery works across all kin
 |---|---|---|
 | `human` | a person | local password + session, OIDC, SAML |
 | `service` | scripts, integrations, SDKs, bots | bearer token |
-| `node` | the edge daemon running in the field | bearer token, mTLS |
+| `node` | the edge daemon running in the field | NATS JWT/nkey credential |
 | `agent` | an AI actor, sponsored by a human | bearer token, OAuth on-behalf-of |
 
 An **`agent`** is a first-class principal kind representing an AI actor. It is **mandatorily sponsored by a human** (a `sponsor` FK to a human principal on the per-kind `agent` table), and its authority is bounded by that sponsor: an agent's permissions plus ABAC scope are a **strict subset of its sponsor's**, so it can never exceed, and never outlive, the human who stands behind it (see [The agent principal](#the-agent-principal) below and the [AI](/architecture/ai/) page).
@@ -36,10 +36,10 @@ One `credential` row per authN method per principal. A principal can hold many (
 |---|---|---|---|
 | `password` | `principal.id` (uuid) | argon2id of the password | humans |
 | `oidc` | `iss\|sub` (issuer + subject) | null (IdP verifies) | humans |
-| `token` | `sha256(token)` | null (identifier IS the verifier) | service / node |
-| `mtls` | client-cert subject | null (TLS verifies) | nodes |
+| `token` | `sha256(token)` | null (identifier IS the verifier) | service |
+| `nats` | nkey public key | null (NATS verifies the signed nonce) | nodes |
 
-The password identifier is the `principal.id` (not the username), so a username change does not invalidate the credential. Bearer tokens are 256-bit `crypto/rand` payloads with a human-readable prefix (`ogs_` for services, `ogn_` for nodes) for secret-scanners and audit clarity; the server only ever stores `sha256(token)`. Cleartext is returned exactly once at mint time.
+The password identifier is the `principal.id` (not the username), so a username change does not invalidate the credential. Service bearer tokens are 256-bit `crypto/rand` payloads with a human-readable prefix (`ogs_`) for secret-scanners and audit clarity; the server only ever stores `sha256(token)`. Cleartext is returned exactly once at mint time. A `node` enrolls with a per-tenant **NATS JWT/nkey** instead: the credential row stores the nkey public key, NATS verifies a signed nonce, and the JWT carries the node's subject permissions (its placement-derived `visible_set`, see [The node path](#the-node-path)).
 
 :::caution[Open question]
 OIDC delegates MFA to the IdP; whether to add a local-account TOTP path for installs not on OIDC is
@@ -191,11 +191,11 @@ There is **no RLS and no direct database access** (no PostgREST). The **Storage 
 
 - **Capability (RBAC) in the API middleware** -> can this principal perform this action on this resource kind at all? Answered from an in-process cache of the principal's effective permissions, rejected before the gateway. Routes declare their required permission with `rbac.Require("component:create")`.
 - **Scope (ABAC) in the Storage Gateway** -> every query carries the principal's resolved scope, and the gateway filters rows by their exclusive-arc owner against the visible set (the owning `component`/`system`/`location` in the `visible_set`) on reads and the same predicate on writes. The visible set is bounded by **fleet size (entities), not data volume**, so it stays an indexed membership filter even on the firehose; and because it is an owner filter in app code, not a DB policy, it works identically on Postgres, the columnar tier, or object storage.
-- The gateway has three query **modes**: **scoped** (an API request carrying a principal's visible set), **node** (a node-driven write confined to the node's placement-derived `visible_set`, the owners of the tasks assigned to it from its materialized worklist), and **system** (trusted internal work: engine / reconcile / migrate / seed, all-visibility). Node mode sits between scoped and system: a node is trusted to write platform internals on behalf of itself, but only for the owners it actually covers, so a compromised node cannot write arbitrary owners intra-tenant. System mode is an explicit, audited choice, never the default. There is no fourth path: any storage caller is one of these three.
+- The gateway has three query **modes**: **scoped** (an API request carrying a principal's visible set), **node** (a node-driven write confined to the node's placement-derived `visible_set`, the owners of the tasks assigned to it from its NATS subject grants), and **system** (trusted internal work: the CDC publisher, the datapoint persistence sink, reconcile / migrate / seed, all-visibility). Node mode sits between scoped and system: a node is trusted to write platform internals on behalf of itself, but only for the owners it actually covers, so a compromised node cannot write arbitrary owners intra-tenant. System mode is an explicit, audited choice, never the default. There is no fourth path: any storage caller is one of these three.
 - **Scope is structural, not per-handler**: the principal's scope is a required input to the gateway's query layer, so no code path can query unscoped by accident. With no RLS backstop for in-database scope the gateway is the sole guarantor, so "forgot to filter" must be impossible by construction, not by discipline.
 - **Non-entity resources** (the `datapoint_type` registries, roles, principals, groups) are **capability-gated globally**, no entity scope applies (typically admin only).
 
-Both layers operate **within one database**. Tenant isolation is **per-database** (CNPG-per-tenant): there is no `tenant_id` column anywhere, so the cross-tenant boundary is the database boundary itself, not a row predicate. Intra-database scope (above) is the only app-enforced layer; there is no RLS backstop.
+Both layers operate **within one database**. Tenant isolation is **per-deployment**: a tenant is one database plus one **NATS account** plus one deployment, so per-database isolation (storage) and per-account isolation (messaging) are the same boundary. There is no `tenant_id` column anywhere, so the cross-tenant boundary is the database / account boundary itself, not a row predicate. Intra-database scope (above) is the only app-enforced layer; there is no RLS backstop.
 
 :::caution[Open question]
 Whether to add a **third authorization lever**: a declarative **tenant-level policy** layer, evaluated at
@@ -212,11 +212,11 @@ whether it is deny-only or can also force-allow.
 
 The hot path must not hit the DB for RBAC. Three layers, in-process, no persisted "effective permissions" projection (which would invite cache-coherence bugs):
 
-1. **Role index**: at boot, the `role` table is loaded into a Go map with `inherits` resolved transitively and wildcards expanded. Refreshed on `LISTEN/NOTIFY` from `role` table changes.
-2. **Principal cache**: at session establish (or first token-auth), the principal's grants are loaded and effective permissions computed as a `Set[resource:action]`. Cached by `principal_id`. Invalidated on `LISTEN/NOTIFY` from `principal_grant` or `principal` changes.
+1. **Role index**: at boot, the `role` table is loaded into a Go map with `inherits` resolved transitively and wildcards expanded. Refreshed on a NATS KV watch keyed on `role` changes.
+2. **Principal cache**: at session establish (or first token-auth), the principal's grants are loaded and effective permissions computed as a `Set[resource:action]`. Cached by `principal_id`. Invalidated on a NATS KV watch keyed on `principal_grant` or `principal` changes.
 3. **Per-request**: middleware does a Set membership check on the cached permissions plus, for the gateway, a scope expansion (visible_set). Both O(1)-with-a-prefactor in the common case.
 
-The DB is the source of truth; caches are derived views with explicit invalidation events. `LISTEN/NOTIFY` keeps the design single-binary-friendly; the same invalidation contract scales to NATS / Redis pub-sub when we shard.
+The DB is the source of truth; caches are derived views with explicit invalidation events. The principal/permission cache, config, and distributed locks live in **NATS KV** (not Postgres `LISTEN/NOTIFY`): a committed change to `role` / `principal` / `principal_grant` reaches NATS through the leader-elected CDC publisher, which updates the KV keys those watches observe. The same KV contract holds whether the design runs single-binary (embedded NATS) or against an external NATS cluster at scale.
 
 ## The /auth/me contract
 
@@ -243,17 +243,17 @@ GET /api/v1/auth/me
 
 ## The node path
 
-Nodes do not use general role x scope. A node authenticates with a credential bound to its `node.name` (a bearer token or mTLS) and is authorized only to **its own assignments**: pull my worklist, heartbeat, push for my tasks. It is an identity-scoped narrow path at the API:
+Nodes do not use general role x scope. A node authenticates with a per-tenant **NATS JWT/nkey** credential bound to its `node.name` and is authorized only to **its own assignments**: publish telemetry, heartbeat, consume the commands addressed to it. It is an identity-scoped narrow path, and the scope is carried by **NATS subject permissions**, not a route authorizer:
 
-- The middleware resolves the principal (kind=`node`) as usual.
-- The node-route group (`/api/v1/nodes/{name}/*`, gRPC ingest) is wrapped in a narrow authorizer: `principal.kind == 'node'` AND `principal.credential.identifier == {name}` from the URL. The general RBAC permission matrix does not apply to this group.
-- Behind the gateway, node-driven writes run in **node mode**: the node operates on platform internals on behalf of itself, but the gateway confines its writes to the node's placement-derived `visible_set` (the owners of the tasks assigned to it). A node is not all-visibility system mode, so a compromised node cannot write owners outside its placement. At ingest, an emitted owner label outside that set is treated as an orphan / discovery candidate, never an authoritative write (see [collection](/architecture/collection/)).
+- A node is a NATS client over the WAN (outbound only). The connection resolves the principal (kind=`node`) from the nkey, and the JWT's subject permissions are the node's placement-derived `visible_set`: it may publish only to its own telemetry subjects and consume only from its own durable command queue. The general RBAC permission matrix does not apply.
+- Telemetry lands on the JetStream datapoints stream; the node receives commands from a durable, server-side JetStream command queue rather than polling a route. Placement (the [cascade](/architecture/cascade/)) compiles directly into the account's subject grants, so a node can address only the owners it actually covers.
+- A node's published datapoints are ingested in **node mode**, not all-visibility system mode: the gateway confines the owners a node may write to that same placement-derived `visible_set`, so a compromised node cannot manufacture writes for owners outside its placement. An emitted owner label outside that set is treated as an orphan / discovery candidate, never an authoritative write (see [collection](/architecture/collection/)). The server-side persistence consumer that batch-writes the datapoint firehose to Postgres is a separate all-visibility **system mode** sink; node mode governs the owner-binding at ingest, not that sink.
 
-A `node` principal attempting any general API route returns 403; a non-`node` principal hitting a node route returns 403.
+A `node` credential whose subject permissions do not cover a subject is rejected by NATS at publish/subscribe time; a non-`node` principal cannot hold a node account's subject grants.
 
 ## Encryption in transit
 
-TLS on the HTTP API and the gRPC ingest, terminated at the binary (it serves HTTPS when given a cert + key) or at the operator's reverse proxy. **BYO PKI.** "TLS off" is a deliberate dev-mode flag, never a silent default.
+TLS on the HTTP API (terminated at the binary when given a cert + key, or at the operator's reverse proxy) and on the NATS connection that carries node telemetry and commands. **BYO PKI.** "TLS off" is a deliberate dev-mode flag, never a silent default.
 
 ## Audit
 
