@@ -384,21 +384,19 @@ that exceeds its interval is flagged and the next fires immediately, so a node
 falling behind **surfaces** the overrun rather than stalling its cadence
 silently.
 
-Each tick the node reports its own execution by publishing a `node.self` envelope on its
-report subject: tick duration, task attempted/ran/skipped/failed counts, interface probed/up/down
-counts, and the `node.overrun` state. **Telemetry is telemetry**: the report is
-not special-cased: the persistence consumer appends it as a telemetry envelope through the
-same ingester every source uses (tagged the reserved `node.self` shape),
-and the rule engine derives it like any other event. A node carries no
-operator-authored template; its telemetry shape is **built into the binary** (the
-seeded `node.*` datapoint types and node-health rules), and the `node.self` shape
-is what selects that built-in template at derive time. The one node-specific
-piece is owner resolution: `ProcessTelemetry` **pre-binds** a `node.self` envelope to
-the reporting node (`owner_kind = node`, a `node` owner arc, the `node_id` arm of the
-exclusive arc alongside component/system/location/global), the node-arc analogue of a
-per-component interface pre-binding its telemetry to its component. So node datapoints land node-owned
-with no server-side parse, no inline derivation, and the rule engine's batching +
-concurrency + amortized rule refresh apply for free. This is the operator-visible
+Each tick the node reports its own execution by publishing a `node.self` envelope: tick
+duration, task attempted/ran/skipped/failed counts, interface probed/up/down counts, and the
+`node.overrun` state. It is **not special-cased**: `node.self` is node-owned datapoints (the
+seeded `node.*` types) that ride the **same raw-ingress -> admission -> trusted** path as any
+other node datapoint, and the rule engine derives node-health from them like any other
+datapoint. A node carries no operator-authored template; its self shape is **built into the
+binary** (the seeded `node.*` datapoint types and node-health rules), and the `node.self`
+shape selects that built-in template at derive time. The one node-specific piece is owner
+resolution: the **admission consumer** binds `node.self` to the **reporting node**
+(`owner_kind = node`, a `node` owner arc, the `node_id` arm of the exclusive arc alongside
+component/system/location/global), the node-arc analogue of a per-component interface binding
+its datapoints to its component. So node datapoints land node-owned, and the rule engine's
+batching + concurrency + amortized rule refresh apply for free. This is the operator-visible
 health of the collection layer itself. Self-telemetry is best-effort (a failed
 report is logged, never fatal; it must not break collection).
 
