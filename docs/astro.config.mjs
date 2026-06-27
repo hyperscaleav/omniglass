@@ -11,6 +11,12 @@ export default defineConfig({
     mermaid({
       theme: 'dark',
       autoTheme: true,
+      mermaidConfig: {
+        look: 'neo',
+        layout: 'elk',
+        elk: { nodePlacementStrategy: 'NETWORK_SIMPLEX' },
+        flowchart: { curve: 'basis', padding: 16 },
+      },
     }),
     starlight({
       title: 'Omniglass',
