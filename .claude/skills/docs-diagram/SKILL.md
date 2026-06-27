@@ -9,18 +9,21 @@ Docs diagrams are authored in **D2** and rendered by **astro-d2** to **inline SV
 time**. No client-side JS, no layout shift, and the diagram is styled by the site's own CSS.
 This replaces mermaid (which rendered client-side and could only theme off the OS preference).
 
-## Prerequisite: the d2 binary
+## Rendering: WASM, no binary needed
 
-astro-d2 shells out to the `d2` CLI during `pnpm build`. Install it (this is a Go repo, so
-`go install` is the natural path) and make sure it is on `PATH` when building:
+The build renders through D2's WebAssembly build (`experimental: { useD2js: true }` in
+`astro.config.mjs`), so `pnpm build` is hermetic (pnpm only) and needs **no `d2` binary** on
+PATH. This is what makes the Cloudflare Pages build work; do not remove it (a plain
+`d2()` integration shells out to a `d2` CLI the build host does not have, and the build fails
+with "Could not find D2"). ELK works under D2.js; TALA does not (we use ELK).
+
+Installing the `d2` binary is optional, only for local convenience: it speeds up renders and
+lets you compile a single diagram from the CLI while iterating:
 
 ```bash
-go install oss.terrastruct.com/d2@latest   # lands in ~/go/bin
-PATH="$HOME/go/bin:$PATH" pnpm build        # d2 must be resolvable here
+go install oss.terrastruct.com/d2@latest         # this is a Go repo; lands in ~/go/bin
+~/go/bin/d2 --layout=elk --theme=200 x.d2 x.svg  # eyeball one block fast
 ```
-
-Fallback when the binary is unavailable (some CI): set `experimental: { useD2js: true }` on
-the integration to render through WebAssembly instead. ELK works under D2.js; TALA does not.
 
 ## Where it is wired
 
@@ -101,7 +104,7 @@ config -- datapoint: drift { style.stroke-dash: 4 }        # undirected
 ## The loop
 
 1. Edit the ` ```d2 ` block (and `custom.css` if you introduced a new class).
-2. `PATH="$HOME/go/bin:$PATH" pnpm build` (must be green; a D2 syntax error fails the build).
+2. `pnpm build` (must be green; a D2 syntax error fails the build).
 3. `pnpm preview`, open the page.
 4. **Verify both themes.** Toggle light/dark and confirm the diagram recolors with the page and
    stays legible. This is the step that catches a missing CSS hook or a color hardcoded in source.

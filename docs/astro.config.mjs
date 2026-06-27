@@ -11,13 +11,15 @@ export default defineConfig({
     // Diagrams are authored in D2 and rendered to inline SVG at build time (no client
     // JS). ELK layout; dark theme 200, light theme 0; inline so the SVG embeds in the
     // page and the brand tokens in custom.css can theme it with the light/dark toggle.
-    // Needs the d2 binary on PATH at build (or experimental.useD2js for WASM). See the
-    // /docs-diagram skill.
+    // useD2js renders through the bundled D2 WASM, so the build is hermetic (pnpm only)
+    // and needs no `d2` binary on PATH; required for the Cloudflare Pages build env. See
+    // the /docs-diagram skill.
     d2({
       layout: 'elk',
       pad: 24,
       inline: true,
       theme: { default: '0', dark: '200' },
+      experimental: { useD2js: true },
     }),
     starlight({
       title: 'Omniglass',
