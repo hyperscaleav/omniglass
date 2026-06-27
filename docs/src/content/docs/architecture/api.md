@@ -39,6 +39,9 @@ A list takes `filter`, `order_by`, `page_size` (capped by a server maximum), `pa
   repeat rows.
 - **`filter` is one [Omniglass expression](/architecture/expressions/)** over the resource's fields, the
   same language as rule scopes and dynamic groups, so an operator learns it once.
+- **`filter`, `order_by`, and `fields` name fields, not raw SQL.** Every field resolves through the
+  gateway's generated-column allow-list (an unknown field is a 400), and values are bound parameters, so
+  none of the three can inject SQL ([storage](/architecture/storage/)).
 - **Every list runs through the scoped gateway**, so results are already scope-filtered: a list never
   returns a row outside the caller's visible set, and the page count is over visible rows only.
 
@@ -87,7 +90,8 @@ caller's visible set. Out-of-read-scope is the only 404 case; a readable-but-not
   or a double `:ack`. **Only successful (2xx) outcomes are memoized.** An authorization result
   (401 / 403 / 404) is **never** stored against the key; it is re-evaluated against current grants on every
   call, so a denial recorded before an access change is not re-served, and a success is never replayed
-  after a grant is revoked.
+  after a grant is revoked: a replay **re-enters the authorization and gateway path** before the memoized
+  effect is returned. Re-evaluation guards the replay, not the original effect, which already committed.
 - **Optimistic concurrency**: a conditional update carries the resource version (an `ETag` / `If-Match`);
   a write against a stale version is a 409, never a silent last-writer-wins.
 
@@ -128,8 +132,10 @@ A single resource reads through its typed `GET`. Anything richer, a dashboard, a
 uniform `ViewResult` (`{columns, rows}`), bound by declared params at `/views/{id}:run`, executed through
 the same scoped gateway. Views are part of the public API; an operator never gets raw SQL. A **live** read
 (a tile that streams) may upgrade from polling `:run` to a **server-relayed [SSE](/architecture/messaging/)
-stream** over the same scoped, permission-gated seam: the server holds the internal subscription and
-re-runs the gateway scope per message, pushing only visible deltas. The operator never connects to the bus,
+stream** over the same scoped, permission-gated seam: the subscribe is **capability fast-rejected** at open
+(not authorized there), then the server holds the internal subscription and re-runs the gateway scope per
+message, filtering by `visible_set(P, read)` against each message's owner and pushing only visible deltas.
+The operator never connects to the bus,
 so the live path adds no second authorization model.
 
 ## Versioning and evolution

@@ -36,7 +36,7 @@ An event is **born in a Postgres transaction**, on the record lane. When an `eve
 
 | Table | Key columns | Notes |
 |---|---|---|
-| `event` | id, ts, key, **origin** (caught/caused/derived/scheduled), owner arc, payload (jsonb), correlation_id, **alarm_id** (nullable), + lineage | the semantic-occurrence log; a momentary event has null `alarm_id`, an alarm edge carries it. A schedule fire is an event with `origin=scheduled` (no separate schedule table) |
+| `event` | id, ts, key, **origin** (caught/caused/derived/scheduled), owner arc, payload (jsonb), correlation_id, **caused_by_event_id** (nullable), **alarm_id** (nullable), + lineage | the semantic-occurrence log; a momentary event has null `alarm_id`, an alarm edge carries it; `caused_by_event_id` is the parent edge so the cycle guard can walk causation upstream (the flat `correlation_id` threads the chain, this points at the parent). A schedule fire is an event with `origin=scheduled` (no separate schedule table) |
 | `event_type` | name, display_name, **payload_schema (jsonb)**, **scope** | the event-key registry; lets an event_rule promote a raw log line into a registered event. `scope` (template / org / official) works the same way as `datapoint_type` |
 
 Related: [calculations](/architecture/calculations/) (the `event_rule` that produces events), [alarms and actions](/architecture/alarms-actions/) (alarms and the response layer), [datapoints](/architecture/datapoints/) (the data events read), and [the glossary](/architecture/glossary/).

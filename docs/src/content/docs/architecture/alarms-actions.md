@@ -236,6 +236,13 @@ fires off that observed datapoint inherits the id, so the lineage walk follows a
 carried id across the device edge rather than an assumed lineage; the depth bound stays
 as the backstop.
 
+The carrier crosses the lane boundary, not one continuous header hop. The `event_rule`
+writes the triggering datapoint's `correlation_id` **and a `caused_by_event_id` parent
+edge** onto the `event` row it creates (the record lane, [events](/architecture/events/)),
+and the CDC publisher re-emits both into the record-lane message header. So "carried on
+NATS headers" is really header (data lane) -> PG column -> header (record lane): the walk
+is unbroken because each hop copies the pair forward.
+
 So no edge can close a loop: events come only from data, alarms are terminal toward
 datapoints, the response layer cannot author events, operator transitions never
 re-trigger, and the one real-world control loop is lineage-bounded.

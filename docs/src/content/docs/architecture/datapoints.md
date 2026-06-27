@@ -150,7 +150,7 @@ A calculated value (a 5-minute average, a system rollup, a fused consensus) is p
 
 ### intended: the declared effect of a command
 
-When the action layer issues a command, it records the command as an **event** and writes the **intended** state it expects, in one step. The command and its event are born in the record/state lane (PG-first, CDC-out); the intended datapoint **re-enters the data lane** on the `datapoints` stream, so the command's expected effect rides the same stream as observed and calculated values and reconciles against the observed value that the device round trip produces. The intended datapoint's lineage is that command event. The name is deliberate: **intended vs observed** is the central razor, intent-in-progress versus measured reality.
+When the action layer issues a command, it records the command as an **event** and writes the **intended** state it expects, in one step. The command and its event are born in the record/state lane (PG-first, CDC-out); the intended datapoint **re-enters the data lane** on the `datapoints` stream **under the command's target owner** (the target was scope-checked at dispatch, so the re-entry carries that owner and clears the admission consumer), so the command's expected effect rides the same stream as observed and calculated values and reconciles against the observed value that the device round trip produces. The intended datapoint's lineage is that command event. The name is deliberate: **intended vs observed** is the central razor, intent-in-progress versus measured reality.
 
 ```text
 1. command issued:  "power on display-5"  -> recorded as an event

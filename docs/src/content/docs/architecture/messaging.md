@@ -17,10 +17,15 @@ inter-service diagram are on [scaling](/architecture/scaling/).
 
 Internal traffic splits by what is moving:
 
-- **Data lane (NATS-native): datapoints.** Observed datapoints arrive on the bus (the edge and the
-  central node publish them); calc consumers publish calculated ones back. The rule engine consumes them
-  directly, and a **persistence consumer** batch-writes them to the Postgres datapoint tables as an async
-  sink. Datapoints do not go through CDC, they are already on the bus, idempotent on `(series, ts)`.
+- **Data lane (NATS-native): datapoints.** Observed datapoints arrive on a **raw ingress subject** (the
+  edge and the central node publish them); an **admission consumer** at the head of the lane confines each
+  datapoint's payload owner to the publisher's placement `visible_set` and re-publishes only confined
+  datapoints to the **trusted** datapoints stream. Calc consumers publish calculated ones to that trusted
+  stream. The rule engine consumes it directly, and a **persistence consumer** batch-writes it to the
+  Postgres datapoint tables as an async sink. Confinement is at **consume time, ahead of evaluation**,
+  because the rule engine reacts live: a forged owner must be dropped before it can open an alarm, not just
+  before it is persisted ([identity and access](/architecture/identity-access/)). Datapoints do not go
+  through CDC, they are already on the bus, idempotent on `(series, ts)`.
 - **Record / state lane (Postgres-first, CDC-out): events, alarms, actions, operator mutations.** Born in
   a Postgres transaction (a firing `event_rule` writes the event plus the alarm transition atomically; the
   API writes config, ack, settings). A **leader-elected CDC publisher** (logical decoding of the WAL)
@@ -29,18 +34,20 @@ Internal traffic splits by what is moving:
 
 ## Streams and consumers
 
-- **datapoints** (data lane): published by the edge and calc consumers; consumed by the rule engine and
-  the persistence consumer. A **work-queue consumer group** scales horizontally (each message to exactly
-  one consumer), so adding worker replicas adds throughput with no leader.
+- **datapoints** (data lane): the edge and central node publish to a **raw ingress** subject; the
+  **admission consumer** owner-confines and re-publishes to the **trusted** datapoints stream that the rule
+  engine, calc, and the persistence consumer read. A **work-queue consumer group** scales horizontally
+  (each message to exactly one consumer), so adding worker replicas adds throughput with no leader.
 - **records** (events, alarms, actions): published by the CDC publisher from Postgres commits; consumed by
   `action_rule`, reconcile, and projection consumers.
 - **commands**: a durable, per-node **command queue** the edge holds a consumer on ([nodes](/architecture/nodes/)).
 - **telemetry**: the edge publishes `node.self`, `session_log`, and command results.
 
-Durable consumers track their own position; delivery is at-least-once with `Nats-Msg-Id` dedup and double
-ack, which with the idempotent sinks (`(series, ts)`, action id, the CDC idempotency key) gives
-exactly-once **outcomes**. The edge stamps `ts`, so the system is ts-authoritative and needs no strict
-ordering on the wire.
+Durable consumers track their own position; delivery is at-least-once with `Nats-Msg-Id` dedup plus double
+ack, which with the idempotent sinks (a datapoint on `(series, ts)`, an action transition on
+`(alarm, action, transition)`, the CDC idempotency key) gives exactly-once **outcomes**. This triple
+(`Nats-Msg-Id` dedup, double ack, idempotent sink) is the canonical exactly-once mechanism the other pages
+refer to. The edge stamps `ts`, so the system is ts-authoritative and needs no strict ordering on the wire.
 
 ## Subjects, accounts, and scope
 
@@ -48,12 +55,13 @@ Subjects are hierarchical and **scope is expressed in them**, not bolted on:
 
 - **Tenant = one NATS account.** Per-account isolation (messaging) is the same boundary as the
   per-database isolation (storage): no shared subjects, no shared rows ([identity and access](/architecture/identity-access/)).
-- **Subject permissions gate nodes and internal clients only.** A node may publish and subscribe only the
-  subjects for the owners on its placement (its `visible_set`); the grant is **mechanically derived from
-  placement**, a coarse transport gate, not a second copy of the ABAC model. Authorization stays
-  authoritative in the [Storage Gateway](/architecture/storage/), which confines every node ingest to that
-  same `visible_set`. **Operators never connect to the bus**, so there is no operator subject-permission
-  model to keep in sync (see the live UI relay below).
+- **Subject permissions gate the subject string; the admission consumer gates the owner.** A node may
+  publish and subscribe only the subjects for its placement; the grant is **mechanically derived from
+  placement**, a coarse transport gate, not a second copy of the ABAC model. But a datapoint's owner lives
+  in the **payload** (a multi-owner function resolves owner from labels), which subject permissions cannot
+  see, so the **admission consumer** (above) is the authoritative owner fence, and authorization stays
+  authoritative in the [Storage Gateway](/architecture/storage/). **Operators never connect to the bus**,
+  so there is no operator subject-permission model to keep in sync (see the live UI relay below).
 
 ## Request-reply: service to service
 

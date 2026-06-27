@@ -272,4 +272,6 @@ A wrong column or type fails the build, so the compiler and tests catch a bad qu
 is what keeps the gateway safe to evolve and safe for an AI to edit. Because all dynamic construction
 lives in this one module, the injection-safe discipline is a single reviewable chokepoint. The one
 carve-out is the high-volume datapoint insert (the persistence consumer), which may use `pgx` `COPY` for
-throughput, still inside the gateway and still scoped.
+throughput, still inside the gateway. It runs in all-visibility **system mode**, not per-row scoped: its
+safety rests on the typed column targets plus the upstream **admission consumer** having already confined
+owners ([identity and access](/architecture/identity-access/)), not on a per-write scope predicate.

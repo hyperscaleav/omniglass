@@ -25,8 +25,9 @@ assigned to it), so a node ingests in **node mode**, not all-visibility system m
 ## Getting its instructions
 
 The node pulls a **worklist**: the tasks and commands resolved for the
-components **placed on it**, over a NATS request-reply config pull, and **heartbeats** so the
-server tracks liveness. The server, not the template, decides placement (next), and
+components **placed on it**, over a NATS request-reply config pull. It **heartbeats**
+separately, on its own subject (see [the protocol](#the-node-server-protocol)), so the
+server tracks liveness independently of the pull. The server, not the template, decides placement (next), and
 resolves the cascade (config / `$var:` values, effective `interval`, credentials)
 before handing the node concrete work. The node never sees a template; it sees
 materialized, resolved task and command instances.
@@ -47,8 +48,9 @@ written:
   re-renders the affected interfaces from the component's *current* declared
   config and upserts them, preserving placement. So the materialized interface
   always reflects the latest declared config, regardless of which path changed it.
-- **Invalidate on the node.** The worklist response carries a per-node **config
-  generation** (`X-Og-Config-Generation`): the max `updated_at` across the
+- **Invalidate on the node.** The worklist reply carries a per-node **config
+  generation** (a `config_generation` field on the reply, not an HTTP header: the
+  node path is NATS): the max `updated_at` across the
   interfaces the node polls. When it advances, an interface's rendered config
   changed, so the node drops its interface cache and re-fetches this tick. A
   steady generation serves from cache; a real change forces a refresh within one
