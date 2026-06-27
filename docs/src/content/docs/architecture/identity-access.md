@@ -187,9 +187,35 @@ COMMIT;  -- trigger fires here, sees the new grant, passes.
 
 Attempting to remove the last owner (by grant delete, principal delete, principal disable, or role change) raises a check-violation. The Gateway translates this into a 400 with a clear remediation message.
 
-## Enforcement: two layers, both in the app
+## Enforcement: where each check lives
 
-There is **no RLS and no direct database access** (no PostgREST). The **Storage Gateway is the only door to the database** and the API is its only caller, so authz lives entirely in the app:
+There is **no RLS and no direct database access** (no PostgREST). The **Storage Gateway is the only door to the database** and the API is its only caller, so authz lives entirely in the app. A targeted mutation passes three checkpoints in order: the **capability fast-reject** at the route, the **`canDo` decision** in the handler, and the **per-action scope plus audit** injected by the gateway. Each is one code seam:
+
+```mermaid
+flowchart TD
+  C["Client: SPA / CLI / MCP"] -->|"POST /alarms/X:ack"| MW
+
+  subgraph API["API process (one binary)"]
+    MW["Route middleware<br/>rbac.Require('alarm:ack')"] --> MWQ{"action in<br/>ANY grant?"}
+    MWQ -->|"no"| E403a["403 capability missing"]
+    MWQ -->|"yes: fast-reject passed"| H["Handler"]
+    H --> HQ{"canDo(P, ack, X) ?"}
+    HQ -->|"readable, not ack-scope"| E403b["403 cannot act on target"]
+    HQ -->|"out of read-scope"| E404["404 non-disclosing"]
+    HQ -->|"yes"| GW
+  end
+
+  subgraph GWBOX["Storage Gateway: the only DB door"]
+    GW["inject visible_set(P, ack)<br/>plus audit_log in one txn"] -->|"parameterized predicate"| DB[("Postgres")]
+    DB -->|"0 rows: backstop fires"| E403b
+    DB -->|"1 row changed"| OK["200 plus action row"]
+  end
+
+  KV[("NATS KV cache<br/>grants plus role index<br/>CDC-invalidated")] -.->|"composed per request"| H
+  KV -.-> GW
+```
+
+The capability check is **necessary not sufficient** (it only rejects), the `canDo` check is the **authoritative decision**, and the gateway predicate is the **enforce-by-construction backstop**: handler and gateway return the same status for the same input, so a forgotten handler check cannot leak a write. The detail of each:
 
 - **Capability (RBAC) in the API middleware is a FAST-REJECT, never an authorization.** It answers one necessary-but-not-sufficient question: does the action appear in **any** of the principal's grants? If not, 403 before the gateway is ever touched. Answered from an in-process cache (the flattened union of permissions across all grants). It never grants access: passing the fast-reject only means "not categorically forbidden", scope still decides. Routes declare their required permission with `rbac.Require("component:create")`.
 - **Scope (ABAC) in the Storage Gateway is per-action.** Every query carries `visible_set(P, action)` for the **specific action** being performed (read for a list/get, ack for an `:ack`, command for a `:command`), and the gateway filters rows by their exclusive-arc owner against that action-specific set (the owning `component`/`system`/`location`). A read uses `visible_set(P, read)`; a write uses `visible_set(P, write-action)`, the union of scopes of **only** the grants whose role carries that write action, never the read set and never a global union. This is the enforce-by-construction backstop: an `:ack` whose target lies outside `visible_set(P, ack)` matches **0 rows** even if the handler forgot its up-front check. A gateway write whose action-scoped predicate affects 0 rows is **never a silent success**: the gateway reports the miss to the handler, which returns 404 (target also outside `visible_set(P, read)`, non-disclosing) or 403 (target readable but outside the action scope), matching the up-front `canDo` decision for the same input. A silent 200/no-op is a correctness bug and is forbidden. Each per-action set is bounded by **fleet size (entities), not data volume**, so it stays an indexed membership filter even on the firehose; and because it is an owner filter in app code, not a DB policy, it works identically on Postgres, the columnar tier, or object storage.
