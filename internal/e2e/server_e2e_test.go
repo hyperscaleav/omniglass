@@ -90,7 +90,7 @@ func pollHealthz(t *testing.T, url string) []byte {
 			time.Sleep(100 * time.Millisecond)
 			continue
 		}
-		b := readAllClose(resp)
+		b := readAllClose(t, resp)
 		if resp.StatusCode == http.StatusOK {
 			return b
 		}
@@ -100,9 +100,13 @@ func pollHealthz(t *testing.T, url string) []byte {
 	return nil
 }
 
-func readAllClose(resp *http.Response) []byte {
+func readAllClose(t *testing.T, resp *http.Response) []byte {
+	t.Helper()
 	defer resp.Body.Close()
-	b, _ := io.ReadAll(resp.Body)
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read healthz body: %v", err)
+	}
 	return b
 }
 

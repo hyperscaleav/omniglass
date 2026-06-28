@@ -70,7 +70,7 @@ func NewDSN(t *testing.T) string {
 	if err != nil {
 		t.Fatalf("admin connect: %v", err)
 	}
-	if _, err := admin.Exec(ctx, "CREATE DATABASE "+dbName); err != nil {
+	if _, err := admin.Exec(ctx, "CREATE DATABASE "+pgx.Identifier{dbName}.Sanitize()); err != nil {
 		_ = admin.Close(ctx)
 		t.Fatalf("create database %s: %v", dbName, err)
 	}
