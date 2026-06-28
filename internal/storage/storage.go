@@ -39,6 +39,11 @@ type Gateway interface {
 	AuthenticateBearer(ctx context.Context, hash []byte) (*Principal, error)
 	// ListRoles returns every role, for building the in-process role index.
 	ListRoles(ctx context.Context) ([]Role, error)
+	// UpsertLocationType installs or updates an official location type by id, the
+	// boot-seed phase's write. Idempotent.
+	UpsertLocationType(ctx context.Context, lt LocationType) error
+	// ListLocationTypes returns every location type, ranked.
+	ListLocationTypes(ctx context.Context) ([]LocationType, error)
 	// Close releases the underlying connection pool. Idempotent at the pool
 	// level; call once on shutdown.
 	Close()

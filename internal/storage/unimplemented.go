@@ -17,4 +17,10 @@ func (UnimplementedGateway) AuthenticateBearer(context.Context, []byte) (*Princi
 	return nil, nil
 }
 func (UnimplementedGateway) ListRoles(context.Context) ([]Role, error) { return nil, nil }
-func (UnimplementedGateway) Close()                                    {}
+func (UnimplementedGateway) UpsertLocationType(context.Context, LocationType) error {
+	return nil
+}
+func (UnimplementedGateway) ListLocationTypes(context.Context) ([]LocationType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) Close() {}
