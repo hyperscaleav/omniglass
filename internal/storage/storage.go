@@ -14,6 +14,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -39,6 +40,22 @@ type Gateway interface {
 	AuthenticateBearer(ctx context.Context, hash []byte) (*Principal, error)
 	// ListRoles returns every role, for building the in-process role index.
 	ListRoles(ctx context.Context) ([]Role, error)
+	// UpsertLocationType installs or updates an official location type by id, the
+	// boot-seed phase's write. Idempotent.
+	UpsertLocationType(ctx context.Context, lt LocationType) error
+	// ListLocationTypes returns every location type, ranked.
+	ListLocationTypes(ctx context.Context) ([]LocationType, error)
+
+	// The location CRUD surface. Every method takes the caller's resolved scope
+	// (a required input, so no path queries unscoped), expands it to a row filter,
+	// and writes the audit row in the mutating transaction. The read/action split
+	// drives the non-disclosing 404 versus the 403.
+	ListLocations(ctx context.Context, read scope.Set) ([]Location, error)
+	GetLocation(ctx context.Context, name string, read scope.Set) (*Location, error)
+	CreateLocation(ctx context.Context, actorID string, spec LocationSpec, create scope.Set) (*Location, error)
+	UpdateLocation(ctx context.Context, actorID, name string, patch LocationPatch, read, action scope.Set) (*Location, error)
+	DeleteLocation(ctx context.Context, actorID, name string, read, action scope.Set) error
+
 	// Close releases the underlying connection pool. Idempotent at the pool
 	// level; call once on shutdown.
 	Close()

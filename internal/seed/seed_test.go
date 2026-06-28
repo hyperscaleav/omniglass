@@ -51,4 +51,21 @@ func TestSeedRolesIdempotent(t *testing.T) {
 	if len(ownerPerms) != 1 || ownerPerms[0] != "*:*" {
 		t.Errorf("owner permissions = %v, want [*:*]", ownerPerms)
 	}
+
+	// The four official location types seed alongside the roles, ranked and
+	// idempotent (the second Run above must not have duplicated them).
+	var typeCount int
+	if err := conn.QueryRow(ctx, `select count(*) from location_type where official`).Scan(&typeCount); err != nil {
+		t.Fatalf("count location_types: %v", err)
+	}
+	if typeCount != 4 {
+		t.Errorf("official location_types = %d, want 4", typeCount)
+	}
+	var topType string
+	if err := conn.QueryRow(ctx, `select id from location_type order by rank, id limit 1`).Scan(&topType); err != nil {
+		t.Fatalf("read top location_type: %v", err)
+	}
+	if topType != "campus" {
+		t.Errorf("lowest-rank location_type = %q, want campus", topType)
+	}
 }

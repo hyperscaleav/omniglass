@@ -21,7 +21,7 @@ roles:
     permissions:
       - "component:delete"
       - "system:delete"
-      - "location:delete"
+      - "location:create,update,delete"
       - "principal:*"
       - "credential:*"
       - "principal_grant:*"

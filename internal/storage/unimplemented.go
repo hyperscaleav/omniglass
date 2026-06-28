@@ -1,6 +1,10 @@
 package storage
 
-import "context"
+import (
+	"context"
+
+	"github.com/hyperscaleav/omniglass/internal/scope"
+)
 
 // UnimplementedGateway is a no-op Gateway for tests and codegen stubs that must
 // satisfy the interface without a real backend. Embed it and override only the
@@ -17,4 +21,25 @@ func (UnimplementedGateway) AuthenticateBearer(context.Context, []byte) (*Princi
 	return nil, nil
 }
 func (UnimplementedGateway) ListRoles(context.Context) ([]Role, error) { return nil, nil }
-func (UnimplementedGateway) Close()                                    {}
+func (UnimplementedGateway) UpsertLocationType(context.Context, LocationType) error {
+	return nil
+}
+func (UnimplementedGateway) ListLocationTypes(context.Context) ([]LocationType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) ListLocations(context.Context, scope.Set) ([]Location, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) GetLocation(context.Context, string, scope.Set) (*Location, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) CreateLocation(context.Context, string, LocationSpec, scope.Set) (*Location, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) UpdateLocation(context.Context, string, string, LocationPatch, scope.Set, scope.Set) (*Location, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteLocation(context.Context, string, string, scope.Set, scope.Set) error {
+	return nil
+}
+func (UnimplementedGateway) Close() {}

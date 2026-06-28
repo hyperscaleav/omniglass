@@ -82,6 +82,8 @@ func registerRoutes(api huma.API, gw storage.Gateway) {
 		Description: "Lists the roles. Gated by the role:read capability.",
 		Middlewares: huma.Middlewares{a.authn, a.require("role", "read")},
 	}, rolesHandler(gw))
+
+	registerLocationRoutes(api, a, gw)
 }
 
 // apiConfig is the shared Huma config for the live server and the spec dump. It
