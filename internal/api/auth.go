@@ -10,6 +10,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/hyperscaleav/omniglass/internal/auth"
 	"github.com/hyperscaleav/omniglass/internal/rbac"
+	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
@@ -103,6 +104,32 @@ func (a *authenticator) require(resource, action string) func(huma.Context, func
 		}
 		next(ctx)
 	}
+}
+
+// scopeFor resolves visible_set(P, action) for a resource from the request
+// principal's grants and the cached role index. It is the API's half of the ABAC
+// model: the gateway requires a resolved scope on every query, and this is where
+// the handler composes it (cheap: cached grants plus the role map). An
+// unauthenticated context or an index failure resolves to the empty scope, which
+// admits nothing.
+func (a *authenticator) scopeFor(ctx context.Context, resource, action string) scope.Set {
+	pr, ok := principalFrom(ctx)
+	if !ok {
+		return scope.Set{}
+	}
+	idx, err := a.roleIndex(ctx)
+	if err != nil {
+		return scope.Set{}
+	}
+	grants := make([]scope.Grant, 0, len(pr.Grants))
+	for _, g := range pr.Grants {
+		sg := scope.Grant{Role: g.Role, ScopeKind: g.ScopeKind}
+		if g.ScopeID != nil {
+			sg.ScopeID = *g.ScopeID
+		}
+		grants = append(grants, sg)
+	}
+	return scope.Resolve(grants, idx, resource, action)
 }
 
 func bearerToken(header string) (string, bool) {
