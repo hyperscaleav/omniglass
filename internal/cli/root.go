@@ -22,11 +22,19 @@ func newRoot(version string) *cobra.Command {
 	// cobra's Print* default to stderr; route them to stdout so future data
 	// commands stay pipeable. Errors continue through Execute -> os.Stderr.
 	root.SetOut(os.Stdout)
+
+	// Hand-written commands: the run modes and the trusted bootstrap lane.
 	root.AddCommand(
 		newServerCmd(version),
 		newMigrateCmd(),
 		newBootstrapCmd(),
 	)
+	// Generated commands: one per API operation, sharing the connection flags.
+	// The two sets compose on the same root; regeneration touches only the
+	// generated set.
+	addClientFlags(root)
+	root.AddCommand(generatedCommands()...)
+
 	return root
 }
 
