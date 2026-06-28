@@ -7,7 +7,8 @@
 // example come from the operation summary and description. The output,
 // internal/cli/generated.go, is committed and reviewed like any code; the
 // hand-written commands (bootstrap, server, migrate) live elsewhere and compose
-// with the generated tree on the same root.
+// with the generated tree on the same root. The runtime the generated tree calls
+// (the client and connection flags) is the hand-written api_hooks.go.
 package main
 
 import (
@@ -47,7 +48,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("cligen: gofmt: %v\n%s", err, out)
 	}
-	const dst = "internal/cli/generated.go"
+	const dst = "internal/cli/api_gen.go"
 	if err := os.WriteFile(dst, formatted, 0o644); err != nil {
 		log.Fatalf("cligen: write: %v", err)
 	}
