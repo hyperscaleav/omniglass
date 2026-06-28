@@ -127,13 +127,15 @@ func (p *PG) ListLocations(ctx context.Context, read scope.Set) ([]Location, err
 	if read.All {
 		rows, err = p.pool.Query(ctx, `select `+locationCols+` from location order by name`)
 	} else {
-		// Expand every scope root to its subtree, then list the members.
+		// Expand every scope root to its subtree, then list the members. The
+		// CYCLE clause is the structural-tree cycle guard: a corrupted parent
+		// edge stops the walk gracefully instead of erroring at the depth limit.
 		rows, err = p.pool.Query(ctx, `
 			with recursive sub(id) as (
 				select id from location where id = any($1::uuid[])
 				union all
 				select l.id from location l join sub on l.parent_id = sub.id
-			)
+			) cycle id set is_cycle using path
 			select `+locationCols+` from location
 			where id in (select id from sub)
 			order by name`, read.IDs)
@@ -347,7 +349,7 @@ func (p *PG) inScope(ctx context.Context, q querier, targetID string, set scope.
 			select id, parent_id from location where id = $1
 			union all
 			select l.id, l.parent_id from location l join anc on l.id = anc.parent_id
-		)
+		) cycle id set is_cycle using path
 		select exists(select 1 from anc where id = any($2::uuid[]))`, targetID, set.IDs).Scan(&ok)
 	if err != nil {
 		return false, fmt.Errorf("storage: scope check: %w", err)
