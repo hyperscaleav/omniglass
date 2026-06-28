@@ -1,0 +1,37 @@
+# The four official roles, seeded idempotently at boot (ON CONFLICT DO UPDATE).
+# permissions are <resource>:<action> strings; one entry per resource, actions
+# comma-separated; a wildcard stands alone. inherits names parent role ids.
+# Inheritance, wildcard expansion, and the :read floor are resolved at runtime in
+# the role index, not stored expanded here. A release may patch a default here.
+roles:
+  - id: viewer
+    permissions:
+      - "*:read"
+  - id: operator
+    inherits: ["viewer"]
+    permissions:
+      - "component:create,update"
+      - "interface:create,update"
+      - "task:create,update"
+      - "rule:create,update"
+      - "config:create,update"
+      - "alarm:ack,snooze,resolve"
+  - id: admin
+    inherits: ["operator"]
+    permissions:
+      - "component:delete"
+      - "system:delete"
+      - "location:delete"
+      - "principal:*"
+      - "credential:*"
+      - "principal_grant:*"
+      - "role:*"
+      - "datapoint_type:create"
+      - "tag:create"
+      - "unit:create"
+      - "event_type:create"
+      - "severity_level:create"
+      - "source:create"
+  - id: owner
+    permissions:
+      - "*:*"

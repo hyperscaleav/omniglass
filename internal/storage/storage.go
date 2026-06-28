@@ -25,6 +25,9 @@ type Gateway interface {
 	// endpoint reports its result; a non-nil error means the database leg is
 	// down even if the process is up.
 	Ping(ctx context.Context) error
+	// UpsertRole installs or updates an official role by id, the boot-seed
+	// phase's write. Idempotent: re-seeding the same role is a no-op update.
+	UpsertRole(ctx context.Context, r Role) error
 	// Close releases the underlying connection pool. Idempotent at the pool
 	// level; call once on shutdown.
 	Close()

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/api"
+	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
@@ -56,8 +57,9 @@ func TestHealthzReportsDBOK(t *testing.T) {
 // TestHealthzReportsDBOK above.
 type degradedGateway struct{}
 
-func (degradedGateway) Ping(context.Context) error { return errDown }
-func (degradedGateway) Close()                     {}
+func (degradedGateway) Ping(context.Context) error                    { return errDown }
+func (degradedGateway) UpsertRole(context.Context, storage.Role) error { return nil }
+func (degradedGateway) Close()                                         {}
 
 type sentinel string
 

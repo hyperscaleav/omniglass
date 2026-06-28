@@ -22,8 +22,9 @@ import (
 // called; this keeps the codegen tool free of any database dependency.
 type stubGateway struct{}
 
-func (stubGateway) Ping(context.Context) error { return nil }
-func (stubGateway) Close()                     {}
+func (stubGateway) Ping(context.Context) error                    { return nil }
+func (stubGateway) UpsertRole(context.Context, storage.Role) error { return nil }
+func (stubGateway) Close()                                         {}
 
 func main() {
 	var gw storage.Gateway = stubGateway{}
