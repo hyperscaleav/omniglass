@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/api"
+	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
@@ -54,10 +55,9 @@ func TestHealthzReportsDBOK(t *testing.T) {
 // (the gateway), not of the system under test (the handler), so it does not
 // violate the no-mocking-the-DB doctrine: the real-DB path is covered by
 // TestHealthzReportsDBOK above.
-type degradedGateway struct{}
+type degradedGateway struct{ storage.UnimplementedGateway }
 
 func (degradedGateway) Ping(context.Context) error { return errDown }
-func (degradedGateway) Close()                     {}
 
 type sentinel string
 

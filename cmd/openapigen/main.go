@@ -8,7 +8,6 @@
 package main
 
 import (
-	"context"
 	"log"
 	"os"
 	"path/filepath"
@@ -20,10 +19,7 @@ import (
 // stubGateway satisfies storage.Gateway with no real backend. Spec generation
 // only registers handlers (never invokes the gateway), so its methods are never
 // called; this keeps the codegen tool free of any database dependency.
-type stubGateway struct{}
-
-func (stubGateway) Ping(context.Context) error { return nil }
-func (stubGateway) Close()                     {}
+type stubGateway struct{ storage.UnimplementedGateway }
 
 func main() {
 	var gw storage.Gateway = stubGateway{}

@@ -12,6 +12,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/migrate"
+	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/spf13/cobra"
 )
@@ -42,6 +43,11 @@ func runServer(ctx context.Context, _ string) error {
 		return err
 	}
 	defer gw.Close()
+
+	if err := seed.Run(ctx, gw); err != nil {
+		return err
+	}
+	log.Info("boot seed applied")
 
 	srv := &http.Server{
 		Addr:              c.Addr,

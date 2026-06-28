@@ -25,6 +25,20 @@ type Gateway interface {
 	// endpoint reports its result; a non-nil error means the database leg is
 	// down even if the process is up.
 	Ping(ctx context.Context) error
+	// UpsertRole installs or updates an official role by id, the boot-seed
+	// phase's write. Idempotent: re-seeding the same role is a no-op update.
+	UpsertRole(ctx context.Context, r Role) error
+	// BootstrapOwner creates the first owner (a human principal with a bearer
+	// credential and an owner@all grant) directly, in one transaction, idempotent
+	// per username. Returns whether a new owner was created (false if the
+	// username already exists, so re-running mints no second credential).
+	BootstrapOwner(ctx context.Context, spec OwnerSpec) (created bool, err error)
+	// AuthenticateBearer resolves a bearer credential by its sha256 hash to the
+	// principal, its kind profile, and its grants. Returns ErrCredentialNotFound
+	// if no credential matches.
+	AuthenticateBearer(ctx context.Context, hash []byte) (*Principal, error)
+	// ListRoles returns every role, for building the in-process role index.
+	ListRoles(ctx context.Context) ([]Role, error)
 	// Close releases the underlying connection pool. Idempotent at the pool
 	// level; call once on shutdown.
 	Close()
