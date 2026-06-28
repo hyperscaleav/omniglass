@@ -76,6 +76,10 @@ cd .claude/worktrees/<type>+<short-name>
 - Validate locally: `make test-short` to iterate, `make test` before the PR.
 - No `--no-verify` without explicit approval.
 
+The full lifecycle (define, build test-first, document, validate, review, ship-review) and the
+approval contract are [docs/contributing/slice-workflow.md](docs/src/content/docs/contributing/slice-workflow.md);
+run `/ship-slice` at PR-ready to validate and emit the ship-review.
+
 ## Tracking: issues, not TODOs
 
 All work lives in GitHub issues under epics. Do not keep a TODO doc in the tree and do
@@ -109,6 +113,9 @@ Three buckets, never conflated:
 Procedural workflows live under [.claude/skills/](.claude/skills/). Invoke with
 `/skill-name` (ported and refined as the corresponding subsystems land):
 
+- **`/ship-slice`** - the pre-ship validation pass (fresh `make test`, `make gen` drift check,
+  em-dash and attribution scan, a reviewer pass, docs-with-everything) and the ship-review report
+  the architect approves from. Run at PR-ready.
 - **`/storage-schema-change`** (ported) - how dbmate migrations work (run-once, never edited,
   idempotent, the PG rename DO-block), the three buckets, the Gateway ripple, and the
   testcontainer round-trip RED->GREEN.

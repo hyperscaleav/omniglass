@@ -98,6 +98,7 @@ export default defineConfig({
             { label: 'Learning tool', slug: 'contributing/learning-tool' },
             { label: 'Primitive first', slug: 'contributing/primitive-first' },
             { label: 'Design system', slug: 'contributing/design-system' },
+            { label: 'Slice workflow', slug: 'contributing/slice-workflow' },
           ],
         },
       ],
