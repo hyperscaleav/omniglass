@@ -19,7 +19,7 @@ artifacts.** A drift check in CI fails the PR if the committed artifacts are sta
 
 | Generator | Input | Output | Consumer |
 |---|---|---|---|
-| `cmd/openapigen` | Huma Go structs | `web/src/api/openapi.json` (+ `.yaml`) | everything below |
+| `cmd/openapigen` | Huma Go structs | `api/openapi.json` (+ `.yaml`) | everything below |
 | `web pnpm gen:api` | `openapi.json` | `web/src/api/schema.gen.ts` | typed `openapi-fetch` SPA client |
 | `cmd/cligen` | `openapi.json` | `internal/cli/api_gen.go` (cobra) | the CLI, patched via `api_hooks.go` |
 | `cmd/mcpgen` | `openapi.json` | the MCP server (a curated tool catalog) | AI agents over the [API contract](/architecture/api/) |

@@ -101,6 +101,12 @@ export default defineConfig({
             { label: 'Slice workflow', slug: 'contributing/slice-workflow' },
           ],
         },
+        {
+          label: 'Guides',
+          items: [
+            { label: 'The CLI', slug: 'guides/cli' },
+          ],
+        },
       ],
       customCss: ['./src/styles/custom.css'],
       expressiveCode: {

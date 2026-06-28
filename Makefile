@@ -7,12 +7,14 @@
 build:
 	go build -o bin/omniglass ./cmd/omniglass
 
-# Regenerate the OpenAPI 3.1 document from the Huma API (the source of truth),
-# server-less, into api/openapi.{json,yaml}. The committed spec is the seam the
-# typed SPA client and CLI are generated from in later slices; for now it is
-# one route. Run after any API change.
+# Regenerate the derived artifacts from the Huma API (the source of truth):
+# first the OpenAPI 3.1 document (server-less, into api/openapi.{json,yaml}),
+# then the cobra command tree (internal/cli/generated.go) from that spec. The
+# spec is the seam every downstream client is generated from. Run after any API
+# change; the result is committed and reviewed like code.
 gen:
 	go run ./cmd/openapigen
+	go run ./cmd/cligen
 
 # Full gate: every test, including the testcontainer-backed integration and
 # end-to-end tests (real Postgres). Green before commit and before merge.

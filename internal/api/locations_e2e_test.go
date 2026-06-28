@@ -87,7 +87,7 @@ func TestLocationAPI(t *testing.T) {
 	if l := c.getBody(ownerTok, "hq-b1"); l.DisplayName != "Building One" {
 		t.Errorf("patched display_name = %q, want Building One", l.DisplayName)
 	}
-	c.delete(ownerTok, "hq", http.StatusConflict)   // has children
+	c.delete(ownerTok, "hq", http.StatusConflict) // has children
 	c.delete(ownerTok, "hq-r1", http.StatusNoContent)
 	c.get(ownerTok, "hq-r1", http.StatusNotFound)
 }
@@ -157,7 +157,9 @@ func (c *apiClient) create(tok string, r locReq, want int) {
 func (c *apiClient) patch(tok, name string, r patchReq, want int) {
 	c.do(tok, http.MethodPatch, "/locations/"+name, r, want)
 }
-func (c *apiClient) get(tok, name string, want int) { c.do(tok, http.MethodGet, "/locations/"+name, nil, want) }
+func (c *apiClient) get(tok, name string, want int) {
+	c.do(tok, http.MethodGet, "/locations/"+name, nil, want)
+}
 func (c *apiClient) delete(tok, name string, want int) {
 	c.do(tok, http.MethodDelete, "/locations/"+name, nil, want)
 }
