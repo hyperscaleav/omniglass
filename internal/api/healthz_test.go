@@ -55,11 +55,9 @@ func TestHealthzReportsDBOK(t *testing.T) {
 // (the gateway), not of the system under test (the handler), so it does not
 // violate the no-mocking-the-DB doctrine: the real-DB path is covered by
 // TestHealthzReportsDBOK above.
-type degradedGateway struct{}
+type degradedGateway struct{ storage.UnimplementedGateway }
 
-func (degradedGateway) Ping(context.Context) error                    { return errDown }
-func (degradedGateway) UpsertRole(context.Context, storage.Role) error { return nil }
-func (degradedGateway) Close()                                         {}
+func (degradedGateway) Ping(context.Context) error { return errDown }
 
 type sentinel string
 

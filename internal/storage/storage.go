@@ -28,6 +28,11 @@ type Gateway interface {
 	// UpsertRole installs or updates an official role by id, the boot-seed
 	// phase's write. Idempotent: re-seeding the same role is a no-op update.
 	UpsertRole(ctx context.Context, r Role) error
+	// BootstrapOwner creates the first owner (a human principal with a bearer
+	// credential and an owner@all grant) directly, in one transaction, idempotent
+	// per username. Returns whether a new owner was created (false if the
+	// username already exists, so re-running mints no second credential).
+	BootstrapOwner(ctx context.Context, spec OwnerSpec) (created bool, err error)
 	// Close releases the underlying connection pool. Idempotent at the pool
 	// level; call once on shutdown.
 	Close()
