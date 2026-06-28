@@ -82,9 +82,10 @@ run `/ship-slice` at PR-ready to validate and emit the ship-review.
 
 ## Tracking: issues, not TODOs
 
-All work lives in GitHub issues under epics. Do not keep a TODO doc in the tree and do
-not write a bare `// TODO`; reference an issue (`// TODO(#123): ...`). If it is worth
-doing later, file the issue.
+All work lives in GitHub issues under epics. A feature slice's scope goes in the ticket
+first: **no branch until the issue exists and its scope is approved (a hard gate)**. Do not
+keep a TODO doc in the tree and do not write a bare `// TODO`; reference an issue
+(`// TODO(#123): ...`). If it is worth doing later, file the issue.
 
 ## House style
 
