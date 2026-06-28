@@ -13,4 +13,8 @@ func (UnimplementedGateway) UpsertRole(context.Context, Role) error { return nil
 func (UnimplementedGateway) BootstrapOwner(context.Context, OwnerSpec) (bool, error) {
 	return false, nil
 }
-func (UnimplementedGateway) Close() {}
+func (UnimplementedGateway) AuthenticateBearer(context.Context, []byte) (*Principal, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) ListRoles(context.Context) ([]Role, error) { return nil, nil }
+func (UnimplementedGateway) Close()                                    {}

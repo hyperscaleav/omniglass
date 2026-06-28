@@ -45,6 +45,8 @@ func NewHandler(gw storage.Gateway) http.Handler {
 // (the live server) and OpenAPIJSON (the server-less spec dump), so the routed
 // surface and the generated spec can never drift.
 func registerRoutes(api huma.API, gw storage.Gateway) {
+	a := &authenticator{gw: gw, api: api}
+
 	huma.Register(api, huma.Operation{
 		OperationID: "get-healthz",
 		Method:      http.MethodGet,
@@ -62,6 +64,24 @@ func registerRoutes(api huma.API, gw storage.Gateway) {
 		out.Body.DB = "ok"
 		return out, nil
 	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "get-auth-me",
+		Method:      http.MethodGet,
+		Path:        "/auth/me",
+		Summary:     "The authenticated principal, its permissions, and grants",
+		Description: "Returns the caller's principal, flattened permissions (a UI hint and the fast-reject set), and grants. Requires authentication.",
+		Middlewares: huma.Middlewares{a.authn},
+	}, meHandler)
+
+	huma.Register(api, huma.Operation{
+		OperationID: "list-roles",
+		Method:      http.MethodGet,
+		Path:        "/roles",
+		Summary:     "List roles",
+		Description: "Lists the roles. Gated by the role:read capability.",
+		Middlewares: huma.Middlewares{a.authn, a.require("role", "read")},
+	}, rolesHandler(gw))
 }
 
 // apiConfig is the shared Huma config for the live server and the spec dump. It

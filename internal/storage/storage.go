@@ -33,6 +33,12 @@ type Gateway interface {
 	// per username. Returns whether a new owner was created (false if the
 	// username already exists, so re-running mints no second credential).
 	BootstrapOwner(ctx context.Context, spec OwnerSpec) (created bool, err error)
+	// AuthenticateBearer resolves a bearer credential by its sha256 hash to the
+	// principal, its kind profile, and its grants. Returns ErrCredentialNotFound
+	// if no credential matches.
+	AuthenticateBearer(ctx context.Context, hash []byte) (*Principal, error)
+	// ListRoles returns every role, for building the in-process role index.
+	ListRoles(ctx context.Context) ([]Role, error)
 	// Close releases the underlying connection pool. Idempotent at the pool
 	// level; call once on shutdown.
 	Close()

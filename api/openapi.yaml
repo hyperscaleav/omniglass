@@ -59,6 +59,19 @@ components:
           format: uri
           type: string
       type: object
+    GrantBody:
+      additionalProperties: false
+      properties:
+        role:
+          type: string
+        scope_id:
+          type: string
+        scope_kind:
+          type: string
+      required:
+        - role
+        - scope_kind
+      type: object
     HealthOutputBody:
       additionalProperties: false
       properties:
@@ -79,11 +92,137 @@ components:
         - status
         - db
       type: object
+    HumanBody:
+      additionalProperties: false
+      properties:
+        display_name:
+          type: string
+        email:
+          type: string
+        username:
+          type: string
+      required:
+        - username
+      type: object
+    MeOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/MeOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        grants:
+          items:
+            $ref: "#/components/schemas/GrantBody"
+          type:
+            - array
+            - "null"
+        human:
+          $ref: "#/components/schemas/HumanBody"
+        permissions:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        principal:
+          $ref: "#/components/schemas/PrincipalStruct"
+        service:
+          $ref: "#/components/schemas/SvcBody"
+      required:
+        - principal
+        - permissions
+        - grants
+      type: object
+    PrincipalStruct:
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+      required:
+        - id
+        - kind
+      type: object
+    RoleBody:
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        inherits:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        official:
+          type: boolean
+        permissions:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+      required:
+        - id
+        - official
+        - permissions
+        - inherits
+      type: object
+    RolesOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/RolesOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        roles:
+          items:
+            $ref: "#/components/schemas/RoleBody"
+          type:
+            - array
+            - "null"
+      required:
+        - roles
+      type: object
+    SvcBody:
+      additionalProperties: false
+      properties:
+        label:
+          type: string
+      required:
+        - label
+      type: object
 info:
   title: Omniglass
   version: 0.0.1-skeleton
 openapi: 3.1.0
 paths:
+  /auth/me:
+    get:
+      description: Returns the caller's principal, flattened permissions (a UI hint and the fast-reject set), and grants. Requires authentication.
+      operationId: get-auth-me
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: The authenticated principal, its permissions, and grants
   /healthz:
     get:
       description: Reports process health and the database leg, pinged through the Storage Gateway.
@@ -102,6 +241,24 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Liveness and database-reachability probe
+  /roles:
+    get:
+      description: Lists the roles. Gated by the role:read capability.
+      operationId: list-roles
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RolesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List roles
 servers:
   - url: /api/v1
 

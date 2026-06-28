@@ -109,3 +109,98 @@ func nullize(s string) any {
 	}
 	return s
 }
+
+// ErrCredentialNotFound is returned by AuthenticateBearer when no credential
+// matches the presented token hash. The authn middleware maps it to 401.
+var ErrCredentialNotFound = errors.New("storage: credential not found")
+
+// Principal is an authenticated identity with its kind profile and grants.
+type Principal struct {
+	ID      string
+	Kind    string
+	Human   *HumanProfile
+	Service *ServiceProfile
+	Grants  []Grant
+}
+
+// HumanProfile and ServiceProfile carry the kind-specific attributes.
+type HumanProfile struct{ Username, Email, DisplayName string }
+type ServiceProfile struct{ Label string }
+
+// Grant is one (role x scope) pairing on a principal.
+type Grant struct {
+	Role      string
+	ScopeKind string
+	ScopeID   *string
+}
+
+// AuthenticateBearer resolves a bearer credential by its sha256 hash to the
+// principal, its kind profile, and its grants. ErrCredentialNotFound if none.
+func (p *PG) AuthenticateBearer(ctx context.Context, hash []byte) (*Principal, error) {
+	var pr Principal
+	err := p.pool.QueryRow(ctx, `
+		select pr.id, pr.kind
+		from credential c
+		join principal pr on pr.id = c.principal_id
+		where c.kind = 'bearer' and c.secret_hash = $1`, hash).Scan(&pr.ID, &pr.Kind)
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		return nil, ErrCredentialNotFound
+	case err != nil:
+		return nil, fmt.Errorf("storage: authenticate: %w", err)
+	}
+
+	switch pr.Kind {
+	case "human":
+		var h HumanProfile
+		if err := p.pool.QueryRow(ctx,
+			`select username, coalesce(email, ''), coalesce(display_name, '') from human where principal_id = $1`,
+			pr.ID).Scan(&h.Username, &h.Email, &h.DisplayName); err != nil {
+			return nil, fmt.Errorf("storage: load human: %w", err)
+		}
+		pr.Human = &h
+	case "service":
+		var s ServiceProfile
+		if err := p.pool.QueryRow(ctx,
+			`select label from service where principal_id = $1`, pr.ID).Scan(&s.Label); err != nil {
+			return nil, fmt.Errorf("storage: load service: %w", err)
+		}
+		pr.Service = &s
+	}
+
+	rows, err := p.pool.Query(ctx,
+		`select role_id, scope_kind, scope_id from principal_grant where principal_id = $1`, pr.ID)
+	if err != nil {
+		return nil, fmt.Errorf("storage: load grants: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var g Grant
+		if err := rows.Scan(&g.Role, &g.ScopeKind, &g.ScopeID); err != nil {
+			return nil, fmt.Errorf("storage: scan grant: %w", err)
+		}
+		pr.Grants = append(pr.Grants, g)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("storage: grants: %w", err)
+	}
+	return &pr, nil
+}
+
+// ListRoles returns every role, for building the in-process role index.
+func (p *PG) ListRoles(ctx context.Context) ([]Role, error) {
+	rows, err := p.pool.Query(ctx, `select id, official, permissions, inherits from role`)
+	if err != nil {
+		return nil, fmt.Errorf("storage: list roles: %w", err)
+	}
+	defer rows.Close()
+	var out []Role
+	for rows.Next() {
+		var r Role
+		if err := rows.Scan(&r.ID, &r.Official, &r.Permissions, &r.Inherits); err != nil {
+			return nil, fmt.Errorf("storage: scan role: %w", err)
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
