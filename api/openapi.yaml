@@ -1,5 +1,32 @@
 components:
   schemas:
+    CreateLocationInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateLocationInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        display_name:
+          type: string
+        location_type:
+          description: A location_type id (campus, building, ...)
+          minLength: 1
+          type: string
+        name:
+          description: Globally unique name (the address)
+          minLength: 1
+          type: string
+        parent:
+          description: Parent location name; omit for a root location
+          type: string
+      required:
+        - name
+        - location_type
+      type: object
     ErrorDetail:
       additionalProperties: false
       properties:
@@ -104,6 +131,50 @@ components:
       required:
         - username
       type: object
+    ListLocationsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListLocationsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        locations:
+          items:
+            $ref: "#/components/schemas/LocationBody"
+          type:
+            - array
+            - "null"
+      required:
+        - locations
+      type: object
+    LocationBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/LocationBody.json
+          format: uri
+          readOnly: true
+          type: string
+        display_name:
+          type: string
+        id:
+          type: string
+        location_type:
+          type: string
+        name:
+          type: string
+        parent_id:
+          type: string
+      required:
+        - id
+        - name
+        - location_type
+      type: object
     MeOutputBody:
       additionalProperties: false
       properties:
@@ -200,6 +271,21 @@ components:
       required:
         - label
       type: object
+    UpdateLocationInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/UpdateLocationInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        display_name:
+          type: string
+        location_type:
+          type: string
+      type: object
 info:
   title: Omniglass
   version: 0.0.1-skeleton
@@ -241,6 +327,123 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Liveness and database-reachability probe
+  /locations:
+    get:
+      description: Lists the locations the caller may read, each filtered to its scope subtree. Gated by location:read.
+      operationId: list-locations
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListLocationsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List locations in scope
+    post:
+      description: Creates a location, optionally under a parent (a root needs an all-scoped grant). Gated by location:create.
+      operationId: create-location
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateLocationInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocationBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Create a location
+  /locations/{name}:
+    delete:
+      description: Deletes a location, refused while it still has child locations. Gated by location:delete; read and delete scopes drive the 404 versus 403 split.
+      operationId: delete-location
+      parameters:
+        - description: The location's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The location's unique name
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Delete a location
+    get:
+      description: Fetches a location by name within the caller's read scope. Out of scope is a non-disclosing 404. Gated by location:read.
+      operationId: get-location
+      parameters:
+        - description: The location's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The location's unique name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocationBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get a location
+    patch:
+      description: Patches a location's display_name or location_type. Gated by location:update; the read and update scopes drive the 404 versus 403 split.
+      operationId: update-location
+      parameters:
+        - in: path
+          name: name
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateLocationInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocationBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Update a location
   /roles:
     get:
       description: Lists the roles. Gated by the role:read capability.
