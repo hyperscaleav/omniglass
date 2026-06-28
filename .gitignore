@@ -1,7 +1,9 @@
 # Binaries and build output
 /bin/
 /dist/
-omniglass
+# A stray built binary in the repo root (anchored so it does not swallow the
+# cmd/omniglass package directory).
+/omniglass
 *.exe
 *.test
 *.out
