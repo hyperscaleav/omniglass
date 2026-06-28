@@ -23,15 +23,23 @@ func TestMigrateRoundTrip(t *testing.T) {
 	}
 	defer conn.Close(ctx)
 
-	if !tableExists(t, ctx, conn, "platform_setting") {
-		t.Fatal("platform_setting missing after migrate up")
+	want := []string{
+		"platform_setting",
+		"principal", "human", "service", "credential", "role", "principal_grant", "audit_log",
+	}
+	for _, name := range want {
+		if !tableExists(t, ctx, conn, name) {
+			t.Errorf("%s missing after migrate up", name)
+		}
 	}
 
 	if err := migrate.RollbackAll(dsn); err != nil {
 		t.Fatalf("rollback all: %v", err)
 	}
-	if tableExists(t, ctx, conn, "platform_setting") {
-		t.Fatal("platform_setting still present after rollback")
+	for _, name := range want {
+		if tableExists(t, ctx, conn, name) {
+			t.Errorf("%s still present after rollback", name)
+		}
 	}
 }
 
