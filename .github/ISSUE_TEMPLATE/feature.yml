@@ -31,3 +31,24 @@ body:
       description: The docs that ship with it. Is there an interactive learning surface?
     validations:
       required: false
+  - type: textarea
+    id: thin_cut
+    attributes:
+      label: Thin cut
+      description: The deliberate simplifications this slice makes (the smallest honest increment).
+    validations:
+      required: false
+  - type: textarea
+    id: deferred
+    attributes:
+      label: Deferred
+      description: Work moved to later slices, each its own follow-up issue (link them).
+    validations:
+      required: false
+  - type: input
+    id: authz
+    attributes:
+      label: Permission and scope touched
+      description: The "<resource>:<action>" permission checked and the ABAC scope injected, if any.
+    validations:
+      required: false
