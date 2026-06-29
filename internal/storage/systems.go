@@ -107,52 +107,22 @@ func scanSystem(row pgx.Row) (*System, error) {
 	return &s, nil
 }
 
-// ListSystems returns the systems in the caller's read scope, ordered by name,
-// using the shared scoped-tree primitive.
+// systemConfig drives the generic scoped-CRUD helpers for the system tree.
+var systemConfig = scopedConfig[System]{
+	table: systemTable, cols: systemCols, resource: "system",
+	scan: scanSystem, idOf: func(s *System) string { return s.ID },
+	notFound: ErrSystemNotFound, forbidden: ErrSystemForbidden, occupied: ErrSystemOccupied,
+}
+
+// ListSystems returns the systems in the caller's read scope (shared read path).
 func (p *PG) ListSystems(ctx context.Context, read scope.Set) ([]System, error) {
-	if read.Empty() {
-		return nil, nil
-	}
-	sql := scopedListSQL(systemTable, systemCols, read.All)
-	var (
-		rows pgx.Rows
-		err  error
-	)
-	if read.All {
-		rows, err = p.pool.Query(ctx, sql)
-	} else {
-		rows, err = p.pool.Query(ctx, sql, read.IDs)
-	}
-	if err != nil {
-		return nil, fmt.Errorf("storage: list systems: %w", err)
-	}
-	defer rows.Close()
-	var out []System
-	for rows.Next() {
-		s, err := scanSystem(rows)
-		if err != nil {
-			return nil, fmt.Errorf("storage: scan system: %w", err)
-		}
-		out = append(out, *s)
-	}
-	return out, rows.Err()
+	return scopedList(ctx, p, systemConfig, read)
 }
 
 // GetSystem resolves a system by name within the caller's read scope; absent or
-// out-of-scope is the same non-disclosing ErrSystemNotFound.
+// out of scope is the same non-disclosing ErrSystemNotFound.
 func (p *PG) GetSystem(ctx context.Context, name string, read scope.Set) (*System, error) {
-	s, err := p.systemByName(ctx, p.pool, name)
-	if err != nil {
-		return nil, err
-	}
-	in, err := inScopeTree(ctx, p.pool, systemTable, s.ID, read)
-	if err != nil {
-		return nil, err
-	}
-	if !in {
-		return nil, ErrSystemNotFound
-	}
-	return s, nil
+	return scopedGet(ctx, p, systemConfig, name, read)
 }
 
 // CreateSystem inserts a system under an optional parent and optional location,
@@ -250,65 +220,15 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 // DeleteSystem removes a system, same three-way split, refused while it has
 // child systems (the occupancy rule; member-component re-home is deferred).
 func (p *PG) DeleteSystem(ctx context.Context, actorID, name string, read, action scope.Set) error {
-	tx, err := p.pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("storage: begin delete system: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	before, err := p.resolveSystemForAction(ctx, tx, name, read, action)
-	if err != nil {
-		return err
-	}
-	var childCount int
-	if err := tx.QueryRow(ctx, `select count(*) from system where parent_id = $1`, before.ID).Scan(&childCount); err != nil {
-		return fmt.Errorf("storage: count child systems: %w", err)
-	}
-	if childCount > 0 {
-		return ErrSystemOccupied
-	}
-	if _, err := tx.Exec(ctx, `delete from system where id = $1`, before.ID); err != nil {
-		return mapSystemWriteErr(err)
-	}
-	if err := writeAuditRes(ctx, tx, actorID, "delete", "system", before.ID, before, nil); err != nil {
-		return err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("storage: commit delete system: %w", err)
-	}
-	return nil
+	return scopedDelete(ctx, p, systemConfig, actorID, name, read, action)
 }
 
 func (p *PG) resolveSystemForAction(ctx context.Context, q querier, name string, read, action scope.Set) (*System, error) {
-	s, err := p.systemByName(ctx, q, name)
-	if err != nil {
-		return nil, err
-	}
-	readable, err := inScopeTree(ctx, q, systemTable, s.ID, read)
-	if err != nil {
-		return nil, err
-	}
-	if !readable {
-		return nil, ErrSystemNotFound
-	}
-	actionable, err := inScopeTree(ctx, q, systemTable, s.ID, action)
-	if err != nil {
-		return nil, err
-	}
-	if !actionable {
-		return nil, ErrSystemForbidden
-	}
-	return s, nil
+	return resolveScoped(ctx, q, systemConfig, name, read, action)
 }
 
 func (p *PG) systemByName(ctx context.Context, q querier, name string) (*System, error) {
-	s, err := scanSystem(q.QueryRow(ctx, `select `+systemCols+` from system where name = $1`, name))
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrSystemNotFound
-	} else if err != nil {
-		return nil, fmt.Errorf("storage: load system %q: %w", name, err)
-	}
-	return s, nil
+	return scopedByName(ctx, q, systemConfig, name)
 }
 
 func mapSystemWriteErr(err error) error {
