@@ -3,6 +3,7 @@ import { A, useLocation } from "@solidjs/router";
 import { navItems, type NavItem } from "../lib/nav";
 import { useMe } from "../lib/auth";
 import { PanelLeft } from "./icons";
+import { BrandMark, Wordmark } from "./Brand";
 
 // The navigation rail: a daisyUI `menu` with collapsible clusters, the brand
 // lockup, a collapse toggle, and an identity footer. Routing and active state go
@@ -47,7 +48,7 @@ export default function Sidebar(props: { collapsed: boolean; onToggle: () => voi
       <div class="border-t border-base-300 p-3">
         <div class="flex items-center gap-2.5" classList={{ "justify-center": props.collapsed }}>
           <div class="avatar avatar-placeholder">
-            <div class="w-7 rounded-full bg-gradient-to-br from-primary to-info text-primary-content">
+            <div class="w-7 rounded-full bg-linear-to-br from-primary to-info text-primary-content">
               <span class="font-data text-[11px] font-bold uppercase">{ident().name.slice(0, 2)}</span>
             </div>
           </div>
@@ -134,18 +135,7 @@ function Lockup() {
   return (
     <div class="flex min-w-0 items-center gap-2.5">
       <BrandMark />
-      <span class="og-wordmark font-data text-lg font-bold tracking-tight">omni<span class="text-primary">glass</span></span>
+      <Wordmark class="text-lg" />
     </div>
-  );
-}
-
-function BrandMark() {
-  return (
-    <svg width="26" height="26" viewBox="0 0 160 160" class="flex-none" aria-hidden="true">
-      <line x1="80" y1="22" x2="24" y2="128" stroke="var(--color-primary)" stroke-linecap="round" stroke-width="9" />
-      <line x1="80" y1="22" x2="136" y2="128" stroke="var(--color-primary)" stroke-linecap="round" stroke-width="9" />
-      <line x1="24" y1="128" x2="136" y2="128" stroke="var(--color-primary)" stroke-linecap="round" stroke-width="9" />
-      <circle cx="80" cy="93" fill="var(--color-primary)" r="11" />
-    </svg>
   );
 }

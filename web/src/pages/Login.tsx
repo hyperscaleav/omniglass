@@ -1,6 +1,7 @@
 import { Show, createSignal } from "solid-js";
 import { useNavigate, useSearchParams } from "@solidjs/router";
 import { useLogin } from "../lib/auth";
+import { BrandMark, Wordmark } from "../components/Brand";
 
 // Login is a bearer-token paste form (the backend is bearer-only this slice).
 // On success it stores + validates the token and lands at ?next= (an in-app
@@ -50,8 +51,11 @@ export default function Login() {
       <div class="card w-full max-w-sm border border-base-300 bg-base-200">
         <div class="card-body gap-4">
           <div>
-            <h1 class="og-wordmark font-data text-xl font-bold">omni<span class="text-primary">glass</span></h1>
-            <p class="mt-1 text-sm text-base-content/60">Sign in to the operator console.</p>
+            <div class="flex items-center gap-2.5">
+              <BrandMark size={28} />
+              <Wordmark class="text-xl" />
+            </div>
+            <p class="mt-1.5 text-sm text-base-content/60">Sign in to the operator console.</p>
           </div>
           <form onSubmit={onSubmit} class="flex flex-col gap-3">
             <div>
@@ -59,6 +63,7 @@ export default function Login() {
               <input
                 id="login-token"
                 type="password"
+                autocomplete="off"
                 class="input input-bordered w-full"
                 placeholder="ogp_…"
                 value={token()}

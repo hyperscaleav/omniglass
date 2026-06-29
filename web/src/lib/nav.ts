@@ -62,14 +62,15 @@ export const navItems: NavItem[] = [
   },
 ];
 
-// Flattened title + hint (+ tracking issue) lookup by base-relative path, for the
-// generic stub.
-export type NavMeta = { label: string; hint: string; issue?: number };
+// Flattened title + hint (+ icon + tracking issue) lookup by base-relative path,
+// for the generic stub. A child inherits its parent group's icon (that is the icon
+// the sidebar shows it under), so the placeholder matches the sidebar.
+export type NavMeta = { label: string; hint: string; issue?: number; icon: Component<{ size?: number }> };
 export const navByPath: Record<string, NavMeta> = (() => {
   const m: Record<string, NavMeta> = {};
   for (const item of navItems) {
-    if (item.path) m[item.path] = { label: item.label, hint: item.hint, issue: item.issue };
-    for (const child of item.children ?? []) m[child.path] = { label: child.label, hint: child.hint, issue: child.issue };
+    if (item.path) m[item.path] = { label: item.label, hint: item.hint, issue: item.issue, icon: item.icon };
+    for (const child of item.children ?? []) m[child.path] = { label: child.label, hint: child.hint, issue: child.issue, icon: item.icon };
   }
   return m;
 })();
@@ -82,7 +83,7 @@ function relative(pathname: string): string {
 }
 
 export function lookupNav(pathname: string): NavMeta {
-  return navByPath[relative(pathname)] ?? { label: "Coming soon", hint: "This section is not built yet." };
+  return navByPath[relative(pathname)] ?? { label: "Coming soon", hint: "This section is not built yet.", icon: Icons.Layers };
 }
 
 // sectionLabel resolves a pathname to its top-bar section by longest prefix, so
