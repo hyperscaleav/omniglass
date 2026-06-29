@@ -77,4 +77,12 @@ func TestSeedRolesIdempotent(t *testing.T) {
 	if sysTypeCount != 6 {
 		t.Errorf("official system_types = %d, want 6", sysTypeCount)
 	}
+
+	var compTypeCount int
+	if err := conn.QueryRow(ctx, `select count(*) from component_type where official`).Scan(&compTypeCount); err != nil {
+		t.Fatalf("count component_types: %v", err)
+	}
+	if compTypeCount != 10 {
+		t.Errorf("official component_types = %d, want 10", compTypeCount)
+	}
 }

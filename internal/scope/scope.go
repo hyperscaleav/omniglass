@@ -69,6 +69,8 @@ func applicableKinds(resource string) map[string]bool {
 		return map[string]bool{"location": true}
 	case "system":
 		return map[string]bool{"system": true}
+	case "component":
+		return map[string]bool{"component": true}
 	default:
 		return map[string]bool{}
 	}

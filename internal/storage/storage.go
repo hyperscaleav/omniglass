@@ -69,6 +69,15 @@ type Gateway interface {
 	UpdateSystem(ctx context.Context, actorID, name string, patch SystemPatch, read, action scope.Set) (*System, error)
 	DeleteSystem(ctx context.Context, actorID, name string, read, action scope.Set) error
 
+	// The component tier: a type registry and scoped CRUD, on the same helpers.
+	UpsertComponentType(ctx context.Context, ct ComponentType) error
+	ListComponentTypes(ctx context.Context) ([]ComponentType, error)
+	ListComponents(ctx context.Context, read scope.Set) ([]Component, error)
+	GetComponent(ctx context.Context, name string, read scope.Set) (*Component, error)
+	CreateComponent(ctx context.Context, actorID string, spec ComponentSpec, create scope.Set) (*Component, error)
+	UpdateComponent(ctx context.Context, actorID, name string, patch ComponentPatch, read, action scope.Set) (*Component, error)
+	DeleteComponent(ctx context.Context, actorID, name string, read, action scope.Set) error
+
 	// Close releases the underlying connection pool. Idempotent at the pool
 	// level; call once on shutdown.
 	Close()

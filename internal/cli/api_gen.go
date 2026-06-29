@@ -51,6 +51,127 @@ func generatedCommands() []*cobra.Command {
 	}
 	{
 		parent := &cobra.Command{
+			Use:   "component",
+			Short: "Commands for the component resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			var fComponentType string
+			var fDisplayName string
+			var fLocation string
+			var fName string
+			var fParent string
+			var fSystem string
+			cmd := &cobra.Command{
+				Use:     "create",
+				Short:   "Create a component",
+				Long:    "Creates a component, optionally under a parent (a root needs an all-scoped grant), bound to a system and a location. Gated by component:create.",
+				Example: "  omniglass component create --component-type component_type --name name",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/components")
+					body := map[string]any{}
+					if cmd.Flags().Changed("component-type") {
+						body["component_type"] = fComponentType
+					}
+					if cmd.Flags().Changed("display-name") {
+						body["display_name"] = fDisplayName
+					}
+					if cmd.Flags().Changed("location") {
+						body["location"] = fLocation
+					}
+					if cmd.Flags().Changed("name") {
+						body["name"] = fName
+					}
+					if cmd.Flags().Changed("parent") {
+						body["parent"] = fParent
+					}
+					if cmd.Flags().Changed("system") {
+						body["system"] = fSystem
+					}
+					return runAPICommand(cmd, "POST", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fComponentType, "component-type", "", "A component_type id")
+			_ = cmd.MarkFlagRequired("component-type")
+			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
+			cmd.Flags().StringVar(&fLocation, "location", "", "Location name this component is placed at")
+			cmd.Flags().StringVar(&fName, "name", "", "Globally unique name (the address)")
+			_ = cmd.MarkFlagRequired("name")
+			cmd.Flags().StringVar(&fParent, "parent", "", "Parent component name; omit for a root component")
+			cmd.Flags().StringVar(&fSystem, "system", "", "Primary system name this component belongs to")
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "delete <name>",
+				Short:   "Delete a component",
+				Long:    "Deletes a component, refused while it still has child components. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.",
+				Example: "  omniglass component delete <name>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/components/%s", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "DELETE", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "get <name>",
+				Short:   "Get a component",
+				Long:    "Fetches a component by name within the caller's read scope. Out of scope is a non-disclosing 404. Gated by component:read.",
+				Example: "  omniglass component get <name>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/components/%s", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "list",
+				Short:   "List components in scope",
+				Long:    "Lists the components the caller may read, each filtered to its scope subtree. Gated by component:read.",
+				Example: "  omniglass component list",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/components")
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			var fComponentType string
+			var fDisplayName string
+			cmd := &cobra.Command{
+				Use:     "update <name>",
+				Short:   "Update a component",
+				Long:    "Patches a component's display_name or component_type. Gated by component:update; read and update scopes drive the 404 versus 403 split.",
+				Example: "  omniglass component update <name>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/components/%s", url.PathEscape(args[0]))
+					body := map[string]any{}
+					if cmd.Flags().Changed("component-type") {
+						body["component_type"] = fComponentType
+					}
+					if cmd.Flags().Changed("display-name") {
+						body["display_name"] = fDisplayName
+					}
+					return runAPICommand(cmd, "PATCH", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fComponentType, "component-type", "", "")
+			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
+			return cmd
+		}())
+		roots = append(roots, parent)
+	}
+	{
+		parent := &cobra.Command{
 			Use:   "location",
 			Short: "Commands for the location resource",
 		}

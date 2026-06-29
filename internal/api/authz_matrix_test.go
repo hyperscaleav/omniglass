@@ -36,6 +36,7 @@ type scopedEntity struct {
 var scopedEntities = []scopedEntity{
 	{resource: "location", base: "/locations", typeField: "location_type", typeValue: "campus"},
 	{resource: "system", base: "/systems", typeField: "system_type", typeValue: "meeting-room"},
+	{resource: "component", base: "/components", typeField: "component_type", typeValue: "display"},
 }
 
 func (e scopedEntity) createBody(name, parent string) map[string]any {
