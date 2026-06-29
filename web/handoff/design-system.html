@@ -1,0 +1,1238 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="omniglass-dark" data-density="comfortable" data-type="mixed">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Omniglass · Design System</title>
+  <link rel="icon" href="assets/og-mark.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- daisyUI 5 (prebuilt components) + Tailwind v4 browser build (utilities).
+       The browser build can't resolve the daisyUI @plugin in-page, so daisyUI
+       ships as compiled CSS and Tailwind generates the utilities. Themes are
+       [data-theme] variable blocks below (+ thin overrides so daisyUI color
+       modifiers track the live variables when switching at runtime). -->
+  <link href="https://cdn.jsdelivr.net/npm/daisyui@5/daisyui.css" rel="stylesheet" type="text/css" />
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <style type="text/tailwindcss">
+    @import "tailwindcss";
+  </style>
+
+  <!-- ====================================================================
+       BESPOKE TOUCHES ONLY. Everything else is daisyUI + Tailwind classes.
+       1) extra severity/health colors daisyUI has no semantic slot for
+       2) the type-system (mixed/mono) + density (comfortable/compact) levers
+       ==================================================================== -->
+  <style>
+    /* daisyUI 5 registers the brand color tokens (primary/secondary/accent) as
+       @property with inherits:false. Under the CDN build those don't cascade to
+       descendants, so brand-colored components don't recolor on theme switch
+       (base + semantic colors do). We bind the brand-colored components to
+       plain, inheriting --og-* aliases instead, which switch reliably. */
+    /* ===================================================================
+       THEMES — daisyUI variable blocks. daisyUI 5 components read these
+       CSS custom properties; defining them on our own [data-theme] names
+       gives us two fully custom themes without the build-time plugin.
+       =================================================================== */
+    [data-theme="omniglass-dark"] {
+      color-scheme: dark;
+      --color-base-100: #080c16;   /* page ground */
+      --color-base-200: #0c1320;   /* raised: cards, rail, navbar */
+      --color-base-300: #101a2b;   /* lifted: hover rows, borders */
+      --color-base-content: #e7eef6;
+      --color-primary: #21cab9;    /* teal */
+      --color-primary-content: #04201d;
+      --color-secondary: #ef2ada;  /* magenta */
+      --color-secondary-content: #ffffff;
+      --color-accent: #4cd5c6;     /* link teal (lifted for dark) */
+      --color-accent-content: #04201d;
+      --color-neutral: #1a2336;    /* slate chips / muted surfaces */
+      --color-neutral-content: #cbd5e1;
+      --color-info: #5b8def;          --color-info-content: #061328;
+      --color-success: #3ecf8e;       --color-success-content: #04130c;
+      --color-warning: #f0b232;       --color-warning-content: #1f1402;
+      --color-error: #f0676b;         --color-error-content: #1f0506;
+      --radius-selector: 0.25rem; --radius-field: 0.375rem; --radius-box: 0.625rem;
+      --size-selector: 0.25rem; --size-field: 0.25rem; --border: 1px; --depth: 1; --noise: 0;
+      /* domain extras daisyUI has no semantic slot for */
+      --og-up: #21cab9; --og-unknown: #8aa0c0; --og-snoozed: #a78bfa;
+      --og-average: #fb923c; --og-disaster: #e11d48;
+      /* inheriting brand aliases (see note above) */
+      --og-primary: #21cab9; --og-primary-content: #04201d;
+      --og-secondary: #ef2ada; --og-secondary-content: #ffffff;
+      --og-accent: #4cd5c6; --og-accent-content: #04201d;
+    }
+    [data-theme="omniglass-light"] {
+      color-scheme: light;
+      --color-base-100: #f4f7fb;   /* page ground (cool gray) */
+      --color-base-200: #ffffff;   /* raised cards lift off the ground */
+      --color-base-300: #f0f4f9;
+      --color-base-content: #0e1726;
+      --color-primary: #11a294;    /* teal, darkened for AA on white */
+      --color-primary-content: #ffffff;
+      --color-secondary: #c81fb6;
+      --color-secondary-content: #ffffff;
+      --color-accent: #0d8d80;
+      --color-accent-content: #ffffff;
+      --color-neutral: #1f2a3d;
+      --color-neutral-content: #e7eef6;
+      --color-info: #3567d6;          --color-info-content: #ffffff;
+      --color-success: #16a06b;       --color-success-content: #ffffff;
+      --color-warning: #b9791a;       --color-warning-content: #ffffff;
+      --color-error: #d6494d;         --color-error-content: #ffffff;
+      --radius-selector: 0.25rem; --radius-field: 0.375rem; --radius-box: 0.625rem;
+      --size-selector: 0.25rem; --size-field: 0.25rem; --border: 1px; --depth: 1; --noise: 0;
+      --og-up: #11a294; --og-unknown: #6b7f99; --og-snoozed: #7c5cd6;
+      --og-average: #d97516; --og-disaster: #c81e3f;
+      --og-primary: #11a294; --og-primary-content: #ffffff;
+      --og-secondary: #c81fb6; --og-secondary-content: #ffffff;
+      --og-accent: #0d8d80; --og-accent-content: #ffffff;
+    }
+
+    /* domain badge variants — same shape/size as daisyUI badge-soft, just
+       carrying a color daisyUI doesn't ship a semantic for. */
+    .badge-up       { color: var(--og-up);       background: color-mix(in oklch, var(--og-up) 15%, transparent);       border-color: color-mix(in oklch, var(--og-up) 45%, transparent); }
+    .badge-unknown  { color: var(--og-unknown);  background: color-mix(in oklch, var(--og-unknown) 15%, transparent);  border-color: color-mix(in oklch, var(--og-unknown) 45%, transparent); }
+    .badge-snoozed  { color: var(--og-snoozed);  background: color-mix(in oklch, var(--og-snoozed) 15%, transparent);  border-color: color-mix(in oklch, var(--og-snoozed) 45%, transparent); }
+    .badge-average  { color: var(--og-average);  background: color-mix(in oklch, var(--og-average) 16%, transparent);  border-color: color-mix(in oklch, var(--og-average) 45%, transparent); }
+    .badge-disaster { color: var(--og-disaster); background: color-mix(in oklch, var(--og-disaster) 16%, transparent); border-color: color-mix(in oklch, var(--og-disaster) 50%, transparent); }
+    .dot-up { background: var(--og-up); } .dot-unknown { background: var(--og-unknown); }
+    .dot-snoozed { background: var(--og-snoozed); } .dot-average { background: var(--og-average); } .dot-disaster { background: var(--og-disaster); }
+
+    /* bind brand-colored daisyUI components + utilities to the inheriting
+       aliases so they switch with the theme (see note at top of styles). */
+    .text-primary   { color: var(--og-primary) !important; }
+    .text-secondary { color: var(--og-secondary) !important; }
+    .text-accent, .link.text-accent { color: var(--og-accent) !important; }
+    .bg-primary   { background-color: var(--og-primary) !important; }
+    .bg-secondary { background-color: var(--og-secondary) !important; }
+    .bg-accent    { background-color: var(--og-accent) !important; }
+    .border-primary { border-color: var(--og-primary) !important; }
+    .btn-primary:not(.btn-soft):not(.btn-outline):not(.btn-ghost):not(.btn-link)   { background-color: var(--og-primary) !important;   border-color: var(--og-primary) !important;   color: var(--og-primary-content) !important; }
+    .btn-secondary:not(.btn-soft):not(.btn-outline):not(.btn-ghost):not(.btn-link) { background-color: var(--og-secondary) !important; border-color: var(--og-secondary) !important; color: var(--og-secondary-content) !important; }
+    .btn-accent:not(.btn-soft):not(.btn-outline):not(.btn-ghost):not(.btn-link)    { background-color: var(--og-accent) !important;    border-color: var(--og-accent) !important;    color: var(--og-accent-content) !important; }
+    .btn-primary:not(.btn-soft):not(.btn-outline):not(.btn-ghost):not(.btn-link):hover { background-color: color-mix(in oklch, var(--og-primary) 86%, #000) !important; }
+    .badge-primary:not(.badge-soft):not(.badge-outline)   { background-color: var(--og-primary) !important;   border-color: var(--og-primary) !important;   color: var(--og-primary-content) !important; }
+    .badge-secondary:not(.badge-soft):not(.badge-outline) { background-color: var(--og-secondary) !important; border-color: var(--og-secondary) !important; color: var(--og-secondary-content) !important; }
+    .radial-progress { color: var(--og-primary) !important; }
+    /* soft/tinted brand surfaces */
+    .badge-soft.badge-primary { color: var(--og-primary) !important; background-color: color-mix(in oklch, var(--og-primary) 15%, transparent) !important; border-color: color-mix(in oklch, var(--og-primary) 35%, transparent) !important; }
+
+    /* --- type system: IBM Plex Sans for UI, JetBrains Mono for data ---- */
+    :root { --og-font-ui: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+            --og-font-data: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
+    html { font-family: var(--og-font-ui); }
+    .font-data, .tnum { font-family: var(--og-font-data); }
+    .tnum { font-variant-numeric: tabular-nums; }
+    /* "mono everywhere" — the faithful original face */
+    html[data-type="mono"] { --og-font-ui: var(--og-font-data); }
+
+    /* --- density: drives row height + card padding on dense surfaces --- */
+    :root { --og-row-h: 2.75rem; --og-pad-card: 1.25rem; --og-gap: 1.5rem; }
+    html[data-density="compact"] { --og-row-h: 2.1rem; --og-pad-card: 0.9rem; --og-gap: 1.1rem; }
+    .og-rows tbody tr td { height: var(--og-row-h); padding-top: 0; padding-bottom: 0; }
+    .og-pad { padding: var(--og-pad-card); }
+    .og-stack { gap: var(--og-gap); }
+
+    /* a single live pulse — pure decoration, no daisyUI equivalent */
+    .og-pulse { position: relative; }
+    .og-pulse::after { content: ""; position: absolute; inset: 0; border-radius: 9999px; background: var(--color-primary);
+      animation: ogp 2s cubic-bezier(.4,0,.6,1) infinite; }
+    @keyframes ogp { 0% { transform: scale(1); opacity: .7 } 70% { transform: scale(2.6); opacity: 0 } 100% { opacity: 0 } }
+    @media (prefers-reduced-motion: reduce) { .og-pulse::after { animation: none } }
+    /* apply theme/var changes instantly (a throttled tab can otherwise strand a
+       transitioned color at its pre-switch value) */
+    .theme-switching, .theme-switching * { transition: none !important; }
+
+    html { scroll-behavior: smooth; }
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-thumb { background: var(--color-base-300); border-radius: 9999px; border: 3px solid transparent; background-clip: padding-box; }
+  </style>
+</head>
+
+<body class="min-h-screen bg-base-100 text-base-content">
+  <!-- drawer wraps the whole app; the RIGHT (end) drawer is the Tweaks panel.
+       Pure-CSS open/close via the checkbox — in the Solid app this maps to a
+       Kobalte Dialog/Drawer (Trigger / Overlay / Content). -->
+  <div class="drawer drawer-end">
+    <input id="tweaks-drawer" type="checkbox" class="drawer-toggle" />
+
+    <div class="drawer-content flex min-h-screen">
+      <!-- ============================================================ -->
+      <!-- NAV RAIL (collapsible). daisyUI `menu`. Collapse = peer checkbox -->
+      <!-- ============================================================ -->
+      <input id="rail-collapse" type="checkbox" class="peer hidden" />
+      <aside class="hidden md:flex shrink-0 flex-col border-r border-base-300 bg-base-200
+                    w-60 peer-checked:w-16 transition-[width] duration-200 sticky top-0 h-screen">
+        <!-- brand + collapse toggle -->
+        <div class="flex items-center gap-2 h-14 px-3 border-b border-base-300">
+          <img src="assets/og-mark.svg" width="26" height="26" alt="Omniglass" class="shrink-0" />
+          <span class="font-data text-lg font-bold tracking-tight peer-checked:hidden whitespace-nowrap"
+                style="font-family: var(--og-font-data)">omni<span class="text-primary">glass</span></span>
+          <label for="rail-collapse" class="btn btn-ghost btn-sm btn-square ml-auto text-base-content/50" title="Collapse rail">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="9" y1="4" x2="9" y2="20"/></svg>
+          </label>
+        </div>
+        <!-- nav menu = the console IA -->
+        <nav class="flex-1 overflow-y-auto p-2">
+          <ul class="menu w-full gap-0.5 [&_li>*]:rounded-field">
+            <li><a class="active" href="#screen-home"><span class="size-[18px]" data-icon="home"></span><span class="peer-checked:hidden">Home</span></a></li>
+            <li><a href="#components-static"><span class="size-[18px]" data-icon="dashboard"></span><span>Dashboards</span></a></li>
+            <li><a href="#components-static"><span class="size-[18px]" data-icon="bell"></span><span>Alarms</span></a></li>
+            <li>
+              <details open>
+                <summary><span class="size-[18px]" data-icon="package"></span><span>Inventory</span></summary>
+                <ul>
+                  <li><a href="#screen-data">Systems</a></li>
+                  <li><a href="#screen-data">Components</a></li>
+                  <li><a class="" href="#screen-locations">Locations</a></li>
+                </ul>
+              </details>
+            </li>
+            <li>
+              <details>
+                <summary><span class="size-[18px]" data-icon="layers"></span><span>Catalog</span></summary>
+                <ul><li><a href="#components-static">Templates</a></li><li><a href="#components-static">Types</a></li><li><a href="#components-static">Rules</a></li></ul>
+              </details>
+            </li>
+            <li><a href="#components-interactive"><span class="size-[18px]" data-icon="compass"></span><span>Explore</span></a></li>
+            <li><a href="#foundations"><span class="size-[18px]" data-icon="cap"></span><span>Learn</span></a></li>
+            <li>
+              <details>
+                <summary><span class="size-[18px]" data-icon="settings"></span><span>Settings</span></summary>
+                <ul><li><a href="#components-interactive">Config</a></li><li><a href="#components-interactive">Users</a></li><li><a href="#components-interactive">Audit</a></li></ul>
+              </details>
+            </li>
+          </ul>
+        </nav>
+        <!-- user footer -->
+        <div class="border-t border-base-300 p-3">
+          <div class="flex items-center gap-2.5">
+            <div class="avatar avatar-placeholder">
+              <div class="w-7 rounded-full bg-primary text-primary-content"><span class="text-[11px] font-semibold font-data">AL</span></div>
+            </div>
+            <div class="leading-tight peer-checked:hidden">
+              <div class="font-data text-xs font-semibold">a.loucks</div>
+              <div class="text-[11px] text-base-content/40">Owner</div>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- ============================================================ -->
+      <!-- MAIN COLUMN                                                   -->
+      <!-- ============================================================ -->
+      <div class="flex-1 min-w-0 flex flex-col">
+        <!-- TOP BAR -->
+        <header class="navbar sticky top-0 z-30 min-h-14 border-b border-base-300 bg-base-100/80 backdrop-blur px-4 gap-3">
+          <div class="flex items-center gap-2">
+            <label for="rail-collapse" class="btn btn-ghost btn-sm btn-square md:hidden">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>
+            </label>
+            <span class="text-[11px] font-semibold uppercase tracking-[0.12em] text-base-content/60">Design System</span>
+          </div>
+          <div class="flex-1"></div>
+          <!-- search affordance (reserved) -->
+          <label class="input input-sm hidden sm:flex items-center gap-2 w-56 bg-base-200 border-base-300">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="opacity-50"><circle cx="11" cy="11" r="7"/><line x1="20" y1="20" x2="16.5" y2="16.5"/></svg>
+            <input type="search" class="grow" placeholder="Search" />
+            <kbd class="kbd kbd-sm font-data">⌘K</kbd>
+          </label>
+          <!-- theme toggle -->
+          <button id="theme-toggle" class="btn btn-ghost btn-sm btn-square" title="Toggle theme" aria-label="Toggle theme">
+            <span data-icon="moon" class="size-[18px] hidden [data-theme=omniglass-dark]_&:inline"></span>
+          </button>
+          <!-- tweaks trigger -->
+          <label for="tweaks-drawer" class="btn btn-sm btn-primary gap-1.5">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="12" cy="12" r="3"/><path d="M3 12h3M18 12h3M12 3v3M12 18v3"/></svg>
+            Tweaks
+          </label>
+        </header>
+
+        <!-- in-page tabs -->
+        <div class="sticky top-14 z-20 border-b border-base-300 bg-base-100/80 backdrop-blur px-4 sm:px-8">
+          <div role="tablist" class="tabs tabs-border" id="page-tabs">
+            <a role="tab" class="tab tab-active" href="#foundations">Foundations</a>
+            <a role="tab" class="tab" href="#components-static">Static</a>
+            <a role="tab" class="tab" href="#components-interactive">Interactive</a>
+            <a role="tab" class="tab" href="#screen-home">Screens</a>
+          </div>
+        </div>
+
+        <main class="flex-1 px-4 sm:px-8 py-8 max-w-[1180px] w-full mx-auto flex flex-col gap-16">
+
+          <!-- ====================================================== -->
+          <!-- HERO                                                    -->
+          <!-- ====================================================== -->
+          <section class="flex flex-col gap-3">
+            <div class="flex items-center gap-2 text-primary">
+              <img src="assets/og-mark.svg" width="22" height="22" alt="" />
+              <span class="text-[11px] font-semibold uppercase tracking-[0.14em]">Omniglass UI</span>
+            </div>
+            <h1 class="text-3xl sm:text-4xl font-semibold tracking-tight">Design System</h1>
+            <p class="text-base-content/60 max-w-2xl leading-relaxed">
+              Built on <span class="text-base-content font-medium">daisyUI 5</span> + <span class="text-base-content font-medium">Tailwind CSS 4</span>.
+              Two themes, two density modes, two type systems — all driven by <code class="font-data text-primary text-sm">data-</code> attributes on
+              <code class="font-data text-sm">&lt;html&gt;</code>. Static components are pure daisyUI markup; interactive components pair daisyUI classes
+              with <span class="text-base-content font-medium">Kobalte</span> for behavior and accessibility in the SolidJS app.
+            </p>
+            <div class="flex flex-wrap gap-2 mt-1">
+              <span class="badge badge-soft badge-primary gap-1.5"><span class="og-pulse inline-block size-1.5 rounded-full bg-primary"></span>Live themable</span>
+              <span class="badge badge-soft">daisyUI 5</span>
+              <span class="badge badge-soft">Tailwind 4</span>
+              <span class="badge badge-soft">Kobalte</span>
+              <span class="badge badge-soft">SolidJS</span>
+            </div>
+          </section>
+
+          <!-- ====================================================== -->
+          <!-- FOUNDATIONS                                             -->
+          <!-- ====================================================== -->
+          <section id="foundations" class="scroll-mt-32 flex flex-col gap-8">
+            <header class="flex flex-col gap-1.5">
+              <span class="text-[11px] font-semibold uppercase tracking-[0.12em] text-base-content/50">Foundations</span>
+              <h2 class="text-2xl font-semibold tracking-tight">Themes &amp; tokens</h2>
+              <p class="text-base-content/60 max-w-2xl">The whole system is two daisyUI themes. Everything below recolors live when you switch — try the theme toggle or the Tweaks panel.</p>
+            </header>
+
+            <!-- theme swatches -->
+            <div class="grid sm:grid-cols-2 gap-4">
+              <!-- dark -->
+              <div class="card bg-base-200 border border-base-300 overflow-hidden">
+                <div class="px-4 py-3 border-b border-base-300 flex items-center justify-between">
+                  <span class="font-data text-sm font-semibold">omniglass-dark</span>
+                  <span class="badge badge-sm badge-soft badge-primary">default</span>
+                </div>
+                <div class="p-4 grid grid-cols-6 gap-2" data-theme="omniglass-dark">
+                  <div class="aspect-square rounded-field bg-base-100 border border-base-300" title="base-100"></div>
+                  <div class="aspect-square rounded-field bg-base-200 border border-base-300" title="base-200"></div>
+                  <div class="aspect-square rounded-field bg-base-300 border border-base-300" title="base-300"></div>
+                  <div class="aspect-square rounded-field bg-primary" title="primary"></div>
+                  <div class="aspect-square rounded-field bg-secondary" title="secondary"></div>
+                  <div class="aspect-square rounded-field bg-accent" title="accent"></div>
+                  <div class="aspect-square rounded-field bg-info" title="info"></div>
+                  <div class="aspect-square rounded-field bg-success" title="success"></div>
+                  <div class="aspect-square rounded-field bg-warning" title="warning"></div>
+                  <div class="aspect-square rounded-field bg-error" title="error"></div>
+                  <div class="aspect-square rounded-field" style="background: var(--og-snoozed)" title="snoozed"></div>
+                  <div class="aspect-square rounded-field" style="background: var(--og-unknown)" title="unknown"></div>
+                </div>
+              </div>
+              <!-- light -->
+              <div class="card bg-base-200 border border-base-300 overflow-hidden">
+                <div class="px-4 py-3 border-b border-base-300 flex items-center justify-between">
+                  <span class="font-data text-sm font-semibold">omniglass-light</span>
+                  <span class="badge badge-sm badge-soft">light</span>
+                </div>
+                <div class="p-4 grid grid-cols-6 gap-2" data-theme="omniglass-light">
+                  <div class="aspect-square rounded-field bg-base-100 border border-base-300" title="base-100"></div>
+                  <div class="aspect-square rounded-field bg-base-200 border border-base-300" title="base-200"></div>
+                  <div class="aspect-square rounded-field bg-base-300 border border-base-300" title="base-300"></div>
+                  <div class="aspect-square rounded-field bg-primary" title="primary"></div>
+                  <div class="aspect-square rounded-field bg-secondary" title="secondary"></div>
+                  <div class="aspect-square rounded-field bg-accent" title="accent"></div>
+                  <div class="aspect-square rounded-field bg-info" title="info"></div>
+                  <div class="aspect-square rounded-field bg-success" title="success"></div>
+                  <div class="aspect-square rounded-field bg-warning" title="warning"></div>
+                  <div class="aspect-square rounded-field bg-error" title="error"></div>
+                  <div class="aspect-square rounded-field" style="background: var(--og-snoozed)" title="snoozed"></div>
+                  <div class="aspect-square rounded-field" style="background: var(--og-unknown)" title="unknown"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- semantic mapping -->
+            <div class="grid md:grid-cols-2 gap-8">
+              <div class="flex flex-col gap-3">
+                <h3 class="text-sm font-semibold uppercase tracking-wide text-base-content/50">Domain → token mapping</h3>
+                <div class="overflow-x-auto rounded-box border border-base-300">
+                  <table class="table table-sm">
+                    <thead><tr><th>Meaning</th><th>Token</th><th>Swatch</th></tr></thead>
+                    <tbody>
+                      <tr><td>Healthy / Up</td><td><code class="font-data text-xs">success</code> · <code class="font-data text-xs">--og-up</code></td><td><span class="inline-block size-4 rounded dot-up"></span></td></tr>
+                      <tr><td>Degraded / Warning</td><td><code class="font-data text-xs">warning</code></td><td><span class="inline-block size-4 rounded bg-warning"></span></td></tr>
+                      <tr><td>Average</td><td><code class="font-data text-xs">--og-average</code></td><td><span class="inline-block size-4 rounded dot-average"></span></td></tr>
+                      <tr><td>High / Down / Error</td><td><code class="font-data text-xs">error</code></td><td><span class="inline-block size-4 rounded bg-error"></span></td></tr>
+                      <tr><td>Disaster</td><td><code class="font-data text-xs">--og-disaster</code></td><td><span class="inline-block size-4 rounded dot-disaster"></span></td></tr>
+                      <tr><td>Info</td><td><code class="font-data text-xs">info</code></td><td><span class="inline-block size-4 rounded bg-info"></span></td></tr>
+                      <tr><td>Snoozed</td><td><code class="font-data text-xs">--og-snoozed</code></td><td><span class="inline-block size-4 rounded dot-snoozed"></span></td></tr>
+                      <tr><td>Unknown</td><td><code class="font-data text-xs">--og-unknown</code></td><td><span class="inline-block size-4 rounded dot-unknown"></span></td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div class="flex flex-col gap-6">
+                <!-- type -->
+                <div class="flex flex-col gap-3">
+                  <h3 class="text-sm font-semibold uppercase tracking-wide text-base-content/50">Type system</h3>
+                  <div class="rounded-box border border-base-300 p-4 flex flex-col gap-3">
+                    <div><div class="text-[11px] uppercase tracking-wide text-base-content/40 mb-1">UI · IBM Plex Sans</div>
+                      <div class="text-lg" style="font-family: var(--og-font-ui)">Executive Boardroom is degraded</div></div>
+                    <div><div class="text-[11px] uppercase tracking-wide text-base-content/40 mb-1">Data · JetBrains Mono</div>
+                      <div class="text-lg tnum">DISP-L · 4 alarms · 31.4°C</div></div>
+                    <p class="text-xs text-base-content/50">The <code class="font-data text-xs">mono</code> type variant swaps UI text to mono too — the original all-mono face.</p>
+                  </div>
+                </div>
+                <!-- radii -->
+                <div class="flex flex-col gap-3">
+                  <h3 class="text-sm font-semibold uppercase tracking-wide text-base-content/50">Radii</h3>
+                  <div class="flex gap-3">
+                    <div class="flex-1 flex flex-col items-center gap-2"><div class="w-full h-12 bg-base-300 rounded-selector"></div><code class="font-data text-[11px] text-base-content/60">selector ·25</code></div>
+                    <div class="flex-1 flex flex-col items-center gap-2"><div class="w-full h-12 bg-base-300 rounded-field"></div><code class="font-data text-[11px] text-base-content/60">field ·375</code></div>
+                    <div class="flex-1 flex flex-col items-center gap-2"><div class="w-full h-12 bg-base-300 rounded-box"></div><code class="font-data text-[11px] text-base-content/60">box ·625</code></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- ====================================================== -->
+          <!-- STATIC COMPONENTS (pure daisyUI)                        -->
+          <!-- ====================================================== -->
+          <section id="components-static" class="scroll-mt-32 flex flex-col gap-10">
+            <header class="flex flex-col gap-1.5">
+              <span class="text-[11px] font-semibold uppercase tracking-[0.12em] text-base-content/50">Components · Static</span>
+              <h2 class="text-2xl font-semibold tracking-tight">Pure daisyUI</h2>
+              <p class="text-base-content/60 max-w-2xl">Presentational components — markup + classes only, no behavior. These port to SolidJS as plain JSX with the same class strings.</p>
+            </header>
+
+            <!-- BUTTON -->
+            <div class="flex flex-col gap-3">
+              <div class="flex items-center gap-2"><h3 class="text-base font-semibold">Button</h3><span class="badge badge-xs badge-soft">daisyUI</span><code class="font-data text-xs text-base-content/45 ml-auto">.btn</code></div>
+              <div class="rounded-box border border-base-300 bg-base-100 p-5 flex flex-col gap-4">
+                <div class="flex flex-wrap items-center gap-2">
+                  <button class="btn btn-primary">Resolve</button>
+                  <button class="btn btn-secondary">Secondary</button>
+                  <button class="btn btn-accent">Accent</button>
+                  <button class="btn">Default</button>
+                  <button class="btn btn-soft">Soft</button>
+                  <button class="btn btn-outline">Outline</button>
+                  <button class="btn btn-ghost">Ghost</button>
+                  <button class="btn btn-link">Link</button>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                  <button class="btn btn-primary btn-xs">xs</button>
+                  <button class="btn btn-primary btn-sm">sm</button>
+                  <button class="btn btn-primary">md</button>
+                  <button class="btn btn-primary btn-lg">lg</button>
+                  <button class="btn btn-primary btn-square btn-sm" aria-label="ack"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.5 10 17 19 7"/></svg></button>
+                  <button class="btn btn-error btn-soft btn-sm">Acknowledge</button>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                  <span class="text-[11px] uppercase tracking-wide text-base-content/40 w-16">States</span>
+                  <button class="btn btn-primary">Default</button>
+                  <button class="btn btn-primary btn-active">Active</button>
+                  <button class="btn btn-primary" disabled>Disabled</button>
+                  <button class="btn btn-primary"><span class="loading loading-spinner loading-sm"></span>Saving</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- BADGE -->
+            <div class="flex flex-col gap-3">
+              <div class="flex items-center gap-2"><h3 class="text-base font-semibold">Badge</h3><span class="badge badge-xs badge-soft">daisyUI + bespoke colors</span><code class="font-data text-xs text-base-content/45 ml-auto">.badge</code></div>
+              <div class="rounded-box border border-base-300 bg-base-100 p-5 flex flex-col gap-5">
+                <div class="flex flex-col gap-2">
+                  <span class="text-[11px] uppercase tracking-wide text-base-content/40">Severity</span>
+                  <div class="flex flex-wrap gap-2">
+                    <span class="badge badge-soft badge-unknown gap-1.5"><span class="size-1.5 rounded-full dot-unknown"></span>Unclassified</span>
+                    <span class="badge badge-soft badge-info gap-1.5"><span class="size-1.5 rounded-full bg-info"></span>Info</span>
+                    <span class="badge badge-soft badge-warning gap-1.5"><span class="size-1.5 rounded-full bg-warning"></span>Warning</span>
+                    <span class="badge badge-soft badge-average gap-1.5"><span class="size-1.5 rounded-full dot-average"></span>Average</span>
+                    <span class="badge badge-soft badge-error gap-1.5"><span class="size-1.5 rounded-full bg-error"></span>High</span>
+                    <span class="badge badge-soft badge-disaster gap-1.5"><span class="size-1.5 rounded-full dot-disaster"></span>Disaster</span>
+                  </div>
+                </div>
+                <div class="flex flex-col gap-2">
+                  <span class="text-[11px] uppercase tracking-wide text-base-content/40">Alarm status</span>
+                  <div class="flex flex-wrap gap-2">
+                    <span class="badge badge-soft badge-error gap-1.5"><span class="size-1.5 rounded-full bg-error"></span>Open</span>
+                    <span class="badge badge-soft badge-info gap-1.5"><span class="size-1.5 rounded-full bg-info"></span>Acked</span>
+                    <span class="badge badge-soft badge-snoozed gap-1.5"><span class="size-1.5 rounded-full dot-snoozed"></span>Snoozed</span>
+                    <span class="badge badge-soft badge-success gap-1.5"><span class="size-1.5 rounded-full bg-success"></span>Resolved</span>
+                  </div>
+                </div>
+                <div class="flex flex-col gap-2">
+                  <span class="text-[11px] uppercase tracking-wide text-base-content/40">Health · count · style variants</span>
+                  <div class="flex flex-wrap items-center gap-2">
+                    <span class="badge badge-soft badge-up gap-1.5"><span class="size-1.5 rounded-full dot-up"></span>Up</span>
+                    <span class="badge badge-soft badge-warning gap-1.5"><span class="size-1.5 rounded-full bg-warning"></span>Degraded</span>
+                    <span class="badge badge-soft badge-error gap-1.5"><span class="size-1.5 rounded-full bg-error"></span>Down</span>
+                    <span class="badge badge-error gap-1 font-data tnum">4</span>
+                    <span class="badge badge-outline">outline</span>
+                    <span class="badge badge-primary">solid</span>
+                    <span class="badge badge-sm badge-soft">sm</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- CARD + STAT -->
+            <div class="grid md:grid-cols-2 gap-6">
+              <div class="flex flex-col gap-3">
+                <div class="flex items-center gap-2"><h3 class="text-base font-semibold">Card</h3><span class="badge badge-xs badge-soft">daisyUI</span><code class="font-data text-xs text-base-content/45 ml-auto">.card</code></div>
+                <div class="card bg-base-200 border border-base-300">
+                  <div class="card-body gap-3 og-pad">
+                    <div class="flex items-start justify-between gap-3">
+                      <div>
+                        <h4 class="card-title text-base">Executive Boardroom</h4>
+                        <p class="text-xs text-base-content/50 font-data">HQ · San Jose · Bldg 1 · Fl 14</p>
+                      </div>
+                      <span class="badge badge-soft badge-warning gap-1.5"><span class="size-1.5 rounded-full bg-warning"></span>Degraded</span>
+                    </div>
+                    <p class="text-sm text-base-content/70">Boardroom Type A · 10 components · 1 active alarm on the ceiling mic.</p>
+                    <div class="card-actions justify-end">
+                      <button class="btn btn-ghost btn-sm">Details</button>
+                      <button class="btn btn-primary btn-sm">Open</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="flex flex-col gap-3">
+                <div class="flex items-center gap-2"><h3 class="text-base font-semibold">Stat</h3><span class="badge badge-xs badge-soft">daisyUI</span><code class="font-data text-xs text-base-content/45 ml-auto">.stats</code></div>
+                <div class="stats stats-vertical sm:stats-horizontal bg-base-200 border border-base-300 w-full">
+                  <div class="stat">
+                    <div class="stat-title text-[11px] uppercase tracking-wide">Open alarms</div>
+                    <div class="stat-value text-error tnum text-3xl">13</div>
+                    <div class="stat-desc">firing now</div>
+                  </div>
+                  <div class="stat">
+                    <div class="stat-title text-[11px] uppercase tracking-wide">Systems offline</div>
+                    <div class="stat-value tnum text-3xl">3</div>
+                    <div class="stat-desc text-warning">5 degraded</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- TABLE -->
+            <div class="flex flex-col gap-3">
+              <div class="flex items-center gap-2"><h3 class="text-base font-semibold">Table</h3><span class="badge badge-xs badge-soft">daisyUI</span><code class="font-data text-xs text-base-content/45 ml-auto">.table · .og-rows (density)</code></div>
+              <div class="overflow-x-auto rounded-box border border-base-300 bg-base-200">
+                <table class="table og-rows">
+                  <thead>
+                    <tr><th>Room</th><th>Type</th><th>Health</th><th class="text-right">Alarms</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr class="hover:bg-base-300/40 cursor-pointer">
+                      <td><span class="font-medium">Cedar (4-201)</span></td>
+                      <td class="text-base-content/60">Standard Conf 65"</td>
+                      <td><span class="inline-flex items-center gap-2 text-sm"><span class="size-2 rounded-full bg-error"></span>Down</span></td>
+                      <td class="text-right"><span class="badge badge-soft badge-disaster tnum">2</span></td>
+                    </tr>
+                    <tr class="hover:bg-base-300/40 cursor-pointer">
+                      <td><span class="font-medium">Executive Boardroom</span></td>
+                      <td class="text-base-content/60">Boardroom Type A</td>
+                      <td><span class="inline-flex items-center gap-2 text-sm"><span class="size-2 rounded-full bg-warning"></span>Degraded</span></td>
+                      <td class="text-right"><span class="badge badge-soft badge-warning tnum">1</span></td>
+                    </tr>
+                    <tr class="hover:bg-base-300/40 cursor-pointer">
+                      <td><span class="font-medium">Innovation Theater</span></td>
+                      <td class="text-base-content/60">Town Hall / Event</td>
+                      <td><span class="inline-flex items-center gap-2 text-sm"><span class="size-2 rounded-full dot-up"></span>Up</span></td>
+                      <td class="text-right text-base-content/30">—</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- FORM CONTROLS -->
+            <div class="flex flex-col gap-3">
+              <div class="flex items-center gap-2"><h3 class="text-base font-semibold">Form controls</h3><span class="badge badge-xs badge-soft">daisyUI</span><code class="font-data text-xs text-base-content/45 ml-auto">.input · .select · .toggle …</code></div>
+              <div class="rounded-box border border-base-300 bg-base-100 p-5 grid sm:grid-cols-2 gap-5">
+                <fieldset class="fieldset">
+                  <legend class="fieldset-legend">Display name</legend>
+                  <input type="text" class="input w-full" value="Executive Boardroom" />
+                  <span class="label">Shown across the console</span>
+                </fieldset>
+                <fieldset class="fieldset">
+                  <legend class="fieldset-legend">Room type</legend>
+                  <select class="select w-full">
+                    <option>Boardroom Type A</option><option>Training Room</option><option>Zoom Room</option>
+                  </select>
+                  <span class="label">System template</span>
+                </fieldset>
+                <fieldset class="fieldset">
+                  <legend class="fieldset-legend">Focus &amp; validation</legend>
+                  <input type="text" class="input w-full input-primary" placeholder="Focused (input-primary ring)" />
+                  <input type="text" class="input w-full input-error mt-2" value="bad value" />
+                  <span class="label text-error">Required</span>
+                </fieldset>
+                <fieldset class="fieldset">
+                  <legend class="fieldset-legend">Toggles</legend>
+                  <label class="flex items-center gap-3 text-sm"><input type="checkbox" class="toggle toggle-primary" checked /> Notify on-call</label>
+                  <label class="flex items-center gap-3 text-sm mt-1"><input type="checkbox" class="checkbox checkbox-primary checkbox-sm" checked /> Auto-resolve</label>
+                  <label class="flex items-center gap-3 text-sm mt-1"><input type="radio" name="r" class="radio radio-primary radio-sm" checked /> Primary collector</label>
+                </fieldset>
+              </div>
+            </div>
+
+            <!-- ALERT -->
+            <div class="flex flex-col gap-3">
+              <div class="flex items-center gap-2"><h3 class="text-base font-semibold">Alert</h3><span class="badge badge-xs badge-soft">daisyUI</span><code class="font-data text-xs text-base-content/45 ml-auto">.alert</code></div>
+              <div class="rounded-box border border-base-300 bg-base-100 p-5 flex flex-col gap-3">
+                <div class="alert alert-error alert-soft">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M12 3 2 20h20L12 3Z"/><line x1="12" y1="9" x2="12" y2="14"/><circle cx="12" cy="17" r=".5"/></svg>
+                  <span><span class="font-semibold">Cedar (4-201)</span> is unreachable — video bar offline, room marked unavailable.</span>
+                  <button class="btn btn-sm btn-ghost">View</button>
+                </div>
+                <div class="alert alert-warning alert-soft">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="12"/><circle cx="12" cy="16" r=".5"/></svg>
+                  <span>3 displays in Training Lab A are past their rated panel-hours.</span>
+                </div>
+                <div class="alert alert-success alert-soft">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M5 12.5 10 17 19 7"/></svg>
+                  <span>Firmware rollout complete across 156 devices.</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- NAV ITEMS -->
+            <div class="flex flex-col gap-3">
+              <div class="flex items-center gap-2"><h3 class="text-base font-semibold">Nav rail items</h3><span class="badge badge-xs badge-soft">daisyUI</span><code class="font-data text-xs text-base-content/45 ml-auto">.menu</code></div>
+              <div class="rounded-box border border-base-300 bg-base-200 p-3 max-w-xs">
+                <ul class="menu w-full gap-0.5">
+                  <li><a class="active"><span class="size-[18px]" data-icon="home"></span>Home <span class="badge badge-xs badge-soft ml-auto">active</span></a></li>
+                  <li><a><span class="size-[18px]" data-icon="bell"></span>Alarms <span class="badge badge-error badge-sm ml-auto tnum">13</span></a></li>
+                  <li><a class="text-base-content/50"><span class="size-[18px]" data-icon="compass"></span>Explore</a></li>
+                </ul>
+              </div>
+            </div>
+          </section>
+
+          <!-- ====================================================== -->
+          <!-- INTERACTIVE COMPONENTS (Kobalte + daisyUI)              -->
+          <!-- ====================================================== -->
+          <section id="components-interactive" class="scroll-mt-32 flex flex-col gap-10">
+            <header class="flex flex-col gap-1.5">
+              <span class="text-[11px] font-semibold uppercase tracking-[0.12em] text-base-content/50">Components · Interactive</span>
+              <h2 class="text-2xl font-semibold tracking-tight">Kobalte + daisyUI</h2>
+              <p class="text-base-content/60 max-w-3xl">
+                In the SolidJS app, these are <span class="text-base-content font-medium">Kobalte</span> primitives styled with daisyUI classes. Kobalte owns
+                behavior, focus management, and ARIA; daisyUI owns the look. Each block shows the visual states and maps every Kobalte part to its classes —
+                so the markup drops straight onto Kobalte's anatomy. The open states below are rendered statically for reference.
+              </p>
+              <div class="alert alert-soft mt-1">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><circle cx="12" cy="8" r=".5"/></svg>
+                <span class="text-sm">Focus-visible ring recipe (all parts): <code class="font-data text-xs">focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-base-100</code></span>
+              </div>
+            </header>
+
+            <!-- DRAWER / DIALOG -->
+            <div class="flex flex-col gap-3">
+              <div class="flex items-center gap-2 flex-wrap"><h3 class="text-base font-semibold">Tweaks drawer</h3><span class="badge badge-xs badge-soft badge-primary">Kobalte Dialog</span><code class="font-data text-xs text-base-content/45 ml-auto">.drawer · .modal-box</code></div>
+              <div class="grid lg:grid-cols-2 gap-4">
+                <div class="rounded-box border border-base-300 bg-base-100 p-5 flex flex-col gap-3">
+                  <span class="text-[11px] uppercase tracking-wide text-base-content/40">Trigger + live panel</span>
+                  <p class="text-sm text-base-content/70">The real Tweaks panel in this page is the open state. Trigger it from the top bar or here:</p>
+                  <label for="tweaks-drawer" class="btn btn-primary btn-sm w-fit gap-1.5">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="12" cy="12" r="3"/><path d="M3 12h3M18 12h3M12 3v3M12 18v3"/></svg>Open Tweaks
+                  </label>
+                  <div class="text-xs text-base-content/45 leading-relaxed mt-1">Slides from <code class="font-data">drawer-end</code>; <code class="font-data">drawer-overlay</code> dims + closes. Kobalte traps focus and restores it on close.</div>
+                </div>
+                <div class="overflow-x-auto rounded-box border border-base-300 bg-base-200">
+                  <table class="table table-sm">
+                    <thead><tr><th>Kobalte part</th><th>daisyUI / Tailwind</th></tr></thead>
+                    <tbody class="font-data text-xs">
+                      <tr><td>Dialog.Trigger</td><td><code>btn btn-primary</code></td></tr>
+                      <tr><td>Dialog.Overlay</td><td><code>drawer-overlay</code> / <code>modal-backdrop</code></td></tr>
+                      <tr><td>Dialog.Content</td><td><code>bg-base-200 w-80 border-l border-base-300</code></td></tr>
+                      <tr><td>Dialog.Title</td><td><code>font-semibold</code></td></tr>
+                      <tr><td>Dialog.CloseButton</td><td><code>btn btn-ghost btn-sm btn-square</code></td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <!-- DROPDOWN MENU -->
+            <div class="flex flex-col gap-3">
+              <div class="flex items-center gap-2 flex-wrap"><h3 class="text-base font-semibold">Dropdown / Menu</h3><span class="badge badge-xs badge-soft badge-primary">Kobalte DropdownMenu</span><code class="font-data text-xs text-base-content/45 ml-auto">.dropdown · .menu</code></div>
+              <div class="grid lg:grid-cols-2 gap-4">
+                <div class="rounded-box border border-base-300 bg-base-100 p-5 flex flex-col gap-5">
+                  <div class="flex flex-col gap-2">
+                    <span class="text-[11px] uppercase tracking-wide text-base-content/40">Closed (trigger)</span>
+                    <button class="btn btn-sm w-fit gap-1.5">Bulk actions <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></button>
+                  </div>
+                  <div class="flex flex-col gap-2">
+                    <span class="text-[11px] uppercase tracking-wide text-base-content/40">Open (content + items)</span>
+                    <ul class="menu bg-base-200 rounded-box border border-base-300 shadow-lg w-56 gap-0.5">
+                      <li class="menu-title text-[11px]">3 alarms selected</li>
+                      <li><a>Acknowledge</a></li>
+                      <li><a class="bg-base-300/60">Snooze 1h <span class="text-[11px] text-base-content/40 ml-auto">hover</span></a></li>
+                      <li><a class="active">Resolve <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="ml-auto"><path d="M5 12.5 10 17 19 7"/></svg></a></li>
+                      <li><hr class="my-1 border-base-300" /></li>
+                      <li class="menu-disabled"><a>Reassign owner</a></li>
+                    </ul>
+                  </div>
+                </div>
+                <div class="overflow-x-auto rounded-box border border-base-300 bg-base-200">
+                  <table class="table table-sm">
+                    <thead><tr><th>Kobalte part</th><th>daisyUI / Tailwind</th></tr></thead>
+                    <tbody class="font-data text-xs">
+                      <tr><td>DropdownMenu.Trigger</td><td><code>btn btn-sm</code></td></tr>
+                      <tr><td>DropdownMenu.Content</td><td><code>menu bg-base-200 rounded-box border border-base-300 shadow-lg</code></td></tr>
+                      <tr><td>DropdownMenu.Item</td><td><code>&lt;li&gt;&lt;a&gt;</code> · hover <code>bg-base-300/60</code></td></tr>
+                      <tr><td>… [data-highlighted]</td><td><code>bg-base-300/60</code></td></tr>
+                      <tr><td>… [data-disabled]</td><td><code>menu-disabled</code></td></tr>
+                      <tr><td>DropdownMenu.Separator</td><td><code>&lt;hr class="border-base-300"&gt;</code></td></tr>
+                      <tr><td>Group label</td><td><code>menu-title</code></td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <!-- MODAL -->
+            <div class="flex flex-col gap-3">
+              <div class="flex items-center gap-2 flex-wrap"><h3 class="text-base font-semibold">Modal / Dialog</h3><span class="badge badge-xs badge-soft badge-primary">Kobalte Dialog</span><code class="font-data text-xs text-base-content/45 ml-auto">.modal · .modal-box</code></div>
+              <div class="grid lg:grid-cols-2 gap-4">
+                <div class="rounded-box border border-base-300 bg-base-100 p-0 overflow-hidden relative h-72">
+                  <!-- inline 'open' modal for reference -->
+                  <div class="absolute inset-0 bg-neutral/40"></div>
+                  <div class="absolute inset-0 flex items-center justify-center p-4">
+                    <div class="modal-box bg-base-200 border border-base-300 shadow-xl max-w-sm w-full">
+                      <h3 class="font-semibold text-lg">Resolve alarm?</h3>
+                      <p class="py-3 text-sm text-base-content/70"><span class="font-data">device.offline</span> on <span class="font-data">BAR-01</span> will be marked resolved. The room returns to bookable.</p>
+                      <div class="modal-action">
+                        <button class="btn btn-ghost btn-sm">Cancel</button>
+                        <button class="btn btn-primary btn-sm">Resolve</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="overflow-x-auto rounded-box border border-base-300 bg-base-200">
+                  <table class="table table-sm">
+                    <thead><tr><th>Kobalte part</th><th>daisyUI / Tailwind</th></tr></thead>
+                    <tbody class="font-data text-xs">
+                      <tr><td>Dialog.Trigger</td><td><code>btn</code></td></tr>
+                      <tr><td>Dialog.Overlay</td><td><code>bg-neutral/40</code> (or <code>modal-backdrop</code>)</td></tr>
+                      <tr><td>Dialog.Content</td><td><code>modal-box bg-base-200 border border-base-300</code></td></tr>
+                      <tr><td>Dialog.Title</td><td><code>font-semibold text-lg</code></td></tr>
+                      <tr><td>Dialog.Description</td><td><code>text-sm text-base-content/70</code></td></tr>
+                      <tr><td>Actions</td><td><code>modal-action</code></td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <!-- SELECT + COMBOBOX -->
+            <div class="grid lg:grid-cols-2 gap-6">
+              <!-- SELECT -->
+              <div class="flex flex-col gap-3">
+                <div class="flex items-center gap-2 flex-wrap"><h3 class="text-base font-semibold">Select</h3><span class="badge badge-xs badge-soft badge-primary">Kobalte Select</span></div>
+                <div class="rounded-box border border-base-300 bg-base-100 p-5 flex flex-col gap-4">
+                  <div class="flex flex-col gap-2">
+                    <span class="text-[11px] uppercase tracking-wide text-base-content/40">Trigger (value + icon)</span>
+                    <button class="select w-full flex items-center justify-between text-left">
+                      <span>Boardroom Type A</span>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="opacity-50"><path d="M6 9l6 6 6-6"/></svg>
+                    </button>
+                  </div>
+                  <div class="flex flex-col gap-2">
+                    <span class="text-[11px] uppercase tracking-wide text-base-content/40">Open (listbox)</span>
+                    <ul class="menu bg-base-200 rounded-box border border-base-300 shadow-lg w-full gap-0.5">
+                      <li><a class="active justify-between">Boardroom Type A <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.5 10 17 19 7"/></svg></a></li>
+                      <li><a class="bg-base-300/60">Training Room</a></li>
+                      <li><a>Zoom Room</a></li>
+                    </ul>
+                  </div>
+                </div>
+                <div class="overflow-x-auto rounded-box border border-base-300 bg-base-200">
+                  <table class="table table-xs">
+                    <thead><tr><th>Kobalte part</th><th>classes</th></tr></thead>
+                    <tbody class="font-data text-[11px]">
+                      <tr><td>Select.Trigger</td><td><code>select</code></td></tr>
+                      <tr><td>Select.Content/Listbox</td><td><code>menu bg-base-200 rounded-box shadow-lg</code></td></tr>
+                      <tr><td>Select.Item</td><td><code>&lt;li&gt;&lt;a&gt;</code></td></tr>
+                      <tr><td>[data-highlighted]</td><td><code>bg-base-300/60</code></td></tr>
+                      <tr><td>ItemIndicator</td><td><code>active</code> + check svg</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <!-- COMBOBOX -->
+              <div class="flex flex-col gap-3">
+                <div class="flex items-center gap-2 flex-wrap"><h3 class="text-base font-semibold">Combobox</h3><span class="badge badge-xs badge-soft badge-primary">Kobalte Combobox</span></div>
+                <div class="rounded-box border border-base-300 bg-base-100 p-5 flex flex-col gap-4">
+                  <div class="flex flex-col gap-2">
+                    <span class="text-[11px] uppercase tracking-wide text-base-content/40">Control (input + trigger)</span>
+                    <label class="input w-full flex items-center gap-2">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="opacity-50"><circle cx="11" cy="11" r="7"/><line x1="20" y1="20" x2="16.5" y2="16.5"/></svg>
+                      <input type="text" class="grow" value="cedar" />
+                    </label>
+                  </div>
+                  <div class="flex flex-col gap-2">
+                    <span class="text-[11px] uppercase tracking-wide text-base-content/40">Open (filtered listbox)</span>
+                    <ul class="menu bg-base-200 rounded-box border border-base-300 shadow-lg w-full gap-0.5">
+                      <li><a class="bg-base-300/60 justify-between"><span>Cedar (4-201)</span><span class="text-[11px] text-base-content/40 font-data">HQ</span></a></li>
+                      <li><a class="justify-between"><span>Cedar Falls AV</span><span class="text-[11px] text-base-content/40 font-data">Austin</span></a></li>
+                      <li class="menu-title text-[11px] text-base-content/40">No more matches</li>
+                    </ul>
+                  </div>
+                </div>
+                <div class="overflow-x-auto rounded-box border border-base-300 bg-base-200">
+                  <table class="table table-xs">
+                    <thead><tr><th>Kobalte part</th><th>classes</th></tr></thead>
+                    <tbody class="font-data text-[11px]">
+                      <tr><td>Combobox.Control</td><td><code>input</code> (wrapper)</td></tr>
+                      <tr><td>Combobox.Input</td><td><code>grow</code></td></tr>
+                      <tr><td>Combobox.Listbox</td><td><code>menu bg-base-200 rounded-box shadow-lg</code></td></tr>
+                      <tr><td>Combobox.Item</td><td><code>&lt;li&gt;&lt;a&gt;</code></td></tr>
+                      <tr><td>[data-highlighted]</td><td><code>bg-base-300/60</code></td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <!-- TABS + TOOLTIP + TOAST -->
+            <div class="grid lg:grid-cols-2 gap-6">
+              <!-- TABS -->
+              <div class="flex flex-col gap-3">
+                <div class="flex items-center gap-2 flex-wrap"><h3 class="text-base font-semibold">Tabs</h3><span class="badge badge-xs badge-soft badge-primary">Kobalte Tabs</span></div>
+                <div class="rounded-box border border-base-300 bg-base-100 p-5 flex flex-col gap-4">
+                  <div role="tablist" class="tabs tabs-border">
+                    <a role="tab" class="tab tab-active">By system</a>
+                    <a role="tab" class="tab">By alarm</a>
+                    <a role="tab" class="tab tab-disabled">Archived</a>
+                  </div>
+                  <div role="tablist" class="tabs tabs-box bg-base-200 w-fit">
+                    <a role="tab" class="tab tab-active">Dark</a>
+                    <a role="tab" class="tab">Light</a>
+                  </div>
+                </div>
+                <div class="overflow-x-auto rounded-box border border-base-300 bg-base-200">
+                  <table class="table table-xs">
+                    <thead><tr><th>Kobalte part</th><th>classes</th></tr></thead>
+                    <tbody class="font-data text-[11px]">
+                      <tr><td>Tabs.List</td><td><code>tabs tabs-border</code> / <code>tabs-box</code></td></tr>
+                      <tr><td>Tabs.Trigger</td><td><code>tab</code></td></tr>
+                      <tr><td>[data-selected]</td><td><code>tab-active</code></td></tr>
+                      <tr><td>[data-disabled]</td><td><code>tab-disabled</code></td></tr>
+                      <tr><td>Tabs.Content</td><td><code>tab-content</code> / panel div</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <!-- TOOLTIP + TOAST -->
+              <div class="flex flex-col gap-3">
+                <div class="flex items-center gap-2 flex-wrap"><h3 class="text-base font-semibold">Tooltip &amp; Toast</h3><span class="badge badge-xs badge-soft badge-primary">Kobalte Tooltip / Toast</span></div>
+                <div class="rounded-box border border-base-300 bg-base-100 p-5 flex flex-col gap-6">
+                  <div class="flex flex-col gap-2">
+                    <span class="text-[11px] uppercase tracking-wide text-base-content/40">Tooltip (open)</span>
+                    <div class="pt-8 w-fit">
+                      <div class="tooltip tooltip-open tooltip-primary" data-tip="Last seen 6m ago">
+                        <button class="btn btn-sm btn-soft">DISP-01</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="flex flex-col gap-2">
+                    <span class="text-[11px] uppercase tracking-wide text-base-content/40">Toast (dismissible)</span>
+                    <div class="alert alert-success alert-soft shadow-lg">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M5 12.5 10 17 19 7"/></svg>
+                      <span class="text-sm">Alarm resolved.</span>
+                      <button class="btn btn-ghost btn-xs btn-square"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg></button>
+                    </div>
+                  </div>
+                </div>
+                <div class="overflow-x-auto rounded-box border border-base-300 bg-base-200">
+                  <table class="table table-xs">
+                    <thead><tr><th>Kobalte part</th><th>classes</th></tr></thead>
+                    <tbody class="font-data text-[11px]">
+                      <tr><td>Tooltip.Content</td><td><code>tooltip</code> + <code>data-tip</code></td></tr>
+                      <tr><td>Toast.Region/List</td><td><code>toast toast-end</code></td></tr>
+                      <tr><td>Toast (root)</td><td><code>alert alert-* alert-soft shadow-lg</code></td></tr>
+                      <tr><td>Toast.CloseButton</td><td><code>btn btn-ghost btn-xs btn-square</code></td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- ====================================================== -->
+          <!-- SCREENS                                                 -->
+          <!-- ====================================================== -->
+          <section class="scroll-mt-32 flex flex-col gap-2">
+            <span class="text-[11px] font-semibold uppercase tracking-[0.12em] text-base-content/50">Screens</span>
+            <h2 class="text-2xl font-semibold tracking-tight">Assembled from the kit</h2>
+            <p class="text-base-content/60 max-w-2xl">The same components composed into real console surfaces. 1:1 with the SolidJS pages.</p>
+          </section>
+
+          <!-- HOME SITUATION ROOM -->
+          <div id="screen-home" class="scroll-mt-32 flex flex-col gap-4">
+            <div class="flex items-center gap-2"><span class="size-2 rounded-full og-pulse bg-primary"></span><h3 class="text-base font-semibold">Home · situation room</h3></div>
+            <div class="rounded-box border border-base-300 bg-base-100 p-5 sm:p-6 flex flex-col og-stack">
+              <div>
+                <h4 class="text-2xl font-semibold tracking-tight">Good afternoon, Andrew</h4>
+                <p class="text-sm text-base-content/55 mt-1">Your environment at a glance, and what needs attention right now.</p>
+              </div>
+              <!-- stat grid -->
+              <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="card bg-base-200 border border-base-300"><div class="card-body og-pad gap-1">
+                  <span class="text-[11px] uppercase tracking-wide text-base-content/45">Open alarms</span>
+                  <span class="text-3xl font-semibold tnum text-error leading-none">13</span><span class="text-xs text-base-content/50">firing now</span></div></div>
+                <div class="card bg-base-200 border border-base-300"><div class="card-body og-pad gap-1">
+                  <span class="text-[11px] uppercase tracking-wide text-base-content/45">Systems offline</span>
+                  <span class="text-3xl font-semibold tnum text-error leading-none">3</span><span class="text-xs text-warning">5 degraded</span></div></div>
+                <div class="card bg-base-200 border border-base-300"><div class="card-body og-pad gap-1">
+                  <span class="text-[11px] uppercase tracking-wide text-base-content/45">Devices online</span>
+                  <span class="text-3xl font-semibold tnum text-success leading-none">176<span class="text-base-content/30 text-xl"> / 190</span></span><span class="text-xs text-base-content/50">endpoints reporting</span></div></div>
+                <div class="card bg-base-200 border border-base-300"><div class="card-body og-pad gap-1">
+                  <span class="text-[11px] uppercase tracking-wide text-base-content/45">Collectors</span>
+                  <span class="text-3xl font-semibold tnum text-warning leading-none">9<span class="text-base-content/30 text-xl"> / 10</span></span><span class="text-xs text-base-content/50">reporting</span></div></div>
+              </div>
+              <!-- two-column -->
+              <div class="grid lg:grid-cols-[1.5fr_1fr] gap-4">
+                <!-- firing now -->
+                <div class="card bg-base-200 border border-base-300"><div class="card-body og-pad gap-3">
+                  <div class="flex items-center justify-between">
+                    <span class="text-[11px] uppercase tracking-wide text-base-content/50 font-semibold">Firing now</span>
+                    <a class="link link-hover text-xs text-accent inline-flex items-center gap-1">All alarms <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 6l6 6-6 6"/><line x1="5" y1="12" x2="19" y2="12"/></svg></a>
+                  </div>
+                  <ul class="flex flex-col">
+                    <li class="flex items-center gap-3 py-2 px-2 -mx-2 rounded-field hover:bg-base-300/40 cursor-pointer">
+                      <span class="badge badge-soft badge-disaster gap-1.5"><span class="size-1.5 rounded-full dot-disaster"></span>Disaster</span>
+                      <span class="font-data text-xs truncate flex-1">device.offline <span class="text-base-content/40">BAR-01 · Cedar</span></span>
+                      <span class="tnum text-[11px] text-base-content/45">8m</span>
+                    </li>
+                    <li class="flex items-center gap-3 py-2 px-2 -mx-2 rounded-field hover:bg-base-300/40 cursor-pointer">
+                      <span class="badge badge-soft badge-error gap-1.5"><span class="size-1.5 rounded-full bg-error"></span>High</span>
+                      <span class="font-data text-xs truncate flex-1">device.offline <span class="text-base-content/40">CP-01 · Bluebonnet</span></span>
+                      <span class="tnum text-[11px] text-base-content/45">16m</span>
+                    </li>
+                    <li class="flex items-center gap-3 py-2 px-2 -mx-2 rounded-field hover:bg-base-300/40 cursor-pointer">
+                      <span class="badge badge-soft badge-average gap-1.5"><span class="size-1.5 rounded-full dot-average"></span>Average</span>
+                      <span class="font-data text-xs truncate flex-1">temperature.high <span class="text-base-content/40">DSP-01 · Innovation</span></span>
+                      <span class="tnum text-[11px] text-base-content/45">34m</span>
+                    </li>
+                    <li class="flex items-center gap-3 py-2 px-2 -mx-2 rounded-field hover:bg-base-300/40 cursor-pointer">
+                      <span class="badge badge-soft badge-warning gap-1.5"><span class="size-1.5 rounded-full bg-warning"></span>Warning</span>
+                      <span class="font-data text-xs truncate flex-1">mic.fault <span class="text-base-content/40">MIC-2 · Executive</span></span>
+                      <span class="tnum text-[11px] text-base-content/45">42m</span>
+                    </li>
+                  </ul>
+                </div></div>
+                <!-- fleet + sites -->
+                <div class="flex flex-col gap-4">
+                  <div class="card bg-base-200 border border-base-300"><div class="card-body og-pad flex-row items-center gap-5">
+                    <div class="radial-progress text-primary shrink-0" style="--value:55; --size:6.5rem; --thickness:0.7rem" role="progressbar" aria-valuenow="55">
+                      <span class="text-lg font-semibold tnum">55%</span>
+                    </div>
+                    <div class="flex flex-col gap-1.5 text-xs flex-1">
+                      <span class="text-[11px] uppercase tracking-wide text-base-content/50 font-semibold mb-1">Fleet health</span>
+                      <div class="flex items-center gap-2"><span class="size-2.5 rounded dot-up"></span><span class="flex-1 text-base-content/70">Up</span><span class="tnum text-base-content/50">11</span></div>
+                      <div class="flex items-center gap-2"><span class="size-2.5 rounded bg-warning"></span><span class="flex-1 text-base-content/70">Degraded</span><span class="tnum text-base-content/50">5</span></div>
+                      <div class="flex items-center gap-2"><span class="size-2.5 rounded bg-error"></span><span class="flex-1 text-base-content/70">Down</span><span class="tnum text-base-content/50">3</span></div>
+                      <div class="flex items-center gap-2"><span class="size-2.5 rounded dot-unknown"></span><span class="flex-1 text-base-content/70">Unknown</span><span class="tnum text-base-content/50">1</span></div>
+                    </div>
+                  </div></div>
+                  <div class="card bg-base-200 border border-base-300"><div class="card-body og-pad gap-3">
+                    <span class="text-[11px] uppercase tracking-wide text-base-content/50 font-semibold">Sites</span>
+                    <div class="grid grid-cols-2 gap-2">
+                      <div class="rounded-field bg-base-100 border-l-2 border-error px-3 py-2"><div class="text-xs font-medium">HQ · San Jose</div><div class="text-[11px] text-error">Down · 6</div></div>
+                      <div class="rounded-field bg-base-100 border-l-2 border-error px-3 py-2"><div class="text-xs font-medium">Austin</div><div class="text-[11px] text-error">Down · 4</div></div>
+                      <div class="rounded-field bg-base-100 border-l-2 border-warning px-3 py-2"><div class="text-xs font-medium">New York</div><div class="text-[11px] text-warning">Degraded · 4</div></div>
+                      <div class="rounded-field bg-base-100 border-l-2 px-3 py-2" style="border-color: var(--og-up)"><div class="text-xs font-medium">London</div><div class="text-[11px]" style="color: var(--og-up)">Up · 3</div></div>
+                    </div>
+                  </div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- DATA TABLE PATTERN -->
+          <div id="screen-data" class="scroll-mt-32 flex flex-col gap-4">
+            <div class="flex items-center gap-2"><h3 class="text-base font-semibold">Data table pattern</h3><span class="text-xs text-base-content/45 ml-auto">facets · filter bar · dense rows</span></div>
+            <div class="rounded-box border border-base-300 bg-base-100 p-5 sm:p-6 flex flex-col gap-4">
+              <!-- toolbar -->
+              <div class="flex flex-wrap items-center gap-3 justify-between">
+                <div role="tablist" class="tabs tabs-box tabs-sm bg-base-200">
+                  <a role="tab" class="tab tab-active">By system</a>
+                  <a role="tab" class="tab">By alarm</a>
+                </div>
+                <div class="flex items-center gap-2 text-xs text-base-content/50"><span class="size-1.5 rounded-full og-pulse bg-primary"></span><span class="tnum">10 systems · 13</span></div>
+              </div>
+              <!-- filter bar with chips -->
+              <div class="rounded-box border border-base-300 bg-base-200 px-3 py-2 flex flex-wrap items-center gap-2">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="opacity-40"><circle cx="11" cy="11" r="7"/><line x1="20" y1="20" x2="16.5" y2="16.5"/></svg>
+                <span class="inline-flex items-center gap-1 rounded-field border border-base-300 bg-base-100 pl-2 pr-1 py-0.5 text-xs">
+                  <span class="text-base-content/50">status</span><span class="text-primary font-data font-semibold">=</span><span class="font-data">open</span>
+                  <button class="text-base-content/40 hover:text-base-content"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg></button>
+                </span>
+                <span class="inline-flex items-center gap-1 rounded-field border border-base-300 bg-base-100 pl-2 pr-1 py-0.5 text-xs">
+                  <span class="text-base-content/50">severity</span><span class="text-primary font-data font-semibold">≥</span><span class="font-data">40</span>
+                  <button class="text-base-content/40 hover:text-base-content"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg></button>
+                </span>
+                <input class="grow bg-transparent outline-none text-sm py-1 min-w-32" placeholder="filter: key, operator, value" />
+              </div>
+              <!-- table -->
+              <div class="overflow-x-auto rounded-box border border-base-300 bg-base-200">
+                <table class="table og-rows">
+                  <thead><tr><th>Severity</th><th>Owner</th><th>Rule</th><th>Status</th><th class="text-right">Opened</th></tr></thead>
+                  <tbody>
+                    <tr class="hover:bg-base-300/40 cursor-pointer">
+                      <td><span class="badge badge-soft badge-disaster">Disaster</span></td>
+                      <td><span class="font-data font-semibold">BAR-01</span> <span class="text-base-content/40 text-xs">Cedar</span></td>
+                      <td class="font-data text-xs text-base-content/60">device.offline</td>
+                      <td><span class="badge badge-soft badge-error">Open</span></td>
+                      <td class="text-right text-base-content/50 tnum">8m</td>
+                    </tr>
+                    <tr class="hover:bg-base-300/40 cursor-pointer">
+                      <td><span class="badge badge-soft badge-error">High</span></td>
+                      <td><span class="font-data font-semibold">CP-01</span> <span class="text-base-content/40 text-xs">Bluebonnet</span></td>
+                      <td class="font-data text-xs text-base-content/60">device.offline</td>
+                      <td><span class="badge badge-soft badge-error">Open</span></td>
+                      <td class="text-right text-base-content/50 tnum">16m</td>
+                    </tr>
+                    <tr class="hover:bg-base-300/40 cursor-pointer">
+                      <td><span class="badge badge-soft badge-average">Average</span></td>
+                      <td><span class="font-data font-semibold">DSP-01</span> <span class="text-base-content/40 text-xs">Innovation</span></td>
+                      <td class="font-data text-xs text-base-content/60">temperature.high</td>
+                      <td><span class="badge badge-soft badge-info">Acked</span></td>
+                      <td class="text-right text-base-content/50 tnum">34m</td>
+                    </tr>
+                    <tr class="hover:bg-base-300/40 cursor-pointer">
+                      <td><span class="badge badge-soft badge-warning">Warning</span></td>
+                      <td><span class="font-data font-semibold">MIC-2</span> <span class="text-base-content/40 text-xs">Executive</span></td>
+                      <td class="font-data text-xs text-base-content/60">mic.fault</td>
+                      <td><span class="badge badge-soft badge-snoozed">Snoozed</span></td>
+                      <td class="text-right text-base-content/50 tnum">42m</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- LOCATIONS -->
+          <div id="screen-locations" class="scroll-mt-32 flex flex-col gap-4">
+            <div class="flex items-center gap-2"><h3 class="text-base font-semibold">Locations</h3><span class="text-xs text-base-content/45 ml-auto">list · detail · create</span></div>
+
+            <!-- list -->
+            <div class="rounded-box border border-base-300 bg-base-100 p-5 sm:p-6 flex flex-col gap-4">
+              <div class="flex items-center justify-between gap-3">
+                <div>
+                  <h4 class="text-lg font-semibold">Place tree</h4>
+                  <p class="text-xs text-base-content/55">Site › Campus › Building › Floor › Room. Systems live in a location; components inherit it.</p>
+                </div>
+                <label for="loc-create" class="btn btn-primary btn-sm gap-1.5"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>New location</label>
+              </div>
+              <div class="overflow-x-auto rounded-box border border-base-300 bg-base-200">
+                <table class="table og-rows">
+                  <thead><tr><th>Location</th><th>Type</th><th class="text-right">Systems</th></tr></thead>
+                  <tbody>
+                    <tr class="hover:bg-base-300/40 cursor-pointer"><td><span class="font-medium">HQ · San Jose</span></td><td><span class="badge badge-soft badge-primary badge-sm">Site</span></td><td class="text-right tnum text-base-content/60">6</td></tr>
+                    <tr class="hover:bg-base-300/40 cursor-pointer"><td><span class="pl-4 text-base-content/80">Bldg 4</span></td><td><span class="badge badge-soft badge-sm">Building</span></td><td class="text-right tnum text-base-content/60">3</td></tr>
+                    <tr class="hover:bg-base-300/40 cursor-pointer bg-base-300/30"><td><span class="pl-8">Floor 2</span></td><td><span class="badge badge-soft badge-sm">Floor</span></td><td class="text-right tnum text-base-content/60">2</td></tr>
+                    <tr class="hover:bg-base-300/40 cursor-pointer"><td><span class="pl-12 font-data text-sm">Cedar (4-201)</span></td><td><span class="badge badge-soft badge-sm badge-info">Room</span></td><td class="text-right"><span class="badge badge-soft badge-disaster tnum badge-sm">2</span></td></tr>
+                    <tr class="hover:bg-base-300/40 cursor-pointer"><td><span class="pl-12 font-data text-sm">Madrone (4-202)</span></td><td><span class="badge badge-soft badge-sm badge-info">Room</span></td><td class="text-right tnum text-base-content/30">—</td></tr>
+                    <tr class="hover:bg-base-300/40 cursor-pointer"><td><span class="pl-4 text-base-content/80">Bldg 1</span></td><td><span class="badge badge-soft badge-sm">Building</span></td><td class="text-right tnum text-base-content/60">2</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="grid lg:grid-cols-2 gap-4">
+              <!-- detail -->
+              <div class="rounded-box border border-base-300 bg-base-100 p-5 sm:p-6 flex flex-col gap-4">
+                <div class="breadcrumbs text-xs text-base-content/50 py-0">
+                  <ul><li><a class="link-hover">HQ · San Jose</a></li><li><a class="link-hover">Bldg 4</a></li><li class="text-base-content">Floor 2</li></ul>
+                </div>
+                <div class="flex items-start justify-between gap-3">
+                  <div><h4 class="text-xl font-semibold">Floor 2</h4><p class="text-xs text-base-content/50 font-data mt-0.5">hq-bldg4-fl2</p></div>
+                  <span class="badge badge-soft">Floor</span>
+                </div>
+                <dl class="grid grid-cols-2 gap-4">
+                  <div><dt class="text-[11px] uppercase tracking-wide text-base-content/45 mb-1">Type</dt><dd>Floor</dd></div>
+                  <div><dt class="text-[11px] uppercase tracking-wide text-base-content/45 mb-1">Parent</dt><dd class="link link-hover text-accent">Bldg 4</dd></div>
+                  <div><dt class="text-[11px] uppercase tracking-wide text-base-content/45 mb-1">Systems</dt><dd class="tnum">2</dd></div>
+                  <div><dt class="text-[11px] uppercase tracking-wide text-base-content/45 mb-1">Site</dt><dd>HQ · San Jose</dd></div>
+                </dl>
+                <div class="flex flex-col gap-1.5">
+                  <span class="text-[11px] uppercase tracking-wide text-base-content/45">Rooms here</span>
+                  <div class="flex items-center justify-between rounded-field bg-base-200 px-3 py-2"><span class="font-data text-sm">Cedar (4-201)</span><span class="inline-flex items-center gap-2 text-xs"><span class="size-2 rounded-full bg-error"></span>Down</span></div>
+                  <div class="flex items-center justify-between rounded-field bg-base-200 px-3 py-2"><span class="font-data text-sm">Madrone (4-202)</span><span class="inline-flex items-center gap-2 text-xs"><span class="size-2 rounded-full dot-up"></span>Up</span></div>
+                </div>
+              </div>
+
+              <!-- create form -->
+              <div class="rounded-box border border-base-300 bg-base-100 p-5 sm:p-6 flex flex-col gap-4">
+                <input id="loc-create" type="checkbox" class="hidden" />
+                <div class="flex items-center justify-between">
+                  <h4 class="text-lg font-semibold">New location</h4>
+                  <span class="badge badge-soft badge-primary badge-sm">create</span>
+                </div>
+                <fieldset class="fieldset">
+                  <legend class="fieldset-legend">Name</legend>
+                  <input type="text" class="input w-full font-data" placeholder="hq-bldg4-fl3" />
+                  <span class="label">Stable slug · lowercase, no spaces</span>
+                </fieldset>
+                <fieldset class="fieldset">
+                  <legend class="fieldset-legend">Display name</legend>
+                  <input type="text" class="input w-full" placeholder="Floor 3" />
+                </fieldset>
+                <div class="grid grid-cols-2 gap-3">
+                  <fieldset class="fieldset">
+                    <legend class="fieldset-legend">Type</legend>
+                    <select class="select w-full"><option>Site</option><option>Campus</option><option>Building</option><option selected>Floor</option><option>Room</option></select>
+                  </fieldset>
+                  <fieldset class="fieldset">
+                    <legend class="fieldset-legend">Parent</legend>
+                    <select class="select w-full"><option>Bldg 4</option><option>Bldg 1</option><option>HQ · San Jose</option></select>
+                  </fieldset>
+                </div>
+                <div class="flex justify-end gap-2 mt-1">
+                  <button class="btn btn-ghost btn-sm">Cancel</button>
+                  <button class="btn btn-primary btn-sm">Create location</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </main>
+
+        <footer class="border-t border-base-300 px-8 py-6 text-center text-xs text-base-content/40">
+          Omniglass Design System · daisyUI 5 + Tailwind CSS 4 · static = daisyUI, interactive = Kobalte + daisyUI
+        </footer>
+      </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- TWEAKS DRAWER (drawer-side). Maps to Kobalte Dialog in Solid. -->
+    <!-- ============================================================ -->
+    <div class="drawer-side z-50">
+      <label for="tweaks-drawer" aria-label="Close tweaks" class="drawer-overlay"></label>
+      <div class="bg-base-200 min-h-full w-80 border-l border-base-300 flex flex-col">
+        <div class="flex items-center justify-between h-14 px-4 border-b border-base-300">
+          <span class="font-semibold">Tweaks</span>
+          <label for="tweaks-drawer" class="btn btn-ghost btn-sm btn-square">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+          </label>
+        </div>
+        <div class="p-4 flex flex-col gap-6 overflow-y-auto">
+          <!-- theme -->
+          <div class="flex flex-col gap-2">
+            <span class="text-[11px] font-semibold uppercase tracking-wide text-base-content/50">Theme</span>
+            <div role="tablist" class="tabs tabs-box tabs-sm bg-base-100" data-tweak="theme">
+              <a role="tab" class="tab tab-active" data-value="omniglass-dark">Dark</a>
+              <a role="tab" class="tab" data-value="omniglass-light">Light</a>
+            </div>
+          </div>
+          <!-- type -->
+          <div class="flex flex-col gap-2">
+            <span class="text-[11px] font-semibold uppercase tracking-wide text-base-content/50">Type system</span>
+            <div role="tablist" class="tabs tabs-box tabs-sm bg-base-100" data-tweak="type">
+              <a role="tab" class="tab tab-active" data-value="mixed">Mixed</a>
+              <a role="tab" class="tab" data-value="mono">Mono</a>
+            </div>
+            <p class="text-[11px] text-base-content/45 leading-relaxed">Mixed pairs IBM Plex Sans (UI) with JetBrains Mono (data). Mono is the original all-mono face.</p>
+          </div>
+          <!-- density -->
+          <div class="flex flex-col gap-2">
+            <span class="text-[11px] font-semibold uppercase tracking-wide text-base-content/50">Density</span>
+            <div role="tablist" class="tabs tabs-box tabs-sm bg-base-100" data-tweak="density">
+              <a role="tab" class="tab tab-active" data-value="comfortable">Comfortable</a>
+              <a role="tab" class="tab" data-value="compact">Compact</a>
+            </div>
+          </div>
+          <div class="divider my-0"></div>
+          <p class="text-[11px] text-base-content/40 leading-relaxed">
+            In the SolidJS app these controls are a <span class="text-base-content/70">Kobalte&nbsp;Dialog</span> with
+            <span class="text-base-content/70">RadioGroup</span> segments; here they write <code class="font-data">data-theme</code>,
+            <code class="font-data">data-type</code>, and <code class="font-data">data-density</code> on <code class="font-data">&lt;html&gt;</code>.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ---- chrome only: persist + apply the three display levers, sync tabs.
+    // (No widget behavior is hand-rolled — daisyUI handles drawer/menu/tabs
+    //  visuals via CSS; the Solid app delegates behavior to Kobalte.)
+    const root = document.documentElement;
+    const LS = { theme: "og-theme", type: "og-type", density: "og-density", rail: "og-rail" };
+
+    function setLever(attr, value) {
+      root.classList.add("theme-switching");
+      root.setAttribute("data-" + attr, value);
+      localStorage.setItem(LS[attr], value);
+      document.querySelectorAll('[data-tweak="' + attr + '"] .tab').forEach((t) =>
+        t.classList.toggle("tab-active", t.dataset.value === value));
+      if (attr === "theme") paintBrand();
+      requestAnimationFrame(() => requestAnimationFrame(() => root.classList.remove("theme-switching")));
+    }
+
+    // daisyUI 5 registers the brand color tokens as @property{inherits:false};
+    // under the CDN build that prevents pre-rendered solid brand components from
+    // recoloring on theme switch. We resolve the theme's brand colors to literal
+    // values and paint them on, which is immune to the @property capture.
+    const BRAND = { primary: ["--og-primary", "--og-primary-content"], secondary: ["--og-secondary", "--og-secondary-content"], accent: ["--og-accent", "--og-accent-content"] };
+    function paintBrand() {
+      const cs = getComputedStyle(root);
+      for (const name in BRAND) {
+        const bg = cs.getPropertyValue(BRAND[name][0]).trim();
+        const fg = cs.getPropertyValue(BRAND[name][1]).trim();
+        if (!bg) continue;
+        document.querySelectorAll(".btn-" + name + ":not(.btn-soft):not(.btn-outline):not(.btn-ghost):not(.btn-link)").forEach((b) => {
+          b.style.setProperty("background-color", bg, "important");
+          b.style.setProperty("background-image", "none", "important");
+          b.style.setProperty("border-color", bg, "important");
+          b.style.setProperty("color", fg, "important");
+        });
+        document.querySelectorAll(".badge-" + name + ":not(.badge-soft):not(.badge-outline)").forEach((b) => {
+          b.style.setProperty("background-color", bg, "important");
+          b.style.setProperty("border-color", bg, "important");
+          b.style.setProperty("color", fg, "important");
+        });
+      }
+    }
+    // restore
+    setLever("theme", localStorage.getItem(LS.theme) || "omniglass-dark");
+    setLever("type", localStorage.getItem(LS.type) || "mixed");
+    setLever("density", localStorage.getItem(LS.density) || "comfortable");
+
+    // tweak segment clicks
+    document.querySelectorAll('[data-tweak] .tab').forEach((tab) => {
+      tab.addEventListener("click", (e) => {
+        e.preventDefault();
+        setLever(tab.closest("[data-tweak]").dataset.tweak, tab.dataset.value);
+      });
+    });
+    // top-bar theme toggle
+    document.getElementById("theme-toggle").addEventListener("click", () =>
+      setLever("theme", root.getAttribute("data-theme") === "omniglass-dark" ? "omniglass-light" : "omniglass-dark"));
+
+    // in-page tabs active sync
+    const tabs = [...document.querySelectorAll('#page-tabs .tab')];
+    tabs.forEach((t) => t.addEventListener("click", () => { tabs.forEach((x) => x.classList.remove("tab-active")); t.classList.add("tab-active"); }));
+
+    // inline icons for the rail/topbar (lucide-style strokes)
+    const ICON = {
+      home: '<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/>',
+      dashboard: '<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
+      bell: '<path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10.5 20a1.8 1.8 0 0 0 3 0"/>',
+      package: '<path d="M21 8 12 3 3 8l9 5 9-5Z"/><path d="M3 8v8l9 5 9-5V8"/><line x1="12" y1="13" x2="12" y2="21"/>',
+      layers: '<path d="M12 3 3 8l9 5 9-5-9-5Z"/><path d="M3 13l9 5 9-5"/>',
+      compass: '<circle cx="12" cy="12" r="9"/><path d="M15.5 8.5 13.5 13.5 8.5 15.5 10.5 10.5Z"/>',
+      cap: '<path d="M22 9 12 5 2 9l10 4 10-4Z"/><path d="M6 10.5V15c0 1.5 2.7 3 6 3s6-1.5 6-3v-4.5"/>',
+      settings: '<circle cx="12" cy="12" r="3"/><path d="M19 13a1.6 1.6 0 0 0 .3 1.8 2 2 0 1 1-2.8 2.8 1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 0 1-4 0 1.6 1.6 0 0 0-2.7-1.1 2 2 0 1 1-2.8-2.8A1.6 1.6 0 0 0 3 13a2 2 0 0 1 0-4 1.6 1.6 0 0 0 1.1-2.7 2 2 0 1 1 2.8-2.8A1.6 1.6 0 0 0 11 3a2 2 0 0 1 4 0 1.6 1.6 0 0 0 2.7 1.1 2 2 0 1 1 2.8 2.8A1.6 1.6 0 0 0 21 9a2 2 0 0 1 0 4Z"/>',
+      moon: '<path d="M20 14.5A8 8 0 1 1 9.5 4 6.5 6.5 0 0 0 20 14.5Z"/>',
+    };
+    document.querySelectorAll("[data-icon]").forEach((el) => {
+      const k = el.getAttribute("data-icon"); if (!ICON[k]) return;
+      el.innerHTML = '<svg width="100%" height="100%" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">' + ICON[k] + "</svg>";
+    });
+
+    // initial brand paint (covers a restored light theme on load)
+    paintBrand();
+  </script>
+</body>
+</html>

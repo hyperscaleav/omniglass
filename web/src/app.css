@@ -1,4 +1,8 @@
 @import "tailwindcss";
+/* The handoff reference (the design-system spec + the React prototype) is not
+   production source; keep its class names out of the Tailwind content scan so it
+   does not bloat the bundle. */
+@source not "../handoff";
 @plugin "daisyui" {
   themes: false;
 }
@@ -108,9 +112,10 @@ html[data-type="mono"] .og-wordmark { text-transform: uppercase; }
 .eyebrow { font-size: 10.5px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: color-mix(in oklch, var(--color-base-content) 55%, transparent); }
 
 /* density: row height + card padding on dense surfaces. */
-:root { --og-row-h: 2.5rem; --og-pad-card: 1.25rem; --og-gap: 1.5rem; }
+:root { --og-row-h: 2.75rem; --og-pad-card: 1.25rem; --og-gap: 1.5rem; }
 html[data-density="compact"] { --og-row-h: 2.1rem; --og-pad-card: 0.9rem; --og-gap: 1.1rem; }
 .og-rows tbody tr td { height: var(--og-row-h); padding-top: 0; padding-bottom: 0; }
+.og-pad { padding: var(--og-pad-card); }
 .og-stack { gap: var(--og-gap); }
 
 /* a single live pulse, pure decoration. */

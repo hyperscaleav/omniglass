@@ -84,3 +84,39 @@ export const Trash: Component<P> = (p) => (
 export const ChevronRight: Component<P> = (p) => (
   <Svg size={p.size}><path d="m9 6 6 6-6 6" /></Svg>
 );
+export const ChevronLeft: Component<P> = (p) => (
+  <Svg size={p.size}><path d="m15 18-6-6 6-6" /></Svg>
+);
+export const ArrowUpRight: Component<P> = (p) => (
+  <Svg size={p.size}><path d="M7 17 17 7" /><path d="M7 7h10v10" /></Svg>
+);
+export const Maximize: Component<P> = (p) => (
+  <Svg size={p.size}><path d="M8 3H5a2 2 0 0 0-2 2v3" /><path d="M21 8V5a2 2 0 0 0-2-2h-3" /><path d="M3 16v3a2 2 0 0 0 2 2h3" /><path d="M16 21h3a2 2 0 0 0 2-2v-3" /></Svg>
+);
+export const Check: Component<P> = (p) => (
+  <Svg size={p.size}><path d="m20 6-11 11-5-5" /></Svg>
+);
+export const Columns: Component<P> = (p) => (
+  <Svg size={p.size}><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M12 3v18" /></Svg>
+);
+export const Rows: Component<P> = (p) => (
+  <Svg size={p.size}><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 12h18" /></Svg>
+);
+export const ListTree: Component<P> = (p) => (
+  <Svg size={p.size}><path d="M21 12h-8" /><path d="M21 6H8" /><path d="M21 18h-8" /><path d="M3 6v4a2 2 0 0 0 2 2h3" /><path d="M3 10v6a2 2 0 0 0 2 2h3" /></Svg>
+);
+export const ChevronsUpDown: Component<P> = (p) => (
+  <Svg size={p.size}><path d="m7 15 5 5 5-5" /><path d="m7 9 5-5 5 5" /></Svg>
+);
+export const ChevronsDownUp: Component<P> = (p) => (
+  <Svg size={p.size}><path d="m7 20 5-5 5 5" /><path d="m7 4 5 5 5-5" /></Svg>
+);
+export const GripVertical: Component<P> = (p) => (
+  <Svg size={p.size}><circle cx="9" cy="5" r="1" /><circle cx="9" cy="12" r="1" /><circle cx="9" cy="19" r="1" /><circle cx="15" cy="5" r="1" /><circle cx="15" cy="12" r="1" /><circle cx="15" cy="19" r="1" /></Svg>
+);
+export const Clock: Component<P> = (p) => (
+  <Svg size={p.size}><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></Svg>
+);
+export const Star: Component<{ size?: number; filled?: boolean }> = (p) => (
+  <Svg size={p.size} fill={p.filled}><path d="m12 2 3 6.5 7 .9-5 4.8 1.3 7-6.6-3.6L5 21.2l1.3-7-5-4.8 7-.9z" /></Svg>
+);
