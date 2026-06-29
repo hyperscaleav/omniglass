@@ -24,6 +24,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/components": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List components in scope
+         * @description Lists the components the caller may read, each filtered to its scope subtree. Gated by component:read.
+         */
+        get: operations["list-components"];
+        put?: never;
+        /**
+         * Create a component
+         * @description Creates a component, optionally under a parent (a root needs an all-scoped grant), bound to a system and a location. Gated by component:create.
+         */
+        post: operations["create-component"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/components/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a component
+         * @description Fetches a component by name within the caller's read scope. Out of scope is a non-disclosing 404. Gated by component:read.
+         */
+        get: operations["get-component"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a component
+         * @description Deletes a component, refused while it still has child components. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.
+         */
+        delete: operations["delete-component"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a component
+         * @description Patches a component's display_name or component_type. Gated by component:update; read and update scopes drive the 404 versus 403 split.
+         */
+        patch: operations["update-component"];
+        trace?: never;
+    };
     "/healthz": {
         parameters: {
             query?: never;
@@ -172,6 +224,40 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        ComponentBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ComponentBody.json
+             */
+            readonly $schema?: string;
+            component_type: string;
+            display_name?: string;
+            id: string;
+            location_id?: string;
+            name: string;
+            parent_id?: string;
+            system_id?: string;
+        };
+        CreateComponentInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateComponentInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description A component_type id */
+            component_type: string;
+            display_name?: string;
+            /** @description Location name this component is placed at */
+            location?: string;
+            /** @description Globally unique name (the address) */
+            name: string;
+            /** @description Parent component name; omit for a root component */
+            parent?: string;
+            /** @description Primary system name this component belongs to */
+            system?: string;
+        };
         CreateLocationInputBody: {
             /**
              * Format: uri
@@ -273,6 +359,15 @@ export interface components {
             email?: string;
             username: string;
         };
+        ListComponentsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListComponentsOutputBody.json
+             */
+            readonly $schema?: string;
+            components: components["schemas"]["ComponentBody"][] | null;
+        };
         ListLocationsOutputBody: {
             /**
              * Format: uri
@@ -353,6 +448,16 @@ export interface components {
             parent_id?: string;
             system_type: string;
         };
+        UpdateComponentInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/UpdateComponentInputBody.json
+             */
+            readonly $schema?: string;
+            component_type?: string;
+            display_name?: string;
+        };
         UpdateLocationInputBody: {
             /**
              * Format: uri
@@ -398,6 +503,165 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MeOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-components": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListComponentsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-component": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateComponentInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComponentBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-component": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The component's unique name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComponentBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-component": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The component's unique name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "update-component": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateComponentInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComponentBody"];
                 };
             };
             /** @description Error */

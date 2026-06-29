@@ -64,4 +64,23 @@ func (UnimplementedGateway) UpdateSystem(context.Context, string, string, System
 func (UnimplementedGateway) DeleteSystem(context.Context, string, string, scope.Set, scope.Set) error {
 	return nil
 }
+func (UnimplementedGateway) UpsertComponentType(context.Context, ComponentType) error { return nil }
+func (UnimplementedGateway) ListComponentTypes(context.Context) ([]ComponentType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) ListComponents(context.Context, scope.Set) ([]Component, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) GetComponent(context.Context, string, scope.Set) (*Component, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) CreateComponent(context.Context, string, ComponentSpec, scope.Set) (*Component, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) UpdateComponent(context.Context, string, string, ComponentPatch, scope.Set, scope.Set) (*Component, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteComponent(context.Context, string, string, scope.Set, scope.Set) error {
+	return nil
+}
 func (UnimplementedGateway) Close() {}

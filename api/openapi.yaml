@@ -1,5 +1,67 @@
 components:
   schemas:
+    ComponentBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ComponentBody.json
+          format: uri
+          readOnly: true
+          type: string
+        component_type:
+          type: string
+        display_name:
+          type: string
+        id:
+          type: string
+        location_id:
+          type: string
+        name:
+          type: string
+        parent_id:
+          type: string
+        system_id:
+          type: string
+      required:
+        - id
+        - name
+        - component_type
+      type: object
+    CreateComponentInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateComponentInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        component_type:
+          description: A component_type id
+          minLength: 1
+          type: string
+        display_name:
+          type: string
+        location:
+          description: Location name this component is placed at
+          type: string
+        name:
+          description: Globally unique name (the address)
+          minLength: 1
+          type: string
+        parent:
+          description: Parent component name; omit for a root component
+          type: string
+        system:
+          description: Primary system name this component belongs to
+          type: string
+      required:
+        - name
+        - component_type
+      type: object
     CreateLocationInputBody:
       additionalProperties: false
       properties:
@@ -160,6 +222,25 @@ components:
           type: string
       required:
         - username
+      type: object
+    ListComponentsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListComponentsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        components:
+          items:
+            $ref: "#/components/schemas/ComponentBody"
+          type:
+            - array
+            - "null"
+      required:
+        - components
       type: object
     ListLocationsOutputBody:
       additionalProperties: false
@@ -347,6 +428,21 @@ components:
         - name
         - system_type
       type: object
+    UpdateComponentInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/UpdateComponentInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        component_type:
+          type: string
+        display_name:
+          type: string
+      type: object
     UpdateLocationInputBody:
       additionalProperties: false
       properties:
@@ -400,6 +496,123 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: The authenticated principal, its permissions, and grants
+  /components:
+    get:
+      description: Lists the components the caller may read, each filtered to its scope subtree. Gated by component:read.
+      operationId: list-components
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListComponentsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List components in scope
+    post:
+      description: Creates a component, optionally under a parent (a root needs an all-scoped grant), bound to a system and a location. Gated by component:create.
+      operationId: create-component
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateComponentInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComponentBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Create a component
+  /components/{name}:
+    delete:
+      description: Deletes a component, refused while it still has child components. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.
+      operationId: delete-component
+      parameters:
+        - description: The component's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The component's unique name
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Delete a component
+    get:
+      description: Fetches a component by name within the caller's read scope. Out of scope is a non-disclosing 404. Gated by component:read.
+      operationId: get-component
+      parameters:
+        - description: The component's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The component's unique name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComponentBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get a component
+    patch:
+      description: Patches a component's display_name or component_type. Gated by component:update; read and update scopes drive the 404 versus 403 split.
+      operationId: update-component
+      parameters:
+        - in: path
+          name: name
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateComponentInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComponentBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Update a component
   /healthz:
     get:
       description: Reports process health and the database leg, pinged through the Storage Gateway.

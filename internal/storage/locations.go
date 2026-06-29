@@ -112,57 +112,23 @@ func scanLocation(row pgx.Row) (*Location, error) {
 	return &l, nil
 }
 
-// ListLocations returns the locations in the caller's read scope, ordered by
-// name. An all scope returns every row; a rooted scope expands each root to its
-// subtree (the recursive descendant walk) and filters to it; an empty scope
-// returns nothing.
-func (p *PG) ListLocations(ctx context.Context, read scope.Set) ([]Location, error) {
-	if read.Empty() {
-		return nil, nil
-	}
-	// The scoped-tree primitive builds the subtree-filtered list query; only the
-	// columns and scan are location-specific.
-	sql := scopedListSQL(locationTable, locationCols, read.All)
-	var (
-		rows pgx.Rows
-		err  error
-	)
-	if read.All {
-		rows, err = p.pool.Query(ctx, sql)
-	} else {
-		rows, err = p.pool.Query(ctx, sql, read.IDs)
-	}
-	if err != nil {
-		return nil, fmt.Errorf("storage: list locations: %w", err)
-	}
-	defer rows.Close()
-	var out []Location
-	for rows.Next() {
-		l, err := scanLocation(rows)
-		if err != nil {
-			return nil, fmt.Errorf("storage: scan location: %w", err)
-		}
-		out = append(out, *l)
-	}
-	return out, rows.Err()
+// locationConfig drives the generic scoped-CRUD helpers for the location tree.
+var locationConfig = scopedConfig[Location]{
+	table: locationTable, cols: locationCols, resource: "location",
+	scan: scanLocation, idOf: func(l *Location) string { return l.ID },
+	notFound: ErrLocationNotFound, forbidden: ErrLocationForbidden, occupied: ErrLocationOccupied,
 }
 
-// GetLocation resolves a location by name within the caller's read scope. A name
-// that does not exist, or exists outside the read scope, returns the same
-// ErrLocationNotFound: the 404 is non-disclosing.
+// ListLocations returns the locations in the caller's read scope, ordered by
+// name (the shared scoped-tree read path).
+func (p *PG) ListLocations(ctx context.Context, read scope.Set) ([]Location, error) {
+	return scopedList(ctx, p, locationConfig, read)
+}
+
+// GetLocation resolves a location by name within the caller's read scope; absent
+// or out of scope is the same non-disclosing ErrLocationNotFound.
 func (p *PG) GetLocation(ctx context.Context, name string, read scope.Set) (*Location, error) {
-	l, err := p.locationByName(ctx, p.pool, name)
-	if err != nil {
-		return nil, err
-	}
-	in, err := p.inScope(ctx, p.pool, l.ID, read)
-	if err != nil {
-		return nil, err
-	}
-	if !in {
-		return nil, ErrLocationNotFound
-	}
-	return l, nil
+	return scopedGet(ctx, p, locationConfig, name, read)
 }
 
 // CreateLocation inserts a location under an optional parent and writes the audit
@@ -257,71 +223,19 @@ func (p *PG) UpdateLocation(ctx context.Context, actorID, name string, patch Loc
 // locations (the "occupied" rule, for the structural children this slice knows
 // about; placed systems and components join the check when they land).
 func (p *PG) DeleteLocation(ctx context.Context, actorID, name string, read, action scope.Set) error {
-	tx, err := p.pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("storage: begin delete location: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	before, err := p.resolveForAction(ctx, tx, name, read, action)
-	if err != nil {
-		return err
-	}
-
-	var childCount int
-	if err := tx.QueryRow(ctx, `select count(*) from location where parent_id = $1`, before.ID).Scan(&childCount); err != nil {
-		return fmt.Errorf("storage: count children: %w", err)
-	}
-	if childCount > 0 {
-		return ErrLocationOccupied
-	}
-
-	if _, err := tx.Exec(ctx, `delete from location where id = $1`, before.ID); err != nil {
-		return mapLocationWriteErr(err)
-	}
-	if err := writeAuditRes(ctx, tx, actorID, "delete", "location", before.ID, before, nil); err != nil {
-		return err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("storage: commit delete location: %w", err)
-	}
-	return nil
+	return scopedDelete(ctx, p, locationConfig, actorID, name, read, action)
 }
 
-// resolveForAction loads a location by name and enforces the read-then-action
-// scope split, returning the row when the caller may act on it.
+// resolveForAction enforces the read-then-action scope split for a location
+// (the shared helper); Create/Update use it.
 func (p *PG) resolveForAction(ctx context.Context, q querier, name string, read, action scope.Set) (*Location, error) {
-	l, err := p.locationByName(ctx, q, name)
-	if err != nil {
-		return nil, err
-	}
-	readable, err := p.inScope(ctx, q, l.ID, read)
-	if err != nil {
-		return nil, err
-	}
-	if !readable {
-		return nil, ErrLocationNotFound // non-disclosing
-	}
-	actionable, err := p.inScope(ctx, q, l.ID, action)
-	if err != nil {
-		return nil, err
-	}
-	if !actionable {
-		return nil, ErrLocationForbidden
-	}
-	return l, nil
+	return resolveScoped(ctx, q, locationConfig, name, read, action)
 }
 
-// locationByName loads a single location by its unique name, ErrLocationNotFound
-// if absent. It applies no scope: callers layer the scope check on top.
+// locationByName loads a single location by its unique name (no scope check),
+// reused by the system/component located-at resolution.
 func (p *PG) locationByName(ctx context.Context, q querier, name string) (*Location, error) {
-	l, err := scanLocation(q.QueryRow(ctx, `select `+locationCols+` from location where name = $1`, name))
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrLocationNotFound
-	} else if err != nil {
-		return nil, fmt.Errorf("storage: load location %q: %w", name, err)
-	}
-	return l, nil
+	return scopedByName(ctx, q, locationConfig, name)
 }
 
 // inScope reports whether a target location falls within a resolved scope,
