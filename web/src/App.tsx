@@ -21,11 +21,11 @@ const App: ParentComponent = (props) => {
   createEffect(() => localStorage.setItem("og-collapsed", collapsed() ? "1" : "0"));
 
   return (
-    <div style={{ display: "flex", "min-height": "100vh", background: "var(--ground)" }}>
+    <div class="flex min-h-screen bg-base-100">
       <Sidebar collapsed={collapsed()} onToggle={() => setCollapsed(!collapsed())} />
-      <div style={{ flex: 1, "min-width": 0, display: "flex", "flex-direction": "column" }}>
+      <div class="flex min-w-0 flex-1 flex-col">
         <TopBar section={section()} onOpenTweaks={() => setTweaksOpen(true)} />
-        <main id="scroll-main" style={{ flex: 1, "overflow-y": "auto", padding: "28px 32px 64px", "max-width": "1320px", width: "100%", margin: "0 auto" }}>
+        <main id="scroll-main" class="mx-auto w-full max-w-[1320px] flex-1 overflow-y-auto px-8 pb-16 pt-7">
           {props.children}
         </main>
       </div>

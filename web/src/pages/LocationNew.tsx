@@ -1,5 +1,4 @@
-import { createSignal } from "solid-js";
-import { Show } from "solid-js";
+import { createSignal, Show, For, type JSX } from "solid-js";
 import { useNavigate } from "@solidjs/router";
 import { useQueryClient } from "@tanstack/solid-query";
 import Page from "../components/Page";
@@ -45,41 +44,40 @@ export default function LocationNew() {
 
   return (
     <Page title="New location" subtitle="A root location needs an all-scoped grant; a child must sit under a location you may create in.">
-      <form onSubmit={onSubmit} class="card" style={{ padding: "var(--pad-card)", display: "flex", "flex-direction": "column", gap: "16px", "max-width": "520px" }}>
-        <Field label="Name" hint="Globally unique, the address (e.g. hq-b1-r204).">
-          <input class="input" style={{ width: "100%" }} value={name()} onInput={(e) => setName(e.currentTarget.value)} required autofocus disabled={busy()} />
-        </Field>
-        <Field label="Type" hint="A location type (campus, building, floor, room, or a custom one).">
-          <input class="input" style={{ width: "100%" }} list="loctypes" value={type()} onInput={(e) => setType(e.currentTarget.value)} required disabled={busy()} />
-          <datalist id="loctypes">
-            {OFFICIAL_TYPES.map((t) => <option value={t} />)}
-          </datalist>
-        </Field>
-        <Field label="Display name" hint="Optional human label.">
-          <input class="input" style={{ width: "100%" }} value={displayName()} onInput={(e) => setDisplayName(e.currentTarget.value)} disabled={busy()} />
-        </Field>
-        <Field label="Parent" hint="Optional parent location name; leave blank for a root.">
-          <input class="input" style={{ width: "100%" }} value={parent()} onInput={(e) => setParent(e.currentTarget.value)} disabled={busy()} />
-        </Field>
-        <Show when={err()}>
-          <div role="alert" class="badge" style={{ color: "var(--high)", "border-color": "color-mix(in oklch, var(--high) 45%, transparent)", background: "color-mix(in oklch, var(--high) 13%, transparent)", padding: "8px 10px" }}>{err()}</div>
-        </Show>
-        <div style={{ display: "flex", gap: "8px" }}>
-          <button type="submit" class="btn btn-primary" disabled={busy() || !name() || !type()}>{busy() ? "Creating…" : "Create location"}</button>
-          <button type="button" class="btn" onClick={() => navigate("/locations")} disabled={busy()}>Cancel</button>
+      <form onSubmit={onSubmit} class="card max-w-xl border border-base-300 bg-base-200">
+        <div class="card-body gap-4">
+          <Field label="Name" hint="Globally unique, the address (e.g. hq-b1-r204).">
+            <input class="input input-bordered w-full" value={name()} onInput={(e) => setName(e.currentTarget.value)} required autofocus disabled={busy()} />
+          </Field>
+          <Field label="Type" hint="A location type (campus, building, floor, room, or a custom one).">
+            <input class="input input-bordered w-full" list="loctypes" value={type()} onInput={(e) => setType(e.currentTarget.value)} required disabled={busy()} />
+            <datalist id="loctypes"><For each={OFFICIAL_TYPES}>{(t) => <option value={t} />}</For></datalist>
+          </Field>
+          <Field label="Display name" hint="Optional human label.">
+            <input class="input input-bordered w-full" value={displayName()} onInput={(e) => setDisplayName(e.currentTarget.value)} disabled={busy()} />
+          </Field>
+          <Field label="Parent" hint="Optional parent location name; leave blank for a root.">
+            <input class="input input-bordered w-full" value={parent()} onInput={(e) => setParent(e.currentTarget.value)} disabled={busy()} />
+          </Field>
+          <Show when={err()}>
+            <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
+          </Show>
+          <div class="flex gap-2">
+            <button type="submit" class="btn btn-primary" disabled={busy() || !name() || !type()}>{busy() ? "Creating…" : "Create location"}</button>
+            <button type="button" class="btn btn-ghost" onClick={() => navigate("/locations")} disabled={busy()}>Cancel</button>
+          </div>
         </div>
       </form>
     </Page>
   );
 }
 
-import type { JSX } from "solid-js";
 function Field(props: { label: string; hint?: string; children: JSX.Element }) {
   return (
     <div>
-      <label class="eyebrow" style={{ display: "block", "margin-bottom": "6px" }}>{props.label}</label>
+      <label class="eyebrow mb-1.5 block">{props.label}</label>
       {props.children}
-      <Show when={props.hint}><p style={{ "font-size": "11.5px", color: "var(--text-faint)", margin: "5px 2px 0" }}>{props.hint}</p></Show>
+      <Show when={props.hint}><p class="mt-1.5 px-0.5 text-[11px] text-base-content/40">{props.hint}</p></Show>
     </div>
   );
 }

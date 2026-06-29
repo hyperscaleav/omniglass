@@ -39,7 +39,9 @@ export function setTweak<K extends keyof Tweaks>(key: K, value: Tweaks[K]): void
 export function applyTweaks(t: Tweaks): void {
   const r = document.documentElement;
   r.classList.add("theme-switching");
-  r.dataset.theme = t.theme;
+  // The daisyUI themes are named omniglass-dark / omniglass-light; the tweak
+  // stores just the mode.
+  r.dataset.theme = `omniglass-${t.theme}`;
   r.dataset.type = t.type;
   r.dataset.density = t.density;
   requestAnimationFrame(() => requestAnimationFrame(() => r.classList.remove("theme-switching")));

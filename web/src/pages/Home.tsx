@@ -1,4 +1,4 @@
-import { Show, Suspense } from "solid-js";
+import { Suspense } from "solid-js";
 import { useQuery } from "@tanstack/solid-query";
 import { useNavigate } from "@solidjs/router";
 import Page from "../components/Page";
@@ -7,8 +7,7 @@ import { useMe } from "../lib/auth";
 
 // Home is the situation room. It shows real signal where the platform has it
 // (locations, this slice) and honest "coming soon" cards for the metrics whose
-// collection backends land later, rather than mock data. The visual grid
-// matches the design's Home.
+// collection backends land later, rather than mock data.
 export default function Home() {
   const navigate = useNavigate();
   const me = useMe();
@@ -17,9 +16,9 @@ export default function Home() {
 
   return (
     <Page title={`Welcome, ${who()}`} subtitle="Your environment at a glance. More lands here as collection comes online.">
-      <div style={{ display: "grid", gap: "16px", "grid-template-columns": "repeat(auto-fit, minmax(190px, 1fr))" }}>
+      <div class="grid grid-cols-[repeat(auto-fit,minmax(190px,1fr))] gap-4">
         <Suspense fallback={<Stat label="Locations" value="…" unit="in scope" />}>
-          <Stat label="Locations" value={String(locs.data?.length ?? 0)} unit="in your scope" tone="var(--up)" onClick={() => navigate("/locations")} />
+          <Stat label="Locations" value={String(locs.data?.length ?? 0)} unit="in your scope" tone="text-primary" onClick={() => navigate("/locations")} />
         </Suspense>
         <Stat label="Open alarms" value="—" unit="collection pending" />
         <Stat label="Systems" value="—" unit="collection pending" />
@@ -32,13 +31,15 @@ export default function Home() {
 function Stat(props: { label: string; value: string; unit: string; tone?: string; onClick?: () => void }) {
   return (
     <div
-      class="card"
+      class="card border border-base-300 bg-base-200"
+      classList={{ "cursor-pointer hover:border-base-content/20": !!props.onClick }}
       onClick={props.onClick}
-      style={{ padding: "16px 18px", cursor: props.onClick ? "pointer" : "default" }}
     >
-      <div class="eyebrow" style={{ "margin-bottom": "8px" }}>{props.label}</div>
-      <div class="tnum" style={{ "font-size": "30px", "font-weight": 600, "line-height": 1, color: props.tone ?? "var(--text-faint)" }}>{props.value}</div>
-      <div style={{ "font-size": "12px", color: "var(--text-dim)", "margin-top": "5px" }}>{props.unit}</div>
+      <div class="card-body gap-1 p-5">
+        <div class="eyebrow">{props.label}</div>
+        <div class="tnum text-3xl font-semibold leading-none" classList={{ [props.tone ?? ""]: !!props.tone, "text-base-content/30": !props.tone }}>{props.value}</div>
+        <div class="text-xs text-base-content/50">{props.unit}</div>
+      </div>
     </div>
   );
 }

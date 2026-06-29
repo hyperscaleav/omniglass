@@ -1,30 +1,35 @@
-import { For, Show } from "solid-js";
+import { For, Show, onCleanup, createEffect } from "solid-js";
 import { useTweaks, setTweak, type Tweaks } from "../lib/tweaks";
 import { X } from "./icons";
 
-// The Tweaks slide-over from the design: theme, type system, and density. Each
-// is a segmented radio bound to the shared tweak state.
+// The Tweaks slide-over: theme, type system, and density, each a daisyUI
+// segmented control (`join` of buttons). A plain signal-driven panel for now; it
+// is the first candidate to move to a Kobalte Dialog when the interactive
+// surface grows (focus trap, escape, aria), tracked for a later slice.
 export default function TweaksPanel(props: { open: boolean; onClose: () => void }) {
   const t = useTweaks();
+
+  // Close on Escape while open.
+  createEffect(() => {
+    if (!props.open) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && props.onClose();
+    window.addEventListener("keydown", onKey);
+    onCleanup(() => window.removeEventListener("keydown", onKey));
+  });
+
   return (
     <Show when={props.open}>
-      <div onClick={props.onClose} style={{ position: "fixed", inset: 0, "z-index": 60, background: "rgba(0,0,0,.45)" }} />
-      <aside
-        role="dialog"
-        style={{
-          position: "fixed", top: 0, bottom: 0, right: 0, "z-index": 61, width: "320px", display: "flex", "flex-direction": "column",
-          background: "var(--ground)", "border-left": "1px solid var(--line)", "box-shadow": "var(--shadow-pop)",
-        }}
-      >
-        <header style={{ display: "flex", "align-items": "center", "justify-content": "space-between", gap: "12px", "border-bottom": "1px solid var(--line)", padding: "14px 16px" }}>
-          <span style={{ "font-size": "14px", "font-weight": 600 }}>Display</span>
-          <button class="btn btn-ghost btn-sm btn-icon" onClick={props.onClose} aria-label="Close"><X size={16} /></button>
+      <div class="fixed inset-0 z-60 bg-black/45" onClick={props.onClose} />
+      <aside role="dialog" aria-label="Display settings" class="fixed inset-y-0 right-0 z-60 flex w-80 flex-col border-l border-base-300 bg-base-100 shadow-2xl">
+        <header class="flex items-center justify-between gap-3 border-b border-base-300 px-4 py-3.5">
+          <span class="text-sm font-semibold">Display</span>
+          <button class="btn btn-ghost btn-sm btn-square" onClick={props.onClose} aria-label="Close"><X size={16} /></button>
         </header>
-        <div style={{ padding: "18px", display: "flex", "flex-direction": "column", gap: "20px" }}>
+        <div class="flex flex-col gap-5 p-5">
           <Segmented label="Theme" value={t().theme} options={["dark", "light"]} onChange={(v) => setTweak("theme", v as Tweaks["theme"])} />
           <div>
             <Segmented label="Type system" value={t().type} options={["mixed", "mono"]} onChange={(v) => setTweak("type", v as Tweaks["type"])} />
-            <p style={{ "font-size": "11px", color: "var(--text-dim)", margin: "8px 2px 0", "line-height": 1.45 }}>
+            <p class="mt-2 px-0.5 text-[11px] leading-relaxed text-base-content/50">
               Mixed pairs IBM Plex Sans for prose with JetBrains Mono for data. Mono is the all-mono face.
             </p>
           </div>
@@ -38,18 +43,14 @@ export default function TweaksPanel(props: { open: boolean; onClose: () => void 
 function Segmented(props: { label: string; value: string; options: string[]; onChange: (v: string) => void }) {
   return (
     <div>
-      <div class="eyebrow" style={{ "margin-bottom": "8px" }}>{props.label}</div>
-      <div style={{ display: "inline-flex", gap: "4px", padding: "3px", background: "var(--raised)", border: "1px solid var(--line)", "border-radius": "var(--r-field)" }}>
+      <div class="eyebrow mb-2">{props.label}</div>
+      <div class="join">
         <For each={props.options}>
           {(opt) => (
             <button
+              class="btn join-item btn-sm capitalize"
+              classList={{ "btn-primary": props.value === opt, "btn-ghost": props.value !== opt }}
               onClick={() => props.onChange(opt)}
-              style={{
-                padding: "5px 14px", "border-radius": "var(--r-selector)", border: "none", cursor: "pointer", "font-size": "12.5px", "font-family": "var(--font-ui)", "text-transform": "capitalize",
-                background: props.value === opt ? "var(--primary)" : "transparent",
-                color: props.value === opt ? "var(--primary-ink)" : "var(--text-soft)",
-                "font-weight": props.value === opt ? 600 : 400,
-              }}
             >
               {opt}
             </button>

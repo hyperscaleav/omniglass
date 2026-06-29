@@ -7,7 +7,7 @@ import { useMe, can } from "../lib/auth";
 import { Plus, MapPin } from "../components/icons";
 
 // Locations: the live list, scoped by the server to the caller's grants. The
-// first real entity view in the console (the design drew it as a stub).
+// first real entity view in the console.
 export default function Locations() {
   const navigate = useNavigate();
   const me = useMe();
@@ -25,11 +25,11 @@ export default function Locations() {
         </Show>
       }
     >
-      <div class="card" style={{ padding: "6px 6px 2px" }}>
+      <div class="card border border-base-300 bg-base-200">
         <Suspense fallback={<Empty msg="Loading…" />}>
           <Show when={!query.error} fallback={<Empty msg={`Could not load locations: ${String(query.error)}`} />}>
             <Show when={(query.data?.length ?? 0) > 0} fallback={<Empty msg="No locations yet. Create the first one." icon />}>
-              <table class="tbl">
+              <table class="og-rows table table-sm">
                 <thead>
                   <tr>
                     <th>Name</th>
@@ -40,10 +40,10 @@ export default function Locations() {
                 <tbody>
                   <For each={query.data}>
                     {(loc) => (
-                      <tr class="clickable" onClick={() => navigate(`/locations/${encodeURIComponent(loc.name)}`)}>
-                        <td class="mono" style={{ "font-weight": 600 }}>{loc.name}</td>
-                        <td><span class="badge" style={{ color: "var(--text-soft)", "border-color": "var(--line-strong)", background: "var(--raised-2)", "text-transform": "capitalize" }}>{loc.location_type}</span></td>
-                        <td style={{ color: "var(--text-dim)" }}>{loc.display_name || "—"}</td>
+                      <tr class="cursor-pointer hover:bg-base-content/5" onClick={() => navigate(`/locations/${encodeURIComponent(loc.name)}`)}>
+                        <td class="font-data font-semibold">{loc.name}</td>
+                        <td><span class="badge badge-soft badge-neutral badge-sm capitalize">{loc.location_type}</span></td>
+                        <td class="text-base-content/50">{loc.display_name || "—"}</td>
                       </tr>
                     )}
                   </For>
@@ -59,9 +59,9 @@ export default function Locations() {
 
 function Empty(props: { msg: string; icon?: boolean }) {
   return (
-    <div style={{ padding: "40px 16px", "text-align": "center", color: "var(--text-dim)", display: "flex", "flex-direction": "column", "align-items": "center", gap: "10px" }}>
-      <Show when={props.icon}><span style={{ color: "var(--text-faint)" }}><MapPin size={24} /></span></Show>
-      <span style={{ "font-size": "13px" }}>{props.msg}</span>
+    <div class="flex flex-col items-center gap-2.5 px-4 py-10 text-center text-base-content/50">
+      <Show when={props.icon}><span class="text-base-content/30"><MapPin size={24} /></span></Show>
+      <span class="text-sm">{props.msg}</span>
     </div>
   );
 }

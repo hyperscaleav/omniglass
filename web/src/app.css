@@ -1,5 +1,121 @@
-/* Tailwind provides layout utilities (flex, grid, gap, spacing); theme.css is
-   imported last so the design-system component classes (.card, .btn, .input,
-   .tbl, .eyebrow) and base styles win over Tailwind's preflight. */
 @import "tailwindcss";
-@import "./theme.css";
+@plugin "daisyui" {
+  themes: false;
+}
+
+/* The two Omniglass themes, defined through the daisyUI plugin (no CDN alias
+   hacks needed: with the real plugin the brand colors cascade and switch). The
+   token values are the "Omniglass Design System" source of truth. */
+@plugin "daisyui/theme" {
+  name: "omniglass-dark";
+  default: true;
+  color-scheme: dark;
+  --color-base-100: #080c16;
+  --color-base-200: #0c1320;
+  --color-base-300: #101a2b;
+  --color-base-content: #e7eef6;
+  --color-primary: #21cab9;
+  --color-primary-content: #04201d;
+  --color-secondary: #ef2ada;
+  --color-secondary-content: #ffffff;
+  --color-accent: #4cd5c6;
+  --color-accent-content: #04201d;
+  --color-neutral: #1a2336;
+  --color-neutral-content: #cbd5e1;
+  --color-info: #5b8def;
+  --color-info-content: #061328;
+  --color-success: #3ecf8e;
+  --color-success-content: #04130c;
+  --color-warning: #f0b232;
+  --color-warning-content: #1f1402;
+  --color-error: #f0676b;
+  --color-error-content: #1f0506;
+  --radius-selector: 0.25rem;
+  --radius-field: 0.375rem;
+  --radius-box: 0.625rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 1;
+  --noise: 0;
+}
+@plugin "daisyui/theme" {
+  name: "omniglass-light";
+  color-scheme: light;
+  --color-base-100: #f4f7fb;
+  --color-base-200: #ffffff;
+  --color-base-300: #f0f4f9;
+  --color-base-content: #0e1726;
+  --color-primary: #11a294;
+  --color-primary-content: #ffffff;
+  --color-secondary: #c81fb6;
+  --color-secondary-content: #ffffff;
+  --color-accent: #0d8d80;
+  --color-accent-content: #ffffff;
+  --color-neutral: #1f2a3d;
+  --color-neutral-content: #e7eef6;
+  --color-info: #3567d6;
+  --color-info-content: #ffffff;
+  --color-success: #16a06b;
+  --color-success-content: #ffffff;
+  --color-warning: #b9791a;
+  --color-warning-content: #ffffff;
+  --color-error: #d6494d;
+  --color-error-content: #ffffff;
+  --radius-selector: 0.25rem;
+  --radius-field: 0.375rem;
+  --radius-box: 0.625rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 1;
+  --noise: 0;
+}
+
+/* ===================================================================
+   BESPOKE TOUCHES ONLY (everything else is daisyUI + Tailwind classes):
+   domain severity/health colors with no daisyUI semantic slot, the type
+   and density levers, and the live pulse.
+   =================================================================== */
+[data-theme="omniglass-dark"] {
+  --og-up: #21cab9; --og-unknown: #8aa0c0; --og-snoozed: #a78bfa;
+  --og-average: #fb923c; --og-disaster: #e11d48;
+}
+[data-theme="omniglass-light"] {
+  --og-up: #11a294; --og-unknown: #6b7f99; --og-snoozed: #7c5cd6;
+  --og-average: #d97516; --og-disaster: #c81e3f;
+}
+
+/* domain badge variants: same shape as daisyUI badge-soft, carrying a color
+   daisyUI ships no semantic for. Use as `badge badge-up`, etc. */
+.badge-up       { color: var(--og-up);       background: color-mix(in oklch, var(--og-up) 15%, transparent);       border-color: color-mix(in oklch, var(--og-up) 45%, transparent); }
+.badge-unknown  { color: var(--og-unknown);  background: color-mix(in oklch, var(--og-unknown) 15%, transparent);  border-color: color-mix(in oklch, var(--og-unknown) 45%, transparent); }
+.badge-snoozed  { color: var(--og-snoozed);  background: color-mix(in oklch, var(--og-snoozed) 15%, transparent);  border-color: color-mix(in oklch, var(--og-snoozed) 45%, transparent); }
+
+/* type system: IBM Plex Sans for UI, JetBrains Mono for data/IDs/counts. */
+:root {
+  --og-font-ui: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --og-font-data: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+html { font-family: var(--og-font-ui); }
+.font-data, .mono, .tnum { font-family: var(--og-font-data); }
+.tnum { font-variant-numeric: tabular-nums; }
+html[data-type="mono"] { --og-font-ui: var(--og-font-data); }
+
+/* eyebrow: the small-caps section label the design uses above cards. */
+.eyebrow { font-size: 10.5px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: color-mix(in oklch, var(--color-base-content) 55%, transparent); }
+
+/* density: row height + card padding on dense surfaces. */
+:root { --og-row-h: 2.5rem; --og-pad-card: 1.25rem; --og-gap: 1.5rem; }
+html[data-density="compact"] { --og-row-h: 2.1rem; --og-pad-card: 0.9rem; --og-gap: 1.1rem; }
+.og-rows tbody tr td { height: var(--og-row-h); padding-top: 0; padding-bottom: 0; }
+.og-stack { gap: var(--og-gap); }
+
+/* a single live pulse, pure decoration. */
+.og-pulse { position: relative; }
+.og-pulse::after { content: ""; position: absolute; inset: 0; border-radius: 9999px; background: var(--color-primary); animation: ogp 2s cubic-bezier(.4,0,.6,1) infinite; }
+@keyframes ogp { 0% { transform: scale(1); opacity: .7 } 70% { transform: scale(2.6); opacity: 0 } 100% { opacity: 0 } }
+@media (prefers-reduced-motion: reduce) { .og-pulse::after { animation: none } }
+
+/* apply theme/var changes instantly during a switch. */
+.theme-switching, .theme-switching * { transition: none !important; }

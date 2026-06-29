@@ -28,8 +28,10 @@ export const AuthGuard: ParentComponent = (props) => {
 
 function FullScreenLoader(props: { pending: boolean }) {
   return (
-    <div style={{ "min-height": "100vh", display: "flex", "align-items": "center", "justify-content": "center", background: "var(--ground)" }}>
-      <span style={{ "font-size": "13px", color: "var(--text-dim)" }}>{props.pending ? "Loading…" : "Redirecting…"}</span>
+    <div class="flex min-h-screen items-center justify-center gap-3 bg-base-100 text-sm text-base-content/50">
+      <Show when={props.pending} fallback={<span>Redirecting…</span>}>
+        <span class="loading loading-spinner loading-md text-primary" />
+      </Show>
     </div>
   );
 }
