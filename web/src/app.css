@@ -118,6 +118,11 @@ html[data-density="compact"] { --og-row-h: 2.1rem; --og-pad-card: 0.9rem; --og-g
 .og-pad { padding: var(--og-pad-card); }
 .og-stack { gap: var(--og-gap); }
 
+/* column-resize handle for DataTable (daisyUI has no table-resize primitive). */
+.col-resizer { position: absolute; top: 0; right: -3px; width: 6px; height: 100%; cursor: col-resize; z-index: 2; touch-action: none; }
+.col-resizer::after { content: ""; position: absolute; top: 25%; right: 3px; width: 1px; height: 50%; background: var(--color-base-300); opacity: 0; transition: opacity .15s; }
+.table thead th:hover .col-resizer::after, .col-resizer.active::after { opacity: 1; }
+
 /* a single live pulse, pure decoration. */
 .og-pulse { position: relative; }
 .og-pulse::after { content: ""; position: absolute; inset: 0; border-radius: 9999px; background: var(--color-primary); animation: ogp 2s cubic-bezier(.4,0,.6,1) infinite; }
