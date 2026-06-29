@@ -34,7 +34,7 @@ export default function Donut(props: {
   return (
     <div style={{ position: "relative", display: "inline-flex", width: `${size()}px`, height: `${size()}px` }}>
       <svg width={size()} height={size()} viewBox={`0 0 ${size()} ${size()}`} style={{ transform: "rotate(-90deg)" }}>
-        <circle cx={cx()} cy={cx()} r={r()} fill="none" stroke="var(--line)" stroke-width={thickness()} />
+        <circle cx={cx()} cy={cx()} r={r()} fill="none" stroke="var(--color-base-300)" stroke-width={thickness()} />
         <For each={arcs()}>
           {(a) => (
             <circle

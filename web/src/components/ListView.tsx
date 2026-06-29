@@ -5,7 +5,7 @@ import { buildPredicate, facetActive as facetActiveFn, toggleFacet as toggleFace
 import FilterBar from "./FilterBar";
 import Drawer from "./Drawer";
 import {
-  ChevronDown, ChevronLeft, ChevronsDownUp, ChevronsUpDown, Columns, Check, ListTree, Rows, Maximize, Plus, Pencil, Trash, X,
+  ChevronDown, ChevronLeft, ChevronsDownUp, ChevronsUpDown, Columns, Check, GripVertical, ListTree, Rows, Maximize, Plus, Pencil, Trash, X,
 } from "./icons";
 
 // ListView: the one config-driven inventory shell. Every entity page (Components,
@@ -40,6 +40,15 @@ export type FormState<N> = { mode: "create"; parent: N | null } | { mode: "edit"
 
 export type Blade = { title: JSX.Element; headerExtra?: JSX.Element; body: JSX.Element };
 
+// A summary widget: a compact badge (collapsed rail) and a full tile (expanded
+// board). Both receive the context so a widget can drive the filter (facet
+// toggles) or expand the rail.
+export type Widget<N extends ListNode> = {
+  title: string;
+  badge: (ctx: ListCtx<N>) => JSX.Element;
+  tile: (ctx: ListCtx<N>) => JSX.Element;
+};
+
 export type ListCtx<N extends ListNode> = {
   // true in the full-page detail, false in a blade: lets a shared detail body show
   // its breadcrumb only in a blade and drill via blade vs URL navigation.
@@ -51,6 +60,7 @@ export type ListCtx<N extends ListNode> = {
   openEdit: (n: N) => void;
   openCreate: (parent: N | null) => void;
   openNode: (n: N) => void;
+  setSummaryOpen: (open: boolean) => void;
   // context-aware open: in a blade it pushes a child blade, on the full page it
   // navigates to that node's full-page URL.
   go: (n: N) => void;
@@ -92,6 +102,12 @@ export interface ListConfig<N extends ListNode> {
   onBack?: () => void;
   onDelete?: (n: N, ctx: ListCtx<N>) => void;
   nav?: (page: string, params?: unknown) => void;
+  // Optional summary board: a collapsible rail of widgets above the table, with a
+  // personal show/hide preference. allWidgets is the catalog, defaultWidgets the
+  // initial board.
+  widgets?: Record<string, Widget<N>>;
+  allWidgets?: string[];
+  defaultWidgets?: string[];
 }
 
 type Crumb = { id: string; display: string };
@@ -102,12 +118,19 @@ export default function ListView<N extends ListNode>(props: { config: ListConfig
   const me = useMe();
   const allow = (action: string) => can(me.data, cfg.entity.name, action);
 
+  // The stored value is the visible columns IN ORDER (visibility + reorder in one
+  // client preference; the eventual home is a per-principal user-preferences
+  // endpoint, a straight read/write swap, not the cascade). Order is honored as
+  // stored; unknown keys are dropped.
   const readCols = (): string[] => {
     try {
       const raw = localStorage.getItem(`${cfg.storageKey}-cols`);
       if (raw) {
         const arr = JSON.parse(raw);
-        if (Array.isArray(arr)) return cfg.columnKeys.filter((k) => arr.includes(k));
+        if (Array.isArray(arr)) {
+          const valid = [...new Set(arr.filter((k) => cfg.columnKeys.includes(k)))];
+          if (valid.length || arr.length === 0) return valid;
+        }
       }
     } catch {
       /* ignore corrupt prefs */
@@ -205,22 +228,25 @@ export default function ListView<N extends ListNode>(props: { config: ListConfig
 
   const filtering = createMemo(() => chips().length > 0);
   const flatten = createMemo(() => !!cfg.flat || filtering() || viewMode() === "list");
-  const visible = createMemo(() => cfg.columnKeys.filter((k) => cols().includes(k)));
+  // cols() IS the ordered visible list (so reorder persists); render in that order.
+  const visible = createMemo(() => cols());
 
   const rows = createMemo<Row<N>[]>(() => {
     if (flatten()) {
       const pred = buildPredicate(cfg.filterKeys, chips());
       const list = index().all.filter(pred);
       const s = sort();
-      list.sort((a, b) => {
-        if (s) {
+      // Default (no column chosen) keeps index order, which is the tree walked
+      // depth-first: the tree compressed to a flat list, nesting preserved. A
+      // column sort overrides that.
+      if (s) {
+        list.sort((a, b) => {
           const x = cfg.sortVal(a, s.key);
           const y = cfg.sortVal(b, s.key);
           const r = typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y));
           return r * s.dir;
-        }
-        return a.display.toLowerCase().localeCompare(b.display.toLowerCase());
-      });
+        });
+      }
       return list.map((n) => ({ n, depth: 0, path: pathOf(n) }));
     }
     const out: Row<N>[] = [];
@@ -250,6 +276,41 @@ export default function ListView<N extends ListNode>(props: { config: ListConfig
   });
   const toggleAll = () => setExpanded(allExpanded() ? new Set<string>() : new Set(index().containerIds));
   const toggleCol = (k: string) => setCols((c) => (c.includes(k) ? c.filter((x) => x !== k) : [...c, k]));
+  // Reorder a visible column from one position to another (drag in the menu).
+  const moveCol = (from: number, to: number) =>
+    setCols((c) => {
+      const a = [...c];
+      const [x] = a.splice(from, 1);
+      a.splice(to, 0, x);
+      return a;
+    });
+  const [colDrag, setColDrag] = createSignal<number | null>(null);
+
+  // Summary board: which widgets are on the personal board, and whether the rail is
+  // expanded. Both persist as client preferences (same future home as columns).
+  const readBoard = (): string[] => {
+    if (!cfg.widgets) return [];
+    try {
+      const raw = localStorage.getItem(`${cfg.storageKey}-widgets`);
+      if (raw) {
+        const arr = JSON.parse(raw);
+        if (Array.isArray(arr)) {
+          const valid = [...new Set(arr.filter((id) => cfg.widgets![id]))];
+          if (valid.length || arr.length === 0) return valid;
+        }
+      }
+    } catch {
+      /* ignore corrupt prefs */
+    }
+    return cfg.defaultWidgets ?? cfg.allWidgets ?? Object.keys(cfg.widgets);
+  };
+  const [board, setBoard] = createSignal<string[]>(readBoard());
+  const [summaryOpen, setSummaryOpen] = createSignal(localStorage.getItem(`${cfg.storageKey}-sumopen`) === "1");
+  const toggleWidget = (id: string) => setBoard((b) => (b.includes(id) ? b.filter((x) => x !== id) : [...b, id]));
+  if (cfg.widgets) {
+    createEffect(() => localStorage.setItem(`${cfg.storageKey}-widgets`, JSON.stringify(board())));
+    createEffect(() => localStorage.setItem(`${cfg.storageKey}-sumopen`, summaryOpen() ? "1" : "0"));
+  }
 
   // Blade ops. pushBlade truncates to an existing entry (so a breadcrumb ancestor
   // collapses the stack back to it) or appends a new one.
@@ -326,6 +387,7 @@ export default function ListView<N extends ListNode>(props: { config: ListConfig
     openEdit: (n: N) => { closeBlades(); setForm({ mode: "edit", node: n }); },
     openCreate: (parent: N | null) => { closeBlades(); setForm({ mode: "create", parent }); },
     openNode,
+    setSummaryOpen,
     openFull,
     parentOf: (n: N) => index().parentOf.get(n.id),
     pushBlade,
@@ -364,17 +426,36 @@ export default function ListView<N extends ListNode>(props: { config: ListConfig
         <summary class="btn btn-ghost btn-sm btn-square" title="Columns">
           <Columns size={15} />
         </summary>
-        <ul class="dropdown-content menu z-40 mt-1.5 w-52 rounded-box border border-base-300 bg-base-100 p-1.5 shadow-2xl">
-          <li class="menu-title px-2 pb-1.5 text-[10.5px]">Columns</li>
-          <For each={cfg.columnKeys}>
+        <ul class="dropdown-content menu z-40 mt-1.5 w-56 rounded-box border border-base-300 bg-base-100 p-1.5 shadow-2xl">
+          <li class="menu-title px-2 pb-1.5 text-[10.5px]">Columns · drag to reorder</li>
+          {/* Visible columns, in order, draggable to reorder. */}
+          <For each={cols()}>
+            {(k, i) => (
+              <li
+                draggable={true}
+                onDragStart={() => setColDrag(i())}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={() => { const from = colDrag(); if (from !== null && from !== i()) moveCol(from, i()); setColDrag(null); }}
+                onDragEnd={() => setColDrag(null)}
+                classList={{ "opacity-40": colDrag() === i() }}
+              >
+                <div class="flex items-center gap-2 px-2 py-1.5">
+                  <span class="cursor-grab text-base-content/40"><GripVertical size={13} /></span>
+                  <button class="flex flex-1 items-center gap-2.5" onClick={() => toggleCol(k)}>
+                    <span class={colBox(true)}><Check size={11} /></span>
+                    {cfg.columns[k].label}
+                  </button>
+                </div>
+              </li>
+            )}
+          </For>
+          {/* Hidden columns, click to add (appended at the end). */}
+          <For each={cfg.columnKeys.filter((k) => !cols().includes(k))}>
             {(k) => (
               <li>
-                <button class="flex items-center gap-2.5 px-2 py-1.5" onClick={() => toggleCol(k)}>
-                  <span class={colBox(cols().includes(k))}>
-                    <Show when={cols().includes(k)}>
-                      <Check size={11} />
-                    </Show>
-                  </span>
+                <button class="flex items-center gap-2.5 px-2 py-1.5 text-base-content/60" onClick={() => toggleCol(k)}>
+                  <span class="w-3.25 flex-none" />
+                  <span class={colBox(false)} />
                   {cfg.columns[k].label}
                 </button>
               </li>
@@ -476,8 +557,63 @@ export default function ListView<N extends ListNode>(props: { config: ListConfig
     );
   };
 
+  // Summary board: a collapsed badge rail or an expanded tile grid, with a personal
+  // show/hide preference. Rendered above the table only when the config supplies
+  // widgets.
+  const SummaryRail = () => {
+    const W = cfg.widgets!;
+    const catalog = cfg.allWidgets ?? Object.keys(W);
+    return (
+      <div class="flex flex-col gap-3">
+        <Show
+          when={summaryOpen()}
+          fallback={
+            <div class="flex flex-wrap items-center gap-2">
+              <div class="flex min-w-0 flex-1 flex-wrap gap-2">
+                <For each={board().filter((id) => W[id])}>{(id) => W[id].badge(ctxFull)}</For>
+              </div>
+              <button class="btn btn-ghost btn-sm btn-square flex-none" title="Expand summary" onClick={() => setSummaryOpen(true)}>
+                <span class="inline-flex" style={{ transform: "rotate(-90deg)" }}><ChevronDown size={16} /></span>
+              </button>
+            </div>
+          }
+        >
+          <div class="flex items-center gap-2">
+            <span class="eyebrow">Summary</span>
+            <span class="flex-1" />
+            <details class="dropdown dropdown-end">
+              <summary class="btn btn-ghost btn-sm gap-1.5"><Columns size={14} /> Customize</summary>
+              <ul class="dropdown-content menu z-40 mt-1.5 w-56 rounded-box border border-base-300 bg-base-100 p-1.5 shadow-2xl">
+                <li class="menu-title px-2 pb-1.5 text-[10.5px]">Show widgets · personal</li>
+                <For each={catalog}>
+                  {(id) => (
+                    <li>
+                      <button class="flex items-center gap-2.5 px-2 py-1.5" onClick={() => toggleWidget(id)}>
+                        <span class={colBox(board().includes(id))}><Show when={board().includes(id)}><Check size={11} /></Show></span>
+                        {W[id].title}
+                      </button>
+                    </li>
+                  )}
+                </For>
+              </ul>
+            </details>
+            <button class="btn btn-ghost btn-sm gap-1.5" onClick={() => setSummaryOpen(false)}>Collapse <ChevronDown size={14} /></button>
+          </div>
+          <div class="flex flex-wrap items-stretch gap-3">
+            <For each={board().filter((id) => W[id])}>
+              {(id) => <div class="min-w-50 max-w-sm flex-[1_1_220px]">{W[id].tile(ctxFull)}</div>}
+            </For>
+          </div>
+        </Show>
+      </div>
+    );
+  };
+
   const ListBody = () => (
     <section class="fade-in flex flex-col gap-3.5">
+      <Show when={cfg.widgets}>
+        <SummaryRail />
+      </Show>
       <div class="card overflow-hidden border border-base-300 bg-base-200 p-0">
         <div class="border-b border-base-300 px-3 py-2.5">
           <FilterBar
