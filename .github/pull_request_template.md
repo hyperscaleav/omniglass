@@ -26,6 +26,25 @@ Closes #
 - Tiers: unit _x_ / integration _y_ / e2e _z_
 - `make gen`: clean (spec and code in sync)
 
+<!-- PASTE the actual fresh test output (the tail of `make test`, and web tests
+     if touched). Evidence, not a claim. -->
+
+```
+$ make test
+... (paste) ...
+```
+
+## Visual confirmation
+
+<!-- REQUIRED for any operator-facing (UI) change: screenshots of the surface,
+     driven live (e.g. against `make dev`). Upload via the gh-image extension
+     when GH_SESSION_TOKEN is set; otherwise commit them under
+     .github/screenshots/ and embed by immutable commit SHA
+     (https://raw.githubusercontent.com/<owner>/<repo>/<sha>/.github/screenshots/...).
+     Write "n/a (no UI surface)" for non-UI slices. -->
+
+![](...)
+
 ## Docs and review
 
 - **Docs:** <!-- what shipped; architecture-of-record consistent, or a divergence note -->
@@ -42,7 +61,8 @@ Closes #
 
 ## Checklist
 
-- [ ] Tests failed before, pass after; `make test` green run fresh
+- [ ] Tests failed before, pass after; `make test` green run fresh, **output pasted above**
+- [ ] **Screenshots** of any operator-facing change, driven live (or "n/a")
 - [ ] Docs ship in this PR (or `no-docs` label with justification); status build-progress noted
 - [ ] Operator-facing surface teaches its concept (learning-tool), if applicable
 - [ ] `make gen` clean; no em dashes; no AI attribution

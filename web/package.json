@@ -1,0 +1,32 @@
+{
+  "name": "omniglass-console",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "gen:api": "openapi-typescript ../api/openapi.json -o src/api/schema.gen.ts"
+  },
+  "dependencies": {
+    "@solidjs/router": "^0.15.3",
+    "@tanstack/solid-query": "^5.100.14",
+    "openapi-fetch": "^0.17.0",
+    "solid-js": "^1.9.5"
+  },
+  "devDependencies": {
+    "@solidjs/testing-library": "^0.8.10",
+    "@tailwindcss/vite": "^4.1.0",
+    "@testing-library/jest-dom": "^6.9.1",
+    "jsdom": "^29.1.1",
+    "openapi-typescript": "^7.13.0",
+    "tailwindcss": "^4.1.0",
+    "typescript": "^5.7.3",
+    "vite": "^6.1.0",
+    "vite-plugin-solid": "^2.11.6",
+    "vitest": "^4.1.7",
+    "daisyui": "^5.0.0"
+  }
+}

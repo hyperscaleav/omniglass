@@ -17,6 +17,7 @@ import (
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/go-chi/chi/v5"
 	"github.com/hyperscaleav/omniglass/internal/storage"
+	"github.com/hyperscaleav/omniglass/internal/webui"
 )
 
 // healthOutput is the body of GET /api/v1/healthz. Status is the overall
@@ -38,6 +39,19 @@ func NewHandler(gw storage.Gateway) http.Handler {
 		api := humachi.New(sub, apiConfig())
 		registerRoutes(api, gw)
 	})
+
+	// The operator console SPA is nested under /web/* (namespaces stay explicit:
+	// /api/v1 = data, /web = console). StripPrefix lets the SPA handler resolve
+	// assets (/web/assets/* -> dist/assets/*) and fall back to the shell for the
+	// SPA's own client routes (/web/locations -> index.html, resolved by the
+	// Solid router whose base is /web). The console is embedded only in
+	// `-tags web` builds; otherwise a build-the-console placeholder is served.
+	spa := http.StripPrefix("/web", webui.SPA())
+	r.Get("/web", func(w http.ResponseWriter, req *http.Request) {
+		http.Redirect(w, req, "/web/", http.StatusMovedPermanently)
+	})
+	r.Handle("/web/*", spa)
+
 	return r
 }
 

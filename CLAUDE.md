@@ -26,8 +26,9 @@ Treat every change as portfolio-quality and externally visible.
    one-off where a primitive belongs (the expression engine, the `ViewResult` contract, the
    Storage Gateway, the cascade, the timer). [docs/contributing/primitive-first.md](docs/src/content/docs/contributing/primitive-first.md).
 
-The UI is SolidJS + daisyUI + Tailwind, a generated typed client over the `ViewResult`
-renderer contract; learning surfaces render the real engine, not static diagrams.
+The UI is SolidJS + daisyUI 5 on Tailwind (Kobalte for interactive primitives), a generated
+typed client over the `ViewResult` renderer contract; learning surfaces render the real engine,
+not static diagrams.
 [docs/contributing/design-system.md](docs/src/content/docs/contributing/design-system.md). Authorization is
 two layers, both in the app: a `<resource>:<action>` permission checked on **every** route,
 and ABAC **scope** injected by the Storage Gateway on **every** applicable query. These are

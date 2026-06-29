@@ -9,6 +9,16 @@ from the API: a new route is a new command on the next regeneration. A small set
 commands (the run modes and the trusted bootstrap) are hand-written and compose with the
 generated tree on the same root.
 
+## Running the full stack locally
+
+`make dev` brings up the whole stack for a browser session: a dev Postgres (docker
+compose, matching the default DSN), the migrations and boot seed, a bootstrapped `dev`
+owner whose token is printed once, and the server with the operator console at
+`http://localhost:8080/web`. Ctrl-C stops the server; `make down` stops Postgres (the
+named volume persists data between runs; `docker compose down -v` wipes it and re-mints a
+token next run). `make up` / `make down` manage just the database. Tests never touch this
+stack: they spin their own ephemeral Postgres via testcontainers.
+
 ## Connecting
 
 Every generated command is a client of a running server and takes two shared flags, each

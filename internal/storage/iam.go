@@ -101,6 +101,28 @@ func (p *PG) BootstrapOwner(ctx context.Context, spec OwnerSpec) (created bool, 
 	return true, nil
 }
 
+// IssueBearerCredential mints an additional bearer credential for an existing
+// principal addressed by its human username, returning false if no such
+// username exists. The caller generates and hashes the token and shows the
+// cleartext once; this is the same trusted direct-DB lane as BootstrapOwner
+// (token reissue, break-glass, and the `make dev` login).
+func (p *PG) IssueBearerCredential(ctx context.Context, username string, hash []byte, prefix string) (bool, error) {
+	var pid string
+	err := p.pool.QueryRow(ctx, `select principal_id from human where username = $1`, username).Scan(&pid)
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		return false, nil
+	case err != nil:
+		return false, fmt.Errorf("storage: lookup human %q: %w", username, err)
+	}
+	if _, err := p.pool.Exec(ctx,
+		`insert into credential (principal_id, kind, secret_hash, prefix) values ($1, 'bearer', $2, $3)`,
+		pid, hash, prefix); err != nil {
+		return false, fmt.Errorf("storage: issue credential: %w", err)
+	}
+	return true, nil
+}
+
 // nullize maps an empty string to a SQL NULL so optional text columns stay null
 // rather than empty.
 func nullize(s string) any {

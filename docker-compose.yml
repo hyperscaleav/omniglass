@@ -1,0 +1,26 @@
+# Local dev dependency only: a Postgres matching config.DefaultDSN
+# (omniglass:omniglass@localhost:5432/omniglass), so the server runs with no
+# OMNIGLASS_DSN override. Production is BYO Postgres; this is never deployed.
+# Tests do not use it (they spin ephemeral testcontainer Postgres on random
+# ports). Lifecycle is `make up` / `make down` (add `-v` to wipe the volume).
+services:
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: omniglass
+      POSTGRES_PASSWORD: omniglass
+      POSTGRES_DB: omniglass
+    ports:
+      - "5432:5432"
+    # postgres:18+ stores data under /var/lib/postgresql (a major-version
+    # subdirectory), not /var/lib/postgresql/data; mount the volume there.
+    volumes:
+      - og-pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U omniglass -d omniglass"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  og-pgdata:
