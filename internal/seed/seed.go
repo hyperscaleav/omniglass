@@ -20,6 +20,9 @@ var rolesYAML []byte
 //go:embed location_types.yaml
 var locationTypesYAML []byte
 
+//go:embed system_types.yaml
+var systemTypesYAML []byte
+
 type rolesDoc struct {
 	Roles []struct {
 		ID          string   `yaml:"id"`
@@ -36,6 +39,14 @@ type locationTypesDoc struct {
 	} `yaml:"location_types"`
 }
 
+type systemTypesDoc struct {
+	SystemTypes []struct {
+		ID          string `yaml:"id"`
+		DisplayName string `yaml:"display_name"`
+		Rank        int    `yaml:"rank"`
+	} `yaml:"system_types"`
+}
+
 // Run upserts the ship-with reference data: the official roles and location
 // types. Idempotent, so it is safe to call on every boot; a release that changes
 // a default takes effect on the next start.
@@ -43,7 +54,28 @@ func Run(ctx context.Context, gw storage.Gateway) error {
 	if err := seedRoles(ctx, gw); err != nil {
 		return err
 	}
-	return seedLocationTypes(ctx, gw)
+	if err := seedLocationTypes(ctx, gw); err != nil {
+		return err
+	}
+	return seedSystemTypes(ctx, gw)
+}
+
+func seedSystemTypes(ctx context.Context, gw storage.Gateway) error {
+	var doc systemTypesDoc
+	if err := yaml.Unmarshal(systemTypesYAML, &doc); err != nil {
+		return fmt.Errorf("seed: parse system_types: %w", err)
+	}
+	for _, st := range doc.SystemTypes {
+		if err := gw.UpsertSystemType(ctx, storage.SystemType{
+			ID:          st.ID,
+			Official:    true,
+			DisplayName: st.DisplayName,
+			Rank:        st.Rank,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func seedRoles(ctx context.Context, gw storage.Gateway) error {

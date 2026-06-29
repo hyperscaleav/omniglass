@@ -181,5 +181,121 @@ func generatedCommands() []*cobra.Command {
 		}())
 		roots = append(roots, parent)
 	}
+	{
+		parent := &cobra.Command{
+			Use:   "system",
+			Short: "Commands for the system resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			var fDisplayName string
+			var fLocation string
+			var fName string
+			var fParent string
+			var fSystemType string
+			cmd := &cobra.Command{
+				Use:     "create",
+				Short:   "Create a system",
+				Long:    "Creates a system, optionally under a parent (a root needs an all-scoped grant) and at a location. Gated by system:create.",
+				Example: "  omniglass system create --name name --system-type system_type",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/systems")
+					body := map[string]any{}
+					if cmd.Flags().Changed("display-name") {
+						body["display_name"] = fDisplayName
+					}
+					if cmd.Flags().Changed("location") {
+						body["location"] = fLocation
+					}
+					if cmd.Flags().Changed("name") {
+						body["name"] = fName
+					}
+					if cmd.Flags().Changed("parent") {
+						body["parent"] = fParent
+					}
+					if cmd.Flags().Changed("system-type") {
+						body["system_type"] = fSystemType
+					}
+					return runAPICommand(cmd, "POST", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
+			cmd.Flags().StringVar(&fLocation, "location", "", "Location name this system is placed at")
+			cmd.Flags().StringVar(&fName, "name", "", "Globally unique name (the address)")
+			_ = cmd.MarkFlagRequired("name")
+			cmd.Flags().StringVar(&fParent, "parent", "", "Parent system name; omit for a root system")
+			cmd.Flags().StringVar(&fSystemType, "system-type", "", "A system_type id")
+			_ = cmd.MarkFlagRequired("system-type")
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "delete <name>",
+				Short:   "Delete a system",
+				Long:    "Deletes a system, refused while it still has child systems. Gated by system:delete; read and delete scopes drive the 404 versus 403 split.",
+				Example: "  omniglass system delete <name>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/systems/%s", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "DELETE", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "get <name>",
+				Short:   "Get a system",
+				Long:    "Fetches a system by name within the caller's read scope. Out of scope is a non-disclosing 404. Gated by system:read.",
+				Example: "  omniglass system get <name>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/systems/%s", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "list",
+				Short:   "List systems in scope",
+				Long:    "Lists the systems the caller may read, each filtered to its scope subtree. Gated by system:read.",
+				Example: "  omniglass system list",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/systems")
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			var fDisplayName string
+			var fSystemType string
+			cmd := &cobra.Command{
+				Use:     "update <name>",
+				Short:   "Update a system",
+				Long:    "Patches a system's display_name or system_type. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
+				Example: "  omniglass system update <name>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/systems/%s", url.PathEscape(args[0]))
+					body := map[string]any{}
+					if cmd.Flags().Changed("display-name") {
+						body["display_name"] = fDisplayName
+					}
+					if cmd.Flags().Changed("system-type") {
+						body["system_type"] = fSystemType
+					}
+					return runAPICommand(cmd, "PATCH", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
+			cmd.Flags().StringVar(&fSystemType, "system-type", "", "")
+			return cmd
+		}())
+		roots = append(roots, parent)
+	}
 	return roots
 }

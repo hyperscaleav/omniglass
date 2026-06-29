@@ -79,6 +79,21 @@ func TestResolveNoMatchingGrant(t *testing.T) {
 	}
 }
 
+func TestResolveSystemKind(t *testing.T) {
+	idx := index()
+	// A system-scoped grant contributes to the system resource...
+	set := scope.Resolve([]scope.Grant{{Role: "owner", ScopeKind: "system", ScopeID: "av"}}, idx, "system", "read")
+	if set.All || len(set.IDs) != 1 || set.IDs[0] != "av" {
+		t.Fatalf("system scope = %+v, want [av]", set)
+	}
+	// ...but a location-scoped grant does NOT confer system access (no cross-tier
+	// cascade yet).
+	other := scope.Resolve([]scope.Grant{{Role: "owner", ScopeKind: "location", ScopeID: "hq"}}, idx, "system", "read")
+	if !other.Empty() {
+		t.Fatalf("location grant should not confer system scope, got %+v", other)
+	}
+}
+
 func TestResolveDedupRoots(t *testing.T) {
 	idx := index()
 	// Two grants to the same root via different roles collapse to one id.

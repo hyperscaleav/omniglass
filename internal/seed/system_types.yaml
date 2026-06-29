@@ -1,0 +1,24 @@
+# The official system types, seeded idempotently at boot (ON CONFLICT DO
+# UPDATE). A system is the service tree for a space or function; the type
+# classifies it. rank orders the registry, spaced by 10 so a new type slots in
+# without a renumber. Starter set, operator-extensible via the namespace shadow
+# later; tune freely.
+system_types:
+  - id: meeting-room
+    display_name: Meeting Room
+    rank: 10
+  - id: huddle-room
+    display_name: Huddle Room
+    rank: 20
+  - id: classroom
+    display_name: Classroom
+    rank: 30
+  - id: auditorium
+    display_name: Auditorium
+    rank: 40
+  - id: signage
+    display_name: Digital Signage
+    rank: 50
+  - id: control-room
+    display_name: Control Room
+    rank: 60

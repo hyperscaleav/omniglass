@@ -116,6 +116,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/systems": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List systems in scope
+         * @description Lists the systems the caller may read, each filtered to its scope subtree. Gated by system:read.
+         */
+        get: operations["list-systems"];
+        put?: never;
+        /**
+         * Create a system
+         * @description Creates a system, optionally under a parent (a root needs an all-scoped grant) and at a location. Gated by system:create.
+         */
+        post: operations["create-system"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/systems/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a system
+         * @description Fetches a system by name within the caller's read scope. Out of scope is a non-disclosing 404. Gated by system:read.
+         */
+        get: operations["get-system"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a system
+         * @description Deletes a system, refused while it still has child systems. Gated by system:delete; read and delete scopes drive the 404 versus 403 split.
+         */
+        delete: operations["delete-system"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a system
+         * @description Patches a system's display_name or system_type. Gated by system:update; read and update scopes drive the 404 versus 403 split.
+         */
+        patch: operations["update-system"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -134,6 +186,23 @@ export interface components {
             name: string;
             /** @description Parent location name; omit for a root location */
             parent?: string;
+        };
+        CreateSystemInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateSystemInputBody.json
+             */
+            readonly $schema?: string;
+            display_name?: string;
+            /** @description Location name this system is placed at */
+            location?: string;
+            /** @description Globally unique name (the address) */
+            name: string;
+            /** @description Parent system name; omit for a root system */
+            parent?: string;
+            /** @description A system_type id */
+            system_type: string;
         };
         ErrorDetail: {
             /** @description Where the error occurred, e.g. 'body.items[3].tags' or 'path.thing-id' */
@@ -213,6 +282,15 @@ export interface components {
             readonly $schema?: string;
             locations: components["schemas"]["LocationBody"][] | null;
         };
+        ListSystemsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListSystemsOutputBody.json
+             */
+            readonly $schema?: string;
+            systems: components["schemas"]["SystemBody"][] | null;
+        };
         LocationBody: {
             /**
              * Format: uri
@@ -261,6 +339,20 @@ export interface components {
         SvcBody: {
             label: string;
         };
+        SystemBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/SystemBody.json
+             */
+            readonly $schema?: string;
+            display_name?: string;
+            id: string;
+            location_id?: string;
+            name: string;
+            parent_id?: string;
+            system_type: string;
+        };
         UpdateLocationInputBody: {
             /**
              * Format: uri
@@ -270,6 +362,16 @@ export interface components {
             readonly $schema?: string;
             display_name?: string;
             location_type?: string;
+        };
+        UpdateSystemInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/UpdateSystemInputBody.json
+             */
+            readonly $schema?: string;
+            display_name?: string;
+            system_type?: string;
         };
     };
     responses: never;
@@ -513,6 +615,165 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RolesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-systems": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListSystemsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-system": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSystemInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-system": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The system's unique name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-system": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The system's unique name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "update-system": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSystemInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemBody"];
                 };
             };
             /** @description Error */

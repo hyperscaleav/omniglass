@@ -60,12 +60,15 @@ func Resolve(grants []Grant, idx rbac.RoleIndex, resource, action string) Set {
 }
 
 // applicableKinds returns the scope kinds that can contain a resource: "all"
-// always, plus the resource's own tier and any ancestor tier. Only location
-// exists today; system, component, and group join as those entities land.
+// always, plus the resource's own tier. The cross-tier cascade (a location scope
+// also covering its systems and components) is a later slice; today each entity
+// is scoped by its own kind. component and group join as those entities land.
 func applicableKinds(resource string) map[string]bool {
 	switch resource {
 	case "location":
 		return map[string]bool{"location": true}
+	case "system":
+		return map[string]bool{"system": true}
 	default:
 		return map[string]bool{}
 	}
