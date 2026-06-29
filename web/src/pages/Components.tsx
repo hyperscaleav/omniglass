@@ -1,7 +1,7 @@
-import { For, Show, createMemo, createSignal } from "solid-js";
+import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
-import { useNavigate, useParams } from "@solidjs/router";
-import ListView, { type ListConfig, type ListCtx, type ListNode } from "../components/ListView";
+import { useNavigate, useParams, useSearchParams } from "@solidjs/router";
+import ListView, { type Blade, type ListConfig, type ListCtx, type ListNode } from "../components/ListView";
 import {
   type Component as Comp,
   COMPONENTS_KEY,
@@ -13,6 +13,7 @@ import {
 import { type System, SYSTEMS_KEY, listSystems } from "../lib/systems";
 import { type Location, LOCATIONS_KEY, listLocations } from "../lib/locations";
 import { useMe, can } from "../lib/auth";
+import { ChevronRight, Maximize } from "../components/icons";
 
 // Components: the device inventory, the first page built on the generic ListView.
 // Components form a tree (parent_id) and each is bound to a primary system and a
@@ -23,12 +24,14 @@ import { useMe, can } from "../lib/auth";
 type CompNode = ListNode & {
   type: string;
   systemName: string;
+  systemAddr: string;
   locationName: string;
   raw: Comp;
 };
 
 export default function Components() {
   const params = useParams();
+  const [search] = useSearchParams();
   const navigate = useNavigate();
   const qc = useQueryClient();
   const me = useMe();
@@ -55,6 +58,7 @@ export default function Components() {
         children: [],
         type: c.component_type,
         systemName: c.system_id ? label(sm.get(c.system_id) ?? { name: c.system_id }) : "",
+        systemAddr: c.system_id ? (sm.get(c.system_id)?.name ?? c.system_id) : "",
         locationName: c.location_id ? label(lm.get(c.location_id) ?? { name: c.location_id }) : "",
         raw: c,
       });
@@ -81,6 +85,76 @@ export default function Components() {
       setErr(describeError(e));
     }
   }
+
+  // The detail body, shared by the full page (ctx.full) and a blade. In a blade it
+  // leads with a breadcrumb and drills via ctx.go (push child blade); the system
+  // link crosses to the Systems page.
+  function detail(n: CompNode, ctx: ListCtx<CompNode>): JSX.Element {
+    const parent = ctx.parentOf(n);
+    const path = ctx.pathOf(n);
+    const sysName = n.raw.system_id ? sysById().get(n.raw.system_id)?.name : undefined;
+    const kids = n.children;
+    return (
+      <div class="flex flex-col gap-5">
+        <Show when={!ctx.full && path.length}>
+          <div class="flex flex-wrap items-center gap-1 text-[11.5px]">
+            <For each={path}>
+              {(c, i) => (
+                <>
+                  <Show when={i()}><span class="text-base-content/30">{"›"}</span></Show>
+                  <button class="text-base-content/60 hover:text-base-content" onClick={() => { const a = nodeById(c.id); if (a) ctx.go(a); }}>{c.display}</button>
+                </>
+              )}
+            </For>
+          </div>
+        </Show>
+        <div class="grid grid-cols-2 gap-5">
+          {ctx.fact("Type", <span class="badge badge-soft badge-neutral badge-sm">{n.type}</span>)}
+          {ctx.fact("System", sysName ? <button class="link text-sm" onClick={() => navigate(`/systems/${encodeURIComponent(sysName)}`)}>{n.systemName}</button> : <span class="text-base-content/50">—</span>)}
+          {ctx.fact("Location", <span>{n.locationName || "—"}</span>)}
+          {ctx.fact("Parent", parent ? <button class="link text-sm" onClick={() => ctx.go(parent)}>{parent.display}</button> : <span class="text-base-content/50">Root</span>)}
+          {ctx.fact("Technical name", <span class="font-data text-sm">{n.raw.name}</span>)}
+          {ctx.fact("ID", <span class="font-data text-xs text-base-content/50">{n.raw.id}</span>)}
+        </div>
+        <Show when={kids.length}>
+          <div class="flex flex-col gap-1.5">
+            <span class="eyebrow">Sub-components</span>
+            <div class="overflow-hidden rounded-box border border-base-300">
+              <For each={kids}>
+                {(c, i) => (
+                  <button class="flex w-full items-center gap-2.5 px-3 py-2 text-left hover:bg-base-content/5" classList={{ "border-t border-base-300": i() > 0 }} onClick={() => ctx.go(c)}>
+                    <span class="flex-1 truncate text-sm">{c.display}</span>
+                    <span class="badge badge-soft badge-neutral badge-sm text-[10px]">{c.type}</span>
+                    <ChevronRight size={14} />
+                  </button>
+                )}
+              </For>
+            </div>
+          </div>
+        </Show>
+        <div class="flex items-center gap-2 border-t border-base-300 pt-4">
+          <Show when={can(me.data, "component", "delete")}>
+            <button class="btn btn-ghost btn-sm gap-1.5 text-error" onClick={() => { ctx.closeBlades(); del(n); }}>Delete</button>
+          </Show>
+          <span class="flex-1" />
+          <Show when={can(me.data, "component", "update")}>
+            <button class="btn btn-primary btn-sm" onClick={() => ctx.openEdit(n)}>Edit</button>
+          </Show>
+        </div>
+      </div>
+    );
+  }
+  const nodeById = (id: string): CompNode | undefined => {
+    const find = (list: CompNode[]): CompNode | undefined => {
+      for (const n of list) {
+        if (n.id === id) return n;
+        const hit = find(n.children);
+        if (hit) return hit;
+      }
+      return undefined;
+    };
+    return find(nodes());
+  };
 
   // The create/edit form. Only display_name and component_type are mutable on an
   // existing component (the API update body); name, system, location, and parent
@@ -179,6 +253,10 @@ export default function Components() {
     );
   }
 
+  // A cross-page deep link from a system seeds a system facet by the system's
+  // unique address (?system=<name>), which the system filter key matches exactly.
+  const initialChips = search.system ? [{ key: "system", op: "eq" as const, values: [String(search.system)] }] : undefined;
+
   const cfg: ListConfig<CompNode> = {
     entity: { name: "component", plural: "Components" },
     storageKey: "og-cmp",
@@ -186,6 +264,7 @@ export default function Components() {
     focus: () => params.name,
     loading: () => components.isLoading,
     error: () => components.error,
+    initialChips,
     filterPlaceholder: "Filter by name, type, system, location…",
     columns: {
       type: { label: "Type", width: 170 },
@@ -204,7 +283,7 @@ export default function Components() {
     filterKeys: [
       { key: "name", type: "string", hint: "substring", get: (n) => `${n.display} ${n.raw.name}`, values: () => [] },
       { key: "type", type: "string", hint: "exact", get: (n) => n.type, values: (rows) => [...new Set(rows.map((r) => r.type))].sort() },
-      { key: "system", type: "string", hint: "exact", get: (n) => n.systemName, values: (rows) => [...new Set(rows.map((r) => r.systemName).filter(Boolean))].sort() },
+      { key: "system", type: "string", hint: "exact", get: (n) => n.systemAddr, values: (rows) => [...new Set(rows.map((r) => r.systemAddr).filter(Boolean))].sort(), valueLabel: (v) => (systems.data ?? []).find((s) => s.name === v)?.display_name ?? v },
       { key: "location", type: "string", hint: "exact", get: (n) => n.locationName, values: (rows) => [...new Set(rows.map((r) => r.locationName).filter(Boolean))].sort() },
     ],
     sortVal: (n, key) => {
@@ -217,27 +296,12 @@ export default function Components() {
     onOpenNode: (n) => navigate(`/components/${encodeURIComponent(n.id)}`),
     onBack: () => navigate("/components"),
     onDelete: (n) => del(n),
-    renderDetail: (n, ctx) => (
-      <div class="flex flex-col gap-5">
-        <div class="grid grid-cols-2 gap-5">
-          {ctx.fact("Type", <span class="badge badge-soft badge-neutral badge-sm">{n.type}</span>)}
-          {ctx.fact("System", <span>{n.systemName || "—"}</span>)}
-          {ctx.fact("Location", <span>{n.locationName || "—"}</span>)}
-          {ctx.fact("Parent", n.raw.parent_id ? <span>{ctx.pathOf(n).at(-1)?.display ?? "—"}</span> : <span class="text-base-content/50">Root</span>)}
-          {ctx.fact("Technical name", <span class="font-data text-sm">{n.raw.name}</span>)}
-          {ctx.fact("ID", <span class="font-data text-xs text-base-content/50">{n.raw.id}</span>)}
-        </div>
-        <div class="flex items-center gap-2 border-t border-base-300 pt-4">
-          <Show when={can(me.data, "component", "delete")}>
-            <button class="btn btn-ghost btn-sm gap-1.5 text-error" onClick={() => del(n)}>Delete</button>
-          </Show>
-          <span class="flex-1" />
-          <Show when={can(me.data, "component", "update")}>
-            <button class="btn btn-primary btn-sm" onClick={() => ctx.openEdit(n)}>Edit</button>
-          </Show>
-        </div>
-      </div>
-    ),
+    renderDetail: (n, ctx) => detail(n, ctx),
+    renderBlade: (n, ctx): Blade => ({
+      title: n.display,
+      headerExtra: <button class="btn btn-ghost btn-sm btn-square" title="Open full page" onClick={() => { ctx.closeBlades(); ctx.openFull(n); }}><Maximize size={15} /></button>,
+      body: detail(n, ctx),
+    }),
     FormBody,
   };
 

@@ -1,35 +1,49 @@
-import { type Accessor, type Component, type JSX, For, Show, createEffect, createMemo, createSignal } from "solid-js";
+import { type Accessor, type Component, type JSX, For, Show, createEffect, createMemo, createSignal, onCleanup, untrack } from "solid-js";
 import { Dynamic } from "solid-js/web";
 import { useMe, can } from "../lib/auth";
 import { buildPredicate, facetActive as facetActiveFn, toggleFacet as toggleFacetFn, type Chip, type FilterKey } from "../lib/predicate";
 import FilterBar from "./FilterBar";
 import Drawer from "./Drawer";
 import {
-  ChevronDown, ChevronsDownUp, ChevronsUpDown, Columns, Check, ListTree, Rows, Maximize, Plus, Pencil, Trash,
+  ChevronDown, ChevronLeft, ChevronsDownUp, ChevronsUpDown, Columns, Check, ListTree, Rows, Maximize, Plus, Pencil, Trash, X,
 } from "./icons";
 
 // ListView: the one config-driven inventory shell. Every entity page (Components,
 // Systems, Locations) is a config over this, never a fork. It owns the filter
 // header (the faceted chip search), the action rail (view toggle, expand/collapse,
 // column visibility, the primary create), the table in both tree and flattened
-// modes, the full-page detail shell, and the create/edit form Drawer. Filtering or
-// list mode flattens the tree (with each row's ancestor path shown); sort is
-// active only when flattened. Authorization is read off the caller's grants by
-// the entity's resource name, a UI hint over the server's authority.
+// modes, the stacked detail blades, the full-page detail shell, and the
+// create/edit form Drawer. Filtering or list mode flattens the tree (with each
+// row's ancestor path shown); sort is active only when flattened. Authorization is
+// read off the caller's grants by the entity's resource name, a UI hint over the
+// server's authority.
 //
-// Deferred to later phases on this branch: the stacked detail blades (Phase 5),
-// drag reorder of columns and sibling rows (Phase 6), and the summary widget
-// board (Phase 7, where a health/alarm backend feeds it).
+// The blade stack is the Azure model: a row opens an ephemeral right-hand blade,
+// drilling into a child pushes another blade offset behind it, and Maximize
+// promotes the blade to the addressable full-page URL. Blades carry no URL of
+// their own (the full page is the shareable deep link); they stay live across a
+// refetch by re-resolving their node id against the fresh index.
+//
+// Deferred to later phases on this branch: drag reorder of columns and sibling
+// rows (Phase 6), and the summary widget board (Phase 7, where a health/alarm
+// backend feeds it).
 
 export interface ListNode {
   id: string;
   display: string;
-  children: ListNode[];
+  // polymorphic so a concrete node's children carry its own type (a CompNode's
+  // children are CompNode[]), letting pages drill without casting.
+  children: this[];
 }
 
 export type FormState<N> = { mode: "create"; parent: N | null } | { mode: "edit"; node: N };
 
+export type Blade = { title: JSX.Element; headerExtra?: JSX.Element; body: JSX.Element };
+
 export type ListCtx<N extends ListNode> = {
+  // true in the full-page detail, false in a blade: lets a shared detail body show
+  // its breadcrumb only in a blade and drill via blade vs URL navigation.
+  full: boolean;
   fact: (label: string, value: JSX.Element) => JSX.Element;
   field: (label: string, control: JSX.Element, hint?: string) => JSX.Element;
   facetActive: (key: string, val: string) => boolean;
@@ -37,6 +51,14 @@ export type ListCtx<N extends ListNode> = {
   openEdit: (n: N) => void;
   openCreate: (parent: N | null) => void;
   openNode: (n: N) => void;
+  // context-aware open: in a blade it pushes a child blade, on the full page it
+  // navigates to that node's full-page URL.
+  go: (n: N) => void;
+  openFull: (n: N) => void;
+  parentOf: (n: N) => N | undefined;
+  pushBlade: (n: N) => void;
+  popBlade: () => void;
+  closeBlades: () => void;
   setFullPage: (n: N | null) => void;
   pathOf: (n: N) => { id: string; display: string }[];
   nav?: (page: string, params?: unknown) => void;
@@ -62,6 +84,9 @@ export interface ListConfig<N extends ListNode> {
   nameWeight?: (n: N) => number;
   canAddChild?: (n: N) => boolean;
   renderDetail: (n: N, ctx: ListCtx<N>) => JSX.Element;
+  // when present, a row opens a blade instead of the full page; the body is the
+  // same detail content, with a Maximize affordance in headerExtra.
+  renderBlade?: (n: N, ctx: ListCtx<N>) => Blade;
   FormBody: Component<{ form: FormState<N>; close: () => void; ctx: ListCtx<N> }>;
   onOpenNode?: (n: N) => void;
   onBack?: () => void;
@@ -99,6 +124,12 @@ export default function ListView<N extends ListNode>(props: { config: ListConfig
   const [sort, setSort] = createSignal<{ key: string; dir: 1 | -1 } | null>(null);
   const [fullPage, setFullPage] = createSignal<N | null>(null);
   const [form, setForm] = createSignal<FormState<N> | null>(null);
+  // The blade stack holds node ids, not node objects: ids are stable string values
+  // so <For> keeps each blade's DOM across a refetch (which rebuilds node objects),
+  // while the blade body re-resolves its node from the fresh index and updates in
+  // place. Storing references here would tear down and remount every blade on any
+  // mutation refetch.
+  const [stack, setStack] = createSignal<string[]>([]);
 
   createEffect(() => localStorage.setItem(`${cfg.storageKey}-cols`, JSON.stringify(cols())));
   createEffect(() => localStorage.setItem(`${cfg.storageKey}-view`, viewMode()));
@@ -142,14 +173,34 @@ export default function ListView<N extends ListNode>(props: { config: ListConfig
     return out;
   };
 
-  // Deep link: when the route carries a focus id, open that node full-page.
+  // After a refetch, drop any open blade whose node no longer exists (e.g. it was
+  // deleted), and re-resolve the full-page node by id so it shows fresh data. The
+  // blade bodies re-resolve themselves from index() by id, so surviving ids stay
+  // put. fullPage is read untracked so this effect depends only on index().
+  createEffect(() => {
+    const idx = index();
+    setStack((s) => {
+      const next = s.filter((id) => idx.byId.has(id));
+      return next.length === s.length ? s : next;
+    });
+    const fp = untrack(fullPage);
+    if (fp) {
+      const fresh = idx.byId.get(fp.id) ?? null;
+      if (fresh !== fp) showFull(fresh);
+    }
+  });
+
+  // Deep link: when the route carries a focus id, open that node full-page and
+  // close any ephemeral blades (the full page is the addressable surface).
   createEffect(() => {
     const f = cfg.focus?.();
     if (!f) {
       showFull(null);
       return;
     }
-    showFull(index().byId.get(f) ?? null);
+    const n = index().byId.get(f) ?? null;
+    showFull(n);
+    if (n) setStack([]);
   });
 
   const filtering = createMemo(() => chips().length > 0);
@@ -200,17 +251,66 @@ export default function ListView<N extends ListNode>(props: { config: ListConfig
   const toggleAll = () => setExpanded(allExpanded() ? new Set<string>() : new Set(index().containerIds));
   const toggleCol = (k: string) => setCols((c) => (c.includes(k) ? c.filter((x) => x !== k) : [...c, k]));
 
-  const openNode = (n: N) => (cfg.onOpenNode ? cfg.onOpenNode(n) : showFull(n));
+  // Blade ops. pushBlade truncates to an existing entry (so a breadcrumb ancestor
+  // collapses the stack back to it) or appends a new one.
+  const pushBlade = (n: N) =>
+    setStack((s) => {
+      const i = s.indexOf(n.id);
+      return i >= 0 ? s.slice(0, i + 1) : [...s, n.id];
+    });
+  const popBlade = () => setStack((s) => s.slice(0, -1));
+  const closeBlades = () => setStack([]);
+
+  const openFull = (n: N) => (cfg.onOpenNode ? cfg.onOpenNode(n) : showFull(n));
+  // A row opens a blade when the config renders one, else the full page.
+  const openNode = (n: N) => (cfg.renderBlade ? setStack([n.id]) : openFull(n));
   const back = () => (cfg.onBack ? cfg.onBack() : showFull(null));
 
-  const ctx: ListCtx<N> = {
-    fact: (label, value) => (
+  // Trap Tab within the top blade so focus cannot wander to the covered page.
+  const trapTab = (e: KeyboardEvent, el: HTMLElement) => {
+    if (e.key !== "Tab") return;
+    const items = [...el.querySelectorAll<HTMLElement>('a[href],button:not([disabled]),input,select,textarea,[tabindex]:not([tabindex="-1"])')].filter((x) => x.offsetParent !== null);
+    if (!items.length) return;
+    const first = items[0];
+    const last = items[items.length - 1];
+    const active = document.activeElement;
+    if (e.shiftKey && (active === first || active === el)) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && active === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  };
+
+  // Escape pops the top blade, unless a form Drawer is open over it (that dialog
+  // owns Escape).
+  const onKey = (e: KeyboardEvent) => {
+    if (e.key === "Escape" && stack().length && !form()) {
+      e.stopPropagation();
+      popBlade();
+    }
+  };
+  window.addEventListener("keydown", onKey);
+  onCleanup(() => window.removeEventListener("keydown", onKey));
+
+  // Move focus into the top blade as the stack grows or shrinks.
+  createEffect(() => {
+    if (!stack().length) return;
+    queueMicrotask(() => {
+      const asides = document.querySelectorAll<HTMLElement>("aside[data-blade]");
+      asides[asides.length - 1]?.focus();
+    });
+  });
+
+  const baseCtx = {
+    fact: (label: string, value: JSX.Element) => (
       <div>
         <div class="eyebrow mb-1.5">{label}</div>
         <div class="text-sm">{value}</div>
       </div>
     ),
-    field: (label, control, hint) => (
+    field: (label: string, control: JSX.Element, hint?: string) => (
       <label class="flex flex-col gap-1.5">
         <span class="eyebrow">{label}</span>
         {control}
@@ -219,15 +319,26 @@ export default function ListView<N extends ListNode>(props: { config: ListConfig
         </Show>
       </label>
     ),
-    facetActive: (key, val) => facetActiveFn(chips(), key, val),
-    toggleFacet: (key, val) => setChips(toggleFacetFn(chips(), key, val)),
-    openEdit: (n) => setForm({ mode: "edit", node: n }),
-    openCreate: (parent) => setForm({ mode: "create", parent }),
+    facetActive: (key: string, val: string) => facetActiveFn(chips(), key, val),
+    toggleFacet: (key: string, val: string) => setChips(toggleFacetFn(chips(), key, val)),
+    // Close any open blade before the form Drawer opens (the Drawer would
+    // otherwise render behind the higher-z blade and be unreachable).
+    openEdit: (n: N) => { closeBlades(); setForm({ mode: "edit", node: n }); },
+    openCreate: (parent: N | null) => { closeBlades(); setForm({ mode: "create", parent }); },
     openNode,
-    setFullPage: (n) => showFull(n),
+    openFull,
+    parentOf: (n: N) => index().parentOf.get(n.id),
+    pushBlade,
+    popBlade,
+    closeBlades,
+    setFullPage: (n: N | null) => showFull(n),
     pathOf,
     nav: cfg.nav,
   };
+  // Two views over the shared context: the full page navigates by URL, a blade
+  // drills by pushing another blade.
+  const ctxFull: ListCtx<N> = { ...baseCtx, full: true, go: openFull };
+  const ctxBlade: ListCtx<N> = { ...baseCtx, full: false, go: pushBlade };
 
   const colBox = (on: boolean) =>
     "flex h-4 w-4 flex-none items-center justify-center rounded border " +
@@ -273,7 +384,7 @@ export default function ListView<N extends ListNode>(props: { config: ListConfig
       </details>
       <span class="mx-1 h-5 w-px flex-none bg-base-300" />
       <Show when={allow("create")}>
-        <button class="btn btn-primary btn-sm" onClick={() => ctx.openCreate(null)}>
+        <button class="btn btn-primary btn-sm" onClick={() => ctxFull.openCreate(null)}>
           <Plus size={15} /> New {cfg.entity.name}
         </button>
       </Show>
@@ -285,7 +396,7 @@ export default function ListView<N extends ListNode>(props: { config: ListConfig
     const active = () => sort()?.key === p.col;
     return (
       <th
-        class="sticky top-0 z-[5] select-none bg-base-200 text-left"
+        class="sticky top-0 z-5 select-none bg-base-200 text-left"
         classList={{ "cursor-pointer": sortable() }}
         onClick={() => sortable() && toggleSort(p.col)}
       >
@@ -337,25 +448,25 @@ export default function ListView<N extends ListNode>(props: { config: ListConfig
           </span>
         </td>
         <For each={visible()}>
-          {(k) => <td class="overflow-hidden text-ellipsis whitespace-nowrap text-sm">{cfg.cellFor(k, n, ctx)}</td>}
+          {(k) => <td class="overflow-hidden text-ellipsis whitespace-nowrap text-sm">{cfg.cellFor(k, n, ctxFull)}</td>}
         </For>
         <td>
           <div class="flex justify-end gap-0.5 opacity-0 transition group-hover:opacity-100">
-            <button class="btn btn-ghost btn-xs btn-square" title="Open full page" onClick={(e) => { e.stopPropagation(); showFull(n); }}>
+            <button class="btn btn-ghost btn-xs btn-square" title="Open full page" onClick={(e) => { e.stopPropagation(); openFull(n); }}>
               <Maximize size={15} />
             </button>
             <Show when={cfg.canAddChild?.(n) && allow("create")}>
-              <button class="btn btn-ghost btn-xs btn-square" title="Add child" onClick={(e) => { e.stopPropagation(); ctx.openCreate(n); }}>
+              <button class="btn btn-ghost btn-xs btn-square" title="Add child" onClick={(e) => { e.stopPropagation(); ctxFull.openCreate(n); }}>
                 <Plus size={15} />
               </button>
             </Show>
             <Show when={allow("update")}>
-              <button class="btn btn-ghost btn-xs btn-square" title="Edit" onClick={(e) => { e.stopPropagation(); ctx.openEdit(n); }}>
+              <button class="btn btn-ghost btn-xs btn-square" title="Edit" onClick={(e) => { e.stopPropagation(); ctxFull.openEdit(n); }}>
                 <Pencil size={15} />
               </button>
             </Show>
             <Show when={allow("delete") && cfg.onDelete}>
-              <button class="btn btn-ghost btn-xs btn-square text-error" title="Delete" onClick={(e) => { e.stopPropagation(); cfg.onDelete!(n, ctx); }}>
+              <button class="btn btn-ghost btn-xs btn-square text-error" title="Delete" onClick={(e) => { e.stopPropagation(); cfg.onDelete!(n, ctxFull); }}>
                 <Trash size={15} />
               </button>
             </Show>
@@ -391,7 +502,7 @@ export default function ListView<N extends ListNode>(props: { config: ListConfig
               <tr>
                 <Th col="name" label="Name" />
                 <For each={visible()}>{(k) => <Th col={k} label={cfg.columns[k].label} />}</For>
-                <th class="sticky top-0 z-[5] bg-base-200" />
+                <th class="sticky top-0 z-5 bg-base-200" />
               </tr>
             </thead>
             <tbody>
@@ -432,7 +543,7 @@ export default function ListView<N extends ListNode>(props: { config: ListConfig
                     class="text-base-content/60 hover:text-base-content"
                     onClick={() => {
                       const anc = index().byId.get(c.id);
-                      if (anc) openNode(anc);
+                      if (anc) openFull(anc);
                     }}
                   >
                     {c.display}
@@ -444,9 +555,69 @@ export default function ListView<N extends ListNode>(props: { config: ListConfig
         </Show>
         <h1 class="text-2xl font-semibold tracking-tight">{props2.node.display}</h1>
       </div>
-      <div class="card border border-base-300 bg-base-200 og-pad">{cfg.renderDetail(props2.node, ctx)}</div>
+      <div class="card border border-base-300 bg-base-200 og-pad">{cfg.renderDetail(props2.node, ctxFull)}</div>
     </section>
   );
+
+  const BladeStack = () => {
+    const top = () => stack().length - 1;
+    return (
+      <Show when={stack().length}>
+        <div class="fixed inset-0 z-60 bg-black/45" onClick={closeBlades} />
+        <For each={stack()}>
+          {(id, i) => {
+            const node = () => index().byId.get(id);
+            const isTop = () => i() === top();
+            const titleId = `blade-title-${id}`;
+            return (
+              <Show when={node()}>
+                {(n) => {
+                  // Recomputes only when this node's data changes (its id is stable,
+                  // so the aside DOM persists across a refetch).
+                  const blade = createMemo(() => cfg.renderBlade!(n(), ctxBlade));
+                  return (
+                    <aside
+                      data-blade
+                      tabindex={-1}
+                      role="dialog"
+                      aria-modal={isTop() ? "true" : undefined}
+                      aria-labelledby={titleId}
+                      class="fixed inset-y-0 flex w-full max-w-md flex-col border-l border-base-300 bg-base-100 shadow-2xl outline-none"
+                      style={{ right: `${(top() - i()) * 40}px`, "z-index": 61 + i() }}
+                      onKeyDown={(e) => isTop() && trapTab(e, e.currentTarget)}
+                    >
+                      <header class="flex items-center justify-between gap-3 border-b border-base-300 px-4 py-3">
+                        <div class="flex min-w-0 items-center gap-2">
+                          <Show when={i()}>
+                            <button class="btn btn-ghost btn-sm btn-square" title="Back" onClick={popBlade}>
+                              <ChevronLeft size={16} />
+                            </button>
+                          </Show>
+                          <div id={titleId} class="min-w-0 truncate text-sm font-semibold">{blade().title}</div>
+                        </div>
+                        <div class="flex flex-none items-center gap-1">
+                          {blade().headerExtra}
+                          <button class="btn btn-ghost btn-sm btn-square" title="Close" aria-label="Close" onClick={closeBlades}>
+                            <X size={16} />
+                          </button>
+                        </div>
+                      </header>
+                      <div class="flex-1 overflow-auto p-5" classList={{ "pointer-events-none opacity-55": !isTop() }}>
+                        {blade().body}
+                      </div>
+                      <Show when={!isTop()}>
+                        <div class="absolute inset-0 cursor-pointer" onClick={() => setStack((s) => s.slice(0, i() + 1))} />
+                      </Show>
+                    </aside>
+                  );
+                }}
+              </Show>
+            );
+          }}
+        </For>
+      </Show>
+    );
+  };
 
   return (
     <>
@@ -458,10 +629,11 @@ export default function ListView<N extends ListNode>(props: { config: ListConfig
       <Show when={fullPage()} fallback={<ListBody />}>
         {(n) => <FullPage node={n()} />}
       </Show>
+      <BladeStack />
       <Show when={form()}>
         {(f) => (
           <Drawer open={true} onClose={() => setForm(null)} title={f().mode === "edit" ? `Edit ${cfg.entity.name}` : `New ${cfg.entity.name}`}>
-            <Dynamic component={cfg.FormBody} form={f()} close={() => setForm(null)} ctx={ctx} />
+            <Dynamic component={cfg.FormBody} form={f()} close={() => setForm(null)} ctx={ctxFull} />
           </Drawer>
         )}
       </Show>
