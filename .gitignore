@@ -42,5 +42,6 @@ coverage.txt
 /.playwright-mcp/
 /web/.playwright-mcp/
 
-# Embedded dev Postgres data + binaries (make dev)
+
+# stale embedded-postgres dev dir (no longer produced)
 /.dev/

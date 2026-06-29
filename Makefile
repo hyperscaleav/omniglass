@@ -1,7 +1,7 @@
 # Local dev loop + the build/run flow for the single binary. Production deploy
 # is BYO Postgres; tests use ephemeral testcontainer Postgres.
 
-.PHONY: build build-web web gen gen-web test test-short tidy dev down
+.PHONY: build build-web web gen gen-web test test-short tidy up down dev
 
 # Build the single binary (no console embedded; serves the build-the-console
 # placeholder under /web).
@@ -47,18 +47,25 @@ test-short:
 tidy:
 	go mod tidy
 
-# ---- local dev stack (no Docker) -------------------------------------------
-# Full stack in one process: build the binary with the console embedded AND the
-# dev command (embedded Postgres), then run it. `omniglass dev` starts an
-# embedded Postgres under .dev/, mints a dev owner token (printed once), and
-# serves the API + console at http://localhost:8080/web. Ctrl-C stops both. The
-# embedded-postgres dependency is behind `-tags dev`, so it never enters a
-# normal `make build` / `make build-web` binary.
-dev: web
-	go build -tags web -o bin/ogdev ./cmd/ogdev
-	./bin/ogdev
+# ---- local dev stack -------------------------------------------------------
+# Bring up the dev Postgres (docker compose) and wait until it is ready. It
+# matches config.DefaultDSN, so the server needs no env override.
+up:
+	docker compose up -d db
+	@echo "waiting for postgres..."
+	@until docker compose exec -T db pg_isready -U omniglass -d omniglass >/dev/null 2>&1; do sleep 1; done
+	@echo "postgres ready on localhost:5432"
 
-# Stop / reset: the dev stack stops on Ctrl-C; remove .dev/ to wipe the data and
-# re-mint a token on the next run.
+# Stop the dev stack. The named volume persists data across runs; add `-v`
+# (docker compose down -v) to wipe it and re-mint a token on the next `make dev`.
 down:
-	@echo "The dev stack stops on Ctrl-C. To wipe data: rm -rf .dev/"
+	docker compose down
+
+# Full stack for a browser session: Postgres + the server with the console
+# embedded. Mints (idempotently) a dev owner token, prints it once, then serves
+# the API and console at http://localhost:8080/web. Ctrl-C stops the server;
+# `make down` stops Postgres.
+dev: up build-web
+	@./bin/omniglass bootstrap dev || true
+	@echo "console: http://localhost:8080/web   (paste the token above; for a fresh token: docker compose down -v && make dev)"
+	./bin/omniglass server

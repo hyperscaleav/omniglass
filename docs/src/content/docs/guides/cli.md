@@ -11,14 +11,13 @@ generated tree on the same root.
 
 ## Running the full stack locally
 
-`make dev` brings up everything in one process, **no Docker required**: an embedded
-Postgres (downloaded once, then cached under `.dev/`), the migrations and boot seed, a
-bootstrapped `dev` owner whose token is printed once, and the server with the operator
-console at `http://localhost:8080/web`. Ctrl-C stops it; `rm -rf .dev/` wipes the data and
-re-mints a token next run. The embedded Postgres lives in a dev-only entry point
-(`cmd/ogdev`, built with `-tags web`), so the dependency never enters the shipped
-`omniglass` binary. Tests do not use it: they spin their own ephemeral Postgres via
-testcontainers.
+`make dev` brings up the whole stack for a browser session: a dev Postgres (docker
+compose, matching the default DSN), the migrations and boot seed, a bootstrapped `dev`
+owner whose token is printed once, and the server with the operator console at
+`http://localhost:8080/web`. Ctrl-C stops the server; `make down` stops Postgres (the
+named volume persists data between runs; `docker compose down -v` wipes it and re-mints a
+token next run). `make up` / `make down` manage just the database. Tests never touch this
+stack: they spin their own ephemeral Postgres via testcontainers.
 
 ## Connecting
 
