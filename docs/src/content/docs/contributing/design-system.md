@@ -3,17 +3,20 @@ title: UI and the design system
 description: The SolidJS and daisyUI console, a generated typed client over the ViewResult renderer contract.
 ---
 
-The operator console is a **SolidJS** SPA carrying its own **design-system stylesheet**
-(`theme.css`) on **Tailwind CSS** for layout. It is a generated client of the API (typed via
-`openapi-fetch` off the committed `openapi.json`) and a renderer over the views BFF. The same
-surfaces are also the **learning surfaces** (see [the learning-tool restriction](/contributing/learning-tool/)).
+The operator console is a **SolidJS** SPA styled with **daisyUI 5** on **Tailwind CSS 4**. It
+is a generated client of the API (typed via `openapi-fetch` off the committed `openapi.json`)
+and a renderer over the views BFF. The same surfaces are also the **learning surfaces** (see
+[the learning-tool restriction](/contributing/learning-tool/)).
 
 :::note[What shipped]
-The console ships the "Omniglass Console" design's own `theme.css` (tokens plus component
-classes: `.card`, `.btn`, `.input`, `.tbl`, `.badge`, `.eyebrow`, and the dark/light, type, and
-density modes via `html` data-attributes). daisyUI was **dropped**: the design is a complete,
-self-contained component CSS, so a second component framework would only conflict. Tailwind is
-kept for layout utilities.
+Styling is **daisyUI 5 component classes + Tailwind utilities**, with two brand themes defined
+through the daisyUI plugin (`omniglass-dark` default, `omniglass-light`) from the "Omniglass
+Design System" tokens. Bespoke CSS is kept to what daisyUI has no slot for: the domain
+severity/health colors, the type-system (`mixed`/`mono`) and density (`comfortable`/`compact`)
+levers via `html` data-attributes, and the live pulse. Accessible **interactive** widgets
+(dialog, combobox, select, popover, tabs, tooltip, toast) are built with **Kobalte**
+(Solid-native, styled by daisyUI), pulled in primitive-first when the first one is needed; the
+Tweaks panel is the first candidate to move there.
 :::
 
 ## The stack
@@ -21,7 +24,8 @@ kept for layout utilities.
 | Concern | Choice |
 |---|---|
 | Framework | SolidJS (`solid-js`, `@solidjs/router`) |
-| Components / theme | the design's own `theme.css` (tokens + component classes), Tailwind CSS v4 for layout |
+| Components / theme | daisyUI 5 on Tailwind CSS v4 (the `omniglass-dark` / `omniglass-light` themes) |
+| Interactive primitives | Kobalte (selective: dialog, combobox, select, popover, tabs, toast), styled by daisyUI |
 | Data fetching | `@tanstack/solid-query` over a typed `openapi-fetch` client |
 | Tables | `@tanstack/solid-table` (group-by, sub-rows) |
 | Flow / graph viz | `solid-flow` (collection functions, pipelines, DAGs) |
