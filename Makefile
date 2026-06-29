@@ -1,7 +1,7 @@
 # Local dev loop + the build/run flow for the single binary. Production deploy
 # is BYO Postgres; tests use ephemeral testcontainer Postgres.
 
-.PHONY: build build-web web gen gen-web test test-short tidy
+.PHONY: build build-web web gen gen-web test test-short tidy dev down
 
 # Build the single binary (no console embedded; serves the build-the-console
 # placeholder under /web).
@@ -46,3 +46,19 @@ test-short:
 # Sync go.mod / go.sum to the actual import graph.
 tidy:
 	go mod tidy
+
+# ---- local dev stack (no Docker) -------------------------------------------
+# Full stack in one process: build the binary with the console embedded AND the
+# dev command (embedded Postgres), then run it. `omniglass dev` starts an
+# embedded Postgres under .dev/, mints a dev owner token (printed once), and
+# serves the API + console at http://localhost:8080/web. Ctrl-C stops both. The
+# embedded-postgres dependency is behind `-tags dev`, so it never enters a
+# normal `make build` / `make build-web` binary.
+dev: web
+	go build -tags web -o bin/ogdev ./cmd/ogdev
+	./bin/ogdev
+
+# Stop / reset: the dev stack stops on Ctrl-C; remove .dev/ to wipe the data and
+# re-mint a token on the next run.
+down:
+	@echo "The dev stack stops on Ctrl-C. To wipe data: rm -rf .dev/"

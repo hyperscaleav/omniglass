@@ -41,3 +41,6 @@ coverage.txt
 # Playwright MCP scratch (screenshots, logs)
 /.playwright-mcp/
 /web/.playwright-mcp/
+
+# Embedded dev Postgres data + binaries (make dev)
+/.dev/
