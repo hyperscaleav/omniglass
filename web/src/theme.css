@@ -1,6 +1,6 @@
 /* ============================================================================
    OMNIGLASS DESIGN SYSTEM
-   Ported from the "Omniglass Console" design (claude.ai/design). Tokens and
+   The "Omniglass Console" design system. Tokens and
    component classes are the visual source of truth for the console: surfaces,
    text ramp, brand teal, severity/health semantics, and the dark/light, type,
    and density modes driven by the html data-attributes.
