@@ -1,0 +1,5 @@
+/* Tailwind provides layout utilities (flex, grid, gap, spacing); theme.css is
+   imported last so the design-system component classes (.card, .btn, .input,
+   .tbl, .eyebrow) and base styles win over Tailwind's preflight. */
+@import "tailwindcss";
+@import "./theme.css";

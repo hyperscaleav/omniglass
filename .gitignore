@@ -10,6 +10,8 @@
 
 # Build artifacts (generated, not committed)
 /internal/docsembed/site/
+# The Vite build output, embedded into the binary under -tags web.
+/internal/webui/dist/
 /web/dist/
 /web/node_modules/
 
