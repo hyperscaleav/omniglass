@@ -318,8 +318,13 @@ func mapSystemWriteErr(err error) error {
 		case "23505":
 			return ErrSystemExists
 		case "23503":
-			if pgErr.ConstraintName == "system_system_type_fkey" {
+			switch pgErr.ConstraintName {
+			case "system_system_type_fkey":
 				return ErrUnknownSystemType
+			case "system_location_id_fkey":
+				// The located-at location was removed between resolve and insert
+				// (a race); report it like the resolve-time miss (422).
+				return ErrLocationNotFound
 			}
 		}
 	}
