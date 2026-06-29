@@ -33,6 +33,13 @@ Each is a gate; a red one blocks the ship.
    addressed. Add a `security-review` lens if the slice touches authz, secrets, the edge, or an
    invariant. Verify behavior to the outcome line, not just call sites.
 6. **Scope honesty.** Every thin cut is documented; every deferral is a filed issue.
+7. **Evidence in the PR.** Paste the *actual* fresh test output (the tail of `make test`, plus
+   web tests if touched) into the PR body, not a "they pass" claim. For any operator-facing
+   change, include **screenshots driven live** (e.g. against `make dev`): upload via the
+   `gh image` extension when `GH_SESSION_TOKEN` is set, otherwise commit them under
+   `.github/screenshots/` and embed by **immutable commit SHA**
+   (`https://raw.githubusercontent.com/<owner>/<repo>/<sha>/.github/screenshots/...`), so the
+   link survives the branch being deleted on squash-merge.
 
 ## The ship-review (emit this, in chat and as the PR body)
 
@@ -49,10 +56,11 @@ Scope
 
 Surfaces:  API <ops> / CLI <commands, generated> / UI <view, live | stub>
 Proof (ran fresh)
-  make test: green, N packages
+  make test: green, N packages   <pasted output in the PR body>
   Behaviors: <the RED->GREEN and the load-bearing assertions>
   Tiers:     unit X / integration Y / e2e Z
   make gen:  clean
+Visual:    <screenshots in the PR for any UI surface | n/a>
 
 Docs:      <what shipped; arch-of-record consistent | divergence note>
 Review:    <reviewer findings + how addressed; security: n/a | note>
