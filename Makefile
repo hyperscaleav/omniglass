@@ -66,6 +66,7 @@ down:
 # the API and console at http://localhost:8080/web. Ctrl-C stops the server;
 # `make down` stops Postgres.
 dev: up build-web
-	@./bin/omniglass bootstrap dev || true
-	@echo "console: http://localhost:8080/web   (paste the token above; for a fresh token: docker compose down -v && make dev)"
+	@./bin/omniglass bootstrap dev >/dev/null 2>&1 || true
+	@./bin/omniglass token dev
+	@echo "console: http://localhost:8080/web   (paste the token above to sign in)"
 	./bin/omniglass server
