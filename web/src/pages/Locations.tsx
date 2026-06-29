@@ -14,17 +14,16 @@ export default function Locations() {
   const query = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations }));
 
   return (
-    <Page
-      title="Locations"
-      subtitle="The place tree: campuses, buildings, floors, and rooms. Each row is scoped to what you may see."
-      actions={
-        <Show when={can(me.data, "location", "create")}>
+    <Page title="Locations">
+      {/* Actions rail: sits directly above the table, right-aligned, with room
+          for more buttons (filter, export) as they land. */}
+      <Show when={can(me.data, "location", "create")}>
+        <div class="flex justify-end">
           <button class="btn btn-primary btn-sm" onClick={() => navigate("/locations/new")}>
             <Plus size={15} /> New location
           </button>
-        </Show>
-      }
-    >
+        </div>
+      </Show>
       <div class="card border border-base-300 bg-base-200">
         <Suspense fallback={<Empty msg="Loading…" />}>
           <Show when={!query.error} fallback={<Empty msg={`Could not load locations: ${String(query.error)}`} />}>

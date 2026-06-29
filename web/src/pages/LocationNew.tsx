@@ -43,7 +43,7 @@ export default function LocationNew() {
   }
 
   return (
-    <Page title="New location" subtitle="A root location needs an all-scoped grant; a child must sit under a location you may create in.">
+    <Page title="New location">
       <form onSubmit={onSubmit} class="card max-w-xl border border-base-300 bg-base-200">
         <div class="card-body gap-4">
           <Field label="Name" hint="Globally unique, the address (e.g. hq-b1-r204).">

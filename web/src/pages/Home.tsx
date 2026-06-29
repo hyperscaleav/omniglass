@@ -15,7 +15,7 @@ export default function Home() {
   const who = () => me.data?.human?.username ?? me.data?.service?.label ?? "operator";
 
   return (
-    <Page title={`Welcome, ${who()}`} subtitle="Your environment at a glance. More lands here as collection comes online.">
+    <Page title={`Welcome, ${who()}`}>
       <div class="grid grid-cols-[repeat(auto-fit,minmax(190px,1fr))] gap-4">
         <Suspense fallback={<Stat label="Locations" value="…" unit="in scope" />}>
           <Stat label="Locations" value={String(locs.data?.length ?? 0)} unit="in your scope" tone="text-primary" onClick={() => navigate("/locations")} />
