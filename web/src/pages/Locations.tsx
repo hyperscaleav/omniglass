@@ -12,6 +12,7 @@ import {
   deleteLocation,
 } from "../lib/locations";
 import { useMe, can } from "../lib/auth";
+import { describeError } from "../lib/format";
 import { ChevronRight, Maximize, Plus } from "../components/icons";
 
 // Locations: the place tree on the generic ListView (campuses, buildings, floors,
@@ -137,10 +138,12 @@ export default function Locations() {
           <ul class="flex flex-col gap-1 text-xs">
             <For each={segs()}>
               {(s) => (
-                <li class="flex cursor-pointer items-center gap-2" onClick={() => ctx.toggleFacet("type", s.key)} title={`Filter ${s.label}`}>
-                  <span class="h-2.5 w-2.5 flex-none rounded-sm" style={{ background: s.color }} />
-                  <span>{s.label}</span>
-                  <span class="tnum ml-auto pl-3 text-base-content/50">{s.value}</span>
+                <li>
+                  <button class="flex w-full items-center gap-2 rounded px-1 py-0.5 text-left hover:bg-base-content/5" onClick={() => ctx.toggleFacet("type", s.key)} title={`Filter ${s.label}`}>
+                    <span class="h-2.5 w-2.5 flex-none rounded-sm" style={{ background: s.color }} />
+                    <span>{s.label}</span>
+                    <span class="tnum ml-auto pl-3 text-base-content/50">{s.value}</span>
+                  </button>
                 </li>
               )}
             </For>
@@ -182,7 +185,7 @@ export default function Locations() {
               {(c, i) => (
                 <>
                   <Show when={i()}><span class="text-base-content/30">{"›"}</span></Show>
-                  <button class="text-base-content/60 hover:text-base-content" onClick={() => { const a = nodeById(c.id); if (a) ctx.go(a); }}>{c.display}</button>
+                  <button class="text-base-content/60 hover:text-base-content" onClick={() => { const a = ctx.byId(c.id); if (a) ctx.go(a); }}>{c.display}</button>
                 </>
               )}
             </For>
@@ -229,18 +232,6 @@ export default function Locations() {
       </div>
     );
   }
-  const nodeById = (id: string): LocNode | undefined => {
-    const find = (list: LocNode[]): LocNode | undefined => {
-      for (const n of list) {
-        if (n.id === id) return n;
-        const hit = find(n.children);
-        if (hit) return hit;
-      }
-      return undefined;
-    };
-    return find(nodes());
-  };
-
   function FormBody(p: { form: { mode: "create"; parent: LocNode | null } | { mode: "edit"; node: LocNode }; close: () => void; ctx: ListCtx<LocNode> }) {
     const editing = p.form.mode === "edit";
     const base = p.form.mode === "edit" ? p.form.node.raw : null;
@@ -256,20 +247,6 @@ export default function Locations() {
     const [formErr, setFormErr] = createSignal<string | null>(null);
 
     const types = createMemo(() => [...new Set((locations.data ?? []).map((l) => l.location_type))].sort());
-    // When editing, a location cannot become its own descendant's child.
-    const exclude = createMemo(() => {
-      if (!editing || !base) return new Set<string>();
-      const all = locations.data ?? [];
-      const out = new Set<string>([base.id]);
-      let grew = true;
-      while (grew) {
-        grew = false;
-        for (const l of all) {
-          if (l.parent_id && out.has(l.parent_id) && !out.has(l.id)) { out.add(l.id); grew = true; }
-        }
-      }
-      return out;
-    });
 
     async function submit(e: Event) {
       e.preventDefault();
@@ -311,7 +288,7 @@ export default function Locations() {
               "Parent",
               <select class="select select-bordered w-full" value={parent()} onChange={(e) => setParent(e.currentTarget.value)}>
                 <option value="">Root (no parent)</option>
-                <For each={(locations.data ?? []).filter((l) => !exclude().has(l.id))}>{(l) => <option value={l.name}>{l.display_name || l.name}</option>}</For>
+                <For each={locations.data}>{(l) => <option value={l.name}>{l.display_name || l.name}</option>}</For>
               </select>,
             )}
           </Show>
@@ -377,9 +354,4 @@ export default function Locations() {
 // The conventional child type one level down, used to seed the create form's type.
 function childType(t: string): string {
   return ({ campus: "building", site: "building", building: "floor", floor: "room", room: "room" } as Record<string, string>)[t] ?? "";
-}
-
-function describeError(e: unknown): string {
-  const detail = (e as { detail?: string; title?: string })?.detail ?? (e as { title?: string })?.title;
-  return detail ?? "The operation failed.";
 }

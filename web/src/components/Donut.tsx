@@ -1,7 +1,8 @@
 import { For, Show, type JSX } from "solid-js";
 
 // A ring chart. segments: { key, value, color }[]. Optional onSelect/active make
-// each arc a facet (the SummaryFacet board uses this to drive the filter).
+// each arc a clickable facet (the Locations summary board's type-mix tile uses
+// this; its legend beside the chart is the keyboard-operable path).
 export type Segment = { key: string; value: number; color: string; label?: string };
 
 export default function Donut(props: {

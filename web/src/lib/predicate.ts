@@ -46,7 +46,13 @@ export function defaultOp<T>(spec: FilterKey<T>): OpKey {
 // matchOp tests one row value against one target under one operator.
 export function matchOp(op: OpKey, rowVal: unknown, target: string): boolean {
   const rv = rowVal === null || rowVal === undefined ? "" : rowVal;
-  if (op === "eq") return String(rv).toLowerCase() === target.toLowerCase() || Number(rv) === Number(target);
+  // Compare numerically only when the field value is actually a number; comparing
+  // numeric-looking strings (a "type"/"name" facet) would false-match (e.g. "01"
+  // vs "1"). Number fields still get numeric equality.
+  if (op === "eq") {
+    if (typeof rowVal === "number") return rowVal === Number(target);
+    return String(rv).toLowerCase() === target.toLowerCase();
+  }
   if (op === "neq") return String(rv).toLowerCase() !== target.toLowerCase();
   const s = String(rv).toLowerCase();
   const t = target.toLowerCase();

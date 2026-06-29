@@ -120,3 +120,6 @@ export const Clock: Component<P> = (p) => (
 export const Star: Component<{ size?: number; filled?: boolean }> = (p) => (
   <Svg size={p.size} fill={p.filled}><path d="m12 2 3 6.5 7 .9-5 4.8 1.3 7-6.6-3.6L5 21.2l1.3-7-5-4.8 7-.9z" /></Svg>
 );
+export const LogOut: Component<P> = (p) => (
+  <Svg size={p.size}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="M16 17l5-5-5-5" /><path d="M21 12H9" /></Svg>
+);

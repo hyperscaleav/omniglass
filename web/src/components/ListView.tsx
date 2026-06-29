@@ -1,6 +1,7 @@
 import { type Accessor, type Component, type JSX, For, Show, createEffect, createMemo, createSignal, onCleanup, untrack } from "solid-js";
 import { Dynamic } from "solid-js/web";
 import { useMe, can } from "../lib/auth";
+import { describeError } from "../lib/format";
 import { facetActive as facetActiveFn, toggleFacet as toggleFacetFn, type Chip, type FilterKey } from "../lib/predicate";
 import {
   buildIndex, pathOf as pathOfModel, flattenRows, treeRows, parsePref, toggleItem, moveItem, allExpanded as allExpandedModel,
@@ -70,6 +71,7 @@ export type ListCtx<N extends ListNode> = {
   go: (n: N) => void;
   openFull: (n: N) => void;
   parentOf: (n: N) => N | undefined;
+  byId: (id: string) => N | undefined;
   pushBlade: (n: N) => void;
   popBlade: () => void;
   closeBlades: () => void;
@@ -281,13 +283,25 @@ export default function ListView<N extends ListNode>(props: { config: ListConfig
   window.addEventListener("keydown", onKey);
   onCleanup(() => window.removeEventListener("keydown", onKey));
 
-  // Move focus into the top blade as the stack grows or shrinks.
+  // Focus management: when the stack opens, remember the element that had focus and
+  // move focus into the top blade; when it closes, restore focus to that element.
+  let priorFocus: HTMLElement | null = null;
+  let wasOpen = false;
   createEffect(() => {
-    if (!stack().length) return;
-    queueMicrotask(() => {
-      const asides = document.querySelectorAll<HTMLElement>("aside[data-blade]");
-      asides[asides.length - 1]?.focus();
-    });
+    const open = stack().length > 0;
+    if (open && !wasOpen) priorFocus = document.activeElement as HTMLElement | null;
+    else if (!open && wasOpen) {
+      const el = priorFocus;
+      priorFocus = null;
+      queueMicrotask(() => el?.focus?.());
+    }
+    wasOpen = open;
+    if (open) {
+      queueMicrotask(() => {
+        const asides = document.querySelectorAll<HTMLElement>("aside[data-blade]");
+        asides[asides.length - 1]?.focus();
+      });
+    }
   });
 
   const baseCtx = {
@@ -316,6 +330,7 @@ export default function ListView<N extends ListNode>(props: { config: ListConfig
     setSummaryOpen,
     openFull,
     parentOf: (n: N) => index().parentOf.get(n.id),
+    byId: (id: string) => index().byId.get(id),
     pushBlade,
     popBlade,
     closeBlades,
@@ -424,7 +439,18 @@ export default function ListView<N extends ListNode>(props: { config: ListConfig
     const canExpand = () => isTree() && kids().length > 0;
     const open = () => expanded().has(n.id);
     return (
-      <tr class="group cursor-pointer hover:bg-base-content/5" onClick={() => openNode(n)}>
+      <tr
+        class="group cursor-pointer hover:bg-base-content/5 focus-visible:bg-base-content/5 focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-primary"
+        role="button"
+        tabindex={0}
+        onClick={() => openNode(n)}
+        onKeyDown={(e) => {
+          if ((e.key === "Enter" || e.key === " ") && e.currentTarget === e.target) {
+            e.preventDefault();
+            openNode(n);
+          }
+        }}
+      >
         <td>
           <span class="inline-flex w-full items-center gap-1.5" style={{ "padding-left": isTree() ? `${p.row.depth * 20}px` : "0" }}>
             <Show when={isTree()}>
@@ -458,7 +484,7 @@ export default function ListView<N extends ListNode>(props: { config: ListConfig
           {(k) => <td class="overflow-hidden text-ellipsis whitespace-nowrap text-sm">{cfg.cellFor(k, n, ctxFull)}</td>}
         </For>
         <td>
-          <div class="flex justify-end gap-0.5 opacity-0 transition group-hover:opacity-100">
+          <div class="flex justify-end gap-0.5 opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100">
             <button class="btn btn-ghost btn-xs btn-square" title="Open full page" onClick={(e) => { e.stopPropagation(); openFull(n); }}>
               <Maximize size={15} />
             </button>
@@ -685,7 +711,7 @@ export default function ListView<N extends ListNode>(props: { config: ListConfig
     <>
       <Show when={cfg.error?.()}>
         <div role="alert" class="alert alert-error alert-soft mb-4 text-sm">
-          <span>Could not load {cfg.entity.plural.toLowerCase()}: {String(cfg.error?.())}</span>
+          <span>Could not load {cfg.entity.plural.toLowerCase()}: {describeError(cfg.error?.())}</span>
         </div>
       </Show>
       <Show when={fullPage()} fallback={<ListBody />}>

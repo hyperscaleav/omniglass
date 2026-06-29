@@ -13,6 +13,7 @@ import {
 import { type System, SYSTEMS_KEY, listSystems } from "../lib/systems";
 import { type Location, LOCATIONS_KEY, listLocations } from "../lib/locations";
 import { useMe, can } from "../lib/auth";
+import { describeError } from "../lib/format";
 import { ChevronRight, Maximize } from "../components/icons";
 
 // Components: the device inventory, the first page built on the generic ListView.
@@ -116,7 +117,7 @@ export default function Components() {
               {(c, i) => (
                 <>
                   <Show when={i()}><span class="text-base-content/30">{"›"}</span></Show>
-                  <button class="text-base-content/60 hover:text-base-content" onClick={() => { const a = nodeById(c.id); if (a) ctx.go(a); }}>{c.display}</button>
+                  <button class="text-base-content/60 hover:text-base-content" onClick={() => { const a = ctx.byId(c.id); if (a) ctx.go(a); }}>{c.display}</button>
                 </>
               )}
             </For>
@@ -158,18 +159,6 @@ export default function Components() {
       </div>
     );
   }
-  const nodeById = (id: string): CompNode | undefined => {
-    const find = (list: CompNode[]): CompNode | undefined => {
-      for (const n of list) {
-        if (n.id === id) return n;
-        const hit = find(n.children);
-        if (hit) return hit;
-      }
-      return undefined;
-    };
-    return find(nodes());
-  };
-
   // The create/edit form. Only display_name and component_type are mutable on an
   // existing component (the API update body); name, system, location, and parent
   // are set at creation and shown read-only when editing.
@@ -321,9 +310,4 @@ export default function Components() {
       <ListView config={cfg} />
     </div>
   );
-}
-
-function describeError(e: unknown): string {
-  const detail = (e as { detail?: string; title?: string })?.detail ?? (e as { title?: string })?.title;
-  return detail ?? "The operation failed.";
 }

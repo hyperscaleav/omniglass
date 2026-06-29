@@ -1,4 +1,4 @@
-import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
+import { For, Show, createMemo, createSignal, createUniqueId, type JSX } from "solid-js";
 import { OP, opsFor, tokenToChip, chipGlyph, type FilterKey, type Chip, type OpKey } from "../lib/predicate";
 import { Search, X } from "./icons";
 
@@ -31,6 +31,7 @@ export default function FilterBar<T>(props: {
   const [text, setText] = createSignal("");
   const [open, setOpen] = createSignal(false);
   const [sel, setSel] = createSignal(-1);
+  const listId = createUniqueId();
   let inputRef: HTMLInputElement | undefined;
 
   const fallbackKey = () => (props.keys.find((k) => k.hint === "substring") ?? props.keys[0])?.key ?? "";
@@ -168,6 +169,10 @@ export default function FilterBar<T>(props: {
             placeholder={props.chips.length ? "" : (props.placeholder ?? "filter: key, operator, value")}
             role="combobox"
             aria-expanded={open()}
+            aria-controls={listId}
+            aria-haspopup="listbox"
+            aria-autocomplete="list"
+            aria-activedescendant={sel() >= 0 ? `${listId}-opt-${sel()}` : undefined}
             onInput={(e) => {
               setText(e.currentTarget.value);
               setOpen(true);
@@ -178,11 +183,12 @@ export default function FilterBar<T>(props: {
             onKeyDown={onKeyDown}
           />
           <Show when={open() && suggestions().length > 0}>
-            <ul role="listbox" class="absolute z-40 mt-1.5 max-h-72 w-[300px] overflow-auto rounded-box border border-base-300 bg-base-100 p-1.5 shadow-2xl">
+            <ul id={listId} role="listbox" class="absolute z-40 mt-1.5 max-h-72 w-75 overflow-auto rounded-box border border-base-300 bg-base-100 p-1.5 shadow-2xl">
               <For each={suggestions()}>
                 {(s, i) => (
                   <li>
                     <button
+                      id={`${listId}-opt-${i()}`}
                       role="option"
                       aria-selected={sel() === i()}
                       class="flex w-full items-center justify-between gap-3 rounded-field px-2 py-1.5 text-left text-sm"

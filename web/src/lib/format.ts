@@ -10,6 +10,14 @@ export function rel(iso: string): string {
   return fut ? `in ${f}` : `${f} ago`;
 }
 
+// describeError pulls a human message out of a thrown API error: openapi-fetch
+// surfaces the parsed Huma problem body ({ title, detail, status }), so String()
+// on it would yield "[object Object]". Falls back to a generic line.
+export function describeError(e: unknown): string {
+  const o = e as { detail?: string; title?: string } | null | undefined;
+  return o?.detail ?? o?.title ?? "The operation failed.";
+}
+
 export function fmtTime(iso: string): string {
   const d = new Date(iso);
   return isNaN(d.getTime()) ? iso : d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });

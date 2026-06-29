@@ -1,4 +1,4 @@
-import { For, Show, createMemo, createSignal, createEffect } from "solid-js";
+import { For, Show, createMemo, createSignal, createEffect, createUniqueId } from "solid-js";
 import { Dialog } from "@kobalte/core/dialog";
 import { useNavigate } from "@solidjs/router";
 import { navItems } from "../lib/nav";
@@ -20,6 +20,8 @@ export default function CommandPalette(props: { open: boolean; onClose: () => vo
   const navigate = useNavigate();
   const [query, setQuery] = createSignal("");
   const [active, setActive] = createSignal(0);
+  const listId = createUniqueId();
+  const optId = (i: number) => `${listId}-opt-${i}`;
 
   const results = createMemo(() => {
     const q = query().trim().toLowerCase();
@@ -70,18 +72,26 @@ export default function CommandPalette(props: { open: boolean; onClose: () => vo
                 class="h-12 w-full bg-transparent text-sm outline-none placeholder:text-base-content/40"
                 placeholder="Jump to…"
                 value={query()}
+                role="combobox"
+                aria-expanded={results().length > 0}
+                aria-controls={listId}
+                aria-autocomplete="list"
+                aria-activedescendant={results().length ? optId(active()) : undefined}
                 onInput={(e) => setQuery(e.currentTarget.value)}
                 onKeyDown={onKey}
                 autofocus
               />
               <kbd class="kbd kbd-sm">esc</kbd>
             </div>
-            <ul class="max-h-80 overflow-y-auto p-2">
+            <ul id={listId} role="listbox" class="max-h-80 overflow-y-auto p-2">
               <Show when={results().length > 0} fallback={<li class="px-3 py-6 text-center text-sm text-base-content/40">No matches</li>}>
                 <For each={results()}>
                   {(c, i) => (
                     <li>
                       <button
+                        id={optId(i())}
+                        role="option"
+                        aria-selected={i() === active()}
                         class="flex w-full items-center gap-3 rounded-field px-3 py-2 text-left text-sm"
                         classList={{ "bg-primary/15 text-primary": i() === active() }}
                         onMouseEnter={() => setActive(i())}

@@ -129,5 +129,10 @@ html[data-density="compact"] { --og-row-h: 2.1rem; --og-pad-card: 0.9rem; --og-g
 @keyframes ogp { 0% { transform: scale(1); opacity: .7 } 70% { transform: scale(2.6); opacity: 0 } 100% { opacity: 0 } }
 @media (prefers-reduced-motion: reduce) { .og-pulse::after { animation: none } }
 
+/* the page/section enter transition (used by the list and detail surfaces). */
+.fade-in { animation: og-fade-in .18s ease both; }
+@keyframes og-fade-in { from { opacity: 0; transform: translateY(2px) } to { opacity: 1; transform: none } }
+@media (prefers-reduced-motion: reduce) { .fade-in { animation: none } }
+
 /* apply theme/var changes instantly during a switch. */
 .theme-switching, .theme-switching * { transition: none !important; }

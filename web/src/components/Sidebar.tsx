@@ -1,8 +1,8 @@
 import { For, Show, createMemo } from "solid-js";
-import { A, useLocation } from "@solidjs/router";
+import { A, useLocation, useNavigate } from "@solidjs/router";
 import { navItems, filterNav, type NavItem } from "../lib/nav";
-import { useMe, can } from "../lib/auth";
-import { PanelLeft } from "./icons";
+import { useMe, useLogout, can } from "../lib/auth";
+import { PanelLeft, LogOut } from "./icons";
 import { BrandMark, Wordmark } from "./Brand";
 
 // The navigation rail: a daisyUI `menu` with collapsible clusters, the brand
@@ -12,7 +12,9 @@ const BASE = "/web";
 
 export default function Sidebar(props: { collapsed: boolean; onToggle: () => void }) {
   const location = useLocation();
+  const navigate = useNavigate();
   const me = useMe();
+  const logout = useLogout();
   const rel = () => {
     const p = location.pathname.startsWith(BASE) ? location.pathname.slice(BASE.length) : location.pathname;
     return p === "" ? "/" : p;
@@ -56,10 +58,21 @@ export default function Sidebar(props: { collapsed: boolean; onToggle: () => voi
             </div>
           </div>
           <Show when={!props.collapsed}>
-            <div class="min-w-0 leading-tight">
+            <div class="min-w-0 flex-1 leading-tight">
               <div class="truncate font-data text-xs font-semibold">{ident().name}</div>
               <div class="text-[11px] capitalize text-base-content/40">{ident().role}</div>
             </div>
+            <button
+              class="btn btn-ghost btn-sm btn-square flex-none text-base-content/50"
+              title="Sign out"
+              aria-label="Sign out"
+              onClick={async () => {
+                await logout();
+                navigate("/login");
+              }}
+            >
+              <LogOut size={16} />
+            </button>
           </Show>
         </div>
       </div>

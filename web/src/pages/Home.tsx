@@ -1,4 +1,5 @@
 import { Suspense } from "solid-js";
+import { Dynamic } from "solid-js/web";
 import { useQuery } from "@tanstack/solid-query";
 import { useNavigate } from "@solidjs/router";
 import Page from "../components/Page";
@@ -29,9 +30,13 @@ export default function Home() {
 }
 
 function Stat(props: { label: string; value: string; unit: string; tone?: string; onClick?: () => void }) {
+  // A clickable stat renders as a real <button> (keyboard-operable); a static one
+  // stays a plain div.
   return (
-    <div
-      class="card border border-base-300 bg-base-200"
+    <Dynamic
+      component={props.onClick ? "button" : "div"}
+      type={props.onClick ? "button" : undefined}
+      class="card w-full border border-base-300 bg-base-200 text-left"
       classList={{ "cursor-pointer hover:border-base-content/20": !!props.onClick }}
       onClick={props.onClick}
     >
@@ -40,6 +45,6 @@ function Stat(props: { label: string; value: string; unit: string; tone?: string
         <div class="tnum text-3xl font-semibold leading-none" classList={{ [props.tone ?? ""]: !!props.tone, "text-base-content/30": !props.tone }}>{props.value}</div>
         <div class="text-xs text-base-content/50">{props.unit}</div>
       </div>
-    </div>
+    </Dynamic>
   );
 }

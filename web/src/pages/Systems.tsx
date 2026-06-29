@@ -13,6 +13,7 @@ import {
 import { type Location, LOCATIONS_KEY, listLocations } from "../lib/locations";
 import { type Component as Comp, COMPONENTS_KEY, listComponents } from "../lib/components";
 import { useMe, can } from "../lib/auth";
+import { describeError } from "../lib/format";
 import { ArrowRight, ChevronRight, Maximize, Plus } from "../components/icons";
 
 // Systems: the system inventory on the generic ListView, the same shell as
@@ -110,7 +111,7 @@ export default function Systems() {
               {(c, i) => (
                 <>
                   <Show when={i()}><span class="text-base-content/30">{"›"}</span></Show>
-                  <button class="text-base-content/60 hover:text-base-content" onClick={() => { const a = nodeById(c.id); if (a) ctx.go(a); }}>{c.display}</button>
+                  <button class="text-base-content/60 hover:text-base-content" onClick={() => { const a = ctx.byId(c.id); if (a) ctx.go(a); }}>{c.display}</button>
                 </>
               )}
             </For>
@@ -170,18 +171,6 @@ export default function Systems() {
       </div>
     );
   }
-  const nodeById = (id: string): SysNode | undefined => {
-    const find = (list: SysNode[]): SysNode | undefined => {
-      for (const n of list) {
-        if (n.id === id) return n;
-        const hit = find(n.children);
-        if (hit) return hit;
-      }
-      return undefined;
-    };
-    return find(nodes());
-  };
-
   function FormBody(p: { form: { mode: "create"; parent: SysNode | null } | { mode: "edit"; node: SysNode }; close: () => void; ctx: ListCtx<SysNode> }) {
     const editing = p.form.mode === "edit";
     const base = p.form.mode === "edit" ? p.form.node.raw : null;
@@ -196,19 +185,6 @@ export default function Systems() {
     const [formErr, setFormErr] = createSignal<string | null>(null);
 
     const types = createMemo(() => [...new Set((systems.data ?? []).map((s) => s.system_type))].sort());
-    const exclude = createMemo(() => {
-      if (!editing || !base) return new Set<string>();
-      const all = systems.data ?? [];
-      const out = new Set<string>([base.id]);
-      let grew = true;
-      while (grew) {
-        grew = false;
-        for (const s of all) {
-          if (s.parent_id && out.has(s.parent_id) && !out.has(s.id)) { out.add(s.id); grew = true; }
-        }
-      }
-      return out;
-    });
 
     async function submit(e: Event) {
       e.preventDefault();
@@ -257,7 +233,7 @@ export default function Systems() {
               "Parent system",
               <select class="select select-bordered w-full" value={parent()} onChange={(e) => setParent(e.currentTarget.value)}>
                 <option value="">Root (no parent)</option>
-                <For each={(systems.data ?? []).filter((s) => !exclude().has(s.id))}>{(s) => <option value={s.name}>{s.display_name || s.name}</option>}</For>
+                <For each={systems.data}>{(s) => <option value={s.name}>{s.display_name || s.name}</option>}</For>
               </select>,
             )}
           </div>
@@ -315,9 +291,4 @@ export default function Systems() {
       <ListView config={cfg} />
     </div>
   );
-}
-
-function describeError(e: unknown): string {
-  const detail = (e as { detail?: string; title?: string })?.detail ?? (e as { title?: string })?.title;
-  return detail ?? "The operation failed.";
 }
