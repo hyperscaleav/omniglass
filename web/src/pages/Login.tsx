@@ -14,9 +14,20 @@ export default function Login() {
   const [error, setError] = createSignal<string | null>(null);
   const [busy, setBusy] = createSignal(false);
 
+  // Resolve ?next= to a safe in-app path. Parsing against the current origin and
+  // refusing any cross-origin result blocks an open redirect (// , scheme, or
+  // backslash tricks); the /web base is stripped so the router does not
+  // double-count it. Falls back to Home on anything malformed.
   const next = (): string => {
-    const raw = typeof params.next === "string" ? decodeURIComponent(params.next) : "/";
-    return raw.startsWith("/") && !raw.startsWith("//") ? raw.replace(/^\/web/, "") || "/" : "/";
+    const raw = typeof params.next === "string" ? params.next : "/";
+    try {
+      const u = new URL(decodeURIComponent(raw), window.location.origin);
+      if (u.origin !== window.location.origin) return "/";
+      const p = u.pathname.replace(/^\/web/, "") || "/";
+      return p.startsWith("/") ? p : "/";
+    } catch {
+      return "/";
+    }
   };
 
   async function onSubmit(e: SubmitEvent) {

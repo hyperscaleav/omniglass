@@ -48,6 +48,24 @@ func TestFallsBackToIndexForClientRoute(t *testing.T) {
 	}
 }
 
+func TestNoPathTraversal(t *testing.T) {
+	// An absolute request path is cleaned at the root, and io/fs rejects any
+	// remaining "..", so a traversal attempt cannot escape the embedded FS: it
+	// resolves to a non-existent file and falls back to index.html, never a host
+	// file. This documents the safety the http.FileServer + fs.Sub already give.
+	h := SPAHandler(fakeConsole())
+	for _, p := range []string{"/../../etc/passwd", "/assets/../../../../etc/passwd", "/..%2f..%2fetc/passwd"} {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, p, nil))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET %s = %d, want 200 (index fallback)", p, rec.Code)
+		}
+		if body := rec.Body.String(); !contains(body, `id="root"`) {
+			t.Errorf("GET %s leaked a non-index body: %q", p, body)
+		}
+	}
+}
+
 func TestPlaceholderWhenUnbuilt(t *testing.T) {
 	// No index.html: the unbuilt-console placeholder, not a 404.
 	h := SPAHandler(fstest.MapFS{})
