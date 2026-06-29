@@ -1,7 +1,11 @@
 import { type Accessor, type Component, type JSX, For, Show, createEffect, createMemo, createSignal, onCleanup, untrack } from "solid-js";
 import { Dynamic } from "solid-js/web";
 import { useMe, can } from "../lib/auth";
-import { buildPredicate, facetActive as facetActiveFn, toggleFacet as toggleFacetFn, type Chip, type FilterKey } from "../lib/predicate";
+import { facetActive as facetActiveFn, toggleFacet as toggleFacetFn, type Chip, type FilterKey } from "../lib/predicate";
+import {
+  buildIndex, pathOf as pathOfModel, flattenRows, treeRows, parsePref, toggleItem, moveItem, allExpanded as allExpandedModel,
+  type Crumb, type Row, type SortState,
+} from "../lib/listmodel";
 import FilterBar from "./FilterBar";
 import Drawer from "./Drawer";
 import {
@@ -110,9 +114,6 @@ export interface ListConfig<N extends ListNode> {
   defaultWidgets?: string[];
 }
 
-type Crumb = { id: string; display: string };
-type Row<N> = { n: N; depth: number; path: Crumb[] | null };
-
 export default function ListView<N extends ListNode>(props: { config: ListConfig<N> }) {
   const cfg = props.config;
   const me = useMe();
@@ -120,23 +121,9 @@ export default function ListView<N extends ListNode>(props: { config: ListConfig
 
   // The stored value is the visible columns IN ORDER (visibility + reorder in one
   // client preference; the eventual home is a per-principal user-preferences
-  // endpoint, a straight read/write swap, not the cascade). Order is honored as
-  // stored; unknown keys are dropped.
-  const readCols = (): string[] => {
-    try {
-      const raw = localStorage.getItem(`${cfg.storageKey}-cols`);
-      if (raw) {
-        const arr = JSON.parse(raw);
-        if (Array.isArray(arr)) {
-          const valid = [...new Set(arr.filter((k) => cfg.columnKeys.includes(k)))];
-          if (valid.length || arr.length === 0) return valid;
-        }
-      }
-    } catch {
-      /* ignore corrupt prefs */
-    }
-    return cfg.defaultCols;
-  };
+  // endpoint, a straight read/write swap, not the cascade). parsePref keeps valid
+  // keys in stored order, de-dupes, and honors an explicit empty array.
+  const readCols = (): string[] => parsePref(localStorage.getItem(`${cfg.storageKey}-cols`), cfg.columnKeys) ?? cfg.defaultCols;
   const initialView = (): "tree" | "list" =>
     cfg.flat ? "list" : localStorage.getItem(`${cfg.storageKey}-view`) === "list" ? "list" : "tree";
 
@@ -144,7 +131,7 @@ export default function ListView<N extends ListNode>(props: { config: ListConfig
   const [expanded, setExpanded] = createSignal<Set<string>>(new Set());
   const [cols, setCols] = createSignal<string[]>(readCols());
   const [viewMode, setViewMode] = createSignal<"tree" | "list">(initialView());
-  const [sort, setSort] = createSignal<{ key: string; dir: 1 | -1 } | null>(null);
+  const [sort, setSort] = createSignal<SortState>(null);
   const [fullPage, setFullPage] = createSignal<N | null>(null);
   const [form, setForm] = createSignal<FormState<N> | null>(null);
   // The blade stack holds node ids, not node objects: ids are stable string values
@@ -161,40 +148,10 @@ export default function ListView<N extends ListNode>(props: { config: ListConfig
   // cannot prove it is not callable, so set the focused node through a thunk.
   const showFull = (n: N | null) => setFullPage(() => n);
 
-  // The flattened index: id -> node, child -> parent, the in-order node list, and
-  // the set of nodes that have children (containers, for expand/collapse-all).
-  type Idx = { byId: Map<string, N>; parentOf: Map<string, N>; all: N[]; containerIds: Set<string> };
-  const index = createMemo<Idx>(() => {
-    const byId = new Map<string, N>();
-    const parentOf = new Map<string, N>();
-    const all: N[] = [];
-    const containerIds = new Set<string>();
-    const walk = (list: N[], parent: N | null) => {
-      for (const n of list) {
-        byId.set(n.id, n);
-        all.push(n);
-        if (parent) parentOf.set(n.id, parent);
-        const kids = (n.children as N[]) ?? [];
-        if (kids.length) {
-          containerIds.add(n.id);
-          walk(kids, n);
-        }
-      }
-    };
-    walk(cfg.nodes(), null);
-    return { byId, parentOf, all, containerIds };
-  });
-
-  const pathOf = (n: N): Crumb[] => {
-    const idx = index();
-    const out: Crumb[] = [];
-    let p = idx.parentOf.get(n.id);
-    while (p) {
-      out.unshift({ id: p.id, display: p.display });
-      p = idx.parentOf.get(p.id);
-    }
-    return out;
-  };
+  // The flattened index (id -> node, child -> parent, the in-order node list, the
+  // container ids) and the ancestor path: both are pure, in lib/listmodel.
+  const index = createMemo(() => buildIndex(cfg.nodes()));
+  const pathOf = (n: N): Crumb[] => pathOfModel(index(), n);
 
   // After a refetch, drop any open blade whose node no longer exists (e.g. it was
   // deleted), and re-resolve the full-page node by id so it shows fresh data. The
@@ -231,36 +188,14 @@ export default function ListView<N extends ListNode>(props: { config: ListConfig
   // cols() IS the ordered visible list (so reorder persists); render in that order.
   const visible = createMemo(() => cols());
 
-  const rows = createMemo<Row<N>[]>(() => {
-    if (flatten()) {
-      const pred = buildPredicate(cfg.filterKeys, chips());
-      const list = index().all.filter(pred);
-      const s = sort();
-      // Default (no column chosen) keeps index order, which is the tree walked
-      // depth-first: the tree compressed to a flat list, nesting preserved. A
-      // column sort overrides that.
-      if (s) {
-        list.sort((a, b) => {
-          const x = cfg.sortVal(a, s.key);
-          const y = cfg.sortVal(b, s.key);
-          const r = typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y));
-          return r * s.dir;
-        });
-      }
-      return list.map((n) => ({ n, depth: 0, path: pathOf(n) }));
-    }
-    const out: Row<N>[] = [];
-    const ex = expanded();
-    const walk = (list: N[], depth: number) => {
-      for (const n of list) {
-        out.push({ n, depth, path: null });
-        const kids = (n.children as N[]) ?? [];
-        if (kids.length && ex.has(n.id)) walk(kids, depth + 1);
-      }
-    };
-    walk(cfg.nodes(), 0);
-    return out;
-  });
+  // Flatten mode (filtering or list mode) compresses the tree to a flat list (tree
+  // order by default, the chosen column sort otherwise); tree mode walks the
+  // forest descending into expanded containers. Both derivations are pure.
+  const rows = createMemo<Row<N>[]>(() =>
+    flatten()
+      ? flattenRows(index(), cfg.filterKeys, chips(), sort(), cfg.sortVal)
+      : treeRows(cfg.nodes(), expanded()),
+  );
 
   const toggleSort = (key: string) =>
     setSort((s) => (s?.key !== key ? { key, dir: 1 } : s.dir === 1 ? { key, dir: -1 } : null));
@@ -270,43 +205,23 @@ export default function ListView<N extends ListNode>(props: { config: ListConfig
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
-  const allExpanded = createMemo(() => {
-    const c = index().containerIds;
-    return c.size > 0 && [...c].every((id) => expanded().has(id));
-  });
+  const allExpanded = createMemo(() => allExpandedModel(index().containerIds, expanded()));
   const toggleAll = () => setExpanded(allExpanded() ? new Set<string>() : new Set(index().containerIds));
-  const toggleCol = (k: string) => setCols((c) => (c.includes(k) ? c.filter((x) => x !== k) : [...c, k]));
+  const toggleCol = (k: string) => setCols((c) => toggleItem(c, k));
   // Reorder a visible column from one position to another (drag in the menu).
-  const moveCol = (from: number, to: number) =>
-    setCols((c) => {
-      const a = [...c];
-      const [x] = a.splice(from, 1);
-      a.splice(to, 0, x);
-      return a;
-    });
+  const moveCol = (from: number, to: number) => setCols((c) => moveItem(c, from, to));
   const [colDrag, setColDrag] = createSignal<number | null>(null);
 
   // Summary board: which widgets are on the personal board, and whether the rail is
   // expanded. Both persist as client preferences (same future home as columns).
   const readBoard = (): string[] => {
     if (!cfg.widgets) return [];
-    try {
-      const raw = localStorage.getItem(`${cfg.storageKey}-widgets`);
-      if (raw) {
-        const arr = JSON.parse(raw);
-        if (Array.isArray(arr)) {
-          const valid = [...new Set(arr.filter((id) => cfg.widgets![id]))];
-          if (valid.length || arr.length === 0) return valid;
-        }
-      }
-    } catch {
-      /* ignore corrupt prefs */
-    }
-    return cfg.defaultWidgets ?? cfg.allWidgets ?? Object.keys(cfg.widgets);
+    const parsed = parsePref(localStorage.getItem(`${cfg.storageKey}-widgets`), Object.keys(cfg.widgets));
+    return parsed ?? cfg.defaultWidgets ?? cfg.allWidgets ?? Object.keys(cfg.widgets);
   };
   const [board, setBoard] = createSignal<string[]>(readBoard());
   const [summaryOpen, setSummaryOpen] = createSignal(localStorage.getItem(`${cfg.storageKey}-sumopen`) === "1");
-  const toggleWidget = (id: string) => setBoard((b) => (b.includes(id) ? b.filter((x) => x !== id) : [...b, id]));
+  const toggleWidget = (id: string) => setBoard((b) => toggleItem(b, id));
   if (cfg.widgets) {
     createEffect(() => localStorage.setItem(`${cfg.storageKey}-widgets`, JSON.stringify(board())));
     createEffect(() => localStorage.setItem(`${cfg.storageKey}-sumopen`, summaryOpen() ? "1" : "0"));

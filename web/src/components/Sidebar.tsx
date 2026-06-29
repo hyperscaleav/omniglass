@@ -63,13 +63,30 @@ export default function Sidebar(props: { collapsed: boolean; onToggle: () => voi
   );
 }
 
+// Soon: the marker on a nav item whose backend has not landed. The item stays
+// navigable (its stub page explains what is coming); it just reads as pending.
+function Soon() {
+  return <span class="ml-auto flex-none rounded bg-base-content/5 px-1 py-px text-[9px] font-semibold uppercase tracking-wider text-base-content/40">soon</span>;
+}
+
 function Leaf(props: { item: NavItem; collapsed: boolean }) {
   const Icon = props.item.icon;
+  const live = () => props.item.live;
   return (
     <li>
-      <A href={props.item.path!} end={props.item.path === "/"} activeClass="menu-active" class="gap-3" classList={{ "tooltip tooltip-right justify-center": props.collapsed }} data-tip={props.collapsed ? props.item.label : undefined}>
+      <A
+        href={props.item.path!}
+        end={props.item.path === "/"}
+        activeClass="menu-active"
+        class="gap-3"
+        classList={{ "tooltip tooltip-right justify-center": props.collapsed, "opacity-45": !live() }}
+        data-tip={props.collapsed ? (live() ? props.item.label : `${props.item.label} · soon`) : undefined}
+      >
         <Icon size={17} />
-        <Show when={!props.collapsed}><span>{props.item.label}</span></Show>
+        <Show when={!props.collapsed}>
+          <span class="flex-1 truncate">{props.item.label}</span>
+          <Show when={!live()}><Soon /></Show>
+        </Show>
       </A>
     </li>
   );
@@ -98,7 +115,12 @@ function Group(props: { item: NavItem; rel: string; collapsed: boolean }) {
           <ul class="ms-5 ps-2.25">
             <For each={props.item.children}>
               {(c) => (
-                <li><A href={c.path} activeClass="menu-active">{c.label}</A></li>
+                <li>
+                  <A href={c.path} activeClass="menu-active" classList={{ "opacity-45": !c.live }}>
+                    <span class="flex-1 truncate">{c.label}</span>
+                    <Show when={!c.live}><Soon /></Show>
+                  </A>
+                </li>
               )}
             </For>
           </ul>

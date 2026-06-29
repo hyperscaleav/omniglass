@@ -10,6 +10,7 @@ export type NavChild = {
   path: string;
   hint: string;
   live?: boolean;
+  issue?: number; // tracking issue for a not-yet-built section, shown on its stub
 };
 
 export type NavItem = {
@@ -18,6 +19,7 @@ export type NavItem = {
   hint: string;
   path?: string;
   live?: boolean;
+  issue?: number;
   children?: NavChild[];
 };
 
@@ -60,12 +62,14 @@ export const navItems: NavItem[] = [
   },
 ];
 
-// Flattened title + hint lookup by base-relative path, for the generic stub.
-export const navByPath: Record<string, { label: string; hint: string }> = (() => {
-  const m: Record<string, { label: string; hint: string }> = {};
+// Flattened title + hint (+ tracking issue) lookup by base-relative path, for the
+// generic stub.
+export type NavMeta = { label: string; hint: string; issue?: number };
+export const navByPath: Record<string, NavMeta> = (() => {
+  const m: Record<string, NavMeta> = {};
   for (const item of navItems) {
-    if (item.path) m[item.path] = { label: item.label, hint: item.hint };
-    for (const child of item.children ?? []) m[child.path] = { label: child.label, hint: child.hint };
+    if (item.path) m[item.path] = { label: item.label, hint: item.hint, issue: item.issue };
+    for (const child of item.children ?? []) m[child.path] = { label: child.label, hint: child.hint, issue: child.issue };
   }
   return m;
 })();
@@ -77,8 +81,8 @@ function relative(pathname: string): string {
   return p === "" ? "/" : p;
 }
 
-export function lookupNav(pathname: string): { label: string; hint: string } {
-  return navByPath[relative(pathname)] ?? { label: "Coming soon", hint: "This section lands in a later slice." };
+export function lookupNav(pathname: string): NavMeta {
+  return navByPath[relative(pathname)] ?? { label: "Coming soon", hint: "This section is not built yet." };
 }
 
 // sectionLabel resolves a pathname to its top-bar section by longest prefix, so
