@@ -1,7 +1,7 @@
 import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { useNavigate, useParams, useSearchParams } from "@solidjs/router";
-import ListView, { type Blade, type ListConfig, type ListCtx, type ListNode } from "../components/ListView";
+import ListView, { type Blade, type ListConfig, type ListCtx, type ListNode, type PageDescriptor } from "../components/ListView";
 import {
   type Component as Comp,
   COMPONENTS_KEY,
@@ -27,6 +27,20 @@ type CompNode = ListNode & {
   systemAddr: string;
   locationName: string;
   raw: Comp;
+};
+
+// The static config (matrix-tested in pages/descriptors.test.ts); the page spreads
+// it into its ListConfig and adds the live wiring.
+export const componentsDescriptor: PageDescriptor = {
+  entity: { name: "component", plural: "Components" },
+  storageKey: "og-cmp",
+  columns: {
+    type: { label: "Type", width: 170 },
+    system: { label: "System", width: 190 },
+    location: { label: "Location", width: 190 },
+  },
+  columnKeys: ["type", "system", "location"],
+  defaultCols: ["type", "system", "location"],
 };
 
 export default function Components() {
@@ -258,21 +272,13 @@ export default function Components() {
   const initialChips = search.system ? [{ key: "system", op: "eq" as const, values: [String(search.system)] }] : undefined;
 
   const cfg: ListConfig<CompNode> = {
-    entity: { name: "component", plural: "Components" },
-    storageKey: "og-cmp",
+    ...componentsDescriptor,
     nodes,
     focus: () => params.name,
     loading: () => components.isLoading,
     error: () => components.error,
     initialChips,
     filterPlaceholder: "Filter by name, type, system, location…",
-    columns: {
-      type: { label: "Type", width: 170 },
-      system: { label: "System", width: 190 },
-      location: { label: "Location", width: 190 },
-    },
-    columnKeys: ["type", "system", "location"],
-    defaultCols: ["type", "system", "location"],
     nameWeight: () => 500,
     cellFor: (key, n) => {
       if (key === "type") return <span class="badge badge-soft badge-neutral badge-sm">{n.type}</span>;

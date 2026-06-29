@@ -1,7 +1,7 @@
 import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { useNavigate, useParams } from "@solidjs/router";
-import ListView, { type Blade, type ListConfig, type ListCtx, type ListNode, type Widget } from "../components/ListView";
+import ListView, { type Blade, type ListConfig, type ListCtx, type ListNode, type PageDescriptor, type Widget } from "../components/ListView";
 import Donut from "../components/Donut";
 import {
   type Location,
@@ -31,6 +31,19 @@ const TYPE_BADGE: Record<string, string> = { campus: "badge-primary", site: "bad
 const TYPE_COLOR: Record<string, string> = { campus: "var(--color-primary)", site: "var(--color-primary)", region: "var(--color-primary)", building: "var(--color-warning)", floor: "var(--color-success)", room: "var(--color-info)" };
 const TYPE_PLURAL: Record<string, string> = { campus: "Campuses", site: "Sites", region: "Regions", building: "Buildings", floor: "Floors", room: "Rooms" };
 const typeBadge = (t: string) => `badge badge-soft badge-sm capitalize ${TYPE_BADGE[t] ?? "badge-ghost"}`;
+
+// The static config (matrix-tested in pages/descriptors.test.ts).
+export const locationsDescriptor: PageDescriptor = {
+  entity: { name: "location", plural: "Locations" },
+  storageKey: "og-loc",
+  columns: {
+    type: { label: "Type", width: 120 },
+    parent: { label: "Parent", width: 190 },
+    tech: { label: "Technical name", width: 200 },
+  },
+  columnKeys: ["type", "parent", "tech"],
+  defaultCols: ["type", "parent"],
+};
 
 export default function Locations() {
   const params = useParams();
@@ -312,20 +325,12 @@ export default function Locations() {
   }
 
   const cfg: ListConfig<LocNode> = {
-    entity: { name: "location", plural: "Locations" },
-    storageKey: "og-loc",
+    ...locationsDescriptor,
     nodes,
     focus: () => params.name,
     loading: () => locations.isLoading,
     error: () => locations.error,
     filterPlaceholder: "Filter by name, type…",
-    columns: {
-      type: { label: "Type", width: 120 },
-      parent: { label: "Parent", width: 190 },
-      tech: { label: "Technical name", width: 200 },
-    },
-    columnKeys: ["type", "parent", "tech"],
-    defaultCols: ["type", "parent"],
     nameWeight: (n) => (TYPE_RANK[n.type] === 0 ? 600 : n.type === "room" ? 400 : 500),
     canAddChild: (n) => n.type !== "room",
     cellFor: (key, n, ctx) => {

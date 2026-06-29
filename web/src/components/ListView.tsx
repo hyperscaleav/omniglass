@@ -114,6 +114,17 @@ export interface ListConfig<N extends ListNode> {
   defaultWidgets?: string[];
 }
 
+// The static, page-agnostic part of an inventory page's config: the parts a matrix
+// contract test can check without rendering. Each page exports one and spreads it
+// into its ListConfig.
+export type PageDescriptor = {
+  entity: { name: string; plural: string };
+  storageKey: string;
+  columns: Record<string, { label: string; width: number }>;
+  columnKeys: string[];
+  defaultCols: string[];
+};
+
 export default function ListView<N extends ListNode>(props: { config: ListConfig<N> }) {
   const cfg = props.config;
   const me = useMe();

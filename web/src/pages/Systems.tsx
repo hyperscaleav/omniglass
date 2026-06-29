@@ -1,7 +1,7 @@
 import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { useNavigate, useParams } from "@solidjs/router";
-import ListView, { type Blade, type ListConfig, type ListCtx, type ListNode } from "../components/ListView";
+import ListView, { type Blade, type ListConfig, type ListCtx, type ListNode, type PageDescriptor } from "../components/ListView";
 import {
   type System,
   SYSTEMS_KEY,
@@ -22,6 +22,19 @@ import { ArrowRight, ChevronRight, Maximize, Plus } from "../components/icons";
 // row opens that component's full page, and "Components" deep-links the Components
 // page filtered to this system.
 type SysNode = ListNode & { type: string; locationName: string; raw: System };
+
+// The static config (matrix-tested in pages/descriptors.test.ts).
+export const systemsDescriptor: PageDescriptor = {
+  entity: { name: "system", plural: "Systems" },
+  storageKey: "og-sys",
+  columns: {
+    type: { label: "Type", width: 170 },
+    location: { label: "Location", width: 190 },
+    components: { label: "Components", width: 130 },
+  },
+  columnKeys: ["type", "location", "components"],
+  defaultCols: ["type", "location", "components"],
+};
 
 export default function Systems() {
   const params = useParams();
@@ -258,20 +271,12 @@ export default function Systems() {
   }
 
   const cfg: ListConfig<SysNode> = {
-    entity: { name: "system", plural: "Systems" },
-    storageKey: "og-sys",
+    ...systemsDescriptor,
     nodes,
     focus: () => params.name,
     loading: () => systems.isLoading,
     error: () => systems.error,
     filterPlaceholder: "Filter by name, type, location…",
-    columns: {
-      type: { label: "Type", width: 170 },
-      location: { label: "Location", width: 190 },
-      components: { label: "Components", width: 130 },
-    },
-    columnKeys: ["type", "location", "components"],
-    defaultCols: ["type", "location", "components"],
     nameWeight: () => 500,
     cellFor: (key, n) => {
       if (key === "type") return <span class="badge badge-soft badge-neutral badge-sm">{n.type}</span>;

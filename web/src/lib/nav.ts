@@ -11,6 +11,11 @@ export type NavChild = {
   hint: string;
   live?: boolean;
   issue?: number; // tracking issue for a not-yet-built section, shown on its stub
+  // The authorization resource this tab needs to read. When set, the sidebar hides
+  // the tab from a principal without <resource>:read. Set it when the entity goes
+  // live (its server route already gates on the same resource); leave unset while
+  // the section is a stub so its "soon" entry stays visible.
+  resource?: string;
 };
 
 export type NavItem = {
@@ -20,6 +25,7 @@ export type NavItem = {
   path?: string;
   live?: boolean;
   issue?: number;
+  resource?: string;
   children?: NavChild[];
 };
 
@@ -30,9 +36,9 @@ export const navItems: NavItem[] = [
   {
     label: "Inventory", icon: Icons.Package, hint: "The entity graph: systems, components, locations, interfaces, nodes, and tasks.",
     children: [
-      { label: "Systems", path: "/systems", live: true, hint: "Location and system trees, navigable, with health at each level." },
-      { label: "Components", path: "/components", live: true, hint: "The component inventory, with declared config, props, and tags." },
-      { label: "Locations", path: "/locations", live: true, hint: "The place tree: campuses, buildings, floors, and rooms." },
+      { label: "Systems", path: "/systems", live: true, resource: "system", hint: "Location and system trees, navigable, with health at each level." },
+      { label: "Components", path: "/components", live: true, resource: "component", hint: "The component inventory, with declared config, props, and tags." },
+      { label: "Locations", path: "/locations", live: true, resource: "location", hint: "The place tree: campuses, buildings, floors, and rooms." },
       { label: "Interfaces", path: "/interfaces", hint: "Connection endpoints on components, with their device credentials." },
       { label: "Nodes", path: "/nodes", hint: "Collection daemons: their assigned tasks, health, and enrollment." },
       { label: "Tasks", path: "/tasks", hint: "Collection task assignments across nodes." },
@@ -61,6 +67,24 @@ export const navItems: NavItem[] = [
     ],
   },
 ];
+
+// filterNav drops the tabs a principal cannot read: a leaf with no resource is
+// always kept; a leaf with a resource is kept only when canRead(resource); a group
+// is kept only if it has at least one kept child (with its children filtered). The
+// server gates the route regardless; this hides what the caller cannot use.
+export function filterNav(items: NavItem[], canRead: (resource: string) => boolean): NavItem[] {
+  const ok = (n: { resource?: string }) => !n.resource || canRead(n.resource);
+  const out: NavItem[] = [];
+  for (const item of items) {
+    if (item.children) {
+      const children = item.children.filter(ok);
+      if (children.length) out.push({ ...item, children });
+    } else if (ok(item)) {
+      out.push(item);
+    }
+  }
+  return out;
+}
 
 // Flattened title + hint (+ icon + tracking issue) lookup by base-relative path,
 // for the generic stub. A child inherits its parent group's icon (that is the icon

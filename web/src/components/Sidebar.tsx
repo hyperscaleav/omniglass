@@ -1,7 +1,7 @@
-import { For, Show } from "solid-js";
+import { For, Show, createMemo } from "solid-js";
 import { A, useLocation } from "@solidjs/router";
-import { navItems, type NavItem } from "../lib/nav";
-import { useMe } from "../lib/auth";
+import { navItems, filterNav, type NavItem } from "../lib/nav";
+import { useMe, can } from "../lib/auth";
 import { PanelLeft } from "./icons";
 import { BrandMark, Wordmark } from "./Brand";
 
@@ -22,6 +22,9 @@ export default function Sidebar(props: { collapsed: boolean; onToggle: () => voi
     if (!m) return { name: "—", role: "" };
     return { name: m.human?.username ?? m.service?.label ?? m.principal.kind, role: m.grants[0]?.role ?? m.principal.kind };
   };
+  // The tabs this principal may see: those with no resource (Home, Explore, Learn,
+  // and the still-stubbed sections) plus those whose resource it can read.
+  const items = createMemo(() => filterNav(navItems, (r) => can(me.data, r, "read")));
 
   return (
     <aside
@@ -36,7 +39,7 @@ export default function Sidebar(props: { collapsed: boolean; onToggle: () => voi
       </div>
 
       <ul class="menu min-h-0 w-full flex-1 flex-nowrap gap-0.5 overflow-y-auto [&_li>*]:rounded-field">
-        <For each={navItems}>
+        <For each={items()}>
           {(item) => (
             <Show when={item.children} fallback={<Leaf item={item} collapsed={props.collapsed} />}>
               <Group item={item} rel={rel()} collapsed={props.collapsed} />
@@ -95,13 +98,15 @@ function Leaf(props: { item: NavItem; collapsed: boolean }) {
 
 function Group(props: { item: NavItem; rel: string; collapsed: boolean }) {
   const Icon = props.item.icon;
-  const childActive = () => (props.item.children ?? []).some((c) => props.rel === c.path);
+  // Children are already permission-filtered by filterNav upstream.
+  const children = () => props.item.children ?? [];
+  const childActive = () => children().some((c) => props.rel === c.path);
   return (
     <Show
       when={!props.collapsed}
       fallback={
         <li>
-          <A href={props.item.children![0].path} class="tooltip tooltip-right justify-center" classList={{ "menu-active": childActive() }} data-tip={props.item.label}>
+          <A href={children()[0].path} class="tooltip tooltip-right justify-center" classList={{ "menu-active": childActive() }} data-tip={props.item.label}>
             <Icon size={17} />
           </A>
         </li>
@@ -114,7 +119,7 @@ function Group(props: { item: NavItem; rel: string; collapsed: boolean }) {
               (the margin positions daisyUI's ::before rule under the icon center),
               and pad so child labels land on the parent-label rail at 49px. */}
           <ul class="ms-5 ps-2.25">
-            <For each={props.item.children}>
+            <For each={children()}>
               {(c) => (
                 <li>
                   <A href={c.path} activeClass="menu-active" classList={{ "opacity-45": !c.live }}>

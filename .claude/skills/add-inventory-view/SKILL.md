@@ -49,14 +49,20 @@ timeseries/graph/board shaped and each needs its own primitive. Do not bend `Lis
    `:name` route is the addressable full-page detail via `focus`). Remove `/<entity>` from
    `STUBS`.
 
-4. **Nav** `web/src/lib/nav.ts`: flip the child's `live: true`. Until the page ships, leave it
-   in `STUBS` / `!live`; the dimmed "soon" item + shared `Placeholder` cover it (set the child's
-   `issue` to link its tracking issue).
+4. **Nav** `web/src/lib/nav.ts`: flip the child's `live: true` and set its `resource` to the
+   page's authz resource (the same string its server route gates on, e.g. `"node"`). The sidebar
+   hides the tab from a principal without `<resource>:read` (`filterNav`). Until the page ships,
+   leave it `!live` with no resource; the dimmed "soon" item + shared `Placeholder` cover it (set
+   the child's `issue` to link its tracking issue).
 
-5. **Test** (test-first): a data-layer unit test (mock the client, assert envelope unwrap +
-   request body + error throw, like [`locations.test.ts`](../../../web/src/lib/locations.test.ts)).
-   The ListView derivations are already covered by `listmodel.test.ts`; add tests only for the
-   page's own pure helpers. Component-test a bespoke interaction if the page adds one.
+5. **Test** (test-first): export a `PageDescriptor` (the static `entity`/`storageKey`/`columns`/
+   `columnKeys`/`defaultCols`) and add it to the registry in
+   [`descriptors.test.ts`](../../../web/src/pages/descriptors.test.ts) — the page then inherits the
+   config-shape conformance matrix (the analogue of the backend `TestAuthzConformance`), no bespoke
+   per-page test. Add a data-layer unit test (mock the client, assert envelope unwrap + request
+   body + error throw, like [`locations.test.ts`](../../../web/src/lib/locations.test.ts)). The
+   ListView derivations are already covered by `listmodel.test.ts`; add tests only for the page's
+   own pure helpers, or component-test a bespoke interaction.
 
 6. **Verify live**: `make dev` (or `npm run dev` on :5173 with `/api` proxied to a running
    `omniglass server`). Seed a few rows via the API/CLI, drive the page, screenshot to the
