@@ -120,25 +120,17 @@ func (p *PG) ListLocations(ctx context.Context, read scope.Set) ([]Location, err
 	if read.Empty() {
 		return nil, nil
 	}
+	// The scoped-tree primitive builds the subtree-filtered list query; only the
+	// columns and scan are location-specific.
+	sql := scopedListSQL(locationTable, locationCols, read.All)
 	var (
 		rows pgx.Rows
 		err  error
 	)
 	if read.All {
-		rows, err = p.pool.Query(ctx, `select `+locationCols+` from location order by name`)
+		rows, err = p.pool.Query(ctx, sql)
 	} else {
-		// Expand every scope root to its subtree, then list the members. The
-		// CYCLE clause is the structural-tree cycle guard: a corrupted parent
-		// edge stops the walk gracefully instead of erroring at the depth limit.
-		rows, err = p.pool.Query(ctx, `
-			with recursive sub(id) as (
-				select id from location where id = any($1::uuid[])
-				union all
-				select l.id from location l join sub on l.parent_id = sub.id
-			) cycle id set is_cycle using path
-			select `+locationCols+` from location
-			where id in (select id from sub)
-			order by name`, read.IDs)
+		rows, err = p.pool.Query(ctx, sql, read.IDs)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("storage: list locations: %w", err)
@@ -215,7 +207,7 @@ func (p *PG) CreateLocation(ctx context.Context, actorID string, spec LocationSp
 	if err != nil {
 		return nil, mapLocationWriteErr(err)
 	}
-	if err := writeAudit(ctx, tx, actorID, "create", l.ID, nil, l); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "create", "location", l.ID, nil, l); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -251,7 +243,7 @@ func (p *PG) UpdateLocation(ctx context.Context, actorID, name string, patch Loc
 	if err != nil {
 		return nil, mapLocationWriteErr(err)
 	}
-	if err := writeAudit(ctx, tx, actorID, "update", after.ID, before, after); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "update", "location", after.ID, before, after); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -287,7 +279,7 @@ func (p *PG) DeleteLocation(ctx context.Context, actorID, name string, read, act
 	if _, err := tx.Exec(ctx, `delete from location where id = $1`, before.ID); err != nil {
 		return mapLocationWriteErr(err)
 	}
-	if err := writeAudit(ctx, tx, actorID, "delete", before.ID, before, nil); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "delete", "location", before.ID, before, nil); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -332,29 +324,10 @@ func (p *PG) locationByName(ctx context.Context, q querier, name string) (*Locat
 	return l, nil
 }
 
-// inScope reports whether a target location falls within a resolved scope: an all
-// scope always holds; otherwise the target is in scope when itself or any
-// ancestor is one of the scope roots (the ancestor-path walk, cheaper than
-// expanding every root's subtree for a membership test).
+// inScope reports whether a target location falls within a resolved scope,
+// delegating to the shared scoped-tree walk.
 func (p *PG) inScope(ctx context.Context, q querier, targetID string, set scope.Set) (bool, error) {
-	if set.All {
-		return true, nil
-	}
-	if len(set.IDs) == 0 {
-		return false, nil
-	}
-	var ok bool
-	err := q.QueryRow(ctx, `
-		with recursive anc(id, parent_id) as (
-			select id, parent_id from location where id = $1
-			union all
-			select l.id, l.parent_id from location l join anc on l.id = anc.parent_id
-		) cycle id set is_cycle using path
-		select exists(select 1 from anc where id = any($2::uuid[]))`, targetID, set.IDs).Scan(&ok)
-	if err != nil {
-		return false, fmt.Errorf("storage: scope check: %w", err)
-	}
-	return ok, nil
+	return inScopeTree(ctx, q, locationTable, targetID, set)
 }
 
 // querier is the read surface shared by *pgxpool.Pool and pgx.Tx, so scope and
@@ -363,9 +336,10 @@ type querier interface {
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 }
 
-// writeAudit records one write in the audit_log, in the caller's transaction.
-// A nil old or new marshals to a SQL NULL (a create has no old, a delete no new).
-func writeAudit(ctx context.Context, tx pgx.Tx, actorID, verb, resourceID string, old, new any) error {
+// writeAuditRes records one write in the audit_log, in the caller's
+// transaction, for the named resource. A nil old or new marshals to a SQL NULL
+// (a create has no old, a delete no new). Shared by every entity gateway.
+func writeAuditRes(ctx context.Context, tx pgx.Tx, actorID, verb, resource, resourceID string, old, new any) error {
 	oldJSON, err := auditJSON(old)
 	if err != nil {
 		return err
@@ -376,8 +350,8 @@ func writeAudit(ctx context.Context, tx pgx.Tx, actorID, verb, resourceID string
 	}
 	if _, err := tx.Exec(ctx, `
 		insert into audit_log (actor_principal_id, verb, resource, resource_id, old, new)
-		values ($1, $2, 'location', $3, $4, $5)`,
-		nullize(actorID), verb, resourceID, oldJSON, newJSON); err != nil {
+		values ($1, $2, $3, $4, $5, $6)`,
+		nullize(actorID), verb, resource, resourceID, oldJSON, newJSON); err != nil {
 		return fmt.Errorf("storage: write audit: %w", err)
 	}
 	return nil

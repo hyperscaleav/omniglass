@@ -68,4 +68,13 @@ func TestSeedRolesIdempotent(t *testing.T) {
 	if topType != "campus" {
 		t.Errorf("lowest-rank location_type = %q, want campus", topType)
 	}
+
+	// The official system types seed too, idempotently.
+	var sysTypeCount int
+	if err := conn.QueryRow(ctx, `select count(*) from system_type where official`).Scan(&sysTypeCount); err != nil {
+		t.Fatalf("count system_types: %v", err)
+	}
+	if sysTypeCount != 6 {
+		t.Errorf("official system_types = %d, want 6", sysTypeCount)
+	}
 }

@@ -27,6 +27,36 @@ components:
         - name
         - location_type
       type: object
+    CreateSystemInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateSystemInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        display_name:
+          type: string
+        location:
+          description: Location name this system is placed at
+          type: string
+        name:
+          description: Globally unique name (the address)
+          minLength: 1
+          type: string
+        parent:
+          description: Parent system name; omit for a root system
+          type: string
+        system_type:
+          description: A system_type id
+          minLength: 1
+          type: string
+      required:
+        - name
+        - system_type
+      type: object
     ErrorDetail:
       additionalProperties: false
       properties:
@@ -150,6 +180,25 @@ components:
       required:
         - locations
       type: object
+    ListSystemsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListSystemsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        systems:
+          items:
+            $ref: "#/components/schemas/SystemBody"
+          type:
+            - array
+            - "null"
+      required:
+        - systems
+      type: object
     LocationBody:
       additionalProperties: false
       properties:
@@ -271,6 +320,33 @@ components:
       required:
         - label
       type: object
+    SystemBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/SystemBody.json
+          format: uri
+          readOnly: true
+          type: string
+        display_name:
+          type: string
+        id:
+          type: string
+        location_id:
+          type: string
+        name:
+          type: string
+        parent_id:
+          type: string
+        system_type:
+          type: string
+      required:
+        - id
+        - name
+        - system_type
+      type: object
     UpdateLocationInputBody:
       additionalProperties: false
       properties:
@@ -284,6 +360,21 @@ components:
         display_name:
           type: string
         location_type:
+          type: string
+      type: object
+    UpdateSystemInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/UpdateSystemInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        display_name:
+          type: string
+        system_type:
           type: string
       type: object
 info:
@@ -462,6 +553,123 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List roles
+  /systems:
+    get:
+      description: Lists the systems the caller may read, each filtered to its scope subtree. Gated by system:read.
+      operationId: list-systems
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListSystemsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List systems in scope
+    post:
+      description: Creates a system, optionally under a parent (a root needs an all-scoped grant) and at a location. Gated by system:create.
+      operationId: create-system
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSystemInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Create a system
+  /systems/{name}:
+    delete:
+      description: Deletes a system, refused while it still has child systems. Gated by system:delete; read and delete scopes drive the 404 versus 403 split.
+      operationId: delete-system
+      parameters:
+        - description: The system's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The system's unique name
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Delete a system
+    get:
+      description: Fetches a system by name within the caller's read scope. Out of scope is a non-disclosing 404. Gated by system:read.
+      operationId: get-system
+      parameters:
+        - description: The system's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The system's unique name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get a system
+    patch:
+      description: Patches a system's display_name or system_type. Gated by system:update; read and update scopes drive the 404 versus 403 split.
+      operationId: update-system
+      parameters:
+        - in: path
+          name: name
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSystemInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Update a system
 servers:
   - url: /api/v1
 

@@ -60,6 +60,15 @@ type Gateway interface {
 	UpdateLocation(ctx context.Context, actorID, name string, patch LocationPatch, read, action scope.Set) (*Location, error)
 	DeleteLocation(ctx context.Context, actorID, name string, read, action scope.Set) error
 
+	// The system tier: a type registry and scoped CRUD, mirroring locations.
+	UpsertSystemType(ctx context.Context, st SystemType) error
+	ListSystemTypes(ctx context.Context) ([]SystemType, error)
+	ListSystems(ctx context.Context, read scope.Set) ([]System, error)
+	GetSystem(ctx context.Context, name string, read scope.Set) (*System, error)
+	CreateSystem(ctx context.Context, actorID string, spec SystemSpec, create scope.Set) (*System, error)
+	UpdateSystem(ctx context.Context, actorID, name string, patch SystemPatch, read, action scope.Set) (*System, error)
+	DeleteSystem(ctx context.Context, actorID, name string, read, action scope.Set) error
+
 	// Close releases the underlying connection pool. Idempotent at the pool
 	// level; call once on shutdown.
 	Close()

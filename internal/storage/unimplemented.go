@@ -45,4 +45,23 @@ func (UnimplementedGateway) UpdateLocation(context.Context, string, string, Loca
 func (UnimplementedGateway) DeleteLocation(context.Context, string, string, scope.Set, scope.Set) error {
 	return nil
 }
+func (UnimplementedGateway) UpsertSystemType(context.Context, SystemType) error { return nil }
+func (UnimplementedGateway) ListSystemTypes(context.Context) ([]SystemType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) ListSystems(context.Context, scope.Set) ([]System, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) GetSystem(context.Context, string, scope.Set) (*System, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) CreateSystem(context.Context, string, SystemSpec, scope.Set) (*System, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) UpdateSystem(context.Context, string, string, SystemPatch, scope.Set, scope.Set) (*System, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteSystem(context.Context, string, string, scope.Set, scope.Set) error {
+	return nil
+}
 func (UnimplementedGateway) Close() {}

@@ -20,7 +20,7 @@ roles:
     inherits: ["operator"]
     permissions:
       - "component:delete"
-      - "system:delete"
+      - "system:create,update,delete"
       - "location:create,update,delete"
       - "principal:*"
       - "credential:*"
