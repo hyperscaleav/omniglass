@@ -101,6 +101,8 @@ html { font-family: var(--og-font-ui); }
 .font-data, .mono, .tnum { font-family: var(--og-font-data); }
 .tnum { font-variant-numeric: tabular-nums; }
 html[data-type="mono"] { --og-font-ui: var(--og-font-data); }
+/* the brand wordmark reads better uppercase in the all-mono face. */
+html[data-type="mono"] .og-wordmark { text-transform: uppercase; }
 
 /* eyebrow: the small-caps section label the design uses above cards. */
 .eyebrow { font-size: 10.5px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: color-mix(in oklch, var(--color-base-content) 55%, transparent); }

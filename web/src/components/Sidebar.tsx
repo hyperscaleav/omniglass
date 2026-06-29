@@ -109,7 +109,7 @@ function Lockup() {
   return (
     <div class="flex min-w-0 items-center gap-2.5">
       <BrandMark />
-      <span class="font-data text-lg font-bold tracking-tight">omni<span class="text-primary">glass</span></span>
+      <span class="og-wordmark font-data text-lg font-bold tracking-tight">omni<span class="text-primary">glass</span></span>
     </div>
   );
 }

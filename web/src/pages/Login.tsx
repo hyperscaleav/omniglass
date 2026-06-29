@@ -50,7 +50,7 @@ export default function Login() {
       <div class="card w-full max-w-sm border border-base-300 bg-base-200">
         <div class="card-body gap-4">
           <div>
-            <h1 class="font-data text-xl font-bold">omni<span class="text-primary">glass</span></h1>
+            <h1 class="og-wordmark font-data text-xl font-bold">omni<span class="text-primary">glass</span></h1>
             <p class="mt-1 text-sm text-base-content/60">Sign in to the operator console.</p>
           </div>
           <form onSubmit={onSubmit} class="flex flex-col gap-3">
