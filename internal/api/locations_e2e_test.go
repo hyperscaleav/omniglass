@@ -119,6 +119,34 @@ type apiClient struct {
 	base string
 }
 
+// send issues a request and returns the status and body without asserting, for
+// callers that test the status itself (the route-gating guard).
+func (c *apiClient) send(tok, method, path string, body any) (int, []byte) {
+	c.t.Helper()
+	var rdr *bytes.Reader
+	if body != nil {
+		b, _ := json.Marshal(body)
+		rdr = bytes.NewReader(b)
+	} else {
+		rdr = bytes.NewReader(nil)
+	}
+	req, err := http.NewRequestWithContext(c.ctx, method, c.base+"/api/v1"+path, rdr)
+	if err != nil {
+		c.t.Fatalf("request: %v", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+tok)
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		c.t.Fatalf("send %s %s: %v", method, path, err)
+	}
+	defer resp.Body.Close()
+	out, _ := io.ReadAll(resp.Body)
+	return resp.StatusCode, out
+}
+
 func (c *apiClient) do(tok, method, path string, body any, want int) []byte {
 	c.t.Helper()
 	var rdr *bytes.Reader

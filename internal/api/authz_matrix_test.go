@@ -2,6 +2,7 @@ package api_test
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -21,18 +22,52 @@ type grant struct {
 	scopeID   string // "" for the all scope
 }
 
-// TestAuthzScopeMatrix is the foundation security test: it drives the live API
-// with realistically-granted principals and asserts the full authorization
-// matrix end to end (grant -> role index -> per-action visible_set -> gateway
-// 3-way split), the property every scoped surface depends on:
+// scopedEntity describes a scoped tree entity so the authorization conformance
+// matrix runs against every one of them. Adding a new scoped entity (component,
+// group, ...) is one line here, and it inherits the full security matrix; no
+// bespoke per-entity authz test needed.
+type scopedEntity struct {
+	resource  string // "location", "system": drives the role permission + grant scope_kind
+	base      string // "/locations"
+	typeField string // "location_type"
+	typeValue string // a valid type id
+}
+
+var scopedEntities = []scopedEntity{
+	{resource: "location", base: "/locations", typeField: "location_type", typeValue: "campus"},
+	{resource: "system", base: "/systems", typeField: "system_type", typeValue: "meeting-room"},
+}
+
+func (e scopedEntity) createBody(name, parent string) map[string]any {
+	b := map[string]any{"name": name, e.typeField: e.typeValue}
+	if parent != "" {
+		b["parent"] = parent
+	}
+	return b
+}
+
+// TestAuthzConformance is the foundation security test, run against EVERY scoped
+// entity: it drives the live API with realistically-granted principals and
+// asserts the full authorization matrix end to end (grant -> role index ->
+// per-action visible_set -> gateway 3-way split):
 //
 //   - capability fast-reject (403) when the action is in no grant;
 //   - the over-permit fix: read-everywhere + write-narrow yields a SCOPE 403 on a
 //     readable-but-out-of-write-scope target (not a 404, not a silent success);
 //   - non-disclosing 404 when the target is outside the read scope entirely;
-//   - success only inside the action scope;
-//   - the read/act asymmetry (can read what you cannot write, never the reverse).
-func TestAuthzScopeMatrix(t *testing.T) {
+//   - success only inside the action scope, and the read/act asymmetry.
+//
+// Because it iterates scopedEntities, a new scoped entity is covered the moment
+// it is registered.
+func TestAuthzConformance(t *testing.T) {
+	for _, e := range scopedEntities {
+		t.Run(e.resource, func(t *testing.T) {
+			runAuthzMatrix(t, e)
+		})
+	}
+}
+
+func runAuthzMatrix(t *testing.T, e scopedEntity) {
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
@@ -44,58 +79,93 @@ func TestAuthzScopeMatrix(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	// A custom write-only role: location create/update/delete, no inheritance.
-	// Its holder also gets location:read via the :read floor, scoped to its
-	// grant; it does NOT read other resources or other locations.
+	// A custom write-only role for this entity (create/update/delete, no
+	// inherit). Its holder also gets <res>:read via the :read floor, scoped to
+	// its grant; it reads no other resource or out-of-scope target.
+	writerRole := e.resource + "-writer"
+	writePerm := e.resource + ":create,update,delete"
 	conn, err := pgx.Connect(ctx, dsn)
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}
 	if _, err := conn.Exec(ctx,
-		`insert into role (id, official, permissions, inherits) values ('loc-writer', false, $1, '{}')`,
-		[]string{"location:create,update,delete"}); err != nil {
-		t.Fatalf("insert loc-writer role: %v", err)
+		`insert into role (id, official, permissions, inherits) values ($1, false, $2, '{}')`,
+		writerRole, []string{writePerm}); err != nil {
+		t.Fatalf("insert %s role: %v", writerRole, err)
 	}
 	conn.Close(ctx)
 
-	// Owner builds the tree before any request (so the role index, built lazily
-	// on first authn, includes loc-writer). hq (root) > hq-b1; lab (root).
 	ownerTok := bootstrapOwnerTok(t, ctx, gw)
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
-	c.create(ownerTok, locReq{Name: "hq", LocationType: "campus"}, http.StatusCreated)
-	c.create(ownerTok, locReq{Name: "hq-b1", LocationType: "building", Parent: ptr("hq")}, http.StatusCreated)
-	c.create(ownerTok, locReq{Name: "lab", LocationType: "campus"}, http.StatusCreated)
-	hqID := c.list(ownerTok)[mustIndex(t, c.list(ownerTok), "hq")].ID
 
-	// --- principal 1: viewer@all only (read everywhere, write nothing) --------
-	readerTok := principalWithGrants(t, ctx, dsn, "reader", []grant{{role: "viewer", scopeKind: "all"}})
-	c.get(readerTok, "lab", http.StatusOK)                                             // reads anything
-	c.patch(readerTok, "hq-b1", patchReq{DisplayName: ptr("x")}, http.StatusForbidden) // capability 403 (no update anywhere)
+	// Owner builds: root > child; plus other (a separate root). The first owner
+	// request builds the role index (lazy), by which point the custom role
+	// exists.
+	c.do(ownerTok, http.MethodPost, e.base, e.createBody("az-root", ""), http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, e.base, e.createBody("az-child", "az-root"), http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, e.base, e.createBody("az-other", ""), http.StatusCreated)
+	rootID := entityID(t, c, ownerTok, e.base, "az-root")
 
-	// --- principal 2: write-only, scoped to hq only (no @all) -----------------
-	// Read scope = hq subtree (via the floor); lab is outside it.
-	hqWriterTok := principalWithGrants(t, ctx, dsn, "hq-writer", []grant{{role: "loc-writer", scopeKind: "location", scopeID: hqID}})
-	c.patch(hqWriterTok, "hq-b1", patchReq{DisplayName: ptr("ok")}, http.StatusOK)    // in write scope
-	c.get(hqWriterTok, "lab", http.StatusNotFound)                                    // outside read scope -> non-disclosing 404
-	c.patch(hqWriterTok, "lab", patchReq{DisplayName: ptr("x")}, http.StatusNotFound) // out of read scope -> 404, not 403
+	patch := map[string]any{"display_name": "x"}
+	path := func(name string) string { return e.base + "/" + name }
 
-	// --- principal 3: viewer@all + loc-writer@hq (the over-permit case) -------
-	// Reads everywhere (viewer@all); writes only under hq (loc-writer@hq).
-	mixedTok := principalWithGrants(t, ctx, dsn, "mixed", []grant{
+	// Principal 1: viewer@all (read everywhere, write nothing).
+	reader := principalWithGrants(t, ctx, dsn, "reader", []grant{{role: "viewer", scopeKind: "all"}})
+	c.do(reader, http.MethodGet, path("az-other"), nil, http.StatusOK)              // reads anything
+	c.do(reader, http.MethodPatch, path("az-child"), patch, http.StatusForbidden)   // capability 403 (no write anywhere)
+
+	// Principal 2: write-only, scoped to root only (no @all). Read scope = root
+	// subtree (via floor); az-other is outside it.
+	narrow := principalWithGrants(t, ctx, dsn, "narrow", []grant{{role: writerRole, scopeKind: e.resource, scopeID: rootID}})
+	c.do(narrow, http.MethodPatch, path("az-child"), patch, http.StatusOK)          // write in scope
+	c.do(narrow, http.MethodGet, path("az-other"), nil, http.StatusNotFound)        // out of read scope -> non-disclosing 404
+	c.do(narrow, http.MethodPatch, path("az-other"), patch, http.StatusNotFound)    // 404, not 403
+
+	// Principal 3: viewer@all + writer@root (the over-permit case): reads
+	// everywhere, writes only under root.
+	mixed := principalWithGrants(t, ctx, dsn, "mixed", []grant{
 		{role: "viewer", scopeKind: "all"},
-		{role: "loc-writer", scopeKind: "location", scopeID: hqID},
+		{role: writerRole, scopeKind: e.resource, scopeID: rootID},
 	})
-	c.get(mixedTok, "lab", http.StatusOK)                                        // readable (viewer@all)
-	c.patch(mixedTok, "hq-b1", patchReq{DisplayName: ptr("ok2")}, http.StatusOK) // write in scope (under hq)
-	// The crown jewel: lab is READABLE (viewer@all) but OUTSIDE the write scope
-	// (loc-writer@hq) -> 403 scope, NOT 404, NOT a silent success. This is the
-	// over-permit fix: the read grant must not widen the write set.
-	c.patch(mixedTok, "lab", patchReq{DisplayName: ptr("nope")}, http.StatusForbidden)
+	c.do(mixed, http.MethodGet, path("az-other"), nil, http.StatusOK)               // readable (viewer@all)
+	c.do(mixed, http.MethodPatch, path("az-child"), patch, http.StatusOK)           // write in scope
+	// The crown jewel: az-other is READABLE (viewer@all) but OUTSIDE the write
+	// scope (writer@root) -> 403 scope, NOT 404, NOT silent success. The read
+	// grant must not widen the write set.
+	c.do(mixed, http.MethodPatch, path("az-other"), patch, http.StatusForbidden)
 }
 
-// bootstrapOwnerTok mints an owner and returns its bearer token.
+// entityID lists base as the owner and returns the id of the row named name.
+// The list envelope has a single array under a resource-named key, so this is
+// generic across entities.
+func entityID(t *testing.T, c *apiClient, tok, base, name string) string {
+	t.Helper()
+	// The list envelope carries a $schema string alongside the single array, so
+	// decode to raw values and pick the one that is an array of rows.
+	var env map[string]json.RawMessage
+	if err := json.Unmarshal(c.do(tok, http.MethodGet, base, nil, http.StatusOK), &env); err != nil {
+		t.Fatalf("decode list %s: %v", base, err)
+	}
+	for _, raw := range env {
+		var rows []struct {
+			ID   string `json:"id"`
+			Name string `json:"name"`
+		}
+		if json.Unmarshal(raw, &rows) != nil {
+			continue
+		}
+		for _, it := range rows {
+			if it.Name == name {
+				return it.ID
+			}
+		}
+	}
+	t.Fatalf("%s named %q not found under %s", base, name, base)
+	return ""
+}
+
 func bootstrapOwnerTok(t *testing.T, ctx context.Context, gw storage.Gateway) string {
 	t.Helper()
 	tok, hash, prefix, err := auth.NewBearerToken()
