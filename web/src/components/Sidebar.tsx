@@ -92,7 +92,10 @@ function Group(props: { item: NavItem; rel: string; collapsed: boolean }) {
       <li>
         <details open>
           <summary class="gap-3"><Icon size={17} />{props.item.label}</summary>
-          <ul>
+          {/* Keep the submenu guide line dropping straight down the icon column
+              (the margin positions daisyUI's ::before rule under the icon center),
+              and pad so child labels land on the parent-label rail at 49px. */}
+          <ul class="ms-5 ps-2.25">
             <For each={props.item.children}>
               {(c) => (
                 <li><A href={c.path} activeClass="menu-active">{c.label}</A></li>

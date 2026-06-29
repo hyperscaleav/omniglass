@@ -11,6 +11,7 @@ import Home from "./pages/Home";
 import Locations from "./pages/Locations";
 import LocationNew from "./pages/LocationNew";
 import LocationDetail from "./pages/LocationDetail";
+import Components from "./pages/Components";
 import SectionStub from "./pages/SectionStub";
 import NotFound from "./pages/NotFound";
 
@@ -30,7 +31,7 @@ const ProtectedShell: ParentComponent = (props) => (
 
 // Stubbed sections: backends not built yet. The design draws them as stubs too.
 const STUBS = [
-  "/dashboards", "/alarms", "/systems", "/components", "/interfaces", "/nodes", "/tasks",
+  "/dashboards", "/alarms", "/systems", "/interfaces", "/nodes", "/tasks",
   "/templates", "/types", "/tags", "/rules", "/explore", "/learn",
   "/config", "/secrets", "/users", "/roles", "/groups", "/audit",
 ];
@@ -46,6 +47,10 @@ render(
           <Route path="/locations" component={Locations} />
           <Route path="/locations/new" component={LocationNew} />
           <Route path="/locations/:name" component={LocationDetail} />
+          {/* Components: the device inventory on the generic ListView. The detail
+              route opens the same page focused on one component (deep-link). */}
+          <Route path="/components" component={Components} />
+          <Route path="/components/:name" component={Components} />
           {STUBS.map((p) => <Route path={p} component={SectionStub} />)}
           <Route path="*" component={NotFound} />
         </Route>
