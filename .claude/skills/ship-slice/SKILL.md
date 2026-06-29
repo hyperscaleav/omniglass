@@ -47,6 +47,7 @@ Scope
   Thin cut:  <deliberate simplifications>
   Deferred:  <#issue refs>
 
+Surfaces:  API <ops> / CLI <commands, generated> / UI <view, live | stub>
 Proof (ran fresh)
   make test: green, N packages
   Behaviors: <the RED->GREEN and the load-bearing assertions>

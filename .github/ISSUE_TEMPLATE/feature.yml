@@ -18,6 +18,15 @@ body:
     validations:
       required: true
   - type: textarea
+    id: surfaces
+    attributes:
+      label: Surfaces (API / CLI / UI)
+      description: >-
+        Every entry point this slice touches. The API route(s); the generated CLI command(s);
+        the UI view (live where the entity exists, an honest stub where its backend does not yet).
+    validations:
+      required: true
+  - type: textarea
     id: test
     attributes:
       label: How it will be tested
