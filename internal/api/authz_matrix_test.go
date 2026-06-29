@@ -113,15 +113,15 @@ func runAuthzMatrix(t *testing.T, e scopedEntity) {
 
 	// Principal 1: viewer@all (read everywhere, write nothing).
 	reader := principalWithGrants(t, ctx, dsn, "reader", []grant{{role: "viewer", scopeKind: "all"}})
-	c.do(reader, http.MethodGet, path("az-other"), nil, http.StatusOK)              // reads anything
-	c.do(reader, http.MethodPatch, path("az-child"), patch, http.StatusForbidden)   // capability 403 (no write anywhere)
+	c.do(reader, http.MethodGet, path("az-other"), nil, http.StatusOK)            // reads anything
+	c.do(reader, http.MethodPatch, path("az-child"), patch, http.StatusForbidden) // capability 403 (no write anywhere)
 
 	// Principal 2: write-only, scoped to root only (no @all). Read scope = root
 	// subtree (via floor); az-other is outside it.
 	narrow := principalWithGrants(t, ctx, dsn, "narrow", []grant{{role: writerRole, scopeKind: e.resource, scopeID: rootID}})
-	c.do(narrow, http.MethodPatch, path("az-child"), patch, http.StatusOK)          // write in scope
-	c.do(narrow, http.MethodGet, path("az-other"), nil, http.StatusNotFound)        // out of read scope -> non-disclosing 404
-	c.do(narrow, http.MethodPatch, path("az-other"), patch, http.StatusNotFound)    // 404, not 403
+	c.do(narrow, http.MethodPatch, path("az-child"), patch, http.StatusOK)       // write in scope
+	c.do(narrow, http.MethodGet, path("az-other"), nil, http.StatusNotFound)     // out of read scope -> non-disclosing 404
+	c.do(narrow, http.MethodPatch, path("az-other"), patch, http.StatusNotFound) // 404, not 403
 
 	// Principal 3: viewer@all + writer@root (the over-permit case): reads
 	// everywhere, writes only under root.
@@ -129,8 +129,8 @@ func runAuthzMatrix(t *testing.T, e scopedEntity) {
 		{role: "viewer", scopeKind: "all"},
 		{role: writerRole, scopeKind: e.resource, scopeID: rootID},
 	})
-	c.do(mixed, http.MethodGet, path("az-other"), nil, http.StatusOK)               // readable (viewer@all)
-	c.do(mixed, http.MethodPatch, path("az-child"), patch, http.StatusOK)           // write in scope
+	c.do(mixed, http.MethodGet, path("az-other"), nil, http.StatusOK)     // readable (viewer@all)
+	c.do(mixed, http.MethodPatch, path("az-child"), patch, http.StatusOK) // write in scope
 	// The crown jewel: az-other is READABLE (viewer@all) but OUTSIDE the write
 	// scope (writer@root) -> 403 scope, NOT 404, NOT silent success. The read
 	// grant must not widen the write set.
