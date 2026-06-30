@@ -282,7 +282,6 @@ export default function Locations() {
               <option value="" disabled>Select a type…</option>
               <For each={locationTypes.data}>{(t) => <option value={t.id}>{t.display_name}</option>}</For>
             </select>,
-            "The location_type that classifies this location.",
           )}
           <Show when={!editing}>
             {p.ctx.field(
