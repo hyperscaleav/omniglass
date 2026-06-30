@@ -1,0 +1,45 @@
+# The image CI publishes. Previews pin tag to sha-<short> or pr-<n>.
+image:
+  repository: ghcr.io/hyperscaleav/omniglass
+  tag: latest
+  pullPolicy: IfNotPresent
+
+server:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 25m
+      memory: 64Mi
+    limits:
+      memory: 256Mi
+
+service:
+  port: 8080
+
+# Owner auto-created by the bootstrap init container. Intended for previews;
+# disable for production, where identity is provisioned out of band. The minted
+# bearer token is printed once to the bootstrap container's logs.
+bootstrap:
+  enabled: true
+  username: preview
+  email: ""
+  displayName: "Preview Owner"
+
+# Bundled ephemeral Postgres for disposable previews. Data is emptyDir: it does
+# not survive a pod restart, which is the point. Disable for production and set
+# externalDsn (BYO Postgres).
+postgres:
+  enabled: true
+  image: postgres:18
+  user: omniglass
+  password: omniglass
+  database: omniglass
+
+# Required when postgres.enabled is false: the full Postgres DSN the server and
+# the migrate/bootstrap init containers dial.
+externalDsn: ""
+
+# Optional name overrides; default release-named resources keep preview service
+# DNS predictable (e.g. og-pr-42).
+nameOverride: ""
+fullnameOverride: ""

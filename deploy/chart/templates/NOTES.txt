@@ -1,0 +1,22 @@
+Omniglass release {{ .Release.Name }} is installed in namespace {{ .Release.Namespace }}.
+
+1. Wait for the server to become ready:
+
+     kubectl -n {{ .Release.Namespace }} rollout status deploy/{{ include "omniglass.fullname" . }}
+
+2. Reach the console (until an ingress/exposure is added by the preview pipeline):
+
+     kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "omniglass.fullname" . }} 8080:{{ .Values.service.port }}
+
+   then open http://localhost:8080/web
+{{- if .Values.bootstrap.enabled }}
+
+3. The first owner ({{ .Values.bootstrap.username }}) was created by the bootstrap init
+   container, which prints its one-time bearer token. Read it from the logs:
+
+     kubectl -n {{ .Release.Namespace }} logs deploy/{{ include "omniglass.fullname" . }} -c bootstrap
+{{- end }}
+{{- if not .Values.postgres.enabled }}
+
+NOTE: postgres.enabled is false, so the server dials the externalDsn you supplied.
+{{- end }}
