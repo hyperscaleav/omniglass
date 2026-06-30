@@ -305,6 +305,24 @@ components:
         - name
         - location_type
       type: object
+    LoginInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/LoginInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        password:
+          type: string
+        username:
+          type: string
+      required:
+        - username
+        - password
+      type: object
     MeOutputBody:
       additionalProperties: false
       properties:
@@ -478,6 +496,53 @@ info:
   version: 0.0.1-skeleton
 openapi: 3.1.0
 paths:
+  /auth/login:
+    post:
+      description: Verifies a human's password and sets an httpOnly session cookie. Public; a bad credential is a flat 401.
+      operationId: login
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginInputBody"
+        required: true
+      responses:
+        "204":
+          description: No Content
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Log in with a username and password
+  /auth/logout:
+    post:
+      description: Revokes the session token and clears the cookie. Public.
+      operationId: logout
+      parameters:
+        - in: header
+          name: Cookie
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No Content
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Log out the current session
   /auth/me:
     get:
       description: Returns the caller's principal, flattened permissions (a UI hint and the fast-reject set), and grants. Requires authentication.
