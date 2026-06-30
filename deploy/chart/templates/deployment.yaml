@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "omniglass.fullname" . }}
+  labels:
+    {{- include "omniglass.labels" . | nindent 4 }}
+    app.kubernetes.io/component: server
+spec:
+  replicas: {{ .Values.server.replicas }}
+  selector:
+    matchLabels:
+      {{- include "omniglass.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: server
+  template:
+    metadata:
+      labels:
+        {{- include "omniglass.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: server
+    spec:
+      # Init containers gate the server on schema (and, for previews, an owner)
+      # instead of Helm pre-install hooks: a bundled Postgres in the same release
+      # is not up during pre-install, so a hook-Job migrate would race the DB.
+      # Both migrate and bootstrap are idempotent, so re-running on every rollout
+      # is safe. At replicas > 1 in production, run migrate as a one-shot Job
+      # instead, to avoid concurrent migrators.
+      initContainers:
+        {{- if .Values.postgres.enabled }}
+        - name: wait-for-db
+          image: {{ .Values.postgres.image | quote }}
+          command:
+            - sh
+            - -c
+            - until pg_isready -h {{ include "omniglass.fullname" . }}-postgres -U {{ .Values.postgres.user }}; do echo "waiting for postgres"; sleep 1; done
+        {{- end }}
+        - name: migrate
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["migrate"]
+          env:
+            - name: OMNIGLASS_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "omniglass.fullname" . }}-dsn
+                  key: dsn
+        {{- if .Values.bootstrap.enabled }}
+        - name: bootstrap
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - bootstrap
+            - {{ .Values.bootstrap.username | quote }}
+            {{- if .Values.bootstrap.email }}
+            - --email
+            - {{ .Values.bootstrap.email | quote }}
+            {{- end }}
+            {{- if .Values.bootstrap.displayName }}
+            - --display-name
+            - {{ .Values.bootstrap.displayName | quote }}
+            {{- end }}
+          env:
+            - name: OMNIGLASS_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "omniglass.fullname" . }}-dsn
+                  key: dsn
+        {{- end }}
+      containers:
+        - name: server
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["server"]
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: OMNIGLASS_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "omniglass.fullname" . }}-dsn
+                  key: dsn
+          readinessProbe:
+            httpGet:
+              path: /api/v1/healthz
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /api/v1/healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.server.resources | nindent 12 }}

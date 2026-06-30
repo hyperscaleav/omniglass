@@ -1,0 +1,10 @@
+apiVersion: v2
+name: omniglass
+description: >-
+  The Omniglass control plane: the single binary with the operator console
+  embedded, plus an optional bundled ephemeral Postgres for disposable previews.
+  The same chart deploys production (set postgres.enabled=false and supply
+  externalDsn).
+type: application
+version: 0.1.0
+appVersion: "latest"

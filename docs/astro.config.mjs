@@ -107,6 +107,7 @@ export default defineConfig({
             { label: 'The console', slug: 'guides/console' },
             { label: 'The CLI', slug: 'guides/cli' },
             { label: 'Container image', slug: 'guides/container-image' },
+            { label: 'Deploying with Helm', slug: 'guides/helm' },
           ],
         },
       ],
