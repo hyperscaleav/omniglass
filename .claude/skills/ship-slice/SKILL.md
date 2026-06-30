@@ -39,9 +39,10 @@ Each is a gate; a red one blocks the ship.
    with `node web/e2e/shot.mjs <url> <out.png> [--token <og-token>] [--click <sel>]...
    [--select "<sel>||<value>"]...` (bundled chromium, writes to the host FS, drives interactive
    states like an open menu or a chosen option). Host them with the `gh image` extension
-   (`node web/e2e/shot.mjs ... && gh image <out.png>` prints the markdown to paste; reads
-   `GH_SESSION_TOKEN`, or `gh image extract-token` from the logged-in browser, or
-   `web/e2e/ghimage.sh` which falls back to `~/.config/gh-image/token`), otherwise commit them
+   (`node web/e2e/shot.mjs ... && gh image <out.png>` prints the markdown to paste). `gh image`
+   **auto-extracts the browser session cookie by default** (no `GH_SESSION_TOKEN`, no setup);
+   `gh image check-token` verifies it is valid. `GH_SESSION_TOKEN` / `--token` are optional
+   overrides for a machine with no logged-in browser. Otherwise commit them
    under `.github/screenshots/` and embed by **immutable commit SHA**
    (`https://raw.githubusercontent.com/<owner>/<repo>/<sha>/.github/screenshots/...`), so the
    link survives the branch being deleted on squash-merge.

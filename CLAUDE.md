@@ -101,8 +101,9 @@ keep a TODO doc in the tree and do not write a bare `// TODO`; reference an issu
 - Head-noun-last naming (`<qualifier>_<genus>`); match the architecture glossary.
 - Any change that alters an operator-facing (UI) surface ships **live screenshots** in the PR
   body (driven against `make dev`, not mocked), per the PR template's Visual confirmation
-  section. Host them with the `gh image` extension (`gh image extract-token` / `GH_SESSION_TOKEN`),
-  or commit under `.github/screenshots/` and embed by immutable commit SHA. No UI surface, write "n/a".
+  section. Host them with the `gh image` extension (`gh image <path>` auto-extracts the browser
+  session cookie; `gh image check-token` verifies it), or commit under `.github/screenshots/` and
+  embed by immutable commit SHA. No UI surface, write "n/a".
 
 ## Migrations and seeding
 
