@@ -20,7 +20,41 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # No arm64 CI hardware: cross-compile the arm64 image, load it, and boot the
+  # binary under QEMU. This is the only arm64 validation, and it gates the
+  # publish below so a broken arm64 build never reaches the GHCR manifest.
+  smoke-arm64:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Register QEMU for arm64 emulation
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build the arm64 image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/arm64
+          load: true
+          tags: omniglass:arm64-smoke
+          build-args: |
+            VERSION=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Boot the arm64 binary under emulation
+        # `--help` is handled by cobra before any run mode, so it needs no DB
+        # and exits 0 only if the cross-compiled arm64 binary actually runs.
+        run: docker run --rm --platform linux/arm64 omniglass:arm64-smoke --help
+
   build-push:
+    # Only publish the multi-arch manifest once arm64 is proven to boot.
+    needs: smoke-arm64
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -49,6 +83,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
+          platforms: linux/amd64,linux/arm64
           push: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

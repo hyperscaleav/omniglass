@@ -3,9 +3,17 @@
 # `build` compiles the Go binary with -tags web so go:embed picks the SPA up;
 # the final stage is a distroless static image running the binary as nonroot.
 # One image is the whole app: server, node, migrate, bootstrap, and token modes.
+#
+# Multi-arch: the two builder stages pin to $BUILDPLATFORM so they always run
+# natively on the host (no QEMU), and the Go stage cross-compiles to the target
+# via $TARGETOS/$TARGETARCH. The SPA bundle is arch-independent, so the web
+# stage builds it once and both target images embed the same dist. CGO is off,
+# so the cross-compile is a plain GOARCH switch with no C toolchain. The final
+# distroless/static base is itself a multi-arch manifest, resolved per target.
 
 # ---- stage 1: build the console (Vite -> internal/webui/dist) --------------
-FROM node:22-bookworm-slim AS web
+# Arch-independent JS bundle: build on the native host regardless of target.
+FROM --platform=$BUILDPLATFORM node:22-bookworm-slim AS web
 WORKDIR /src/web
 # Install against the lockfile first so the deps layer caches across source-only
 # changes.
@@ -17,7 +25,8 @@ COPY web/ ./
 RUN npm run build
 
 # ---- stage 2: compile the binary with the console embedded -----------------
-FROM golang:1.25.3-bookworm AS build
+# Runs natively on the host ($BUILDPLATFORM); cross-compiles to the target arch.
+FROM --platform=$BUILDPLATFORM golang:1.25.3-bookworm AS build
 WORKDIR /src
 # Module graph first for a cached download layer.
 COPY go.mod go.sum ./
@@ -28,7 +37,10 @@ COPY . .
 COPY --from=web /src/internal/webui/dist ./internal/webui/dist
 # version is stamped into main.version; CI passes the commit SHA (or a tag).
 ARG VERSION=dev
-RUN CGO_ENABLED=0 go build -trimpath -tags web \
+# TARGETOS/TARGETARCH are provided by buildx per target in the platform list.
+ARG TARGETOS
+ARG TARGETARCH
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -trimpath -tags web \
       -ldflags "-X main.version=${VERSION} -s -w" \
       -o /out/omniglass ./cmd/omniglass
 
