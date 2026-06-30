@@ -28,6 +28,11 @@ bootstrap:
 # Bundled ephemeral Postgres for disposable previews. Data is emptyDir: it does
 # not survive a pod restart, which is the point. Disable for production and set
 # externalDsn (BYO Postgres).
+#
+# The credentials below are a preview-only default for a cluster-internal
+# (ClusterIP) throwaway database. They are not a secret and must never front a
+# durable or exposed Postgres: for that, run postgres.enabled=false and supply
+# externalDsn (a real, secret-managed DSN).
 postgres:
   enabled: true
   image: postgres:18
