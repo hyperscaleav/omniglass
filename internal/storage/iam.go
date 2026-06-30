@@ -246,6 +246,16 @@ func (p *PG) SetPassword(ctx context.Context, username, encoded string) (bool, e
 	return true, nil
 }
 
+// RevokeBearer deletes the bearer credential with the given sha256 hash (logout
+// of a session token). A no-op if none matches.
+func (p *PG) RevokeBearer(ctx context.Context, hash []byte) error {
+	if _, err := p.pool.Exec(ctx,
+		`delete from credential where kind = 'bearer' and secret_hash = $1`, hash); err != nil {
+		return fmt.Errorf("storage: revoke bearer: %w", err)
+	}
+	return nil
+}
+
 // loadPrincipal fills a principal's kind profile (human or service) and its
 // grants, given its id and kind already set.
 func (p *PG) loadPrincipal(ctx context.Context, pr *Principal) error {

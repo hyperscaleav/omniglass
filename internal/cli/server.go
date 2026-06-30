@@ -51,7 +51,7 @@ func runServer(ctx context.Context, _ string) error {
 
 	srv := &http.Server{
 		Addr:              c.Addr,
-		Handler:           api.NewHandler(gw),
+		Handler:           api.NewHandler(gw, api.WithSecureCookies(c.SecureCookies)),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
