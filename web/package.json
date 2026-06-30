@@ -8,7 +8,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "gen:api": "openapi-typescript ../api/openapi.json -o src/api/schema.gen.ts"
+    "gen:api": "openapi-typescript ../api/openapi.json -o src/api/schema.gen.ts",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@kobalte/core": "^0.13.11",
@@ -18,6 +19,7 @@
     "solid-js": "^1.9.5"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@solidjs/testing-library": "^0.8.10",
     "@tailwindcss/vite": "^4.1.0",
     "@testing-library/jest-dom": "^6.9.1",
