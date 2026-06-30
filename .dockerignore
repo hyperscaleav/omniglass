@@ -1,0 +1,13 @@
+# Keep the build context small and deterministic. The SPA is rebuilt in the
+# `web` stage and copied in, so a local internal/webui/dist must not leak.
+.git
+.github
+.claude
+bin/
+**/node_modules
+internal/webui/dist/
+web/dist/
+web/test-results/
+web/playwright-report/
+*.zip
+*.png
