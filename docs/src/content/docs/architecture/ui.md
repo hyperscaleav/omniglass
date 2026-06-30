@@ -10,6 +10,18 @@ sidebar:
 The UI is where an operator actually does the work, so it is built as one renderer over the same views the rest of the platform reads, with an information architecture organized around the entities you care about. This page covers the renderer / page / dashboard model and the information architecture. The stack, the typed client, the build pipeline, and
 the concrete reusable primitives are the [design system](/contributing/design-system/).
 
+:::note[What shipped vs the model below]
+The first surfaces built are the **inventory tier** (Systems, Components, Locations) and the
+shell. These ship as **config-driven `ListView` pages over the typed CRUD client**, not as the
+`ViewResult` renderer described next: an inventory page is CRUD over a scoped resource, so it
+reads the resource directly and renders one configurable shell. The `ViewResult` / views model,
+the renderer library, and composable dashboards below remain the intended **read side** for the
+analytical and dashboard surfaces (alarms, datapoint history, the cascade view, fleet
+dashboards), which are not built yet. The realized inventory shell and its primitives are in the
+[design system](/contributing/design-system/); how to operate it is the
+[console guide](/guides/console/).
+:::
+
 ## The renderer contract: ViewResult and the views BFF
 
 The whole console rests on one contract. **All UI reads go through [views](/architecture/views/)**
@@ -20,11 +32,12 @@ specific query and keeps the read contract uniform whether a page is coded or a 
 configured.
 
 The **dense-ops layout is an architectural pattern**, not a one-off page: list surfaces follow one
-shape (a summary of donut facets over the full set, then a keyboard chip filter, then a group-by table,
-then a click-row detail drawer plus a full detail page), and the facets drive the filter while the
-summary stays whole so click-to-filter is stable. The concrete extracted primitives that realize the
-pattern (`DensePage`, `FilterBar`, `Donut`, `SummaryFacet`, `Drawer`, `HealthBadge`, `Actor`,
-`Sparkline`) live in the [design system](/contributing/design-system/); the pattern is the model.
+shape (a summary of facets over the full set, then a keyboard chip filter, then a tree/list table,
+then a click-row detail blade plus a full detail page), and the facets drive the filter while the
+summary stays whole so click-to-filter is stable. The inventory tier realizes this pattern as the
+one config-driven `ListView` shell (with `FilterBar`, `Drawer`, `Donut`, and the faceted-filter
+engine); the concrete shipped primitives live in the [design system](/contributing/design-system/),
+and the pattern is the model the analytical surfaces will reuse.
 
 ## One renderer library, two composition modes
 

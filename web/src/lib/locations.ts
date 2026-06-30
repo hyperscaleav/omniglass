@@ -38,6 +38,17 @@ export async function createLocation(body: CreateLocation): Promise<Location> {
   return data as Location;
 }
 
+export type UpdateLocation = {
+  display_name?: string;
+  location_type?: string;
+};
+
+export async function updateLocation(name: string, body: UpdateLocation): Promise<Location> {
+  const { data, error } = await api.PATCH("/locations/{name}", { params: { path: { name } }, body });
+  if (error) throw error;
+  return data as Location;
+}
+
 export async function deleteLocation(name: string): Promise<void> {
   const { error } = await api.DELETE("/locations/{name}", { params: { path: { name } } });
   if (error) throw error;

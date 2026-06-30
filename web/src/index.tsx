@@ -9,8 +9,8 @@ import { AuthGuard } from "./components/AuthGuard";
 import Login from "./pages/Login";
 import Home from "./pages/Home";
 import Locations from "./pages/Locations";
-import LocationNew from "./pages/LocationNew";
-import LocationDetail from "./pages/LocationDetail";
+import Systems from "./pages/Systems";
+import Components from "./pages/Components";
 import SectionStub from "./pages/SectionStub";
 import NotFound from "./pages/NotFound";
 
@@ -30,7 +30,7 @@ const ProtectedShell: ParentComponent = (props) => (
 
 // Stubbed sections: backends not built yet. The design draws them as stubs too.
 const STUBS = [
-  "/dashboards", "/alarms", "/systems", "/components", "/interfaces", "/nodes", "/tasks",
+  "/dashboards", "/alarms", "/interfaces", "/nodes", "/tasks",
   "/templates", "/types", "/tags", "/rules", "/explore", "/learn",
   "/config", "/secrets", "/users", "/roles", "/groups", "/audit",
 ];
@@ -42,10 +42,14 @@ render(
         <Route path="/login" component={Login} />
         <Route path="/" component={ProtectedShell}>
           <Route path="/" component={Home} />
-          {/* Locations: the live entity this slice ships. */}
+          {/* Inventory pages on the generic ListView. The :name route opens the
+              same page focused on one entity (the addressable full-page detail). */}
           <Route path="/locations" component={Locations} />
-          <Route path="/locations/new" component={LocationNew} />
-          <Route path="/locations/:name" component={LocationDetail} />
+          <Route path="/locations/:name" component={Locations} />
+          <Route path="/systems" component={Systems} />
+          <Route path="/systems/:name" component={Systems} />
+          <Route path="/components" component={Components} />
+          <Route path="/components/:name" component={Components} />
           {STUBS.map((p) => <Route path={p} component={SectionStub} />)}
           <Route path="*" component={NotFound} />
         </Route>

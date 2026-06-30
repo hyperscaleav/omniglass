@@ -1,4 +1,8 @@
 @import "tailwindcss";
+/* The handoff reference (the design-system spec + the React prototype) is not
+   production source; keep its class names out of the Tailwind content scan so it
+   does not bloat the bundle. */
+@source not "../handoff";
 @plugin "daisyui" {
   themes: false;
 }
@@ -108,16 +112,27 @@ html[data-type="mono"] .og-wordmark { text-transform: uppercase; }
 .eyebrow { font-size: 10.5px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: color-mix(in oklch, var(--color-base-content) 55%, transparent); }
 
 /* density: row height + card padding on dense surfaces. */
-:root { --og-row-h: 2.5rem; --og-pad-card: 1.25rem; --og-gap: 1.5rem; }
+:root { --og-row-h: 2.75rem; --og-pad-card: 1.25rem; --og-gap: 1.5rem; }
 html[data-density="compact"] { --og-row-h: 2.1rem; --og-pad-card: 0.9rem; --og-gap: 1.1rem; }
 .og-rows tbody tr td { height: var(--og-row-h); padding-top: 0; padding-bottom: 0; }
+.og-pad { padding: var(--og-pad-card); }
 .og-stack { gap: var(--og-gap); }
+
+/* column-resize handle for DataTable (daisyUI has no table-resize primitive). */
+.col-resizer { position: absolute; top: 0; right: -3px; width: 6px; height: 100%; cursor: col-resize; z-index: 2; touch-action: none; }
+.col-resizer::after { content: ""; position: absolute; top: 25%; right: 3px; width: 1px; height: 50%; background: var(--color-base-300); opacity: 0; transition: opacity .15s; }
+.table thead th:hover .col-resizer::after, .col-resizer.active::after { opacity: 1; }
 
 /* a single live pulse, pure decoration. */
 .og-pulse { position: relative; }
 .og-pulse::after { content: ""; position: absolute; inset: 0; border-radius: 9999px; background: var(--color-primary); animation: ogp 2s cubic-bezier(.4,0,.6,1) infinite; }
 @keyframes ogp { 0% { transform: scale(1); opacity: .7 } 70% { transform: scale(2.6); opacity: 0 } 100% { opacity: 0 } }
 @media (prefers-reduced-motion: reduce) { .og-pulse::after { animation: none } }
+
+/* the page/section enter transition (used by the list and detail surfaces). */
+.fade-in { animation: og-fade-in .18s ease both; }
+@keyframes og-fade-in { from { opacity: 0; transform: translateY(2px) } to { opacity: 1; transform: none } }
+@media (prefers-reduced-motion: reduce) { .fade-in { animation: none } }
 
 /* apply theme/var changes instantly during a switch. */
 .theme-switching, .theme-switching * { transition: none !important; }

@@ -7,5 +7,5 @@ import { lookupNav } from "../lib/nav";
 export default function SectionStub() {
   const loc = useLocation();
   const node = () => lookupNav(loc.pathname);
-  return <Placeholder title={node().label} hint={node().hint} />;
+  return <Placeholder title={node().label} hint={node().hint} issue={node().issue} icon={node().icon} />;
 }

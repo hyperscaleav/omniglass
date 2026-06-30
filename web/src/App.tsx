@@ -1,35 +1,45 @@
-import { type ParentComponent, createMemo, createSignal, createEffect } from "solid-js";
+import { type ParentComponent, createMemo, createSignal, createEffect, onCleanup } from "solid-js";
 import { useLocation } from "@solidjs/router";
 import Sidebar from "./components/Sidebar";
 import TopBar from "./components/TopBar";
-import TweaksPanel from "./components/Tweaks";
+import CommandPalette from "./components/CommandPalette";
 import { sectionLabel } from "./lib/nav";
-import { useTweaks, applyTweaks } from "./lib/tweaks";
+import { useTheme, applyTheme } from "./lib/theme";
 
-// App is the authenticated shell: the nav rail, the sticky top bar, and the
-// routed page, with the Tweaks slide-over. It owns the collapse state and the
-// effect that mirrors the display tweaks onto <html>.
+// App is the authenticated shell: the nav rail, the sticky top bar, the routed
+// page, and the global ⌘K command palette. It owns the rail collapse state, the
+// theme effect (mirrors the mode onto <html>), and the ⌘K keybinding.
 const App: ParentComponent = (props) => {
   const location = useLocation();
   const section = createMemo(() => sectionLabel(location.pathname));
-  const tweaks = useTweaks();
+  const theme = useTheme();
 
   const [collapsed, setCollapsed] = createSignal(localStorage.getItem("og-collapsed") === "1");
-  const [tweaksOpen, setTweaksOpen] = createSignal(false);
+  const [paletteOpen, setPaletteOpen] = createSignal(false);
 
-  createEffect(() => applyTweaks(tweaks()));
+  createEffect(() => applyTheme(theme()));
   createEffect(() => localStorage.setItem("og-collapsed", collapsed() ? "1" : "0"));
+
+  // Global ⌘K / Ctrl-K toggles the command palette.
+  const onKey = (e: KeyboardEvent) => {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+      e.preventDefault();
+      setPaletteOpen((o) => !o);
+    }
+  };
+  window.addEventListener("keydown", onKey);
+  onCleanup(() => window.removeEventListener("keydown", onKey));
 
   return (
     <div class="flex min-h-screen bg-base-100">
       <Sidebar collapsed={collapsed()} onToggle={() => setCollapsed(!collapsed())} />
       <div class="flex min-w-0 flex-1 flex-col">
-        <TopBar section={section()} onOpenTweaks={() => setTweaksOpen(true)} />
-        <main id="scroll-main" class="mx-auto w-full max-w-[1320px] flex-1 overflow-y-auto px-8 pb-16 pt-7">
+        <TopBar section={section()} onOpenPalette={() => setPaletteOpen(true)} />
+        <main id="scroll-main" class="mx-auto w-full max-w-330 flex-1 overflow-y-auto px-8 pb-16 pt-7">
           {props.children}
         </main>
       </div>
-      <TweaksPanel open={tweaksOpen()} onClose={() => setTweaksOpen(false)} />
+      <CommandPalette open={paletteOpen()} onClose={() => setPaletteOpen(false)} />
     </div>
   );
 };

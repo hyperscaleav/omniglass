@@ -15,7 +15,7 @@ through a fixed lifecycle so quality is a process, not a hope.
 | **Design** | read the [architecture spine](/architecture/) (the docs are the spec); locate the seam; name the thin cut | the cut is explicit |
 | **Branch** | a git worktree off `origin/main` under `.claude/worktrees/`, never a commit on `main` | only after Define is approved |
 | **Build** | [test-first](/contributing/test-driven/): the failing test, then the feature, committing each increment. A slice cuts every entry point it touches, **API + CLI + UI**: the CLI command is generated from the OpenAPI (`make gen`); the UI view is built where the entity is live, or rendered as an honest stub where its backend does not exist yet | RED then GREEN; all three surfaces present (stub allowed) |
-| **Document** | the teaching [docs ship with it](/contributing/docs-with-everything/), plus a build-progress note on the status page | docs in the same PR |
+| **Document** | the teaching [docs ship with it](/contributing/docs-with-everything/): the **architecture** page (the model) and, when the slice ships or changes an operator surface, its **operator guide** in `/guides/` (the how-to); plus a build-progress note on the status page | docs in the same PR (architecture + guide for an operator surface) |
 | **Validate** | `make test` green (run fresh), `make gen` clean, no drift | green, fresh |
 | **Review** | a reviewer pass over the diff, findings addressed; a security lens when it touches authz, secrets, the edge, or an invariant | findings cleared |
 | **Ship** | the ship-review (below), then squash-merge | architect approves |

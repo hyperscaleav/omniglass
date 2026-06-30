@@ -1,7 +1,7 @@
 # Local dev loop + the build/run flow for the single binary. Production deploy
 # is BYO Postgres; tests use ephemeral testcontainer Postgres.
 
-.PHONY: build build-web web gen gen-web test test-short tidy up down dev
+.PHONY: build build-web web gen gen-web test test-short test-e2e tidy up down dev
 
 # Build the single binary (no console embedded; serves the build-the-console
 # placeholder under /web).
@@ -42,6 +42,12 @@ test:
 # Postgres container or builds the binary.
 test-short:
 	go test -short ./...
+
+# Browser-driven e2e of the console against the built binary: brings up the dev
+# Postgres, embeds + serves the console, mints a token, and drives it with
+# Playwright. Needs the browser once: (cd web && npx playwright install chromium).
+test-e2e:
+	bash web/e2e/run.sh
 
 # Sync go.mod / go.sum to the actual import graph.
 tidy:

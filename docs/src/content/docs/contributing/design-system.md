@@ -1,22 +1,21 @@
 ---
 title: UI and the design system
-description: The SolidJS and daisyUI console, a generated typed client over the ViewResult renderer contract.
+description: The SolidJS and daisyUI console, a config-driven ListView shell over a generated typed client.
 ---
 
-The operator console is a **SolidJS** SPA styled with **daisyUI 5** on **Tailwind CSS 4**. It
-is a generated client of the API (typed via `openapi-fetch` off the committed `openapi.json`)
-and a renderer over the views BFF. The same surfaces are also the **learning surfaces** (see
+The operator console is a **SolidJS** SPA styled with **daisyUI 5** on **Tailwind CSS 4**. It is
+a generated client of the API (typed via `openapi-fetch` off the committed `openapi.json`). The
+same surfaces are also the **learning surfaces** (see
 [the learning-tool restriction](/contributing/learning-tool/)).
 
 :::note[What shipped]
 Styling is **daisyUI 5 component classes + Tailwind utilities**, with two brand themes defined
-through the daisyUI plugin (`omniglass-dark` default, `omniglass-light`) from the "Omniglass
-Design System" tokens. Bespoke CSS is kept to what daisyUI has no slot for: the domain
-severity/health colors, the type-system (`mixed`/`mono`) and density (`comfortable`/`compact`)
-levers via `html` data-attributes, and the live pulse. Accessible **interactive** widgets
-(dialog, combobox, select, popover, tabs, tooltip, toast) are built with **Kobalte**
-(Solid-native, styled by daisyUI), pulled in primitive-first when the first one is needed; the
-Tweaks panel is the first candidate to move there.
+through the daisyUI plugin (`omniglass-dark` default, `omniglass-light`) from the design-system
+tokens. Bespoke CSS is kept to what daisyUI has no slot for: the domain severity/health colors,
+the density lever, the column-resize handle, and the live pulse. Accessible interactive widgets
+(dialog, combobox, select, popover) are built on **Kobalte**, styled by daisyUI, pulled in
+primitive-first. The first consumers are the ⌘K command palette and the form/detail `Drawer`
+(Kobalte `Dialog`).
 :::
 
 ## The stack
@@ -25,46 +24,68 @@ Tweaks panel is the first candidate to move there.
 |---|---|
 | Framework | SolidJS (`solid-js`, `@solidjs/router`) |
 | Components / theme | daisyUI 5 on Tailwind CSS v4 (the `omniglass-dark` / `omniglass-light` themes) |
-| Interactive primitives | Kobalte (selective: dialog, combobox, select, popover, tabs, toast), styled by daisyUI |
+| Interactive primitives | Kobalte (`Dialog` for the palette and Drawer; daisyUI `dropdown` for menus), styled by daisyUI |
 | Data fetching | `@tanstack/solid-query` over a typed `openapi-fetch` client |
-| Tables | `@tanstack/solid-table` (group-by, sub-rows) |
-| Flow / graph viz | `solid-flow` (collection functions, pipelines, DAGs) |
-| Dashboards | `gridstack` (12-column widget grid) |
 | Build / test | Vite, Vitest, `@solidjs/testing-library` |
+| Flow / graph viz (future) | for the learning + explore surfaces; not built yet |
+| Dashboards (future) | a widget grid for the dashboards surface; not built yet |
 
-The typed client is generated, never hand-written: `openapi-typescript` turns
-`openapi.json` into `schema.gen.ts`, so a route or shape change surfaces as a TypeScript
-error in the SPA.
+The typed client is generated, never hand-written: `openapi-typescript` turns `openapi.json` into
+`schema.gen.ts`, so a route or shape change surfaces as a TypeScript error in the SPA. The cobra
+CLI is generated the same way. `make gen` regenerates all of it; a non-empty diff fails the slice.
 
 ## Core UI contracts
 
-- **One renderer per view.** Every view returns `ViewResult` (`{columns, rows}`); the SPA
-  renders any view through one contract, so adding a view does not add a bespoke renderer.
-- **`useCan(...)` from `/auth/me`.** The console reads the principal's flat, wildcard-
-  expanded `permissions` once and gates UI affordances with O(1) checks; `grants` drive
-  scope chips and "why is this hidden" explanations.
-- **The dense ops layout / `DensePage` primitive.** List pages follow one shape: summary
-  (donut facets over the full set) then filter (keyboard chip `FilterBar`) then a group-by
-  table then a click-row detail `Drawer` plus a full detail page. Facets drive the filter;
-  the summary stays whole so click-to-filter is stable. The extracted primitives
-  (`DensePage`, `FilterBar`, `Donut`, `SummaryFacet`, `Drawer`, `HealthBadge`,
-  `Actor`, `Sparkline`) are the reuse target.
-- **Learning surfaces ride the real engine.** A concept page (a collection function, a
-  edge parse step, a calc rollup, an alarm lifecycle) renders the actual pipeline against real or
-  lab-simulated data, not a static diagram. `solid-flow` is the workhorse for rendering the
-  DAGs the engine actually runs.
+- **One inventory shell: `ListView<N>`.** Every inventory page (Components, Systems, Locations)
+  is a `ListConfig` over the one shell, **never a fork**. The shell owns the faceted filter
+  header, the action rail (tree/list toggle, expand/collapse, column visibility + drag reorder,
+  the primary create), tree and flattened rendering, the stacked detail blades, the full-page
+  detail, the create/edit `Drawer`, and an optional summary widget board. Adding an entity of
+  this class is a data layer + a config + a route (see the `add-inventory-view` skill).
+- **The faceted filter is a tested engine.** `lib/predicate` is the pure matcher: values within a
+  chip are OR, chips across keys are AND, clicking an active facet removes it. `FilterBar` is the
+  thin staged combobox over it; the genuinely tricky list derivations (index, ancestor paths,
+  flatten-vs-tree rows, client-preference parsing) are pure in `lib/listmodel`. Both are unit
+  tested; `FilterBar` has a component test.
+- **`can(me, resource, action)` from `/auth/me`.** The console reads the principal's flat,
+  wildcard-expanded `permissions` once and gates UI affordances with O(1) checks; `ListView`
+  gates create/update/delete by the entity's resource name. The server is the authority; this is
+  a hint only.
+- **Blades are ephemeral, the full page is addressable.** A row opens a stacked blade (the Azure
+  model); Maximize promotes it to the `/<entity>/:name` URL. The blade stack holds node ids, so a
+  blade survives a refetch.
+- **Client preferences in localStorage, for now.** Column order/visibility and the widget board
+  persist per browser; the eventual home is a per-principal user-preferences endpoint (a
+  read/write swap), not the cascade.
+- **Learning surfaces ride the real engine.** A concept page renders the actual pipeline against
+  real or lab-simulated data, not a static diagram. The flow/graph library for these lands with
+  the explore/learn surfaces.
+
+## Primitives (the reuse target)
+
+`ListView`, `FilterBar`, `Drawer`, `Donut`, `Badge`, `Fact`, `Page`, `DataTable`,
+`CommandPalette`, plus the `Sidebar` / `TopBar` shell. New inventory pages consume these; new
+surface *classes* (dashboards, alarms, explore, learn) add their own primitive rather than
+bending `ListView`.
 
 ## Build and embed
 
-The SPA builds with Vite and is embedded into the Go binary (served under `/web`); the
-docs/learning site is embedded and served under `/docs`. One artifact serves the API, the
-console, and the docs. Component-level tests (Vitest) run in CI; user-observable behavior
-gets an e2e (browser-driven) test per the test-first doctrine.
+The SPA builds with Vite (`npm run build`, into `internal/webui/dist`) and is embedded into the
+Go binary under the `web` build tag, served at `/web`. One artifact serves the API and the
+console. In dev, `npm run dev` serves the SPA on :5173 with `/api` proxied to a locally-running
+`omniglass server`, so the frontend loop needs no rebuild.
+
+## Tests
+
+Component-level tests (Vitest + `@solidjs/testing-library`) cover the interactive widgets and the
+pure list/filter logic (`lib/predicate`, `lib/listmodel`, `FilterBar`, the data layers). The
+**browser-driven e2e tier** (drive the console as a user against the full stack) is the remaining
+gate per the [test-first doctrine](/contributing/test-driven/); until it lands, user-observable
+behavior is verified by hand/Playwright and is not yet a committed gate.
 
 ## How this relates to the UI architecture
 
-This page is the **build and dev guide** for the console: the stack, the generated typed client, the
-reusable primitives, and the build-and-embed pipeline. The **architecture** the console implements,
-the `ViewResult` renderer contract, the views BFF (read side), one renderer per view, the dense-ops
-layout as a pattern, the information architecture, and the live-update model, is
-[UI](/architecture/ui/) on the architecture spine. Build mechanics live here; the model lives there.
+This page is the **build and dev guide** for the console: the stack, the generated client, the
+`ListView` shell and its primitives, and the build-and-embed pipeline. The **architecture** (the
+information architecture, the read-side BFF, the live-update model) is [UI](/architecture/ui/) on
+the architecture spine. Build mechanics live here; the model lives there.
