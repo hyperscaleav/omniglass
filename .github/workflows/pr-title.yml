@@ -1,0 +1,39 @@
+name: pr-title
+
+# The squash-merge subject is the PR title, and semantic-release reads it to
+# decide the next version. This lints the title to the conventional-commit
+# grammar the repo uses so a malformed title cannot reach `main` and mis-version
+# (or silently not version) the release.
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  pull-requests: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # The conventional-commit types from CLAUDE.md. ci/chore/docs/refactor/
+          # test do not trigger a release; feat/fix/perf do.
+          types: |
+            feat
+            fix
+            docs
+            ci
+            chore
+            refactor
+            test
+            perf
+          requireScope: false
+          # CONTRIBUTING: the description starts lowercase.
+          subjectPattern: ^(?![A-Z]).+$
+          subjectPatternError: |
+            The PR title subject "{subject}" must start with a lowercase letter,
+            e.g. "feat: add the thing", not "feat: Add the thing".

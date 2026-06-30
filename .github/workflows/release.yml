@@ -1,0 +1,40 @@
+name: release
+
+# semantic-release on every push to main. It reads the conventional-commit
+# subjects since the last tag (each is a squash-merged PR title, linted by
+# pr-title.yml), computes the next version, pushes a git tag, and creates a
+# GitHub Release with generated notes. No changelog is committed back to main;
+# the tag is the artifact, and the binary release pipeline (#55) builds off it.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write       # push the tag, create the GitHub Release
+  issues: write         # comment on released issues
+  pull-requests: write  # comment on released PRs
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # full history + tags for version analysis
+          persist-credentials: false
+
+      - uses: cycjimmy/semantic-release-action@v4
+        with:
+          # Plugins are pinned in .releaserc.json (the npm publish plugin is
+          # deliberately excluded: this is a Go repo, nothing publishes to npm).
+          extra_plugins: |
+            @semantic-release/commit-analyzer
+            @semantic-release/release-notes-generator
+            @semantic-release/github
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
