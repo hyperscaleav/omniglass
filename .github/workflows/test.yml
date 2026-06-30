@@ -1,0 +1,37 @@
+name: test
+
+# The CI test gate. `make test` is the local gate (validate-locally doctrine);
+# this is the backstop on every PR and on main. The integration and e2e tiers
+# use testcontainers-go, which needs a Docker daemon; ubuntu-latest ships one.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          # Track the toolchain pinned in go.mod so CI never drifts from local.
+          go-version-file: go.mod
+          cache: true
+
+      # No -tags web: the build-tag-with-fallback embed (internal/webui) serves
+      # a placeholder without a real dist/, so the gate needs no SPA build.
+      - name: Build
+        run: go build ./...
+
+      - name: Test
+        run: go test ./...
