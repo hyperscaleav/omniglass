@@ -9,10 +9,15 @@ to it is the [design system](/contributing/design-system/).
 
 ## Signing in
 
-The console is bearer-token only for now. Paste a token on the login screen; it is stored in
-your browser and attached to every request. To mint the first one, run
-`omniglass bootstrap <username>` on the server (see [the CLI guide](/guides/cli/)). Sign out
-from the menu in the sidebar footer, which clears the token from the browser.
+Sign in with your username and password. On success the server sets an httpOnly session
+cookie (the browser never exposes a token to scripts), and the cookie rides on every request
+for the rest of the session. Sign out from the menu in the sidebar footer, which revokes the
+session and clears the cookie.
+
+The first owner is created on the server with
+`omniglass bootstrap <username> --password <password>` (see [the CLI guide](/guides/cli/)).
+Service accounts and the CLI still authenticate with a bearer token in the `Authorization`
+header.
 
 ## The layout
 
