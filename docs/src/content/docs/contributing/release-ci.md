@@ -20,11 +20,22 @@ Three workflows carry it.
 The other PR check, **`image.yml`**, builds the multi-arch container image (see
 [Container image](/guides/container-image/)).
 
-## On merge to main
+## Cutting a release (manual)
 
-**`release.yml`** runs [semantic-release](https://semantic-release.gitbook.io/). It reads the
-conventional-commit subjects since the last tag, computes the next version, pushes a git tag,
-and creates a GitHub Release with generated notes.
+Releases are **not** cut automatically on merge to `main` (deliberately, for now). A release
+is a deliberate act, run from an up-to-date `main` with [semantic-release](https://semantic-release.gitbook.io/),
+which reads the conventional-commit subjects since the last tag, computes the next version,
+pushes a git tag, and creates a GitHub Release with generated notes.
+
+Two make targets:
+
+```bash
+make release-plan    # dry run: print the next version + notes, publish nothing
+make release-apply   # tag + create the GitHub Release
+```
+
+The same thing can be dispatched in CI from the **release** workflow's "Run workflow" button
+(with a `dry_run` toggle), for a release cut from a clean checkout instead of a laptop.
 
 | Title prefix | Release |
 |--------------|---------|
@@ -33,10 +44,13 @@ and creates a GitHub Release with generated notes.
 | `BREAKING CHANGE:` (footer) or `feat!:` | major |
 | `docs:`, `ci:`, `chore:`, `refactor:`, `test:` | none |
 
-The tag is the only artifact: no changelog is committed back to `main`, so CI never writes to
-the default branch. The generated notes live on the GitHub Release. The
+The tag is the only artifact: no changelog is committed back to `main`, so the release never
+writes to the default branch. The generated notes live on the GitHub Release. The
 [binary release pipeline](https://github.com/hyperscaleav/omniglass/issues/55) builds its
-cross-platform artifacts off the tag this step creates.
+cross-platform artifacts off the tag.
+
+To switch to release-on-merge later, change the release workflow's trigger to `push` on
+`main`; the make targets stay as the local preview path.
 
 ## Why the PR title, not the commits
 

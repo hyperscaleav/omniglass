@@ -1,14 +1,22 @@
 name: release
 
-# semantic-release on every push to main. It reads the conventional-commit
-# subjects since the last tag (each is a squash-merged PR title, linted by
+# Manual release. Releases are NOT cut on merge to main (deliberately, for now):
+# this runs only when dispatched by hand, and the primary path is the local
+# `make release-plan` / `make release-apply` targets. It reads the conventional-
+# commit subjects since the last tag (each is a squash-merged PR title, linted by
 # pr-title.yml), computes the next version, pushes a git tag, and creates a
 # GitHub Release with generated notes. No changelog is committed back to main;
 # the tag is the artifact, and the binary release pipeline (#55) builds off it.
+# To switch to release-on-merge later, change the trigger to `push: branches:
+# [main]`.
 
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Plan only (compute version + notes, publish nothing)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write       # push the tag, create the GitHub Release
@@ -30,6 +38,7 @@ jobs:
 
       - uses: cycjimmy/semantic-release-action@v4
         with:
+          dry_run: ${{ inputs.dry_run }}
           # Plugins are pinned in .releaserc.json (the npm publish plugin is
           # deliberately excluded: this is a Go repo, nothing publishes to npm).
           extra_plugins: |

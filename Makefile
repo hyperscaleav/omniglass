@@ -1,7 +1,7 @@
 # Local dev loop + the build/run flow for the single binary. Production deploy
 # is BYO Postgres; tests use ephemeral testcontainer Postgres.
 
-.PHONY: build build-web web image gen gen-web test test-short test-e2e tidy up down dev
+.PHONY: build build-web web image gen gen-web test test-short test-e2e tidy up down dev release-plan release-apply
 
 # Build the single binary (no console embedded; serves the build-the-console
 # placeholder under /web).
@@ -57,6 +57,26 @@ test-short:
 # Playwright. Needs the browser once: (cd web && npx playwright install chromium).
 test-e2e:
 	bash web/e2e/run.sh
+
+# ---- release ---------------------------------------------------------------
+# Releases are cut MANUALLY (not on merge to main). `release-plan` is the
+# dry-run preview: it prints the next version and the generated notes and
+# publishes nothing. `release-apply` performs the release: it pushes the git tag
+# and creates the GitHub Release. Run both from an up-to-date `main`.
+# semantic-release reads the conventional-commit subjects since the last tag
+# (.releaserc.json drives the plugins). GITHUB_TOKEN defaults to the gh CLI's
+# token; export your own to override. The shell runs only when these targets do.
+GITHUB_TOKEN ?= $(shell gh auth token 2>/dev/null)
+SEMANTIC_RELEASE := npx --yes -p semantic-release@24 \
+	-p @semantic-release/commit-analyzer \
+	-p @semantic-release/release-notes-generator \
+	-p @semantic-release/github semantic-release
+
+release-plan:
+	GITHUB_TOKEN="$(GITHUB_TOKEN)" $(SEMANTIC_RELEASE) --dry-run --no-ci
+
+release-apply:
+	GITHUB_TOKEN="$(GITHUB_TOKEN)" $(SEMANTIC_RELEASE) --no-ci
 
 # Sync go.mod / go.sum to the actual import graph.
 tidy:
