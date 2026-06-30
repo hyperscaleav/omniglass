@@ -9,8 +9,9 @@ import {
 } from "../lib/listmodel";
 import FilterBar from "./FilterBar";
 import Drawer from "./Drawer";
+import ColumnMenu from "./ColumnMenu";
 import {
-  ChevronDown, ChevronLeft, ChevronsDownUp, ChevronsUpDown, Columns, Check, GripVertical, ListTree, Rows, Maximize, Plus, Pencil, Trash, X,
+  ChevronDown, ChevronLeft, ChevronsDownUp, ChevronsUpDown, Columns, Check, ListTree, Rows, Maximize, Plus, Pencil, Trash, X,
 } from "./icons";
 
 // ListView: the one config-driven inventory shell. Every entity page (Components,
@@ -223,7 +224,6 @@ export default function ListView<N extends ListNode>(props: { config: ListConfig
   const toggleCol = (k: string) => setCols((c) => toggleItem(c, k));
   // Reorder a visible column from one position to another (drag in the menu).
   const moveCol = (from: number, to: number) => setCols((c) => moveItem(c, from, to));
-  const [colDrag, setColDrag] = createSignal<number | null>(null);
 
   // Summary board: which widgets are on the personal board, and whether the rail is
   // expanded. Both persist as client preferences (same future home as columns).
@@ -363,47 +363,7 @@ export default function ListView<N extends ListNode>(props: { config: ListConfig
           {allExpanded() ? <ChevronsDownUp size={15} /> : <ChevronsUpDown size={15} />}
         </button>
       </Show>
-      <details class="dropdown dropdown-end">
-        <summary class="btn btn-ghost btn-sm btn-square" title="Columns">
-          <Columns size={15} />
-        </summary>
-        <ul class="dropdown-content menu z-40 mt-1.5 w-56 rounded-box border border-base-300 bg-base-100 p-1.5 shadow-2xl">
-          <li class="menu-title px-2 pb-1.5 text-[10.5px]">Columns · drag to reorder</li>
-          {/* Visible columns, in order, draggable to reorder. */}
-          <For each={cols()}>
-            {(k, i) => (
-              <li
-                draggable={true}
-                onDragStart={() => setColDrag(i())}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={() => { const from = colDrag(); if (from !== null && from !== i()) moveCol(from, i()); setColDrag(null); }}
-                onDragEnd={() => setColDrag(null)}
-                classList={{ "opacity-40": colDrag() === i() }}
-              >
-                <div class="flex items-center gap-2 px-2 py-1.5">
-                  <span class="cursor-grab text-base-content/40"><GripVertical size={13} /></span>
-                  <button class="flex flex-1 items-center gap-2.5" onClick={() => toggleCol(k)}>
-                    <span class={colBox(true)}><Check size={11} /></span>
-                    {cfg.columns[k].label}
-                  </button>
-                </div>
-              </li>
-            )}
-          </For>
-          {/* Hidden columns, click to add (appended at the end). */}
-          <For each={cfg.columnKeys.filter((k) => !cols().includes(k))}>
-            {(k) => (
-              <li>
-                <button class="flex items-center gap-2.5 px-2 py-1.5 text-base-content/60" onClick={() => toggleCol(k)}>
-                  <span class="w-3.25 flex-none" />
-                  <span class={colBox(false)} />
-                  {cfg.columns[k].label}
-                </button>
-              </li>
-            )}
-          </For>
-        </ul>
-      </details>
+      <ColumnMenu columns={cfg.columns} columnKeys={cfg.columnKeys} cols={cols} onToggle={toggleCol} onMove={moveCol} />
       <span class="mx-1 h-5 w-px flex-none bg-base-300" />
       <Show when={allow("create")}>
         <button class="btn btn-primary btn-sm" onClick={() => ctxFull.openCreate(null)}>
