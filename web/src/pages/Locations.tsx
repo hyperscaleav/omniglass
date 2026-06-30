@@ -296,7 +296,7 @@ export default function Locations() {
         </div>
         <div class="mt-1 flex justify-end gap-2">
           <button type="button" class="btn btn-ghost btn-sm" onClick={p.close}>Cancel</button>
-          <button type="submit" class="btn btn-primary btn-sm" disabled={busy()}>{editing ? "Save changes" : "Create location"}</button>
+          <button type="submit" class="btn btn-primary btn-sm" disabled={busy() || locationTypes.isLoading}>{editing ? "Save changes" : "Create location"}</button>
         </div>
       </form>
     );
