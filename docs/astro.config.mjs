@@ -104,6 +104,7 @@ export default defineConfig({
         {
           label: 'Guides',
           items: [
+            { label: 'The console', slug: 'guides/console' },
             { label: 'The CLI', slug: 'guides/cli' },
           ],
         },

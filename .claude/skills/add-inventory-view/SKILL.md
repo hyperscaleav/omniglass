@@ -90,6 +90,10 @@ timeseries/graph/board shaped and each needs its own primitive. Do not bend `Lis
 
 - **API first:** the client + CLI are generated from the Go; the UI consumes the generated client.
 - **Test first:** the data-layer test + `listmodel`/`predicate`/`FilterBar` tests are the gate.
-- **Docs with everything:** the view's teaching docs ship in the same PR.
+- **Docs with everything:** ship the view's docs in the same PR, in **both** homes: the
+  operator how-to (a section in the console **operator guide** under `/guides/`, e.g. how to
+  filter, open a blade, create/edit the entity) and the **architecture** page
+  (`/architecture/ui`) if the entity changes the model. See
+  [docs-with-everything](../../../docs/src/content/docs/contributing/docs-with-everything.md).
 - **Primitive first:** consume `ListView` / `FilterBar` / `Drawer` / `Donut`; never fork the shell.
 - **Functional and pedagogical:** learning surfaces render the real engine, not static diagrams.
