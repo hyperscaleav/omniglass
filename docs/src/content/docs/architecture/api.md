@@ -3,8 +3,8 @@ title: API
 description: "The API contract: AIP-style resources and :verb methods, cursor lists, a problem+json error envelope, idempotent writes, and long-running operations carried by the action row."
 sidebar:
   badge:
-    text: Design
-    variant: caution
+    text: Partial
+    variant: note
 ---
 
 The contract is **two typed surfaces, one source of truth**. The **public HTTP / OpenAPI contract** (this
@@ -16,6 +16,14 @@ service-to-service and node wire; it is typed and versioned the same way and liv
 [messaging](/architecture/messaging/). This page is the **contract every HTTP route honors**. The doctrine
 behind it (the API is the source of truth, the clients are generated from it) and the generation pipeline
 live in [API first](/contributing/api-first/); this page is the conventions that doctrine points at.
+
+:::note[Partial]
+Built today: the Huma-over-chi API with the OpenAPI 3.1 document generated from the Go structs
+(`make gen`), the AIP-style resource and `:verb` routing, and the problem+json error envelope, proven
+on `/auth`, `/roles`, `/locations`, `/systems`, `/components`, and the type registries. Still `Design`:
+the expression `filter` language, idempotency keys, long-running operations over the `action` row, the
+MCP surface, the SSE relay, and the NATS node contract. See [implementation status](/architecture/status/).
+:::
 
 ## Shape: resources and `:verb` methods
 
