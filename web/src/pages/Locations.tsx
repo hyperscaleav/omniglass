@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { useNavigate, useParams } from "@solidjs/router";
 import ListView, { type Blade, type ListConfig, type ListCtx, type ListNode, type PageDescriptor, type Widget } from "../components/ListView";
 import Donut from "../components/Donut";
+import TreeSelect from "../components/TreeSelect";
 import {
   type Location,
   LOCATIONS_KEY,
@@ -286,10 +287,12 @@ export default function Locations() {
           <Show when={!editing}>
             {p.ctx.field(
               "Parent",
-              <select class="select select-bordered w-full" value={parent()} onChange={(e) => setParent(e.currentTarget.value)}>
-                <option value="">Root (no parent)</option>
-                <For each={locations.data}>{(l) => <option value={l.name}>{l.display_name || l.name}</option>}</For>
-              </select>,
+              <TreeSelect
+                items={(locations.data ?? []).map((l) => ({ id: l.id, value: l.name, label: l.display_name || l.name, parentId: l.parent_id, rank: TYPE_RANK[l.location_type] ?? 9 }))}
+                value={parent()}
+                onChange={setParent}
+                rootLabel="Root (no parent)"
+              />,
             )}
           </Show>
         </div>
