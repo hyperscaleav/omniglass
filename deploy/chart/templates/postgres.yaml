@@ -38,6 +38,10 @@ spec:
               command: ["pg_isready", "-U", {{ .Values.postgres.user | quote }}, "-d", {{ .Values.postgres.database | quote }}]
             periodSeconds: 3
             timeoutSeconds: 3
+          {{- with .Values.postgres.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           volumeMounts:
             # postgres:18 stores data under a major-version subdir of
             # /var/lib/postgresql, so mount the emptyDir there (matches the dev

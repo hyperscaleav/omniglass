@@ -1,0 +1,24 @@
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "omniglass.fullname" . }}
+  labels:
+    {{- include "omniglass.labels" . | nindent 4 }}
+    app.kubernetes.io/component: server
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  rules:
+    # Host-routed by the in-cluster controller (Traefik on midgar) behind the
+    # cloudflared tunnel; TLS terminates at the Cloudflare edge, so no tls block.
+    - host: {{ required "ingress.host is required when ingress.enabled" .Values.ingress.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "omniglass.fullname" . }}
+                port:
+                  number: {{ .Values.service.port }}
+{{- end }}

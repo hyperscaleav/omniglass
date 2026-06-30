@@ -16,6 +16,16 @@ server:
 service:
   port: 8080
 
+# External HTTP exposure via an in-cluster Ingress controller (Traefik on
+# midgar). Enabled by the per-PR preview ApplicationSet; off for production and
+# the standing single-app deploy, where exposure is handled out of band
+# (cloudflared dials the Service directly). TLS terminates at the edge, so the
+# Ingress carries no tls block.
+ingress:
+  enabled: false
+  className: traefik
+  host: ""
+
 # Owner auto-created by the bootstrap init container. Intended for previews;
 # disable for production, where identity is provisioned out of band. The minted
 # bearer token is printed once to the bootstrap container's logs.
@@ -39,6 +49,13 @@ postgres:
   user: omniglass
   password: omniglass
   database: omniglass
+  # Bound the throwaway DB so N concurrent previews cannot exhaust a shared node.
+  resources:
+    requests:
+      cpu: 25m
+      memory: 64Mi
+    limits:
+      memory: 256Mi
 
 # Required when postgres.enabled is false: the full Postgres DSN the server and
 # the migrate/bootstrap init containers dial.

@@ -60,25 +60,42 @@ instead, to avoid concurrent migrators.
 | Key | Default | Purpose |
 |-----|---------|---------|
 | `image.repository` | `ghcr.io/hyperscaleav/omniglass` | image to run |
-| `image.tag` | `latest` | pin to `sha-<short>` for an exact build |
+| `image.tag` | `latest` | pin to `sha-<full-sha>` for an exact, immutable build |
 | `image.pullPolicy` | `IfNotPresent` | |
 | `server.replicas` | `1` | server pod count |
 | `server.resources` | small requests/limits | |
 | `service.port` | `8080` | ClusterIP service port |
+| `ingress.enabled` | `false` | create an Ingress (on for per-PR previews) |
+| `ingress.className` | `traefik` | ingress controller class |
+| `ingress.host` | empty | required when `ingress.enabled`; the public host |
 | `bootstrap.enabled` | `true` | auto-create an owner (previews) |
 | `bootstrap.username` | `preview` | owner username |
 | `bootstrap.email` / `bootstrap.displayName` | empty / `Preview Owner` | optional owner fields |
 | `postgres.enabled` | `true` | bundle an ephemeral Postgres |
 | `postgres.image` / `user` / `password` / `database` | `postgres:18` / `omniglass` x3 | bundled Postgres settings |
+| `postgres.resources` | small requests/limits | bound the throwaway DB |
 | `externalDsn` | empty | required when `postgres.enabled` is false |
 
-## Getting in
+## Exposure
 
-There is no ingress in this chart (the per-PR preview pipeline adds the
-Cloudflare exposure). Reach a fresh install by port-forward:
+By default the chart creates no Ingress: the standing deploy is reached by
+port-forward (or a cloudflared route dialing the ClusterIP Service directly).
 
 ```bash
-kubectl -n og-pr-42 port-forward svc/og-pr-42 8080:8080
+kubectl -n omniglass port-forward svc/omniglass 8080:8080
 # open http://localhost:8080/web
-kubectl -n og-pr-42 logs deploy/og-pr-42 -c bootstrap   # the one-time token
+kubectl -n omniglass logs deploy/omniglass -c bootstrap   # the one-time token
+```
+
+For per-PR previews, set `ingress.enabled=true` and an `ingress.host`. The chart
+then emits a plain-HTTP Ingress (class `traefik`) that the in-cluster controller
+Host-routes; the shared cloudflared tunnel fronts it with one wildcard route and
+terminates TLS at the edge, so the Ingress carries no `tls` block.
+
+```bash
+helm install og-pr-42 deploy/chart -n og-pr-42 --create-namespace \
+  --set image.tag=sha-<full-sha> \
+  --set ingress.enabled=true \
+  --set ingress.host=og-pr-42.preview.hyperscaleav.com \
+  --set fullnameOverride=omniglass
 ```

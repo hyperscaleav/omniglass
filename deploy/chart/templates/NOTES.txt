@@ -4,11 +4,18 @@ Omniglass release {{ .Release.Name }} is installed in namespace {{ .Release.Name
 
      kubectl -n {{ .Release.Namespace }} rollout status deploy/{{ include "omniglass.fullname" . }}
 
-2. Reach the console (until an ingress/exposure is added by the preview pipeline):
+2. Reach the console:
+{{- if .Values.ingress.enabled }}
+
+     https://{{ .Values.ingress.host }}/web
+
+   (routed by the {{ .Values.ingress.className }} ingress controller; TLS at the edge)
+{{- else }}
 
      kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "omniglass.fullname" . }} 8080:{{ .Values.service.port }}
 
    then open http://localhost:8080/web
+{{- end }}
 {{- if .Values.bootstrap.enabled }}
 
 3. The first owner ({{ .Values.bootstrap.username }}) was created by the bootstrap init
