@@ -23,6 +23,12 @@ func (UnimplementedGateway) IssueBearerCredential(context.Context, string, []byt
 func (UnimplementedGateway) AuthenticateBearer(context.Context, []byte) (*Principal, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) AuthenticatePassword(context.Context, string, string) (*Principal, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) SetPassword(context.Context, string, string) (bool, error) {
+	return false, nil
+}
 func (UnimplementedGateway) ListRoles(context.Context) ([]Role, error) { return nil, nil }
 func (UnimplementedGateway) UpsertLocationType(context.Context, LocationType) error {
 	return nil

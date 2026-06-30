@@ -42,6 +42,13 @@ type Gateway interface {
 	// principal, its kind profile, and its grants. Returns ErrCredentialNotFound
 	// if no credential matches.
 	AuthenticateBearer(ctx context.Context, hash []byte) (*Principal, error)
+	// AuthenticatePassword verifies a human's password against their argon2id
+	// credential and resolves the principal. Returns ErrBadCredentials for an
+	// unknown user, no password set, or a wrong password.
+	AuthenticatePassword(ctx context.Context, username, password string) (*Principal, error)
+	// SetPassword installs or replaces a human's password credential (the caller
+	// passes the PHC-encoded argon2id hash). Returns false if no such username.
+	SetPassword(ctx context.Context, username, encoded string) (bool, error)
 	// ListRoles returns every role, for building the in-process role index.
 	ListRoles(ctx context.Context) ([]Role, error)
 	// UpsertLocationType installs or updates an official location type by id, the
