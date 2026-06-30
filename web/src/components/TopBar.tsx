@@ -23,8 +23,8 @@ export default function TopBar(props: { section: string; onOpenPalette: () => vo
         <Search size={15} />
         <span>Search</span>
         <span class="ml-auto flex items-center gap-1">
-          <kbd class="kbd kbd-sm">{mod}</kbd>
-          <kbd class="kbd kbd-sm">K</kbd>
+          <kbd class="kbd kbd-sm leading-none">{mod}</kbd>
+          <kbd class="kbd kbd-sm leading-none">K</kbd>
         </span>
       </button>
       <button class="btn btn-ghost btn-sm btn-square sm:hidden" onClick={props.onOpenPalette} title="Search and jump">
