@@ -64,19 +64,25 @@ test-e2e:
 # publishes nothing. `release-apply` performs the release: it pushes the git tag
 # and creates the GitHub Release. Run both from an up-to-date `main`.
 # semantic-release reads the conventional-commit subjects since the last tag
-# (.releaserc.json drives the plugins). GITHUB_TOKEN defaults to the gh CLI's
-# token; export your own to override. The shell runs only when these targets do.
-GITHUB_TOKEN ?= $(shell gh auth token 2>/dev/null)
+# (.releaserc.json drives the plugins).
 SEMANTIC_RELEASE := npx --yes -p semantic-release@24 \
 	-p @semantic-release/commit-analyzer \
 	-p @semantic-release/release-notes-generator \
 	-p @semantic-release/github semantic-release
 
+# The token is resolved inside the recipe shell at runtime (prefer an exported
+# GITHUB_TOKEN, else the gh CLI), never stored in a make variable, so it is
+# never echoed into the build log. The recipe is `@`-silenced and fails fast
+# with an actionable message when no token is available.
 release-plan:
-	GITHUB_TOKEN="$(GITHUB_TOKEN)" $(SEMANTIC_RELEASE) --dry-run --no-ci
+	@token="$${GITHUB_TOKEN:-$$(gh auth token)}"; \
+	  [ -n "$$token" ] || { echo "release: no GITHUB_TOKEN set and gh is not authenticated (run: gh auth login)"; exit 1; }; \
+	  GITHUB_TOKEN="$$token" $(SEMANTIC_RELEASE) --dry-run --no-ci
 
 release-apply:
-	GITHUB_TOKEN="$(GITHUB_TOKEN)" $(SEMANTIC_RELEASE) --no-ci
+	@token="$${GITHUB_TOKEN:-$$(gh auth token)}"; \
+	  [ -n "$$token" ] || { echo "release: no GITHUB_TOKEN set and gh is not authenticated (run: gh auth login)"; exit 1; }; \
+	  GITHUB_TOKEN="$$token" $(SEMANTIC_RELEASE) --no-ci
 
 # Sync go.mod / go.sum to the actual import graph.
 tidy:

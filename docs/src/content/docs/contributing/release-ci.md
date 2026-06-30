@@ -1,6 +1,6 @@
 ---
 title: "Release and CI"
-description: "The CI gates on every PR and the semantic-release versioning that runs on merge to main."
+description: "The CI gates on every PR and the manual semantic-release versioning cut from main."
 ---
 
 `make test` is the local gate (the [test-driven](/contributing/test-driven/) doctrine says
@@ -44,8 +44,8 @@ The same thing can be dispatched in CI from the **release** workflow's "Run work
 | `BREAKING CHANGE:` (footer) or `feat!:` | major |
 | `docs:`, `ci:`, `chore:`, `refactor:`, `test:` | none |
 
-The tag is the only artifact: no changelog is committed back to `main`, so the release never
-writes to the default branch. The generated notes live on the GitHub Release. The
+The tag is the only artifact: no changelog is ever committed back to `main`, so the release
+never writes to the default branch. The generated notes live on the GitHub Release. The
 [binary release pipeline](https://github.com/hyperscaleav/omniglass/issues/55) builds its
 cross-platform artifacts off the tag.
 
