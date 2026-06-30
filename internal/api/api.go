@@ -93,6 +93,14 @@ func registerRoutes(api huma.API, gw storage.Gateway, o options) {
 	})
 
 	huma.Register(api, huma.Operation{
+		OperationID: "get-auth-status",
+		Method:      http.MethodGet,
+		Path:        "/auth/status",
+		Summary:     "Whether the system has an owner yet",
+		Description: "Public: reports whether any owner has been bootstrapped, so the login screen can hide the bootstrap hint.",
+	}, a.statusHandler)
+
+	huma.Register(api, huma.Operation{
 		OperationID:   "login",
 		Method:        http.MethodPost,
 		Path:          "/auth/login",

@@ -30,6 +30,7 @@ func (UnimplementedGateway) SetPassword(context.Context, string, string) (bool, 
 	return false, nil
 }
 func (UnimplementedGateway) RevokeBearer(context.Context, []byte) error { return nil }
+func (UnimplementedGateway) AnyHuman(context.Context) (bool, error)     { return false, nil }
 func (UnimplementedGateway) ListRoles(context.Context) ([]Role, error) { return nil, nil }
 func (UnimplementedGateway) UpsertLocationType(context.Context, LocationType) error {
 	return nil

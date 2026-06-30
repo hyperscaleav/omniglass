@@ -52,6 +52,9 @@ type Gateway interface {
 	// RevokeBearer deletes the bearer credential with the given sha256 hash
 	// (session logout). A no-op if none matches.
 	RevokeBearer(ctx context.Context, hash []byte) error
+	// AnyHuman reports whether any human principal exists (drives the login
+	// screen's bootstrap hint).
+	AnyHuman(ctx context.Context) (bool, error)
 	// ListRoles returns every role, for building the in-process role index.
 	ListRoles(ctx context.Context) ([]Role, error)
 	// UpsertLocationType installs or updates an official location type by id, the

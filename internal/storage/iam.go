@@ -246,6 +246,16 @@ func (p *PG) SetPassword(ctx context.Context, username, encoded string) (bool, e
 	return true, nil
 }
 
+// AnyHuman reports whether any human principal exists, so the login screen hides
+// the bootstrap hint once the system has an owner.
+func (p *PG) AnyHuman(ctx context.Context) (bool, error) {
+	var exists bool
+	if err := p.pool.QueryRow(ctx, `select exists(select 1 from human)`).Scan(&exists); err != nil {
+		return false, fmt.Errorf("storage: any human: %w", err)
+	}
+	return exists, nil
+}
+
 // RevokeBearer deletes the bearer credential with the given sha256 hash (logout
 // of a session token). A no-op if none matches.
 func (p *PG) RevokeBearer(ctx context.Context, hash []byte) error {

@@ -67,23 +67,39 @@ func (a *authenticator) roleIndex(ctx context.Context) (rbac.RoleIndex, error) {
 // principal and its flattened permission set to the context, or 401. It is the
 // capability fast-reject's prerequisite, not the authorization itself.
 func (a *authenticator) authn(ctx huma.Context, next func(huma.Context)) {
-	// A human session arrives as the httpOnly cookie; a service or the CLI sends
-	// an Authorization bearer. Either resolves the same way.
-	tok, ok := bearerToken(ctx.Header("Authorization"))
-	if !ok {
-		tok, ok = sessionCookieToken(ctx.Header("Cookie"))
+	// A human session arrives as the httpOnly cookie; a service or the CLI sends an
+	// Authorization bearer. Try each candidate token: a stale or invalid bearer
+	// must not shadow a valid session cookie (the cookie is the fallback), so 401
+	// only when no candidate resolves.
+	var candidates []string
+	if t, ok := bearerToken(ctx.Header("Authorization")); ok {
+		candidates = append(candidates, t)
 	}
-	if !ok {
+	if t, ok := sessionCookieToken(ctx.Header("Cookie")); ok {
+		candidates = append(candidates, t)
+	}
+	if len(candidates) == 0 {
 		_ = huma.WriteErr(a.api, ctx, http.StatusUnauthorized, "unauthenticated")
 		return
 	}
-	pr, err := a.gw.AuthenticateBearer(ctx.Context(), auth.HashToken(tok))
-	switch {
-	case errors.Is(err, storage.ErrCredentialNotFound):
+	var pr *storage.Principal
+	for _, tok := range candidates {
+		p, err := a.gw.AuthenticateBearer(ctx.Context(), auth.HashToken(tok))
+		switch {
+		case err == nil:
+			pr = p
+		case errors.Is(err, storage.ErrCredentialNotFound):
+			continue
+		default:
+			_ = huma.WriteErr(a.api, ctx, http.StatusInternalServerError, "authentication failed")
+			return
+		}
+		if pr != nil {
+			break
+		}
+	}
+	if pr == nil {
 		_ = huma.WriteErr(a.api, ctx, http.StatusUnauthorized, "unauthenticated")
-		return
-	case err != nil:
-		_ = huma.WriteErr(a.api, ctx, http.StatusInternalServerError, "authentication failed")
 		return
 	}
 	idx, err := a.roleIndex(ctx.Context())
@@ -179,6 +195,24 @@ func (a *authenticator) clearedCookie() http.Cookie {
 		Name: sessionCookieName, Value: "", Path: "/",
 		HttpOnly: true, Secure: a.secureCookies, SameSite: http.SameSiteLaxMode, MaxAge: -1,
 	}
+}
+
+// authStatusOutput is the body of GET /api/v1/auth/status: whether the system has
+// an owner yet. Public, so the login screen can hide the bootstrap hint.
+type authStatusOutput struct {
+	Body struct {
+		Bootstrapped bool `json:"bootstrapped"`
+	}
+}
+
+func (a *authenticator) statusHandler(ctx context.Context, _ *struct{}) (*authStatusOutput, error) {
+	exists, err := a.gw.AnyHuman(ctx)
+	if err != nil {
+		return nil, huma.Error500InternalServerError("status")
+	}
+	out := &authStatusOutput{}
+	out.Body.Bootstrapped = exists
+	return out, nil
 }
 
 // loginInput is the body of POST /api/v1/auth/login.

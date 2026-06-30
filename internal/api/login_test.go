@@ -106,6 +106,20 @@ func TestPasswordLoginCookieSession(t *testing.T) {
 		t.Fatalf("me without cookie: want 401, got %d", code)
 	}
 
+	// A stale or invalid bearer header must not shadow a valid session cookie: the
+	// authn middleware falls through to the cookie.
+	stale, _ := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL+"/api/v1/auth/me", nil)
+	stale.AddCookie(session)
+	stale.Header.Set("Authorization", "Bearer ogp_deadbeef_notarealtoken")
+	staleResp, err := http.DefaultClient.Do(stale)
+	if err != nil {
+		t.Fatalf("me with stale bearer + cookie: %v", err)
+	}
+	staleResp.Body.Close()
+	if staleResp.StatusCode != http.StatusOK {
+		t.Fatalf("a stale bearer should fall through to the cookie: want 200, got %d", staleResp.StatusCode)
+	}
+
 	// Logout revokes the session token: the same cookie no longer authenticates.
 	lreq, _ := http.NewRequestWithContext(ctx, http.MethodPost, srv.URL+"/api/v1/auth/logout", nil)
 	lreq.AddCookie(session)
@@ -116,5 +130,52 @@ func TestPasswordLoginCookieSession(t *testing.T) {
 	lresp.Body.Close()
 	if code, _ := me(session); code != http.StatusUnauthorized {
 		t.Fatalf("me after logout: want 401, got %d", code)
+	}
+}
+
+// TestAuthStatus proves the public /auth/status flips from not-bootstrapped to
+// bootstrapped when the first owner is created, with no auth required (it drives
+// the login screen's bootstrap hint). Skipped under -short.
+func TestAuthStatus(t *testing.T) {
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+
+	status := func() bool {
+		t.Helper()
+		resp, err := http.DefaultClient.Get(srv.URL + "/api/v1/auth/status")
+		if err != nil {
+			t.Fatalf("status: %v", err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("status code: want 200, got %d", resp.StatusCode)
+		}
+		var body struct {
+			Bootstrapped bool `json:"bootstrapped"`
+		}
+		_ = json.NewDecoder(resp.Body).Decode(&body)
+		return body.Bootstrapped
+	}
+
+	if status() {
+		t.Fatal("a fresh system should report not bootstrapped")
+	}
+	_, bh, bp, _ := auth.NewBearerToken()
+	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "ops", SecretHash: bh, Prefix: bp}); err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+	if !status() {
+		t.Fatal("after bootstrap the system should report bootstrapped")
 	}
 }

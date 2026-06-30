@@ -77,11 +77,13 @@ down:
 	docker compose down
 
 # Full stack for a browser session: Postgres + the server with the console
-# embedded. Mints (idempotently) a dev owner token, prints it once, then serves
-# the API and console at http://localhost:8080/web. Ctrl-C stops the server;
-# `make down` stops Postgres.
+# embedded. Creates (idempotently) a dev owner with password "dev", also mints a
+# bearer token, then serves the API and console at http://localhost:8080/web.
+# Ctrl-C stops the server; `make down` stops Postgres.
 dev: up build-web
-	@./bin/omniglass bootstrap dev >/dev/null 2>&1 || true
+	@./bin/omniglass bootstrap dev --password dev >/dev/null 2>&1 || true
+	@./bin/omniglass set-password dev dev >/dev/null 2>&1 || true
+	@echo "console: http://localhost:8080/web"
+	@echo "  sign in with username 'dev' and password 'dev', or paste a bearer token:"
 	@./bin/omniglass token dev
-	@echo "console: http://localhost:8080/web   (paste the token above to sign in)"
 	./bin/omniglass server

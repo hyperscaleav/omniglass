@@ -359,6 +359,27 @@ func generatedCommands() []*cobra.Command {
 	}
 	{
 		parent := &cobra.Command{
+			Use:   "statu",
+			Short: "Commands for the statu resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "list",
+				Short:   "Whether the system has an owner yet",
+				Long:    "Public: reports whether any owner has been bootstrapped, so the login screen can hide the bootstrap hint.",
+				Example: "  omniglass statu list",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/auth/status")
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		roots = append(roots, parent)
+	}
+	{
+		parent := &cobra.Command{
 			Use:   "system",
 			Short: "Commands for the system resource",
 		}

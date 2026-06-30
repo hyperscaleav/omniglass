@@ -19,10 +19,10 @@ describe("locations data layer", () => {
     const locs = await listLocations();
     expect(locs).toHaveLength(1);
     expect(locs[0].name).toBe("hq");
-    // The session cookie rides on the request (credentials included); no bearer.
     const req = fetchMock.mock.calls[0][0] as Request;
-    expect(req.credentials).toBe("include");
     expect(req.url).toContain("/api/v1/locations");
+    // No bearer header is attached when no token is stored (the cookie path).
+    expect(req.headers.get("Authorization")).toBeNull();
   });
 
   it("posts the create body", async () => {

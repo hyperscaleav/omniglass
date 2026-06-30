@@ -1,5 +1,20 @@
 components:
   schemas:
+    AuthStatusOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/AuthStatusOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        bootstrapped:
+          type: boolean
+      required:
+        - bootstrapped
+      type: object
     ComponentBody:
       additionalProperties: false
       properties:
@@ -561,6 +576,24 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: The authenticated principal, its permissions, and grants
+  /auth/status:
+    get:
+      description: "Public: reports whether any owner has been bootstrapped, so the login screen can hide the bootstrap hint."
+      operationId: get-auth-status
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthStatusOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Whether the system has an owner yet
   /components:
     get:
       description: Lists the components the caller may read, each filtered to its scope subtree. Gated by component:read.
