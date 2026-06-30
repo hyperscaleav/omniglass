@@ -33,12 +33,25 @@ export default function Sidebar(props: { collapsed: boolean; onToggle: () => voi
       class="sticky top-0 flex h-screen flex-none flex-col border-r border-base-300 bg-base-200 transition-[width] duration-200"
       classList={{ "w-16": props.collapsed, "w-60": !props.collapsed }}
     >
-      <div class="flex h-14 items-center gap-2" classList={{ "flex-col pt-3 justify-center": props.collapsed, "justify-between px-4 pr-2": !props.collapsed }}>
+      {/* The brand mark stays in this h-14 row in both states (vertically centered,
+          horizontally centered when collapsed to match the nav icons): collapsing
+          only drops the wordmark, never moves the mark. The toggle moves to its own
+          row below when collapsed, since the mark and toggle cannot share the w-16. */}
+      <div class="flex h-14 items-center gap-2" classList={{ "justify-center": props.collapsed, "justify-between px-4 pr-2": !props.collapsed }}>
         <Show when={!props.collapsed} fallback={<BrandMark />}><Lockup /></Show>
-        <button class="btn btn-ghost btn-sm btn-square text-base-content/50" onClick={props.onToggle} title={props.collapsed ? "Expand" : "Collapse"} aria-label="Toggle sidebar">
-          <PanelLeft size={16} />
-        </button>
+        <Show when={!props.collapsed}>
+          <button class="btn btn-ghost btn-sm btn-square text-base-content/50" onClick={props.onToggle} title="Collapse" aria-label="Toggle sidebar">
+            <PanelLeft size={16} />
+          </button>
+        </Show>
       </div>
+      <Show when={props.collapsed}>
+        <div class="flex justify-center pb-1">
+          <button class="btn btn-ghost btn-sm btn-square text-base-content/50" onClick={props.onToggle} title="Expand" aria-label="Toggle sidebar">
+            <PanelLeft size={16} />
+          </button>
+        </div>
+      </Show>
 
       <ul class="menu min-h-0 w-full flex-1 flex-nowrap gap-0.5 overflow-y-auto [&_li>*]:rounded-field">
         <For each={items()}>

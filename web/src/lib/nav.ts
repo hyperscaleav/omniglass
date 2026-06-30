@@ -36,8 +36,8 @@ export const navItems: NavItem[] = [
   {
     label: "Inventory", icon: Icons.Package, hint: "The entity graph: systems, components, locations, interfaces, nodes, and tasks.",
     children: [
-      { label: "Systems", path: "/systems", live: true, resource: "system", hint: "Location and system trees, navigable, with health at each level." },
       { label: "Components", path: "/components", live: true, resource: "component", hint: "The component inventory, with declared config, props, and tags." },
+      { label: "Systems", path: "/systems", live: true, resource: "system", hint: "Location and system trees, navigable, with health at each level." },
       { label: "Locations", path: "/locations", live: true, resource: "location", hint: "The place tree: campuses, buildings, floors, and rooms." },
       { label: "Interfaces", path: "/interfaces", hint: "Connection endpoints on components, with their device credentials." },
       { label: "Nodes", path: "/nodes", hint: "Collection daemons: their assigned tasks, health, and enrollment." },

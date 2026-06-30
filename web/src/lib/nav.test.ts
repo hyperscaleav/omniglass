@@ -30,6 +30,13 @@ describe("filterNav", () => {
     expect(out[0].children!.map((c) => c.label)).toEqual(["Systems"]);
   });
 
+  it("orders the inventory section Components, Systems, Locations, then the stubs", () => {
+    const inv = navItems.find((i) => i.label === "Inventory");
+    expect(inv?.children?.map((c) => c.label)).toEqual([
+      "Components", "Systems", "Locations", "Interfaces", "Nodes", "Tasks",
+    ]);
+  });
+
   it("on the real nav, a principal without system/component/location read loses those tabs but keeps the stubs", () => {
     const out = filterNav(navItems, (r) => !["system", "component", "location"].includes(r));
     const inv = out.find((i) => i.label === "Inventory");
