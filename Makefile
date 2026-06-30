@@ -1,7 +1,7 @@
 # Local dev loop + the build/run flow for the single binary. Production deploy
 # is BYO Postgres; tests use ephemeral testcontainer Postgres.
 
-.PHONY: build build-web web gen gen-web test test-short test-e2e tidy up down dev
+.PHONY: build build-web web image gen gen-web test test-short test-e2e tidy up down dev
 
 # Build the single binary (no console embedded; serves the build-the-console
 # placeholder under /web).
@@ -16,6 +16,15 @@ build-web: web
 # Build the SPA into the embed target (internal/webui/dist).
 web:
 	cd web && npm install && npm run build
+
+# Build the container image CI publishes: the multistage Dockerfile (Vite build
+# then `go build -tags web`) on a distroless base. VERSION stamps main.version;
+# it defaults to the short commit sha. Override TAG/IMAGE/VERSION as needed.
+IMAGE   ?= omniglass
+TAG     ?= dev
+VERSION ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo dev)
+image:
+	docker build -t $(IMAGE):$(TAG) --build-arg VERSION=$(VERSION) .
 
 # Regenerate the derived artifacts from the Huma API (the source of truth): the
 # OpenAPI 3.1 document (server-less, into api/openapi.{json,yaml}), the cobra

@@ -35,9 +35,15 @@ Each is a gate; a red one blocks the ship.
 6. **Scope honesty.** Every thin cut is documented; every deferral is a filed issue.
 7. **Evidence in the PR.** Paste the *actual* fresh test output (the tail of `make test`, plus
    web tests if touched) into the PR body, not a "they pass" claim. For any operator-facing
-   change, include **screenshots driven live** (e.g. against `make dev`): upload via the
-   `gh image` extension when `GH_SESSION_TOKEN` is set, otherwise commit them under
-   `.github/screenshots/` and embed by **immutable commit SHA**
+   change, include **screenshots driven live** (e.g. against `make dev`). Capture them headless
+   with `node web/e2e/shot.mjs <url> <out.png> [--token <og-token>] [--click <sel>]...
+   [--select "<sel>||<value>"]...` (bundled chromium, writes to the host FS, drives interactive
+   states like an open menu or a chosen option). Host them with the `gh image` extension
+   (`node web/e2e/shot.mjs ... && gh image <out.png>` prints the markdown to paste). `gh image`
+   **auto-extracts the browser session cookie by default** (no `GH_SESSION_TOKEN`, no setup);
+   `gh image check-token` verifies it is valid. `GH_SESSION_TOKEN` / `--token` are optional
+   overrides for a machine with no logged-in browser. Otherwise commit them
+   under `.github/screenshots/` and embed by **immutable commit SHA**
    (`https://raw.githubusercontent.com/<owner>/<repo>/<sha>/.github/screenshots/...`), so the
    link survives the branch being deleted on squash-merge.
 

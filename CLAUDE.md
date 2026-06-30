@@ -78,8 +78,14 @@ cd .claude/worktrees/<type>+<short-name>
 - No `--no-verify` without explicit approval.
 
 The full lifecycle (define, build test-first, document, validate, review, ship-review) and the
-approval contract are [docs/contributing/slice-workflow.md](docs/src/content/docs/contributing/slice-workflow.md);
-run `/ship-slice` at PR-ready to validate and emit the ship-review.
+approval contract are [docs/contributing/slice-workflow.md](docs/src/content/docs/contributing/slice-workflow.md).
+
+**Every slice runs `/ship-slice` before its PR is proposed for merge: a required gate, not
+optional.** Build to PR-ready, then run `/ship-slice`; its emitted ship-review becomes the PR
+body and runs the pre-ship checks (fresh `make test` with the output pasted, `make gen` drift,
+em-dash and attribution scan, docs-with-everything, and **live screenshots for any
+operator-facing surface**). A UI PR with no screenshots, or any PR whose `/ship-slice` has not
+been run, is not ready for review. Re-run it after addressing findings.
 
 ## Tracking: issues, not TODOs
 
@@ -93,6 +99,11 @@ keep a TODO doc in the tree and do not write a bare `// TODO`; reference an issu
 - No AI/assistant attribution in commits, PRs, code comments, or any visible artifact.
 - No em dashes in written artifacts; use commas, colons, periods, or parentheses.
 - Head-noun-last naming (`<qualifier>_<genus>`); match the architecture glossary.
+- Any change that alters an operator-facing (UI) surface ships **live screenshots** in the PR
+  body (driven against `make dev`, not mocked), per the PR template's Visual confirmation
+  section. Host them with the `gh image` extension (`gh image <path>` auto-extracts the browser
+  session cookie; `gh image check-token` verifies it), or commit under `.github/screenshots/` and
+  embed by immutable commit SHA. No UI surface, write "n/a".
 
 ## Migrations and seeding
 

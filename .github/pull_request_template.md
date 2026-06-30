@@ -38,7 +38,8 @@ $ make test
 
 <!-- REQUIRED for any operator-facing (UI) change: screenshots of the surface,
      driven live (e.g. against `make dev`). Upload via the gh-image extension
-     when GH_SESSION_TOKEN is set; otherwise commit them under
+     (`gh image <path>` auto-extracts the browser session cookie; `gh image
+     check-token` verifies it); otherwise commit them under
      .github/screenshots/ and embed by immutable commit SHA
      (https://raw.githubusercontent.com/<owner>/<repo>/<sha>/.github/screenshots/...).
      Write "n/a (no UI surface)" for non-UI slices. -->

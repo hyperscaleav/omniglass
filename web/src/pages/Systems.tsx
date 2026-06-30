@@ -2,6 +2,7 @@ import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { useNavigate, useParams } from "@solidjs/router";
 import ListView, { type Blade, type ListConfig, type ListCtx, type ListNode, type PageDescriptor } from "../components/ListView";
+import TreeSelect from "../components/TreeSelect";
 import {
   type System,
   SYSTEMS_KEY,
@@ -224,17 +225,21 @@ export default function Systems() {
           <div class="grid grid-cols-2 gap-3">
             {p.ctx.field(
               "Location",
-              <select class="select select-bordered w-full" value={location()} onChange={(e) => setLocation(e.currentTarget.value)}>
-                <option value="">None</option>
-                <For each={locations.data}>{(l) => <option value={l.name}>{l.display_name || l.name}</option>}</For>
-              </select>,
+              <TreeSelect
+                items={(locations.data ?? []).map((l) => ({ id: l.id, value: l.name, label: l.display_name || l.name, parentId: l.parent_id }))}
+                value={location()}
+                onChange={setLocation}
+                rootLabel="None"
+              />,
             )}
             {p.ctx.field(
               "Parent system",
-              <select class="select select-bordered w-full" value={parent()} onChange={(e) => setParent(e.currentTarget.value)}>
-                <option value="">Root (no parent)</option>
-                <For each={systems.data}>{(s) => <option value={s.name}>{s.display_name || s.name}</option>}</For>
-              </select>,
+              <TreeSelect
+                items={(systems.data ?? []).map((s) => ({ id: s.id, value: s.name, label: s.display_name || s.name, parentId: s.parent_id }))}
+                value={parent()}
+                onChange={setParent}
+                rootLabel="Root (no parent)"
+              />,
             )}
           </div>
         </Show>
