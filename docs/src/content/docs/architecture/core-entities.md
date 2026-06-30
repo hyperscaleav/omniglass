@@ -24,7 +24,9 @@ Three nouns describe what you operate, plus the edge process that collects for t
   is located at a location, and is classified by `system_type`.
 - A **location** ties systems and components to a physical place (campus, building, floor, room).
   It is classified by `location_type` and, unlike component and system, has **no template**: for a
-  location the type is the only shape-definer.
+  location the type is the only shape-definer. The official `location_type` set ships seeded and is
+  readable at `GET /location-types` (ranked), which is what the type picker on the location form
+  lists so a location is classified by a known type rather than a free-typed string.
 - A **node** is the edge process (`omniglass --mode node`) that pulls work, reaches components over
   interfaces, and ships results ([nodes](/architecture/nodes/)). It is structural because it is a
   first-class **owner**: a node owns its own self-health telemetry and can carry a node-owned alarm.

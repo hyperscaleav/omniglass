@@ -13,10 +13,28 @@ export type Location = {
 
 export const LOCATIONS_KEY = ["locations"] as const;
 
+// A location_type registry row: the type picker on the location form lists these
+// (value = id, label = display_name), so a location is classified by a known type
+// rather than a free-typed string.
+export type LocationType = {
+  id: string;
+  display_name: string;
+  rank: number;
+  official: boolean;
+};
+
+export const LOCATION_TYPES_KEY = ["location-types"] as const;
+
 export async function listLocations(): Promise<Location[]> {
   const { data, error } = await api.GET("/locations");
   if (error) throw error;
   return (data?.locations ?? []) as Location[];
+}
+
+export async function listLocationTypes(): Promise<LocationType[]> {
+  const { data, error } = await api.GET("/location-types");
+  if (error) throw error;
+  return (data?.location_types ?? []) as LocationType[];
 }
 
 export async function getLocation(name: string): Promise<Location> {

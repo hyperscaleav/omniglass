@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { listLocations, createLocation, deleteLocation } from "./locations";
+import { listLocations, listLocationTypes, createLocation, deleteLocation } from "./locations";
 
 // The data layer is the unit under test; fetch is the seam we fake, so these
 // assert the request shape and the response handling without a server.
@@ -24,6 +24,17 @@ describe("locations data layer", () => {
     const req = fetchMock.mock.calls[0][0] as Request;
     expect(req.headers.get("Authorization")).toBe("Bearer ogp_test");
     expect(req.url).toContain("/api/v1/locations");
+  });
+
+  it("lists location types and unwraps the registry envelope", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonResponse({ location_types: [{ id: "campus", display_name: "Campus", rank: 10, official: true }] }),
+    );
+    const types = await listLocationTypes();
+    expect(types).toHaveLength(1);
+    expect(types[0]).toMatchObject({ id: "campus", display_name: "Campus" });
+    const req = fetchMock.mock.calls[0][0] as Request;
+    expect(req.url).toContain("/api/v1/location-types");
   });
 
   it("posts the create body", async () => {

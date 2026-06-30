@@ -32,6 +32,22 @@ type listLocationsOutput struct {
 	}
 }
 
+// locationTypeBody is the wire shape of a location_type registry row: the stable
+// id a location is classified by, its display_name, the rank that orders the
+// registry, and whether it ships with the binary.
+type locationTypeBody struct {
+	ID          string `json:"id"`
+	DisplayName string `json:"display_name"`
+	Rank        int    `json:"rank"`
+	Official    bool   `json:"official"`
+}
+
+type listLocationTypesOutput struct {
+	Body struct {
+		LocationTypes []locationTypeBody `json:"location_types"`
+	}
+}
+
 type locationOutput struct {
 	Body locationBody
 }
@@ -78,6 +94,28 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		out.Body.Locations = make([]locationBody, 0, len(locs))
 		for i := range locs {
 			out.Body.Locations = append(out.Body.Locations, toLocationBody(&locs[i]))
+		}
+		return out, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "list-location-types",
+		Method:      http.MethodGet,
+		Path:        "/location-types",
+		Summary:     "List location types",
+		Description: "Lists the location_type registry (the shape-definers a location is classified by), ordered by rank. Populates the type picker on the location form. Gated by location:read.",
+		Middlewares: huma.Middlewares{a.authn, a.require("location", "read")},
+	}, func(ctx context.Context, _ *struct{}) (*listLocationTypesOutput, error) {
+		types, err := gw.ListLocationTypes(ctx)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("list location types")
+		}
+		out := &listLocationTypesOutput{}
+		out.Body.LocationTypes = make([]locationTypeBody, 0, len(types))
+		for i := range types {
+			out.Body.LocationTypes = append(out.Body.LocationTypes, locationTypeBody{
+				ID: types[i].ID, DisplayName: types[i].DisplayName, Rank: types[i].Rank, Official: types[i].Official,
+			})
 		}
 		return out, nil
 	})

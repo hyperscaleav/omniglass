@@ -96,6 +96,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/location-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List location types
+         * @description Lists the location_type registry (the shape-definers a location is classified by), ordered by rank. Populates the type picker on the location form. Gated by location:read.
+         */
+        get: operations["list-location-types"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/locations": {
         parameters: {
             query?: never;
@@ -368,6 +388,15 @@ export interface components {
             readonly $schema?: string;
             components: components["schemas"]["ComponentBody"][] | null;
         };
+        ListLocationTypesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListLocationTypesOutputBody.json
+             */
+            readonly $schema?: string;
+            location_types: components["schemas"]["LocationTypeBody"][] | null;
+        };
         ListLocationsOutputBody: {
             /**
              * Format: uri
@@ -398,6 +427,13 @@ export interface components {
             location_type: string;
             name: string;
             parent_id?: string;
+        };
+        LocationTypeBody: {
+            display_name: string;
+            id: string;
+            official: boolean;
+            /** Format: int64 */
+            rank: number;
         };
         MeOutputBody: {
             /**
@@ -691,6 +727,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-location-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListLocationTypesOutputBody"];
                 };
             };
             /** @description Error */

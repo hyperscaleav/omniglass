@@ -7,7 +7,9 @@ import TreeSelect from "../components/TreeSelect";
 import {
   type Location,
   LOCATIONS_KEY,
+  LOCATION_TYPES_KEY,
   listLocations,
+  listLocationTypes,
   createLocation,
   updateLocation,
   deleteLocation,
@@ -54,6 +56,7 @@ export default function Locations() {
   const me = useMe();
 
   const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations }));
+  const locationTypes = useQuery(() => ({ queryKey: LOCATION_TYPES_KEY, queryFn: listLocationTypes }));
 
   const nodes = createMemo<LocNode[]>(() => {
     const list = locations.data ?? [];
@@ -247,8 +250,6 @@ export default function Locations() {
     const [busy, setBusy] = createSignal(false);
     const [formErr, setFormErr] = createSignal<string | null>(null);
 
-    const types = createMemo(() => [...new Set((locations.data ?? []).map((l) => l.location_type))].sort());
-
     async function submit(e: Event) {
       e.preventDefault();
       setBusy(true);
@@ -278,11 +279,10 @@ export default function Locations() {
         <div class="grid grid-cols-2 gap-3">
           {p.ctx.field(
             "Type",
-            <>
-              <input class="input input-bordered w-full" list="loc-types" value={type()} placeholder="room" onInput={(e) => setType(e.currentTarget.value)} />
-              <datalist id="loc-types"><For each={types()}>{(t) => <option value={t} />}</For></datalist>
-            </>,
-            "A location_type id.",
+            <select class="select select-bordered w-full" value={type()} onChange={(e) => setType(e.currentTarget.value)}>
+              <option value="" disabled>Select a type…</option>
+              <For each={locationTypes.data}>{(t) => <option value={t.id}>{t.display_name}</option>}</For>
+            </select>,
           )}
           <Show when={!editing}>
             {p.ctx.field(
@@ -298,7 +298,7 @@ export default function Locations() {
         </div>
         <div class="mt-1 flex justify-end gap-2">
           <button type="button" class="btn btn-ghost btn-sm" onClick={p.close}>Cancel</button>
-          <button type="submit" class="btn btn-primary btn-sm" disabled={busy()}>{editing ? "Save changes" : "Create location"}</button>
+          <button type="submit" class="btn btn-primary btn-sm" disabled={busy() || locationTypes.isLoading}>{editing ? "Save changes" : "Create location"}</button>
         </div>
       </form>
     );
