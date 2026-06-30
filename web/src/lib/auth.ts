@@ -1,9 +1,10 @@
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
-import { api, setToken, clearToken } from "../api/client";
+import { api } from "../api/client";
 
-// Auth for the SPA. The backend is bearer-only: GET /auth/me with the stored
-// token resolves the principal (200) or rejects (401). "Logging in" is pasting
-// a valid token; we store it, then validate by reading /auth/me.
+// Auth for the SPA. Authentication is an httpOnly session cookie set by
+// POST /auth/login; GET /auth/me resolves the principal (200) or rejects (401).
+// The SPA never sees the token: it logs in with a username and password, and the
+// cookie rides on every request (the client sends credentials).
 
 export type Me = {
   principal: { id: string; kind: string };
@@ -31,31 +32,29 @@ export function useMe() {
   }));
 }
 
-// useLogin stores a pasted bearer token and validates it by reading /auth/me.
-// On success it primes the cache; on 401 it clears the bad token.
+// useLogin posts a username and password to /auth/login. On success the server
+// sets the session cookie; we then invalidate /auth/me to load the principal.
 export function useLogin() {
   const qc = useQueryClient();
-  return async (token: string): Promise<{ ok: true } | { ok: false; message: string }> => {
-    setToken(token.trim());
-    const { data, error, response } = await api.GET("/auth/me");
+  return async (username: string, password: string): Promise<{ ok: true } | { ok: false; message: string }> => {
+    const { error, response } = await api.POST("/auth/login", { body: { username, password } });
     if (response.status === 401) {
-      clearToken();
-      return { ok: false, message: "That token is not valid." };
+      return { ok: false, message: "Invalid username or password." };
     }
     if (error) {
-      clearToken();
       return { ok: false, message: "Could not reach the server." };
     }
-    qc.setQueryData(ME_KEY, data);
     await qc.invalidateQueries({ queryKey: ME_KEY });
     return { ok: true };
   };
 }
 
+// useLogout posts /auth/logout (revoking the session and clearing the cookie),
+// then resets the cache.
 export function useLogout() {
   const qc = useQueryClient();
   return async () => {
-    clearToken();
+    await api.POST("/auth/logout");
     qc.setQueryData(ME_KEY, null);
     await qc.invalidateQueries({ queryKey: ME_KEY });
   };

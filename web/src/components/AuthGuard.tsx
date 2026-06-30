@@ -1,7 +1,6 @@
 import { Show, type ParentComponent, createEffect } from "solid-js";
 import { useLocation, useNavigate } from "@solidjs/router";
 import { useMe } from "../lib/auth";
-import { clearToken } from "../api/client";
 
 // AuthGuard gates the console chrome. It reads /auth/me; while pending it shows
 // a loader, on 401 (me === null) it redirects to /login carrying the attempted
@@ -15,9 +14,8 @@ export const AuthGuard: ParentComponent = (props) => {
   createEffect(() => {
     if (me.isPending) return;
     if (me.data === null) {
-      // The stored token is invalid/revoked (401); flush it so a dead token does
-      // not linger in localStorage at the login screen.
-      clearToken();
+      // Not authenticated (no/invalid session cookie): redirect to login carrying
+      // the attempted path.
       const next = encodeURIComponent(location.pathname + location.search);
       navigate(next === "%2F" ? "/login" : `/login?next=${next}`, { replace: true });
     }

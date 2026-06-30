@@ -9,7 +9,6 @@ function jsonResponse(body: unknown, status = 200) {
 
 describe("locations data layer", () => {
   beforeEach(() => {
-    localStorage.setItem("og-token", "ogp_test");
     vi.restoreAllMocks();
   });
 
@@ -20,9 +19,9 @@ describe("locations data layer", () => {
     const locs = await listLocations();
     expect(locs).toHaveLength(1);
     expect(locs[0].name).toBe("hq");
-    // The bearer token from localStorage is attached.
+    // The session cookie rides on the request (credentials included); no bearer.
     const req = fetchMock.mock.calls[0][0] as Request;
-    expect(req.headers.get("Authorization")).toBe("Bearer ogp_test");
+    expect(req.credentials).toBe("include");
     expect(req.url).toContain("/api/v1/locations");
   });
 

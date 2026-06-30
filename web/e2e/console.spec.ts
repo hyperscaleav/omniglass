@@ -4,14 +4,19 @@ import { test, expect } from "@playwright/test";
 // to end, against the real binary (the API, the typed client, the SPA), asserting
 // the user-observable outcome. A full inventory CRUD round-trip exercises the
 // shell, the typed client, the create/edit Drawer, the blade, and delete.
-const TOKEN = process.env.OG_E2E_TOKEN;
+const USER = process.env.OG_E2E_USER;
+const PASSWORD = process.env.OG_E2E_PASSWORD;
 
 test.describe("operator console", () => {
-  test.skip(!TOKEN, "set OG_E2E_TOKEN (run via `make test-e2e`)");
+  test.skip(!USER || !PASSWORD, "set OG_E2E_USER/OG_E2E_PASSWORD (run via `make test-e2e`)");
 
   test.beforeEach(async ({ page }) => {
-    await page.goto("/web/");
-    await page.evaluate((t) => localStorage.setItem("og-token", t as string), TOKEN);
+    // Sign in through the real login form; the server sets the session cookie.
+    await page.goto("/web/login");
+    await page.locator("#login-username").fill(USER as string);
+    await page.locator("#login-password").fill(PASSWORD as string);
+    await page.getByRole("button", { name: /sign in/i }).click();
+    await page.waitForURL((url) => !url.pathname.endsWith("/login"));
   });
 
   test("signs in, lists locations, creates a location, opens it, deletes it", async ({ page }) => {

@@ -3,15 +3,16 @@ import { useNavigate, useSearchParams } from "@solidjs/router";
 import { useLogin } from "../lib/auth";
 import { BrandMark, Wordmark } from "../components/Brand";
 
-// Login is a bearer-token paste form (the backend is bearer-only this slice).
-// On success it stores + validates the token and lands at ?next= (an in-app
-// path) or Home. Mounted outside the App shell, so it has a bare layout.
+// Login is the username + password form. On success the server sets the session
+// cookie and the form lands at ?next= (an in-app path) or Home. Mounted outside
+// the App shell, so it has a bare layout.
 export default function Login() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const login = useLogin();
 
-  const [token, setTokenInput] = createSignal("");
+  const [username, setUsername] = createSignal("");
+  const [password, setPassword] = createSignal("");
   const [error, setError] = createSignal<string | null>(null);
   const [busy, setBusy] = createSignal(false);
 
@@ -35,7 +36,7 @@ export default function Login() {
     setError(null);
     setBusy(true);
     try {
-      const result = await login(token());
+      const result = await login(username().trim(), password());
       if (!result.ok) {
         setError(result.message);
         return;
@@ -59,30 +60,43 @@ export default function Login() {
           </div>
           <form onSubmit={onSubmit} class="flex flex-col gap-3">
             <div>
-              <label class="eyebrow mb-1.5 block" for="login-token">Bearer token</label>
+              <label class="eyebrow mb-1.5 block" for="login-username">Username</label>
               <input
-                id="login-token"
-                type="password"
-                autocomplete="off"
+                id="login-username"
+                type="text"
+                autocomplete="username"
                 class="input input-bordered w-full"
-                placeholder="ogp_…"
-                value={token()}
-                onInput={(e) => setTokenInput(e.currentTarget.value)}
+                placeholder="ops"
+                value={username()}
+                onInput={(e) => setUsername(e.currentTarget.value)}
                 disabled={busy()}
                 autofocus
+                required
+              />
+            </div>
+            <div>
+              <label class="eyebrow mb-1.5 block" for="login-password">Password</label>
+              <input
+                id="login-password"
+                type="password"
+                autocomplete="current-password"
+                class="input input-bordered w-full"
+                value={password()}
+                onInput={(e) => setPassword(e.currentTarget.value)}
+                disabled={busy()}
                 required
               />
             </div>
             <Show when={error()}>
               <div role="alert" class="alert alert-error alert-soft text-sm"><span>{error()}</span></div>
             </Show>
-            <button type="submit" class="btn btn-primary w-full" disabled={busy() || !token()}>
+            <button type="submit" class="btn btn-primary w-full" disabled={busy() || !username() || !password()}>
               <Show when={busy()}><span class="loading loading-spinner loading-xs" /></Show>
-              {busy() ? "Checking…" : "Sign in"}
+              {busy() ? "Signing in…" : "Sign in"}
             </button>
           </form>
           <p class="text-[11px] leading-relaxed text-base-content/40">
-            No token? Run <span class="font-data text-base-content/60">omniglass bootstrap &lt;username&gt;</span> on the server to mint the first owner's token.
+            No account? Run <span class="font-data text-base-content/60">omniglass bootstrap &lt;username&gt; --password &lt;password&gt;</span> on the server to create the first owner.
           </p>
         </div>
       </div>
