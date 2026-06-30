@@ -10,8 +10,8 @@ import {
   updateComponent,
   deleteComponent,
 } from "../lib/components";
-import { type System, SYSTEMS_KEY, listSystems } from "../lib/systems";
-import { type Location, LOCATIONS_KEY, listLocations } from "../lib/locations";
+import { SYSTEMS_KEY, listSystems } from "../lib/systems";
+import { LOCATIONS_KEY, listLocations } from "../lib/locations";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { ChevronRight, Maximize } from "../components/icons";

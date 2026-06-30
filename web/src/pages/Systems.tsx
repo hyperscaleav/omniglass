@@ -10,11 +10,11 @@ import {
   updateSystem,
   deleteSystem,
 } from "../lib/systems";
-import { type Location, LOCATIONS_KEY, listLocations } from "../lib/locations";
+import { LOCATIONS_KEY, listLocations } from "../lib/locations";
 import { type Component as Comp, COMPONENTS_KEY, listComponents } from "../lib/components";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
-import { ArrowRight, ChevronRight, Maximize, Plus } from "../components/icons";
+import { ArrowRight, ChevronRight, Maximize } from "../components/icons";
 
 // Systems: the system inventory on the generic ListView, the same shell as
 // Locations and Components. Systems form a tree (parent_id) and are placed at a
