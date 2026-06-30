@@ -64,6 +64,15 @@ docker run --rm -e OMNIGLASS_DSN="$DSN" \
   ghcr.io/hyperscaleav/omniglass:latest token alice
 ```
 
+## Building it locally
+
+`make image` builds the same image CI publishes:
+
+```bash
+make image                 # omniglass:dev, VERSION = short commit sha
+make image TAG=v1 IMAGE=ghcr.io/hyperscaleav/omniglass
+```
+
 ## Where this fits
 
 This image is the unit the Helm chart and the per-PR preview environments
