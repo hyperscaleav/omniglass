@@ -11,6 +11,7 @@ for (let i = 2; i < a.length; i++) {
   if (a[i] === '--token') token = a[++i];
   else if (a[i] === '--click') steps.push(['click', a[++i]]);
   else if (a[i] === '--select') steps.push(['select', a[++i]]);
+  else if (a[i] === '--hover') steps.push(['hover', a[++i]]);
   else if (a[i] === '--wait') wait = +a[++i];
   else if (a[i] === '--full') full = true;
 }
@@ -21,6 +22,7 @@ if (token) await page.addInitScript(t => localStorage.setItem('og-token', t), to
 await page.goto(url, { waitUntil: 'networkidle' });
 for (const [kind, arg] of steps) {
   if (kind === 'click') await page.click(arg);
+  else if (kind === 'hover') await page.hover(arg);
   else { const [sel, val] = arg.split('||'); await page.selectOption(sel, val); }
   await page.waitForTimeout(wait);
 }
