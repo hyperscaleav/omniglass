@@ -49,9 +49,14 @@ location-scoped admin cannot list users.
 - With `principal:create`, **New user** creates a human with a username and an optional initial
   password. The new user can sign in right away and change that password themselves; a fresh
   account holds no grants (so it can sign in but do nothing) until you assign a role.
+- With `principal:update`, **Edit** changes a user's display name, email, and **username**.
+  Renaming is safe: their credentials and grants follow the account (they key on an internal id,
+  not the username), so a renamed user keeps their password and access. Only an administrator can
+  change a username; the user cannot change their own.
 
-Editing, disabling, and role assignment land in later slices. From the CLI the same surface is
-`omniglass principal list`, `omniglass principal get <id>`, and `omniglass principal create`.
+Disabling and role assignment land in later slices. From the CLI the same surface is
+`omniglass principal list`, `omniglass principal get <id>`, `omniglass principal create`, and
+`omniglass principal update <id>`.
 
 ## The layout
 
