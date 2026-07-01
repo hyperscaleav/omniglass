@@ -38,8 +38,8 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0001](#adr-0001-ai-acts-as-a-user-the-agent-principal-is-deferred) | 2026-06-27 | Accepted | AI acts as a `human` / `service` principal; a first-class `agent` principal is deferred |
 | [ADR-0002](#adr-0002-roles-carry-requirements-not-an-allow-list) | 2026-06-27 | Accepted | Authorization is role + scope grants, not a per-principal allow-list |
 | [ADR-0003](#adr-0003-health-reads-ok-not-up) | 2026-06-27 | Accepted | The healthy state is named `ok`, not `up` |
-| [ADR-0004](#adr-0004-credentials-ship-bearer-only) | 2026-06-27 | Accepted | The credential model ships bearer-only; password / OIDC / NATS are deferred |
-| [ADR-0005](#adr-0005-the-first-owner-is-omniglass-bootstrap) | 2026-06-27 | Accepted | The first owner is created by `omniglass bootstrap <username>` |
+| [ADR-0004](#adr-0004-credentials-ship-bearer-only) | 2026-06-27 | Resolved | Bearer shipped first; `password` credentials (argon2id) landed in identity slices 1-2. OIDC / NATS still deferred |
+| [ADR-0005](#adr-0005-the-first-owner-is-omniglass-bootstrap) | 2026-06-27 | Resolved | `omniglass bootstrap <username> [--password]`; the password-on-create path shipped, the `iam` namespace is deferred |
 | [ADR-0006](#adr-0006-the-owner-invariant-is-enforced-by-bootstrap-for-now) | 2026-06-27 | Accepted | The single-owner invariant is upheld by the bootstrap path, not yet a DB trigger |
 
 ## Entries
@@ -80,7 +80,8 @@ below from the project's history. From here it grows one slice at a time.
 
 ### ADR-0004: Credentials ship bearer-only
 
-- **Date:** 2026-06-27 | **Status:** Accepted | **Pages:** [identity and access](/architecture/identity-access/)
+- **Date:** 2026-06-27 | **Status:** Resolved (identity slices 1-2) | **Pages:** [identity and access](/architecture/identity-access/)
+- **Resolved:** Password credentials shipped in identity slice 1 ([#35](https://github.com/hyperscaleav/omniglass/pull/35)) and slice 2 ([#70](https://github.com/hyperscaleav/omniglass/pull/70)): `credential.kind` now allows `bearer` or `password` (argon2id, PHC-encoded, one password per principal), and a human signs in with a username and password behind an httpOnly session cookie. The `oidc` / `nats` methods and the full `(method, identifier)` lookup key remain deferred (future slices).
 - **Decision (divergence):** The shipped `credential` table carries `kind = 'bearer'` only, stored as the
   token's sha256 with a non-secret `ogp_` locator prefix. The design's fuller model (the `password`,
   `oidc`, and `nats` methods, and the `(method, identifier)` lookup key) is **deferred**, not yet built.
@@ -94,7 +95,8 @@ below from the project's history. From here it grows one slice at a time.
 
 ### ADR-0005: The first owner is `omniglass bootstrap`
 
-- **Date:** 2026-06-27 | **Status:** Accepted | **Pages:** [identity and access](/architecture/identity-access/)
+- **Date:** 2026-06-27 | **Status:** Resolved (identity slice 1) | **Pages:** [identity and access](/architecture/identity-access/)
+- **Resolved:** `omniglass bootstrap <username> --password <pw>` shipped in identity slice 1 ([#35](https://github.com/hyperscaleav/omniglass/pull/35)): bootstrap now installs a password credential on create (plus `--email` / `--display-name`), so the owner can sign in to the console without a separate step. The `og iam` admin command namespace is still deferred (it lands with the admin user surface, slice 3).
 - **Decision (divergence):** The first owner is created by `omniglass bootstrap <username>`, which mints an
   `owner@all` grant plus a **bearer** credential in one transaction. The design page describes the eventual
   `og iam create-owner --username ... --email ...` password path under an `iam` command namespace; that
