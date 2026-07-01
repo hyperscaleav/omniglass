@@ -54,9 +54,11 @@ location-scoped admin cannot list users.
   not the username), so a renamed user keeps their password and access. Only an administrator can
   change a username; the user cannot change their own.
 - With `principal_grant:create` / `:delete`, the detail panel **grants** a role at a scope (pick a
-  role and a scope kind; a non-`all` scope names its root) and revokes one with the **x** on a
-  grant chip. That is how a fresh user gets permissions. One rule the server always holds: the
-  **last owner grant cannot be revoked**, so the platform can never be locked out of administration.
+  role, a scope kind, and, for a non-`all` scope, the specific location, system, or component from
+  the picker) and revokes one with the **x** on a grant chip. That is how a fresh user gets
+  permissions. A scope targets the entity by its internal id, so a grant survives a rename of that
+  entity. One rule the server always holds: the **last owner grant cannot be revoked**, so the
+  platform can never be locked out of administration.
 - With `principal:update`, **Disable** turns off a principal: it can no longer sign in or use a
   token, but its audit history is kept (accounts are disabled, never deleted). **Enable** restores
   access. A disabled account reads **inactive** in the grid. The **last active owner cannot be

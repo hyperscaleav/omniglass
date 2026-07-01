@@ -4,6 +4,9 @@ import Page from "../components/Page";
 import { type Principal, type Grant, type ScopeKind, PRINCIPALS_KEY, ROLES_KEY, listPrincipals, createPrincipal, updatePrincipal, createGrant, revokeGrant, setPrincipalActive, listRoles, principalName } from "../lib/principals";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
+import { listLocations } from "../lib/locations";
+import { listSystems } from "../lib/systems";
+import { listComponents } from "../lib/components";
 import { Plus } from "../components/icons";
 
 // Users: the admin principal directory. A read grid of every principal (human or
@@ -11,10 +14,6 @@ import { Plus } from "../components/icons";
 // a create form for a new human (gated by principal:create). It is self-teaching:
 // the detail panel shows the grant model (role x scope) the platform enforces.
 const kindBadge = (kind: string) => `badge badge-soft badge-sm capitalize ${kind === "service" ? "badge-info" : "badge-primary"}`;
-
-function grantLabel(g: Grant): string {
-  return `${g.role} @ ${g.scope_kind}${g.scope_id ? `:${g.scope_id}` : ""}`;
-}
 
 export default function Users() {
   const qc = useQueryClient();
@@ -183,17 +182,41 @@ function Fact(props: { label: string; value: unknown }) {
   );
 }
 
-const SCOPE_KINDS: ScopeKind[] = ["all", "location", "system", "component", "group"];
+// SCOPE_KINDS the grant form offers. "group" is deferred (no group entity yet), so
+// it is not offered; the server also rejects it.
+const SCOPE_KINDS: Exclude<ScopeKind, "group">[] = ["all", "location", "system", "component"];
 
 // GrantEditor shows a principal's role grants (each a role at a scope), lets an
 // admin revoke one (the x, gated principal_grant:delete) and add one (the form,
-// gated principal_grant:create). The role picker is the seeded + custom role
-// catalog; a non-all scope needs a scope id. The server enforces the owner
-// invariant (the last owner grant cannot be revoked) and answers 409.
+// gated principal_grant:create). A scoped grant targets a real entity by id: the
+// form is a picker of the chosen kind (value = id, label = name), and the chips
+// resolve the stored id back to its name. The server enforces the owner invariant
+// (the last owner grant cannot be revoked) and answers 409.
 function GrantEditor(props: { principal: Principal; canGrant: boolean; canRevoke: boolean; onChange: () => void | Promise<void> }) {
   const roles = useQuery(() => ({ queryKey: ROLES_KEY, queryFn: listRoles, enabled: props.canGrant }));
+  const locations = useQuery(() => ({ queryKey: ["locations"], queryFn: listLocations, enabled: props.canGrant }));
+  const systems = useQuery(() => ({ queryKey: ["systems"], queryFn: listSystems, enabled: props.canGrant }));
+  const components = useQuery(() => ({ queryKey: ["components"], queryFn: listComponents, enabled: props.canGrant }));
+
+  // id -> name across the tree tiers, for turning a stored scope id back into a
+  // readable grant chip.
+  const nameOf = createMemo(() => {
+    const m = new Map<string, string>();
+    for (const e of locations.data ?? []) m.set(e.id, e.name);
+    for (const e of systems.data ?? []) m.set(e.id, e.name);
+    for (const e of components.data ?? []) m.set(e.id, e.name);
+    return m;
+  });
+  const label = (g: Grant) => {
+    if (g.scope_kind === "all") return `${g.role} @ all`;
+    const name = g.scope_id ? nameOf().get(g.scope_id) ?? g.scope_id : g.scope_id;
+    return `${g.role} @ ${g.scope_kind}:${name}`;
+  };
+  const entitiesFor = (kind: string) =>
+    kind === "location" ? locations.data ?? [] : kind === "system" ? systems.data ?? [] : kind === "component" ? components.data ?? [] : [];
+
   const [role, setRole] = createSignal("");
-  const [scopeKind, setScopeKind] = createSignal<ScopeKind>("all");
+  const [scopeKind, setScopeKind] = createSignal<Exclude<ScopeKind, "group">>("all");
   const [scopeId, setScopeId] = createSignal("");
   const [busy, setBusy] = createSignal(false);
   const [err, setErr] = createSignal<string | null>(null);
@@ -206,7 +229,7 @@ function GrantEditor(props: { principal: Principal; canGrant: boolean; canRevoke
       await createGrant(props.principal.id, {
         role: role(),
         scope_kind: scopeKind(),
-        scope_id: scopeKind() === "all" ? undefined : scopeId().trim() || undefined,
+        scope_id: scopeKind() === "all" ? undefined : scopeId() || undefined,
       });
       setRole("");
       setScopeKind("all");
@@ -236,9 +259,9 @@ function GrantEditor(props: { principal: Principal; canGrant: boolean; canRevoke
         <For each={props.principal.grants} fallback={<span class="text-xs text-base-content/40">No grants yet. This principal can sign in but has no permissions.</span>}>
           {(g) => (
             <span class="badge badge-soft badge-primary gap-1 font-data text-[11px]">
-              {grantLabel(g)}
+              {label(g)}
               <Show when={props.canRevoke && g.id}>
-                <button type="button" class="leading-none hover:text-error" title="Revoke" aria-label={`Revoke ${grantLabel(g)}`} onClick={() => remove(g)}>&times;</button>
+                <button type="button" class="leading-none hover:text-error" title="Revoke" aria-label={`Revoke ${label(g)}`} onClick={() => remove(g)}>&times;</button>
               </Show>
             </span>
           )}
@@ -253,13 +276,21 @@ function GrantEditor(props: { principal: Principal; canGrant: boolean; canRevoke
             <option value="" disabled>Role…</option>
             <For each={roles.data}>{(r) => <option value={r.id}>{r.id}</option>}</For>
           </select>
-          <select class="select select-bordered select-sm" value={scopeKind()} onChange={(e) => setScopeKind(e.currentTarget.value as ScopeKind)} aria-label="Scope kind">
+          <select
+            class="select select-bordered select-sm"
+            value={scopeKind()}
+            onChange={(e) => { setScopeKind(e.currentTarget.value as Exclude<ScopeKind, "group">); setScopeId(""); }}
+            aria-label="Scope kind"
+          >
             <For each={SCOPE_KINDS}>{(k) => <option value={k}>{k}</option>}</For>
           </select>
           <Show when={scopeKind() !== "all"}>
-            <input class="input input-bordered input-sm w-28 font-data" placeholder="scope id" value={scopeId()} onInput={(e) => setScopeId(e.currentTarget.value)} />
+            <select class="select select-bordered select-sm" value={scopeId()} onChange={(e) => setScopeId(e.currentTarget.value)} required aria-label="Scope entity">
+              <option value="" disabled>Select a {scopeKind()}…</option>
+              <For each={entitiesFor(scopeKind())}>{(e) => <option value={e.id}>{e.name}</option>}</For>
+            </select>
           </Show>
-          <button type="submit" class="btn btn-primary btn-sm" disabled={busy() || !role()}>Grant</button>
+          <button type="submit" class="btn btn-primary btn-sm" disabled={busy() || !role() || (scopeKind() !== "all" && !scopeId())}>Grant</button>
         </form>
       </Show>
     </div>
