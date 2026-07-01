@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { listPrincipals, createPrincipal, updatePrincipal, principalName, type Principal } from "./principals";
+import { listPrincipals, createPrincipal, updatePrincipal, createGrant, revokeGrant, principalName, type Principal } from "./principals";
 
 // The data layer is the unit under test; fetch is the seam we fake, so these
 // assert the request shape and the response handling without a server.
@@ -56,6 +56,26 @@ describe("principals data layer", () => {
     expect(req.method).toBe("PATCH");
     expect(req.url).toContain("/api/v1/principals/p1");
     expect(await req.json()).toMatchObject({ username: "renamed", display_name: "New" });
+  });
+
+  it("POSTs a grant to the principal's grants path", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonResponse({ id: "g1", role: "viewer", scope_kind: "all" }, 201),
+    );
+    const g = await createGrant("p1", { role: "viewer", scope_kind: "all" });
+    expect(g.id).toBe("g1");
+    const req = fetchMock.mock.calls[0][0] as Request;
+    expect(req.method).toBe("POST");
+    expect(req.url).toContain("/api/v1/principals/p1/grants");
+    expect(await req.json()).toMatchObject({ role: "viewer", scope_kind: "all" });
+  });
+
+  it("DELETEs a grant by id", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
+    await revokeGrant("p1", "g1");
+    const req = fetchMock.mock.calls[0][0] as Request;
+    expect(req.method).toBe("DELETE");
+    expect(req.url).toContain("/api/v1/principals/p1/grants/g1");
   });
 
   it("principalName prefers display name, then username, then service label", () => {

@@ -1,7 +1,7 @@
 import { For, Show, createMemo, createSignal } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import Page from "../components/Page";
-import { type Principal, type Grant, PRINCIPALS_KEY, listPrincipals, createPrincipal, updatePrincipal, principalName } from "../lib/principals";
+import { type Principal, type Grant, type ScopeKind, PRINCIPALS_KEY, ROLES_KEY, listPrincipals, createPrincipal, updatePrincipal, createGrant, revokeGrant, listRoles, principalName } from "../lib/principals";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { Plus } from "../components/icons";
@@ -113,14 +113,12 @@ export default function Users() {
                       <Fact label="Label" value={<span class="font-data">{p().service!.label}</span>} />
                     </Show>
                   </div>
-                  <div>
-                    <div class="eyebrow mb-1.5">Role grants</div>
-                    <div class="flex flex-wrap gap-1.5">
-                      <For each={p().grants} fallback={<span class="text-xs text-base-content/40">No grants yet. This principal can sign in but has no permissions.</span>}>
-                        {(g) => <span class="badge badge-soft badge-primary font-data text-[11px]">{grantLabel(g)}</span>}
-                      </For>
-                    </div>
-                  </div>
+                  <GrantEditor
+                    principal={p()}
+                    canGrant={can(me.data, "principal_grant", "create")}
+                    canRevoke={can(me.data, "principal_grant", "delete")}
+                    onChange={() => qc.invalidateQueries({ queryKey: PRINCIPALS_KEY })}
+                  />
                 </>
               )}
             </Show>
@@ -158,6 +156,89 @@ function Fact(props: { label: string; value: unknown }) {
     <div>
       <div class="eyebrow">{props.label}</div>
       <div>{props.value as never}</div>
+    </div>
+  );
+}
+
+const SCOPE_KINDS: ScopeKind[] = ["all", "location", "system", "component", "group"];
+
+// GrantEditor shows a principal's role grants (each a role at a scope), lets an
+// admin revoke one (the x, gated principal_grant:delete) and add one (the form,
+// gated principal_grant:create). The role picker is the seeded + custom role
+// catalog; a non-all scope needs a scope id. The server enforces the owner
+// invariant (the last owner grant cannot be revoked) and answers 409.
+function GrantEditor(props: { principal: Principal; canGrant: boolean; canRevoke: boolean; onChange: () => void | Promise<void> }) {
+  const roles = useQuery(() => ({ queryKey: ROLES_KEY, queryFn: listRoles, enabled: props.canGrant }));
+  const [role, setRole] = createSignal("");
+  const [scopeKind, setScopeKind] = createSignal<ScopeKind>("all");
+  const [scopeId, setScopeId] = createSignal("");
+  const [busy, setBusy] = createSignal(false);
+  const [err, setErr] = createSignal<string | null>(null);
+
+  async function add(e: SubmitEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setErr(null);
+    try {
+      await createGrant(props.principal.id, {
+        role: role(),
+        scope_kind: scopeKind(),
+        scope_id: scopeKind() === "all" ? undefined : scopeId().trim() || undefined,
+      });
+      setRole("");
+      setScopeKind("all");
+      setScopeId("");
+      await props.onChange();
+    } catch (er) {
+      setErr(describeError(er));
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function remove(g: Grant) {
+    if (!g.id) return;
+    setErr(null);
+    try {
+      await revokeGrant(props.principal.id, g.id);
+      await props.onChange();
+    } catch (er) {
+      setErr(describeError(er));
+    }
+  }
+
+  return (
+    <div>
+      <div class="eyebrow mb-1.5">Role grants</div>
+      <div class="flex flex-wrap gap-1.5">
+        <For each={props.principal.grants} fallback={<span class="text-xs text-base-content/40">No grants yet. This principal can sign in but has no permissions.</span>}>
+          {(g) => (
+            <span class="badge badge-soft badge-primary gap-1 font-data text-[11px]">
+              {grantLabel(g)}
+              <Show when={props.canRevoke && g.id}>
+                <button type="button" class="leading-none hover:text-error" title="Revoke" aria-label={`Revoke ${grantLabel(g)}`} onClick={() => remove(g)}>&times;</button>
+              </Show>
+            </span>
+          )}
+        </For>
+      </div>
+      <Show when={err()}>
+        <p class="mt-2 text-[11px] text-error">{err()}</p>
+      </Show>
+      <Show when={props.canGrant}>
+        <form class="mt-3 flex flex-wrap items-end gap-2" onSubmit={add}>
+          <select class="select select-bordered select-sm" value={role()} onChange={(e) => setRole(e.currentTarget.value)} required aria-label="Role">
+            <option value="" disabled>Role…</option>
+            <For each={roles.data}>{(r) => <option value={r.id}>{r.id}</option>}</For>
+          </select>
+          <select class="select select-bordered select-sm" value={scopeKind()} onChange={(e) => setScopeKind(e.currentTarget.value as ScopeKind)} aria-label="Scope kind">
+            <For each={SCOPE_KINDS}>{(k) => <option value={k}>{k}</option>}</For>
+          </select>
+          <Show when={scopeKind() !== "all"}>
+            <input class="input input-bordered input-sm w-28 font-data" placeholder="scope id" value={scopeId()} onInput={(e) => setScopeId(e.currentTarget.value)} />
+          </Show>
+          <button type="submit" class="btn btn-primary btn-sm" disabled={busy() || !role()}>Grant</button>
+        </form>
+      </Show>
     </div>
   );
 }
