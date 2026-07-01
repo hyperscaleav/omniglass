@@ -6,7 +6,9 @@ import (
 	"fmt"
 
 	"github.com/hyperscaleav/omniglass/internal/auth"
+	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // Role is a capability set: permissions are <resource>:<action> strings, and
@@ -296,6 +298,142 @@ func (p *PG) RevokeBearer(ctx context.Context, hash []byte) error {
 		return fmt.Errorf("storage: revoke bearer: %w", err)
 	}
 	return nil
+}
+
+// ErrPrincipalForbidden is returned by the principal directory methods when the
+// caller's resolved scope is not all-scope. A principal is not a scope-tree
+// entity, so a location or system grant confers no principal access; only an
+// all-scope grant does. The API maps it to 403.
+var ErrPrincipalForbidden = errors.New("storage: principal access requires an all-scope grant")
+
+// ErrPrincipalNotFound is returned by GetPrincipal when no principal has the id.
+// The API maps it to 404.
+var ErrPrincipalNotFound = errors.New("storage: principal not found")
+
+// ErrUsernameTaken is returned by CreateHumanPrincipal when the username already
+// exists. The API maps it to 409.
+var ErrUsernameTaken = errors.New("storage: username already exists")
+
+// HumanSpec is the admin create-a-human input. PasswordHash, when set, installs a
+// password credential (PHC-encoded argon2id); cleartext never reaches storage.
+type HumanSpec struct {
+	Username     string
+	Email        string
+	DisplayName  string
+	PasswordHash string
+}
+
+// ListPrincipals returns every principal with its profile and grants, oldest
+// first. Reads require an all-scope grant (a principal is not scope-tree scoped),
+// so a non-all read scope is ErrPrincipalForbidden rather than a silent empty
+// list. Credentials are never loaded, so no secret leaves the gateway.
+func (p *PG) ListPrincipals(ctx context.Context, read scope.Set) ([]Principal, error) {
+	if !read.All {
+		return nil, ErrPrincipalForbidden
+	}
+	rows, err := p.pool.Query(ctx, `select id, kind from principal order by created_at`)
+	if err != nil {
+		return nil, fmt.Errorf("storage: list principals: %w", err)
+	}
+	type base struct{ id, kind string }
+	var bases []base
+	for rows.Next() {
+		var b base
+		if err := rows.Scan(&b.id, &b.kind); err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("storage: scan principal: %w", err)
+		}
+		bases = append(bases, b)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("storage: list principals: %w", err)
+	}
+	// loadPrincipal runs its own queries, so the row cursor is drained first.
+	out := make([]Principal, 0, len(bases))
+	for _, b := range bases {
+		pr := Principal{ID: b.id, Kind: b.kind}
+		if err := p.loadPrincipal(ctx, &pr); err != nil {
+			return nil, err
+		}
+		out = append(out, pr)
+	}
+	return out, nil
+}
+
+// GetPrincipal resolves one principal by id, with its profile and grants. Reads
+// require an all-scope grant; an unknown id is ErrPrincipalNotFound.
+func (p *PG) GetPrincipal(ctx context.Context, id string, read scope.Set) (*Principal, error) {
+	if !read.All {
+		return nil, ErrPrincipalForbidden
+	}
+	pr := Principal{ID: id}
+	err := p.pool.QueryRow(ctx, `select id, kind from principal where id = $1`, id).Scan(&pr.ID, &pr.Kind)
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		return nil, ErrPrincipalNotFound
+	case err != nil:
+		return nil, fmt.Errorf("storage: get principal: %w", err)
+	}
+	if err := p.loadPrincipal(ctx, &pr); err != nil {
+		return nil, err
+	}
+	return &pr, nil
+}
+
+// CreateHumanPrincipal creates a human principal (and, when a password hash is
+// given, its password credential) in one audited transaction. Creates require an
+// all-scope grant; a duplicate username is ErrUsernameTaken. The new principal
+// holds no grants (role assignment is a later admin surface).
+func (p *PG) CreateHumanPrincipal(ctx context.Context, actorID string, spec HumanSpec, create scope.Set) (*Principal, error) {
+	if !create.All {
+		return nil, ErrPrincipalForbidden
+	}
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("storage: begin create principal: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var pid string
+	if err := tx.QueryRow(ctx, `insert into principal (kind) values ('human') returning id`).Scan(&pid); err != nil {
+		return nil, fmt.Errorf("storage: create principal: %w", err)
+	}
+	if _, err := tx.Exec(ctx,
+		`insert into human (principal_id, username, email, display_name) values ($1, $2, $3, $4)`,
+		pid, spec.Username, nullize(spec.Email), nullize(spec.DisplayName)); err != nil {
+		return nil, mapPrincipalWriteErr(err)
+	}
+	if spec.PasswordHash != "" {
+		if _, err := tx.Exec(ctx,
+			`insert into credential (principal_id, kind, secret_hash, prefix) values ($1, 'password', $2, '')`,
+			pid, []byte(spec.PasswordHash)); err != nil {
+			return nil, fmt.Errorf("storage: create password: %w", err)
+		}
+	}
+	summary := map[string]any{"username": spec.Username, "kind": "human"}
+	if err := writeAuditRes(ctx, tx, actorID, "create", "principal", pid, nil, summary); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("storage: commit create principal: %w", err)
+	}
+
+	pr := Principal{ID: pid, Kind: "human"}
+	if err := p.loadPrincipal(ctx, &pr); err != nil {
+		return nil, err
+	}
+	return &pr, nil
+}
+
+// mapPrincipalWriteErr translates the human.username unique violation into
+// ErrUsernameTaken (the API's 409); other errors pass through wrapped.
+func mapPrincipalWriteErr(err error) error {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+		return ErrUsernameTaken
+	}
+	return fmt.Errorf("storage: create human: %w", err)
 }
 
 // loadPrincipal fills a principal's kind profile (human or service) and its

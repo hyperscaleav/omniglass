@@ -103,6 +103,18 @@ func TestCLIEndToEnd(t *testing.T) {
 		t.Fatalf("change-password with a wrong current should fail, got exit 0:\n%s", out)
 	}
 
+	// Admin principal directory: the owner lists itself, creates a human, and the
+	// new human then appears in the directory.
+	if out, code := cli("principal", "list"); code != 0 || !strings.Contains(out, `"username": "root"`) {
+		t.Fatalf("principal list exit %d:\n%s", code, out)
+	}
+	if out, code := cli("principal", "create", "--username", "charlie", "--password", "charlie-secret"); code != 0 || !strings.Contains(out, `"username": "charlie"`) {
+		t.Fatalf("principal create exit %d:\n%s", code, out)
+	}
+	if out, code := cli("principal", "list"); code != 0 || !strings.Contains(out, `"username": "charlie"`) {
+		t.Fatalf("principal list after create exit %d:\n%s", code, out)
+	}
+
 	// healthz needs no token.
 	if out, code := runCLI(t, root, binPath, os.Environ())("--server", "http://"+addr, "healthz"); code != 0 || !strings.Contains(out, `"status": "ok"`) {
 		t.Fatalf("healthz exit %d:\n%s", code, out)

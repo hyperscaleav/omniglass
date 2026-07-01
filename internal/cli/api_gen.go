@@ -406,6 +406,77 @@ func generatedCommands() []*cobra.Command {
 	}
 	{
 		parent := &cobra.Command{
+			Use:   "principal",
+			Short: "Commands for the principal resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			var fDisplayName string
+			var fEmail string
+			var fPassword string
+			var fUsername string
+			cmd := &cobra.Command{
+				Use:     "create",
+				Short:   "Create a human principal",
+				Long:    "Creates a human principal with an optional initial password. Gated by principal:create (all-scope). The new principal holds no grants; assign roles separately.",
+				Example: "  omniglass principal create --username username",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/principals")
+					body := map[string]any{}
+					if cmd.Flags().Changed("display-name") {
+						body["display_name"] = fDisplayName
+					}
+					if cmd.Flags().Changed("email") {
+						body["email"] = fEmail
+					}
+					if cmd.Flags().Changed("password") {
+						body["password"] = fPassword
+					}
+					if cmd.Flags().Changed("username") {
+						body["username"] = fUsername
+					}
+					return runAPICommand(cmd, "POST", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
+			cmd.Flags().StringVar(&fEmail, "email", "", "")
+			cmd.Flags().StringVar(&fPassword, "password", "", "Optional initial password; the user changes it after signing in")
+			cmd.Flags().StringVar(&fUsername, "username", "", "Unique sign-in name")
+			_ = cmd.MarkFlagRequired("username")
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "get <id>",
+				Short:   "Get a principal",
+				Long:    "Fetches one principal by id with its profile and grants. Gated by principal:read (all-scope).",
+				Example: "  omniglass principal get <id>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/principals/%s", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "list",
+				Short:   "List principals",
+				Long:    "Lists all principals (humans and service accounts) with their grants. Gated by principal:read, which confers access only at all-scope.",
+				Example: "  omniglass principal list",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/principals")
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		roots = append(roots, parent)
+	}
+	{
+		parent := &cobra.Command{
 			Use:   "role",
 			Short: "Commands for the role resource",
 		}

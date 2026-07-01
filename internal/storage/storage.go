@@ -53,6 +53,17 @@ type Gateway interface {
 	// principal id (the authenticated session's own id): a nil patch field is left
 	// unchanged, a provided empty string clears the nullable column.
 	UpdateHumanProfile(ctx context.Context, principalID string, patch HumanProfilePatch) error
+	// ListPrincipals returns every principal with its profile and grants (the admin
+	// directory). Requires an all-scope read (a principal is not scope-tree scoped);
+	// a non-all scope is ErrPrincipalForbidden. No credential secret is loaded.
+	ListPrincipals(ctx context.Context, read scope.Set) ([]Principal, error)
+	// GetPrincipal resolves one principal by id with its profile and grants.
+	// Requires an all-scope read; an unknown id is ErrPrincipalNotFound.
+	GetPrincipal(ctx context.Context, id string, read scope.Set) (*Principal, error)
+	// CreateHumanPrincipal creates a human principal (and its password credential
+	// when a hash is given) in one audited transaction. Requires an all-scope
+	// create; a duplicate username is ErrUsernameTaken.
+	CreateHumanPrincipal(ctx context.Context, actorID string, spec HumanSpec, create scope.Set) (*Principal, error)
 	// RevokeBearer deletes the bearer credential with the given sha256 hash
 	// (session logout). A no-op if none matches.
 	RevokeBearer(ctx context.Context, hash []byte) error

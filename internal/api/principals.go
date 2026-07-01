@@ -1,0 +1,154 @@
+package api
+
+import (
+	"context"
+	"errors"
+	"net/http"
+
+	"github.com/danielgtaylor/huma/v2"
+	"github.com/hyperscaleav/omniglass/internal/auth"
+	"github.com/hyperscaleav/omniglass/internal/storage"
+)
+
+// principalBody is the wire shape of a principal in the admin directory: its id
+// and kind, the kind profile, and its grants. Credentials are deliberately not
+// included, so no secret ever leaves the API.
+type principalBody struct {
+	ID      string      `json:"id"`
+	Kind    string      `json:"kind"`
+	Human   *humanBody  `json:"human,omitempty"`
+	Service *svcBody    `json:"service,omitempty"`
+	Grants  []grantBody `json:"grants"`
+}
+
+func toPrincipalBody(pr *storage.Principal) principalBody {
+	b := principalBody{ID: pr.ID, Kind: pr.Kind, Grants: make([]grantBody, 0, len(pr.Grants))}
+	if pr.Human != nil {
+		b.Human = &humanBody{Username: pr.Human.Username, Email: pr.Human.Email, DisplayName: pr.Human.DisplayName}
+	}
+	if pr.Service != nil {
+		b.Service = &svcBody{Label: pr.Service.Label}
+	}
+	for _, g := range pr.Grants {
+		gb := grantBody{Role: g.Role, ScopeKind: g.ScopeKind}
+		if g.ScopeID != nil {
+			gb.ScopeID = *g.ScopeID
+		}
+		b.Grants = append(b.Grants, gb)
+	}
+	return b
+}
+
+type listPrincipalsInput struct {
+	Kind string `query:"kind" enum:"human,service" doc:"Optionally filter by principal kind"`
+}
+
+type listPrincipalsOutput struct {
+	Body struct {
+		Principals []principalBody `json:"principals"`
+	}
+}
+
+type principalPathInput struct {
+	ID string `path:"id" doc:"The principal's id (uuid)"`
+}
+
+type principalOutput struct {
+	Body principalBody
+}
+
+type createPrincipalInput struct {
+	Body struct {
+		Username    string `json:"username" minLength:"1" maxLength:"200" doc:"Unique sign-in name"`
+		DisplayName string `json:"display_name,omitempty" maxLength:"200"`
+		Email       string `json:"email,omitempty" maxLength:"320"`
+		Password    string `json:"password,omitempty" minLength:"8" maxLength:"256" doc:"Optional initial password; the user changes it after signing in"`
+	}
+}
+
+// registerPrincipalRoutes wires the admin principal directory: list, get, and
+// create a human. Each is gated by a principal capability, which resolves to an
+// all-scope grant only (a principal is not a scope-tree entity), so the gateway
+// refuses a location or system scope with a 403.
+func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
+	huma.Register(api, huma.Operation{
+		OperationID: "list-principals",
+		Method:      http.MethodGet,
+		Path:        "/principals",
+		Summary:     "List principals",
+		Description: "Lists all principals (humans and service accounts) with their grants. Gated by principal:read, which confers access only at all-scope.",
+		Middlewares: huma.Middlewares{a.authn, a.require("principal", "read")},
+	}, func(ctx context.Context, in *listPrincipalsInput) (*listPrincipalsOutput, error) {
+		prs, err := gw.ListPrincipals(ctx, a.scopeFor(ctx, "principal", "read"))
+		if err != nil {
+			return nil, mapPrincipalErr(err)
+		}
+		out := &listPrincipalsOutput{}
+		out.Body.Principals = make([]principalBody, 0, len(prs))
+		for i := range prs {
+			if in.Kind != "" && prs[i].Kind != in.Kind {
+				continue
+			}
+			out.Body.Principals = append(out.Body.Principals, toPrincipalBody(&prs[i]))
+		}
+		return out, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "get-principal",
+		Method:      http.MethodGet,
+		Path:        "/principals/{id}",
+		Summary:     "Get a principal",
+		Description: "Fetches one principal by id with its profile and grants. Gated by principal:read (all-scope).",
+		Middlewares: huma.Middlewares{a.authn, a.require("principal", "read")},
+	}, func(ctx context.Context, in *principalPathInput) (*principalOutput, error) {
+		pr, err := gw.GetPrincipal(ctx, in.ID, a.scopeFor(ctx, "principal", "read"))
+		if err != nil {
+			return nil, mapPrincipalErr(err)
+		}
+		return &principalOutput{Body: toPrincipalBody(pr)}, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID:   "create-principal",
+		Method:        http.MethodPost,
+		Path:          "/principals",
+		DefaultStatus: http.StatusCreated,
+		Summary:       "Create a human principal",
+		Description:   "Creates a human principal with an optional initial password. Gated by principal:create (all-scope). The new principal holds no grants; assign roles separately.",
+		Middlewares:   huma.Middlewares{a.authn, a.require("principal", "create")},
+	}, func(ctx context.Context, in *createPrincipalInput) (*principalOutput, error) {
+		spec := storage.HumanSpec{
+			Username:    in.Body.Username,
+			Email:       in.Body.Email,
+			DisplayName: in.Body.DisplayName,
+		}
+		if in.Body.Password != "" {
+			hash, err := auth.HashPassword(in.Body.Password)
+			if err != nil {
+				return nil, huma.Error500InternalServerError("create principal")
+			}
+			spec.PasswordHash = hash
+		}
+		pr, err := gw.CreateHumanPrincipal(ctx, actorID(ctx), spec, a.scopeFor(ctx, "principal", "create"))
+		if err != nil {
+			return nil, mapPrincipalErr(err)
+		}
+		return &principalOutput{Body: toPrincipalBody(pr)}, nil
+	})
+}
+
+// mapPrincipalErr translates the gateway's principal sentinels into HTTP status:
+// an unknown id 404, a non-all scope 403, a duplicate username 409.
+func mapPrincipalErr(err error) error {
+	switch {
+	case errors.Is(err, storage.ErrPrincipalNotFound):
+		return huma.Error404NotFound("principal not found")
+	case errors.Is(err, storage.ErrPrincipalForbidden):
+		return huma.Error403Forbidden("principal management requires an all-scope grant")
+	case errors.Is(err, storage.ErrUsernameTaken):
+		return huma.Error409Conflict("username already exists")
+	default:
+		return huma.Error500InternalServerError("principal operation failed")
+	}
+}

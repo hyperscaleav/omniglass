@@ -252,6 +252,50 @@ export interface paths {
         patch: operations["update-location"];
         trace?: never;
     };
+    "/principals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List principals
+         * @description Lists all principals (humans and service accounts) with their grants. Gated by principal:read, which confers access only at all-scope.
+         */
+        get: operations["list-principals"];
+        put?: never;
+        /**
+         * Create a human principal
+         * @description Creates a human principal with an optional initial password. Gated by principal:create (all-scope). The new principal holds no grants; assign roles separately.
+         */
+        post: operations["create-principal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/principals/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a principal
+         * @description Fetches one principal by id with its profile and grants. Gated by principal:read (all-scope).
+         */
+        get: operations["get-principal"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/roles": {
         parameters: {
             query?: never;
@@ -398,6 +442,20 @@ export interface components {
             /** @description Parent location name; omit for a root location */
             parent?: string;
         };
+        CreatePrincipalInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreatePrincipalInputBody.json
+             */
+            readonly $schema?: string;
+            display_name?: string;
+            email?: string;
+            /** @description Optional initial password; the user changes it after signing in */
+            password?: string;
+            /** @description Unique sign-in name */
+            username: string;
+        };
         CreateSystemInputBody: {
             /**
              * Format: uri
@@ -517,6 +575,15 @@ export interface components {
             readonly $schema?: string;
             locations: components["schemas"]["LocationBody"][] | null;
         };
+        ListPrincipalsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListPrincipalsOutputBody.json
+             */
+            readonly $schema?: string;
+            principals: components["schemas"]["PrincipalBody"][] | null;
+        };
         ListSystemsOutputBody: {
             /**
              * Format: uri
@@ -567,6 +634,19 @@ export interface components {
             human?: components["schemas"]["HumanBody"];
             permissions: string[] | null;
             principal: components["schemas"]["PrincipalStruct"];
+            service?: components["schemas"]["SvcBody"];
+        };
+        PrincipalBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/PrincipalBody.json
+             */
+            readonly $schema?: string;
+            grants: components["schemas"]["GrantBody"][] | null;
+            human?: components["schemas"]["HumanBody"];
+            id: string;
+            kind: string;
             service?: components["schemas"]["SvcBody"];
         };
         PrincipalStruct: {
@@ -1201,6 +1281,103 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LocationBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-principals": {
+        parameters: {
+            query?: {
+                /** @description Optionally filter by principal kind */
+                kind?: "human" | "service";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListPrincipalsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-principal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePrincipalInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrincipalBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-principal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The principal's id (uuid) */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrincipalBody"];
                 };
             };
             /** @description Error */

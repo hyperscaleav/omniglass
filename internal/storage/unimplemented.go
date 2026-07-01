@@ -32,6 +32,15 @@ func (UnimplementedGateway) SetPassword(context.Context, string, string) (bool, 
 func (UnimplementedGateway) UpdateHumanProfile(context.Context, string, HumanProfilePatch) error {
 	return nil
 }
+func (UnimplementedGateway) ListPrincipals(context.Context, scope.Set) ([]Principal, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) GetPrincipal(context.Context, string, scope.Set) (*Principal, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) CreateHumanPrincipal(context.Context, string, HumanSpec, scope.Set) (*Principal, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) RevokeBearer(context.Context, []byte) error { return nil }
 func (UnimplementedGateway) AnyHuman(context.Context) (bool, error)     { return false, nil }
 func (UnimplementedGateway) ListRoles(context.Context) ([]Role, error) { return nil, nil }
