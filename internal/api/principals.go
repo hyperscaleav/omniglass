@@ -30,7 +30,7 @@ func toPrincipalBody(pr *storage.Principal) principalBody {
 		b.Service = &svcBody{Label: pr.Service.Label}
 	}
 	for _, g := range pr.Grants {
-		gb := grantBody{Role: g.Role, ScopeKind: g.ScopeKind}
+		gb := grantBody{ID: g.ID, Role: g.Role, ScopeKind: g.ScopeKind}
 		if g.ScopeID != nil {
 			gb.ScopeID = *g.ScopeID
 		}
@@ -73,6 +73,24 @@ type updatePrincipalInput struct {
 		Email       *string `json:"email,omitempty" maxLength:"320" doc:"Email; empty clears it"`
 		Username    *string `json:"username,omitempty" minLength:"1" maxLength:"200" doc:"Sign-in name; renaming is safe"`
 	}
+}
+
+type createGrantInput struct {
+	ID   string `path:"id" doc:"The principal's id (uuid)"`
+	Body struct {
+		Role      string `json:"role" minLength:"1" doc:"A role id (viewer, operator, admin, owner, or a custom role)"`
+		ScopeKind string `json:"scope_kind" enum:"all,location,system,component,group" doc:"The scope kind; 'all' confers the whole estate"`
+		ScopeID   string `json:"scope_id,omitempty" doc:"The scope root id; omit for the all scope"`
+	}
+}
+
+type grantOutput struct {
+	Body grantBody
+}
+
+type revokeGrantInput struct {
+	ID      string `path:"id" doc:"The principal's id (uuid)"`
+	GrantID string `path:"grantId" doc:"The grant's id (uuid)"`
 }
 
 // registerPrincipalRoutes wires the admin principal directory: list, get, and
@@ -164,6 +182,43 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		}
 		return &principalOutput{Body: toPrincipalBody(pr)}, nil
 	})
+
+	huma.Register(api, huma.Operation{
+		OperationID:   "create-grant",
+		Method:        http.MethodPost,
+		Path:          "/principals/{id}/grants",
+		DefaultStatus: http.StatusCreated,
+		Summary:       "Grant a role to a principal",
+		Description:   "Assigns a role at a scope to a principal. Gated by principal_grant:create (all-scope). A duplicate is 409, an unknown role or bad scope 422.",
+		Middlewares:   huma.Middlewares{a.authn, a.require("principal_grant", "create")},
+	}, func(ctx context.Context, in *createGrantInput) (*grantOutput, error) {
+		g, err := gw.CreateGrant(ctx, actorID(ctx), in.ID, storage.GrantSpec{
+			Role: in.Body.Role, ScopeKind: in.Body.ScopeKind, ScopeID: in.Body.ScopeID,
+		}, a.scopeFor(ctx, "principal_grant", "create"))
+		if err != nil {
+			return nil, mapPrincipalErr(err)
+		}
+		out := &grantOutput{Body: grantBody{ID: g.ID, Role: g.Role, ScopeKind: g.ScopeKind}}
+		if g.ScopeID != nil {
+			out.Body.ScopeID = *g.ScopeID
+		}
+		return out, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID:   "revoke-grant",
+		Method:        http.MethodDelete,
+		Path:          "/principals/{id}/grants/{grantId}",
+		DefaultStatus: http.StatusNoContent,
+		Summary:       "Revoke a grant",
+		Description:   "Removes one grant from a principal. Gated by principal_grant:delete (all-scope). The last owner grant cannot be revoked.",
+		Middlewares:   huma.Middlewares{a.authn, a.require("principal_grant", "delete")},
+	}, func(ctx context.Context, in *revokeGrantInput) (*struct{}, error) {
+		if err := gw.RevokeGrant(ctx, actorID(ctx), in.ID, in.GrantID, a.scopeFor(ctx, "principal_grant", "delete")); err != nil {
+			return nil, mapPrincipalErr(err)
+		}
+		return nil, nil
+	})
 }
 
 // mapPrincipalErr translates the gateway's principal sentinels into HTTP status:
@@ -178,6 +233,16 @@ func mapPrincipalErr(err error) error {
 		return huma.Error409Conflict("username already exists")
 	case errors.Is(err, storage.ErrPrincipalNotHuman):
 		return huma.Error422UnprocessableEntity("only human principals have these fields")
+	case errors.Is(err, storage.ErrLastOwner):
+		return huma.Error409Conflict("cannot revoke the last owner grant")
+	case errors.Is(err, storage.ErrGrantNotFound):
+		return huma.Error404NotFound("grant not found")
+	case errors.Is(err, storage.ErrGrantExists):
+		return huma.Error409Conflict("that grant already exists")
+	case errors.Is(err, storage.ErrUnknownRole):
+		return huma.Error422UnprocessableEntity("unknown role")
+	case errors.Is(err, storage.ErrBadScope):
+		return huma.Error422UnprocessableEntity("a scoped grant needs a scope_id")
 	default:
 		return huma.Error500InternalServerError("principal operation failed")
 	}

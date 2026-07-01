@@ -69,6 +69,14 @@ type Gateway interface {
 	// non-human target is ErrPrincipalNotHuman, an unknown id ErrPrincipalNotFound,
 	// a username clash ErrUsernameTaken.
 	UpdatePrincipalHuman(ctx context.Context, actorID, id string, patch AdminHumanPatch, action scope.Set) (*Principal, error)
+	// CreateGrant assigns a role x scope to a principal, audited. Requires an
+	// all-scope grant. Bad scope / unknown role / unknown principal / duplicate map
+	// to ErrBadScope / ErrUnknownRole / ErrPrincipalNotFound / ErrGrantExists.
+	CreateGrant(ctx context.Context, actorID, principalID string, spec GrantSpec, action scope.Set) (*Grant, error)
+	// RevokeGrant deletes one grant from a principal, audited. Requires an all-scope
+	// grant. Unknown grant is ErrGrantNotFound; revoking the last owner grant is
+	// ErrLastOwner (the deferred owner-invariant trigger).
+	RevokeGrant(ctx context.Context, actorID, principalID, grantID string, action scope.Set) error
 	// RevokeBearer deletes the bearer credential with the given sha256 hash
 	// (session logout). A no-op if none matches.
 	RevokeBearer(ctx context.Context, hash []byte) error

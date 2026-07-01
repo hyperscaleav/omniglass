@@ -162,8 +162,10 @@ type Principal struct {
 type HumanProfile struct{ Username, Email, DisplayName string }
 type ServiceProfile struct{ Label string }
 
-// Grant is one (role x scope) pairing on a principal.
+// Grant is one (role x scope) pairing on a principal, addressable by its id (so
+// the admin surface can revoke a specific one).
 type Grant struct {
+	ID        string
 	Role      string
 	ScopeKind string
 	ScopeID   *string
@@ -531,6 +533,128 @@ func (p *PG) UpdatePrincipalHuman(ctx context.Context, actorID, id string, patch
 	return &pr, nil
 }
 
+// Grant-management sentinels. The API maps them to 409 (last owner / duplicate),
+// 404 (unknown grant), and 422 (unknown role / bad scope).
+var (
+	ErrLastOwner     = errors.New("storage: at least one owner grant must remain")
+	ErrGrantNotFound = errors.New("storage: grant not found")
+	ErrGrantExists   = errors.New("storage: grant already exists")
+	ErrUnknownRole   = errors.New("storage: unknown role")
+	ErrBadScope      = errors.New("storage: invalid scope for a grant")
+)
+
+// GrantSpec is a role x scope to assign to a principal. ScopeID is empty for the
+// "all" scope; for any other kind it names the scope root.
+type GrantSpec struct {
+	Role      string
+	ScopeKind string
+	ScopeID   string
+}
+
+// CreateGrant assigns a role x scope to a principal, audited. Requires an
+// all-scope grant. A non-all scope with no scope id is ErrBadScope; an unknown
+// role ErrUnknownRole; an unknown principal ErrPrincipalNotFound; a duplicate
+// ErrGrantExists.
+func (p *PG) CreateGrant(ctx context.Context, actorID, principalID string, spec GrantSpec, action scope.Set) (*Grant, error) {
+	if !action.All {
+		return nil, ErrPrincipalForbidden
+	}
+	if spec.ScopeKind == "all" {
+		spec.ScopeID = "" // the all scope has no id
+	} else if spec.ScopeID == "" {
+		return nil, ErrBadScope // a scoped grant must name its root
+	}
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("storage: begin create grant: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var gid string
+	err = tx.QueryRow(ctx,
+		`insert into principal_grant (principal_id, role_id, scope_kind, scope_id) values ($1, $2, $3, $4) returning id`,
+		principalID, spec.Role, spec.ScopeKind, nullize(spec.ScopeID)).Scan(&gid)
+	if err != nil {
+		return nil, mapGrantWriteErr(err)
+	}
+	g := Grant{ID: gid, Role: spec.Role, ScopeKind: spec.ScopeKind}
+	if spec.ScopeID != "" {
+		g.ScopeID = &spec.ScopeID
+	}
+	if err := writeAuditRes(ctx, tx, actorID, "create", "principal_grant", gid, nil, g); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("storage: commit create grant: %w", err)
+	}
+	return &g, nil
+}
+
+// RevokeGrant deletes one grant from a principal, audited. Requires an all-scope
+// grant. An unknown grant (for that principal) is ErrGrantNotFound. Revoking the
+// last owner grant is refused by the deferred owner-invariant trigger, surfaced at
+// COMMIT as ErrLastOwner.
+func (p *PG) RevokeGrant(ctx context.Context, actorID, principalID, grantID string, action scope.Set) error {
+	if !action.All {
+		return ErrPrincipalForbidden
+	}
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("storage: begin revoke grant: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var g Grant
+	err = tx.QueryRow(ctx,
+		`select id, role_id, scope_kind, scope_id from principal_grant where id = $1 and principal_id = $2`,
+		grantID, principalID).Scan(&g.ID, &g.Role, &g.ScopeKind, &g.ScopeID)
+	var pgErr *pgconn.PgError
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		return ErrGrantNotFound
+	case errors.As(err, &pgErr) && pgErr.Code == "22P02":
+		return ErrGrantNotFound
+	case err != nil:
+		return fmt.Errorf("storage: revoke grant lookup: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `delete from principal_grant where id = $1`, grantID); err != nil {
+		return fmt.Errorf("storage: revoke grant: %w", err)
+	}
+	if err := writeAuditRes(ctx, tx, actorID, "delete", "principal_grant", grantID, g, nil); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		// The deferred owner-invariant trigger raises OG001 at COMMIT.
+		if errors.As(err, &pgErr) && pgErr.Code == "OG001" {
+			return ErrLastOwner
+		}
+		return fmt.Errorf("storage: commit revoke grant: %w", err)
+	}
+	return nil
+}
+
+// mapGrantWriteErr translates the principal_grant constraint violations into the
+// grant sentinels the API reports.
+func mapGrantWriteErr(err error) error {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		switch pgErr.Code {
+		case "23505": // unique_violation
+			return ErrGrantExists
+		case "23503": // foreign_key_violation
+			if pgErr.ConstraintName == "principal_grant_role_id_fkey" {
+				return ErrUnknownRole
+			}
+			return ErrPrincipalNotFound
+		case "23514": // check_violation (scope_kind)
+			return ErrBadScope
+		case "22P02": // invalid uuid (principal id)
+			return ErrPrincipalNotFound
+		}
+	}
+	return fmt.Errorf("storage: create grant: %w", err)
+}
+
 // mapPrincipalWriteErr translates the human.username unique violation into
 // ErrUsernameTaken (the API's 409); other errors pass through wrapped.
 func mapPrincipalWriteErr(err error) error {
@@ -563,14 +687,14 @@ func (p *PG) loadPrincipal(ctx context.Context, pr *Principal) error {
 	}
 
 	rows, err := p.pool.Query(ctx,
-		`select role_id, scope_kind, scope_id from principal_grant where principal_id = $1`, pr.ID)
+		`select id, role_id, scope_kind, scope_id from principal_grant where principal_id = $1 order by created_at`, pr.ID)
 	if err != nil {
 		return fmt.Errorf("storage: load grants: %w", err)
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var g Grant
-		if err := rows.Scan(&g.Role, &g.ScopeKind, &g.ScopeID); err != nil {
+		if err := rows.Scan(&g.ID, &g.Role, &g.ScopeKind, &g.ScopeID); err != nil {
 			return fmt.Errorf("storage: scan grant: %w", err)
 		}
 		pr.Grants = append(pr.Grants, g)

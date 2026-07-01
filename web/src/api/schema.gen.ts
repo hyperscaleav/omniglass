@@ -300,6 +300,46 @@ export interface paths {
         patch: operations["update-principal"];
         trace?: never;
     };
+    "/principals/{id}/grants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Grant a role to a principal
+         * @description Assigns a role at a scope to a principal. Gated by principal_grant:create (all-scope). A duplicate is 409, an unknown role or bad scope 422.
+         */
+        post: operations["create-grant"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/principals/{id}/grants/{grantId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke a grant
+         * @description Removes one grant from a principal. Gated by principal_grant:delete (all-scope). The last owner grant cannot be revoked.
+         */
+        delete: operations["revoke-grant"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/roles": {
         parameters: {
             query?: never;
@@ -431,6 +471,23 @@ export interface components {
             /** @description Primary system name this component belongs to */
             system?: string;
         };
+        CreateGrantInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateGrantInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description A role id (viewer, operator, admin, owner, or a custom role) */
+            role: string;
+            /** @description The scope root id; omit for the all scope */
+            scope_id?: string;
+            /**
+             * @description The scope kind; 'all' confers the whole estate
+             * @enum {string}
+             */
+            scope_kind: "all" | "location" | "system" | "component" | "group";
+        };
         CreateLocationInputBody: {
             /**
              * Format: uri
@@ -525,6 +582,13 @@ export interface components {
             type: string;
         };
         GrantBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/GrantBody.json
+             */
+            readonly $schema?: string;
+            id?: string;
             role: string;
             scope_id?: string;
             scope_kind: string;
@@ -1433,6 +1497,74 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PrincipalBody"];
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-grant": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The principal's id (uuid) */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateGrantInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GrantBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "revoke-grant": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The principal's id (uuid) */
+                id: string;
+                /** @description The grant's id (uuid) */
+                grantId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {

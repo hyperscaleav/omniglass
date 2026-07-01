@@ -99,6 +99,36 @@ components:
         - name
         - component_type
       type: object
+    CreateGrantInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateGrantInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        role:
+          description: A role id (viewer, operator, admin, owner, or a custom role)
+          minLength: 1
+          type: string
+        scope_id:
+          description: The scope root id; omit for the all scope
+          type: string
+        scope_kind:
+          description: The scope kind; 'all' confers the whole estate
+          enum:
+            - all
+            - location
+            - system
+            - component
+            - group
+          type: string
+      required:
+        - role
+        - scope_kind
+      type: object
     CreateLocationInputBody:
       additionalProperties: false
       properties:
@@ -247,6 +277,15 @@ components:
     GrantBody:
       additionalProperties: false
       properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/GrantBody.json
+          format: uri
+          readOnly: true
+          type: string
+        id:
+          type: string
         role:
           type: string
         scope_id:
@@ -1198,6 +1237,67 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Update a principal
+  /principals/{id}/grants:
+    post:
+      description: Assigns a role at a scope to a principal. Gated by principal_grant:create (all-scope). A duplicate is 409, an unknown role or bad scope 422.
+      operationId: create-grant
+      parameters:
+        - description: The principal's id (uuid)
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The principal's id (uuid)
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateGrantInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GrantBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Grant a role to a principal
+  /principals/{id}/grants/{grantId}:
+    delete:
+      description: Removes one grant from a principal. Gated by principal_grant:delete (all-scope). The last owner grant cannot be revoked.
+      operationId: revoke-grant
+      parameters:
+        - description: The principal's id (uuid)
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The principal's id (uuid)
+            type: string
+        - description: The grant's id (uuid)
+          in: path
+          name: grantId
+          required: true
+          schema:
+            description: The grant's id (uuid)
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Revoke a grant
   /roles:
     get:
       description: Lists the roles. Gated by the role:read capability.

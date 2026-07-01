@@ -44,6 +44,12 @@ func (UnimplementedGateway) CreateHumanPrincipal(context.Context, string, HumanS
 func (UnimplementedGateway) UpdatePrincipalHuman(context.Context, string, string, AdminHumanPatch, scope.Set) (*Principal, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) CreateGrant(context.Context, string, string, GrantSpec, scope.Set) (*Grant, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) RevokeGrant(context.Context, string, string, string, scope.Set) error {
+	return nil
+}
 func (UnimplementedGateway) RevokeBearer(context.Context, []byte) error { return nil }
 func (UnimplementedGateway) AnyHuman(context.Context) (bool, error)     { return false, nil }
 func (UnimplementedGateway) ListRoles(context.Context) ([]Role, error) { return nil, nil }

@@ -219,6 +219,59 @@ func generatedCommands() []*cobra.Command {
 	}
 	{
 		parent := &cobra.Command{
+			Use:   "grant",
+			Short: "Commands for the grant resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			var fRole string
+			var fScopeId string
+			var fScopeKind string
+			cmd := &cobra.Command{
+				Use:     "create <id>",
+				Short:   "Grant a role to a principal",
+				Long:    "Assigns a role at a scope to a principal. Gated by principal_grant:create (all-scope). A duplicate is 409, an unknown role or bad scope 422.",
+				Example: "  omniglass grant create <id> --role role --scope-kind scope_kind",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/principals/%s/grants", url.PathEscape(args[0]))
+					body := map[string]any{}
+					if cmd.Flags().Changed("role") {
+						body["role"] = fRole
+					}
+					if cmd.Flags().Changed("scope-id") {
+						body["scope_id"] = fScopeId
+					}
+					if cmd.Flags().Changed("scope-kind") {
+						body["scope_kind"] = fScopeKind
+					}
+					return runAPICommand(cmd, "POST", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fRole, "role", "", "A role id (viewer, operator, admin, owner, or a custom role)")
+			_ = cmd.MarkFlagRequired("role")
+			cmd.Flags().StringVar(&fScopeId, "scope-id", "", "The scope root id; omit for the all scope")
+			cmd.Flags().StringVar(&fScopeKind, "scope-kind", "", "The scope kind; 'all' confers the whole estate")
+			_ = cmd.MarkFlagRequired("scope-kind")
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "delete <id> <grantId>",
+				Short:   "Revoke a grant",
+				Long:    "Removes one grant from a principal. Gated by principal_grant:delete (all-scope). The last owner grant cannot be revoked.",
+				Example: "  omniglass grant delete <id> <grantId>",
+				Args:    cobra.ExactArgs(2),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/principals/%s/grants/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+					return runAPICommand(cmd, "DELETE", path, nil)
+				},
+			}
+			return cmd
+		}())
+		roots = append(roots, parent)
+	}
+	{
+		parent := &cobra.Command{
 			Use:   "location",
 			Short: "Commands for the location resource",
 		}
