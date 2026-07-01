@@ -64,9 +64,20 @@ func TestGrantsAndOwnerInvariant(t *testing.T) {
 	if _, err := gw.CreateGrant(ctx, owner.ID, "00000000-0000-0000-0000-000000000000", storage.GrantSpec{Role: "viewer", ScopeKind: "all"}, all); !errors.Is(err, storage.ErrPrincipalNotFound) {
 		t.Fatalf("unknown principal: want ErrPrincipalNotFound, got %v", err)
 	}
-	// A scoped grant with an id is fine.
-	if _, err := gw.CreateGrant(ctx, owner.ID, alice.ID, storage.GrantSpec{Role: "viewer", ScopeKind: "location", ScopeID: "HQ"}, all); err != nil {
-		t.Fatalf("scoped grant: %v", err)
+	// A scoped grant targets a real entity by id: a name or unknown id is refused,
+	// a valid location id is fine.
+	if err := gw.UpsertLocationType(ctx, storage.LocationType{ID: "campus", DisplayName: "Campus", Official: true}); err != nil {
+		t.Fatalf("seed location type: %v", err)
+	}
+	hq, err := gw.CreateLocation(ctx, owner.ID, storage.LocationSpec{Name: "hq", LocationType: "campus"}, all)
+	if err != nil {
+		t.Fatalf("create hq: %v", err)
+	}
+	if _, err := gw.CreateGrant(ctx, owner.ID, alice.ID, storage.GrantSpec{Role: "viewer", ScopeKind: "location", ScopeID: "hq"}, all); !errors.Is(err, storage.ErrBadScope) {
+		t.Fatalf("scoped grant to a name: want ErrBadScope, got %v", err)
+	}
+	if _, err := gw.CreateGrant(ctx, owner.ID, alice.ID, storage.GrantSpec{Role: "viewer", ScopeKind: "location", ScopeID: hq.ID}, all); err != nil {
+		t.Fatalf("scoped grant by id: %v", err)
 	}
 
 	// Revoke the viewer@all grant; it disappears.

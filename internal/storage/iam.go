@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/hyperscaleav/omniglass/internal/auth"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/jackc/pgx/v5"
@@ -574,6 +575,27 @@ func (p *PG) CreateGrant(ctx context.Context, actorID, principalID string, spec 
 		return nil, fmt.Errorf("storage: begin create grant: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+
+	// A scoped grant must target a real entity of that kind by id, so the scope
+	// filter (which matches entity ids) resolves. This rejects a grant scoped to a
+	// name or a non-existent id up front, rather than 500-ing the scoped list later.
+	if spec.ScopeKind != "all" {
+		tbl, ok := scopeKindTable(spec.ScopeKind)
+		if !ok {
+			return nil, ErrBadScope // "group" and any other non-tree kind are unsupported
+		}
+		if _, perr := uuid.Parse(spec.ScopeID); perr != nil {
+			return nil, ErrBadScope
+		}
+		var exists bool
+		if err := tx.QueryRow(ctx,
+			`select exists(select 1 from `+string(tbl)+` where id = $1)`, spec.ScopeID).Scan(&exists); err != nil {
+			return nil, fmt.Errorf("storage: scope target check: %w", err)
+		}
+		if !exists {
+			return nil, ErrBadScope
+		}
+	}
 
 	var gid string
 	err = tx.QueryRow(ctx,

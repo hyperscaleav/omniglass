@@ -4,8 +4,24 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 )
+
+// uuidRoots keeps only the scope roots that are syntactically valid uuids. A
+// malformed root (for example a grant mis-scoped to an entity name rather than its
+// id) is dropped, so it contributes nothing to the scope, rather than erroring the
+// whole `id = any($1::uuid[])` query. Grant creation validates the target up
+// front; this is the defense-in-depth that keeps a bad grant from 500-ing a list.
+func uuidRoots(ids []string) []string {
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if _, err := uuid.Parse(id); err == nil {
+			out = append(out, id)
+		}
+	}
+	return out
+}
 
 // The scoped-tree primitive: the recursive ABAC walks shared by every estate
 // entity that is a parent_id self-referencing tree (location, system, and
@@ -24,6 +40,21 @@ const (
 	componentTable scopeTable = "component"
 )
 
+// scopeKindTable maps a grant scope_kind to its tree table for validating a scope
+// target. Only the tree tiers are addressable; "all" has no target and "group" is
+// not built yet, so both report false.
+func scopeKindTable(kind string) (scopeTable, bool) {
+	switch kind {
+	case "location":
+		return locationTable, true
+	case "system":
+		return systemTable, true
+	case "component":
+		return componentTable, true
+	}
+	return "", false
+}
+
 // inScopeTree reports whether targetID falls within a resolved scope on tbl: an
 // all scope always holds; otherwise the target is in scope when itself or an
 // ancestor is one of the scope roots (the ancestor walk, cheaper than expanding
@@ -33,7 +64,8 @@ func inScopeTree(ctx context.Context, q querier, tbl scopeTable, targetID string
 	if set.All {
 		return true, nil
 	}
-	if len(set.IDs) == 0 {
+	roots := uuidRoots(set.IDs)
+	if len(roots) == 0 {
 		return false, nil
 	}
 	var ok bool
@@ -43,7 +75,7 @@ func inScopeTree(ctx context.Context, q querier, tbl scopeTable, targetID string
 			union all
 			select t.id, t.parent_id from `+string(tbl)+` t join anc on t.id = anc.parent_id
 		) cycle id set is_cycle using path
-		select exists(select 1 from anc where id = any($2::uuid[]))`, targetID, set.IDs).Scan(&ok)
+		select exists(select 1 from anc where id = any($2::uuid[]))`, targetID, roots).Scan(&ok)
 	if err != nil {
 		return false, fmt.Errorf("storage: scope check on %s: %w", tbl, err)
 	}
