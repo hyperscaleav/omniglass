@@ -2,8 +2,25 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook } from "@solidjs/testing-library";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import type { JSX } from "solid-js";
-import { useLogin, useTokenLogin, useLogout, useUpdateProfile, useChangePassword } from "./auth";
+import { useLogin, useTokenLogin, useLogout, useUpdateProfile, useChangePassword, can, type Me } from "./auth";
 import { getToken, setToken } from "../api/client";
+
+// can() is a pure UI hint over the flattened permissions. The server joins a
+// resource's actions into one string ("create,update,delete"), so can() must
+// split the list, not compare it whole.
+describe("can", () => {
+  const me = (permissions: string[]): Me => ({ principal: { id: "p", kind: "human" }, permissions, grants: [] });
+  it("matches an action inside a comma-joined permission", () => {
+    expect(can(me(["location:create,update,delete"]), "location", "update")).toBe(true);
+    expect(can(me(["location:create,update,delete"]), "location", "delete")).toBe(true);
+    expect(can(me(["location:create"]), "location", "update")).toBe(false);
+  });
+  it("honors the wildcard and the read floor", () => {
+    expect(can(me(["*:*"]), "location", "delete")).toBe(true);
+    expect(can(me(["location:create"]), "location", "read")).toBe(true);
+    expect(can(me(["alarm:ack,snooze"]), "location", "update")).toBe(false);
+  });
+});
 
 // The auth hooks are the unit under test; fetch is the seam we fake, so these
 // assert the request shape (no stale bearer rides along) and the localStorage

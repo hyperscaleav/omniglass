@@ -132,13 +132,15 @@ export function useChangePassword() {
 
 // can reports whether the principal's flattened permissions allow a
 // resource:action, with the wildcard and :read floor the server applies. A UI
-// hint only; the server is the authority.
+// hint only; the server is the authority. A permission's action part may be a
+// comma-joined list ("create,update,delete"), so it is split before matching.
 export function can(me: Me | null | undefined, resource: string, action: string): boolean {
   if (!me) return false;
   for (const perm of me.permissions) {
     const [r, a] = perm.split(":");
     if (r !== "*" && r !== resource) continue;
-    if (action === "read" || a === "*" || a === action) return true;
+    const actions = (a ?? "").split(",");
+    if (action === "read" || actions.includes("*") || actions.includes(action)) return true;
   }
   return false;
 }
