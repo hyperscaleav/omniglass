@@ -41,6 +41,14 @@ export async function createPrincipal(body: CreatePrincipal): Promise<Principal>
   return data as Principal;
 }
 
+export type UpdatePrincipal = { display_name?: string; email?: string; username?: string };
+
+export async function updatePrincipal(id: string, body: UpdatePrincipal): Promise<Principal> {
+  const { data, error } = await api.PATCH("/principals/{id}", { params: { path: { id } }, body });
+  if (error) throw error;
+  return data as Principal;
+}
+
 // The display name for a principal: a human's display name or username, a service
 // account's label, else the bare kind.
 export function principalName(p: Principal): string {

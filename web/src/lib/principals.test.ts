@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { listPrincipals, createPrincipal, principalName, type Principal } from "./principals";
+import { listPrincipals, createPrincipal, updatePrincipal, principalName, type Principal } from "./principals";
 
 // The data layer is the unit under test; fetch is the seam we fake, so these
 // assert the request shape and the response handling without a server.
@@ -44,6 +44,18 @@ describe("principals data layer", () => {
   it("throws on an error status", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ detail: "username already exists" }, 409));
     await expect(createPrincipal({ username: "dup" })).rejects.toBeTruthy();
+  });
+
+  it("PATCHes the changed fields to the id path", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonResponse({ id: "p1", kind: "human", human: { username: "renamed" }, grants: [] }, 200),
+    );
+    const out = await updatePrincipal("p1", { username: "renamed", display_name: "New" });
+    expect(out.human?.username).toBe("renamed");
+    const req = fetchMock.mock.calls[0][0] as Request;
+    expect(req.method).toBe("PATCH");
+    expect(req.url).toContain("/api/v1/principals/p1");
+    expect(await req.json()).toMatchObject({ username: "renamed", display_name: "New" });
   });
 
   it("principalName prefers display name, then username, then service label", () => {

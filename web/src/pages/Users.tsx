@@ -1,7 +1,7 @@
 import { For, Show, createMemo, createSignal } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import Page from "../components/Page";
-import { type Principal, type Grant, PRINCIPALS_KEY, listPrincipals, createPrincipal, principalName } from "../lib/principals";
+import { type Principal, type Grant, PRINCIPALS_KEY, listPrincipals, createPrincipal, updatePrincipal, principalName } from "../lib/principals";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { Plus } from "../components/icons";
@@ -24,6 +24,7 @@ export default function Users() {
   const [selectedId, setSelectedId] = createSignal<string | null>(null);
   const selected = createMemo(() => principals.data?.find((p) => p.id === selectedId()) ?? null);
   const [createOpen, setCreateOpen] = createSignal(false);
+  const [editOpen, setEditOpen] = createSignal(false);
 
   const initials = (p: Principal) => principalName(p).slice(0, 2).toUpperCase();
 
@@ -98,6 +99,10 @@ export default function Users() {
                       <div class="truncate text-base font-semibold">{principalName(p())}</div>
                       <span class={kindBadge(p().kind)}>{p().kind}</span>
                     </div>
+                    <span class="flex-1" />
+                    <Show when={p().human && can(me.data, "principal", "update")}>
+                      <button class="btn btn-ghost btn-sm" onClick={() => setEditOpen(true)}>Edit</button>
+                    </Show>
                   </div>
                   <div class="grid grid-cols-2 gap-3 text-sm">
                     <Show when={p().human}>
@@ -130,6 +135,17 @@ export default function Users() {
             await qc.invalidateQueries({ queryKey: PRINCIPALS_KEY });
             setSelectedId(p.id);
             setCreateOpen(false);
+          }}
+        />
+      </Show>
+
+      <Show when={editOpen() && selected()?.human}>
+        <EditUserModal
+          principal={selected()!}
+          close={() => setEditOpen(false)}
+          onSaved={async () => {
+            await qc.invalidateQueries({ queryKey: PRINCIPALS_KEY });
+            setEditOpen(false);
           }}
         />
       </Show>
@@ -206,6 +222,71 @@ function CreateUserModal(props: { close: () => void; onCreated: (p: Principal) =
             <button type="submit" class="btn btn-primary btn-sm" disabled={busy() || !username().trim()}>
               <Show when={busy()}><span class="loading loading-spinner loading-xs" /></Show>
               Create user
+            </button>
+          </div>
+        </form>
+      </div>
+      <button class="modal-backdrop" onClick={props.close} aria-label="Close" />
+    </div>
+  );
+}
+
+// EditUserModal edits a human principal's admin-owned fields: display name, email,
+// and username. Username is renamable here (it is not a key); the user cannot edit
+// it themselves. Only the changed fields are sent.
+function EditUserModal(props: { principal: Principal; close: () => void; onSaved: () => void | Promise<void> }) {
+  const h = props.principal.human!;
+  const [username, setUsername] = createSignal(h.username);
+  const [displayName, setDisplayName] = createSignal(h.display_name ?? "");
+  const [email, setEmail] = createSignal(h.email ?? "");
+  const [busy, setBusy] = createSignal(false);
+  const [err, setErr] = createSignal<string | null>(null);
+
+  async function submit(e: SubmitEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setErr(null);
+    try {
+      // Send only the fields that changed.
+      const patch: { username?: string; display_name?: string; email?: string } = {};
+      if (username().trim() !== h.username) patch.username = username().trim();
+      if (displayName().trim() !== (h.display_name ?? "")) patch.display_name = displayName().trim();
+      if (email().trim() !== (h.email ?? "")) patch.email = email().trim();
+      await updatePrincipal(props.principal.id, patch);
+      await props.onSaved();
+    } catch (er) {
+      setErr(describeError(er));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div class="modal modal-open">
+      <div class="modal-box">
+        <h3 class="text-base font-semibold">Edit user</h3>
+        <p class="mb-3 mt-1 text-xs text-base-content/50">Change this user's display name, email, or username. Renaming is safe: their credentials and grants follow the account.</p>
+        <form class="flex flex-col gap-3" onSubmit={submit}>
+          <Show when={err()}>
+            <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
+          </Show>
+          <div>
+            <label class="eyebrow mb-1.5 block" for="edit-username">Username</label>
+            <input id="edit-username" autocomplete="off" class="input input-bordered w-full font-data" value={username()} onInput={(e) => setUsername(e.currentTarget.value)} disabled={busy()} required />
+          </div>
+          <div>
+            <label class="eyebrow mb-1.5 block" for="edit-display">Display name</label>
+            <input id="edit-display" autocomplete="off" class="input input-bordered w-full" value={displayName()} onInput={(e) => setDisplayName(e.currentTarget.value)} disabled={busy()} />
+          </div>
+          <div>
+            <label class="eyebrow mb-1.5 block" for="edit-email">Email</label>
+            <input id="edit-email" type="email" autocomplete="off" class="input input-bordered w-full" value={email()} onInput={(e) => setEmail(e.currentTarget.value)} disabled={busy()} />
+          </div>
+          <div class="mt-1 flex justify-end gap-2">
+            <button type="button" class="btn btn-ghost btn-sm" onClick={props.close} disabled={busy()}>Cancel</button>
+            <button type="submit" class="btn btn-primary btn-sm" disabled={busy() || !username().trim()}>
+              <Show when={busy()}><span class="loading loading-spinner loading-xs" /></Show>
+              Save changes
             </button>
           </div>
         </form>
