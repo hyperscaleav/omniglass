@@ -130,8 +130,10 @@ type bodyField struct {
 // command words; everything else derives from the path. This is the documented
 // seam for naming an operation the heuristic cannot.
 var nameOverride = map[string]([]string){
-	"get-healthz": {"healthz"},
-	"get-auth-me": {"auth", "me"},
+	"get-healthz":             {"healthz"},
+	"get-auth-me":             {"auth", "me"},
+	"update-auth-me":          {"auth", "update-profile"},
+	"change-auth-me-password": {"auth", "change-password"},
 }
 
 func buildCommands(doc spec, base string) []command {

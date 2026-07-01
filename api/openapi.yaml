@@ -15,6 +15,28 @@ components:
       required:
         - bootstrapped
       type: object
+    ChangePasswordInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ChangePasswordInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        current_password:
+          description: Your current password
+          type: string
+        new_password:
+          description: The new password (at least 8 characters)
+          maxLength: 256
+          minLength: 8
+          type: string
+      required:
+        - current_password
+        - new_password
+      type: object
     ComponentBody:
       additionalProperties: false
       properties:
@@ -229,6 +251,13 @@ components:
     HumanBody:
       additionalProperties: false
       properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/HumanBody.json
+          format: uri
+          readOnly: true
+          type: string
         display_name:
           type: string
         email:
@@ -528,6 +557,25 @@ components:
         location_type:
           type: string
       type: object
+    UpdateMeInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/UpdateMeInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        display_name:
+          description: Your display name; empty clears it
+          maxLength: 200
+          type: string
+        email:
+          description: Your email; empty clears it
+          maxLength: 320
+          type: string
+      type: object
     UpdateSystemInputBody:
       additionalProperties: false
       properties:
@@ -613,6 +661,49 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: The authenticated principal, its permissions, and grants
+    patch:
+      description: Updates the caller's own display name and email. Requires authentication; self-scoped (edits only your own principal).
+      operationId: update-auth-me
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMeInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HumanBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Update your own profile
+  /auth/me:changePassword:
+    post:
+      description: Verifies the current password and sets a new one. Requires authentication; self-scoped.
+      operationId: change-auth-me-password
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePasswordInputBody"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Change your own password
   /auth/status:
     get:
       description: "Public: reports whether any owner has been bootstrapped, so the login screen can hide the bootstrap hint."

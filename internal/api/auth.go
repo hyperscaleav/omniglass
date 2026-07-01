@@ -324,6 +324,80 @@ func meHandler(ctx context.Context, _ *struct{}) (*meOutput, error) {
 	return out, nil
 }
 
+// updateMeInput is the body of PATCH /api/v1/auth/me: the editable self-profile
+// fields. Each is optional (a pointer): an absent field is left unchanged, a
+// provided empty string clears it.
+type updateMeInput struct {
+	Body struct {
+		DisplayName *string `json:"display_name,omitempty" maxLength:"200" doc:"Your display name; empty clears it"`
+		Email       *string `json:"email,omitempty" maxLength:"320" doc:"Your email; empty clears it"`
+	}
+}
+
+// profileOutput is the updated human profile returned by PATCH /auth/me.
+type profileOutput struct {
+	Body humanBody
+}
+
+// updateMeHandler updates the caller's own profile. Self-scoped: it edits the
+// principal resolved from the session, never another. Authentication is the only
+// gate (in the ungated allow-list, like GET /auth/me).
+func (a *authenticator) updateMeHandler(ctx context.Context, in *updateMeInput) (*profileOutput, error) {
+	pr, ok := principalFrom(ctx)
+	if !ok || pr.Human == nil {
+		return nil, huma.Error401Unauthorized("unauthenticated")
+	}
+	patch := storage.HumanProfilePatch{DisplayName: in.Body.DisplayName, Email: in.Body.Email}
+	if err := a.gw.UpdateHumanProfile(ctx, pr.ID, patch); err != nil {
+		return nil, huma.Error500InternalServerError("update profile")
+	}
+	// Return the merged result: exactly what was written (the session profile plus
+	// the applied fields), so the client need not re-read.
+	h := *pr.Human
+	if in.Body.DisplayName != nil {
+		h.DisplayName = *in.Body.DisplayName
+	}
+	if in.Body.Email != nil {
+		h.Email = *in.Body.Email
+	}
+	return &profileOutput{Body: humanBody{Username: h.Username, Email: h.Email, DisplayName: h.DisplayName}}, nil
+}
+
+// changePasswordInput is the body of POST /api/v1/auth/me:changePassword. The new
+// password has a minimum length; the current password is verified in the handler.
+type changePasswordInput struct {
+	Body struct {
+		CurrentPassword string `json:"current_password" doc:"Your current password"`
+		NewPassword     string `json:"new_password" minLength:"8" maxLength:"256" doc:"The new password (at least 8 characters)"`
+	}
+}
+
+// changePasswordHandler verifies the caller's current password and sets a new one.
+// Self-scoped and authn-only. A wrong current password is a 403 (the request is
+// authenticated, but not permitted to rotate without the current secret). Existing
+// sessions are intentionally left valid for this slice; revoke-on-change is a later
+// hardening.
+func (a *authenticator) changePasswordHandler(ctx context.Context, in *changePasswordInput) (*struct{}, error) {
+	pr, ok := principalFrom(ctx)
+	if !ok || pr.Human == nil {
+		return nil, huma.Error401Unauthorized("unauthenticated")
+	}
+	if _, err := a.gw.AuthenticatePassword(ctx, pr.Human.Username, in.Body.CurrentPassword); err != nil {
+		if errors.Is(err, storage.ErrBadCredentials) {
+			return nil, huma.Error403Forbidden("current password is incorrect")
+		}
+		return nil, huma.Error500InternalServerError("change password")
+	}
+	encoded, err := auth.HashPassword(in.Body.NewPassword)
+	if err != nil {
+		return nil, huma.Error500InternalServerError("change password")
+	}
+	if _, err := a.gw.SetPassword(ctx, pr.Human.Username, encoded); err != nil {
+		return nil, huma.Error500InternalServerError("change password")
+	}
+	return nil, nil
+}
+
 // rolesOutput is the body of GET /api/v1/roles.
 type rolesOutput struct {
 	Body struct {

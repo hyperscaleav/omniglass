@@ -61,6 +61,30 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
+        /**
+         * Update your own profile
+         * @description Updates the caller's own display name and email. Requires authentication; self-scoped (edits only your own principal).
+         */
+        patch: operations["update-auth-me"];
+        trace?: never;
+    };
+    "/auth/me:changePassword": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change your own password
+         * @description Verifies the current password and sets a new one. Requires authentication; self-scoped.
+         */
+        post: operations["change-auth-me-password"];
+        delete?: never;
+        options?: never;
+        head?: never;
         patch?: never;
         trace?: never;
     };
@@ -313,6 +337,18 @@ export interface components {
             readonly $schema?: string;
             bootstrapped: boolean;
         };
+        ChangePasswordInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ChangePasswordInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Your current password */
+            current_password: string;
+            /** @description The new password (at least 8 characters) */
+            new_password: string;
+        };
         ComponentBody: {
             /**
              * Format: uri
@@ -444,6 +480,12 @@ export interface components {
             status: string;
         };
         HumanBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/HumanBody.json
+             */
+            readonly $schema?: string;
             display_name?: string;
             email?: string;
             username: string;
@@ -583,6 +625,18 @@ export interface components {
             display_name?: string;
             location_type?: string;
         };
+        UpdateMeInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/UpdateMeInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Your display name; empty clears it */
+            display_name?: string;
+            /** @description Your email; empty clears it */
+            email?: string;
+        };
         UpdateSystemInputBody: {
             /**
              * Format: uri
@@ -681,6 +735,70 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["MeOutputBody"];
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "update-auth-me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateMeInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HumanBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "change-auth-me-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangePasswordInputBody"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {

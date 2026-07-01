@@ -34,8 +34,9 @@ func TestCLIEndToEnd(t *testing.T) {
 	dsn := storagetest.NewDSN(t)
 	dbEnv := append(os.Environ(), "OMNIGLASS_DSN="+dsn)
 
-	// Hand-written command: bootstrap the owner and capture its bearer token.
-	bootOut, code := runCLI(t, root, binPath, dbEnv)("bootstrap", "root")
+	// Hand-written command: bootstrap the owner (with a password, so the generated
+	// change-password command has a current secret to verify) and capture its token.
+	bootOut, code := runCLI(t, root, binPath, dbEnv)("bootstrap", "root", "--password", "init-secret-pw")
 	if code != 0 {
 		t.Fatalf("bootstrap exit %d:\n%s", code, bootOut)
 	}
@@ -82,6 +83,24 @@ func TestCLIEndToEnd(t *testing.T) {
 	// auth me (hand-written-style data command, here generated) shows the owner.
 	if out, code := cli("auth", "me"); code != 0 || !strings.Contains(out, `"username": "root"`) {
 		t.Fatalf("auth me exit %d:\n%s", code, out)
+	}
+
+	// Self-service profile edit: the generated command updates the owner's own
+	// display name and email, and auth me reflects it.
+	if out, code := cli("auth", "update-profile", "--display-name", "Root Admin", "--email", "root@omniglass.test"); code != 0 || !strings.Contains(out, `"display_name": "Root Admin"`) {
+		t.Fatalf("auth update-profile exit %d:\n%s", code, out)
+	}
+	if out, code := cli("auth", "me"); code != 0 || !strings.Contains(out, `"display_name": "Root Admin"`) {
+		t.Fatalf("auth me after update exit %d:\n%s", code, out)
+	}
+
+	// Self-service change-password: the right current secret rotates it (exit 0), a
+	// wrong one is refused (the 403 surfaces as a non-zero exit).
+	if out, code := cli("auth", "change-password", "--current-password", "init-secret-pw", "--new-password", "rotated-secret-pw"); code != 0 {
+		t.Fatalf("auth change-password exit %d:\n%s", code, out)
+	}
+	if out, code := cli("auth", "change-password", "--current-password", "wrong-secret", "--new-password", "another-secret-pw"); code == 0 {
+		t.Fatalf("change-password with a wrong current should fail, got exit 0:\n%s", out)
 	}
 
 	// healthz needs no token.
