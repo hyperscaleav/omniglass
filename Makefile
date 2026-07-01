@@ -1,7 +1,7 @@
 # Local dev loop + the build/run flow for the single binary. Production deploy
 # is BYO Postgres; tests use ephemeral testcontainer Postgres.
 
-.PHONY: build build-web web image gen gen-web test test-short test-e2e tidy up down dev release-plan release-apply
+.PHONY: build build-web web image gen gen-web test test-short test-e2e tidy up down dev release-plan release-apply release-snapshot
 
 # Build the single binary (no console embedded; serves the build-the-console
 # placeholder under /web).
@@ -83,6 +83,13 @@ release-apply:
 	@token="$${GITHUB_TOKEN:-$$(gh auth token)}"; \
 	  [ -n "$$token" ] || { echo "release: no GITHUB_TOKEN set and gh is not authenticated (run: gh auth login)"; exit 1; }; \
 	  GITHUB_TOKEN="$$token" $(SEMANTIC_RELEASE) --no-ci
+
+# Local dry build of the release matrix (all OS/arch archives + checksums), with
+# no tag and no publish, to validate .goreleaser.yaml. SBOM is skipped (needs
+# syft); CI runs the full path. Requires goreleaser
+# (go install github.com/goreleaser/goreleaser/v2@latest).
+release-snapshot:
+	goreleaser release --snapshot --clean --skip=publish,sbom
 
 # Sync go.mod / go.sum to the actual import graph.
 tidy:
