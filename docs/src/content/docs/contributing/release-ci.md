@@ -44,13 +44,36 @@ The same thing can be dispatched in CI from the **release** workflow's "Run work
 | `BREAKING CHANGE:` (footer) or `feat!:` | major |
 | `docs:`, `ci:`, `chore:`, `refactor:`, `test:` | none |
 
-The tag is the only artifact: no changelog is ever committed back to `main`, so the release
-never writes to the default branch. The generated notes live on the GitHub Release. The
-[binary release pipeline](https://github.com/hyperscaleav/omniglass/issues/55) builds its
-cross-platform artifacts off the tag.
+No changelog is ever committed back to `main`, so the release never writes to the default
+branch. The generated notes live on the GitHub Release.
 
 To switch to release-on-merge later, change the release workflow's trigger to `push` on
 `main`; the make targets stay as the local preview path.
+
+## Binaries on the release
+
+semantic-release cuts the tag and the Release; [GoReleaser](https://goreleaser.com/) then
+fills that Release with the cross-platform binaries. The two split cleanly: semantic-release
+owns the version and the notes, GoReleaser only builds artifacts and attaches them (its
+`release.mode: keep-existing` leaves the notes untouched). The matrix is `linux/amd64`,
+`linux/arm64`, `darwin/amd64`, `darwin/arm64`, and `windows/amd64`, plus a `checksums.txt`
+and an SBOM per archive. Because the binary is pure Go with CGO disabled, all of it
+cross-compiles from one runner; the SPA is built once by a `before` hook (`make web`) and
+embedded in every target via `-tags web`.
+
+The binaries are always built in CI, never on a laptop, but which workflow builds them
+depends on how the release was cut:
+
+- **`make release-apply`** pushes the tag with your token, which cascades, so the
+  tag-triggered `goreleaser.yml` workflow builds the binaries.
+- **The CI-dispatch path** pushes the tag with `GITHUB_TOKEN`, which by design does not
+  cascade, so `release.yml` builds the binaries inline in the same job.
+
+Both drive the same `.goreleaser.yaml`, so the artifacts are identical either way. Validate a
+config change locally with `make release-snapshot` (builds the whole matrix, no tag, no
+publish), and CI runs the same snapshot on any pull request that touches the release config,
+uploading the archives as downloadable workflow artifacts. A green PR snapshot is real
+evidence that the tagged release will build.
 
 ## Why the PR title, not the commits
 

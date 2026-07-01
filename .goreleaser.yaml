@@ -1,0 +1,62 @@
+# Cross-platform release binaries for the single Omniglass binary (operator
+# console embedded). Division of labour: semantic-release owns the version, the
+# git tag, the GitHub Release, and its notes; GoReleaser only builds the
+# per-OS/arch binaries and attaches them to that existing release. The binary is
+# pure Go with CGO disabled, so every target cross-compiles from one host with
+# no C toolchain and no emulation.
+version: 2
+
+project_name: omniglass
+
+before:
+  hooks:
+    # Build the SPA into internal/webui/dist so the `web` build tag embeds the
+    # real console (the same artifact the container image ships).
+    - make web
+
+builds:
+  - id: omniglass
+    main: ./cmd/omniglass
+    binary: omniglass
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+      - -tags=web
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    ignore:
+      # No Windows on ARM for now (see #55); revisit if demand appears.
+      - goos: windows
+        goarch: arm64
+
+archives:
+  - id: omniglass
+    ids: [omniglass]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - LICENSE
+      - NOTICE
+      - README.md
+
+checksum:
+  name_template: checksums.txt
+
+sboms:
+  - artifacts: archive
+
+# semantic-release generates the release notes; GoReleaser must not also emit a
+# changelog into the release body.
+changelog:
+  disable: true
+
+release:
+  # The tagged GitHub Release already exists (semantic-release created it with
+  # its notes). Keep it and its body; only add the binary archives + checksums.
+  mode: keep-existing
