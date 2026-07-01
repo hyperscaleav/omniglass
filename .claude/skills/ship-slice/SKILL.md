@@ -33,6 +33,16 @@ Each is a gate; a red one blocks the ship.
    if the build diverges from a page's present-tense design, the page carries an inline note **and**
    a [decision-log](/architecture/decisions/) entry (an ADR) lands in the same PR. A page that
    gained a built capability but kept a `Design` badge is a red gate.
+   Beyond status, **every operator surface the diff moves takes its guide in the same PR**. Grep
+   the diff and walk the surfaces, mapping each to its home; a surface that moved while its guide
+   did not is a red gate:
+   - a new or changed **API route / Huma op** (`internal/api`, `api/openapi.*`) to the API
+     reference (`architecture/api.md`);
+   - a new or changed **CLI command** to the CLI guide (`guides/cli.md`), **including a generated
+     command**: if `make gen` touched `internal/cli/api_gen.go`, the CLI guide is in scope (this
+     is how the password and profile commands shipped undocumented);
+   - a changed **console surface** (`web/src`) to the console guide (`guides/console.md`) plus the
+     live screenshots (item 7).
 5. **Review.** A reviewer pass over the diff (`code-review` or `cavecrew-reviewer`), findings
    addressed. Add a `security-review` lens if the slice touches authz, secrets, the edge, or an
    invariant. Verify behavior to the outcome line, not just call sites.

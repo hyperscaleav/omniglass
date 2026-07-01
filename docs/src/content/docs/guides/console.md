@@ -14,10 +14,12 @@ cookie (the browser never exposes a token to scripts), and the cookie rides on e
 for the rest of the session. Sign out from the menu in the sidebar footer, which revokes the
 session and clears the cookie.
 
+The login screen also has a **"Use a bearer token instead"** toggle: paste a token (for a
+service account, or an operator who works from the CLI) and the console authenticates with the
+`Authorization` header rather than a password. Either path lands you in the same console.
+
 The first owner is created on the server with
 `omniglass bootstrap <username> --password <password>` (see [the CLI guide](/guides/cli/)).
-Service accounts and the CLI still authenticate with a bearer token in the `Authorization`
-header.
 
 ## Your profile
 

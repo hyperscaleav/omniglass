@@ -11,21 +11,23 @@ Identity and access is how an operator controls who may call the platform and wh
 
 :::note[Partial: what is built, and where it diverges]
 Built and tested today: the `principal` (+ per-kind `human` / `service`) and `credential` tables, the
-`role` / `principal_grant` model, the `audit_log`, the capability fast-reject, `GET /auth/me`, and the
-per-action `visible_set` resolver enforced in the Storage Gateway across locations, systems, and
-components. Still `Design`: password and OIDC auth, `principal_group`s, the node / NATS path, the
-permission cache, and the tenant-policy lever. The per-slice breakdown is on
-[implementation status](/architecture/status/).
+`role` / `principal_grant` model, the `audit_log`, the capability fast-reject, **local password auth
+(argon2id) behind an httpOnly session cookie** (`POST /auth/login` and `/auth/logout`, the public
+`GET /auth/status`), the self-service `GET` / `PATCH /auth/me` and `POST /auth/me:changePassword`, and
+the per-action `visible_set` resolver enforced in the Storage Gateway across locations, systems, and
+components. Still `Design`: OIDC / SAML auth, `principal_group`s, the node / NATS path, the permission
+cache, admin user CRUD and role-assignment endpoints, and the tenant-policy lever. The per-slice
+breakdown is on [implementation status](/architecture/status/).
 
 Where the build currently differs from the present-tense design below (each logged in the
 [decision log](/architecture/decisions/)):
 
-- **Credentials are bearer-only.** `credential.kind` is `bearer`; the `password` / `oidc` / `nats`
-  methods and the `(method, identifier)` lookup are deferred (epic #27, slice #28). The minted token
-  prefix is `ogp_`.
-- **Bootstrap is `omniglass bootstrap <username>`** and mints a bearer credential, not the
-  `og iam create-owner` password path described under [Bootstrap](#bootstrap); the `iam` command
-  namespace is deferred.
+- **Credentials are `bearer` or `password`.** `credential.kind` is `bearer` or `password` (argon2id,
+  PHC-encoded, one password per principal); the `oidc` / `nats` methods and the full
+  `(method, identifier)` lookup are still deferred. The minted bearer token prefix is `ogp_`.
+- **The `iam` command namespace is not built.** Owner creation is `omniglass bootstrap <username>
+  [--password <pw>]` ([Bootstrap](#bootstrap)), not the `og iam create-owner` path; the broader `iam`
+  admin CLI is deferred with the admin user surface.
 - **The `agent` principal kind** is already reserved in the schema's `kind` CHECK, although no `agent`
   identity is issued yet (AI still acts as a `human` or `service`).
 - **The owner invariant** is upheld by the bootstrap path today; the deferrable Postgres trigger
@@ -341,7 +343,7 @@ Every API operation records the resolved **actor** (the principal id) in `audit_
 
 ## Bootstrap
 
-The first install runs `og iam create-owner --username ops --email ops@example.com`. This creates the first operator as a `human` principal, a password credential (argon2id), and an `owner @ all` grant in one transaction. That operator logs in via the web UI or CLI and begins minting other principals. There is no implicit default principal; the bootstrap is the only path to the first owner.
+The first install runs `omniglass bootstrap <username>` with optional `--password <pw>`, `--email <email>`, and `--display-name <name>` flags. This creates the first operator as a `human` principal with an `owner @ all` grant and a bearer credential (the cleartext token is shown once, only `sha256(token)` is stored) in one transaction; with `--password` it also installs a password credential (argon2id, PHC-encoded) so the owner can sign in to the web console. That operator logs in via the web UI or CLI and begins minting other principals. There is no implicit default principal; the bootstrap is the only path to the first owner.
 
 ## Worked example
 

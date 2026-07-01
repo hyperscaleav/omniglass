@@ -29,9 +29,9 @@ with an environment default:
 | `--server` | `OMNIGLASS_SERVER` | `http://localhost:8080` |
 | `--token` | `OMNIGLASS_TOKEN` | (none) |
 
-The token is a bearer credential (mint the first one with `omniglass bootstrap`). The
-server enforces the same capability and scope for the CLI as for any caller: the CLI is
-just another client, with no privileged path.
+The token is a bearer credential (mint the first one with `omniglass bootstrap`; see
+[Authentication](#authentication) below). The server enforces the same capability and scope
+for the CLI as for any caller: the CLI is just another client, with no privileged path.
 
 ```sh
 export OMNIGLASS_SERVER=https://omniglass.example.com
@@ -44,6 +44,37 @@ omniglass location get hq
 Output is JSON. A non-2xx response prints the server's error body and exits non-zero, so
 the CLI is safe in scripts.
 
+## Authentication
+
+There are two ways to authenticate, both accepted on every request. A **bearer token** in
+the `Authorization` header (the `--token` flag above) is the path for services and the CLI.
+A **username and password** is the path for a human at the web console: the server verifies
+it and sets an httpOnly session cookie. The CLI itself always uses a bearer token.
+
+The first owner is created directly against the database with `bootstrap` (the trusted lane,
+no running server needed):
+
+```sh
+# Mints a bearer credential (the token is printed once) and, with --password, a password
+# credential (argon2id) so the owner can sign in to the console.
+omniglass bootstrap ops --password 's3cret-pw' --email ops@example.com --display-name "Ops Lead"
+
+# Reprint a fresh bearer token for an existing user (direct-DB, owner lane).
+omniglass token ops
+
+# Set or rotate a user's password (direct-DB, owner lane).
+omniglass set-password ops 'new-s3cret-pw'
+```
+
+Once a server is running, a signed-in principal manages **its own** account through the
+generated `auth` commands (self-scoped: each edits only the caller's own profile):
+
+```sh
+omniglass auth me                                    # your principal, permissions, and grants
+omniglass auth update-profile --display-name "Ops Lead"
+omniglass auth change-password --current-password 's3cret-pw' --new-password 'brand-new-pw'
+```
+
 ## Generated versus hand-written
 
 - **Generated** (`internal/cli/api_gen.go`, do not edit): one command per API operation.
@@ -54,7 +85,8 @@ the CLI is safe in scripts.
   description.
 - **Hand-written** (`internal/cli/api_hooks.go` and the run-mode files): the client
   runtime the generated tree calls, plus commands that are not API operations, the
-  `server` and `migrate` run modes and `bootstrap` (the trusted direct-DB owner lane).
+  `server` and `migrate` run modes and the trusted direct-DB owner lane (`bootstrap`,
+  `token`, `set-password`).
 
 To add a hand-written command, write a `newXxxCmd()` returning a `*cobra.Command` and add
 it in `newRoot`, exactly as `bootstrap` does. Regenerating the API commands never touches
