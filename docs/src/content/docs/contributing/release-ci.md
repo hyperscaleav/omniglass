@@ -71,7 +71,9 @@ depends on how the release was cut:
 
 Both drive the same `.goreleaser.yaml`, so the artifacts are identical either way. Validate a
 config change locally with `make release-snapshot` (builds the whole matrix, no tag, no
-publish).
+publish), and CI runs the same snapshot on any pull request that touches the release config,
+uploading the archives as downloadable workflow artifacts. A green PR snapshot is real
+evidence that the tagged release will build.
 
 ## Why the PR title, not the commits
 
