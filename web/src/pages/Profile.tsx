@@ -11,16 +11,14 @@ export default function Profile() {
   const updateProfile = useUpdateProfile();
   const changePassword = useChangePassword();
 
-  // Seed the editable fields once, when /auth/me first resolves, so later keystrokes
+  // Seed the editable field once, when /auth/me first resolves, so later keystrokes
   // are not clobbered by the query settling.
   const [displayName, setDisplayName] = createSignal("");
-  const [email, setEmail] = createSignal("");
   const [seeded, setSeeded] = createSignal(false);
   createEffect(() => {
     const h = me.data?.human;
     if (h && !seeded()) {
       setDisplayName(h.display_name ?? "");
-      setEmail(h.email ?? "");
       setSeeded(true);
     }
   });
@@ -31,10 +29,15 @@ export default function Profile() {
     e.preventDefault();
     setProfileBusy(true);
     setProfileMsg(null);
-    const r = await updateProfile({ display_name: displayName().trim(), email: email().trim() });
+    const r = await updateProfile({ display_name: displayName().trim() });
     setProfileMsg(r.ok ? { tone: "success", text: "Profile saved." } : { tone: "error", text: r.message });
     setProfileBusy(false);
   }
+
+  // The avatar preview: the first two letters of the display name being typed, or of
+  // the username when it is blank, matching the sidebar avatar. A live preview of how
+  // you appear (a real image lands later, see the profile-picture issue).
+  const initials = () => (displayName().trim() || human()?.username || "").slice(0, 2).toUpperCase();
 
   const [current, setCurrent] = createSignal("");
   const [next, setNext] = createSignal("");
@@ -70,6 +73,18 @@ export default function Profile() {
         <form onSubmit={saveProfile} class="card border border-base-300 bg-base-200">
           <div class="card-body gap-3">
             <h2 class="card-title text-base">Profile</h2>
+            {/* Avatar preview: initials from the display name being typed. */}
+            <div class="flex items-center gap-3">
+              <div class="avatar avatar-placeholder">
+                <div class="w-12 rounded-full bg-linear-to-br from-primary to-info text-primary-content">
+                  <span class="font-data text-sm font-bold uppercase">{initials()}</span>
+                </div>
+              </div>
+              <div class="min-w-0 leading-tight">
+                <div class="truncate font-data text-sm font-semibold">{displayName().trim() || human()?.username}</div>
+                <div class="text-[11px] text-base-content/40">This is how you appear in the console.</div>
+              </div>
+            </div>
             <div>
               <label class="eyebrow mb-1.5 block">Username</label>
               <input type="text" class="input input-bordered w-full" value={human()?.username ?? ""} disabled readonly />
@@ -87,16 +102,9 @@ export default function Profile() {
               />
             </div>
             <div>
-              <label class="eyebrow mb-1.5 block" for="profile-email">Email</label>
-              <input
-                id="profile-email"
-                type="email"
-                autocomplete="email"
-                class="input input-bordered w-full"
-                value={email()}
-                onInput={(e) => setEmail(e.currentTarget.value)}
-                disabled={profileBusy()}
-              />
+              <label class="eyebrow mb-1.5 block">Email</label>
+              <input type="email" class="input input-bordered w-full" value={human()?.email ?? ""} disabled readonly placeholder="not set" />
+              <p class="mt-1 text-[11px] text-base-content/40">An administrator sets your email.</p>
             </div>
             <Note note={profileMsg()} />
             <div class="card-actions">

@@ -324,13 +324,13 @@ func meHandler(ctx context.Context, _ *struct{}) (*meOutput, error) {
 	return out, nil
 }
 
-// updateMeInput is the body of PATCH /api/v1/auth/me: the editable self-profile
-// fields. Each is optional (a pointer): an absent field is left unchanged, a
-// provided empty string clears it.
+// updateMeInput is the body of PATCH /api/v1/auth/me. Only the display name is
+// self-editable; email is set by an administrator (a later slice), so it is not
+// on the self-service patch. The field is optional (a pointer): absent leaves it
+// unchanged, a provided empty string clears it.
 type updateMeInput struct {
 	Body struct {
 		DisplayName *string `json:"display_name,omitempty" maxLength:"200" doc:"Your display name; empty clears it"`
-		Email       *string `json:"email,omitempty" maxLength:"320" doc:"Your email; empty clears it"`
 	}
 }
 
@@ -341,24 +341,22 @@ type profileOutput struct {
 
 // updateMeHandler updates the caller's own profile. Self-scoped: it edits the
 // principal resolved from the session, never another. Authentication is the only
-// gate (in the ungated allow-list, like GET /auth/me).
+// gate (in the ungated allow-list, like GET /auth/me). Email is deliberately not
+// self-editable here; only the display name moves.
 func (a *authenticator) updateMeHandler(ctx context.Context, in *updateMeInput) (*profileOutput, error) {
 	pr, ok := principalFrom(ctx)
 	if !ok || pr.Human == nil {
 		return nil, huma.Error401Unauthorized("unauthenticated")
 	}
-	patch := storage.HumanProfilePatch{DisplayName: in.Body.DisplayName, Email: in.Body.Email}
+	patch := storage.HumanProfilePatch{DisplayName: in.Body.DisplayName}
 	if err := a.gw.UpdateHumanProfile(ctx, pr.ID, patch); err != nil {
 		return nil, huma.Error500InternalServerError("update profile")
 	}
 	// Return the merged result: exactly what was written (the session profile plus
-	// the applied fields), so the client need not re-read.
+	// the applied field), so the client need not re-read.
 	h := *pr.Human
 	if in.Body.DisplayName != nil {
 		h.DisplayName = *in.Body.DisplayName
-	}
-	if in.Body.Email != nil {
-		h.Email = *in.Body.Email
 	}
 	return &profileOutput{Body: humanBody{Username: h.Username, Email: h.Email, DisplayName: h.DisplayName}}, nil
 }

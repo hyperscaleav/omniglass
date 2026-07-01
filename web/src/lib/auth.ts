@@ -94,11 +94,12 @@ export function useLogout() {
   };
 }
 
-// useUpdateProfile patches the caller's own display name and email, then
-// invalidates /auth/me so the console reflects the change everywhere it is shown.
+// useUpdateProfile patches the caller's own display name (email is set by an
+// administrator, not here), then invalidates /auth/me so the console reflects the
+// change everywhere it is shown.
 export function useUpdateProfile() {
   const qc = useQueryClient();
-  return async (patch: { display_name?: string; email?: string }): Promise<{ ok: true } | { ok: false; message: string }> => {
+  return async (patch: { display_name?: string }): Promise<{ ok: true } | { ok: false; message: string }> => {
     const { error } = await api.PATCH("/auth/me", { body: patch });
     if (error) {
       return { ok: false, message: "Could not save your profile." };

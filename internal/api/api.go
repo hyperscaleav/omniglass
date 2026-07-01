@@ -132,7 +132,7 @@ func registerRoutes(api huma.API, gw storage.Gateway, o options) {
 		Method:      http.MethodPatch,
 		Path:        "/auth/me",
 		Summary:     "Update your own profile",
-		Description: "Updates the caller's own display name and email. Requires authentication; self-scoped (edits only your own principal).",
+		Description: "Updates the caller's own display name (email is administrator-set). Requires authentication; self-scoped (edits only your own principal).",
 		Middlewares: huma.Middlewares{a.authn},
 	}, a.updateMeHandler)
 

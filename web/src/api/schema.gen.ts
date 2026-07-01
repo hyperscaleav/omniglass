@@ -63,7 +63,7 @@ export interface paths {
         head?: never;
         /**
          * Update your own profile
-         * @description Updates the caller's own display name and email. Requires authentication; self-scoped (edits only your own principal).
+         * @description Updates the caller's own display name (email is administrator-set). Requires authentication; self-scoped (edits only your own principal).
          */
         patch: operations["update-auth-me"];
         trace?: never;
@@ -634,8 +634,6 @@ export interface components {
             readonly $schema?: string;
             /** @description Your display name; empty clears it */
             display_name?: string;
-            /** @description Your email; empty clears it */
-            email?: string;
         };
         UpdateSystemInputBody: {
             /**

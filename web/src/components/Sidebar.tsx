@@ -22,7 +22,10 @@ export default function Sidebar(props: { collapsed: boolean; onToggle: () => voi
   const ident = () => {
     const m = me.data;
     if (!m) return { name: "—", role: "" };
-    return { name: m.human?.username ?? m.service?.label ?? m.principal.kind, role: m.grants[0]?.role ?? m.principal.kind };
+    // Prefer the display name (falls through an empty one to the username), so
+    // setting it updates both the label and the initials avatar below.
+    const name = m.human?.display_name || m.human?.username || m.service?.label || m.principal.kind;
+    return { name, role: m.grants[0]?.role ?? m.principal.kind };
   };
   // The tabs this principal may see: those with no resource (Home, Explore, Learn,
   // and the still-stubbed sections) plus those whose resource it can read.

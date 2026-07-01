@@ -24,8 +24,9 @@ header.
 Click your name in the sidebar footer to open **Your profile**. It is self-service: you edit
 only your own account, whatever your role.
 
-- **Profile.** Change your display name and email. Your username is your sign-in name; an
-  administrator changes it, not you.
+- **Profile.** Change your display name; it drives how you appear in the console (the sidebar
+  label and the initials avatar). Your username and email are set by an administrator, not you,
+  and are shown read-only.
 - **Change password.** Enter your current password and a new one (at least 8 characters). A
   wrong current password is refused. Your other active sessions stay signed in.
 - **Access.** A read-only view of the identity model you operate under: your principal, the

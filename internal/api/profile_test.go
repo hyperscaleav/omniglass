@@ -125,18 +125,27 @@ func TestSelfProfileAndChangePassword(t *testing.T) {
 	}
 
 	// --- update profile ---
+	// The display name is self-editable and keeps the bootstrapped email untouched.
 	code, body := send(http.MethodPatch, "/api/v1/auth/me", true,
-		map[string]string{"display_name": "Ops Lead", "email": "ops@new.example"})
+		map[string]string{"display_name": "Ops Lead"})
 	if code != http.StatusOK {
 		t.Fatalf("update profile: want 200, got %d (%s)", code, body)
 	}
-	if !bytes.Contains(body, []byte(`"display_name":"Ops Lead"`)) || !bytes.Contains(body, []byte(`"email":"ops@new.example"`)) {
-		t.Fatalf("update profile body missing new values: %s", body)
+	if !bytes.Contains(body, []byte(`"display_name":"Ops Lead"`)) {
+		t.Fatalf("update profile body missing the new display name: %s", body)
 	}
-	// GET /auth/me reflects the change.
+	if !bytes.Contains(body, []byte(`"email":"ops@old.example"`)) {
+		t.Fatalf("email must be preserved, but it changed: %s", body)
+	}
+	// Email is not a self-editable field: a body carrying it is rejected outright.
+	if code, _ := send(http.MethodPatch, "/api/v1/auth/me", true,
+		map[string]string{"email": "hacker@evil.example"}); code != http.StatusUnprocessableEntity {
+		t.Fatalf("email in the self-service body: want 422, got %d", code)
+	}
+	// GET /auth/me reflects the display name and keeps the original email.
 	_, me := send(http.MethodGet, "/api/v1/auth/me", true, nil)
-	if !bytes.Contains(me, []byte(`"display_name":"Ops Lead"`)) || !bytes.Contains(me, []byte(`"email":"ops@new.example"`)) {
-		t.Fatalf("me after update missing new values: %s", me)
+	if !bytes.Contains(me, []byte(`"display_name":"Ops Lead"`)) || !bytes.Contains(me, []byte(`"email":"ops@old.example"`)) {
+		t.Fatalf("me after update: want new display name and unchanged email, got %s", me)
 	}
 	// Unauthenticated update is 401.
 	if code, _ := send(http.MethodPatch, "/api/v1/auth/me", false,

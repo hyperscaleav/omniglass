@@ -76,11 +76,10 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			var fDisplayName string
-			var fEmail string
 			cmd := &cobra.Command{
 				Use:     "update-profile",
 				Short:   "Update your own profile",
-				Long:    "Updates the caller's own display name and email. Requires authentication; self-scoped (edits only your own principal).",
+				Long:    "Updates the caller's own display name (email is administrator-set). Requires authentication; self-scoped (edits only your own principal).",
 				Example: "  omniglass auth update-profile",
 				Args:    cobra.ExactArgs(0),
 				RunE: func(cmd *cobra.Command, args []string) error {
@@ -89,14 +88,10 @@ func generatedCommands() []*cobra.Command {
 					if cmd.Flags().Changed("display-name") {
 						body["display_name"] = fDisplayName
 					}
-					if cmd.Flags().Changed("email") {
-						body["email"] = fEmail
-					}
 					return runAPICommand(cmd, "PATCH", path, body)
 				},
 			}
 			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "Your display name; empty clears it")
-			cmd.Flags().StringVar(&fEmail, "email", "", "Your email; empty clears it")
 			return cmd
 		}())
 		roots = append(roots, parent)

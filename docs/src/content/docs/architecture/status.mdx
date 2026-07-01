@@ -182,7 +182,7 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   e2e that signs in through the form. Thin cuts: self profile edit and change-password (slice 2), admin
   user CRUD and role assignment (slice 3); email invite and forgot-password are later.
 - **Identity slice 2: the self-service profile.** A signed-in operator manages their own account, whatever
-  their role: `PATCH /auth/me` edits their own display name and email, and `POST /auth/me:changePassword`
+  their role: `PATCH /auth/me` edits their own display name (email stays administrator-set), and `POST /auth/me:changePassword`
   (the first AIP `:verb` custom method on the surface) verifies the current password and sets a new one,
   reusing the slice-1 argon2 primitive. Both are authn-only and self-scoped (they touch only the caller's
   own principal), so they join the small ungated allow-list alongside `GET /auth/me` rather than carrying a

@@ -85,20 +85,20 @@ describe("auth hooks", () => {
     expect(getToken()).toBe("");
   });
 
-  it("useUpdateProfile PATCHes the editable fields", async () => {
+  it("useUpdateProfile PATCHes the display name", async () => {
     let sent: { url: string; method: string; body: unknown } | null = null;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       if (req.method === "PATCH") sent = { url: req.url, method: req.method, body: await req.clone().json() };
-      return jsonResponse({ username: "ops", display_name: "Ops Lead", email: "ops@new.example" }, 200);
+      return jsonResponse({ username: "ops", display_name: "Ops Lead", email: "ops@old.example" }, 200);
     });
 
-    const res = await renderHook(useUpdateProfile, { wrapper }).result({ display_name: "Ops Lead", email: "ops@new.example" });
+    const res = await renderHook(useUpdateProfile, { wrapper }).result({ display_name: "Ops Lead" });
 
     expect(res.ok).toBe(true);
     expect(sent!.url.endsWith("/auth/me")).toBe(true);
     expect(sent!.method).toBe("PATCH");
-    expect(sent!.body).toMatchObject({ display_name: "Ops Lead", email: "ops@new.example" });
+    expect(sent!.body).toMatchObject({ display_name: "Ops Lead" });
   });
 
   it("useUpdateProfile reports a server error", async () => {
