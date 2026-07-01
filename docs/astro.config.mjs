@@ -112,6 +112,7 @@ export default defineConfig({
             { label: 'Install', slug: 'guides/install' },
             { label: 'Container image', slug: 'guides/container-image' },
             { label: 'Deploying with Helm', slug: 'guides/helm' },
+            { label: 'PR preview environments', slug: 'guides/pr-previews' },
           ],
         },
       ],

@@ -1,0 +1,67 @@
+name: preview-comment
+
+# Maintain one sticky comment per PR pointing at its preview environment. The
+# preview itself is provisioned by Argo CD in the ops repo when a PR carries the
+# `preview` label (see the PR previews guide); this only posts the URL. No
+# credentials are ever posted (the console is gated by Cloudflare Access; the
+# repo is public).
+
+on:
+  pull_request:
+    types: [labeled, unlabeled, closed, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: preview-comment-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  comment:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Upsert the preview comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          MARKER='<!-- omniglass-preview -->'
+          HOST="og-pr-${PR}.preview.hyperscaleav.com"
+
+          # Recompute desired state from the PR itself, so labeled/unlabeled/
+          # closed/reopened all converge (idempotent).
+          view=$(gh pr view "$PR" --repo "$REPO" --json state,labels)
+          is_open=$(printf '%s' "$view" | jq -r '.state == "OPEN"')
+          has_label=$(printf '%s' "$view" | jq -r '[.labels[].name] | index("preview") != null')
+
+          if [ "$is_open" = "true" ] && [ "$has_label" = "true" ]; then
+            body="${MARKER}
+          ### Preview environment
+
+          This PR is deploying to **https://${HOST}/web** (behind Cloudflare Access).
+
+          It updates on every push, and is torn down when the \`preview\` label is
+          removed or the PR closes."
+          else
+            body="${MARKER}
+          ### Preview environment
+
+          Torn down. Add the \`preview\` label to spin one up again."
+          fi
+
+          # Find an existing sticky comment by its marker, then update or create.
+          # Slurp all pages into one array (add) and match with a jq --arg so the
+          # marker is never string-interpolated into the filter.
+          cid=$(gh api "repos/${REPO}/issues/${PR}/comments" --paginate \
+                | jq -rs --arg m "$MARKER" 'add | map(select(.body | contains($m)))[0].id // empty')
+          if [ -n "$cid" ]; then
+            gh api "repos/${REPO}/issues/comments/${cid}" -X PATCH -f body="$body" >/dev/null
+            echo "updated comment $cid"
+          else
+            gh api "repos/${REPO}/issues/${PR}/comments" -X POST -f body="$body" >/dev/null
+            echo "created comment"
+          fi
