@@ -12,6 +12,7 @@ import Locations from "./pages/Locations";
 import Systems from "./pages/Systems";
 import Components from "./pages/Components";
 import Profile from "./pages/Profile";
+import Users from "./pages/Users";
 import SectionStub from "./pages/SectionStub";
 import NotFound from "./pages/NotFound";
 
@@ -33,7 +34,7 @@ const ProtectedShell: ParentComponent = (props) => (
 const STUBS = [
   "/dashboards", "/alarms", "/interfaces", "/nodes", "/tasks",
   "/templates", "/types", "/tags", "/rules", "/explore", "/learn",
-  "/config", "/secrets", "/users", "/roles", "/groups", "/audit",
+  "/config", "/secrets", "/roles", "/groups", "/audit",
 ];
 
 render(
@@ -52,6 +53,7 @@ render(
           <Route path="/components" component={Components} />
           <Route path="/components/:name" component={Components} />
           <Route path="/profile" component={Profile} />
+          <Route path="/users" component={Users} />
           {STUBS.map((p) => <Route path={p} component={SectionStub} />)}
           <Route path="*" component={NotFound} />
         </Route>
