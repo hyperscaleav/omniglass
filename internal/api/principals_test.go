@@ -110,6 +110,125 @@ func TestPrincipalDirectoryAPI(t *testing.T) {
 	}
 }
 
+// TestUpdatePrincipalAPI drives the admin update against the real binary: an
+// all-scope admin edits a human's display name, email, and username; the rename
+// re-homes the login (new username works, old fails); a location-scoped admin is
+// refused; a clash is 409, an unknown id 404, and a non-human target 422. Skipped
+// under -short.
+func TestUpdatePrincipalAPI(t *testing.T) {
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+
+	ownerTok := principalWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
+	scopedTok := principalWithGrants(t, ctx, dsn, "hq-admin", []grant{{role: "admin", scopeKind: "location", scopeID: "HQ"}})
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+
+	// Create a human with a password, capture its id.
+	created := c.do(ownerTok, "POST", "/principals", map[string]string{"username": "alice", "password": "alice-s3cret", "display_name": "Alice"}, http.StatusCreated)
+	var made struct {
+		ID string `json:"id"`
+	}
+	_ = json.Unmarshal(created, &made)
+
+	// Update all three admin-owned fields, including a rename.
+	upd := c.do(ownerTok, "PATCH", "/principals/"+made.ID, map[string]string{
+		"display_name": "Alice Cooper", "email": "ac@example.test", "username": "alice-2",
+	}, http.StatusOK)
+	if !bytes.Contains(upd, []byte(`"username":"alice-2"`)) || !bytes.Contains(upd, []byte(`"display_name":"Alice Cooper"`)) {
+		t.Fatalf("update body: %s", upd)
+	}
+
+	// The rename re-homes the login: the new username works, the old does not.
+	login := func(u string) int {
+		body, _ := json.Marshal(map[string]string{"username": u, "password": "alice-s3cret"})
+		resp, err := http.Post(srv.URL+"/api/v1/auth/login", "application/json", bytes.NewReader(body))
+		if err != nil {
+			t.Fatalf("login: %v", err)
+		}
+		resp.Body.Close()
+		return resp.StatusCode
+	}
+	if code := login("alice-2"); code != http.StatusNoContent {
+		t.Fatalf("login under new username: want 204, got %d", code)
+	}
+	if code := login("alice"); code != http.StatusUnauthorized {
+		t.Fatalf("login under old username: want 401, got %d", code)
+	}
+
+	// A location-scoped admin is refused, an unknown id is 404.
+	if code, _ := c.send(scopedTok, "PATCH", "/principals/"+made.ID, map[string]string{"display_name": "no"}); code != http.StatusForbidden {
+		t.Fatalf("scoped update: want 403, got %d", code)
+	}
+	if code, _ := c.send(ownerTok, "PATCH", "/principals/00000000-0000-0000-0000-000000000000", map[string]string{"display_name": "no"}); code != http.StatusNotFound {
+		t.Fatalf("unknown update: want 404, got %d", code)
+	}
+
+	// A username clash is 409.
+	c.do(ownerTok, "POST", "/principals", map[string]string{"username": "bob"}, http.StatusCreated)
+	var bobID string
+	for _, p := range listIDs(t, c, ownerTok) {
+		if p.username == "bob" {
+			bobID = p.id
+		}
+	}
+	if code, _ := c.send(ownerTok, "PATCH", "/principals/"+bobID, map[string]string{"username": "alice-2"}); code != http.StatusConflict {
+		t.Fatalf("clash update: want 409, got %d", code)
+	}
+
+	// A non-human target (a service principal) is 422.
+	var svcID string
+	for _, p := range listIDs(t, c, ownerTok) {
+		if p.kind == "service" {
+			svcID = p.id
+		}
+	}
+	if svcID == "" {
+		t.Fatal("expected a service principal in the directory")
+	}
+	if code, _ := c.send(ownerTok, "PATCH", "/principals/"+svcID, map[string]string{"display_name": "no"}); code != http.StatusUnprocessableEntity {
+		t.Fatalf("non-human update: want 422, got %d", code)
+	}
+}
+
+type dirRow struct{ id, kind, username string }
+
+// listIDs pulls the principal directory as a flat id/kind/username list.
+func listIDs(t *testing.T, c *apiClient, tok string) []dirRow {
+	t.Helper()
+	_, body := c.send(tok, "GET", "/principals", nil)
+	var doc struct {
+		Principals []struct {
+			ID    string `json:"id"`
+			Kind  string `json:"kind"`
+			Human *struct {
+				Username string `json:"username"`
+			} `json:"human"`
+		} `json:"principals"`
+	}
+	if err := json.Unmarshal(body, &doc); err != nil {
+		t.Fatalf("parse list: %v", err)
+	}
+	rows := make([]dirRow, 0, len(doc.Principals))
+	for _, p := range doc.Principals {
+		r := dirRow{id: p.ID, kind: p.Kind}
+		if p.Human != nil {
+			r.username = p.Human.Username
+		}
+		rows = append(rows, r)
+	}
+	return rows
+}
+
 // assertNoSecret fails if a response body carries anything that looks like a
 // credential secret: the hash column, or the cleartext password we sent.
 func assertNoSecret(t *testing.T, body []byte) {

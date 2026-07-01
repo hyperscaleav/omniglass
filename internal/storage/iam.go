@@ -431,6 +431,106 @@ func (p *PG) CreateHumanPrincipal(ctx context.Context, actorID string, spec Huma
 	return &pr, nil
 }
 
+// ErrPrincipalNotHuman is returned when an admin profile update targets a
+// non-human principal (only humans have username / email / display name). The API
+// maps it to 422.
+var ErrPrincipalNotHuman = errors.New("storage: principal is not a human")
+
+// AdminHumanPatch carries the admin-editable fields of a human principal. A nil
+// pointer leaves the field unchanged; a provided empty string clears the nullable
+// display name or email. Username is not nullable: a provided empty string is a
+// request fault the API rejects before the gateway.
+type AdminHumanPatch struct {
+	DisplayName *string
+	Email       *string
+	Username    *string
+}
+
+// UpdatePrincipalHuman applies an admin profile update to a human principal by id,
+// in one audited transaction. Requires an all-scope grant. A non-human target is
+// ErrPrincipalNotHuman, an unknown id ErrPrincipalNotFound, a username clash
+// ErrUsernameTaken. Renaming is safe: nothing keys on the username (credentials
+// and grants reference the principal id), so a rename follows the identity.
+func (p *PG) UpdatePrincipalHuman(ctx context.Context, actorID, id string, patch AdminHumanPatch, action scope.Set) (*Principal, error) {
+	if !action.All {
+		return nil, ErrPrincipalForbidden
+	}
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("storage: begin update principal: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var kind string
+	err = tx.QueryRow(ctx, `select kind from principal where id = $1`, id).Scan(&kind)
+	var pgErr *pgconn.PgError
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		return nil, ErrPrincipalNotFound
+	case errors.As(err, &pgErr) && pgErr.Code == "22P02":
+		return nil, ErrPrincipalNotFound
+	case err != nil:
+		return nil, fmt.Errorf("storage: update principal lookup: %w", err)
+	}
+	if kind != "human" {
+		return nil, ErrPrincipalNotHuman
+	}
+
+	// The audit "before" is the current human row.
+	var before HumanProfile
+	if err := tx.QueryRow(ctx,
+		`select username, coalesce(email, ''), coalesce(display_name, '') from human where principal_id = $1`,
+		id).Scan(&before.Username, &before.Email, &before.DisplayName); err != nil {
+		return nil, fmt.Errorf("storage: update principal before: %w", err)
+	}
+
+	setDisplay, display := patch.DisplayName != nil, any(nil)
+	if patch.DisplayName != nil {
+		display = nullize(*patch.DisplayName)
+	}
+	setEmail, email := patch.Email != nil, any(nil)
+	if patch.Email != nil {
+		email = nullize(*patch.Email)
+	}
+	setUsername := patch.Username != nil
+	var username any
+	if patch.Username != nil {
+		username = *patch.Username
+	}
+	if _, err := tx.Exec(ctx, `
+		update human set
+			display_name = case when $2 then $3 else display_name end,
+			email        = case when $4 then $5 else email end,
+			username     = case when $6 then $7 else username end
+		where principal_id = $1`,
+		id, setDisplay, display, setEmail, email, setUsername, username); err != nil {
+		return nil, mapPrincipalWriteErr(err)
+	}
+
+	after := before
+	if patch.DisplayName != nil {
+		after.DisplayName = *patch.DisplayName
+	}
+	if patch.Email != nil {
+		after.Email = *patch.Email
+	}
+	if patch.Username != nil {
+		after.Username = *patch.Username
+	}
+	if err := writeAuditRes(ctx, tx, actorID, "update", "principal", id, before, after); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("storage: commit update principal: %w", err)
+	}
+
+	pr := Principal{ID: id, Kind: "human"}
+	if err := p.loadPrincipal(ctx, &pr); err != nil {
+		return nil, err
+	}
+	return &pr, nil
+}
+
 // mapPrincipalWriteErr translates the human.username unique violation into
 // ErrUsernameTaken (the API's 409); other errors pass through wrapped.
 func mapPrincipalWriteErr(err error) error {

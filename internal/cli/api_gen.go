@@ -473,6 +473,36 @@ func generatedCommands() []*cobra.Command {
 			}
 			return cmd
 		}())
+		parent.AddCommand(func() *cobra.Command {
+			var fDisplayName string
+			var fEmail string
+			var fUsername string
+			cmd := &cobra.Command{
+				Use:     "update <id>",
+				Short:   "Update a principal",
+				Long:    "Updates a human principal's display name, email, and username. Gated by principal:update (all-scope). Renaming is safe: nothing keys on the username.",
+				Example: "  omniglass principal update <id>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/principals/%s", url.PathEscape(args[0]))
+					body := map[string]any{}
+					if cmd.Flags().Changed("display-name") {
+						body["display_name"] = fDisplayName
+					}
+					if cmd.Flags().Changed("email") {
+						body["email"] = fEmail
+					}
+					if cmd.Flags().Changed("username") {
+						body["username"] = fUsername
+					}
+					return runAPICommand(cmd, "PATCH", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "Display name; empty clears it")
+			cmd.Flags().StringVar(&fEmail, "email", "", "Email; empty clears it")
+			cmd.Flags().StringVar(&fUsername, "username", "", "Sign-in name; renaming is safe")
+			return cmd
+		}())
 		roots = append(roots, parent)
 	}
 	{

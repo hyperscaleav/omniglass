@@ -293,7 +293,11 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Update a principal
+         * @description Updates a human principal's display name, email, and username. Gated by principal:update (all-scope). Renaming is safe: nothing keys on the username.
+         */
+        patch: operations["update-principal"];
         trace?: never;
     };
     "/roles": {
@@ -714,6 +718,20 @@ export interface components {
             readonly $schema?: string;
             /** @description Your display name; empty clears it */
             display_name?: string;
+        };
+        UpdatePrincipalInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/UpdatePrincipalInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Display name; empty clears it */
+            display_name?: string;
+            /** @description Email; empty clears it */
+            email?: string;
+            /** @description Sign-in name; renaming is safe */
+            username?: string;
         };
         UpdateSystemInputBody: {
             /**
@@ -1370,6 +1388,42 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrincipalBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "update-principal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The principal's id (uuid) */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePrincipalInputBody"];
+            };
+        };
         responses: {
             /** @description OK */
             200: {

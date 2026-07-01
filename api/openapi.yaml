@@ -649,6 +649,30 @@ components:
           maxLength: 200
           type: string
       type: object
+    UpdatePrincipalInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/UpdatePrincipalInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        display_name:
+          description: Display name; empty clears it
+          maxLength: 200
+          type: string
+        email:
+          description: Email; empty clears it
+          maxLength: 320
+          type: string
+        username:
+          description: Sign-in name; renaming is safe
+          maxLength: 200
+          minLength: 1
+          type: string
+      type: object
     UpdateSystemInputBody:
       additionalProperties: false
       properties:
@@ -1143,6 +1167,37 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Get a principal
+    patch:
+      description: "Updates a human principal's display name, email, and username. Gated by principal:update (all-scope). Renaming is safe: nothing keys on the username."
+      operationId: update-principal
+      parameters:
+        - description: The principal's id (uuid)
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The principal's id (uuid)
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePrincipalInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PrincipalBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Update a principal
   /roles:
     get:
       description: Lists the roles. Gated by the role:read capability.

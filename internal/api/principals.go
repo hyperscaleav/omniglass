@@ -66,6 +66,15 @@ type createPrincipalInput struct {
 	}
 }
 
+type updatePrincipalInput struct {
+	ID   string `path:"id" doc:"The principal's id (uuid)"`
+	Body struct {
+		DisplayName *string `json:"display_name,omitempty" maxLength:"200" doc:"Display name; empty clears it"`
+		Email       *string `json:"email,omitempty" maxLength:"320" doc:"Email; empty clears it"`
+		Username    *string `json:"username,omitempty" minLength:"1" maxLength:"200" doc:"Sign-in name; renaming is safe"`
+	}
+}
+
 // registerPrincipalRoutes wires the admin principal directory: list, get, and
 // create a human. Each is gated by a principal capability, which resolves to an
 // all-scope grant only (a principal is not a scope-tree entity), so the gateway
@@ -136,6 +145,25 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		}
 		return &principalOutput{Body: toPrincipalBody(pr)}, nil
 	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "update-principal",
+		Method:      http.MethodPatch,
+		Path:        "/principals/{id}",
+		Summary:     "Update a principal",
+		Description: "Updates a human principal's display name, email, and username. Gated by principal:update (all-scope). Renaming is safe: nothing keys on the username.",
+		Middlewares: huma.Middlewares{a.authn, a.require("principal", "update")},
+	}, func(ctx context.Context, in *updatePrincipalInput) (*principalOutput, error) {
+		pr, err := gw.UpdatePrincipalHuman(ctx, actorID(ctx), in.ID, storage.AdminHumanPatch{
+			DisplayName: in.Body.DisplayName,
+			Email:       in.Body.Email,
+			Username:    in.Body.Username,
+		}, a.scopeFor(ctx, "principal", "update"))
+		if err != nil {
+			return nil, mapPrincipalErr(err)
+		}
+		return &principalOutput{Body: toPrincipalBody(pr)}, nil
+	})
 }
 
 // mapPrincipalErr translates the gateway's principal sentinels into HTTP status:
@@ -148,6 +176,8 @@ func mapPrincipalErr(err error) error {
 		return huma.Error403Forbidden("principal management requires an all-scope grant")
 	case errors.Is(err, storage.ErrUsernameTaken):
 		return huma.Error409Conflict("username already exists")
+	case errors.Is(err, storage.ErrPrincipalNotHuman):
+		return huma.Error422UnprocessableEntity("only human principals have these fields")
 	default:
 		return huma.Error500InternalServerError("principal operation failed")
 	}

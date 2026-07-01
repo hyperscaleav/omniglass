@@ -64,6 +64,11 @@ type Gateway interface {
 	// when a hash is given) in one audited transaction. Requires an all-scope
 	// create; a duplicate username is ErrUsernameTaken.
 	CreateHumanPrincipal(ctx context.Context, actorID string, spec HumanSpec, create scope.Set) (*Principal, error)
+	// UpdatePrincipalHuman applies an admin profile update (display name, email,
+	// username) to a human principal by id, audited. Requires an all-scope grant; a
+	// non-human target is ErrPrincipalNotHuman, an unknown id ErrPrincipalNotFound,
+	// a username clash ErrUsernameTaken.
+	UpdatePrincipalHuman(ctx context.Context, actorID, id string, patch AdminHumanPatch, action scope.Set) (*Principal, error)
 	// RevokeBearer deletes the bearer credential with the given sha256 hash
 	// (session logout). A no-op if none matches.
 	RevokeBearer(ctx context.Context, hash []byte) error
