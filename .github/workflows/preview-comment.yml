@@ -2,7 +2,7 @@ name: preview-comment
 
 # Maintain one sticky comment per PR pointing at its preview environment. The
 # preview itself is provisioned by Argo CD in the ops repo when a PR carries the
-# `preview` label (see the PR previews guide); this only posts the URL. No
+# `run:preview` label (see the PR previews guide); this only posts the URL. No
 # credentials are ever posted (the console is gated by Cloudflare Access; the
 # repo is public).
 
@@ -36,7 +36,7 @@ jobs:
           # closed/reopened all converge (idempotent).
           view=$(gh pr view "$PR" --repo "$REPO" --json state,labels)
           is_open=$(printf '%s' "$view" | jq -r '.state == "OPEN"')
-          has_label=$(printf '%s' "$view" | jq -r '[.labels[].name] | index("preview") != null')
+          has_label=$(printf '%s' "$view" | jq -r '[.labels[].name] | index("run:preview") != null')
 
           if [ "$is_open" = "true" ] && [ "$has_label" = "true" ]; then
             body="${MARKER}
@@ -44,13 +44,13 @@ jobs:
 
           This PR is deploying to **https://${HOST}/web** (behind Cloudflare Access).
 
-          It updates on every push, and is torn down when the \`preview\` label is
+          It updates on every push, and is torn down when the \`run:preview\` label is
           removed or the PR closes."
           else
             body="${MARKER}
           ### Preview environment
 
-          Torn down. Add the \`preview\` label to spin one up again."
+          Torn down. Add the \`run:preview\` label to spin one up again."
           fi
 
           # Find an existing sticky comment by its marker, then update or create.
