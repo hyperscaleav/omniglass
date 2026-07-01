@@ -369,8 +369,13 @@ func (p *PG) GetPrincipal(ctx context.Context, id string, read scope.Set) (*Prin
 	}
 	pr := Principal{ID: id}
 	err := p.pool.QueryRow(ctx, `select id, kind from principal where id = $1`, id).Scan(&pr.ID, &pr.Kind)
+	var pgErr *pgconn.PgError
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
+		return nil, ErrPrincipalNotFound
+	case errors.As(err, &pgErr) && pgErr.Code == "22P02":
+		// A malformed id (invalid uuid text) identifies no principal: a clean 404,
+		// not a 500.
 		return nil, ErrPrincipalNotFound
 	case err != nil:
 		return nil, fmt.Errorf("storage: get principal: %w", err)

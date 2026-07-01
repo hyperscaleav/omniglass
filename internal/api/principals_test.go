@@ -87,9 +87,12 @@ func TestPrincipalDirectoryAPI(t *testing.T) {
 		t.Fatalf("short password: want 422, got %d", code)
 	}
 
-	// The all-scope invariant: a location-scoped admin is refused list and create.
+	// The all-scope invariant: a location-scoped admin is refused list, get, and create.
 	if code, _ := c.send(scopedTok, "GET", "/principals", nil); code != http.StatusForbidden {
 		t.Fatalf("scoped list: want 403, got %d", code)
+	}
+	if code, _ := c.send(scopedTok, "GET", "/principals/"+made.ID, nil); code != http.StatusForbidden {
+		t.Fatalf("scoped get: want 403, got %d", code)
 	}
 	if code, _ := c.send(scopedTok, "POST", "/principals", map[string]string{"username": "eve", "password": "eve-s3cret"}); code != http.StatusForbidden {
 		t.Fatalf("scoped create: want 403, got %d", code)

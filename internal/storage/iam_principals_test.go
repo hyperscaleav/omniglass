@@ -94,8 +94,11 @@ func TestPrincipalDirectory(t *testing.T) {
 	if _, err := gw.CreateHumanPrincipal(ctx, owner.ID, storage.HumanSpec{Username: "bob"}, scope.Set{}); !errors.Is(err, storage.ErrPrincipalForbidden) {
 		t.Fatalf("create without all scope: want ErrPrincipalForbidden, got %v", err)
 	}
-	// An unknown id is a clean not-found.
+	// An unknown id, and a malformed (non-uuid) id, are both a clean not-found.
 	if _, err := gw.GetPrincipal(ctx, "00000000-0000-0000-0000-000000000000", all); !errors.Is(err, storage.ErrPrincipalNotFound) {
 		t.Fatalf("get unknown: want ErrPrincipalNotFound, got %v", err)
+	}
+	if _, err := gw.GetPrincipal(ctx, "not-a-uuid", all); !errors.Is(err, storage.ErrPrincipalNotFound) {
+		t.Fatalf("get malformed id: want ErrPrincipalNotFound, got %v", err)
 	}
 }
