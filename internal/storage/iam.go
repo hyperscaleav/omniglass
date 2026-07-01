@@ -153,6 +153,7 @@ var ErrCredentialNotFound = errors.New("storage: credential not found")
 type Principal struct {
 	ID      string
 	Kind    string
+	Active  bool
 	Human   *HumanProfile
 	Service *ServiceProfile
 	Grants  []Grant
@@ -184,7 +185,7 @@ func (p *PG) AuthenticateBearer(ctx context.Context, hash []byte) (*Principal, e
 		select pr.id, pr.kind
 		from credential c
 		join principal pr on pr.id = c.principal_id
-		where c.kind = 'bearer' and c.secret_hash = $1`, hash).Scan(&pr.ID, &pr.Kind)
+		where c.kind = 'bearer' and c.secret_hash = $1 and pr.active`, hash).Scan(&pr.ID, &pr.Kind)
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
 		return nil, ErrCredentialNotFound
@@ -206,8 +207,9 @@ func (p *PG) AuthenticatePassword(ctx context.Context, username, password string
 	err := p.pool.QueryRow(ctx, `
 		select h.principal_id, c.secret_hash
 		from human h
+		join principal pr on pr.id = h.principal_id
 		join credential c on c.principal_id = h.principal_id and c.kind = 'password'
-		where h.username = $1`, username).Scan(&pr.ID, &encoded)
+		where h.username = $1 and pr.active`, username).Scan(&pr.ID, &encoded)
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
 		return nil, ErrBadCredentials
@@ -333,15 +335,18 @@ func (p *PG) ListPrincipals(ctx context.Context, read scope.Set) ([]Principal, e
 	if !read.All {
 		return nil, ErrPrincipalForbidden
 	}
-	rows, err := p.pool.Query(ctx, `select id, kind from principal order by created_at`)
+	rows, err := p.pool.Query(ctx, `select id, kind, active from principal order by created_at`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list principals: %w", err)
 	}
-	type base struct{ id, kind string }
+	type base struct {
+		id, kind string
+		active   bool
+	}
 	var bases []base
 	for rows.Next() {
 		var b base
-		if err := rows.Scan(&b.id, &b.kind); err != nil {
+		if err := rows.Scan(&b.id, &b.kind, &b.active); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("storage: scan principal: %w", err)
 		}
@@ -354,7 +359,7 @@ func (p *PG) ListPrincipals(ctx context.Context, read scope.Set) ([]Principal, e
 	// loadPrincipal runs its own queries, so the row cursor is drained first.
 	out := make([]Principal, 0, len(bases))
 	for _, b := range bases {
-		pr := Principal{ID: b.id, Kind: b.kind}
+		pr := Principal{ID: b.id, Kind: b.kind, Active: b.active}
 		if err := p.loadPrincipal(ctx, &pr); err != nil {
 			return nil, err
 		}
@@ -370,7 +375,7 @@ func (p *PG) GetPrincipal(ctx context.Context, id string, read scope.Set) (*Prin
 		return nil, ErrPrincipalForbidden
 	}
 	pr := Principal{ID: id}
-	err := p.pool.QueryRow(ctx, `select id, kind from principal where id = $1`, id).Scan(&pr.ID, &pr.Kind)
+	err := p.pool.QueryRow(ctx, `select id, kind, active from principal where id = $1`, id).Scan(&pr.ID, &pr.Kind, &pr.Active)
 	var pgErr *pgconn.PgError
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
@@ -629,6 +634,64 @@ func (p *PG) RevokeGrant(ctx context.Context, actorID, principalID, grantID stri
 			return ErrLastOwner
 		}
 		return fmt.Errorf("storage: commit revoke grant: %w", err)
+	}
+	return nil
+}
+
+// SetPrincipalActive enables or disables a principal (soft), audited. Requires an
+// all-scope grant. Disabling the last active owner is refused (ErrLastOwner); a
+// disabled principal cannot authenticate, and enabling restores access.
+func (p *PG) SetPrincipalActive(ctx context.Context, actorID, id string, active bool, action scope.Set) error {
+	if !action.All {
+		return ErrPrincipalForbidden
+	}
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("storage: begin set active: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var kind string
+	var wasActive bool
+	err = tx.QueryRow(ctx, `select kind, active from principal where id = $1`, id).Scan(&kind, &wasActive)
+	var pgErr *pgconn.PgError
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		return ErrPrincipalNotFound
+	case errors.As(err, &pgErr) && pgErr.Code == "22P02":
+		return ErrPrincipalNotFound
+	case err != nil:
+		return fmt.Errorf("storage: set active lookup: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `update principal set active = $2 where id = $1`, id, active); err != nil {
+		return fmt.Errorf("storage: set active: %w", err)
+	}
+	if !active {
+		// Refuse if disabling this principal leaves no active owner@all grant (the
+		// owner invariant for the active flag, mirroring the grant trigger).
+		var ownerRemains bool
+		if err := tx.QueryRow(ctx, `
+			select exists(
+				select 1 from principal_grant g
+				join principal pr on pr.id = g.principal_id
+				where g.role_id = 'owner' and g.scope_kind = 'all' and pr.active
+			)`).Scan(&ownerRemains); err != nil {
+			return fmt.Errorf("storage: owner check: %w", err)
+		}
+		if !ownerRemains {
+			return ErrLastOwner // rolls back the disable
+		}
+	}
+	verb := "enable"
+	if !active {
+		verb = "disable"
+	}
+	if err := writeAuditRes(ctx, tx, actorID, verb, "principal", id,
+		map[string]any{"active": wasActive}, map[string]any{"active": active}); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("storage: commit set active: %w", err)
 	}
 	return nil
 }

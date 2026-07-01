@@ -289,6 +289,81 @@ func TestGrantAPI(t *testing.T) {
 	}
 }
 
+// TestDisableAPI drives soft-disable against the real binary: an admin disables a
+// user (who can then no longer sign in), re-enables them, cannot disable the last
+// owner, and a location-scoped admin is refused. Skipped under -short.
+func TestDisableAPI(t *testing.T) {
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+
+	ownerTok := principalWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
+	scopedTok := principalWithGrants(t, ctx, dsn, "hq-admin", []grant{{role: "admin", scopeKind: "location", scopeID: "HQ"}})
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+
+	created := c.do(ownerTok, "POST", "/principals", map[string]string{"username": "alice", "password": "alice-s3cret"}, http.StatusCreated)
+	var alice struct {
+		ID string `json:"id"`
+	}
+	_ = json.Unmarshal(created, &alice)
+
+	login := func() int {
+		body, _ := json.Marshal(map[string]string{"username": "alice", "password": "alice-s3cret"})
+		resp, err := http.Post(srv.URL+"/api/v1/auth/login", "application/json", bytes.NewReader(body))
+		if err != nil {
+			t.Fatalf("login: %v", err)
+		}
+		resp.Body.Close()
+		return resp.StatusCode
+	}
+
+	if login() != http.StatusNoContent {
+		t.Fatal("alice should sign in before disable")
+	}
+	// Disable: sign-in is refused and the directory shows inactive.
+	if code, _ := c.send(ownerTok, "POST", "/principals/"+alice.ID+":disable", nil); code != http.StatusNoContent {
+		t.Fatalf("disable: want 204, got %d", code)
+	}
+	if login() != http.StatusUnauthorized {
+		t.Fatal("a disabled user must not sign in")
+	}
+	if _, body := c.send(ownerTok, "GET", "/principals/"+alice.ID, nil); !bytes.Contains(body, []byte(`"active":false`)) {
+		t.Fatalf("alice should read inactive: %s", body)
+	}
+	// Enable restores access.
+	if code, _ := c.send(ownerTok, "POST", "/principals/"+alice.ID+":enable", nil); code != http.StatusNoContent {
+		t.Fatalf("enable: want 204, got %d", code)
+	}
+	if login() != http.StatusNoContent {
+		t.Fatal("a re-enabled user should sign in")
+	}
+
+	// The last active owner cannot be disabled.
+	_, me := c.send(ownerTok, "GET", "/auth/me", nil)
+	var meDoc struct {
+		Principal struct {
+			ID string `json:"id"`
+		} `json:"principal"`
+	}
+	_ = json.Unmarshal(me, &meDoc)
+	if code, _ := c.send(ownerTok, "POST", "/principals/"+meDoc.Principal.ID+":disable", nil); code != http.StatusConflict {
+		t.Fatalf("disable last owner: want 409, got %d", code)
+	}
+	// A location-scoped admin is refused.
+	if code, _ := c.send(scopedTok, "POST", "/principals/"+alice.ID+":disable", nil); code != http.StatusForbidden {
+		t.Fatalf("scoped disable: want 403, got %d", code)
+	}
+}
+
 type dirRow struct{ id, kind, username string }
 
 // listIDs pulls the principal directory as a flat id/kind/username list.

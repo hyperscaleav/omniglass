@@ -16,13 +16,14 @@ import (
 type principalBody struct {
 	ID      string      `json:"id"`
 	Kind    string      `json:"kind"`
+	Active  bool        `json:"active"`
 	Human   *humanBody  `json:"human,omitempty"`
 	Service *svcBody    `json:"service,omitempty"`
 	Grants  []grantBody `json:"grants"`
 }
 
 func toPrincipalBody(pr *storage.Principal) principalBody {
-	b := principalBody{ID: pr.ID, Kind: pr.Kind, Grants: make([]grantBody, 0, len(pr.Grants))}
+	b := principalBody{ID: pr.ID, Kind: pr.Kind, Active: pr.Active, Grants: make([]grantBody, 0, len(pr.Grants))}
 	if pr.Human != nil {
 		b.Human = &humanBody{Username: pr.Human.Username, Email: pr.Human.Email, DisplayName: pr.Human.DisplayName}
 	}
@@ -215,6 +216,36 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Middlewares:   huma.Middlewares{a.authn, a.require("principal_grant", "delete")},
 	}, func(ctx context.Context, in *revokeGrantInput) (*struct{}, error) {
 		if err := gw.RevokeGrant(ctx, actorID(ctx), in.ID, in.GrantID, a.scopeFor(ctx, "principal_grant", "delete")); err != nil {
+			return nil, mapPrincipalErr(err)
+		}
+		return nil, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID:   "disable-principal",
+		Method:        http.MethodPost,
+		Path:          "/principals/{id}:disable",
+		DefaultStatus: http.StatusNoContent,
+		Summary:       "Disable a principal",
+		Description:   "Soft-disables a principal so it can no longer authenticate; its audit trail is kept. Gated by principal:update (all-scope). The last active owner cannot be disabled.",
+		Middlewares:   huma.Middlewares{a.authn, a.require("principal", "update")},
+	}, func(ctx context.Context, in *principalPathInput) (*struct{}, error) {
+		if err := gw.SetPrincipalActive(ctx, actorID(ctx), in.ID, false, a.scopeFor(ctx, "principal", "update")); err != nil {
+			return nil, mapPrincipalErr(err)
+		}
+		return nil, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID:   "enable-principal",
+		Method:        http.MethodPost,
+		Path:          "/principals/{id}:enable",
+		DefaultStatus: http.StatusNoContent,
+		Summary:       "Enable a principal",
+		Description:   "Re-enables a disabled principal, restoring its ability to authenticate. Gated by principal:update (all-scope).",
+		Middlewares:   huma.Middlewares{a.authn, a.require("principal", "update")},
+	}, func(ctx context.Context, in *principalPathInput) (*struct{}, error) {
+		if err := gw.SetPrincipalActive(ctx, actorID(ctx), in.ID, true, a.scopeFor(ctx, "principal", "update")); err != nil {
 			return nil, mapPrincipalErr(err)
 		}
 		return nil, nil

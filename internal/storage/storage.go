@@ -77,6 +77,10 @@ type Gateway interface {
 	// grant. Unknown grant is ErrGrantNotFound; revoking the last owner grant is
 	// ErrLastOwner (the deferred owner-invariant trigger).
 	RevokeGrant(ctx context.Context, actorID, principalID, grantID string, action scope.Set) error
+	// SetPrincipalActive enables or disables a principal (soft), audited. Requires
+	// an all-scope grant. Disabling the last active owner is ErrLastOwner; a
+	// disabled principal cannot authenticate.
+	SetPrincipalActive(ctx context.Context, actorID, id string, active bool, action scope.Set) error
 	// RevokeBearer deletes the bearer credential with the given sha256 hash
 	// (session logout). A no-op if none matches.
 	RevokeBearer(ctx context.Context, hash []byte) error

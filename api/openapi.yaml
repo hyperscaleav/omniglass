@@ -534,6 +534,8 @@ components:
           format: uri
           readOnly: true
           type: string
+        active:
+          type: boolean
         grants:
           items:
             $ref: "#/components/schemas/GrantBody"
@@ -551,6 +553,7 @@ components:
       required:
         - id
         - kind
+        - active
         - grants
       type: object
     PrincipalStruct:
@@ -1298,6 +1301,50 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Revoke a grant
+  /principals/{id}:disable:
+    post:
+      description: Soft-disables a principal so it can no longer authenticate; its audit trail is kept. Gated by principal:update (all-scope). The last active owner cannot be disabled.
+      operationId: disable-principal
+      parameters:
+        - description: The principal's id (uuid)
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The principal's id (uuid)
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Disable a principal
+  /principals/{id}:enable:
+    post:
+      description: Re-enables a disabled principal, restoring its ability to authenticate. Gated by principal:update (all-scope).
+      operationId: enable-principal
+      parameters:
+        - description: The principal's id (uuid)
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The principal's id (uuid)
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Enable a principal
   /roles:
     get:
       description: Lists the roles. Gated by the role:read capability.

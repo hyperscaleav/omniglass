@@ -50,6 +50,9 @@ func (UnimplementedGateway) CreateGrant(context.Context, string, string, GrantSp
 func (UnimplementedGateway) RevokeGrant(context.Context, string, string, string, scope.Set) error {
 	return nil
 }
+func (UnimplementedGateway) SetPrincipalActive(context.Context, string, string, bool, scope.Set) error {
+	return nil
+}
 func (UnimplementedGateway) RevokeBearer(context.Context, []byte) error { return nil }
 func (UnimplementedGateway) AnyHuman(context.Context) (bool, error)     { return false, nil }
 func (UnimplementedGateway) ListRoles(context.Context) ([]Role, error) { return nil, nil }
