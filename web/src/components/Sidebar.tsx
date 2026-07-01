@@ -65,16 +65,26 @@ export default function Sidebar(props: { collapsed: boolean; onToggle: () => voi
 
       <div class="border-t border-base-300 p-3">
         <div class="flex items-center gap-2.5" classList={{ "justify-center": props.collapsed }}>
-          <div class="avatar avatar-placeholder">
-            <div class="w-7 rounded-full bg-linear-to-br from-primary to-info text-primary-content">
-              <span class="font-data text-[11px] font-bold uppercase">{ident().name.slice(0, 2)}</span>
+          <A
+            href="/profile"
+            class="flex min-w-0 items-center gap-2.5 rounded-field hover:bg-base-300"
+            classList={{ "flex-1 p-1 -m-1": !props.collapsed, "tooltip tooltip-right": props.collapsed }}
+            data-tip={props.collapsed ? "Your profile" : undefined}
+            title="Your profile"
+          >
+            <div class="avatar avatar-placeholder">
+              <div class="w-7 rounded-full bg-linear-to-br from-primary to-info text-primary-content">
+                <span class="font-data text-[11px] font-bold uppercase">{ident().name.slice(0, 2)}</span>
+              </div>
             </div>
-          </div>
+            <Show when={!props.collapsed}>
+              <div class="min-w-0 flex-1 leading-tight">
+                <div class="truncate font-data text-xs font-semibold">{ident().name}</div>
+                <div class="text-[11px] capitalize text-base-content/40">{ident().role}</div>
+              </div>
+            </Show>
+          </A>
           <Show when={!props.collapsed}>
-            <div class="min-w-0 flex-1 leading-tight">
-              <div class="truncate font-data text-xs font-semibold">{ident().name}</div>
-              <div class="text-[11px] capitalize text-base-content/40">{ident().role}</div>
-            </div>
             <button
               class="btn btn-ghost btn-sm btn-square flex-none text-base-content/50"
               title="Sign out"

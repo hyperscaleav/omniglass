@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook } from "@solidjs/testing-library";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import type { JSX } from "solid-js";
-import { useLogin, useTokenLogin, useLogout } from "./auth";
+import { useLogin, useTokenLogin, useLogout, useUpdateProfile, useChangePassword } from "./auth";
 import { getToken, setToken } from "../api/client";
 
 // The auth hooks are the unit under test; fetch is the seam we fake, so these
@@ -83,5 +83,47 @@ describe("auth hooks", () => {
 
     expect(calls.some((c) => c.url.endsWith("/auth/logout") && c.method === "POST")).toBe(true);
     expect(getToken()).toBe("");
+  });
+
+  it("useUpdateProfile PATCHes the editable fields", async () => {
+    let sent: { url: string; method: string; body: unknown } | null = null;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "PATCH") sent = { url: req.url, method: req.method, body: await req.clone().json() };
+      return jsonResponse({ username: "ops", display_name: "Ops Lead", email: "ops@new.example" }, 200);
+    });
+
+    const res = await renderHook(useUpdateProfile, { wrapper }).result({ display_name: "Ops Lead", email: "ops@new.example" });
+
+    expect(res.ok).toBe(true);
+    expect(sent!.url.endsWith("/auth/me")).toBe(true);
+    expect(sent!.method).toBe("PATCH");
+    expect(sent!.body).toMatchObject({ display_name: "Ops Lead", email: "ops@new.example" });
+  });
+
+  it("useUpdateProfile reports a server error", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ detail: "boom" }, 500));
+    const res = await renderHook(useUpdateProfile, { wrapper }).result({ display_name: "x" });
+    expect(res).toMatchObject({ ok: false });
+  });
+
+  it("useChangePassword maps 204, 403, and 422 to clear outcomes", async () => {
+    // Success.
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse(null, 204));
+    expect((await renderHook(useChangePassword, { wrapper }).result("old", "new-strong-pw")).ok).toBe(true);
+
+    // Wrong current password.
+    vi.restoreAllMocks();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ detail: "current password is incorrect" }, 403));
+    const wrong = await renderHook(useChangePassword, { wrapper }).result("bad", "new-strong-pw");
+    expect(wrong).toMatchObject({ ok: false });
+    expect((wrong as { message: string }).message).toMatch(/current password/i);
+
+    // Too-short new password.
+    vi.restoreAllMocks();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ detail: "validation" }, 422));
+    const short = await renderHook(useChangePassword, { wrapper }).result("old", "short");
+    expect(short).toMatchObject({ ok: false });
+    expect((short as { message: string }).message).toMatch(/8 characters/i);
   });
 });
