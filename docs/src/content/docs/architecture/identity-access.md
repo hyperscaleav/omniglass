@@ -15,11 +15,13 @@ Built and tested today: the `principal` (+ per-kind `human` / `service`) and `cr
 (argon2id) behind an httpOnly session cookie** (`POST /auth/login` and `/auth/logout`, the public
 `GET /auth/status`), the self-service `GET` / `PATCH /auth/me` and `POST /auth/me:changePassword`, the
 admin **principal directory** (`GET /principals`, `GET /principals/{id}`), human **create**
-(`POST /principals`) and **update** (`PATCH /principals/{id}`: display name, email, username; all-scope
-gated), and the per-action `visible_set` resolver enforced in the
+(`POST /principals`) and **update** (`PATCH /principals/{id}`: display name, email, username), **role
+assignment** (`POST` / `DELETE /principals/{id}/grants`) with the **owner-invariant trigger** enforcing
+that the last `owner @ all` grant cannot be revoked (all-scope gated), and the per-action `visible_set`
+resolver enforced in the
 Storage Gateway across locations, systems, and components. Still `Design`: OIDC / SAML auth,
 `principal_group`s, the node / NATS path, the permission cache, the rest of admin user management
-(disable, delete, and role assignment), and the tenant-policy lever. The per-slice
+(disable and delete a principal), and the tenant-policy lever. The per-slice
 breakdown is on [implementation status](/architecture/status/).
 
 Where the build currently differs from the present-tense design below (each logged in the

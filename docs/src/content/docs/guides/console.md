@@ -53,10 +53,14 @@ location-scoped admin cannot list users.
   Renaming is safe: their credentials and grants follow the account (they key on an internal id,
   not the username), so a renamed user keeps their password and access. Only an administrator can
   change a username; the user cannot change their own.
+- With `principal_grant:create` / `:delete`, the detail panel **grants** a role at a scope (pick a
+  role and a scope kind; a non-`all` scope names its root) and revokes one with the **x** on a
+  grant chip. That is how a fresh user gets permissions. One rule the server always holds: the
+  **last owner grant cannot be revoked**, so the platform can never be locked out of administration.
 
-Disabling and role assignment land in later slices. From the CLI the same surface is
-`omniglass principal list`, `omniglass principal get <id>`, `omniglass principal create`, and
-`omniglass principal update <id>`.
+Disabling and deleting a principal land in a later slice. From the CLI the same surface is
+`omniglass principal list` / `get` / `create` / `update`, and `omniglass grant create <id>` /
+`grant delete <id> <grantId>`.
 
 ## The layout
 
