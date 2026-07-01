@@ -97,6 +97,12 @@ first: **no branch until the issue exists and its scope is approved (a hard gate
 keep a TODO doc in the tree and do not write a bare `// TODO`; reference an issue
 (`// TODO(#123): ...`). If it is worth doing later, file the issue.
 
+Kind of work is a native **Issue Type** (`Task`/`Bug`/`Feature`/`Epic`) and priority is a
+field on the Project board, neither one a label. Labels are a fixed set: `area:<subsystem>`
+(describes) and `run:<task>` (triggers CI, e.g. `run:preview`). Any label that runs
+automation is `run:<task>`. The full taxonomy is
+[docs/contributing/labels.md](docs/src/content/docs/contributing/labels.md).
+
 ## House style
 
 - No AI/assistant attribution in commits, PRs, code comments, or any visible artifact.
