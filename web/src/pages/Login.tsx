@@ -1,19 +1,32 @@
-import { Show, createSignal } from "solid-js";
+import { Show, createSignal, createResource } from "solid-js";
 import { useNavigate, useSearchParams } from "@solidjs/router";
-import { useLogin } from "../lib/auth";
+import { useLogin, useTokenLogin } from "../lib/auth";
+import { api } from "../api/client";
 import { BrandMark, Wordmark } from "../components/Brand";
 
-// Login is a bearer-token paste form (the backend is bearer-only this slice).
-// On success it stores + validates the token and lands at ?next= (an in-app
-// path) or Home. Mounted outside the App shell, so it has a bare layout.
+// Login signs in with a username + password (the default, session-cookie path) or,
+// behind a toggle, a pasted bearer token. On success it lands at ?next= (a safe
+// in-app path) or Home. Mounted outside the App shell, so it has a bare layout.
 export default function Login() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const login = useLogin();
+  const tokenLogin = useTokenLogin();
 
+  const [mode, setMode] = createSignal<"password" | "token">("password");
+  const [username, setUsername] = createSignal("");
+  const [password, setPassword] = createSignal("");
   const [token, setTokenInput] = createSignal("");
   const [error, setError] = createSignal<string | null>(null);
   const [busy, setBusy] = createSignal(false);
+
+  // Whether an owner exists yet: the bootstrap hint shows only before the first
+  // owner is created. Default to true (and undefined while loading) so the hint
+  // never flashes for an already-bootstrapped system.
+  const [bootstrapped] = createResource(async () => {
+    const { data } = await api.GET("/auth/status");
+    return data?.bootstrapped ?? true;
+  });
 
   // Resolve ?next= to a safe in-app path. Parsing against the current origin and
   // refusing cross-origin results blocks an open redirect; the /web base is
@@ -30,12 +43,14 @@ export default function Login() {
     }
   };
 
+  const canSubmit = () => (mode() === "password" ? !!username() && !!password() : !!token());
+
   async function onSubmit(e: SubmitEvent) {
     e.preventDefault();
     setError(null);
     setBusy(true);
     try {
-      const result = await login(token());
+      const result = mode() === "password" ? await login(username().trim(), password()) : await tokenLogin(token());
       if (!result.ok) {
         setError(result.message);
         return;
@@ -58,32 +73,77 @@ export default function Login() {
             <p class="mt-1.5 text-sm text-base-content/60">Sign in to the operator console.</p>
           </div>
           <form onSubmit={onSubmit} class="flex flex-col gap-3">
-            <div>
-              <label class="eyebrow mb-1.5 block" for="login-token">Bearer token</label>
-              <input
-                id="login-token"
-                type="password"
-                autocomplete="off"
-                class="input input-bordered w-full"
-                placeholder="ogp_…"
-                value={token()}
-                onInput={(e) => setTokenInput(e.currentTarget.value)}
-                disabled={busy()}
-                autofocus
-                required
-              />
-            </div>
+            <Show
+              when={mode() === "password"}
+              fallback={
+                <div>
+                  <label class="eyebrow mb-1.5 block" for="login-token">Bearer token</label>
+                  <input
+                    id="login-token"
+                    type="password"
+                    autocomplete="off"
+                    class="input input-bordered w-full"
+                    placeholder="ogp_…"
+                    value={token()}
+                    onInput={(e) => setTokenInput(e.currentTarget.value)}
+                    disabled={busy()}
+                    required
+                  />
+                </div>
+              }
+            >
+              <div>
+                <label class="eyebrow mb-1.5 block" for="login-username">Username</label>
+                <input
+                  id="login-username"
+                  type="text"
+                  autocomplete="username"
+                  class="input input-bordered w-full"
+                  placeholder="ops"
+                  value={username()}
+                  onInput={(e) => setUsername(e.currentTarget.value)}
+                  disabled={busy()}
+                  autofocus
+                  required
+                />
+              </div>
+              <div>
+                <label class="eyebrow mb-1.5 block" for="login-password">Password</label>
+                <input
+                  id="login-password"
+                  type="password"
+                  autocomplete="current-password"
+                  class="input input-bordered w-full"
+                  value={password()}
+                  onInput={(e) => setPassword(e.currentTarget.value)}
+                  disabled={busy()}
+                  required
+                />
+              </div>
+            </Show>
             <Show when={error()}>
               <div role="alert" class="alert alert-error alert-soft text-sm"><span>{error()}</span></div>
             </Show>
-            <button type="submit" class="btn btn-primary w-full" disabled={busy() || !token()}>
+            <button type="submit" class="btn btn-primary w-full" disabled={busy() || !canSubmit()}>
               <Show when={busy()}><span class="loading loading-spinner loading-xs" /></Show>
-              {busy() ? "Checking…" : "Sign in"}
+              {busy() ? "Signing in…" : "Sign in"}
             </button>
           </form>
-          <p class="text-[11px] leading-relaxed text-base-content/40">
-            No token? Run <span class="font-data text-base-content/60">omniglass bootstrap &lt;username&gt;</span> on the server to mint the first owner's token.
-          </p>
+          <button
+            type="button"
+            class="link self-start text-xs text-base-content/50"
+            onClick={() => {
+              setMode((m) => (m === "password" ? "token" : "password"));
+              setError(null);
+            }}
+          >
+            {mode() === "password" ? "Use a bearer token instead" : "Use a username and password"}
+          </button>
+          <Show when={bootstrapped() === false}>
+            <p class="text-[11px] leading-relaxed text-base-content/40">
+              No account yet. Run <span class="font-data text-base-content/60">omniglass bootstrap &lt;username&gt; --password &lt;password&gt;</span> on the server to create the first owner.
+            </p>
+          </Show>
         </div>
       </div>
     </div>

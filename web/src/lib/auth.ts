@@ -1,9 +1,10 @@
-import { useQuery, useQueryClient } from "@tanstack/solid-query";
+import { useQuery, useQueryClient, type QueryClient } from "@tanstack/solid-query";
 import { api, setToken, clearToken } from "../api/client";
 
-// Auth for the SPA. The backend is bearer-only: GET /auth/me with the stored
-// token resolves the principal (200) or rejects (401). "Logging in" is pasting
-// a valid token; we store it, then validate by reading /auth/me.
+// Auth for the SPA. Authentication is an httpOnly session cookie set by
+// POST /auth/login; GET /auth/me resolves the principal (200) or rejects (401).
+// The SPA never sees the token: it logs in with a username and password, and the
+// cookie rides on every request (the client sends credentials).
 
 export type Me = {
   principal: { id: string; kind: string };
@@ -31,9 +32,38 @@ export function useMe() {
   }));
 }
 
-// useLogin stores a pasted bearer token and validates it by reading /auth/me.
-// On success it primes the cache; on 401 it clears the bad token.
+// primeMe loads the principal into the cache after a successful sign-in, BEFORE
+// the caller navigates: it reads /auth/me (now authenticated) and writes the
+// result, so the auth guard sees the principal immediately and does not bounce
+// back to the login screen on the first attempt.
+async function primeMe(qc: QueryClient): Promise<void> {
+  const { data } = await api.GET("/auth/me");
+  qc.setQueryData(ME_KEY, (data as Me) ?? null);
+  await qc.invalidateQueries({ queryKey: ME_KEY });
+}
+
+// useLogin posts a username and password to /auth/login. On success the server
+// sets the session cookie; we then prime /auth/me so the guard sees the principal.
 export function useLogin() {
+  const qc = useQueryClient();
+  return async (username: string, password: string): Promise<{ ok: true } | { ok: false; message: string }> => {
+    // Drop any stale bearer token so it cannot shadow the new session cookie.
+    clearToken();
+    const { error, response } = await api.POST("/auth/login", { body: { username, password } });
+    if (response.status === 401) {
+      return { ok: false, message: "Invalid username or password." };
+    }
+    if (error) {
+      return { ok: false, message: "Could not reach the server." };
+    }
+    await primeMe(qc);
+    return { ok: true };
+  };
+}
+
+// useTokenLogin stores a pasted bearer token (the optional token path) and
+// validates it by reading /auth/me; on 401 it clears the bad token.
+export function useTokenLogin() {
   const qc = useQueryClient();
   return async (token: string): Promise<{ ok: true } | { ok: false; message: string }> => {
     setToken(token.trim());
@@ -46,15 +76,18 @@ export function useLogin() {
       clearToken();
       return { ok: false, message: "Could not reach the server." };
     }
-    qc.setQueryData(ME_KEY, data);
+    qc.setQueryData(ME_KEY, data as Me);
     await qc.invalidateQueries({ queryKey: ME_KEY });
     return { ok: true };
   };
 }
 
+// useLogout posts /auth/logout (revoking the session and clearing the cookie),
+// drops any stored token, and resets the cache.
 export function useLogout() {
   const qc = useQueryClient();
   return async () => {
+    await api.POST("/auth/logout");
     clearToken();
     qc.setQueryData(ME_KEY, null);
     await qc.invalidateQueries({ queryKey: ME_KEY });

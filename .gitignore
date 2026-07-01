@@ -41,6 +41,7 @@ coverage.txt
 # Playwright MCP scratch (screenshots, logs)
 /.playwright-mcp/
 /web/.playwright-mcp/
+/web/test-results/
 
 
 # stale embedded-postgres dev dir (no longer produced)

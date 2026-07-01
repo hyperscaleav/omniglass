@@ -25,6 +25,9 @@ type Config struct {
 	DSN string
 	// Addr is the host:port the HTTP API listens on.
 	Addr string
+	// SecureCookies marks the session cookie Secure (https only). Set
+	// OMNIGLASS_SECURE_COOKIES=true behind TLS; off by default for local http dev.
+	SecureCookies bool
 }
 
 // Load resolves the configuration from the environment, applying defaults for
@@ -37,8 +40,9 @@ type Config struct {
 // database independently of any DATABASE_URL the surrounding platform sets.
 func Load() Config {
 	return Config{
-		DSN:  resolveDSN(),
-		Addr: firstNonEmpty(os.Getenv("OMNIGLASS_ADDR"), DefaultAddr),
+		DSN:           resolveDSN(),
+		Addr:          firstNonEmpty(os.Getenv("OMNIGLASS_ADDR"), DefaultAddr),
+		SecureCookies: os.Getenv("OMNIGLASS_SECURE_COOKIES") == "true",
 	}
 }
 

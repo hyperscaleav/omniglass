@@ -20,8 +20,11 @@ import (
 // operation MUST reject a no-permission principal. Keep this list short and
 // justified; a new entry is a security decision.
 var ungated = map[string]bool{
-	"GET /healthz": true, // public, no auth
-	"GET /auth/me": true, // authn-only: returns the caller's own principal
+	"GET /healthz":      true, // public, no auth
+	"GET /auth/status":  true, // public: drives the login screen's bootstrap hint
+	"GET /auth/me":      true, // authn-only: returns the caller's own principal
+	"POST /auth/login":  true, // public by necessity: it establishes a session
+	"POST /auth/logout": true, // public: clearing a session must always succeed
 }
 
 // TestEveryRouteIsGated is the no-unguarded-route guard. It enumerates every

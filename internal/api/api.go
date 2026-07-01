@@ -30,14 +30,27 @@ type healthOutput struct {
 	}
 }
 
+// options are the handler's tunables, set with the Option functions.
+type options struct{ secureCookies bool }
+
+// Option configures NewHandler.
+type Option func(*options)
+
+// WithSecureCookies marks the session cookie Secure (set behind TLS).
+func WithSecureCookies(b bool) Option { return func(o *options) { o.secureCookies = b } }
+
 // NewHandler builds the routed HTTP handler. The gateway is the only dependency
 // for the walking skeleton: healthz pings it. Later slices pass more
 // collaborators here behind the same constructor.
-func NewHandler(gw storage.Gateway) http.Handler {
+func NewHandler(gw storage.Gateway, opts ...Option) http.Handler {
+	var o options
+	for _, f := range opts {
+		f(&o)
+	}
 	r := chi.NewRouter()
 	r.Route("/api/v1", func(sub chi.Router) {
 		api := humachi.New(sub, apiConfig())
-		registerRoutes(api, gw)
+		registerRoutes(api, gw, o)
 	})
 
 	// The operator console SPA is nested under /web/* (namespaces stay explicit:
@@ -58,8 +71,8 @@ func NewHandler(gw storage.Gateway) http.Handler {
 // registerRoutes wires every Huma operation onto the API. Shared by NewHandler
 // (the live server) and OpenAPIJSON (the server-less spec dump), so the routed
 // surface and the generated spec can never drift.
-func registerRoutes(api huma.API, gw storage.Gateway) {
-	a := &authenticator{gw: gw, api: api}
+func registerRoutes(api huma.API, gw storage.Gateway, o options) {
+	a := &authenticator{gw: gw, api: api, secureCookies: o.secureCookies}
 
 	huma.Register(api, huma.Operation{
 		OperationID: "get-healthz",
@@ -78,6 +91,32 @@ func registerRoutes(api huma.API, gw storage.Gateway) {
 		out.Body.DB = "ok"
 		return out, nil
 	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "get-auth-status",
+		Method:      http.MethodGet,
+		Path:        "/auth/status",
+		Summary:     "Whether the system has an owner yet",
+		Description: "Public: reports whether any owner has been bootstrapped, so the login screen can hide the bootstrap hint.",
+	}, a.statusHandler)
+
+	huma.Register(api, huma.Operation{
+		OperationID:   "login",
+		Method:        http.MethodPost,
+		Path:          "/auth/login",
+		Summary:       "Log in with a username and password",
+		Description:   "Verifies a human's password and sets an httpOnly session cookie. Public; a bad credential is a flat 401.",
+		DefaultStatus: http.StatusNoContent,
+	}, a.loginHandler)
+
+	huma.Register(api, huma.Operation{
+		OperationID:   "logout",
+		Method:        http.MethodPost,
+		Path:          "/auth/logout",
+		Summary:       "Log out the current session",
+		Description:   "Revokes the session token and clears the cookie. Public.",
+		DefaultStatus: http.StatusNoContent,
+	}, a.logoutHandler)
 
 	huma.Register(api, huma.Operation{
 		OperationID: "get-auth-me",
@@ -117,7 +156,7 @@ func apiConfig() huma.Config {
 // handlers (never invoked here), so a nil-backed stub is fine.
 func specAPI(gw storage.Gateway) huma.API {
 	api := humachi.New(chi.NewRouter(), apiConfig())
-	registerRoutes(api, gw)
+	registerRoutes(api, gw, options{})
 	return api
 }
 

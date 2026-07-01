@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/hyperscaleav/omniglass/internal/auth"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -53,6 +54,9 @@ type OwnerSpec struct {
 	DisplayName string
 	SecretHash  []byte
 	Prefix      string
+	// PasswordHash, when set, installs an argon2id password credential (PHC
+	// encoded) so the owner can log in with a username and password. Optional.
+	PasswordHash string
 }
 
 // BootstrapOwner creates the first owner in one transaction, idempotent per
@@ -89,6 +93,13 @@ func (p *PG) BootstrapOwner(ctx context.Context, spec OwnerSpec) (created bool, 
 		`insert into credential (principal_id, kind, secret_hash, prefix) values ($1, 'bearer', $2, $3)`,
 		pid, spec.SecretHash, spec.Prefix); err != nil {
 		return false, fmt.Errorf("storage: bootstrap credential: %w", err)
+	}
+	if spec.PasswordHash != "" {
+		if _, err := tx.Exec(ctx,
+			`insert into credential (principal_id, kind, secret_hash, prefix) values ($1, 'password', $2, '')`,
+			pid, []byte(spec.PasswordHash)); err != nil {
+			return false, fmt.Errorf("storage: bootstrap password: %w", err)
+		}
 	}
 	if _, err := tx.Exec(ctx,
 		`insert into principal_grant (principal_id, role_id, scope_kind) values ($1, 'owner', 'all')`,
@@ -156,6 +167,11 @@ type Grant struct {
 	ScopeID   *string
 }
 
+// ErrBadCredentials is returned by AuthenticatePassword when the username is
+// unknown, has no password set, or the password does not match: one error for all
+// three so the handler cannot leak which.
+var ErrBadCredentials = errors.New("storage: bad credentials")
+
 // AuthenticateBearer resolves a bearer credential by its sha256 hash to the
 // principal, its kind profile, and its grants. ErrCredentialNotFound if none.
 func (p *PG) AuthenticateBearer(ctx context.Context, hash []byte) (*Principal, error) {
@@ -171,21 +187,102 @@ func (p *PG) AuthenticateBearer(ctx context.Context, hash []byte) (*Principal, e
 	case err != nil:
 		return nil, fmt.Errorf("storage: authenticate: %w", err)
 	}
+	if err := p.loadPrincipal(ctx, &pr); err != nil {
+		return nil, err
+	}
+	return &pr, nil
+}
 
+// AuthenticatePassword verifies a human's password against their argon2id
+// credential and resolves the principal, its profile, and its grants.
+// ErrBadCredentials for an unknown user, no password set, or a wrong password.
+func (p *PG) AuthenticatePassword(ctx context.Context, username, password string) (*Principal, error) {
+	pr := Principal{Kind: "human"}
+	var encoded []byte
+	err := p.pool.QueryRow(ctx, `
+		select h.principal_id, c.secret_hash
+		from human h
+		join credential c on c.principal_id = h.principal_id and c.kind = 'password'
+		where h.username = $1`, username).Scan(&pr.ID, &encoded)
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		return nil, ErrBadCredentials
+	case err != nil:
+		return nil, fmt.Errorf("storage: authenticate password: %w", err)
+	}
+	ok, err := auth.VerifyPassword(password, string(encoded))
+	if err != nil {
+		return nil, fmt.Errorf("storage: verify password: %w", err)
+	}
+	if !ok {
+		return nil, ErrBadCredentials
+	}
+	if err := p.loadPrincipal(ctx, &pr); err != nil {
+		return nil, err
+	}
+	return &pr, nil
+}
+
+// SetPassword installs or replaces the password credential for a human, returning
+// false if no such username exists. The caller passes the PHC-encoded argon2id
+// hash; cleartext never reaches storage.
+func (p *PG) SetPassword(ctx context.Context, username, encoded string) (bool, error) {
+	var pid string
+	err := p.pool.QueryRow(ctx, `select principal_id from human where username = $1`, username).Scan(&pid)
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		return false, nil
+	case err != nil:
+		return false, fmt.Errorf("storage: lookup human %q: %w", username, err)
+	}
+	if _, err := p.pool.Exec(ctx, `
+		insert into credential (principal_id, kind, secret_hash, prefix)
+		values ($1, 'password', $2, '')
+		on conflict (principal_id) where kind = 'password'
+			do update set secret_hash = excluded.secret_hash`,
+		pid, []byte(encoded)); err != nil {
+		return false, fmt.Errorf("storage: set password: %w", err)
+	}
+	return true, nil
+}
+
+// AnyHuman reports whether any human principal exists, so the login screen hides
+// the bootstrap hint once the system has an owner.
+func (p *PG) AnyHuman(ctx context.Context) (bool, error) {
+	var exists bool
+	if err := p.pool.QueryRow(ctx, `select exists(select 1 from human)`).Scan(&exists); err != nil {
+		return false, fmt.Errorf("storage: any human: %w", err)
+	}
+	return exists, nil
+}
+
+// RevokeBearer deletes the bearer credential with the given sha256 hash (logout
+// of a session token). A no-op if none matches.
+func (p *PG) RevokeBearer(ctx context.Context, hash []byte) error {
+	if _, err := p.pool.Exec(ctx,
+		`delete from credential where kind = 'bearer' and secret_hash = $1`, hash); err != nil {
+		return fmt.Errorf("storage: revoke bearer: %w", err)
+	}
+	return nil
+}
+
+// loadPrincipal fills a principal's kind profile (human or service) and its
+// grants, given its id and kind already set.
+func (p *PG) loadPrincipal(ctx context.Context, pr *Principal) error {
 	switch pr.Kind {
 	case "human":
 		var h HumanProfile
 		if err := p.pool.QueryRow(ctx,
 			`select username, coalesce(email, ''), coalesce(display_name, '') from human where principal_id = $1`,
 			pr.ID).Scan(&h.Username, &h.Email, &h.DisplayName); err != nil {
-			return nil, fmt.Errorf("storage: load human: %w", err)
+			return fmt.Errorf("storage: load human: %w", err)
 		}
 		pr.Human = &h
 	case "service":
 		var s ServiceProfile
 		if err := p.pool.QueryRow(ctx,
 			`select label from service where principal_id = $1`, pr.ID).Scan(&s.Label); err != nil {
-			return nil, fmt.Errorf("storage: load service: %w", err)
+			return fmt.Errorf("storage: load service: %w", err)
 		}
 		pr.Service = &s
 	}
@@ -193,20 +290,20 @@ func (p *PG) AuthenticateBearer(ctx context.Context, hash []byte) (*Principal, e
 	rows, err := p.pool.Query(ctx,
 		`select role_id, scope_kind, scope_id from principal_grant where principal_id = $1`, pr.ID)
 	if err != nil {
-		return nil, fmt.Errorf("storage: load grants: %w", err)
+		return fmt.Errorf("storage: load grants: %w", err)
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var g Grant
 		if err := rows.Scan(&g.Role, &g.ScopeKind, &g.ScopeID); err != nil {
-			return nil, fmt.Errorf("storage: scan grant: %w", err)
+			return fmt.Errorf("storage: scan grant: %w", err)
 		}
 		pr.Grants = append(pr.Grants, g)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("storage: grants: %w", err)
+		return fmt.Errorf("storage: grants: %w", err)
 	}
-	return &pr, nil
+	return nil
 }
 
 // ListRoles returns every role, for building the in-process role index.

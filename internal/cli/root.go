@@ -29,6 +29,7 @@ func newRoot(version string) *cobra.Command {
 		newMigrateCmd(),
 		newBootstrapCmd(),
 		newTokenCmd(),
+		newSetPasswordCmd(),
 	)
 	// Generated commands: one per API operation, sharing the connection flags.
 	// The two sets compose on the same root; regeneration touches only the

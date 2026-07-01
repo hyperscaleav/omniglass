@@ -38,6 +38,9 @@ func permsFrom(ctx context.Context) (rbac.Set, bool) {
 type authenticator struct {
 	gw  storage.Gateway
 	api huma.API
+	// secureCookies marks the session cookie Secure (https only): off for local
+	// http dev, on behind TLS. Set from config.
+	secureCookies bool
 
 	once   sync.Once
 	index  rbac.RoleIndex
@@ -64,18 +67,39 @@ func (a *authenticator) roleIndex(ctx context.Context) (rbac.RoleIndex, error) {
 // principal and its flattened permission set to the context, or 401. It is the
 // capability fast-reject's prerequisite, not the authorization itself.
 func (a *authenticator) authn(ctx huma.Context, next func(huma.Context)) {
-	tok, ok := bearerToken(ctx.Header("Authorization"))
-	if !ok {
+	// A human session arrives as the httpOnly cookie; a service or the CLI sends an
+	// Authorization bearer. Try each candidate token: a stale or invalid bearer
+	// must not shadow a valid session cookie (the cookie is the fallback), so 401
+	// only when no candidate resolves.
+	var candidates []string
+	if t, ok := bearerToken(ctx.Header("Authorization")); ok {
+		candidates = append(candidates, t)
+	}
+	if t, ok := sessionCookieToken(ctx.Header("Cookie")); ok {
+		candidates = append(candidates, t)
+	}
+	if len(candidates) == 0 {
 		_ = huma.WriteErr(a.api, ctx, http.StatusUnauthorized, "unauthenticated")
 		return
 	}
-	pr, err := a.gw.AuthenticateBearer(ctx.Context(), auth.HashToken(tok))
-	switch {
-	case errors.Is(err, storage.ErrCredentialNotFound):
+	var pr *storage.Principal
+	for _, tok := range candidates {
+		p, err := a.gw.AuthenticateBearer(ctx.Context(), auth.HashToken(tok))
+		switch {
+		case err == nil:
+			pr = p
+		case errors.Is(err, storage.ErrCredentialNotFound):
+			continue
+		default:
+			_ = huma.WriteErr(a.api, ctx, http.StatusInternalServerError, "authentication failed")
+			return
+		}
+		if pr != nil {
+			break
+		}
+	}
+	if pr == nil {
 		_ = huma.WriteErr(a.api, ctx, http.StatusUnauthorized, "unauthenticated")
-		return
-	case err != nil:
-		_ = huma.WriteErr(a.api, ctx, http.StatusInternalServerError, "authentication failed")
 		return
 	}
 	idx, err := a.roleIndex(ctx.Context())
@@ -140,6 +164,105 @@ func bearerToken(header string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// sessionCookieName is the httpOnly cookie carrying a human's session bearer
+// token; the SPA never reads it (it sends with credentials: 'include').
+const sessionCookieName = "og_session"
+
+// sessionCookieToken extracts the session token from a raw Cookie header.
+func sessionCookieToken(cookieHeader string) (string, bool) {
+	if cookieHeader == "" {
+		return "", false
+	}
+	r := http.Request{Header: http.Header{"Cookie": {cookieHeader}}}
+	c, err := r.Cookie(sessionCookieName)
+	if err != nil || c.Value == "" {
+		return "", false
+	}
+	return c.Value, true
+}
+
+func (a *authenticator) sessionCookie(token string) http.Cookie {
+	return http.Cookie{
+		Name: sessionCookieName, Value: token, Path: "/",
+		HttpOnly: true, Secure: a.secureCookies, SameSite: http.SameSiteLaxMode,
+	}
+}
+
+func (a *authenticator) clearedCookie() http.Cookie {
+	return http.Cookie{
+		Name: sessionCookieName, Value: "", Path: "/",
+		HttpOnly: true, Secure: a.secureCookies, SameSite: http.SameSiteLaxMode, MaxAge: -1,
+	}
+}
+
+// authStatusOutput is the body of GET /api/v1/auth/status: whether the system has
+// an owner yet. Public, so the login screen can hide the bootstrap hint.
+type authStatusOutput struct {
+	Body struct {
+		Bootstrapped bool `json:"bootstrapped"`
+	}
+}
+
+func (a *authenticator) statusHandler(ctx context.Context, _ *struct{}) (*authStatusOutput, error) {
+	exists, err := a.gw.AnyHuman(ctx)
+	if err != nil {
+		return nil, huma.Error500InternalServerError("status")
+	}
+	out := &authStatusOutput{}
+	out.Body.Bootstrapped = exists
+	return out, nil
+}
+
+// loginInput is the body of POST /api/v1/auth/login.
+type loginInput struct {
+	Body struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+}
+
+// sessionOutput sets (or clears) the session cookie. No body: the SPA reads the
+// principal from /auth/me after a successful login.
+type sessionOutput struct {
+	SetCookie http.Cookie `header:"Set-Cookie"`
+}
+
+// loginHandler verifies a username and password, mints a session bearer token,
+// and returns it as the httpOnly session cookie. A bad credential is a flat 401
+// that does not say which of user / password was wrong.
+func (a *authenticator) loginHandler(ctx context.Context, in *loginInput) (*sessionOutput, error) {
+	pr, err := a.gw.AuthenticatePassword(ctx, in.Body.Username, in.Body.Password)
+	switch {
+	case errors.Is(err, storage.ErrBadCredentials):
+		return nil, huma.Error401Unauthorized("invalid username or password")
+	case err != nil:
+		return nil, huma.Error500InternalServerError("login failed")
+	}
+	token, hash, prefix, err := auth.NewBearerToken()
+	if err != nil {
+		return nil, huma.Error500InternalServerError("login failed")
+	}
+	if _, err := a.gw.IssueBearerCredential(ctx, pr.Human.Username, hash, prefix); err != nil {
+		return nil, huma.Error500InternalServerError("login failed")
+	}
+	return &sessionOutput{SetCookie: a.sessionCookie(token)}, nil
+}
+
+// logoutInput reads the session cookie so the token can be revoked.
+type logoutInput struct {
+	Cookie string `header:"Cookie"`
+}
+
+// logoutHandler revokes the session token (if a valid one is presented) and
+// clears the cookie. Public: clearing the cookie always succeeds, even for an
+// already-invalid session.
+func (a *authenticator) logoutHandler(ctx context.Context, in *logoutInput) (*sessionOutput, error) {
+	if tok, ok := sessionCookieToken(in.Cookie); ok {
+		_ = a.gw.RevokeBearer(ctx, auth.HashToken(tok))
+	}
+	return &sessionOutput{SetCookie: a.clearedCookie()}, nil
 }
 
 // meOutput is the body of GET /api/v1/auth/me: the resolved principal, its

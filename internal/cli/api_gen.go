@@ -304,6 +304,61 @@ func generatedCommands() []*cobra.Command {
 	}
 	{
 		parent := &cobra.Command{
+			Use:   "login",
+			Short: "Commands for the login resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			var fPassword string
+			var fUsername string
+			cmd := &cobra.Command{
+				Use:     "create",
+				Short:   "Log in with a username and password",
+				Long:    "Verifies a human's password and sets an httpOnly session cookie. Public; a bad credential is a flat 401.",
+				Example: "  omniglass login create --password password --username username",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/auth/login")
+					body := map[string]any{}
+					if cmd.Flags().Changed("password") {
+						body["password"] = fPassword
+					}
+					if cmd.Flags().Changed("username") {
+						body["username"] = fUsername
+					}
+					return runAPICommand(cmd, "POST", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fPassword, "password", "", "")
+			_ = cmd.MarkFlagRequired("password")
+			cmd.Flags().StringVar(&fUsername, "username", "", "")
+			_ = cmd.MarkFlagRequired("username")
+			return cmd
+		}())
+		roots = append(roots, parent)
+	}
+	{
+		parent := &cobra.Command{
+			Use:   "logout",
+			Short: "Commands for the logout resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "create",
+				Short:   "Log out the current session",
+				Long:    "Revokes the session token and clears the cookie. Public.",
+				Example: "  omniglass logout create",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/auth/logout")
+					return runAPICommand(cmd, "POST", path, nil)
+				},
+			}
+			return cmd
+		}())
+		roots = append(roots, parent)
+	}
+	{
+		parent := &cobra.Command{
 			Use:   "role",
 			Short: "Commands for the role resource",
 		}
@@ -316,6 +371,27 @@ func generatedCommands() []*cobra.Command {
 				Args:    cobra.ExactArgs(0),
 				RunE: func(cmd *cobra.Command, args []string) error {
 					path := fmt.Sprintf("/api/v1/roles")
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		roots = append(roots, parent)
+	}
+	{
+		parent := &cobra.Command{
+			Use:   "statu",
+			Short: "Commands for the statu resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "list",
+				Short:   "Whether the system has an owner yet",
+				Long:    "Public: reports whether any owner has been bootstrapped, so the login screen can hide the bootstrap hint.",
+				Example: "  omniglass statu list",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/auth/status")
 					return runAPICommand(cmd, "GET", path, nil)
 				},
 			}
