@@ -19,6 +19,22 @@ The first owner is created on the server with
 Service accounts and the CLI still authenticate with a bearer token in the `Authorization`
 header.
 
+## Your profile
+
+Click your name in the sidebar footer to open **Your profile**. It is self-service: you edit
+only your own account, whatever your role.
+
+- **Profile.** Change your display name and email. Your username is your sign-in name; an
+  administrator changes it, not you.
+- **Change password.** Enter your current password and a new one (at least 8 characters). A
+  wrong current password is refused. Your other active sessions stay signed in.
+- **Access.** A read-only view of the identity model you operate under: your principal, the
+  roles granted to you, and the flattened permissions those roles carry. The server enforces
+  these on every request; the console only mirrors them.
+
+From the CLI the same two actions are `omniglass auth update-profile` and
+`omniglass auth change-password` (see [the CLI guide](/guides/cli/)).
+
 ## The layout
 
 - The **sidebar** is the information architecture: sections grouped into Inventory, Catalog,

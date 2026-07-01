@@ -181,3 +181,14 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   Proven by argon2 unit tests, a storage round-trip, a real-binary login integration test, and a browser
   e2e that signs in through the form. Thin cuts: self profile edit and change-password (slice 2), admin
   user CRUD and role assignment (slice 3); email invite and forgot-password are later.
+- **Identity slice 2: the self-service profile.** A signed-in operator manages their own account, whatever
+  their role: `PATCH /auth/me` edits their own display name and email, and `POST /auth/me:changePassword`
+  (the first AIP `:verb` custom method on the surface) verifies the current password and sets a new one,
+  reusing the slice-1 argon2 primitive. Both are authn-only and self-scoped (they touch only the caller's
+  own principal), so they join the small ungated allow-list alongside `GET /auth/me` rather than carrying a
+  capability. The console gains a **Your profile** page (profile form, change-password form, and a read-only
+  Access panel that teaches the principal, grants, and permissions it operates on); the CLI gains
+  `auth update-profile` and `auth change-password` from the generator. Proven by a storage round-trip, a
+  real-binary integration test (wrong current password 403, short new 422, rotation, self-scope), and the
+  client hook units. Thin cut: changing a password does not revoke existing sessions (a later hardening);
+  admin user CRUD and role assignment are slice 3.
