@@ -38,6 +38,21 @@ only your own account, whatever your role.
 From the CLI the same two actions are `omniglass auth update-profile` and
 `omniglass auth change-password` (see [the CLI guide](/guides/cli/)).
 
+## Users
+
+**Settings, Users** is the admin directory of every principal, humans and service accounts,
+each with the roles granted to it. You see it only if you hold `principal:read`, and because a
+principal is not part of any location or system tree, that grant must be **all-scope**: a
+location-scoped admin cannot list users.
+
+- Pick a row to see a principal's profile and its **role grants** (each a role at a scope).
+- With `principal:create`, **New user** creates a human with a username and an optional initial
+  password. The new user can sign in right away and change that password themselves; a fresh
+  account holds no grants (so it can sign in but do nothing) until you assign a role.
+
+Editing, disabling, and role assignment land in later slices. From the CLI the same surface is
+`omniglass principal list`, `omniglass principal get <id>`, and `omniglass principal create`.
+
 ## The layout
 
 - The **sidebar** is the information architecture: sections grouped into Inventory, Catalog,

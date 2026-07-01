@@ -13,10 +13,12 @@ Identity and access is how an operator controls who may call the platform and wh
 Built and tested today: the `principal` (+ per-kind `human` / `service`) and `credential` tables, the
 `role` / `principal_grant` model, the `audit_log`, the capability fast-reject, **local password auth
 (argon2id) behind an httpOnly session cookie** (`POST /auth/login` and `/auth/logout`, the public
-`GET /auth/status`), the self-service `GET` / `PATCH /auth/me` and `POST /auth/me:changePassword`, and
-the per-action `visible_set` resolver enforced in the Storage Gateway across locations, systems, and
-components. Still `Design`: OIDC / SAML auth, `principal_group`s, the node / NATS path, the permission
-cache, admin user CRUD and role-assignment endpoints, and the tenant-policy lever. The per-slice
+`GET /auth/status`), the self-service `GET` / `PATCH /auth/me` and `POST /auth/me:changePassword`, the
+admin **principal directory** (`GET /principals`, `GET /principals/{id}`) and human **create**
+(`POST /principals`, all-scope gated), and the per-action `visible_set` resolver enforced in the
+Storage Gateway across locations, systems, and components. Still `Design`: OIDC / SAML auth,
+`principal_group`s, the node / NATS path, the permission cache, the rest of admin user management
+(update, disable, delete, and role assignment), and the tenant-policy lever. The per-slice
 breakdown is on [implementation status](/architecture/status/).
 
 Where the build currently differs from the present-tense design below (each logged in the
