@@ -1,7 +1,7 @@
 import { For, Show, createMemo, createSignal } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import Page from "../components/Page";
-import { type Principal, type Grant, type ScopeKind, PRINCIPALS_KEY, ROLES_KEY, listPrincipals, createPrincipal, updatePrincipal, createGrant, revokeGrant, listRoles, principalName } from "../lib/principals";
+import { type Principal, type Grant, type ScopeKind, PRINCIPALS_KEY, ROLES_KEY, listPrincipals, createPrincipal, updatePrincipal, createGrant, revokeGrant, setPrincipalActive, listRoles, principalName } from "../lib/principals";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { Plus } from "../components/icons";
@@ -25,6 +25,17 @@ export default function Users() {
   const selected = createMemo(() => principals.data?.find((p) => p.id === selectedId()) ?? null);
   const [createOpen, setCreateOpen] = createSignal(false);
   const [editOpen, setEditOpen] = createSignal(false);
+  const [actErr, setActErr] = createSignal<string | null>(null);
+
+  async function toggleActive(p: Principal) {
+    setActErr(null);
+    try {
+      await setPrincipalActive(p.id, !p.active);
+      await qc.invalidateQueries({ queryKey: PRINCIPALS_KEY });
+    } catch (e) {
+      setActErr(describeError(e));
+    }
+  }
 
   const initials = (p: Principal) => principalName(p).slice(0, 2).toUpperCase();
 
@@ -74,7 +85,10 @@ export default function Users() {
                         </div>
                       </div>
                     </td>
-                    <td><span class={kindBadge(p.kind)}>{p.kind}</span></td>
+                    <td>
+                      <span class={kindBadge(p.kind)}>{p.kind}</span>
+                      <Show when={!p.active}><span class="badge badge-soft badge-warning badge-sm ml-1">inactive</span></Show>
+                    </td>
                     <td class="tnum text-base-content/60">{p.grants.length}</td>
                   </tr>
                 )}
@@ -97,13 +111,22 @@ export default function Users() {
                     </div>
                     <div class="min-w-0">
                       <div class="truncate text-base font-semibold">{principalName(p())}</div>
-                      <span class={kindBadge(p().kind)}>{p().kind}</span>
+                      <span class="flex items-center gap-1.5">
+                        <span class={kindBadge(p().kind)}>{p().kind}</span>
+                        <Show when={!p().active}><span class="badge badge-soft badge-warning badge-sm">inactive</span></Show>
+                      </span>
                     </div>
                     <span class="flex-1" />
+                    <Show when={can(me.data, "principal", "update")}>
+                      <button class="btn btn-ghost btn-sm" onClick={() => toggleActive(p())}>{p().active ? "Disable" : "Enable"}</button>
+                    </Show>
                     <Show when={p().human && can(me.data, "principal", "update")}>
                       <button class="btn btn-ghost btn-sm" onClick={() => setEditOpen(true)}>Edit</button>
                     </Show>
                   </div>
+                  <Show when={actErr()}>
+                    <div role="alert" class="alert alert-error alert-soft text-sm"><span>{actErr()}</span></div>
+                  </Show>
                   <div class="grid grid-cols-2 gap-3 text-sm">
                     <Show when={p().human}>
                       <Fact label="Username" value={<span class="font-data">{p().human!.username}</span>} />

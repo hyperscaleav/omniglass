@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { listPrincipals, createPrincipal, updatePrincipal, createGrant, revokeGrant, principalName, type Principal } from "./principals";
+import { listPrincipals, createPrincipal, updatePrincipal, createGrant, revokeGrant, setPrincipalActive, principalName, type Principal } from "./principals";
 
 // The data layer is the unit under test; fetch is the seam we fake, so these
 // assert the request shape and the response handling without a server.
@@ -78,10 +78,22 @@ describe("principals data layer", () => {
     expect(req.url).toContain("/api/v1/principals/p1/grants/g1");
   });
 
+  it("disable and enable POST to the right custom method", async () => {
+    const calls: string[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+      calls.push((input as Request).url);
+      return Promise.resolve(new Response(null, { status: 204 }));
+    });
+    await setPrincipalActive("p1", false);
+    await setPrincipalActive("p1", true);
+    expect(calls[0]).toContain("/api/v1/principals/p1:disable");
+    expect(calls[1]).toContain("/api/v1/principals/p1:enable");
+  });
+
   it("principalName prefers display name, then username, then service label", () => {
-    const human = (h: Partial<Principal["human"]>): Principal => ({ id: "x", kind: "human", human: h as never, grants: [] });
+    const human = (h: Partial<Principal["human"]>): Principal => ({ id: "x", kind: "human", active: true, human: h as never, grants: [] });
     expect(principalName(human({ username: "u", display_name: "Dee" }))).toBe("Dee");
     expect(principalName(human({ username: "u" }))).toBe("u");
-    expect(principalName({ id: "s", kind: "service", service: { label: "svc" }, grants: [] })).toBe("svc");
+    expect(principalName({ id: "s", kind: "service", active: true, service: { label: "svc" }, grants: [] })).toBe("svc");
   });
 });

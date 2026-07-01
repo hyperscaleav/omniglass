@@ -9,6 +9,7 @@ export type Grant = { id?: string; role: string; scope_kind: string; scope_id?: 
 export type Principal = {
   id: string;
   kind: string;
+  active: boolean;
   human?: { username: string; email?: string; display_name?: string };
   service?: { label: string };
   grants: Grant[];
@@ -61,6 +62,13 @@ export async function createGrant(principalId: string, body: CreateGrant): Promi
 
 export async function revokeGrant(principalId: string, grantId: string): Promise<void> {
   const { error } = await api.DELETE("/principals/{id}/grants/{grantId}", { params: { path: { id: principalId, grantId } } });
+  if (error) throw error;
+}
+
+export async function setPrincipalActive(id: string, active: boolean): Promise<void> {
+  const { error } = active
+    ? await api.POST("/principals/{id}:enable", { params: { path: { id } } })
+    : await api.POST("/principals/{id}:disable", { params: { path: { id } } });
   if (error) throw error;
 }
 
