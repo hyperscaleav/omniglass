@@ -15,7 +15,7 @@ through a fixed lifecycle so quality is a process, not a hope.
 | **Design** | read the [architecture spine](/architecture/) (the docs are the spec); locate the seam; name the thin cut | the cut is explicit |
 | **Branch** | a git worktree off `origin/main` under `.claude/worktrees/`, never a commit on `main` | only after Define is approved |
 | **Build** | [test-first](/contributing/test-driven/): the failing test, then the feature, committing each increment. A slice cuts every entry point it touches, **API + CLI + UI**: the CLI command is generated from the OpenAPI (`make gen`); the UI view is built where the entity is live, or rendered as an honest stub where its backend does not exist yet | RED then GREEN; all three surfaces present (stub allowed) |
-| **Document** | the teaching [docs ship with it](/contributing/docs-with-everything/): the **architecture** page (the model) and, when the slice ships or changes an operator surface, its **operator guide** in `/guides/` (the how-to); plus a build-progress note on the status page | docs in the same PR (architecture + guide for an operator surface) |
+| **Document** | the teaching [docs ship with it](/contributing/docs-with-everything/): the **architecture** page (the model) and, when the slice ships or changes an operator surface, its **operator guide** in `/guides/` (the how-to); plus a build-progress note on the status page, the page's **status badge advanced** to its new floor, and a [decision-log](/architecture/decisions/) entry for any divergence | docs in the same PR; badge advanced; divergence logged |
 | **Validate** | `make test` green (run fresh), `make gen` clean, no drift | green, fresh |
 | **Review** | a reviewer pass over the diff, findings addressed; a security lens when it touches authz, secrets, the edge, or an invariant | findings cleared |
 | **Ship** | the ship-review (below), then squash-merge | architect approves |
@@ -39,6 +39,10 @@ Not a vibe at each gate, a check:
   database-backed behavior, and a green claim is not evidence until the tier actually executed.
 - **Docs ship with the feature.** The page that teaches the concept lands in the same PR, the
   architecture-of-record stays consistent, and any divergence is stated, never silent.
+- **Status moves with the code.** A slice that advances a page flips its **status badge** to the new
+  floor (`Design` to `Partial` to `Built`), adds the `status.mdx` build-progress note, and records any
+  divergence from the design both inline on the page and in the [decision log](/architecture/decisions/).
+  A built capability behind a `Design` badge is a drift bug.
 - **The API cannot drift.** `make gen` regenerates the OpenAPI and the clients (the cobra CLI and the
   typed SPA client) from the Go; a non-empty diff fails the slice until committed.
 - **Every entry point is covered.** A slice that adds or changes an operation surfaces it in all three
@@ -67,6 +71,7 @@ Verdict:   ready | ready-pending-your-call
 Scope:     in / thin cut / deferred (#issues)
 Proof:     make test green (fresh, N packages); the load-bearing behaviors; tiers; make gen clean
 Docs:      what shipped; arch-of-record consistent or a divergence note
+Status:    pages advanced (page: Design->Partial); status.mdx entry; ADR-#### if diverged
 Review:    findings and how addressed; security note if relevant
 
 Decisions I made (your veto window): the judgment calls that bound the design

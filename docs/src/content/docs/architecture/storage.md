@@ -3,12 +3,20 @@ title: Storage
 description: "How storage works: the Storage Gateway, views by default, per-database isolation, append-only partitioning and tiering, and the on-row lineage pattern."
 sidebar:
   badge:
-    text: Design
-    variant: caution
+    text: Partial
+    variant: note
 ---
 
 Storage is the set of patterns every entity in Omniglass lands on, so an operator can trust that scope, audit, retention, and lineage behave the same way no matter which table the data lives in. This page describes **how storage works**, the
 patterns every other leaf's entities land on, not a per-table column dump.
+
+:::note[Partial]
+Built today: the Storage Gateway as the only door to the database, dbmate migrations (run-once,
+embedded, idempotent), the per-action scope predicate and the in-transaction `audit_log` write, and the
+shared scoped-tree and scoped-CRUD primitives. Still `Design`: the CDC publisher and persistence
+consumer, the data-lane / record-lane split, partitioning and tiering, the `current_value` views, and
+the go-jet typed query builder. See [implementation status](/architecture/status/).
+:::
 
 Postgres is the **relational system of record**: it holds the entities, events, alarms, actions,
 audit, config, and the platform settings store. It is the record/state/intent lane. It is **never a

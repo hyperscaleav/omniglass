@@ -3,8 +3,8 @@ title: Scaling and deployment
 description: "One binary that runs a laptop demo or a Kubernetes fleet: two run modes, embedded Postgres and NATS, the CDC bridge, horizontal scale, high availability, platform configuration, and per-database multi-tenancy."
 sidebar:
   badge:
-    text: Design
-    variant: caution
+    text: Partial
+    variant: note
 ---
 
 Omniglass is **one Go binary**, and that is a packaging decision, not a scale ceiling. The same artifact
@@ -12,6 +12,13 @@ runs an all-in-one container on a laptop and a horizontally-scaled fleet on Kube
 **topology**, not by swapping products. This page is the deployment and scale model: the two run modes,
 the embedded services, what replicates, the coordination substrate, platform configuration, high
 availability, and multi-tenancy.
+
+:::note[Partial]
+Built today: the single Go binary with the `server` and `migrate` run modes, the multi-arch container
+image, and the Helm chart. Still `Design`: the embedded Postgres and NATS, the `node` and
+`worker` / `controller` modes, the CDC bridge, horizontal scale-out, and high availability. See
+[implementation status](/architecture/status/).
+:::
 
 ## Two run modes, one binary
 
