@@ -128,6 +128,25 @@ func registerRoutes(api huma.API, gw storage.Gateway, o options) {
 	}, meHandler)
 
 	huma.Register(api, huma.Operation{
+		OperationID: "update-auth-me",
+		Method:      http.MethodPatch,
+		Path:        "/auth/me",
+		Summary:     "Update your own profile",
+		Description: "Updates the caller's own display name (email is administrator-set). Requires authentication; self-scoped (edits only your own principal).",
+		Middlewares: huma.Middlewares{a.authn},
+	}, a.updateMeHandler)
+
+	huma.Register(api, huma.Operation{
+		OperationID:   "change-auth-me-password",
+		Method:        http.MethodPost,
+		Path:          "/auth/me:changePassword",
+		Summary:       "Change your own password",
+		Description:   "Verifies the current password and sets a new one. Requires authentication; self-scoped.",
+		DefaultStatus: http.StatusNoContent,
+		Middlewares:   huma.Middlewares{a.authn},
+	}, a.changePasswordHandler)
+
+	huma.Register(api, huma.Operation{
 		OperationID: "list-roles",
 		Method:      http.MethodGet,
 		Path:        "/roles",

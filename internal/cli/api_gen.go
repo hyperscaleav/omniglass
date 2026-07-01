@@ -34,6 +34,33 @@ func generatedCommands() []*cobra.Command {
 			Short: "Commands for the auth resource",
 		}
 		parent.AddCommand(func() *cobra.Command {
+			var fCurrentPassword string
+			var fNewPassword string
+			cmd := &cobra.Command{
+				Use:     "change-password",
+				Short:   "Change your own password",
+				Long:    "Verifies the current password and sets a new one. Requires authentication; self-scoped.",
+				Example: "  omniglass auth change-password --current-password current_password --new-password new_password",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/auth/me:changePassword")
+					body := map[string]any{}
+					if cmd.Flags().Changed("current-password") {
+						body["current_password"] = fCurrentPassword
+					}
+					if cmd.Flags().Changed("new-password") {
+						body["new_password"] = fNewPassword
+					}
+					return runAPICommand(cmd, "POST", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fCurrentPassword, "current-password", "", "Your current password")
+			_ = cmd.MarkFlagRequired("current-password")
+			cmd.Flags().StringVar(&fNewPassword, "new-password", "", "The new password (at least 8 characters)")
+			_ = cmd.MarkFlagRequired("new-password")
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
 			cmd := &cobra.Command{
 				Use:     "me",
 				Short:   "The authenticated principal, its permissions, and grants",
@@ -45,6 +72,26 @@ func generatedCommands() []*cobra.Command {
 					return runAPICommand(cmd, "GET", path, nil)
 				},
 			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			var fDisplayName string
+			cmd := &cobra.Command{
+				Use:     "update-profile",
+				Short:   "Update your own profile",
+				Long:    "Updates the caller's own display name (email is administrator-set). Requires authentication; self-scoped (edits only your own principal).",
+				Example: "  omniglass auth update-profile",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/auth/me")
+					body := map[string]any{}
+					if cmd.Flags().Changed("display-name") {
+						body["display_name"] = fDisplayName
+					}
+					return runAPICommand(cmd, "PATCH", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "Your display name; empty clears it")
 			return cmd
 		}())
 		roots = append(roots, parent)

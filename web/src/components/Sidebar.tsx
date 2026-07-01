@@ -22,7 +22,10 @@ export default function Sidebar(props: { collapsed: boolean; onToggle: () => voi
   const ident = () => {
     const m = me.data;
     if (!m) return { name: "—", role: "" };
-    return { name: m.human?.username ?? m.service?.label ?? m.principal.kind, role: m.grants[0]?.role ?? m.principal.kind };
+    // Prefer the display name (falls through an empty one to the username), so
+    // setting it updates both the label and the initials avatar below.
+    const name = m.human?.display_name || m.human?.username || m.service?.label || m.principal.kind;
+    return { name, role: m.grants[0]?.role ?? m.principal.kind };
   };
   // The tabs this principal may see: those with no resource (Home, Explore, Learn,
   // and the still-stubbed sections) plus those whose resource it can read.
@@ -65,16 +68,26 @@ export default function Sidebar(props: { collapsed: boolean; onToggle: () => voi
 
       <div class="border-t border-base-300 p-3">
         <div class="flex items-center gap-2.5" classList={{ "justify-center": props.collapsed }}>
-          <div class="avatar avatar-placeholder">
-            <div class="w-7 rounded-full bg-linear-to-br from-primary to-info text-primary-content">
-              <span class="font-data text-[11px] font-bold uppercase">{ident().name.slice(0, 2)}</span>
+          <A
+            href="/profile"
+            class="flex min-w-0 items-center gap-2.5 rounded-field hover:bg-base-300"
+            classList={{ "flex-1 p-1 -m-1": !props.collapsed, "tooltip tooltip-right": props.collapsed }}
+            data-tip={props.collapsed ? "Your profile" : undefined}
+            title="Your profile"
+          >
+            <div class="avatar avatar-placeholder">
+              <div class="w-7 rounded-full bg-linear-to-br from-primary to-info text-primary-content">
+                <span class="font-data text-[11px] font-bold uppercase">{ident().name.slice(0, 2)}</span>
+              </div>
             </div>
-          </div>
+            <Show when={!props.collapsed}>
+              <div class="min-w-0 flex-1 leading-tight">
+                <div class="truncate font-data text-xs font-semibold">{ident().name}</div>
+                <div class="text-[11px] capitalize text-base-content/40">{ident().role}</div>
+              </div>
+            </Show>
+          </A>
           <Show when={!props.collapsed}>
-            <div class="min-w-0 flex-1 leading-tight">
-              <div class="truncate font-data text-xs font-semibold">{ident().name}</div>
-              <div class="text-[11px] capitalize text-base-content/40">{ident().role}</div>
-            </div>
             <button
               class="btn btn-ghost btn-sm btn-square flex-none text-base-content/50"
               title="Sign out"

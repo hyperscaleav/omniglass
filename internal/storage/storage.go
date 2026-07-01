@@ -49,6 +49,10 @@ type Gateway interface {
 	// SetPassword installs or replaces a human's password credential (the caller
 	// passes the PHC-encoded argon2id hash). Returns false if no such username.
 	SetPassword(ctx context.Context, username, encoded string) (bool, error)
+	// UpdateHumanProfile applies a partial update to a human's own profile by
+	// principal id (the authenticated session's own id): a nil patch field is left
+	// unchanged, a provided empty string clears the nullable column.
+	UpdateHumanProfile(ctx context.Context, principalID string, patch HumanProfilePatch) error
 	// RevokeBearer deletes the bearer credential with the given sha256 hash
 	// (session logout). A no-op if none matches.
 	RevokeBearer(ctx context.Context, hash []byte) error

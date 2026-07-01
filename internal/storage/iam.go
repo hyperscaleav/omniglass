@@ -246,6 +246,38 @@ func (p *PG) SetPassword(ctx context.Context, username, encoded string) (bool, e
 	return true, nil
 }
 
+// HumanProfilePatch carries the editable self-profile fields. A nil pointer
+// leaves the column unchanged; a non-nil pointer sets it, with an empty string
+// clearing the nullable column to NULL.
+type HumanProfilePatch struct {
+	DisplayName *string
+	Email       *string
+}
+
+// UpdateHumanProfile applies a partial update to a human's own profile, addressed
+// by principal id (the authenticated session's own id). Absent fields are left
+// as-is; a provided empty string clears the column. The row exists by
+// construction (the caller is that principal), so a no-match is not signalled.
+func (p *PG) UpdateHumanProfile(ctx context.Context, principalID string, patch HumanProfilePatch) error {
+	setDisplay, display := patch.DisplayName != nil, any(nil)
+	if patch.DisplayName != nil {
+		display = nullize(*patch.DisplayName)
+	}
+	setEmail, email := patch.Email != nil, any(nil)
+	if patch.Email != nil {
+		email = nullize(*patch.Email)
+	}
+	if _, err := p.pool.Exec(ctx, `
+		update human set
+			display_name = case when $2 then $3 else display_name end,
+			email        = case when $4 then $5 else email end
+		where principal_id = $1`,
+		principalID, setDisplay, display, setEmail, email); err != nil {
+		return fmt.Errorf("storage: update human profile: %w", err)
+	}
+	return nil
+}
+
 // AnyHuman reports whether any human principal exists, so the login screen hides
 // the bootstrap hint once the system has an owner.
 func (p *PG) AnyHuman(ctx context.Context) (bool, error) {

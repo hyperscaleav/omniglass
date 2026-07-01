@@ -94,6 +94,42 @@ export function useLogout() {
   };
 }
 
+// useUpdateProfile patches the caller's own display name (email is set by an
+// administrator, not here), then invalidates /auth/me so the console reflects the
+// change everywhere it is shown.
+export function useUpdateProfile() {
+  const qc = useQueryClient();
+  return async (patch: { display_name?: string }): Promise<{ ok: true } | { ok: false; message: string }> => {
+    const { error } = await api.PATCH("/auth/me", { body: patch });
+    if (error) {
+      return { ok: false, message: "Could not save your profile." };
+    }
+    await qc.invalidateQueries({ queryKey: ME_KEY });
+    return { ok: true };
+  };
+}
+
+// useChangePassword verifies the current password and sets a new one. A wrong
+// current password is a 403, a too-short new one a 422; both map to a clear
+// message.
+export function useChangePassword() {
+  return async (current: string, next: string): Promise<{ ok: true } | { ok: false; message: string }> => {
+    const { error, response } = await api.POST("/auth/me:changePassword", {
+      body: { current_password: current, new_password: next },
+    });
+    if (response.status === 403) {
+      return { ok: false, message: "Your current password is incorrect." };
+    }
+    if (response.status === 422) {
+      return { ok: false, message: "New password must be at least 8 characters." };
+    }
+    if (error) {
+      return { ok: false, message: "Could not change your password." };
+    }
+    return { ok: true };
+  };
+}
+
 // can reports whether the principal's flattened permissions allow a
 // resource:action, with the wildcard and :read floor the server applies. A UI
 // hint only; the server is the authority.

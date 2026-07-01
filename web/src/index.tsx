@@ -11,6 +11,7 @@ import Home from "./pages/Home";
 import Locations from "./pages/Locations";
 import Systems from "./pages/Systems";
 import Components from "./pages/Components";
+import Profile from "./pages/Profile";
 import SectionStub from "./pages/SectionStub";
 import NotFound from "./pages/NotFound";
 
@@ -50,6 +51,7 @@ render(
           <Route path="/systems/:name" component={Systems} />
           <Route path="/components" component={Components} />
           <Route path="/components/:name" component={Components} />
+          <Route path="/profile" component={Profile} />
           {STUBS.map((p) => <Route path={p} component={SectionStub} />)}
           <Route path="*" component={NotFound} />
         </Route>
