@@ -57,10 +57,13 @@ location-scoped admin cannot list users.
   role and a scope kind; a non-`all` scope names its root) and revokes one with the **x** on a
   grant chip. That is how a fresh user gets permissions. One rule the server always holds: the
   **last owner grant cannot be revoked**, so the platform can never be locked out of administration.
+- With `principal:update`, **Disable** turns off a principal: it can no longer sign in or use a
+  token, but its audit history is kept (accounts are disabled, never deleted). **Enable** restores
+  access. A disabled account reads **inactive** in the grid. The **last active owner cannot be
+  disabled**, the same invariant that protects the last owner grant.
 
-Disabling and deleting a principal land in a later slice. From the CLI the same surface is
-`omniglass principal list` / `get` / `create` / `update`, and `omniglass grant create <id>` /
-`grant delete <id> <grantId>`.
+From the CLI the same surface is `omniglass principal list` / `get` / `create` / `update` /
+`disable` / `enable`, and `omniglass grant create <id>` / `grant delete <id> <grantId>`.
 
 ## The layout
 

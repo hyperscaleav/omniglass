@@ -17,11 +17,13 @@ Built and tested today: the `principal` (+ per-kind `human` / `service`) and `cr
 admin **principal directory** (`GET /principals`, `GET /principals/{id}`), human **create**
 (`POST /principals`) and **update** (`PATCH /principals/{id}`: display name, email, username), **role
 assignment** (`POST` / `DELETE /principals/{id}/grants`) with the **owner-invariant trigger** enforcing
-that the last `owner @ all` grant cannot be revoked (all-scope gated), and the per-action `visible_set`
-resolver enforced in the
+that the last `owner @ all` grant cannot be revoked, and **soft disable** (`POST /principals/{id}:disable`
+/ `:enable`, which refuses authentication for a disabled principal and cannot disable the last active
+owner; all-scope gated), and the per-action `visible_set` resolver enforced in the
 Storage Gateway across locations, systems, and components. Still `Design`: OIDC / SAML auth,
-`principal_group`s, the node / NATS path, the permission cache, the rest of admin user management
-(disable and delete a principal), and the tenant-policy lever. The per-slice
+`principal_group`s, the node / NATS path, the permission cache, service-account and custom-role
+management, and the tenant-policy lever (a principal is disabled, never hard-deleted, since the audit
+trail references it). The per-slice
 breakdown is on [implementation status](/architecture/status/).
 
 Where the build currently differs from the present-tense design below (each logged in the
