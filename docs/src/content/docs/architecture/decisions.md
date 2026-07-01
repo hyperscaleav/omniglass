@@ -40,7 +40,8 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0003](#adr-0003-health-reads-ok-not-up) | 2026-06-27 | Accepted | The healthy state is named `ok`, not `up` |
 | [ADR-0004](#adr-0004-credentials-ship-bearer-only) | 2026-06-27 | Resolved | Bearer shipped first; `password` credentials (argon2id) landed in identity slices 1-2. OIDC / NATS still deferred |
 | [ADR-0005](#adr-0005-the-first-owner-is-omniglass-bootstrap) | 2026-06-27 | Resolved | `omniglass bootstrap <username> [--password]`; the password-on-create path shipped, the `iam` namespace is deferred |
-| [ADR-0006](#adr-0006-the-owner-invariant-is-enforced-by-bootstrap-for-now) | 2026-06-27 | Accepted | The single-owner invariant is upheld by the bootstrap path, not yet a DB trigger |
+| [ADR-0006](#adr-0006-the-owner-invariant-is-enforced-by-bootstrap-for-now) | 2026-06-27 | Resolved | The single-owner invariant is now a DEFERRABLE constraint trigger, landed with grant revocation |
+| [ADR-0007](#adr-0007-principals-are-gated-at-all-scope-not-scope-tree) | 2026-07-01 | Accepted | A principal is not a scope-tree entity; the `principal` capability confers access only at all-scope |
 
 ## Entries
 
@@ -109,7 +110,8 @@ below from the project's history. From here it grows one slice at a time.
 
 ### ADR-0006: The owner invariant is enforced by bootstrap for now
 
-- **Date:** 2026-06-27 | **Status:** Accepted | **Pages:** [identity and access](/architecture/identity-access/)
+- **Date:** 2026-06-27 | **Status:** Resolved (identity slice 3c) | **Pages:** [identity and access](/architecture/identity-access/)
+- **Resolved:** The `DEFERRABLE INITIALLY DEFERRED` constraint trigger (`principal_grant_owner_guard`) shipped with grant revocation ([issue #82](https://github.com/hyperscaleav/omniglass/issues/82)): it refuses to leave zero `owner @ all` grants at `COMMIT`, so revoking the last owner is a clean 409 while a swap (grant a new owner + revoke the old in one transaction) still passes. The gateway maps its custom SQLSTATE `OG001` to `ErrLastOwner`.
 - **Decision (divergence):** "At least one active `owner@all` grant exists at all times" is upheld today by
   the bootstrap path (it always creates one) and the absence of any grant-revocation surface. The design's
   **deferrable Postgres constraint trigger** that enforces it at `COMMIT` (so the swap-owners-in-one-txn
@@ -119,3 +121,19 @@ below from the project's history. From here it grows one slice at a time.
   required before the admin user-management slice exposes grant revocation
   ([epic #27](https://github.com/hyperscaleav/omniglass/issues/27), slice 3).
 - **Closes the gap:** epic [#27](https://github.com/hyperscaleav/omniglass/issues/27).
+
+### ADR-0007: Principals are gated at all-scope, not scope-tree
+
+- **Date:** 2026-07-01 | **Status:** Accepted | **Pages:** [identity and access](/architecture/identity-access/)
+- **Decision:** A `principal` is not a scope-tree entity: it is not "under" a location, system, or component,
+  so the `principal:<action>` capability confers access **only at all-scope**. A grant scoped to a location
+  or system carries no principal access, and the Storage Gateway refuses a non-all scope on the principal
+  directory with a 403 (`ErrPrincipalForbidden`) rather than silently returning an empty list. This falls out
+  of the scope resolver: `applicableKinds("principal")` is empty, so only an `all` grant resolves to a
+  non-empty set.
+- **Context:** The admin principal directory (slice 3a, [issue #77](https://github.com/hyperscaleav/omniglass/issues/77))
+  is the first surface to gate on `principal:*`. Modelling users as scope-tree entities would be wrong (there
+  is no "users under HQ"), and returning an empty list to a mis-scoped admin would hide a misconfiguration, so
+  making all-scope explicit keeps the capability honest and surfaces the error. The same rule governs the later
+  principal-mutation and grant surfaces.
+- **Closes the gap:** n/a (a design decision, not a divergence).

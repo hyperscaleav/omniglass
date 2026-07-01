@@ -13,10 +13,17 @@ Identity and access is how an operator controls who may call the platform and wh
 Built and tested today: the `principal` (+ per-kind `human` / `service`) and `credential` tables, the
 `role` / `principal_grant` model, the `audit_log`, the capability fast-reject, **local password auth
 (argon2id) behind an httpOnly session cookie** (`POST /auth/login` and `/auth/logout`, the public
-`GET /auth/status`), the self-service `GET` / `PATCH /auth/me` and `POST /auth/me:changePassword`, and
-the per-action `visible_set` resolver enforced in the Storage Gateway across locations, systems, and
-components. Still `Design`: OIDC / SAML auth, `principal_group`s, the node / NATS path, the permission
-cache, admin user CRUD and role-assignment endpoints, and the tenant-policy lever. The per-slice
+`GET /auth/status`), the self-service `GET` / `PATCH /auth/me` and `POST /auth/me:changePassword`, the
+admin **principal directory** (`GET /principals`, `GET /principals/{id}`), human **create**
+(`POST /principals`) and **update** (`PATCH /principals/{id}`: display name, email, username), **role
+assignment** (`POST` / `DELETE /principals/{id}/grants`) with the **owner-invariant trigger** enforcing
+that the last `owner @ all` grant cannot be revoked, and **soft disable** (`POST /principals/{id}:disable`
+/ `:enable`, which refuses authentication for a disabled principal and cannot disable the last active
+owner; all-scope gated), and the per-action `visible_set` resolver enforced in the
+Storage Gateway across locations, systems, and components. Still `Design`: OIDC / SAML auth,
+`principal_group`s, the node / NATS path, the permission cache, service-account and custom-role
+management, and the tenant-policy lever (a principal is disabled, never hard-deleted, since the audit
+trail references it). The per-slice
 breakdown is on [implementation status](/architecture/status/).
 
 Where the build currently differs from the present-tense design below (each logged in the

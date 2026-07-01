@@ -291,6 +291,7 @@ type svcBody struct {
 }
 
 type grantBody struct {
+	ID        string `json:"id,omitempty"`
 	Role      string `json:"role"`
 	ScopeKind string `json:"scope_kind"`
 	ScopeID   string `json:"scope_id,omitempty"`
@@ -315,7 +316,7 @@ func meHandler(ctx context.Context, _ *struct{}) (*meOutput, error) {
 	out.Body.Permissions = perms.Strings()
 	out.Body.Grants = make([]grantBody, 0, len(pr.Grants))
 	for _, g := range pr.Grants {
-		gb := grantBody{Role: g.Role, ScopeKind: g.ScopeKind}
+		gb := grantBody{ID: g.ID, Role: g.Role, ScopeKind: g.ScopeKind}
 		if g.ScopeID != nil {
 			gb.ScopeID = *g.ScopeID
 		}

@@ -38,6 +38,35 @@ only your own account, whatever your role.
 From the CLI the same two actions are `omniglass auth update-profile` and
 `omniglass auth change-password` (see [the CLI guide](/guides/cli/)).
 
+## Users
+
+**Settings, Users** is the admin directory of every principal, humans and service accounts,
+each with the roles granted to it. You see it only if you hold `principal:read`, and because a
+principal is not part of any location or system tree, that grant must be **all-scope**: a
+location-scoped admin cannot list users.
+
+- Pick a row to see a principal's profile and its **role grants** (each a role at a scope).
+- With `principal:create`, **New user** creates a human with a username and an optional initial
+  password. The new user can sign in right away and change that password themselves; a fresh
+  account holds no grants (so it can sign in but do nothing) until you assign a role.
+- With `principal:update`, **Edit** changes a user's display name, email, and **username**.
+  Renaming is safe: their credentials and grants follow the account (they key on an internal id,
+  not the username), so a renamed user keeps their password and access. Only an administrator can
+  change a username; the user cannot change their own.
+- With `principal_grant:create` / `:delete`, the detail panel **grants** a role at a scope (pick a
+  role, a scope kind, and, for a non-`all` scope, the specific location, system, or component from
+  the picker) and revokes one with the **x** on a grant chip. That is how a fresh user gets
+  permissions. A scope targets the entity by its internal id, so a grant survives a rename of that
+  entity. One rule the server always holds: the **last owner grant cannot be revoked**, so the
+  platform can never be locked out of administration.
+- With `principal:update`, **Disable** turns off a principal: it can no longer sign in or use a
+  token, but its audit history is kept (accounts are disabled, never deleted). **Enable** restores
+  access. A disabled account reads **inactive** in the grid. The **last active owner cannot be
+  disabled**, the same invariant that protects the last owner grant.
+
+From the CLI the same surface is `omniglass principal list` / `get` / `create` / `update` /
+`disable` / `enable`, and `omniglass grant create <id>` / `grant delete <id> <grantId>`.
+
 ## The layout
 
 - The **sidebar** is the information architecture: sections grouped into Inventory, Catalog,
