@@ -49,9 +49,11 @@ promise: if a label runs automation it is named `run:<task>`, and if a label is 
 | `run:test` | runs the full test suite on demand | reserved |
 
 `run:preview` is live today (the [PR previews guide](/guides/pr-previews/) covers it, and
-`preview-comment.yml` is the workflow behind it). The reserved names hold the namespace for
-workflows that do not exist yet; wire the workflow in the same PR that first relies on the
-label, rather than leaving a label that silently does nothing.
+`preview-comment.yml` is the workflow behind it). `run:build` and `run:test` are reserved:
+the expensive build and test tiers run on every PR today, and
+[issue #78](https://github.com/hyperscaleav/omniglass/issues/78) tracks moving them behind
+these labels so they run only on demand. Wire the workflow in the same PR that first relies
+on a reserved label, rather than leaving a label that silently does nothing.
 
 ## The fixed set
 
