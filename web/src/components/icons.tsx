@@ -123,3 +123,6 @@ export const Star: Component<{ size?: number; filled?: boolean }> = (p) => (
 export const LogOut: Component<P> = (p) => (
   <Svg size={p.size}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="M16 17l5-5-5-5" /><path d="M21 12H9" /></Svg>
 );
+export const Info: Component<P> = (p) => (
+  <Svg size={p.size}><circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" /></Svg>
+);

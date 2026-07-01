@@ -1,7 +1,7 @@
 # Local dev loop + the build/run flow for the single binary. Production deploy
 # is BYO Postgres; tests use ephemeral testcontainer Postgres.
 
-.PHONY: build build-web web image gen gen-web test test-short test-e2e tidy up down dev
+.PHONY: build build-web web image gen gen-web test test-short test-e2e tidy up down dev release-plan release-apply
 
 # Build the single binary (no console embedded; serves the build-the-console
 # placeholder under /web).
@@ -57,6 +57,32 @@ test-short:
 # Playwright. Needs the browser once: (cd web && npx playwright install chromium).
 test-e2e:
 	bash web/e2e/run.sh
+
+# ---- release ---------------------------------------------------------------
+# Releases are cut MANUALLY (not on merge to main). `release-plan` is the
+# dry-run preview: it prints the next version and the generated notes and
+# publishes nothing. `release-apply` performs the release: it pushes the git tag
+# and creates the GitHub Release. Run both from an up-to-date `main`.
+# semantic-release reads the conventional-commit subjects since the last tag
+# (.releaserc.json drives the plugins).
+SEMANTIC_RELEASE := npx --yes -p semantic-release@24 \
+	-p @semantic-release/commit-analyzer \
+	-p @semantic-release/release-notes-generator \
+	-p @semantic-release/github semantic-release
+
+# The token is resolved inside the recipe shell at runtime (prefer an exported
+# GITHUB_TOKEN, else the gh CLI), never stored in a make variable, so it is
+# never echoed into the build log. The recipe is `@`-silenced and fails fast
+# with an actionable message when no token is available.
+release-plan:
+	@token="$${GITHUB_TOKEN:-$$(gh auth token)}"; \
+	  [ -n "$$token" ] || { echo "release: no GITHUB_TOKEN set and gh is not authenticated (run: gh auth login)"; exit 1; }; \
+	  GITHUB_TOKEN="$$token" $(SEMANTIC_RELEASE) --dry-run --no-ci
+
+release-apply:
+	@token="$${GITHUB_TOKEN:-$$(gh auth token)}"; \
+	  [ -n "$$token" ] || { echo "release: no GITHUB_TOKEN set and gh is not authenticated (run: gh auth login)"; exit 1; }; \
+	  GITHUB_TOKEN="$$token" $(SEMANTIC_RELEASE) --no-ci
 
 # Sync go.mod / go.sum to the actual import graph.
 tidy:

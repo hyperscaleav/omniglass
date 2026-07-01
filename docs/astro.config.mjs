@@ -58,6 +58,8 @@ export default defineConfig({
             { label: 'Why Omniglass', slug: 'architecture/why' },
             { label: 'Overview', slug: 'architecture' },
             { label: 'Implementation status', slug: 'architecture/status' },
+            { label: 'Decision log', slug: 'architecture/decisions' },
+            { label: 'Roadmap', slug: 'architecture/roadmap' },
             // the estate model, then the shapes it pins
             { label: 'Core entities', slug: 'architecture/core-entities' },
             { label: 'Templates', slug: 'architecture/templates' },
@@ -99,6 +101,7 @@ export default defineConfig({
             { label: 'Primitive first', slug: 'contributing/primitive-first' },
             { label: 'Design system', slug: 'contributing/design-system' },
             { label: 'Slice workflow', slug: 'contributing/slice-workflow' },
+            { label: 'Release and CI', slug: 'contributing/release-ci' },
           ],
         },
         {
@@ -107,6 +110,7 @@ export default defineConfig({
             { label: 'The console', slug: 'guides/console' },
             { label: 'The CLI', slug: 'guides/cli' },
             { label: 'Container image', slug: 'guides/container-image' },
+            { label: 'Deploying with Helm', slug: 'guides/helm' },
           ],
         },
       ],

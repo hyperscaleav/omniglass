@@ -3,8 +3,8 @@ title: UI
 description: "The operator console: one renderer library in two composition modes, reads through views, and an identity-based information architecture."
 sidebar:
   badge:
-    text: Design
-    variant: caution
+    text: Partial
+    variant: note
 ---
 
 The UI is where an operator actually does the work, so it is built as one renderer over the same views the rest of the platform reads, with an information architecture organized around the entities you care about. This page covers the renderer / page / dashboard model and the information architecture. The stack, the typed client, the build pipeline, and
@@ -19,7 +19,8 @@ the renderer library, and composable dashboards below remain the intended **read
 analytical and dashboard surfaces (alarms, datapoint history, the cascade view, fleet
 dashboards), which are not built yet. The realized inventory shell and its primitives are in the
 [design system](/contributing/design-system/); how to operate it is the
-[console guide](/guides/console/).
+[console guide](/guides/console/), and the per-slice breakdown is on
+[implementation status](/architecture/status/).
 :::
 
 ## The renderer contract: ViewResult and the views BFF

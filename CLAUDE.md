@@ -18,7 +18,10 @@ Treat every change as portfolio-quality and externally visible.
    without a test that failed before it and passes after; a bug fix starts with a
    failing regression test. Full loop: [docs/contributing/test-driven.md](docs/src/content/docs/contributing/test-driven.md).
 3. **Docs with everything.** A feature is not done until the docs that teach it ship in
-   the same PR. [docs/contributing/docs-with-everything.md](docs/src/content/docs/contributing/docs-with-everything.md).
+   the same PR, and **status moves with the code**: advance the page's status badge to its new floor
+   (`Design`/`Partial`/`Built`), add the `status.mdx` build-progress note, and log any divergence from a
+   page's design in the [decision log](docs/src/content/docs/architecture/decisions.md). A built
+   capability behind a `Design` badge is drift. [docs/contributing/docs-with-everything.md](docs/src/content/docs/contributing/docs-with-everything.md).
 4. **Functional and pedagogical.** Omniglass is both a tool and a learning tool. Operator
    surfaces should also teach the concept they operate on, interactively, against real or
    simulated data. [docs/contributing/learning-tool.md](docs/src/content/docs/contributing/learning-tool.md).
@@ -137,3 +140,8 @@ Procedural workflows live under [.claude/skills/](.claude/skills/). Invoke with
 - **`/docs-diagram`** - authoring docs diagrams in D2 (build-time inline SVG via astro-d2):
   the d2-binary prerequisite, the colors-live-in-CSS theming contract that tracks Starlight's
   light/dark toggle, the class to CSS-hook vocabulary, and the build/preview/verify loop.
+
+Reference skills auto-load by description when you touch the relevant code (not invoked by
+name): **`solidjs`** for the `web/` SPA reactivity model (eager-DOM JSX, signals, stores,
+`Show`/`For`, refs, `Portal`) and **`kobalte`** for the interactive-primitive patterns (the
+portal-to-escape-overflow rule, the trigger-not-inside-a-label gotcha, hover and focus behavior).

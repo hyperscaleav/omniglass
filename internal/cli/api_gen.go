@@ -283,6 +283,27 @@ func generatedCommands() []*cobra.Command {
 	}
 	{
 		parent := &cobra.Command{
+			Use:   "location-type",
+			Short: "Commands for the location-type resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "list",
+				Short:   "List location types",
+				Long:    "Lists the location_type registry (the shape-definers a location is classified by), ordered by rank. Populates the type picker on the location form. Gated by location:read.",
+				Example: "  omniglass location-type list",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/location-types")
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		roots = append(roots, parent)
+	}
+	{
+		parent := &cobra.Command{
 			Use:   "login",
 			Short: "Commands for the login resource",
 		}

@@ -26,9 +26,13 @@ Each is a gate; a red one blocks the ship.
    non-empty diff means the committed spec or clients drifted from the Go; commit the regen.
 3. **House style.** No em dashes and no AI/assistant attribution in any changed file (grep the
    diff; scan the commit messages and the PR body).
-4. **Docs with everything.** The teaching docs ship in this PR, the `status.mdx` build-progress
-   entry is added, and the architecture-of-record is consistent or a divergence is stated
-   explicitly. Never silent.
+4. **Docs with everything, status, and decisions.** The teaching docs ship in this PR, and the
+   architecture-of-record stays consistent. Three status surfaces move with the code, never
+   silently: the `status.mdx` build-progress entry is added; **each architecture page the slice
+   advances has its status badge flipped to its new floor** (`Design` to `Partial` to `Built`); and
+   if the build diverges from a page's present-tense design, the page carries an inline note **and**
+   a [decision-log](/architecture/decisions/) entry (an ADR) lands in the same PR. A page that
+   gained a built capability but kept a `Design` badge is a red gate.
 5. **Review.** A reviewer pass over the diff (`code-review` or `cavecrew-reviewer`), findings
    addressed. Add a `security-review` lens if the slice touches authz, secrets, the edge, or an
    invariant. Verify behavior to the outcome line, not just call sites.
@@ -69,6 +73,7 @@ Proof (ran fresh)
 Visual:    <screenshots in the PR for any UI surface | n/a>
 
 Docs:      <what shipped; arch-of-record consistent | divergence note>
+Status:    <pages advanced (page: Design->Partial); status.mdx entry; ADR-#### if diverged>
 Review:    <reviewer findings + how addressed; security: n/a | note>
 
 Decisions I made (your veto window): <judgment calls that bound the design>

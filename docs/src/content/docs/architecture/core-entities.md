@@ -3,13 +3,21 @@ title: Core entities
 description: "The estate model: component, system, location, and node as the structural entities, the variable-depth trees, and the exclusive-arc owner."
 sidebar:
   badge:
-    text: Design
-    variant: caution
+    text: Partial
+    variant: note
 ---
 
 Core entities are the things an operator actually manages, the component, system, location, and node, and giving each its own identity is what lets every datapoint, event, alarm, and config name exactly one of them as its owner. This page covers the structural entities, how they
 nest, and how everything else names one of them as owner. The shapes these entities pin are [templates](/architecture/templates/); the data they own is
 [datapoints](/architecture/datapoints/); the physical tables are [storage](/architecture/storage/).
+
+:::note[Partial]
+Built today: `component`, `system`, and `location` as name-addressable, variable-depth (`parent_id`)
+trees, each with its `*_type` registry and full scoped CRUD; a delete is refused while a structural
+child remains. Still `Design`: the `node` entity, template pinning, `system_member` composition, the
+exclusive-arc owner columns (no datapoints, events, or alarms yet), operational mode, and
+decommission / purge. See [implementation status](/architecture/status/).
+:::
 
 ## The estate: four structural entities
 
@@ -24,7 +32,9 @@ Three nouns describe what you operate, plus the edge process that collects for t
   is located at a location, and is classified by `system_type`.
 - A **location** ties systems and components to a physical place (campus, building, floor, room).
   It is classified by `location_type` and, unlike component and system, has **no template**: for a
-  location the type is the only shape-definer.
+  location the type is the only shape-definer. The official `location_type` set ships seeded and is
+  readable at `GET /location-types` (ranked), which is what the type picker on the location form
+  lists so a location is classified by a known type rather than a free-typed string.
 - A **node** is the edge process (`omniglass --mode node`) that pulls work, reaches components over
   interfaces, and ships results ([nodes](/architecture/nodes/)). It is structural because it is a
   first-class **owner**: a node owns its own self-health telemetry and can carry a node-owned alarm.

@@ -3,11 +3,34 @@ title: Identity and access
 description: How principals authenticate, how grants combine roles with scopes, and how the app enforces capability at the route and ABAC scope in the Storage Gateway.
 sidebar:
   badge:
-    text: Design
-    variant: caution
+    text: Partial
+    variant: note
 ---
 
 Identity and access is how an operator controls who may call the platform and which slice of the estate each caller can see and act on, enforced entirely in the app so "forgot to filter" cannot happen. Enforcement is **two in-app layers**: the capability check (`<resource>:<action>`) runs as **API route middleware** before the handler, and the **ABAC scope** filter is injected by the **Storage Gateway** (the only path to the database), where a row-level filter holds by construction. Scope is built on the cascade's groups ([cascade](/architecture/cascade/)). This doc says what IAM **is**.
+
+:::note[Partial: what is built, and where it diverges]
+Built and tested today: the `principal` (+ per-kind `human` / `service`) and `credential` tables, the
+`role` / `principal_grant` model, the `audit_log`, the capability fast-reject, `GET /auth/me`, and the
+per-action `visible_set` resolver enforced in the Storage Gateway across locations, systems, and
+components. Still `Design`: password and OIDC auth, `principal_group`s, the node / NATS path, the
+permission cache, and the tenant-policy lever. The per-slice breakdown is on
+[implementation status](/architecture/status/).
+
+Where the build currently differs from the present-tense design below (each logged in the
+[decision log](/architecture/decisions/)):
+
+- **Credentials are bearer-only.** `credential.kind` is `bearer`; the `password` / `oidc` / `nats`
+  methods and the `(method, identifier)` lookup are deferred (epic #27, slice #28). The minted token
+  prefix is `ogp_`.
+- **Bootstrap is `omniglass bootstrap <username>`** and mints a bearer credential, not the
+  `og iam create-owner` password path described under [Bootstrap](#bootstrap); the `iam` command
+  namespace is deferred.
+- **The `agent` principal kind** is already reserved in the schema's `kind` CHECK, although no `agent`
+  identity is issued yet (AI still acts as a `human` or `service`).
+- **The owner invariant** is upheld by the bootstrap path today; the deferrable Postgres trigger
+  described under [the owner invariant](#the-owner-invariant) is not yet built.
+:::
 
 ## The model in one breath
 
@@ -38,7 +61,7 @@ One `credential` row per authN method per principal. A principal can hold many (
 | `token` | `sha256(token)` | null (identifier IS the verifier) | service |
 | `nats` | nkey public key | null (NATS verifies the signed nonce) | nodes |
 
-The password identifier is the `principal.id` (not the username), so a username change does not invalidate the credential. Service bearer tokens are 256-bit `crypto/rand` payloads with a human-readable prefix (`ogs_`) for secret-scanners and audit clarity; the server only ever stores `sha256(token)`. Cleartext is returned exactly once at mint time. A `node` enrolls with a per-tenant **NATS JWT/nkey** instead: the credential row stores the nkey public key, NATS verifies a signed nonce, and the JWT carries the node's subject permissions (its placement-derived `visible_set`, see [The node path](#the-node-path)).
+The password identifier is the `principal.id` (not the username), so a username change does not invalidate the credential. Service bearer tokens are 256-bit `crypto/rand` payloads with a human-readable prefix (`ogp_`) for secret-scanners and audit clarity; the server only ever stores `sha256(token)`. Cleartext is returned exactly once at mint time. A `node` enrolls with a per-tenant **NATS JWT/nkey** instead: the credential row stores the nkey public key, NATS verifies a signed nonce, and the JWT carries the node's subject permissions (its placement-derived `visible_set`, see [The node path](#the-node-path)).
 
 :::caution[Open question]
 OIDC delegates MFA to the IdP; whether to add a local-account TOTP path for installs not on OIDC is

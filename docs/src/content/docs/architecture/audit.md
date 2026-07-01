@@ -3,11 +3,18 @@ title: Audit
 description: The who-did-what record, written once in the same transaction as the change it describes.
 sidebar:
   badge:
-    text: Design
-    variant: caution
+    text: Partial
+    variant: note
 ---
 
 The audit log is how an operator answers "who changed this, and to what?" without trusting memory: every mutation is recorded once, at the source.
+
+:::note[Partial]
+Built today: the `audit_log` row written in the same transaction as every entity mutation, carrying the
+resolved actor, verb, resource, and `old -> new` diff. Still `Design`: secret-decrypt audit, the
+read-audit toggle, retention partitioning, and the backtest / reconcile consumers. See
+[implementation status](/architecture/status/).
+:::
 
 ## The model
 
