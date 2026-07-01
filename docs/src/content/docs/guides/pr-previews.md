@@ -9,7 +9,7 @@ the diff.
 
 ## Getting a preview
 
-Add the **`preview`** label to the PR. Within a minute or two a full instance
+Add the **`run:preview`** label to the PR. Within a minute or two a full instance
 comes up at:
 
 ```
@@ -35,7 +35,7 @@ exercised end to end. Sign in as the seeded owner (the bot comment and the
 
 ## Teardown
 
-Remove the `preview` label, or close the PR, and the environment is pruned. A
+Remove the `run:preview` label, or close the PR, and the environment is pruned. A
 reaper also sweeps any namespace left behind, so nothing lingers.
 
 ## How it works
