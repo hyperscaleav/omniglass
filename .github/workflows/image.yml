@@ -72,6 +72,12 @@ jobs:
       - name: Image metadata
         id: meta
         uses: docker/metadata-action@v5
+        # On a pull_request, GITHUB_SHA is the merge commit, so type=sha would
+        # tag sha-<merge>. The preview ApplicationSet pins image.tag to the PR
+        # head_sha, so tag by the head sha instead, or the two never match and
+        # the preview ImagePullBackOffs.
+        env:
+          DOCKER_METADATA_PR_HEAD_SHA: "true"
         with:
           images: ghcr.io/${{ github.repository }}
           tags: |
