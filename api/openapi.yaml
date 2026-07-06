@@ -47,6 +47,13 @@ components:
           format: uri
           readOnly: true
           type: string
+        actions:
+          description: The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces.
+          items:
+            type: string
+          type:
+            - array
+            - "null"
         component_type:
           type: string
         display_name:
@@ -445,6 +452,13 @@ components:
           format: uri
           readOnly: true
           type: string
+        actions:
+          description: The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces.
+          items:
+            type: string
+          type:
+            - array
+            - "null"
         display_name:
           type: string
         id:
@@ -634,6 +648,13 @@ components:
           format: uri
           readOnly: true
           type: string
+        actions:
+          description: The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces.
+          items:
+            type: string
+          type:
+            - array
+            - "null"
         display_name:
           type: string
         id:

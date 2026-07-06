@@ -62,7 +62,7 @@ export default function Locations() {
     const list = locations.data ?? [];
     const byId = new Map<string, LocNode>();
     for (const l of list) {
-      byId.set(l.id, { id: l.name, display: l.display_name || l.name, children: [], type: l.location_type, raw: l });
+      byId.set(l.id, { id: l.name, display: l.display_name || l.name, children: [], type: l.location_type, actions: l.actions, raw: l });
     }
     const roots: LocNode[] = [];
     for (const l of list) {

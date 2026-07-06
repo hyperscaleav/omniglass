@@ -89,6 +89,62 @@ func inScopeTree(ctx context.Context, q querier, tbl scopeTable, targetID string
 	return ok, nil
 }
 
+// InScopeIDs reports, for a batch of candidate row ids of a tree resource
+// (location/system/component), which are inside a resolved scope: an all scope
+// admits every candidate, a non-tree resource or empty candidate set admits none.
+// It is the batch companion to inScopeTree, used to compute per-row UI action
+// affordances (create/update/delete on a row) without a query per row per action:
+// one query per action scope answers the whole page. It applies the same
+// inclusive-subtree plus exclude-root-descendants logic the enforcement uses, so
+// the UI hint can never disagree with the gateway's per-action decision.
+func (p *PG) InScopeIDs(ctx context.Context, resource string, ids []string, set scope.Set) (map[string]bool, error) {
+	out := make(map[string]bool, len(ids))
+	tbl, ok := scopeKindTable(resource)
+	if !ok || len(ids) == 0 {
+		return out, nil // a non-tree resource or no candidates: nothing in scope
+	}
+	if set.All {
+		for _, id := range ids {
+			out[id] = true
+		}
+		return out, nil
+	}
+	roots := uuidRoots(set.IDs)
+	candidates := uuidRoots(ids)
+	if len(roots) == 0 || len(candidates) == 0 {
+		return out, nil
+	}
+	excluded := uuidRoots(set.ExcludeRootIDs)
+	inclusive := subtractRoots(roots, excluded)
+	rows, err := p.pool.Query(ctx, `
+		with recursive sub(id) as (
+			select id from `+string(tbl)+` where id = any($1::uuid[])
+			union all
+			select t.id from `+string(tbl)+` t join sub on t.parent_id = sub.id
+		) cycle id set sub_cyc using sub_path,
+		subx(id, is_root) as (
+			select id, true from `+string(tbl)+` where id = any($2::uuid[])
+			union all
+			select t.id, false from `+string(tbl)+` t join subx on t.parent_id = subx.id
+		) cycle id set subx_cyc using subx_path
+		select id from `+string(tbl)+`
+		where id = any($3::uuid[])
+		  and (id in (select id from sub) or id in (select id from subx where not is_root))`,
+		inclusive, excluded, candidates)
+	if err != nil {
+		return nil, fmt.Errorf("storage: in-scope ids on %s: %w", tbl, err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("storage: scan in-scope id: %w", err)
+		}
+		out[id] = true
+	}
+	return out, rows.Err()
+}
+
 // subtractRoots returns the ids in a that are not in b, a set difference over the
 // small scope-root slices.
 func subtractRoots(a, b []string) []string {

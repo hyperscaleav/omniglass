@@ -71,6 +71,7 @@ export default function Components() {
         id: c.name,
         display: c.display_name || c.name,
         children: [],
+        actions: c.actions,
         type: c.component_type,
         systemName: c.system_id ? label(sm.get(c.system_id) ?? { name: c.system_id }) : "",
         systemAddr: c.system_id ? (sm.get(c.system_id)?.name ?? c.system_id) : "",

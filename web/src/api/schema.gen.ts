@@ -484,6 +484,8 @@ export interface components {
              * @example /api/v1/schemas/ComponentBody.json
              */
             readonly $schema?: string;
+            /** @description The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces. */
+            actions?: string[] | null;
             component_type: string;
             display_name?: string;
             id: string;
@@ -711,6 +713,8 @@ export interface components {
              * @example /api/v1/schemas/LocationBody.json
              */
             readonly $schema?: string;
+            /** @description The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces. */
+            actions?: string[] | null;
             display_name?: string;
             id: string;
             location_type: string;
@@ -790,6 +794,8 @@ export interface components {
              * @example /api/v1/schemas/SystemBody.json
              */
             readonly $schema?: string;
+            /** @description The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces. */
+            actions?: string[] | null;
             display_name?: string;
             id: string;
             location_id?: string;

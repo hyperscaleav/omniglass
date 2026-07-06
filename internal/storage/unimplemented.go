@@ -62,6 +62,9 @@ func (UnimplementedGateway) UpsertLocationType(context.Context, LocationType) er
 func (UnimplementedGateway) ListLocationTypes(context.Context) ([]LocationType, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) InScopeIDs(context.Context, string, []string, scope.Set) (map[string]bool, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) ListLocations(context.Context, scope.Set) ([]Location, error) {
 	return nil, nil
 }

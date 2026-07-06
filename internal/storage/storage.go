@@ -95,6 +95,12 @@ type Gateway interface {
 	// ListLocationTypes returns every location type, ranked.
 	ListLocationTypes(ctx context.Context) ([]LocationType, error)
 
+	// InScopeIDs reports which of the candidate row ids of a tree resource
+	// (location/system/component) are inside a resolved scope, applying the same
+	// subtree/exclude-root logic the enforcement uses. It backs per-row UI action
+	// gating (one query per action scope answers a whole page).
+	InScopeIDs(ctx context.Context, resource string, ids []string, set scope.Set) (map[string]bool, error)
+
 	// The location CRUD surface. Every method takes the caller's resolved scope
 	// (a required input, so no path queries unscoped), expands it to a row filter,
 	// and writes the audit row in the mutating transaction. The read/action split

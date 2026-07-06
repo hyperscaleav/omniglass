@@ -9,6 +9,7 @@ export type Location = {
   display_name?: string;
   location_type: string;
   parent_id?: string;
+  actions?: string[];
 };
 
 export const LOCATIONS_KEY = ["locations"] as const;
