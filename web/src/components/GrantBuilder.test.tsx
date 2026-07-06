@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
+import { createSignal } from "solid-js";
 import { render, fireEvent } from "@solidjs/testing-library";
 import GrantBuilder from "./GrantBuilder";
 import type { TreeNode } from "../lib/treeselect";
@@ -84,6 +85,33 @@ describe("GrantBuilder", () => {
     typeEnter(input, "viewer");
     typeEnter(input, "all");
     expect(queryByText(/already granted/i)).toBeTruthy();
+  });
+
+  // The entity suggestions read the tree through props.entities(), which closes
+  // over a query signal. Solid tracks that read transitively, so entity data that
+  // arrives after mount (a refetch) is reflected in the dropdown without any
+  // explicit version prop.
+  it("re-tracks entity data that arrives after the entity stage is reached", () => {
+    const [locs, setLocs] = createSignal<TreeNode[]>([]);
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    const { getByRole, queryByLabelText } = render(() => (
+      <GrantBuilder
+        principalId="p1"
+        current={[]}
+        roles={roles}
+        entities={(k) => (k === "location" ? locs() : [])}
+        scopeName={scopeName}
+        canGrant
+        canRevoke
+        onSave={onSave}
+      />
+    ));
+    const input = getByRole("combobox");
+    typeEnter(input, "viewer"); // role
+    typeEnter(input, "location"); // kind -> entity stage, tree still empty
+    setLocs(locNodes); // the refetch lands
+    typeEnter(input, "boi"); // only resolvable if the memo re-tracked the new data
+    expect(queryByLabelText("Remove staged viewer @ location:boi")).toBeTruthy();
   });
 
   it("cancels all staged changes", () => {
