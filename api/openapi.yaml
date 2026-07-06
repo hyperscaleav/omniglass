@@ -99,6 +99,36 @@ components:
         - name
         - component_type
       type: object
+    CreateGrantInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateGrantInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        role:
+          description: A role id (viewer, operator, admin, owner, or a custom role)
+          minLength: 1
+          type: string
+        scope_id:
+          description: The scope root id; omit for the all scope
+          type: string
+        scope_kind:
+          description: The scope kind; 'all' confers the whole estate
+          enum:
+            - all
+            - location
+            - system
+            - component
+            - group
+          type: string
+      required:
+        - role
+        - scope_kind
+      type: object
     CreateLocationInputBody:
       additionalProperties: false
       properties:
@@ -125,6 +155,35 @@ components:
       required:
         - name
         - location_type
+      type: object
+    CreatePrincipalInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreatePrincipalInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        display_name:
+          maxLength: 200
+          type: string
+        email:
+          maxLength: 320
+          type: string
+        password:
+          description: Optional initial password; the user changes it after signing in
+          maxLength: 256
+          minLength: 8
+          type: string
+        username:
+          description: Unique sign-in name
+          maxLength: 200
+          minLength: 1
+          type: string
+      required:
+        - username
       type: object
     CreateSystemInputBody:
       additionalProperties: false
@@ -218,6 +277,15 @@ components:
     GrantBody:
       additionalProperties: false
       properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/GrantBody.json
+          format: uri
+          readOnly: true
+          type: string
+        id:
+          type: string
         role:
           type: string
         scope_id:
@@ -323,6 +391,25 @@ components:
             - "null"
       required:
         - locations
+      type: object
+    ListPrincipalsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListPrincipalsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        principals:
+          items:
+            $ref: "#/components/schemas/PrincipalBody"
+          type:
+            - array
+            - "null"
+      required:
+        - principals
       type: object
     ListSystemsOutputBody:
       additionalProperties: false
@@ -435,6 +522,38 @@ components:
       required:
         - principal
         - permissions
+        - grants
+      type: object
+    PrincipalBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/PrincipalBody.json
+          format: uri
+          readOnly: true
+          type: string
+        active:
+          type: boolean
+        grants:
+          items:
+            $ref: "#/components/schemas/GrantBody"
+          type:
+            - array
+            - "null"
+        human:
+          $ref: "#/components/schemas/HumanBody"
+        id:
+          type: string
+        kind:
+          type: string
+        service:
+          $ref: "#/components/schemas/SvcBody"
+      required:
+        - id
+        - kind
+        - active
         - grants
       type: object
     PrincipalStruct:
@@ -570,6 +689,30 @@ components:
         display_name:
           description: Your display name; empty clears it
           maxLength: 200
+          type: string
+      type: object
+    UpdatePrincipalInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/UpdatePrincipalInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        display_name:
+          description: Display name; empty clears it
+          maxLength: 200
+          type: string
+        email:
+          description: Email; empty clears it
+          maxLength: 320
+          type: string
+        username:
+          description: Sign-in name; renaming is safe
+          maxLength: 200
+          minLength: 1
           type: string
       type: object
     UpdateSystemInputBody:
@@ -988,6 +1131,220 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Update a location
+  /principals:
+    get:
+      description: Lists all principals (humans and service accounts) with their grants. Gated by principal:read, which confers access only at all-scope.
+      operationId: list-principals
+      parameters:
+        - description: Optionally filter by principal kind
+          explode: false
+          in: query
+          name: kind
+          schema:
+            description: Optionally filter by principal kind
+            enum:
+              - human
+              - service
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListPrincipalsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List principals
+    post:
+      description: Creates a human principal with an optional initial password. Gated by principal:create (all-scope). The new principal holds no grants; assign roles separately.
+      operationId: create-principal
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePrincipalInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PrincipalBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Create a human principal
+  /principals/{id}:
+    get:
+      description: Fetches one principal by id with its profile and grants. Gated by principal:read (all-scope).
+      operationId: get-principal
+      parameters:
+        - description: The principal's id (uuid)
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The principal's id (uuid)
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PrincipalBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get a principal
+    patch:
+      description: "Updates a human principal's display name, email, and username. Gated by principal:update (all-scope). Renaming is safe: nothing keys on the username."
+      operationId: update-principal
+      parameters:
+        - description: The principal's id (uuid)
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The principal's id (uuid)
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePrincipalInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PrincipalBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Update a principal
+  /principals/{id}/grants:
+    post:
+      description: Assigns a role at a scope to a principal. Gated by principal_grant:create (all-scope). A duplicate is 409, an unknown role or bad scope 422.
+      operationId: create-grant
+      parameters:
+        - description: The principal's id (uuid)
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The principal's id (uuid)
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateGrantInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GrantBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Grant a role to a principal
+  /principals/{id}/grants/{grantId}:
+    delete:
+      description: Removes one grant from a principal. Gated by principal_grant:delete (all-scope). The last owner grant cannot be revoked.
+      operationId: revoke-grant
+      parameters:
+        - description: The principal's id (uuid)
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The principal's id (uuid)
+            type: string
+        - description: The grant's id (uuid)
+          in: path
+          name: grantId
+          required: true
+          schema:
+            description: The grant's id (uuid)
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Revoke a grant
+  /principals/{id}:disable:
+    post:
+      description: Soft-disables a principal so it can no longer authenticate; its audit trail is kept. Gated by principal:update (all-scope). The last active owner cannot be disabled.
+      operationId: disable-principal
+      parameters:
+        - description: The principal's id (uuid)
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The principal's id (uuid)
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Disable a principal
+  /principals/{id}:enable:
+    post:
+      description: Re-enables a disabled principal, restoring its ability to authenticate. Gated by principal:update (all-scope).
+      operationId: enable-principal
+      parameters:
+        - description: The principal's id (uuid)
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The principal's id (uuid)
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Enable a principal
   /roles:
     get:
       description: Lists the roles. Gated by the role:read capability.

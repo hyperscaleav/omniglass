@@ -53,6 +53,34 @@ type Gateway interface {
 	// principal id (the authenticated session's own id): a nil patch field is left
 	// unchanged, a provided empty string clears the nullable column.
 	UpdateHumanProfile(ctx context.Context, principalID string, patch HumanProfilePatch) error
+	// ListPrincipals returns every principal with its profile and grants (the admin
+	// directory). Requires an all-scope read (a principal is not scope-tree scoped);
+	// a non-all scope is ErrPrincipalForbidden. No credential secret is loaded.
+	ListPrincipals(ctx context.Context, read scope.Set) ([]Principal, error)
+	// GetPrincipal resolves one principal by id with its profile and grants.
+	// Requires an all-scope read; an unknown id is ErrPrincipalNotFound.
+	GetPrincipal(ctx context.Context, id string, read scope.Set) (*Principal, error)
+	// CreateHumanPrincipal creates a human principal (and its password credential
+	// when a hash is given) in one audited transaction. Requires an all-scope
+	// create; a duplicate username is ErrUsernameTaken.
+	CreateHumanPrincipal(ctx context.Context, actorID string, spec HumanSpec, create scope.Set) (*Principal, error)
+	// UpdatePrincipalHuman applies an admin profile update (display name, email,
+	// username) to a human principal by id, audited. Requires an all-scope grant; a
+	// non-human target is ErrPrincipalNotHuman, an unknown id ErrPrincipalNotFound,
+	// a username clash ErrUsernameTaken.
+	UpdatePrincipalHuman(ctx context.Context, actorID, id string, patch AdminHumanPatch, action scope.Set) (*Principal, error)
+	// CreateGrant assigns a role x scope to a principal, audited. Requires an
+	// all-scope grant. Bad scope / unknown role / unknown principal / duplicate map
+	// to ErrBadScope / ErrUnknownRole / ErrPrincipalNotFound / ErrGrantExists.
+	CreateGrant(ctx context.Context, actorID, principalID string, spec GrantSpec, action scope.Set) (*Grant, error)
+	// RevokeGrant deletes one grant from a principal, audited. Requires an all-scope
+	// grant. Unknown grant is ErrGrantNotFound; revoking the last owner grant is
+	// ErrLastOwner (the deferred owner-invariant trigger).
+	RevokeGrant(ctx context.Context, actorID, principalID, grantID string, action scope.Set) error
+	// SetPrincipalActive enables or disables a principal (soft), audited. Requires
+	// an all-scope grant. Disabling the last active owner is ErrLastOwner; a
+	// disabled principal cannot authenticate.
+	SetPrincipalActive(ctx context.Context, actorID, id string, active bool, action scope.Set) error
 	// RevokeBearer deletes the bearer credential with the given sha256 hash
 	// (session logout). A no-op if none matches.
 	RevokeBearer(ctx context.Context, hash []byte) error

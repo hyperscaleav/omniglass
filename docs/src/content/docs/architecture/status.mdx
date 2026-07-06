@@ -194,3 +194,47 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   real-binary integration test (wrong current password 403, short new 422, rotation, self-scope), and the
   client hook units. Thin cut: changing a password does not revoke existing sessions (a later hardening);
   admin user CRUD and role assignment are slice 3.
+- **Identity slice 3a: the admin principal directory.** The first surface to exercise the already-seeded
+  `principal:*` capability: `GET /api/v1/principals` (with a `kind` filter) and `GET /api/v1/principals/{id}`
+  list and read every principal with its grants, and `POST /api/v1/principals` creates a human with an
+  optional initial password (argon2id, reusing the slice-1 credential; no new migration). All three are gated
+  by a `principal` capability that resolves **only at all-scope**: a principal is not a scope-tree entity, so
+  a location or system grant confers nothing and the gateway answers a non-all scope with 403, proven both
+  ways. Responses carry credential-free profiles and grants, so no secret ever leaves the API. The console
+  `/users` stub becomes a real **Users** directory (grid, detail panel, and a create form); the CLI gains
+  `principal list` / `get` / `create`. Proven by a storage round-trip, a real-binary integration test
+  (all-scope allow, scoped-deny 403, duplicate 409, short-password 422, secret redaction, created-human
+  login), the route-gating guard, and the client data-layer units. Thin cuts: no `created_at` column in the
+  directory yet, and create is human-only. Deferred: update / disable / delete a principal, role assignment,
+  the owner-invariant trigger, and service-account and credential management.
+- **Identity slice 3b: admin update a principal.** `PATCH /api/v1/principals/{id}` edits a human's display
+  name, email, and **username**, gated by `principal:update` (all-scope). Renaming is safe by construction:
+  nothing keys on the username (credentials and grants reference the `principal.id` uuid), so a rename
+  re-homes the login rather than breaking it. A non-human target is 422, a clash 409, an unknown id 404, a
+  location-scoped admin 403. The console Users detail panel gains an **Edit** form; the CLI gains
+  `principal update`. Proven by a storage round-trip (the rename re-homes authentication), a real-binary
+  integration test (allow, scoped-deny 403, 409, 404, 422), and the client unit. Deferred: disable / delete,
+  role assignment, and editing a service account's label.
+- **Identity slice 3c: role assignment and the owner invariant.** `POST /api/v1/principals/{id}/grants`
+  assigns a role at a scope and `DELETE /api/v1/principals/{id}/grants/{grantId}` revokes one, gated by
+  `principal_grant:create` / `:delete` (all-scope). This is how a fresh user gets permissions. The
+  **owner-invariant trigger** (ADR-0006, now resolved) lands here: a `DEFERRABLE INITIALLY DEFERRED` Postgres
+  constraint trigger refuses to leave zero `owner @ all` grants at `COMMIT`, so revoking the last owner is a
+  409 while a one-transaction owner swap still passes (mapped from the custom SQLSTATE `OG001` to
+  `ErrLastOwner`). Bad inputs are caught: duplicate 409, unknown role 422, a scoped grant with no id 422,
+  unknown grant 404. The console detail panel gains a grant chip **x** (revoke) and an **add-grant** form
+  (role picker, scope kind, scope id); the CLI gains `grant create` / `grant delete`. Proven by a migration
+  round-trip, a storage test (grant, revoke, the last-owner refusal, the swap), a real-binary integration
+  test, and the client units. Deferred: disable / delete a principal, group grants, and editing a grant in
+  place (revoke and re-grant instead).
+- **Identity slice 3d: disable and enable a principal.** `POST /api/v1/principals/{id}:disable` and
+  `:enable` (AIP custom methods, gated `principal:update`, all-scope) soft-disable an account: a new
+  `active` flag on `principal`, and `AuthenticateBearer` / `AuthenticatePassword` refuse a disabled
+  principal, so it can neither sign in nor use a token. Its rows (and the audit trail that references it)
+  are kept, which is why the model is disable, not delete: `audit_log` references the principal, so an
+  actor that has acted cannot be removed. A **last-active-owner guard** refuses to disable the final active
+  `owner @ all` (409), mirroring the grant trigger for the active flag. The console shows an **inactive**
+  badge and a **Disable / Enable** toggle; the CLI gains `principal disable` / `enable`. Proven by a
+  migration round-trip, a storage test (both auth paths refused, enable restores, last-owner refusal, the
+  swap), and a real-binary integration test. Deferred: hard delete (would need an audit-actor
+  `on delete set null`, a separate decision) and bulk operations.
