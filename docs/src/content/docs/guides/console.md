@@ -53,12 +53,15 @@ location-scoped admin cannot list users.
   Renaming is safe: their credentials and grants follow the account (they key on an internal id,
   not the username), so a renamed user keeps their password and access. Only an administrator can
   change a username; the user cannot change their own.
-- With `principal_grant:create` / `:delete`, the detail panel **grants** a role at a scope (pick a
-  role, a scope kind, and, for a non-`all` scope, the specific location, system, or component from
-  the picker) and revokes one with the **x** on a grant chip. That is how a fresh user gets
-  permissions. A scope targets the entity by its internal id, so a grant survives a rename of that
-  entity. One rule the server always holds: the **last owner grant cannot be revoked**, so the
-  platform can never be locked out of administration.
+- With `principal_grant:create` / `:delete`, the detail panel's **grant builder** stages a set of
+  changes and applies them only on **Save**, so there are no accidental edits. Type a role, then Tab
+  or Enter to the scope kind, then (for a non-`all` scope) the specific location, system, or
+  component from an indented tree: each commit becomes a `role @ scope` chip. Removing an existing
+  grant marks it (dimmed and struck, undoable), staging a new one shows it in green, and a
+  pending-diff line ("+N to grant, -M to revoke") previews exactly what **Save** will do. That is how
+  a fresh user gets permissions. A scope targets the entity by its internal id, so a grant survives a
+  rename of that entity. One rule the server always holds: the **last owner grant cannot be
+  revoked**, so the platform can never be locked out of administration.
 - With `principal:update`, **Disable** turns off a principal: it can no longer sign in or use a
   token, but its audit history is kept (accounts are disabled, never deleted). **Enable** restores
   access. A disabled account reads **inactive** in the grid. The **last active owner cannot be
