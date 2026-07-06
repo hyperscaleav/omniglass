@@ -306,8 +306,8 @@ export default function GrantBuilder(props: {
             <Show when={diff().removes.length}> <span class="font-medium text-error">-{diff().removes.length} to revoke</span></Show>
           </span>
           <span class="flex-1" />
-          <button type="button" class="btn btn-ghost btn-xs" onClick={resetAll} disabled={saving()}>Cancel</button>
-          <button type="button" class="btn btn-primary btn-xs" onClick={save} disabled={saving()}>
+          <button type="button" class="btn btn-quiet btn-xs" onClick={resetAll} disabled={saving()}>Cancel</button>
+          <button type="button" class="btn btn-action btn-xs" onClick={save} disabled={saving()}>
             <Show when={saving()}><span class="loading loading-spinner loading-xs" /></Show>
             Save grants
           </button>
