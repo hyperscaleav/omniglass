@@ -126,3 +126,27 @@ export const LogOut: Component<P> = (p) => (
 export const Info: Component<P> = (p) => (
   <Svg size={p.size}><circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" /></Svg>
 );
+// Place-type glyphs: the leading icon a location wears in the tree, resolved from
+// its location_type's icon key (see resolveIcon below).
+export const Landmark: Component<P> = (p) => (
+  <Svg size={p.size}><path d="M3 22h18" /><path d="m12 2 9 5H3z" /><path d="M6 10v8M10 10v8M14 10v8M18 10v8" /></Svg>
+);
+export const Building: Component<P> = (p) => (
+  <Svg size={p.size}><rect x="5" y="2" width="14" height="20" rx="1.5" /><path d="M9 22v-4h6v4" /><path d="M9 6h.01M12 6h.01M15 6h.01M9 10h.01M12 10h.01M15 10h.01M9 14h.01M12 14h.01M15 14h.01" /></Svg>
+);
+export const DoorOpen: Component<P> = (p) => (
+  <Svg size={p.size}><path d="M13 4h3a2 2 0 0 1 2 2v14" /><path d="M2 20h3M13 20h9" /><path d="M13 4.5 5 6v14l8 1.5z" /><path d="M10 12v.01" /></Svg>
+);
+
+// resolveIcon maps a location_type icon key to its glyph component, falling back
+// to MapPin for an unknown or missing key, so the API can add a new type icon
+// without a coordinated console release (the tree stays renderable meanwhile).
+export const iconByName: Record<string, Component<P>> = {
+  landmark: Landmark,
+  building: Building,
+  layers: Layers,
+  "door-open": DoorOpen,
+  "map-pin": MapPin,
+};
+export const resolveIcon = (name: string | undefined | null): Component<P> =>
+  (name && iconByName[name]) || MapPin;

@@ -538,6 +538,8 @@ components:
       properties:
         display_name:
           type: string
+        icon:
+          type: string
         id:
           type: string
         official:
@@ -549,6 +551,7 @@ components:
         - id
         - display_name
         - rank
+        - icon
         - official
       type: object
     LoginInputBody:

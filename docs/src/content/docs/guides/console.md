@@ -130,6 +130,8 @@ then a value; each commit becomes a chip:
   a column header to sort by it instead.
 - The **columns** menu shows or hides columns and lets you **drag to reorder** them. The
   layout is remembered per browser.
+- On Locations, each row wears its **type's icon** as a leading glyph (a campus, building,
+  floor, and room each read differently at a glance), tinted the same hue as the type badge.
 - On Locations, a **summary board** at the top breaks the estate down by place type (a donut
   plus count cards); click any segment or card to filter to it.
 

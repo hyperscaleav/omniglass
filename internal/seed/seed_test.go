@@ -68,6 +68,19 @@ func TestSeedRolesIdempotent(t *testing.T) {
 	if topType != "campus" {
 		t.Errorf("lowest-rank location_type = %q, want campus", topType)
 	}
+	// Each shipped type seeds its glyph key, and re-running Run keeps it (the icon
+	// is part of the idempotent upsert, not just the initial insert).
+	for id, wantIcon := range map[string]string{
+		"campus": "landmark", "building": "building", "floor": "layers", "room": "door-open",
+	} {
+		var icon string
+		if err := conn.QueryRow(ctx, `select icon from location_type where id = $1`, id).Scan(&icon); err != nil {
+			t.Fatalf("read %s icon: %v", id, err)
+		}
+		if icon != wantIcon {
+			t.Errorf("%s icon = %q, want %q", id, icon, wantIcon)
+		}
+	}
 
 	// The official system types seed too, idempotently.
 	var sysTypeCount int

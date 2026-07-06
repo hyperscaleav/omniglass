@@ -34,7 +34,10 @@ Three nouns describe what you operate, plus the edge process that collects for t
   It is classified by `location_type` and, unlike component and system, has **no template**: for a
   location the type is the only shape-definer. The official `location_type` set ships seeded and is
   readable at `GET /location-types` (ranked), which is what the type picker on the location form
-  lists so a location is classified by a known type rather than a free-typed string.
+  lists so a location is classified by a known type rather than a free-typed string. Each type also
+  carries an `icon` (a glyph key like `building` or `landmark`) that the console renders as the
+  leading glyph on every location of that type, so a campus reads differently from a building at a
+  glance in the tree; an unknown key falls back to `map-pin`.
 - A **node** is the edge process (`omniglass --mode node`) that pulls work, reaches components over
   interfaces, and ships results ([nodes](/architecture/nodes/)). It is structural because it is a
   first-class **owner**: a node owns its own self-health telemetry and can carry a node-owned alarm.

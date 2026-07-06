@@ -105,6 +105,10 @@ export interface ListConfig<N extends ListNode> {
   filterKeys: FilterKey<N>[];
   sortVal: (n: N, key: string) => string | number;
   nameWeight?: (n: N) => number;
+  // Optional leading glyph rendered immediately before a node's name in the tree,
+  // always visible (not a toggleable column). Used by Locations to wear each
+  // location's type icon so a campus reads differently from a building at a glance.
+  leadIcon?: (n: N) => JSX.Element;
   canAddChild?: (n: N) => boolean;
   renderDetail: (n: N, ctx: ListCtx<N>) => JSX.Element;
   // when present, a row opens a blade instead of the full page; the body is the
@@ -449,6 +453,9 @@ export default function ListView<N extends ListNode>(props: { config: ListConfig
                   </button>
                 </Show>
               </span>
+            </Show>
+            <Show when={cfg.leadIcon}>
+              <span class="inline-flex flex-none items-center">{cfg.leadIcon!(n)}</span>
             </Show>
             <span class="flex min-w-0 flex-col gap-0.5 py-0.5">
               <Show when={p.row.path && p.row.path.length}>
