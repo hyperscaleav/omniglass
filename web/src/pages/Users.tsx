@@ -140,7 +140,7 @@ export default function Users() {
                     <div class="flex items-center gap-2 border-t border-base-300 pt-3">
                       <button
                         class="btn btn-ghost btn-sm"
-                        classList={{ "text-warning": p().active }}
+                        classList={{ "text-warning": p().active, "text-success": !p().active }}
                         onClick={() => toggleActive(p())}
                       >
                         {p().active ? "Disable" : "Enable"}
