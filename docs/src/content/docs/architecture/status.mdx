@@ -238,6 +238,18 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   migration round-trip, a storage test (both auth paths refused, enable restores, last-owner refusal, the
   swap), and a real-binary integration test. Deferred: hard delete (would need an audit-actor
   `on delete set null`, a separate decision) and bulk operations.
+- **Identity slice 3e: the grant builder (console).** A UI-only refinement of slice 3c: the user card's
+  three stacked selects become a **filter-bar-style scope editor**. A keyboard-staged combobox (type a
+  role, Tab/Enter to the scope kind, then the entity as an indented tree) commits each grant as a chip,
+  and the whole set of changes is staged locally and applied only on **Save** (stage, preview, save), so
+  there are no accidental or unclear edits: removing an existing grant marks it (dimmed, undoable) instead
+  of firing a live `DELETE`, and a pending-diff preview shows exactly what Save will grant and revoke. No
+  new API: it drives the slice-3c `POST` / `DELETE` grant routes, applying adds before removes so an owner
+  swap never trips the last-owner guard mid-batch. The staging core (draft, per-chip state, add/remove
+  diff, stage validation) is a pure unit-tested module (`lib/grantdraft`); the `GrantBuilder` component
+  takes its roles, entity trees, and save mutation as props, proven by a component test that drives the
+  keyboard pipeline and asserts the saved diff. Deferred: previewing a grant's *effective access* across
+  the scope subtree (#89) and group grants.
 - **Console: unified button vocabulary.** Buttons across the console moved from ad-hoc daisyUI classes
   (`btn-primary`, `btn-ghost text-error`, and an inconsistent disable/edit pairing) to a small set of
   **semantic intent classes** defined in `app.css` (`btn-action`, `btn-quiet`, `btn-danger`, `btn-warn`,
@@ -246,3 +258,38 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   `btn-ghost`, pinning the vocabulary against drift. No behavior or API change: purely how buttons are
   styled. See the [design system](/contributing/design-system/#button-vocabulary). Follow-on: custom
   theme switching beyond the two brand themes.
+- **Identity: disabled-account sign-in message.** A disabled account that signs in with the **correct**
+  password now gets an explicit "This account is disabled. Contact your administrator." (a distinct
+  `403`), instead of the generic invalid-credentials message, so a locked-out operator knows to ask an
+  admin rather than assuming a wrong password. The disclosure is **oracle-safe by construction**:
+  `AuthenticatePassword` drops the `and pr.active` filter, always runs the argon2 verify (against the
+  real hash, or a dummy hash of matching parameters on a miss, so there is no early-return timing leak),
+  and only branches to the new `ErrAccountDisabled` **after** the password verifies. So a wrong password
+  (or an unknown user) against a disabled account is indistinguishable from any other bad credential:
+  same generic `401`, same work. The bearer/token path is unchanged. Proven by storage tests (correct
+  password on a disabled account -> `ErrAccountDisabled`; wrong password -> `ErrBadCredentials`), a
+  real-binary api test (disabled + correct -> `403`, disabled + wrong -> `401`), and a web unit. Deferred:
+  **auditing** the disabled-login attempt (#97), which belongs at the api/outbox layer, not the gateway
+  read, to avoid a write-on-read and an attacker-append vector.
+- **Identity: root-excluded grants and the deploy role.** A grant gains an optional `exclude_root` modifier
+  that narrows its **modify** actions (update, delete) to the root's descendants: the holder can create under
+  and edit within the subtree, but a `PATCH` / `DELETE` on the root itself is a **403** (readable, outside the
+  write scope). Read and create-placement keep the root, so a `POST` under the root and a `PATCH` on a child
+  still succeed. A new **deploy** official role (create + update on location / system / component, read via the
+  viewer floor) is the integrator / field-tech grant: `deploy @ location:room-42 (exclude_root)` populates a
+  room without touching its record. The modifier lives on `principal_grant`, resolved in one predicate
+  (`inScopeTree`) shared by all three tree entities, not a new scope kind (ADR-0009); an inclusive grant on the
+  same root wins. Proven by scope unit tests (per-action classification, inclusive-wins) and a real-binary API
+  test (read root 200, create-under-root 201, update child 200, update root 403, delete 403). API and CLI carry
+  `exclude_root`; the grant-builder toggle is a fast-follow (#99).
+- **Console: scope-aware per-row action gating.** The read side now annotates every inventory row with the
+  scope-aware `actions` it permits (create-a-child / update / delete), computed from the **same** per-action
+  `visible_set` the gateway enforces (a new batch `InScopeIDs` primitive answers a whole page in one query per
+  action). The console's `ListView` gates each row's Add-child / Edit / Delete affordance on `row.actions`
+  rather than the coarse `can(...)` capability, so a scoped operator (e.g. `viewer@all + writer@root`, or a
+  `deploy` grant) sees only the buttons the server would actually allow, per row, with no client-side scope
+  math. `can(...)` stays the coarse nav/section hint; the server remains the only authority. Proven by a
+  storage test (batch membership across all / rooted / exclude-root scopes) and a real-binary API test (owner
+  gets every action on every row, a viewer none, a `deploy @ root (exclude_root)` gets create-only on the root
+  and create+update on descendants). Thin cut: the list carries `actions`; single-item GET annotation is a
+  follow-on (the blades render from the list rows).
