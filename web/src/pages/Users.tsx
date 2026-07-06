@@ -1,6 +1,8 @@
 import { For, Show, createMemo, createSignal } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import Page from "../components/Page";
+import TreeSelect from "../components/TreeSelect";
+import type { TreeNode } from "../lib/treeselect";
 import { type Principal, type Grant, type ScopeKind, PRINCIPALS_KEY, ROLES_KEY, listPrincipals, createPrincipal, updatePrincipal, createGrant, revokeGrant, setPrincipalActive, listRoles, principalName } from "../lib/principals";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
@@ -108,20 +110,13 @@ export default function Users() {
                         <span class="font-data text-sm font-bold uppercase">{initials(p())}</span>
                       </div>
                     </div>
-                    <div class="min-w-0">
+                    <div class="min-w-0 flex-1">
                       <div class="truncate text-base font-semibold">{principalName(p())}</div>
                       <span class="flex items-center gap-1.5">
                         <span class={kindBadge(p().kind)}>{p().kind}</span>
                         <Show when={!p().active}><span class="badge badge-soft badge-warning badge-sm">inactive</span></Show>
                       </span>
                     </div>
-                    <span class="flex-1" />
-                    <Show when={can(me.data, "principal", "update")}>
-                      <button class="btn btn-ghost btn-sm" onClick={() => toggleActive(p())}>{p().active ? "Disable" : "Enable"}</button>
-                    </Show>
-                    <Show when={p().human && can(me.data, "principal", "update")}>
-                      <button class="btn btn-ghost btn-sm" onClick={() => setEditOpen(true)}>Edit</button>
-                    </Show>
                   </div>
                   <Show when={actErr()}>
                     <div role="alert" class="alert alert-error alert-soft text-sm"><span>{actErr()}</span></div>
@@ -141,6 +136,21 @@ export default function Users() {
                     canRevoke={can(me.data, "principal_grant", "delete")}
                     onChange={() => qc.invalidateQueries({ queryKey: PRINCIPALS_KEY })}
                   />
+                  <Show when={can(me.data, "principal", "update")}>
+                    <div class="flex items-center gap-2 border-t border-base-300 pt-3">
+                      <button
+                        class="btn btn-ghost btn-sm"
+                        classList={{ "text-warning": p().active }}
+                        onClick={() => toggleActive(p())}
+                      >
+                        {p().active ? "Disable" : "Enable"}
+                      </button>
+                      <span class="flex-1" />
+                      <Show when={p().human}>
+                        <button class="btn btn-primary btn-sm" onClick={() => setEditOpen(true)}>Edit</button>
+                      </Show>
+                    </div>
+                  </Show>
                 </>
               )}
             </Show>
@@ -212,8 +222,13 @@ function GrantEditor(props: { principal: Principal; canGrant: boolean; canRevoke
     const name = g.scope_id ? nameOf().get(g.scope_id) ?? g.scope_id : g.scope_id;
     return `${g.role} @ ${g.scope_kind}:${name}`;
   };
-  const entitiesFor = (kind: string) =>
-    kind === "location" ? locations.data ?? [] : kind === "system" ? systems.data ?? [] : kind === "component" ? components.data ?? [] : [];
+  // The scope entities of the chosen kind, as TreeNodes so the picker reads as an
+  // indented tree (value = id, ordered by the parent_id tree) rather than a flat
+  // alphabetical list.
+  const scopeItems = (kind: string): TreeNode[] => {
+    const list = kind === "location" ? locations.data ?? [] : kind === "system" ? systems.data ?? [] : kind === "component" ? components.data ?? [] : [];
+    return list.map((e) => ({ id: e.id, value: e.id, label: e.name, parentId: e.parent_id, rank: 0 }));
+  };
 
   const [role, setRole] = createSignal("");
   const [scopeKind, setScopeKind] = createSignal<Exclude<ScopeKind, "group">>("all");
@@ -285,10 +300,13 @@ function GrantEditor(props: { principal: Principal; canGrant: boolean; canRevoke
             <For each={SCOPE_KINDS}>{(k) => <option value={k}>{k}</option>}</For>
           </select>
           <Show when={scopeKind() !== "all"}>
-            <select class="select select-bordered select-sm" value={scopeId()} onChange={(e) => setScopeId(e.currentTarget.value)} required aria-label="Scope entity">
-              <option value="" disabled>Select a {scopeKind()}…</option>
-              <For each={entitiesFor(scopeKind())}>{(e) => <option value={e.id}>{e.name}</option>}</For>
-            </select>
+            <TreeSelect
+              class="select select-bordered select-sm"
+              items={scopeItems(scopeKind())}
+              value={scopeId()}
+              onChange={setScopeId}
+              rootLabel={`Select a ${scopeKind()}…`}
+            />
           </Show>
           <button type="submit" class="btn btn-primary btn-sm" disabled={busy() || !role() || (scopeKind() !== "all" && !scopeId())}>Grant</button>
         </form>
