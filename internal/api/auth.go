@@ -147,7 +147,7 @@ func (a *authenticator) scopeFor(ctx context.Context, resource, action string) s
 	}
 	grants := make([]scope.Grant, 0, len(pr.Grants))
 	for _, g := range pr.Grants {
-		sg := scope.Grant{Role: g.Role, ScopeKind: g.ScopeKind}
+		sg := scope.Grant{Role: g.Role, ScopeKind: g.ScopeKind, ExcludeRoot: g.ExcludeRoot}
 		if g.ScopeID != nil {
 			sg.ScopeID = *g.ScopeID
 		}
@@ -296,10 +296,11 @@ type svcBody struct {
 }
 
 type grantBody struct {
-	ID        string `json:"id,omitempty"`
-	Role      string `json:"role"`
-	ScopeKind string `json:"scope_kind"`
-	ScopeID   string `json:"scope_id,omitempty"`
+	ID          string `json:"id,omitempty"`
+	Role        string `json:"role"`
+	ScopeKind   string `json:"scope_kind"`
+	ScopeID     string `json:"scope_id,omitempty"`
+	ExcludeRoot bool   `json:"exclude_root,omitempty"`
 }
 
 func meHandler(ctx context.Context, _ *struct{}) (*meOutput, error) {
@@ -321,7 +322,7 @@ func meHandler(ctx context.Context, _ *struct{}) (*meOutput, error) {
 	out.Body.Permissions = perms.Strings()
 	out.Body.Grants = make([]grantBody, 0, len(pr.Grants))
 	for _, g := range pr.Grants {
-		gb := grantBody{ID: g.ID, Role: g.Role, ScopeKind: g.ScopeKind}
+		gb := grantBody{ID: g.ID, Role: g.Role, ScopeKind: g.ScopeKind, ExcludeRoot: g.ExcludeRoot}
 		if g.ScopeID != nil {
 			gb.ScopeID = *g.ScopeID
 		}

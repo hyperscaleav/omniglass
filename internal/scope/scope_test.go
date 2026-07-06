@@ -58,6 +58,41 @@ func TestResolveReadFloor(t *testing.T) {
 	}
 }
 
+func TestResolveExcludeRoot(t *testing.T) {
+	idx := index()
+	// A loc-editor scoped to ROOM with exclude_root: the write scope covers ROOM's
+	// descendants but not ROOM itself; read and create keep ROOM (you must see the
+	// room and be able to place children under it).
+	grants := []scope.Grant{{Role: "loc-editor", ScopeKind: "location", ScopeID: "ROOM", ExcludeRoot: true}}
+
+	for _, action := range []string{"update", "delete"} {
+		s := scope.Resolve(grants, idx, "location", action)
+		if len(s.IDs) != 1 || s.IDs[0] != "ROOM" || len(s.ExcludeRootIDs) != 1 || s.ExcludeRootIDs[0] != "ROOM" {
+			t.Fatalf("%s scope = %+v, want ROOM as an excluded root", action, s)
+		}
+	}
+	for _, action := range []string{"read", "create"} {
+		s := scope.Resolve(grants, idx, "location", action)
+		if len(s.IDs) != 1 || s.IDs[0] != "ROOM" || len(s.ExcludeRootIDs) != 0 {
+			t.Fatalf("%s scope = %+v, want ROOM included (no exclusion)", action, s)
+		}
+	}
+}
+
+func TestResolveExcludeRootInclusiveWins(t *testing.T) {
+	idx := index()
+	// Two grants naming the SAME root, one exclude_root and one not: the inclusive
+	// grant wins, so the root is not excluded for update.
+	grants := []scope.Grant{
+		{Role: "loc-editor", ScopeKind: "location", ScopeID: "ROOM", ExcludeRoot: true},
+		{Role: "loc-editor", ScopeKind: "location", ScopeID: "ROOM", ExcludeRoot: false},
+	}
+	upd := scope.Resolve(grants, idx, "location", "update")
+	if len(upd.IDs) != 1 || len(upd.ExcludeRootIDs) != 0 {
+		t.Fatalf("update scope = %+v, want ROOM included (inclusive wins)", upd)
+	}
+}
+
 func TestResolveWrongTierIgnored(t *testing.T) {
 	idx := index()
 	// A grant scoped to a system tier cannot confer location access: a system sits

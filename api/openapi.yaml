@@ -109,6 +109,9 @@ components:
           format: uri
           readOnly: true
           type: string
+        exclude_root:
+          description: Exclude the scope root itself from update/delete (descendants only); read and create-placement keep the root. Ignored for the all scope.
+          type: boolean
         role:
           description: A role id (viewer, operator, admin, owner, or a custom role)
           minLength: 1
@@ -284,6 +287,8 @@ components:
           format: uri
           readOnly: true
           type: string
+        exclude_root:
+          type: boolean
         id:
           type: string
         role:

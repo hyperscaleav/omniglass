@@ -57,9 +57,12 @@ func scopeKindTable(kind string) (scopeTable, bool) {
 
 // inScopeTree reports whether targetID falls within a resolved scope on tbl: an
 // all scope always holds; otherwise the target is in scope when itself or an
-// ancestor is one of the scope roots (the ancestor walk, cheaper than expanding
-// every root's subtree for a membership test). The CYCLE clause guards a
-// corrupted parent edge.
+// ancestor is an inclusive scope root, OR a STRICT ancestor is an excluded root
+// (an ExcludeRoot grant covers a root's descendants but not the root itself, for
+// the modify actions). Inclusive and excluded roots are disjoint; a broader
+// inclusive ancestor still admits an id that is another grant's excluded root
+// (inclusive wins). The ancestor walk is cheaper than expanding every root's
+// subtree; the CYCLE clause guards a corrupted parent edge.
 func inScopeTree(ctx context.Context, q querier, tbl scopeTable, targetID string, set scope.Set) (bool, error) {
 	if set.All {
 		return true, nil
@@ -68,6 +71,8 @@ func inScopeTree(ctx context.Context, q querier, tbl scopeTable, targetID string
 	if len(roots) == 0 {
 		return false, nil
 	}
+	excluded := uuidRoots(set.ExcludeRootIDs)
+	inclusive := subtractRoots(roots, excluded)
 	var ok bool
 	err := q.QueryRow(ctx, `
 		with recursive anc(id, parent_id) as (
@@ -75,11 +80,32 @@ func inScopeTree(ctx context.Context, q querier, tbl scopeTable, targetID string
 			union all
 			select t.id, t.parent_id from `+string(tbl)+` t join anc on t.id = anc.parent_id
 		) cycle id set is_cycle using path
-		select exists(select 1 from anc where id = any($2::uuid[]))`, targetID, roots).Scan(&ok)
+		select exists(select 1 from anc where id = any($2::uuid[]))
+		    or exists(select 1 from anc where id = any($3::uuid[]) and id <> $1)`,
+		targetID, inclusive, excluded).Scan(&ok)
 	if err != nil {
 		return false, fmt.Errorf("storage: scope check on %s: %w", tbl, err)
 	}
 	return ok, nil
+}
+
+// subtractRoots returns the ids in a that are not in b, a set difference over the
+// small scope-root slices.
+func subtractRoots(a, b []string) []string {
+	if len(b) == 0 {
+		return a
+	}
+	drop := make(map[string]bool, len(b))
+	for _, id := range b {
+		drop[id] = true
+	}
+	out := make([]string, 0, len(a))
+	for _, id := range a {
+		if !drop[id] {
+			out = append(out, id)
+		}
+	}
+	return out
 }
 
 // scopedListSQL builds the list query for tbl selecting cols, ordered by name.

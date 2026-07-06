@@ -223,6 +223,7 @@ func generatedCommands() []*cobra.Command {
 			Short: "Commands for the grant resource",
 		}
 		parent.AddCommand(func() *cobra.Command {
+			var fExcludeRoot string
 			var fRole string
 			var fScopeId string
 			var fScopeKind string
@@ -235,6 +236,9 @@ func generatedCommands() []*cobra.Command {
 				RunE: func(cmd *cobra.Command, args []string) error {
 					path := fmt.Sprintf("/api/v1/principals/%s/grants", url.PathEscape(args[0]))
 					body := map[string]any{}
+					if cmd.Flags().Changed("exclude-root") {
+						body["exclude_root"] = fExcludeRoot
+					}
 					if cmd.Flags().Changed("role") {
 						body["role"] = fRole
 					}
@@ -247,6 +251,7 @@ func generatedCommands() []*cobra.Command {
 					return runAPICommand(cmd, "POST", path, body)
 				},
 			}
+			cmd.Flags().StringVar(&fExcludeRoot, "exclude-root", "", "Exclude the scope root itself from update/delete (descendants only); read and create-placement keep the root. Ignored for the all scope.")
 			cmd.Flags().StringVar(&fRole, "role", "", "A role id (viewer, operator, admin, owner, or a custom role)")
 			_ = cmd.MarkFlagRequired("role")
 			cmd.Flags().StringVar(&fScopeId, "scope-id", "", "The scope root id; omit for the all scope")

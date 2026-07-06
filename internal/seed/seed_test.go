@@ -40,8 +40,8 @@ func TestSeedRolesIdempotent(t *testing.T) {
 	if err := conn.QueryRow(ctx, `select count(*) from role where official`).Scan(&count); err != nil {
 		t.Fatalf("count roles: %v", err)
 	}
-	if count != 4 {
-		t.Errorf("official roles = %d, want 4 (seed not idempotent or incomplete)", count)
+	if count != 5 {
+		t.Errorf("official roles = %d, want 5 (viewer, operator, deploy, admin, owner; seed not idempotent or incomplete)", count)
 	}
 
 	var ownerPerms []string

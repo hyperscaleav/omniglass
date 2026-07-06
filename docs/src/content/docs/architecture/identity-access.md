@@ -194,6 +194,19 @@ Whether a scope may mix include and exclude (e.g. "all except group X").
 
 A scope of entity E includes E **and everything structurally beneath it** (a location -> its systems -> their components -> their datapoints and alarms). The visible set is **parameterized by action**: `visible_set(P, action)` = the union, over **only the grants whose role carries `action`**, of each scope entity plus its descendants. There is no single global visible set. **`:read` is an implicit floor on every grant**: holding any grant on an entity confers `read` on it, so `visible_set(P, read)` is always the widest set and `visible_set(P, action)` is always a subset of it. The floor is realized as a **capability injection at role-index build** (next): every `<resource>:<action>` permission implies `<resource>:read`, so the implied reads are present in the fast-reject union, in `canDo`'s `perms`, and in `/auth/me.permissions`, not only in the scope layer. A verb-only role (`alarm:ack` without `alarm:read`, no `viewer` inheritance) is therefore **not** hard-403'd on the read. The asymmetry runs one way only: a principal can **read** an entity it cannot **act** on (in `visible_set(P, read)` but outside `visible_set(P, ack)`, via a read-only grant), but never the reverse. So there is no "actionable but not readable" case, and the status split below stays three-way. Dynamic-group scopes recompute as membership changes. Each per-action set is bounded by **fleet size (entities)**, not data volume.
 
+### Root-excluded grants (the deploy modifier)
+
+A grant carries an optional **`exclude_root`** flag that narrows only its **modify** actions to the root's
+descendants: the holder can create under, and update or delete within, the subtree, but cannot update or
+delete the root entity itself. Read and create-placement still include the root, so the holder can see the
+boundary of its scope and place children under it. This is the integrator / deploy grant: `deploy @
+location:room-42 (exclude_root)` lets a field tech add and edit the systems and components inside room-42
+without being able to rename or delete room-42. A `PATCH` on the root is the readable-but-out-of-write-scope
+**403** (not a 404: the target is readable), while a `POST` under the root and a `PATCH` on a descendant
+succeed. The modifier lives **on the grant**, not as a new scope kind, so it composes with the additive-grant
+model and confines the change to one predicate; an inclusive grant on the same root wins over an excluding
+one (an inclusive parent grant likewise re-admits a descendant). It is ignored for the `all` scope.
+
 ## The owner invariant
 
 At least one active `owner @ all` grant must exist at all times. Enforced as a deferrable constraint trigger in Postgres (fires at `COMMIT`, so the swap-owners pattern works in one transaction):

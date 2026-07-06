@@ -518,6 +518,8 @@ export interface components {
              * @example /api/v1/schemas/CreateGrantInputBody.json
              */
             readonly $schema?: string;
+            /** @description Exclude the scope root itself from update/delete (descendants only); read and create-placement keep the root. Ignored for the all scope. */
+            exclude_root?: boolean;
             /** @description A role id (viewer, operator, admin, owner, or a custom role) */
             role: string;
             /** @description The scope root id; omit for the all scope */
@@ -628,6 +630,7 @@ export interface components {
              * @example /api/v1/schemas/GrantBody.json
              */
             readonly $schema?: string;
+            exclude_root?: boolean;
             id?: string;
             role: string;
             scope_id?: string;

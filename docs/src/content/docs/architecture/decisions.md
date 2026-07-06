@@ -43,6 +43,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0006](#adr-0006-the-owner-invariant-is-enforced-by-bootstrap-for-now) | 2026-06-27 | Resolved | The single-owner invariant is now a DEFERRABLE constraint trigger, landed with grant revocation |
 | [ADR-0007](#adr-0007-principals-are-gated-at-all-scope-not-scope-tree) | 2026-07-01 | Accepted | A principal is not a scope-tree entity; the `principal` capability confers access only at all-scope |
 | [ADR-0008](#adr-0008-disable-is-hard-revocation-no-token-version-column) | 2026-07-06 | Accepted | Disable revokes live sessions via the per-request `active` re-read; no token-version column (nothing consumes it) |
+| [ADR-0009](#adr-0009-root-exclusion-lives-on-the-grant-not-a-new-scope-kind) | 2026-07-06 | Accepted | The deploy "act on the subtree but not the root" capability is an `exclude_root` grant modifier, not a new scope kind |
 
 ## Entries
 
@@ -157,3 +158,21 @@ below from the project's history. From here it grows one slice at a time.
   meaningful-migration disciplines. Revisit if any cache/memoization is introduced in the authn path (an
   epoch bump would then be its invalidation signal).
 - **Closes the gap:** issue [#94](https://github.com/hyperscaleav/omniglass/issues/94), closed as already satisfied.
+
+### ADR-0009: Root exclusion lives on the grant, not a new scope kind
+
+- **Date:** 2026-07-06 | **Status:** Accepted | **Pages:** [identity and access](/architecture/identity-access/)
+- **Decision:** The "act on the subtree but not the root" capability (the deploy / integrator case, issue
+  [#87](https://github.com/hyperscaleav/omniglass/issues/87)) is a boolean `exclude_root` modifier on
+  `principal_grant`, not a new `scope_kind` (e.g. `location_descendants`) and not a role-level flag. It narrows
+  only the **modify** actions (update, delete) to the root's descendants; read and create-placement keep the
+  root. An inclusive grant on the same root wins over an excluding one.
+- **Context:** A new scope_kind would fork the kind handling three ways (location / system / component) and
+  grow the scope vocabulary; a role-level flag could not vary per grant (the same deploy role granted
+  root-inclusive in one place and root-excluded in another). The grant modifier composes with the
+  additive-grant model and confines the change to one predicate (`inScopeTree`) shared by all three tree
+  entities. Keeping read and create-placement inclusive means a `PATCH` on the root is the existing
+  readable-but-out-of-write-scope 403, so `exclude_root` reuses the three-way status split rather than adding a
+  fourth case. Shipped with a new `deploy` official role (create + update on the three tree tiers, read via the
+  viewer floor). The grant-builder toggle to set it from the console is a fast-follow ([#99](https://github.com/hyperscaleav/omniglass/issues/99)).
+- **Closes the gap:** issue [#87](https://github.com/hyperscaleav/omniglass/issues/87).

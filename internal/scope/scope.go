@@ -16,15 +16,25 @@ type Grant struct {
 	Role      string
 	ScopeKind string
 	ScopeID   string // empty for the "all" scope
+	// ExcludeRoot narrows the grant's WRITE scope to the descendants of its root:
+	// the holder can create under, and update/delete within, the subtree, but not
+	// update or delete the root entity itself (a deploy/integrator grant that must
+	// not modify the boundary of its own scope). Read and create-placement still
+	// include the root. Ignored for the "all" scope.
+	ExcludeRoot bool
 }
 
 // Set is a resolved scope. All true means every entity of the resource is in
 // scope. Otherwise IDs are the scope roots: an entity is in scope when it is one
 // of these ids or structurally beneath one (the gateway expands the subtree).
-// All false with no IDs means nothing is in scope.
+// All false with no IDs means nothing is in scope. ExcludeRootIDs is the subset
+// of IDs whose own row is excluded from this action (its descendants stay in
+// scope): it is populated only for the modify actions of an ExcludeRoot grant,
+// and only when no other grant covers that root inclusively (inclusive wins).
 type Set struct {
-	All bool
-	IDs []string
+	All            bool
+	IDs            []string
+	ExcludeRootIDs []string
 }
 
 // Empty reports whether the set admits nothing (no all flag, no roots).
@@ -38,8 +48,13 @@ func (s Set) Empty() bool { return !s.All && len(s.IDs) == 0 }
 // system scope does not confer location access) does not apply.
 func Resolve(grants []Grant, idx rbac.RoleIndex, resource, action string) Set {
 	kinds := applicableKinds(resource)
+	// ExcludeRoot narrows only the modify actions; read and create-placement keep
+	// the root so the holder can see the scope boundary and place children under it.
+	excludes := action != "read" && action != "create"
 	var set Set
 	seen := map[string]bool{}
+	inclusive := map[string]bool{} // a root granted without exclusion for this action
+	excluded := map[string]bool{}  // a root granted with exclusion for this action
 	for _, g := range grants {
 		if !idx.Flatten([]string{g.Role}).Allows(resource, action) {
 			continue // the role does not carry this action: the over-permit fix
@@ -54,6 +69,19 @@ func Resolve(grants []Grant, idx rbac.RoleIndex, resource, action string) Set {
 		if !seen[g.ScopeID] {
 			seen[g.ScopeID] = true
 			set.IDs = append(set.IDs, g.ScopeID)
+		}
+		if excludes && g.ExcludeRoot {
+			excluded[g.ScopeID] = true
+		} else {
+			inclusive[g.ScopeID] = true
+		}
+	}
+	// A root is excluded from this action only when every grant naming it excludes
+	// it: an inclusive grant on the same root wins (a broader parent grant is
+	// handled by the gateway's subtree expansion, not here).
+	for _, id := range set.IDs {
+		if excluded[id] && !inclusive[id] {
+			set.ExcludeRootIDs = append(set.ExcludeRootIDs, id)
 		}
 	}
 	return set
