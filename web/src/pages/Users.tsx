@@ -47,7 +47,7 @@ export default function Users() {
         <p class="text-sm text-base-content/60">Every principal that can authenticate: operators and service accounts, with the roles granted to each.</p>
         <span class="flex-1" />
         <Show when={can(me.data, "principal", "create")}>
-          <button class="btn btn-primary btn-sm gap-1.5" onClick={() => setCreateOpen(true)}><Plus size={14} /> New user</button>
+          <button class="btn btn-action btn-sm gap-1.5" onClick={() => setCreateOpen(true)}><Plus size={14} /> New user</button>
         </Show>
       </div>
 
@@ -140,15 +140,15 @@ export default function Users() {
                   <Show when={can(me.data, "principal", "update")}>
                     <div class="flex items-center gap-2 border-t border-base-300 pt-3">
                       <button
-                        class="btn btn-ghost btn-sm"
-                        classList={{ "text-warning": p().active, "text-success": !p().active }}
+                        class="btn btn-sm"
+                        classList={{ "btn-warn": p().active, "btn-ok": !p().active }}
                         onClick={() => toggleActive(p())}
                       >
                         {p().active ? "Disable" : "Enable"}
                       </button>
                       <span class="flex-1" />
                       <Show when={p().human}>
-                        <button class="btn btn-primary btn-sm" onClick={() => setEditOpen(true)}>Edit</button>
+                        <button class="btn btn-action btn-sm" onClick={() => setEditOpen(true)}>Edit</button>
                       </Show>
                     </div>
                   </Show>
@@ -314,8 +314,8 @@ function CreateUserModal(props: { close: () => void; onCreated: (p: Principal) =
             <p class="mt-1 text-[11px] text-base-content/40">Optional, at least 8 characters. The user changes it after signing in.</p>
           </div>
           <div class="mt-1 flex justify-end gap-2">
-            <button type="button" class="btn btn-ghost btn-sm" onClick={props.close} disabled={busy()}>Cancel</button>
-            <button type="submit" class="btn btn-primary btn-sm" disabled={busy() || !username().trim()}>
+            <button type="button" class="btn btn-quiet btn-sm" onClick={props.close} disabled={busy()}>Cancel</button>
+            <button type="submit" class="btn btn-action btn-sm" disabled={busy() || !username().trim()}>
               <Show when={busy()}><span class="loading loading-spinner loading-xs" /></Show>
               Create user
             </button>
@@ -379,8 +379,8 @@ function EditUserModal(props: { principal: Principal; close: () => void; onSaved
             <input id="edit-email" type="email" autocomplete="off" class="input input-bordered w-full" value={email()} onInput={(e) => setEmail(e.currentTarget.value)} disabled={busy()} />
           </div>
           <div class="mt-1 flex justify-end gap-2">
-            <button type="button" class="btn btn-ghost btn-sm" onClick={props.close} disabled={busy()}>Cancel</button>
-            <button type="submit" class="btn btn-primary btn-sm" disabled={busy() || !username().trim()}>
+            <button type="button" class="btn btn-quiet btn-sm" onClick={props.close} disabled={busy()}>Cancel</button>
+            <button type="submit" class="btn btn-action btn-sm" disabled={busy() || !username().trim()}>
               <Show when={busy()}><span class="loading loading-spinner loading-xs" /></Show>
               Save changes
             </button>

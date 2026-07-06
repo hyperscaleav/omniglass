@@ -43,14 +43,14 @@ export default function Sidebar(props: { collapsed: boolean; onToggle: () => voi
       <div class="flex h-14 items-center gap-2" classList={{ "justify-center": props.collapsed, "justify-between px-4 pr-2": !props.collapsed }}>
         <Show when={!props.collapsed} fallback={<BrandMark />}><Lockup /></Show>
         <Show when={!props.collapsed}>
-          <button class="btn btn-ghost btn-sm btn-square text-base-content/50" onClick={props.onToggle} title="Collapse" aria-label="Toggle sidebar">
+          <button class="btn btn-quiet btn-sm btn-square text-base-content/50" onClick={props.onToggle} title="Collapse" aria-label="Toggle sidebar">
             <PanelLeft size={16} />
           </button>
         </Show>
       </div>
       <Show when={props.collapsed}>
         <div class="flex justify-center pb-1">
-          <button class="btn btn-ghost btn-sm btn-square text-base-content/50" onClick={props.onToggle} title="Expand" aria-label="Toggle sidebar">
+          <button class="btn btn-quiet btn-sm btn-square text-base-content/50" onClick={props.onToggle} title="Expand" aria-label="Toggle sidebar">
             <PanelLeft size={16} />
           </button>
         </div>
@@ -89,7 +89,7 @@ export default function Sidebar(props: { collapsed: boolean; onToggle: () => voi
           </A>
           <Show when={!props.collapsed}>
             <button
-              class="btn btn-ghost btn-sm btn-square flex-none text-base-content/50"
+              class="btn btn-quiet btn-sm btn-square flex-none text-base-content/50"
               title="Sign out"
               aria-label="Sign out"
               onClick={async () => {
