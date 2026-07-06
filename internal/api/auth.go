@@ -237,6 +237,11 @@ func (a *authenticator) loginHandler(ctx context.Context, in *loginInput) (*sess
 	switch {
 	case errors.Is(err, storage.ErrBadCredentials):
 		return nil, huma.Error401Unauthorized("invalid username or password")
+	case errors.Is(err, storage.ErrAccountDisabled):
+		// The password was correct but the account is disabled. A distinct 403 (not
+		// the generic 401) so the sign-in screen can explain it; only reachable with
+		// the right password, so it discloses nothing to an attacker without it.
+		return nil, huma.Error403Forbidden("account disabled")
 	case err != nil:
 		return nil, huma.Error500InternalServerError("login failed")
 	}

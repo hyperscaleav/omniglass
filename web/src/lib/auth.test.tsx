@@ -72,6 +72,17 @@ describe("auth hooks", () => {
     const { result } = renderHook(useLogin, { wrapper });
     const res = await result("dev", "nope");
     expect(res).toMatchObject({ ok: false });
+    expect((res as { message: string }).message).toMatch(/invalid/i);
+  });
+
+  // A disabled account (correct password) comes back as a distinct 403 so the
+  // screen can explain it, rather than the generic "invalid credentials".
+  it("useLogin reports a 403 as an explicitly disabled account", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ detail: "account disabled" }, 403));
+    const { result } = renderHook(useLogin, { wrapper });
+    const res = await result("dev", "correct-but-disabled");
+    expect(res).toMatchObject({ ok: false });
+    expect((res as { message: string }).message).toMatch(/disabled/i);
   });
 
   it("useTokenLogin stores a valid token and clears a rejected one", async () => {

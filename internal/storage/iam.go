@@ -178,6 +178,31 @@ type Grant struct {
 // three so the handler cannot leak which.
 var ErrBadCredentials = errors.New("storage: bad credentials")
 
+// ErrAccountDisabled is returned by AuthenticatePassword when the password is
+// CORRECT but the principal is disabled. It is a success-of-password signal, not a
+// peer of ErrBadCredentials: it is reachable only after the password verifies, so
+// a wrong password against a disabled account is still ErrBadCredentials and the
+// endpoint cannot be used to enumerate accounts or their state.
+var ErrAccountDisabled = errors.New("storage: account disabled")
+
+// dummyPasswordHash is a throwaway argon2id hash the unknown-user / no-password
+// path verifies against, so AuthenticatePassword runs one argon2 derivation
+// whether or not the user exists (no early return before the compare). It is
+// generated via auth.HashPassword so it carries the real argon parameters by
+// construction: a hand-written literal with weaker params would make the miss path
+// measurably faster and reopen a timing oracle. argon2 dominates the response
+// time; the pre-existing delta of a single credential-row fetch between a hit and
+// a miss is unchanged (this is not claimed to be perfectly constant-time).
+var dummyPasswordHash = mustDummyHash()
+
+func mustDummyHash() string {
+	h, err := auth.HashPassword("og-dummy-password-not-a-secret")
+	if err != nil {
+		panic(fmt.Sprintf("storage: init dummy password hash: %v", err))
+	}
+	return h
+}
+
 // AuthenticateBearer resolves a bearer credential by its sha256 hash to the
 // principal, its kind profile, and its grants. ErrCredentialNotFound if none.
 func (p *PG) AuthenticateBearer(ctx context.Context, hash []byte) (*Principal, error) {
@@ -205,24 +230,39 @@ func (p *PG) AuthenticateBearer(ctx context.Context, hash []byte) (*Principal, e
 func (p *PG) AuthenticatePassword(ctx context.Context, username, password string) (*Principal, error) {
 	pr := Principal{Kind: "human"}
 	var encoded []byte
+	var active bool
+	// Do NOT filter on pr.active here: the row must be fetched for a disabled user
+	// so their real hash is compared, and the active flag must not steer control
+	// flow before the password compare (that would leak account state by timing).
 	err := p.pool.QueryRow(ctx, `
-		select h.principal_id, c.secret_hash
+		select h.principal_id, c.secret_hash, pr.active
 		from human h
 		join principal pr on pr.id = h.principal_id
 		join credential c on c.principal_id = h.principal_id and c.kind = 'password'
-		where h.username = $1 and pr.active`, username).Scan(&pr.ID, &encoded)
+		where h.username = $1`, username).Scan(&pr.ID, &encoded, &active)
+	found := true
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
-		return nil, ErrBadCredentials
+		// Unknown user or no password credential: verify against the dummy hash so
+		// this path does the same argon2 work as a real user, then fail generically.
+		found = false
+		encoded = []byte(dummyPasswordHash)
 	case err != nil:
 		return nil, fmt.Errorf("storage: authenticate password: %w", err)
 	}
+	// Always verify; branch on found/active only AFTER, so response time does not
+	// reveal whether the user exists or is disabled.
 	ok, err := auth.VerifyPassword(password, string(encoded))
 	if err != nil {
 		return nil, fmt.Errorf("storage: verify password: %w", err)
 	}
-	if !ok {
+	if !found || !ok {
 		return nil, ErrBadCredentials
+	}
+	if !active {
+		// Correct password against a disabled account: a distinct, disclosable
+		// signal, reachable only with the right password (not an enumeration oracle).
+		return nil, ErrAccountDisabled
 	}
 	if err := p.loadPrincipal(ctx, &pr); err != nil {
 		return nil, err

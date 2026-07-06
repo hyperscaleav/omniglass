@@ -413,7 +413,7 @@ func generatedCommands() []*cobra.Command {
 			cmd := &cobra.Command{
 				Use:     "create",
 				Short:   "Log in with a username and password",
-				Long:    "Verifies a human's password and sets an httpOnly session cookie. Public; a bad credential is a flat 401.",
+				Long:    "Verifies a human's password and sets an httpOnly session cookie. Public; a bad credential is a flat 401, and a correct password against a disabled account is a distinct 403 so the screen can explain it.",
 				Example: "  omniglass login create --password password --username username",
 				Args:    cobra.ExactArgs(0),
 				RunE: func(cmd *cobra.Command, args []string) error {
