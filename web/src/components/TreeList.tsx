@@ -7,7 +7,7 @@ import {
   buildIndex, pathOf as pathOfModel, flattenRows, treeRows, parsePref, toggleItem, moveItem, allExpanded as allExpandedModel,
   type Crumb, type Row, type SortState,
 } from "../lib/listmodel";
-import FilterBar from "./FilterBar";
+import ListShell from "./ListShell";
 import Drawer from "./Drawer";
 import ColumnMenu from "./ColumnMenu";
 import InfoTip from "./InfoTip";
@@ -15,7 +15,7 @@ import {
   ChevronDown, ChevronLeft, ChevronsDownUp, ChevronsUpDown, Columns, Check, ListTree, Rows, Maximize, Plus, Pencil, Trash, X,
 } from "./icons";
 
-// ListView: the one config-driven inventory shell. Every entity page (Components,
+// TreeList: the one config-driven tree-list body (composing ListShell), the inventory shell. Every entity page (Components,
 // Systems, Locations) is a config over this, never a fork. It owns the filter
 // header (the faceted chip search), the action rail (view toggle, expand/collapse,
 // column visibility, the primary create), the table in both tree and flattened
@@ -138,7 +138,7 @@ export type PageDescriptor = {
   defaultCols: string[];
 };
 
-export default function ListView<N extends ListNode>(props: { config: ListConfig<N> }) {
+export default function TreeList<N extends ListNode>(props: { config: ListConfig<N> }) {
   const cfg = props.config;
   const me = useMe();
   const allow = (action: string) => can(me.data, cfg.entity.name, action);
@@ -553,21 +553,20 @@ export default function ListView<N extends ListNode>(props: { config: ListConfig
       <Show when={cfg.widgets}>
         <SummaryRail />
       </Show>
-      <div class="card overflow-hidden border border-base-300 bg-base-200 p-0">
-        <div class="border-b border-base-300 px-3 py-2.5">
-          <FilterBar
-            keys={cfg.filterKeys}
-            rows={index().all}
-            chips={chips()}
-            onChips={setChips}
-            bare
-            clearable
-            trailing={actions}
-            placeholder={cfg.filterPlaceholder}
-          />
-        </div>
-        <div class="overflow-x-auto">
-          <table class="og-rows table table-fixed table-sm">
+      {/* The chrome (FilterBar, card, action rail) is the shared ListShell; the
+          tree body owns its own chips (controlled), since it filters tree-aware
+          via flattenRows rather than the shell's flat predicate. */}
+      <ListShell
+        filterKeys={cfg.filterKeys}
+        rows={index().all}
+        chips={chips}
+        onChips={setChips}
+        trailing={actions}
+        placeholder={cfg.filterPlaceholder}
+      >
+        {() => (
+          <div class="overflow-x-auto">
+            <table class="og-rows table table-fixed table-sm">
             <colgroup>
               <col />
               <For each={visible()}>{(k) => <col style={{ width: `${cfg.columns[k].width}px` }} />}</For>
@@ -595,8 +594,9 @@ export default function ListView<N extends ListNode>(props: { config: ListConfig
               </Show>
             </tbody>
           </table>
-        </div>
-      </div>
+          </div>
+        )}
+      </ListShell>
     </section>
   );
 

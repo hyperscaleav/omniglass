@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import type { PageDescriptor } from "../components/ListView";
+import type { PageDescriptor } from "../components/TreeList";
 import { componentsDescriptor } from "./Components";
 import { systemsDescriptor } from "./Systems";
 import { locationsDescriptor } from "./Locations";

@@ -21,9 +21,19 @@ export default function ListShell<T>(props: {
   error?: unknown;
   errorLabel?: string;
   trailing?: JSX.Element;
+  // Controlled chip state (optional): a body that filters tree-aware (TreeList)
+  // owns its own chips and passes them in, so the shell drives the same FilterBar
+  // without owning the predicate. Omit both to let the shell own the chips
+  // (uncontrolled), which is the flat case (FlatList) and the plain-catalog case.
+  chips?: Accessor<Chip[]>;
+  onChips?: (chips: Chip[]) => void;
   children: (filtered: Accessor<T[]>, chips: Accessor<Chip[]>) => JSX.Element;
 }) {
-  const [chips, setChips] = createSignal<Chip[]>(props.initialChips ?? []);
+  const [ownChips, setOwnChips] = createSignal<Chip[]>(props.initialChips ?? []);
+  const chips = () => (props.chips ? props.chips() : ownChips());
+  const setChips = (c: Chip[]) => (props.onChips ? props.onChips(c) : setOwnChips(c));
+  // Lazy: a controlled body that filters itself never reads `filtered`, so this
+  // memo never runs for it (Solid memos are pull-based).
   const filtered = createMemo(() => props.rows.filter(buildPredicate(props.filterKeys, chips())));
   return (
     <div class="og-stack flex flex-col">

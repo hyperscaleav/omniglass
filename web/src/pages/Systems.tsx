@@ -1,7 +1,7 @@
 import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { useNavigate, useParams } from "@solidjs/router";
-import ListView, { type Blade, type ListConfig, type ListCtx, type ListNode, type PageDescriptor } from "../components/ListView";
+import TreeList, { type Blade, type ListConfig, type ListCtx, type ListNode, type PageDescriptor } from "../components/TreeList";
 import TreeSelect from "../components/TreeSelect";
 import {
   type System,
@@ -17,7 +17,7 @@ import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { ArrowRight, ChevronRight, Maximize } from "../components/icons";
 
-// Systems: the system inventory on the generic ListView, the same shell as
+// Systems: the system inventory on the generic TreeList, the same shell as
 // Locations and Components. Systems form a tree (parent_id) and are placed at a
 // location; each owns a set of components by primary system. The live API carries
 // names/types/placement only (no health yet). Cross-links navigate: a component
@@ -294,7 +294,7 @@ export default function Systems() {
       <Show when={err()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
       </Show>
-      <ListView config={cfg} />
+      <TreeList config={cfg} />
     </div>
   );
 }
