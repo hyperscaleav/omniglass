@@ -42,10 +42,11 @@ func scopedList[T any](ctx context.Context, p *PG, cfg scopedConfig[T], read sco
 		rows, err = p.pool.Query(ctx, sql)
 	} else {
 		roots := uuidRoots(read.IDs)
-		if len(roots) == 0 {
+		selfIDs := uuidRoots(read.SelfIDs)
+		if len(roots) == 0 && len(selfIDs) == 0 {
 			return nil, nil // every scope root is malformed: nothing is in scope
 		}
-		rows, err = p.pool.Query(ctx, sql, roots)
+		rows, err = p.pool.Query(ctx, sql, roots, selfIDs)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("storage: list %s: %w", cfg.table, err)

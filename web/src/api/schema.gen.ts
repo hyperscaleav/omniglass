@@ -560,8 +560,6 @@ export interface components {
              * @example /api/v1/schemas/CreateGrantInputBody.json
              */
             readonly $schema?: string;
-            /** @description Exclude the scope root itself from update/delete (descendants only); read and create-placement keep the root. Ignored for the all scope. */
-            exclude_root?: boolean;
             /** @description A role id (viewer, operator, admin, owner, or a custom role) */
             role: string;
             /** @description The scope root id; omit for the all scope */
@@ -571,6 +569,11 @@ export interface components {
              * @enum {string}
              */
             scope_kind: "all" | "location" | "system" | "component" | "group";
+            /**
+             * @description How the scope root matches the tree: subtree (root + descendants, the default), subtree_excl_root (descendants only for update/delete, root kept for read/create), or self (the root row only). Moot for the all scope.
+             * @enum {string}
+             */
+            scope_op?: "subtree" | "subtree_excl_root" | "self";
         };
         CreateLocationInputBody: {
             /**
@@ -672,11 +675,15 @@ export interface components {
              * @example /api/v1/schemas/GrantBody.json
              */
             readonly $schema?: string;
-            exclude_root?: boolean;
             id?: string;
             role: string;
             scope_id?: string;
             scope_kind: string;
+            /**
+             * @description How the scope root matches the tree: subtree (root + descendants), subtree_excl_root (descendants only for update/delete, root kept for read/create), or self (the root row only). Empty means subtree. Moot for the all scope.
+             * @enum {string}
+             */
+            scope_op?: "subtree" | "subtree_excl_root" | "self";
         };
         HealthOutputBody: {
             /**

@@ -9,6 +9,15 @@ package scope
 
 import "github.com/hyperscaleav/omniglass/internal/rbac"
 
+// Scope operators. A grant's ScopeOp says HOW its ScopeID matches the tree.
+// Empty is treated as OpSubtree (the default, and the value a row that predates
+// the column carries), so every grant that omits an op means the plain subtree.
+const (
+	OpSubtree         = "subtree"           // root + descendants, every action
+	OpSubtreeExclRoot = "subtree_excl_root" // root + descendants for read/create, descendants only for modify
+	OpSelf            = "self"              // the root row only, no descendant walk, uniform across actions
+)
+
 // Grant is the scope-relevant view of a principal's grant: the role it carries
 // and the scope it confers. It mirrors storage.Grant without the storage
 // dependency, so this package stays pure.
@@ -16,29 +25,33 @@ type Grant struct {
 	Role      string
 	ScopeKind string
 	ScopeID   string // empty for the "all" scope
-	// ExcludeRoot narrows the grant's WRITE scope to the descendants of its root:
-	// the holder can create under, and update/delete within, the subtree, but not
-	// update or delete the root entity itself (a deploy/integrator grant that must
-	// not modify the boundary of its own scope). Read and create-placement still
-	// include the root. Ignored for the "all" scope.
-	ExcludeRoot bool
+	// ScopeOp says how ScopeID matches the tree: OpSubtree (root + descendants),
+	// OpSubtreeExclRoot (descendants only for modify, root kept for read/create, so
+	// a deploy/integrator grant manages within a subtree without editing its own
+	// boundary), or OpSelf (exactly the root row, no descendants). Empty means
+	// OpSubtree. Ignored for the "all" scope.
+	ScopeOp string
 }
 
 // Set is a resolved scope. All true means every entity of the resource is in
-// scope. Otherwise IDs are the scope roots: an entity is in scope when it is one
-// of these ids or structurally beneath one (the gateway expands the subtree).
-// All false with no IDs means nothing is in scope. ExcludeRootIDs is the subset
-// of IDs whose own row is excluded from this action (its descendants stay in
-// scope): it is populated only for the modify actions of an ExcludeRoot grant,
-// and only when no other grant covers that root inclusively (inclusive wins).
+// scope. Otherwise a row is in scope when it satisfies any of: it is one of IDs
+// or structurally beneath one (the gateway expands the subtree); it is a strict
+// descendant of an ExcludeRootIDs root (that root's own row is out for this
+// action, descendants stay in); or its id is one of SelfIDs (matched exactly, no
+// subtree walk). ExcludeRootIDs is a subset of IDs, populated only for the modify
+// actions of a subtree_excl_root grant and only when no other grant covers that
+// root inclusively (inclusive wins). SelfIDs carries self-op roots plus any root
+// a self grant re-adds after an exclusion stripped it. All false with every list
+// empty means nothing is in scope.
 type Set struct {
 	All            bool
 	IDs            []string
 	ExcludeRootIDs []string
+	SelfIDs        []string
 }
 
-// Empty reports whether the set admits nothing (no all flag, no roots).
-func (s Set) Empty() bool { return !s.All && len(s.IDs) == 0 }
+// Empty reports whether the set admits nothing (no all flag, no roots of any op).
+func (s Set) Empty() bool { return !s.All && len(s.IDs) == 0 && len(s.SelfIDs) == 0 }
 
 // Resolve computes visible_set(P, action) for resource. A grant contributes only
 // when its role carries resource:action (per the role index, including the :read
@@ -48,13 +61,16 @@ func (s Set) Empty() bool { return !s.All && len(s.IDs) == 0 }
 // system scope does not confer location access) does not apply.
 func Resolve(grants []Grant, idx rbac.RoleIndex, resource, action string) Set {
 	kinds := applicableKinds(resource)
-	// ExcludeRoot narrows only the modify actions; read and create-placement keep
-	// the root so the holder can see the scope boundary and place children under it.
+	// subtree_excl_root narrows only the modify actions; read and create-placement
+	// keep the root so the holder can see the scope boundary and place children
+	// under it. self is uniform (the root row) across every action.
 	excludes := action != "read" && action != "create"
 	var set Set
-	seen := map[string]bool{}
-	inclusive := map[string]bool{} // a root granted without exclusion for this action
-	excluded := map[string]bool{}  // a root granted with exclusion for this action
+	seen := map[string]bool{}    // a root already added to IDs (subtree ops)
+	selfSeen := map[string]bool{}
+	inclusive := map[string]bool{} // a root a subtree op admits in full for this action
+	excluded := map[string]bool{}  // a root a subtree_excl_root op strips for this action
+	self := map[string]bool{}      // a root a self op admits as its own row only
 	for _, g := range grants {
 		if !idx.Flatten([]string{g.Role}).Allows(resource, action) {
 			continue // the role does not carry this action: the over-permit fix
@@ -66,23 +82,44 @@ func Resolve(grants []Grant, idx rbac.RoleIndex, resource, action string) Set {
 		if !kinds[g.ScopeKind] || g.ScopeID == "" {
 			continue // scope kind cannot contain this resource, or malformed
 		}
+		op := g.ScopeOp
+		if op == "" {
+			op = OpSubtree
+		}
+		if op == OpSelf {
+			self[g.ScopeID] = true
+			continue // self roots never enter IDs: no subtree expansion
+		}
 		if !seen[g.ScopeID] {
 			seen[g.ScopeID] = true
 			set.IDs = append(set.IDs, g.ScopeID)
 		}
-		if excludes && g.ExcludeRoot {
+		if excludes && op == OpSubtreeExclRoot {
 			excluded[g.ScopeID] = true
 		} else {
 			inclusive[g.ScopeID] = true
 		}
 	}
-	// A root is excluded from this action only when every grant naming it excludes
-	// it: an inclusive grant on the same root wins (a broader parent grant is
-	// handled by the gateway's subtree expansion, not here).
+	// A subtree root is excluded from this action only when every subtree grant
+	// naming it excludes it: an inclusive grant on the same root wins (a broader
+	// parent grant is handled by the gateway's subtree expansion, not here).
 	for _, id := range set.IDs {
 		if excluded[id] && !inclusive[id] {
 			set.ExcludeRootIDs = append(set.ExcludeRootIDs, id)
 		}
+	}
+	// A self root contributes its own row unless a subtree op already admits that
+	// row inclusively (then self is redundant). When a subtree_excl_root op stripped
+	// the root for this action, the self grant re-adds exactly the row: the root
+	// stays in ExcludeRootIDs (its subtree walk skips it) and joins SelfIDs (its row
+	// matches by id). Deterministic order: emit in first-seen order over the grants.
+	for _, g := range grants {
+		id := g.ScopeID
+		if g.ScopeOp != OpSelf || !self[id] || selfSeen[id] || inclusive[id] {
+			continue
+		}
+		selfSeen[id] = true
+		set.SelfIDs = append(set.SelfIDs, id)
 	}
 	return set
 }

@@ -58,16 +58,28 @@ func TestResolveReadFloor(t *testing.T) {
 	}
 }
 
-func TestResolveExcludeRoot(t *testing.T) {
+func TestResolveDefaultOpIsSubtree(t *testing.T) {
 	idx := index()
-	// A loc-editor scoped to ROOM with exclude_root: the write scope covers ROOM's
-	// descendants but not ROOM itself; read and create keep ROOM (you must see the
-	// room and be able to place children under it).
-	grants := []scope.Grant{{Role: "loc-editor", ScopeKind: "location", ScopeID: "ROOM", ExcludeRoot: true}}
+	// A grant literal that leaves ScopeOp empty means the subtree default: root plus
+	// descendants, no exclusion, for every action. This keeps every existing grant
+	// (and every storage row that predates an explicit op) behaving as before.
+	grants := []scope.Grant{{Role: "loc-editor", ScopeKind: "location", ScopeID: "ROOM"}}
+	upd := scope.Resolve(grants, idx, "location", "update")
+	if len(upd.IDs) != 1 || upd.IDs[0] != "ROOM" || len(upd.ExcludeRootIDs) != 0 || len(upd.SelfIDs) != 0 {
+		t.Fatalf("empty op = %+v, want ROOM as a plain subtree root", upd)
+	}
+}
+
+func TestResolveSubtreeExclRoot(t *testing.T) {
+	idx := index()
+	// scope_op = subtree_excl_root: the write scope covers ROOM's descendants but not
+	// ROOM itself; read and create keep ROOM (you must see the room and be able to
+	// place children under it). This is the old exclude_root=true behavior.
+	grants := []scope.Grant{{Role: "loc-editor", ScopeKind: "location", ScopeID: "ROOM", ScopeOp: "subtree_excl_root"}}
 
 	for _, action := range []string{"update", "delete"} {
 		s := scope.Resolve(grants, idx, "location", action)
-		if len(s.IDs) != 1 || s.IDs[0] != "ROOM" || len(s.ExcludeRootIDs) != 1 || s.ExcludeRootIDs[0] != "ROOM" {
+		if len(s.IDs) != 1 || s.IDs[0] != "ROOM" || len(s.ExcludeRootIDs) != 1 || s.ExcludeRootIDs[0] != "ROOM" || len(s.SelfIDs) != 0 {
 			t.Fatalf("%s scope = %+v, want ROOM as an excluded root", action, s)
 		}
 	}
@@ -79,17 +91,65 @@ func TestResolveExcludeRoot(t *testing.T) {
 	}
 }
 
-func TestResolveExcludeRootInclusiveWins(t *testing.T) {
+func TestResolveSubtreeExclRootInclusiveWins(t *testing.T) {
 	idx := index()
-	// Two grants naming the SAME root, one exclude_root and one not: the inclusive
-	// grant wins, so the root is not excluded for update.
+	// Two grants naming the SAME root, one subtree_excl_root and one plain subtree:
+	// the inclusive grant wins, so the root is not excluded for update.
 	grants := []scope.Grant{
-		{Role: "loc-editor", ScopeKind: "location", ScopeID: "ROOM", ExcludeRoot: true},
-		{Role: "loc-editor", ScopeKind: "location", ScopeID: "ROOM", ExcludeRoot: false},
+		{Role: "loc-editor", ScopeKind: "location", ScopeID: "ROOM", ScopeOp: "subtree_excl_root"},
+		{Role: "loc-editor", ScopeKind: "location", ScopeID: "ROOM", ScopeOp: "subtree"},
 	}
 	upd := scope.Resolve(grants, idx, "location", "update")
 	if len(upd.IDs) != 1 || len(upd.ExcludeRootIDs) != 0 {
 		t.Fatalf("update scope = %+v, want ROOM included (inclusive wins)", upd)
+	}
+}
+
+func TestResolveSelf(t *testing.T) {
+	idx := index()
+	// scope_op = self: exactly the ROOM row, no descendant walk, uniform across every
+	// action. The root goes to SelfIDs (matched by id equality), never to IDs (which
+	// the gateway would expand into a subtree).
+	grants := []scope.Grant{{Role: "loc-editor", ScopeKind: "location", ScopeID: "ROOM", ScopeOp: "self"}}
+	for _, action := range []string{"read", "create", "update", "delete"} {
+		s := scope.Resolve(grants, idx, "location", action)
+		if len(s.SelfIDs) != 1 || s.SelfIDs[0] != "ROOM" || len(s.IDs) != 0 || len(s.ExcludeRootIDs) != 0 {
+			t.Fatalf("%s self scope = %+v, want ROOM as a self id only", action, s)
+		}
+		if s.Empty() {
+			t.Fatalf("%s self scope should not be Empty, got %+v", action, s)
+		}
+	}
+}
+
+func TestResolveSelfReAddsExcludedRoot(t *testing.T) {
+	idx := index()
+	// A root granted subtree_excl_root (root stripped from the modify subtree) AND
+	// self (the root row alone) unions to root + descendants for modify: the self
+	// grant re-adds the row the exclusion removed. The root stays in ExcludeRootIDs
+	// (so the subtree walk still excludes it) and also appears in SelfIDs (so the row
+	// itself matches).
+	grants := []scope.Grant{
+		{Role: "loc-editor", ScopeKind: "location", ScopeID: "ROOM", ScopeOp: "subtree_excl_root"},
+		{Role: "loc-editor", ScopeKind: "location", ScopeID: "ROOM", ScopeOp: "self"},
+	}
+	upd := scope.Resolve(grants, idx, "location", "update")
+	if len(upd.IDs) != 1 || upd.IDs[0] != "ROOM" || len(upd.ExcludeRootIDs) != 1 || upd.ExcludeRootIDs[0] != "ROOM" || len(upd.SelfIDs) != 1 || upd.SelfIDs[0] != "ROOM" {
+		t.Fatalf("self+excl_root scope = %+v, want ROOM excluded-from-subtree but re-added via SelfIDs", upd)
+	}
+}
+
+func TestResolveSelfRedundantUnderSubtree(t *testing.T) {
+	idx := index()
+	// If a root is already covered inclusively by a subtree grant, a self grant on the
+	// same root adds nothing: SelfIDs stays empty (the subtree already matches the row).
+	grants := []scope.Grant{
+		{Role: "loc-editor", ScopeKind: "location", ScopeID: "ROOM", ScopeOp: "subtree"},
+		{Role: "loc-editor", ScopeKind: "location", ScopeID: "ROOM", ScopeOp: "self"},
+	}
+	upd := scope.Resolve(grants, idx, "location", "update")
+	if len(upd.IDs) != 1 || len(upd.ExcludeRootIDs) != 0 || len(upd.SelfIDs) != 0 {
+		t.Fatalf("self-under-subtree scope = %+v, want just the subtree root, no SelfIDs", upd)
 	}
 }
 

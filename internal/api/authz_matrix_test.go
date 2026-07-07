@@ -17,10 +17,10 @@ import (
 
 // grant is a (role x scope) pair for building test principals.
 type grant struct {
-	role        string
-	scopeKind   string
-	scopeID     string // "" for the all scope
-	excludeRoot bool   // exclude the scope root from the modify actions
+	role      string
+	scopeKind string
+	scopeID   string // "" for the all scope
+	scopeOp   string // "" (subtree), "subtree_excl_root", or "self"
 }
 
 // scopedEntity describes a scoped tree entity so the authorization conformance
@@ -168,6 +168,30 @@ func entityID(t *testing.T, c *apiClient, tok, base, name string) string {
 	return ""
 }
 
+// listNames returns the names in a scoped list, in the order the endpoint returns
+// them (by name), for asserting exactly which rows a scope admits.
+func listNames(t *testing.T, c *apiClient, tok, base string) []string {
+	t.Helper()
+	var env map[string]json.RawMessage
+	if err := json.Unmarshal(c.do(tok, http.MethodGet, base, nil, http.StatusOK), &env); err != nil {
+		t.Fatalf("decode list %s: %v", base, err)
+	}
+	for _, raw := range env {
+		var rows []struct {
+			Name string `json:"name"`
+		}
+		if json.Unmarshal(raw, &rows) != nil || rows == nil {
+			continue
+		}
+		out := make([]string, 0, len(rows))
+		for _, it := range rows {
+			out = append(out, it.Name)
+		}
+		return out
+	}
+	return nil
+}
+
 func bootstrapOwnerTok(t *testing.T, ctx context.Context, gw storage.Gateway) string {
 	t.Helper()
 	tok, hash, prefix, err := auth.NewBearerToken()
@@ -210,9 +234,13 @@ func principalWithGrants(t *testing.T, ctx context.Context, dsn, label string, g
 		if g.scopeID != "" {
 			scopeID = g.scopeID
 		}
+		op := g.scopeOp
+		if op == "" {
+			op = "subtree"
+		}
 		if _, err := conn.Exec(ctx,
-			`insert into principal_grant (principal_id, role_id, scope_kind, scope_id, exclude_root) values ($1, $2, $3, $4, $5)`,
-			pid, g.role, g.scopeKind, scopeID, g.excludeRoot); err != nil {
+			`insert into principal_grant (principal_id, role_id, scope_kind, scope_id, scope_op) values ($1, $2, $3, $4, $5)`,
+			pid, g.role, g.scopeKind, scopeID, op); err != nil {
 			t.Fatalf("insert grant %+v: %v", g, err)
 		}
 	}

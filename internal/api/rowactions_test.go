@@ -89,11 +89,11 @@ func TestRowActionsAPI(t *testing.T) {
 		}
 	}
 
-	// Deploy @ root with exclude_root: root gets create only (placement keeps the
-	// root, but update/delete exclude it, and deploy has no delete); the child gets
-	// create+update; "other" is out of scope entirely.
+	// Deploy @ root with subtree_excl_root: root gets create only (placement keeps
+	// the root, but update/delete exclude it, and deploy has no delete); the child
+	// gets create+update; "other" is out of scope entirely.
 	deployTok := principalWithGrants(t, ctx, dsn, "integrator",
-		[]grant{{role: "deploy", scopeKind: "location", scopeID: rootID, excludeRoot: true}})
+		[]grant{{role: "deploy", scopeKind: "location", scopeID: rootID, scopeOp: "subtree_excl_root"}})
 	da := listActions(deployTok)
 	if _, ok := da["other"]; ok {
 		t.Fatalf("deploy should not see 'other', got %v", da)
