@@ -3,13 +3,27 @@ title: Nodes
 description: How the edge runtime pulls its worklist, runs tasks and commands, manages sessions, gates reachability, and ships telemetry.
 sidebar:
   badge:
-    text: Design
-    variant: caution
+    text: Partial
+    variant: note
 ---
 
 A node is the edge runtime that lets an operator collect from and control gear no matter where it sits, by pulling its worklist from the server, running it on the spot, and shipping results back. This page covers how it gets its instructions and runs them: worklist pull, placement, executing tasks and
 commands, sessions, inbound demux, the task queue, reachability, and shipping
 telemetry. The declarative shape it executes lives in [templates](/architecture/templates/) and [collection](/architecture/collection/).
+
+:::note[Partial]
+Built today: `omniglass node` enrolls (a node is created server-side, its enrollment token minted at
+`POST /nodes/{name}:enroll` and exchanged for its NATS credential at `POST /nodes:claim`), connects
+outbound-only to the server's in-process NATS server, pulls its worklist over a `og.v1.worklist.<node>`
+request-reply (its enabled tasks plus a `config_generation`), and heartbeats on `og.v1.heartbeat.<node>`
+(the server stamps `last_heartbeat_at`). **Per-node subject isolation is enforced**: each node's NATS
+credential is permitted only its own `<node>` subjects, so a node cannot publish or pull as another. Still
+`Design`: running tasks (the probes), shipping telemetry (the JetStream `Event`), commands and the durable
+command queue, sessions and inbound demux, the reachability gate, config-generation-driven cache
+invalidation, `node.self` self-telemetry, and the `node.down` sweep. The credential is a shared secret
+(the enrollment token doubles as the NATS password); the decentralized nkey/JWT model is deferred. See
+[implementation status](/architecture/status/) and [decision log](/architecture/decisions/) (ADR-0014).
+:::
 
 ## The node
 
