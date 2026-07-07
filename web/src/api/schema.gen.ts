@@ -429,7 +429,7 @@ export interface paths {
         };
         /**
          * List roles
-         * @description Lists the roles. Gated by the role:read capability.
+         * @description Lists the roles with their metadata and effective (flattened) permissions. Gated by the role:read capability.
          */
         get: operations["list-roles"];
         put?: never;
@@ -848,6 +848,9 @@ export interface components {
             kind: string;
         };
         RoleBody: {
+            description?: string;
+            display_name?: string;
+            effective_permissions: string[] | null;
             id: string;
             inherits: string[] | null;
             official: boolean;

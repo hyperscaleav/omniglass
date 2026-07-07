@@ -20,6 +20,8 @@ type Role struct {
 	Official    bool
 	Permissions []string
 	Inherits    []string
+	DisplayName string // operator-facing name; empty falls back to the id
+	Description string // what the role grants, for the Roles view and tooltips
 }
 
 // UpsertRole installs or updates a role by id. The boot-seed phase calls it to
@@ -35,13 +37,15 @@ func (p *PG) UpsertRole(ctx context.Context, r Role) error {
 		r.Inherits = []string{}
 	}
 	_, err := p.pool.Exec(ctx, `
-		insert into role (id, official, permissions, inherits)
-		values ($1, $2, $3, $4)
+		insert into role (id, official, permissions, inherits, display_name, description)
+		values ($1, $2, $3, $4, $5, $6)
 		on conflict (id) do update
-			set official    = excluded.official,
-			    permissions = excluded.permissions,
-			    inherits    = excluded.inherits`,
-		r.ID, r.Official, r.Permissions, r.Inherits)
+			set official     = excluded.official,
+			    permissions  = excluded.permissions,
+			    inherits     = excluded.inherits,
+			    display_name = excluded.display_name,
+			    description  = excluded.description`,
+		r.ID, r.Official, r.Permissions, r.Inherits, nullize(r.DisplayName), nullize(r.Description))
 	if err != nil {
 		return fmt.Errorf("storage: upsert role %q: %w", r.ID, err)
 	}
@@ -874,7 +878,7 @@ func (p *PG) loadPrincipal(ctx context.Context, pr *Principal) error {
 
 // ListRoles returns every role, for building the in-process role index.
 func (p *PG) ListRoles(ctx context.Context) ([]Role, error) {
-	rows, err := p.pool.Query(ctx, `select id, official, permissions, inherits from role`)
+	rows, err := p.pool.Query(ctx, `select id, official, permissions, inherits, coalesce(display_name, ''), coalesce(description, '') from role order by id`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list roles: %w", err)
 	}
@@ -882,7 +886,7 @@ func (p *PG) ListRoles(ctx context.Context) ([]Role, error) {
 	var out []Role
 	for rows.Next() {
 		var r Role
-		if err := rows.Scan(&r.ID, &r.Official, &r.Permissions, &r.Inherits); err != nil {
+		if err := rows.Scan(&r.ID, &r.Official, &r.Permissions, &r.Inherits, &r.DisplayName, &r.Description); err != nil {
 			return nil, fmt.Errorf("storage: scan role: %w", err)
 		}
 		out = append(out, r)

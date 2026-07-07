@@ -75,6 +75,19 @@ location-scoped admin cannot list users.
 From the CLI the same surface is `omniglass principal list` / `get` / `create` / `update` /
 `disable` / `enable`, and `omniglass grant create <id>` / `grant delete <id> <grantId>`.
 
+In the grant builder itself, hovering a role in the picker shows its description and the permissions it
+grants, so you can see what you are assigning before you stage it.
+
+## Roles
+
+**Settings > Roles** (with `role:read`) is a read-only catalog of the built-in roles, so you can see what
+each one grants before assigning it. Each role shows its display name, id, description, what it **inherits**,
+and its **effective permissions**, the full set it confers once inheritance, wildcards, and the read floor are
+resolved (so `owner` reads as `*:*`, while `admin` is broad but deliberately not `*:*`). The roles are ordered
+least to most powerful (viewer, operator, deploy, admin, owner). It is a teaching surface: it renders the real
+seeded roles, not a static table. Custom-role creation and editing are coming; today the built-in roles are
+read-only.
+
 ## The layout
 
 - The **sidebar** is the information architecture: sections grouped into Inventory, Catalog,

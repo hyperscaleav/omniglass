@@ -29,9 +29,14 @@ import { X } from "./icons";
 type ScopedKind = Exclude<ScopeKind, "all" | "group">;
 const SCOPE_KINDS: ScopeKind[] = ["all", "location", "system", "component"];
 
+// A role for the picker: the id it commits, a display label, and a title tooltip
+// (the description + the permissions it grants), so an admin sees what a role
+// confers while building a grant.
+export type RolePick = { id: string; label: string; title: string };
+
 type Stage = "role" | "kind" | "entity" | "op";
 type Suggestion =
-  | { kind: "role"; value: string; label: string; depth?: number }
+  | { kind: "role"; value: string; label: string; title?: string; depth?: number }
   | { kind: "scope"; value: ScopeKind; label: string; depth?: number }
   | { kind: "entity"; value: string; label: string; depth: number }
   | { kind: "op"; value: ScopeOp; label: string; hint: string; depth?: number };
@@ -42,7 +47,7 @@ const errMsg = (e: "role-required" | "entity-required" | "duplicate"): string =>
 export default function GrantBuilder(props: {
   principalId: string;
   current: ExistingGrant[];
-  roles: string[];
+  roles: RolePick[];
   entities: (kind: ScopedKind) => TreeNode[];
   scopeName: (id: string) => string | undefined;
   canGrant: boolean;
@@ -84,7 +89,9 @@ export default function GrantBuilder(props: {
   const suggestions = createMemo<Suggestion[]>(() => {
     const t = text().trim().toLowerCase();
     if (stage() === "role") {
-      return props.roles.filter((r) => r.toLowerCase().includes(t)).map((r) => ({ kind: "role", value: r, label: r }) as Suggestion);
+      return props.roles
+        .filter((r) => r.id.toLowerCase().includes(t) || r.label.toLowerCase().includes(t))
+        .map((r) => ({ kind: "role", value: r.id, label: r.label, title: r.title }) as Suggestion);
     }
     if (stage() === "kind") {
       return SCOPE_KINDS.filter((k) => k.includes(t)).map((k) => ({ kind: "scope", value: k, label: k }) as Suggestion);
@@ -307,6 +314,7 @@ export default function GrantBuilder(props: {
                       id={`${listId}-opt-${i()}`}
                       role="option"
                       aria-selected={sel() === i()}
+                      title={s.kind === "role" ? s.title : undefined}
                       class="flex w-full items-center gap-2 rounded-field px-2 py-1.5 text-left text-sm"
                       classList={{ "bg-primary/15": sel() === i() }}
                       style={s.kind === "entity" ? { "padding-left": `${0.5 + (s.depth ?? 0) * 0.85}rem` } : undefined}
@@ -316,9 +324,12 @@ export default function GrantBuilder(props: {
                       }}
                       onMouseEnter={() => setSel(i())}
                     >
-                      <span classList={{ "font-data": s.kind !== "scope" && s.kind !== "op" }}>{s.label}</span>
+                      <span classList={{ "font-data": s.kind !== "scope" && s.kind !== "op" && s.kind !== "role" }}>{s.label}</span>
+                      <Show when={s.kind === "role" && s.value !== s.label}>
+                        <span class="font-data text-[11px] text-base-content/40">{(s as { value: string }).value}</span>
+                      </Show>
                       <Show when={stage() === "role"}>
-                        <span class="ml-auto text-xs text-base-content/40">role</span>
+                        <span class="ml-auto text-xs text-base-content/40" title="hover a role to see its permissions">?</span>
                       </Show>
                       <Show when={s.kind === "op"}>
                         <span class="ml-auto pl-2 text-right text-[11px] text-base-content/40">{(s as { hint: string }).hint}</span>

@@ -648,6 +648,16 @@ components:
     RoleBody:
       additionalProperties: false
       properties:
+        description:
+          type: string
+        display_name:
+          type: string
+        effective_permissions:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
         id:
           type: string
         inherits:
@@ -669,6 +679,7 @@ components:
         - official
         - permissions
         - inherits
+        - effective_permissions
       type: object
     RolesOutputBody:
       additionalProperties: false
@@ -1520,7 +1531,7 @@ paths:
       summary: Impersonate a principal (view-as or act-as)
   /roles:
     get:
-      description: Lists the roles. Gated by the role:read capability.
+      description: Lists the roles with their metadata and effective (flattened) permissions. Gated by the role:read capability.
       operationId: list-roles
       responses:
         "200":

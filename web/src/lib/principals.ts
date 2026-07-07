@@ -72,8 +72,18 @@ export async function setPrincipalActive(id: string, active: boolean): Promise<v
   if (error) throw error;
 }
 
-// A role in the catalog, for the grant form's role picker.
-export type Role = { id: string; official: boolean; permissions: string[]; inherits: string[] };
+// A role in the catalog, for the grant form's role picker and the Roles view.
+export type Role = {
+  id: string;
+  official: boolean;
+  permissions: string[];
+  inherits: string[];
+  display_name?: string;
+  description?: string;
+  // What the role actually confers, flattened by the server (inheritance, wildcard,
+  // and the :read floor resolved). Present on GET /roles.
+  effective_permissions?: string[];
+};
 
 export const ROLES_KEY = ["roles"] as const;
 
