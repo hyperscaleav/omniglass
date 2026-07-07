@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { listPrincipals, createPrincipal, updatePrincipal, createGrant, revokeGrant, setPrincipalActive, principalName, type Principal } from "./principals";
+import { listPrincipals, createPrincipal, updatePrincipal, createGrant, revokeGrant, setPrincipalActive, principalName, roleFilterKeys, type Principal, type Role } from "./principals";
+import { buildPredicate, type Chip } from "./predicate";
 
 // The data layer is the unit under test; fetch is the seam we fake, so these
 // assert the request shape and the response handling without a server.
@@ -95,5 +96,54 @@ describe("principals data layer", () => {
     expect(principalName(human({ username: "u", display_name: "Dee" }))).toBe("Dee");
     expect(principalName(human({ username: "u" }))).toBe("u");
     expect(principalName({ id: "s", kind: "service", active: true, service: { label: "svc" }, grants: [] })).toBe("svc");
+  });
+});
+
+// The role facets are the console's shared faceted search applied to the roles
+// catalog: name (display name or id substring, the default), id (exact), and
+// permission (a substring over the role's effective permission strings). These
+// pin the filtering behavior the FilterBar/ListShell drives, independent of the
+// page render.
+const role = (p: Partial<Role>): Role => ({ id: "x", official: true, permissions: [], inherits: [], ...p });
+
+const roles: Role[] = [
+  role({ id: "viewer", display_name: "Viewer", effective_permissions: ["*:read"] }),
+  role({ id: "operator", display_name: "Operator", effective_permissions: ["*:read", "alarm:ack"] }),
+  role({ id: "admin", display_name: "Administrator", effective_permissions: ["*:read", "principal:*", "audit:read:admin"] }),
+  role({ id: "owner", display_name: "Owner", effective_permissions: [">"] }),
+];
+
+const matched = (chips: Chip[]): string[] => roles.filter(buildPredicate(roleFilterKeys, chips)).map((r) => r.id);
+
+describe("roleFilterKeys", () => {
+  it("filters by name (display name or id substring)", () => {
+    expect(matched([{ key: "name", op: "contains", values: ["op"] }])).toEqual(["operator"]);
+    // The display name matches even when the id would not.
+    expect(matched([{ key: "name", op: "contains", values: ["admini"] }])).toEqual(["admin"]);
+  });
+  it("filters by id (exact)", () => {
+    expect(matched([{ key: "id", op: "eq", values: ["owner"] }])).toEqual(["owner"]);
+    // Within one chip, values OR: viewer OR owner.
+    expect(matched([{ key: "id", op: "eq", values: ["viewer", "owner"] }])).toEqual(["viewer", "owner"]);
+  });
+  it("filters by permission (substring over the effective set)", () => {
+    // An admin can find every role that grants audit.
+    expect(matched([{ key: "permission", op: "contains", values: ["audit"] }])).toEqual(["admin"]);
+    expect(matched([{ key: "permission", op: "contains", values: ["alarm"] }])).toEqual(["operator"]);
+    // The wildcard read floor is on every non-superuser role.
+    expect(matched([{ key: "permission", op: "contains", values: ["*:read"] }])).toEqual(["viewer", "operator", "admin"]);
+  });
+  it("ANDs across chips", () => {
+    expect(matched([
+      { key: "permission", op: "contains", values: ["*:read"] },
+      { key: "id", op: "eq", values: ["admin"] },
+    ])).toEqual(["admin"]);
+  });
+  it("offers a sorted, de-duplicated value catalog per facet", () => {
+    const byKey = Object.fromEntries(roleFilterKeys.map((k) => [k.key, k]));
+    expect(byKey.name.values!(roles)).toEqual(["Administrator", "Operator", "Owner", "Viewer"]);
+    expect(byKey.id.values!(roles)).toEqual(["admin", "operator", "owner", "viewer"]);
+    // The permission catalog is the distinct resource heads plus the superuser tail.
+    expect(byKey.permission.values!(roles)).toEqual(["*", ">", "alarm", "audit", "principal"]);
   });
 });
