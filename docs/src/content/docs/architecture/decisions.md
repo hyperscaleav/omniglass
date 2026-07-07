@@ -187,10 +187,14 @@ below from the project's history. From here it grows one slice at a time.
   impersonate is the escalation guard `actor.Covers(target)` (the caller's capabilities must cover the
   target's) plus the `principal:impersonate` capability at all-scope. Capability cover applies to both modes;
   **scope** is where the modes diverge: **view-as** is cross-scope (read-only grants no write authority, and
-  seeing another scope is the troubleshooting case), but **act-as** additionally requires the caller be
-  all-scope for every tree-write capability the target holds. Without that, act-as would let a split-grant
-  admin (all-scope user management, but infra scoped to campus X) impersonate a campus-Y admin and gain write
-  in Y, since an impersonated mutation resolves its ABAC scope from the target: a scope escalation. Accountability
+  seeing another scope is the troubleshooting case), but **act-as** additionally requires the caller's
+  **all-scope grants alone** to cover the target: a capability held only through a narrower grant does not
+  count. Without that, act-as would let a split-grant admin (all-scope user management, but infra scoped to
+  campus X) impersonate a campus-Y admin and gain write in Y, since an impersonated request resolves its ABAC
+  scope from the target: a scope escalation. Because the rule is capability-cover against the caller's
+  all-scope grants (not a hardcoded list of scoped resources), it closes non-tree escalation too: a user-admin
+  who holds grant authority only through a scoped grant (empty effective scope, cannot create a grant directly)
+  cannot launder all-scope grant authority by acting-as a grant admin. Accountability
   is a nullable `audit_log.real_actor_principal_id` written on the row directly, not reconstructed from a
   time-window join (clock skew and concurrent sessions make that unreliable for an accountability record), and
   the self-service mutations (`/auth/me` profile and password) audit too so an act-as edit is never untracked.

@@ -236,10 +236,13 @@ revokes it.
 Two guarantees make it safe. The **escalation guard**: a caller may impersonate a target only when the
 caller's capabilities **cover** the target's (`rbac.Set.Covers`), so impersonation can never confer a
 capability the caller lacks (a lesser admin cannot impersonate an owner). Scope is where the modes differ:
-view-as is cross-scope (read-only grants no write authority), but **act-as** additionally requires the caller
-be all-scope for the target's tree-write capabilities, since an impersonated mutation resolves its scope from
-the target: without it a split-grant admin (all-scope user management, campus-scoped infra) could act-as a
-different campus's admin and gain write there. And **accountability**: every audited mutation taken while
+view-as is cross-scope (read-only grants no write authority), but **act-as** additionally requires the
+caller's **all-scope grants alone** to cover the target, since an impersonated request resolves its scope from
+the target: a capability the caller holds only through a narrower grant does not count. Without it a
+split-grant admin (all-scope user management, campus-scoped infra) could act-as a different campus's admin and
+gain write there. The rule is resource-agnostic, so it also closes escalation through non-tree writes
+(`principal_grant`, `role`) whose scoped grants resolve to an empty effective scope: a user-admin who cannot
+create a single grant directly cannot launder all-scope grant authority by acting-as a grant admin either. And **accountability**: every audited mutation taken while
 impersonating records `real_actor_principal_id` alongside the impersonated `actor_principal_id`, so the true
 actor is never lost (the self-service `/auth/me` profile and password edits audit too). Self-impersonation is refused, nesting is refused, and
 disabling either the target or the real admin kills the session on its next request (the same per-request

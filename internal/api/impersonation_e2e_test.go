@@ -48,6 +48,13 @@ func TestImpersonationAPI(t *testing.T) {
 		conn.Close(ctx)
 		t.Fatalf("insert user-admin role: %v", err)
 	}
+	// grant-admin: authority over grants only (a non-tree resource), for the
+	// non-tree scope-escalation case below. Inserted before the lazy role index.
+	if _, err := conn.Exec(ctx, `insert into role (id, official, permissions, inherits) values ('grant-admin', false, $1, '{}')`,
+		[]string{"principal_grant:create,delete"}); err != nil {
+		conn.Close(ctx)
+		t.Fatalf("insert grant-admin role: %v", err)
+	}
 	conn.Close(ctx)
 
 	srv := httptest.NewServer(api.NewHandler(gw))
@@ -176,4 +183,24 @@ func TestImpersonationAPI(t *testing.T) {
 	}
 	// View-as of the same disjoint target is allowed (read-only).
 	c.do(splitTok, http.MethodPost, "/principals/"+yTargetID+":impersonate", map[string]any{"mode": "view_as"}, http.StatusCreated)
+
+	// --- NON-TREE SCOPE ESCALATION: the guard is resource-agnostic. A split-grant
+	// admin who holds grant authority only through a SCOPED grant (which for a
+	// non-tree resource resolves to an empty effective scope, so it cannot create a
+	// single grant directly) must not gain all-scope grant authority by acting-as a
+	// target that holds it. Without the all-scope-cover rule this laundered a full
+	// account takeover (mint yourself owner@all); with it, act-as is refused and
+	// view-as remains available. ---
+	// Attacker: all-scope user-admin (reaches impersonation) + grant-admin scoped to
+	// root only (non-tree, so effectively empty: cannot create grants on its own).
+	grantSplitTok := principalWithGrants(t, ctx, dsn, "grant-split-admin",
+		[]grant{{role: "user-admin", scopeKind: "all"}, {role: "grant-admin", scopeKind: "location", scopeID: rootID}})
+	// Target holds grant authority at ALL scope.
+	grantTargetTok := principalWithGrants(t, ctx, dsn, "grant-target", []grant{{role: "grant-admin", scopeKind: "all"}})
+	grantTargetID := meID(t, c, grantTargetTok)
+
+	if code, b := c.send(grantSplitTok, http.MethodPost, "/principals/"+grantTargetID+":impersonate", map[string]any{"mode": "act_as"}); code != http.StatusForbidden {
+		t.Fatalf("act-as to launder all-scope grant authority: want 403 (scope escalation), got %d (%s)", code, b)
+	}
+	c.do(grantSplitTok, http.MethodPost, "/principals/"+grantTargetID+":impersonate", map[string]any{"mode": "view_as"}, http.StatusCreated)
 }

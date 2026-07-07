@@ -76,21 +76,25 @@ func registerImpersonationRoutes(api huma.API, a *authenticator, gw storage.Gate
 		if !actorPerms.Covers(targetPerms) {
 			return nil, huma.Error403Forbidden("cannot impersonate a principal whose capabilities exceed yours")
 		}
-		// Scope guard for act-as: a mutation while acting-as resolves its scope from
-		// the TARGET, so a caller who is not all-scope for a write capability the
-		// target holds would gain write access to a scope it lacks (a scope
-		// escalation). Refuse act-as unless the caller is all-scope for every
-		// tree-write capability the target has; view-as stays cross-scope (read
-		// only, so it grants no write authority). Non-tree resources (principal,
-		// role, credential) have no scope kind, so they are already all-or-nothing
-		// and covered by the capability guard above.
+		// Scope guard for act-as: a request made while acting-as resolves its scope
+		// from the TARGET, so a caller whose hold on a capability is narrower than
+		// the target's would gain reach it lacks (a scope escalation). The capability
+		// guard above is scope-blind (Covers flattens scope away), so a caller who
+		// holds a write capability only at a narrow, or even empty, scope still passes
+		// it. Close the gap by requiring the caller's ALL-SCOPE grants alone to cover
+		// the target: a capability held only through a scoped grant does not count.
+		// This is resource-agnostic, so it also closes escalation through non-tree
+		// writes (principal_grant, role) whose scoped grants resolve to an empty
+		// effective scope. view-as stays cross-scope (read only, grants no authority).
 		if in.Body.Mode == "act_as" {
-			for _, resource := range []string{"location", "system", "component"} {
-				for _, action := range []string{"create", "update", "delete"} {
-					if targetPerms.Allows(resource, action) && !a.scopeFor(ctx, resource, action).All {
-						return nil, huma.Error403Forbidden("act-as requires all-scope authority over the target's capabilities; use view-as instead")
-					}
+			allScopeRoleIDs := make([]string, 0, len(actor.Grants))
+			for _, g := range actor.Grants {
+				if g.ScopeKind == "all" {
+					allScopeRoleIDs = append(allScopeRoleIDs, g.Role)
 				}
+			}
+			if !idx.Flatten(allScopeRoleIDs).Covers(targetPerms) {
+				return nil, huma.Error403Forbidden("act-as requires all-scope authority over the target's capabilities; use view-as instead")
 			}
 		}
 		mins := in.Body.DurationMinutes
