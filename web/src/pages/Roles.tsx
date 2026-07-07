@@ -1,6 +1,5 @@
 import { For, Show, createMemo } from "solid-js";
 import { useQuery } from "@tanstack/solid-query";
-import Page from "../components/Page";
 import { type Role, ROLES_KEY, listRoles } from "../lib/principals";
 import { describeError } from "../lib/format";
 
@@ -111,13 +110,9 @@ export default function Roles() {
   const ordered = createMemo(() => [...(roles.data ?? [])].sort((a, b) => tierRank(a.id) - tierRank(b.id) || a.id.localeCompare(b.id)));
 
   return (
-    <Page title="Roles">
-      <p class="mb-4 text-sm text-base-content/60">
-        The roles a grant can assign. A role is a bundle of <span class="font-data">resource:action</span> permissions;
-        permissions are additive and inherit, and every role reads what it can act on (the read floor). These are
-        the built-in roles; custom roles are coming.
-      </p>
-
+    // No page H1 or subtitle: the top bar labels the page (see Page.tsx). The role
+    // cards teach the permission model themselves (they render the real seeded roles).
+    <div class="og-stack flex flex-col">
       <Show when={roles.error}>
         <div role="alert" class="alert alert-error alert-soft mb-4 text-sm"><span>{describeError(roles.error)}</span></div>
       </Show>
@@ -127,6 +122,6 @@ export default function Roles() {
           {(r) => <RoleCard role={r} />}
         </For>
       </div>
-    </Page>
+    </div>
   );
 }

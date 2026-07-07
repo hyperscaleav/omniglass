@@ -1,6 +1,5 @@
 import { For, Show, createMemo, createSignal } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
-import Page from "../components/Page";
 import GrantBuilder from "../components/GrantBuilder";
 import type { TreeNode } from "../lib/treeselect";
 import type { ExistingGrant, GrantRef, ScopeOp } from "../lib/grantdraft";
@@ -49,14 +48,14 @@ export default function Users() {
   const initials = (p: Principal) => principalName(p).slice(0, 2).toUpperCase();
 
   return (
-    <Page title="Users">
-      <div class="mb-4 flex items-center gap-3">
-        <p class="text-sm text-base-content/60">Every principal that can authenticate: operators and service accounts, with the roles granted to each.</p>
-        <span class="flex-1" />
-        <Show when={can(me.data, "principal", "create")}>
+    // No page H1 or subtitle: the top bar labels the page (see Page.tsx). The
+    // create action rides a compact rail at the top of the content.
+    <div class="og-stack flex flex-col">
+      <Show when={can(me.data, "principal", "create")}>
+        <div class="flex justify-end">
           <button class="btn btn-action btn-sm gap-1.5" onClick={() => setCreateOpen(true)}><Plus size={14} /> New user</button>
-        </Show>
-      </div>
+        </div>
+      </Show>
 
       <Show when={principals.error}>
         <div role="alert" class="alert alert-error alert-soft mb-4 text-sm"><span>{describeError(principals.error)}</span></div>
@@ -195,7 +194,7 @@ export default function Users() {
           }}
         />
       </Show>
-    </Page>
+    </div>
   );
 }
 
