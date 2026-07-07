@@ -1,0 +1,71 @@
+// Native Omniglass telemetry wire format. A node ships a collected batch as an
+// Event (protobuf) over JetStream to og.v1.telemetry.<node>; the server's ingest
+// consumer decodes it, binds the owner from the task's interface, and writes the
+// typed datapoints. This is the platform's own wire (not OTLP): it fits the
+// datapoint taxonomy directly. Checkpoint 3 carries ONLY the Event and Datapoint
+// messages; there is no gRPC service (the Event is a NATS message, not an RPC).
+
+syntax = "proto3";
+
+package og.v1;
+
+option go_package = "github.com/hyperscaleav/omniglass/proto/og/v1;ogv1";
+
+import "google/protobuf/timestamp.proto";
+
+// Event is one batch of measurements a task collected, already normalized to the
+// platform's datapoint-name vocabulary. The node stamps NO component identity:
+// the server binds the owner at ingest from the task's interface (task_id ->
+// interface -> component). The node's only identity assertion is the subject (its
+// own name, carried as node_id) plus the task_id.
+message Event {
+  // task_id is the identity of the task that produced this batch. The server
+  // resolves the owner (and confines the node to its own tasks) from it.
+  string task_id = 1;
+
+  // node_id is the edge process that ran the task. Provenance for "where did this
+  // run"; the authoritative node identity is the publishing subject.
+  string node_id = 2;
+
+  // ts is the task-side timestamp for the batch. Per-datapoint Datapoint.ts
+  // overrides this when set.
+  google.protobuf.Timestamp ts = 3;
+
+  // labels are batch-level dimensional metadata common to every datapoint. Not
+  // persisted in checkpoint 3 (only the typed datapoint row lands).
+  map<string, string> labels = 4;
+
+  // datapoints is the observations in this batch (a tcp probe carries tcp.open
+  // and, when open, tcp.connect_time).
+  repeated Datapoint datapoints = 5;
+
+  // raw is the original wire payload, preserved verbatim for replay. Empty for
+  // the inline tcp probe (no protocol payload). Raw-Event persistence is deferred
+  // to a later checkpoint.
+  bytes raw = 6;
+}
+
+// Datapoint is one observation: a registry-resolved name plus a typed value. The
+// registry (datapoint_type) says the kind and value type; the ingest consumer
+// validates the name (reject-not-project) before writing.
+message Datapoint {
+  // name is the canonical datapoint name (e.g. "tcp.open"). Validated against
+  // datapoint_type at ingest; an unregistered name is dropped.
+  string name = 1;
+
+  // value carries the observation. The oneof keeps the wire compact and typed.
+  // The tcp probe populates double_value.
+  oneof value {
+    int64 int_value = 2;
+    double double_value = 3;
+    string string_value = 4;
+    bytes json_value = 5;
+  }
+
+  // ts is the per-datapoint timestamp; defaults to Event.ts when unset.
+  google.protobuf.Timestamp ts = 6;
+
+  // labels are datapoint-specific dimensional metadata (e.g. the reason). Not
+  // persisted in checkpoint 3.
+  map<string, string> labels = 7;
+}

@@ -1,7 +1,7 @@
 # Local dev loop + the build/run flow for the single binary. Production deploy
 # is BYO Postgres; tests use ephemeral testcontainer Postgres.
 
-.PHONY: build build-web web image gen gen-web test test-short test-e2e tidy up down dev release-plan release-apply release-snapshot
+.PHONY: build build-web web image gen gen-proto gen-web test test-short test-e2e tidy up down dev release-plan release-apply release-snapshot
 
 # Build the single binary (no console embedded; serves the build-the-console
 # placeholder under /web).
@@ -32,10 +32,18 @@ image:
 # (web/src/api/schema.gen.ts). The spec is the seam every downstream client is
 # generated from. Run after any API change; the results are committed and
 # reviewed like code.
-gen:
+gen: gen-proto
 	go run ./cmd/openapigen
 	go run ./cmd/cligen
 	cd web && npm install && npm run gen:api
+
+# Regenerate the protobuf telemetry wire (proto/og/v1/event.pb.go) from its
+# .proto source. protoc 34.1 must be on PATH and protoc-gen-go v1.36.11 installed
+# (go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.11). The Event is
+# a NATS message, not a gRPC service, so no protoc-gen-go-grpc. Output is committed
+# and reviewed like code; keep protoc + plugin pinned so the bytes are stable.
+gen-proto:
+	PATH="$(shell go env GOPATH)/bin:$$PATH" protoc --go_out=. --go_opt=paths=source_relative proto/og/v1/event.proto
 
 # Regenerate just the typed SPA client from the committed OpenAPI. Requires node.
 gen-web:
