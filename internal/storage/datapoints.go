@@ -70,7 +70,7 @@ func (p *PG) InsertMetricDatapoints(ctx context.Context, evs []MetricDatapointEv
 	for _, ev := range evs {
 		col, err := ownerColumn(ev.OwnerKind)
 		if err != nil {
-			return err
+			return fmt.Errorf("storage: datapoint %s/%s: %w", ev.OwnerID, ev.Key, err)
 		}
 		ts := ev.TS
 		if ts.IsZero() {
