@@ -13,6 +13,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 )
 
 // Config configures the embedded NATS server. Port -1 binds an ephemeral port
@@ -30,6 +31,7 @@ type Server struct {
 	nc            *nats.Conn
 	store         Store
 	subs          []*nats.Subscription
+	consumeCtx    jetstream.ConsumeContext // the telemetry durable consumer's pull loop
 	internalToken string
 	ownStoreDir   string // non-empty when the Server created (and must clean) it
 }
@@ -125,6 +127,12 @@ func (s *Server) subscribe() error {
 		return fmt.Errorf("bus: subscribe heartbeat: %w", err)
 	}
 	s.subs = append(s.subs, wl, hb)
+
+	// The telemetry ingest path: a JetStream stream + durable consumer over the
+	// same internal client. It carries the node -> server datapoint flow.
+	if err := s.startTelemetryConsumer(); err != nil {
+		return fmt.Errorf("bus: start telemetry consumer: %w", err)
+	}
 	return nil
 }
 
@@ -156,6 +164,11 @@ func (s *Server) ClientURL() string { return s.ns.ClientURL() }
 func (s *Server) Shutdown() {
 	for _, sub := range s.subs {
 		_ = sub.Unsubscribe()
+	}
+	// Stop the telemetry consumer's pull loop before closing the client it runs on.
+	if s.consumeCtx != nil {
+		s.consumeCtx.Stop()
+		s.consumeCtx = nil
 	}
 	if s.nc != nil {
 		s.nc.Close()

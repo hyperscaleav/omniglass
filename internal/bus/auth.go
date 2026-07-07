@@ -17,6 +17,12 @@ type Store interface {
 	AuthenticateNode(ctx context.Context, name, tokenHashHex string) (bool, error)
 	NodeWorklist(ctx context.Context, name string) (storage.Worklist, error)
 	RecordHeartbeat(ctx context.Context, name string) error
+	// The telemetry ingest consumer surface: resolve+confine a task's owner,
+	// snapshot the datapoint registry (reject-not-project), and write the typed
+	// metric rows through cp1's insert path.
+	ResolveTaskOwner(ctx context.Context, taskID, nodeName string) (storage.TaskOwner, bool, error)
+	ListDatapointTypes(ctx context.Context) ([]storage.DatapointType, error)
+	InsertMetricDatapoints(ctx context.Context, evs []storage.MetricDatapointEvent) error
 }
 
 // nodeAuth implements server.Authentication (the in-process

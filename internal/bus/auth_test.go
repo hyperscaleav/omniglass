@@ -26,6 +26,15 @@ func (f fakeStore) NodeWorklist(context.Context, string) (storage.Worklist, erro
 	return storage.Worklist{}, nil
 }
 func (f fakeStore) RecordHeartbeat(context.Context, string) error { return nil }
+func (f fakeStore) ResolveTaskOwner(context.Context, string, string) (storage.TaskOwner, bool, error) {
+	return storage.TaskOwner{}, false, nil
+}
+func (f fakeStore) ListDatapointTypes(context.Context) ([]storage.DatapointType, error) {
+	return nil, nil
+}
+func (f fakeStore) InsertMetricDatapoints(context.Context, []storage.MetricDatapointEvent) error {
+	return nil
+}
 
 // fakeClientAuth is a minimal server.ClientAuthentication that carries the
 // presented options and captures the RegisterUser call.

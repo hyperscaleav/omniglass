@@ -160,6 +160,9 @@ func (UnimplementedGateway) RecordHeartbeat(context.Context, string) error { ret
 func (UnimplementedGateway) NodeWorklist(context.Context, string) (Worklist, error) {
 	return Worklist{}, nil
 }
+func (UnimplementedGateway) ResolveTaskOwner(context.Context, string, string) (TaskOwner, bool, error) {
+	return TaskOwner{}, false, nil
+}
 func (UnimplementedGateway) GetNode(context.Context, string, scope.Set) (*Node, error) {
 	return nil, nil
 }
