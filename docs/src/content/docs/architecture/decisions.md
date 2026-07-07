@@ -48,7 +48,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0011](#adr-0011-grant-scope-is-an-operator-not-a-boolean-modifier) | 2026-07-06 | Accepted | Generalize the `exclude_root` boolean into a `scope_op` operator (`subtree` / `subtree_excl_root` / `self`), a flat enum, not a predicate-expression tree |
 | [ADR-0012](#adr-0012-owner-accounts-are-un-impersonatable-impersonation-stays-capability-gated-not-scope-intersected) | 2026-07-07 | Accepted | Owner accounts are un-impersonatable by anyone; impersonate stays swept by `principal:*`; drop act-as scope intersection (#101) |
 | [ADR-0013](#adr-0013-a-grant-cannot-confer-capabilities-the-granter-lacks) | 2026-07-07 | Accepted | Grant creation is refused when the granted role's capabilities exceed the granter's all-scope capabilities (admin cannot self-promote to owner) |
-| [ADR-0014](#adr-0014-node-enrollment-is-a-standalone-table-with-static-per-connection-nats-subject-permissions) | 2026-07-07 | Accepted | A node is a standalone `node` table (not a `principal`), and per-node NATS isolation is static per-connection subject permissions via an in-process auth callback; nkey/JWT deferred |
+| [ADR-0016](#adr-0016-node-enrollment-is-a-standalone-table-with-static-per-connection-nats-subject-permissions) | 2026-07-07 | Accepted | A node is a standalone `node` table (not a `principal`), and per-node NATS isolation is static per-connection subject permissions via an in-process auth callback; nkey/JWT deferred |
 
 ## Entries
 
@@ -286,7 +286,7 @@ below from the project's history. From here it grows one slice at a time.
 - **Refines:** [ADR-0010](#adr-0010-impersonation-is-a-session-not-a-credential-guarded-by-capability-cover) (reuses its capability-cover primitive on the grant path).
 - **Closes the gap:** issue [#109](https://github.com/hyperscaleav/omniglass/issues/109).
 
-### ADR-0014: Node enrollment is a standalone table with static per-connection NATS subject permissions
+### ADR-0016: Node enrollment is a standalone table with static per-connection NATS subject permissions
 
 - **Date:** 2026-07-07 | **Status:** Accepted | **Pages:** [nodes](/architecture/nodes/), [identity and access](/architecture/identity-access/)
 - **Decision:** The collection slice's node runtime ships with three deliberate calls that diverge from the
