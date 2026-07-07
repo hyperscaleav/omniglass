@@ -7,11 +7,18 @@
 -- the estate address (name), not the uuid. reject-not-project is enforced in the
 -- app, so metric_datapoint.key has no FK to datapoint_type.
 
--- The edge runtime. Keyed by name; a node holds no config.
+-- The edge runtime is a first-class principal of kind='node' (alongside human
+-- and service), so this is its 1:1 per-kind detail table keyed by principal_id.
+-- name is the estate address the collection FKs reference (not null unique), so
+-- interface/task/metric_datapoint keep resolving a node by name. The enrollment
+-- secret is a bearer credential ROW on the principal (see internal/storage), not
+-- a column here. enrolled_at is stamped on the first claim.
 create table if not exists node (
-    name              text        primary key,
+    principal_id      uuid        primary key references principal (id) on delete cascade,
+    name              text        not null unique,
     description       text        not null default '',
     last_heartbeat_at timestamptz,
+    enrolled_at       timestamptz,
     labels            jsonb       not null default '{}'::jsonb,
     created_at        timestamptz not null default now(),
     updated_at        timestamptz not null default now()

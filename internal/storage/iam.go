@@ -161,12 +161,15 @@ type Principal struct {
 	Active  bool
 	Human   *HumanProfile
 	Service *ServiceProfile
+	Node    *NodeProfile
 	Grants  []Grant
 }
 
-// HumanProfile and ServiceProfile carry the kind-specific attributes.
+// HumanProfile, ServiceProfile, and NodeProfile carry the kind-specific
+// attributes. A node's operator-facing label is its name (the estate address).
 type HumanProfile struct{ Username, Email, DisplayName string }
 type ServiceProfile struct{ Label string }
+type NodeProfile struct{ Name string }
 
 // Grant is one (role x scope) pairing on a principal, addressable by its id (so
 // the admin surface can revoke a specific one).
@@ -855,6 +858,13 @@ func (p *PG) loadPrincipal(ctx context.Context, pr *Principal) error {
 			return fmt.Errorf("storage: load service: %w", err)
 		}
 		pr.Service = &s
+	case "node":
+		var n NodeProfile
+		if err := p.pool.QueryRow(ctx,
+			`select name from node where principal_id = $1`, pr.ID).Scan(&n.Name); err != nil {
+			return fmt.Errorf("storage: load node: %w", err)
+		}
+		pr.Node = &n
 	}
 
 	rows, err := p.pool.Query(ctx,

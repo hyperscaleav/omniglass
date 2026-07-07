@@ -2,7 +2,7 @@ package storage
 
 import (
 	"context"
-	"crypto/subtle"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"time"
@@ -22,9 +22,12 @@ var (
 	ErrEnrollmentInvalid = errors.New("storage: enrollment token invalid")
 )
 
-// Node is the edge runtime's server-side record. EnrolledAt is set the first
-// time the node claims its identity; Enrolled is a convenience derived from it.
+// Node is the edge runtime's server-side record: the detail row of its
+// kind='node' principal. PrincipalID is that principal's id. EnrolledAt is set
+// the first time the node claims its identity; Enrolled is a convenience derived
+// from it.
 type Node struct {
+	PrincipalID     string
 	Name            string
 	Description     string
 	LastHeartbeatAt *time.Time
@@ -61,20 +64,21 @@ type Worklist struct {
 	ConfigGeneration int64
 }
 
-const nodeCols = `name, description, last_heartbeat_at, enrolled_at, created_at, updated_at`
+const nodeCols = `principal_id, name, description, last_heartbeat_at, enrolled_at, created_at, updated_at`
 
 func scanNode(row pgx.Row) (*Node, error) {
 	var n Node
-	if err := row.Scan(&n.Name, &n.Description, &n.LastHeartbeatAt, &n.EnrolledAt, &n.CreatedAt, &n.UpdatedAt); err != nil {
+	if err := row.Scan(&n.PrincipalID, &n.Name, &n.Description, &n.LastHeartbeatAt, &n.EnrolledAt, &n.CreatedAt, &n.UpdatedAt); err != nil {
 		return nil, err
 	}
 	n.Enrolled = n.EnrolledAt != nil
 	return &n, nil
 }
 
-// CreateNode inserts a node, writing the audit row in the same transaction. A
-// node is estate-wide, so creation requires an all create scope (like a
-// principal, unlike a tree-scoped location/system/component).
+// CreateNode inserts a node as a kind='node' principal plus its detail row,
+// writing the audit row in the same transaction (mirroring the human/service
+// create). A node is estate-wide, so creation requires an all create scope (like
+// a principal, unlike a tree-scoped location/system/component).
 func (p *PG) CreateNode(ctx context.Context, actorID string, spec NodeSpec, create scope.Set) (*Node, error) {
 	if !create.All {
 		return nil, ErrNodeForbidden
@@ -85,10 +89,14 @@ func (p *PG) CreateNode(ctx context.Context, actorID string, spec NodeSpec, crea
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	var pid string
+	if err := tx.QueryRow(ctx, `insert into principal (kind) values ('node') returning id`).Scan(&pid); err != nil {
+		return nil, fmt.Errorf("storage: create node principal: %w", err)
+	}
 	n, err := scanNode(tx.QueryRow(ctx, `
-		insert into node (name, description)
-		values ($1, $2)
-		returning `+nodeCols, spec.Name, spec.Description))
+		insert into node (principal_id, name, description)
+		values ($1, $2, $3)
+		returning `+nodeCols, pid, spec.Name, spec.Description))
 	if err != nil {
 		return nil, mapNodeWriteErr(err)
 	}
@@ -101,12 +109,19 @@ func (p *PG) CreateNode(ctx context.Context, actorID string, spec NodeSpec, crea
 	return n, nil
 }
 
-// SetEnrollmentToken stores the hex sha256 of a freshly minted enrollment token
-// (the cleartext is shown once by the API and never stored), audited. Requires an
-// all action scope.
+// SetEnrollmentToken installs the node's enrollment secret as a bearer
+// credential ROW on its principal (the same machinery a service bearer token
+// uses), taking the hex sha256 of a freshly minted token (the cleartext is shown
+// once by the API and never stored). Re-enrolling replaces any existing bearer
+// credential, so the previous token stops working. Audited. Requires an all
+// action scope.
 func (p *PG) SetEnrollmentToken(ctx context.Context, actorID, name, tokenHashHex string, action scope.Set) (*Node, error) {
 	if !action.All {
 		return nil, ErrNodeForbidden
+	}
+	hash, err := hex.DecodeString(tokenHashHex)
+	if err != nil {
+		return nil, fmt.Errorf("storage: set enrollment token %q: bad hash: %w", name, err)
 	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -120,10 +135,22 @@ func (p *PG) SetEnrollmentToken(ctx context.Context, actorID, name, tokenHashHex
 	} else if err != nil {
 		return nil, fmt.Errorf("storage: load node %q: %w", name, err)
 	}
+	// Replace any prior bearer credential so a re-enroll invalidates the old
+	// token, then install the new one. The secret is stored only as its hash; the
+	// prefix is the node name, a non-secret locator for scanners and audit.
+	if _, err := tx.Exec(ctx,
+		`delete from credential where principal_id = $1 and kind = 'bearer'`, before.PrincipalID); err != nil {
+		return nil, fmt.Errorf("storage: clear node credential %q: %w", name, err)
+	}
+	if _, err := tx.Exec(ctx,
+		`insert into credential (principal_id, kind, secret_hash, prefix) values ($1, 'bearer', $2, $3)`,
+		before.PrincipalID, hash, name); err != nil {
+		return nil, fmt.Errorf("storage: set node credential %q: %w", name, err)
+	}
 	after, err := scanNode(tx.QueryRow(ctx, `
-		update node set enrollment_token = $2, updated_at = now()
+		update node set updated_at = now()
 		where name = $1
-		returning `+nodeCols, name, tokenHashHex))
+		returning `+nodeCols, name))
 	if err != nil {
 		return nil, fmt.Errorf("storage: set enrollment token %q: %w", name, err)
 	}
@@ -139,25 +166,24 @@ func (p *PG) SetEnrollmentToken(ctx context.Context, actorID, name, tokenHashHex
 }
 
 // ClaimNode is the node-facing exchange: the node presents its enrollment token,
-// and a hash match sets enrolled_at (first claim) and returns the node. No scope:
-// the presented token is the authentication. A mismatch or an unset token is
-// ErrEnrollmentInvalid; an unknown node is also ErrEnrollmentInvalid (a claim
-// must not disclose which nodes exist).
+// and a bearer-credential match sets enrolled_at (first claim) and returns the
+// node. No scope: the presented token is the authentication. A mismatch, an
+// unenrolled node, or an unknown node is ErrEnrollmentInvalid (a claim must not
+// disclose which nodes exist).
 func (p *PG) ClaimNode(ctx context.Context, name, tokenHashHex string) (*Node, error) {
-	var stored *string
-	if err := p.pool.QueryRow(ctx, `select enrollment_token from node where name = $1`, name).Scan(&stored); errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrEnrollmentInvalid
-	} else if err != nil {
-		return nil, fmt.Errorf("storage: claim node %q: %w", name, err)
+	pr, err := p.authenticateNodeCredential(ctx, name, tokenHashHex)
+	if err != nil {
+		return nil, err
 	}
-	if stored == nil || subtle.ConstantTimeCompare([]byte(*stored), []byte(tokenHashHex)) != 1 {
+	if pr == nil {
 		return nil, ErrEnrollmentInvalid
 	}
-	// coalesce keeps the original enrolled_at on a re-claim (idempotent).
+	// coalesce keeps the original enrolled_at on a re-claim (idempotent). Keyed by
+	// the resolved principal id, so it stamps exactly the node that authenticated.
 	n, err := scanNode(p.pool.QueryRow(ctx, `
 		update node set enrolled_at = coalesce(enrolled_at, now()), updated_at = now()
-		where name = $1
-		returning `+nodeCols, name))
+		where principal_id = $1
+		returning `+nodeCols, pr.ID))
 	if err != nil {
 		return nil, fmt.Errorf("storage: mark enrolled %q: %w", name, err)
 	}
@@ -165,17 +191,38 @@ func (p *PG) ClaimNode(ctx context.Context, name, tokenHashHex string) (*Node, e
 }
 
 // AuthenticateNode reports whether the presented token hash matches the node's
-// stored enrollment token. The NATS auth callback calls this to admit a node
-// connection; a non-match or unset token is a clean false, not an error.
+// bearer credential. The NATS auth callback calls this to admit a node
+// connection; a non-match, an unenrolled node, or an unknown node is a clean
+// false, not an error.
 func (p *PG) AuthenticateNode(ctx context.Context, name, tokenHashHex string) (bool, error) {
-	var stored *string
-	err := p.pool.QueryRow(ctx, `select enrollment_token from node where name = $1`, name).Scan(&stored)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return false, nil
-	} else if err != nil {
-		return false, fmt.Errorf("storage: authenticate node %q: %w", name, err)
+	pr, err := p.authenticateNodeCredential(ctx, name, tokenHashHex)
+	if err != nil {
+		return false, err
 	}
-	return stored != nil && subtle.ConstantTimeCompare([]byte(*stored), []byte(tokenHashHex)) == 1, nil
+	return pr != nil, nil
+}
+
+// authenticateNodeCredential resolves the presented token hash to a bearer
+// credential via the shared AuthenticateBearer helper and confirms the owning
+// principal is the node of that name. It returns a nil principal (no error) when
+// the hash matches no credential, the credential belongs to a non-node principal,
+// or the node name does not match, so callers cannot use it to enumerate nodes.
+func (p *PG) authenticateNodeCredential(ctx context.Context, name, tokenHashHex string) (*Principal, error) {
+	hash, err := hex.DecodeString(tokenHashHex)
+	if err != nil {
+		return nil, nil // a malformed hash matches nothing
+	}
+	pr, err := p.AuthenticateBearer(ctx, hash)
+	switch {
+	case errors.Is(err, ErrCredentialNotFound):
+		return nil, nil
+	case err != nil:
+		return nil, fmt.Errorf("storage: authenticate node %q: %w", name, err)
+	}
+	if pr.Kind != "node" || pr.Node == nil || pr.Node.Name != name {
+		return nil, nil
+	}
+	return pr, nil
 }
 
 // RecordHeartbeat stamps the node's last_heartbeat_at. Keyed by the node name the

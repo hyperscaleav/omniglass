@@ -46,11 +46,26 @@ func TestNodeGateway(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create node: %v", err)
 	}
-	if n.Name != "node-a" || n.Enrolled {
-		t.Fatalf("fresh node: want name node-a, not enrolled, got %+v", n)
+	if n.Name != "node-a" || n.Enrolled || n.PrincipalID == "" {
+		t.Fatalf("fresh node: want name node-a, not enrolled, with a principal id, got %+v", n)
 	}
 	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "node-a"}, all); !errors.Is(err, storage.ErrNodeExists) {
 		t.Fatalf("duplicate node: want ErrNodeExists, got %v", err)
+	}
+
+	// The node is a first-class principal of kind='node' (not a standalone island):
+	// its detail row's principal_id points to a principal row of that kind.
+	probe, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer probe.Close(ctx)
+	var kind string
+	if err := probe.QueryRow(ctx, `select kind from principal where id = $1`, n.PrincipalID).Scan(&kind); err != nil {
+		t.Fatalf("load node principal: %v", err)
+	}
+	if kind != "node" {
+		t.Fatalf("node principal kind = %q, want node", kind)
 	}
 
 	// Mint: store the token hash.
@@ -60,6 +75,17 @@ func TestNodeGateway(t *testing.T) {
 	}
 	if _, err := gw.SetEnrollmentToken(ctx, "", "ghost", hashHex(token), all); !errors.Is(err, storage.ErrNodeNotFound) {
 		t.Fatalf("mint unknown node: want ErrNodeNotFound, got %v", err)
+	}
+
+	// The enrollment secret is a bearer credential ROW on the node principal (the
+	// same machinery a service token uses), not a bespoke column.
+	var credKind string
+	if err := probe.QueryRow(ctx,
+		`select kind from credential where principal_id = $1`, n.PrincipalID).Scan(&credKind); err != nil {
+		t.Fatalf("load node credential: %v", err)
+	}
+	if credKind != "bearer" {
+		t.Fatalf("node credential kind = %q, want bearer", credKind)
 	}
 
 	// Authenticate (the NATS callback path): right hash true, wrong hash false.
