@@ -104,6 +104,43 @@ func (s Set) Allows(resource, action string) bool {
 	return false
 }
 
+// Covers reports whether this set grants everything the other set grants: for
+// every permission in other, this set permits it too. It is the impersonation
+// escalation guard (A may impersonate T only when A.Covers(T)), so it is
+// deliberately conservative with wildcards: a set of specific actions never
+// covers a "*" (allActions) entry, so a lesser admin cannot impersonate an owner
+// to gain the global wildcard. A resource "*" in other requires this set to grant
+// the action on every resource (an all-resource entry), which Allows models by
+// matching only "*" entries when the queried resource is "*".
+func (s Set) Covers(other Set) bool {
+	for _, e := range other.entries {
+		if e.allActions {
+			if !s.grantsAll(e.resource) {
+				return false
+			}
+			continue
+		}
+		for a := range e.actions {
+			if !s.Allows(e.resource, a) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// grantsAll reports whether the set grants every action on resource, which only
+// an allActions entry (on that resource or the "*" wildcard) can. A resource of
+// "*" therefore requires a "*:*" entry.
+func (s Set) grantsAll(resource string) bool {
+	for _, e := range s.entries {
+		if (e.resource == "*" || e.resource == resource) && e.allActions {
+			return true
+		}
+	}
+	return false
+}
+
 // Strings returns the raw permission strings (wildcard-expanded form is not
 // materialized), for the /auth/me hint list. Order is insertion order.
 func (s Set) Strings() []string {
