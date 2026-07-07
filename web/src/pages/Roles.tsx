@@ -1,8 +1,7 @@
 import { For, Show, createMemo } from "solid-js";
 import { useQuery } from "@tanstack/solid-query";
-import Page from "../components/Page";
-import { type Role, ROLES_KEY, listRoles } from "../lib/principals";
-import { describeError } from "../lib/format";
+import ListShell from "../components/ListShell";
+import { type Role, ROLES_KEY, listRoles, roleFilterKeys } from "../lib/principals";
 
 // Roles: the read-only catalog of roles, teaching the RBAC model against the real
 // seeded roles. Each card shows a role's display name, description, what it
@@ -82,7 +81,7 @@ function PermGrid(props: { perms: string[] }) {
 function RoleCard(props: { role: Role }) {
   const r = props.role;
   return (
-    <div class="rounded-box border border-base-300 bg-base-200/40 p-4">
+    <div class="rounded-box border border-base-300 bg-base-100 p-4">
       <div class="flex flex-wrap items-center gap-2">
         <h2 class="text-base font-semibold">{r.display_name || r.id}</h2>
         <span class="badge badge-ghost badge-sm font-data">{r.id}</span>
@@ -110,23 +109,23 @@ export default function Roles() {
   const roles = useQuery(() => ({ queryKey: ROLES_KEY, queryFn: () => listRoles() }));
   const ordered = createMemo(() => [...(roles.data ?? [])].sort((a, b) => tierRank(a.id) - tierRank(b.id) || a.id.localeCompare(b.id)));
 
+  // No in-page H1 or subtitle: the top bar labels the page, matching the inventory
+  // lists and Audit. The role cards teach the permission model themselves.
   return (
-    <Page title="Roles">
-      <p class="mb-4 text-sm text-base-content/60">
-        The roles a grant can assign. A role is a bundle of <span class="font-data">resource:action</span> permissions;
-        permissions are additive and inherit, and every role reads what it can act on (the read floor). These are
-        the built-in roles; custom roles are coming.
-      </p>
-
-      <Show when={roles.error}>
-        <div role="alert" class="alert alert-error alert-soft mb-4 text-sm"><span>{describeError(roles.error)}</span></div>
-      </Show>
-
-      <div class="grid gap-3">
-        <For each={ordered()} fallback={<p class="text-sm text-base-content/40">{roles.isLoading ? "Loading…" : "No roles."}</p>}>
-          {(r) => <RoleCard role={r} />}
-        </For>
-      </div>
-    </Page>
+    <ListShell<Role>
+      filterKeys={roleFilterKeys}
+      rows={ordered()}
+      placeholder="filter roles by name or permission"
+      error={roles.error}
+      errorLabel="Could not load roles"
+    >
+      {(filtered) => (
+        <div class="grid gap-3 p-3">
+          <For each={filtered()} fallback={<p class="text-sm text-base-content/40">No roles match.</p>}>
+            {(r) => <RoleCard role={r} />}
+          </For>
+        </div>
+      )}
+    </ListShell>
   );
 }

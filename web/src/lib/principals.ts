@@ -1,4 +1,5 @@
 import { api } from "../api/client";
+import type { FilterKey } from "./predicate";
 
 // The principals data layer: thin typed wrappers over the generated client, so
 // the admin directory page stays declarative and unit-testable against a mocked
@@ -92,6 +93,34 @@ export async function listRoles(): Promise<Role[]> {
   if (error) throw error;
   return (data?.roles ?? []) as Role[];
 }
+
+// effectivePerms is what a role actually confers: the server-flattened set
+// (inheritance, wildcard, and the read floor resolved) when present, else the
+// declared permissions. This is the same set the Roles card renders.
+export function effectivePerms(r: Role): string[] {
+  return r.effective_permissions ?? r.permissions;
+}
+
+// permResources pulls the distinct resource heads a role grants (the `resource`
+// of each `resource:action` token, and `>` for the superuser tail), for the
+// permission facet's autocomplete catalog.
+function permResources(perms: string[]): string[] {
+  return perms.map((p) => (p === ">" ? ">" : p.split(":")[0]));
+}
+
+const uniqSorted = (xs: string[]): string[] => [...new Set(xs.filter(Boolean))].sort();
+
+// roleFilterKeys are the faceted-search fields for the Roles catalog, consumed by
+// the shared FilterBar/ListShell exactly as the inventory lists and the audit
+// trail are. `name` is the substring default (a bare term searches the display
+// name or id); `id` is exact; `permission` is a substring over the role's
+// effective permission strings, so an admin can find every role that grants, for
+// example, `audit`. Matching is client-side over the loaded rows via lib/predicate.
+export const roleFilterKeys: FilterKey<Role>[] = [
+  { key: "name", type: "string", hint: "substring", get: (r) => `${r.display_name ?? ""} ${r.id}`, values: (rows) => uniqSorted(rows.map((r) => r.display_name || r.id)) },
+  { key: "id", type: "string", hint: "exact", get: (r) => r.id, values: (rows) => uniqSorted(rows.map((r) => r.id)) },
+  { key: "permission", type: "string", hint: "substring", get: (r) => effectivePerms(r).join(" "), values: (rows) => uniqSorted(rows.flatMap((r) => permResources(effectivePerms(r)))) },
+];
 
 // The display name for a principal: a human's display name or username, a service
 // account's label, else the bare kind.

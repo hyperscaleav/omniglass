@@ -53,4 +53,11 @@ describe("Roles page", () => {
     // "viewer" appears as its own id badge AND in operator's inheritance.
     expect(getAllByText("viewer").length).toBeGreaterThanOrEqual(2);
   });
+
+  it("wraps the catalog in the shared ListShell filter bar", () => {
+    const { getByRole, getByPlaceholderText } = mount();
+    // The FilterBar combobox is present, so the catalog now wears the shell chrome.
+    expect(getByRole("combobox")).toBeTruthy();
+    expect(getByPlaceholderText("filter roles by name or permission")).toBeTruthy();
+  });
 });
