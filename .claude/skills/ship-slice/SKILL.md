@@ -42,12 +42,18 @@ Each is a gate; a red one blocks the ship.
      command**: if `make gen` touched `internal/cli/api_gen.go`, the CLI guide is in scope (this
      is how the password and profile commands shipped undocumented);
    - a changed **console surface** (`web/src`) to the console guide (`guides/console.md`) plus the
-     live screenshots (item 7).
-5. **Review.** A reviewer pass over the diff (`code-review` or `cavecrew-reviewer`), findings
+     live screenshots (item 8).
+5. **Dev seed.** If the slice adds a new operator entity (a Storage Gateway create plus a surface
+   for it), it adds example rows for that entity to the dev seed (`internal/devseed/fixtures.yaml`),
+   so `make dev` comes up populated and nobody hand-creates locations, users, or grants to exercise
+   the feature. The seed stays idempotent: a re-run of `make dev` changes nothing. `n/a` when the
+   slice adds no new entity. This is the dev-only example estate, never the boot seed
+   (`internal/seed`, ship-with reference data that also runs in production).
+6. **Review.** A reviewer pass over the diff (`code-review` or `cavecrew-reviewer`), findings
    addressed. Add a `security-review` lens if the slice touches authz, secrets, the edge, or an
    invariant. Verify behavior to the outcome line, not just call sites.
-6. **Scope honesty.** Every thin cut is documented; every deferral is a filed issue.
-7. **Evidence in the PR.** Paste the *actual* fresh test output (the tail of `make test`, plus
+7. **Scope honesty.** Every thin cut is documented; every deferral is a filed issue.
+8. **Evidence in the PR.** Paste the *actual* fresh test output (the tail of `make test`, plus
    web tests if touched) into the PR body, not a "they pass" claim. For any operator-facing
    change, include **screenshots driven live** (e.g. against `make dev`). Capture them headless
    with `node web/e2e/shot.mjs <url> <out.png> [--token <og-token>] [--click <sel>]...
@@ -81,6 +87,7 @@ Proof (ran fresh)
   Tiers:     unit X / integration Y / e2e Z
   make gen:  clean
 Visual:    <screenshots in the PR for any UI surface | n/a>
+Dev seed:  <new-entity example rows added to internal/devseed | n/a>
 
 Docs:      <what shipped; arch-of-record consistent | divergence note>
 Status:    <pages advanced (page: Design->Partial); status.mdx entry; ADR-#### if diverged>

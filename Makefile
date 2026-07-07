@@ -116,6 +116,7 @@ down:
 dev: up build-web
 	@./bin/omniglass bootstrap dev --password dev >/dev/null 2>&1 || true
 	@./bin/omniglass set-password dev dev >/dev/null 2>&1 || true
+	@./bin/omniglass seed-dev || true
 	@echo "console: http://localhost:8080/web"
 	@echo "  sign in with username 'dev' and password 'dev', or paste a bearer token:"
 	@./bin/omniglass token dev
