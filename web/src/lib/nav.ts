@@ -63,7 +63,7 @@ export const navItems: NavItem[] = [
       { label: "Users", path: "/users", live: true, resource: "principal", hint: "Users and service accounts: status, grants, and tokens." },
       { label: "Roles", path: "/roles", live: true, resource: "role", hint: "The built-in roles: what each permission bundle grants, and how they inherit." },
       { label: "Groups", path: "/groups", hint: "User groups: membership and grants." },
-      { label: "Audit", path: "/audit", hint: "The audit trail of every privileged mutation." },
+      { label: "Audit", path: "/audit", live: true, resource: "audit", hint: "The audit trail of every privileged action and sign-in." },
     ],
   },
 ];

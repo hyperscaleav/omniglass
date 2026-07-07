@@ -4,6 +4,26 @@
  */
 
 export interface paths {
+    "/audit-log": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List audit-trail events
+         * @description Recent audit-trail events, newest first, each with the actor and, for an impersonated action, the real actor behind it. Read-only; gated by audit:read.
+         */
+        get: operations["list-audit-log"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/login": {
         parameters: {
             query?: never;
@@ -496,6 +516,26 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AuditEventBody: {
+            actor?: string;
+            actor_name?: string;
+            id: string;
+            real_actor?: string;
+            real_actor_name?: string;
+            resource: string;
+            resource_id?: string;
+            ts: string;
+            verb: string;
+        };
+        AuditListOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/AuditListOutputBody.json
+             */
+            readonly $schema?: string;
+            events: components["schemas"]["AuditEventBody"][] | null;
+        };
         AuthStatusOutputBody: {
             /**
              * Format: uri
@@ -948,6 +988,44 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    "list-audit-log": {
+        parameters: {
+            query?: {
+                /** @description Max rows to return, newest first (default 100, capped at 500) */
+                limit?: number;
+                /** @description Filter to one resource kind (e.g. auth, principal_grant) */
+                resource?: string;
+                /** @description Filter to one verb (e.g. login, create) */
+                verb?: string;
+                /** @description Only events strictly older than this RFC3339 timestamp (paging backward) */
+                before?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditListOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     login: {
         parameters: {
             query?: never;

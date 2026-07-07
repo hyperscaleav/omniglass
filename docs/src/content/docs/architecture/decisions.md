@@ -48,6 +48,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0011](#adr-0011-grant-scope-is-an-operator-not-a-boolean-modifier) | 2026-07-06 | Accepted | Generalize the `exclude_root` boolean into a `scope_op` operator (`subtree` / `subtree_excl_root` / `self`), a flat enum, not a predicate-expression tree |
 | [ADR-0012](#adr-0012-owner-accounts-are-un-impersonatable-impersonation-stays-capability-gated-not-scope-intersected) | 2026-07-07 | Accepted | Owner accounts are un-impersonatable by anyone; impersonate stays swept by `principal:*`; drop act-as scope intersection (#101) |
 | [ADR-0013](#adr-0013-a-grant-cannot-confer-capabilities-the-granter-lacks) | 2026-07-07 | Accepted | Grant creation is refused when the granted role's capabilities exceed the granter's all-scope capabilities (admin cannot self-promote to owner) |
+| [ADR-0014](#adr-0014-the-audit-trail-is-a-sensitive-read-not-reached-by-a-partial-global-wildcard) | 2026-07-07 | Accepted | The audit trail is admin/owner-only: `audit` is a sensitive resource that `*:read` does not confer, only an explicit `audit:read` or `*:*` |
 
 ## Entries
 
@@ -284,3 +285,23 @@ below from the project's history. From here it grows one slice at a time.
   tier); tracked with that slice.
 - **Refines:** [ADR-0010](#adr-0010-impersonation-is-a-session-not-a-credential-guarded-by-capability-cover) (reuses its capability-cover primitive on the grant path).
 - **Closes the gap:** issue [#109](https://github.com/hyperscaleav/omniglass/issues/109).
+
+### ADR-0014: The audit trail is a sensitive read, not reached by a partial global wildcard
+
+- **Date:** 2026-07-07 | **Status:** Accepted | **Pages:** [identity and access](/architecture/identity-access/)
+- **Decision:** Reading the audit trail requires the `audit:read` capability, and `audit` is a **sensitive
+  resource**: a partial global wildcard (`*:<action>`, e.g. the `viewer` role's `*:read`) does **not** confer
+  it. Only an explicit grant on the resource (`audit:read`, held by `admin`) or the full `*:*` superuser
+  wildcard (held by `owner`) reaches it. So the audit trail is admin/owner-only; a read-only user does not see
+  logins, impersonations, and access changes (issue [#116](https://github.com/hyperscaleav/omniglass/issues/116)).
+- **Context:** The `:read` floor and the `*:read` viewer role mean "read everything," which is right for the
+  estate but wrong for the security audit trail: exposing who impersonated whom and every access change to any
+  read-only operator leaks security posture. Rather than gate the route with a non-read action (a hack), `rbac`
+  gains a small **sensitive-resource** set: in `Set.Allows`, a `*` resource entry that is not `allActions` skips
+  a sensitive resource, so `*:read` no longer matches it while `*:*` still does and an explicit `audit:read`
+  still does. This is the narrow, honest version of the "sensitive permission" idea (distinct from the
+  impersonate call in [ADR-0012](#adr-0012-owner-accounts-are-un-impersonatable-impersonation-stays-capability-gated-not-scope-intersected),
+  where the `principal:*` **resource** wildcard legitimately confers `principal:impersonate`; here it is the
+  **global** `*:read` wildcard over a sensitive **read**). The set is extensible if other sensitive reads
+  appear (it holds only `audit` today).
+- **Closes the gap:** issue [#116](https://github.com/hyperscaleav/omniglass/issues/116).

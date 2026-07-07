@@ -277,11 +277,22 @@ func (a *authenticator) loginHandler(ctx context.Context, in *loginInput) (*sess
 	pr, err := a.gw.AuthenticatePassword(ctx, in.Body.Username, in.Body.Password)
 	switch {
 	case errors.Is(err, storage.ErrBadCredentials):
+		// A wrong password on a REAL account is audited (attributed to that
+		// principal), a brute-force signal; an unknown username returns a nil
+		// principal and is not audited, so scanning cannot flood the log. Best
+		// effort: the login already failed, so an audit error does not change it.
+		if pr != nil {
+			_ = a.gw.WriteAuthEvent(ctx, pr.ID, "login_failed")
+		}
 		return nil, huma.Error401Unauthorized("invalid username or password")
 	case errors.Is(err, storage.ErrAccountDisabled):
 		// The password was correct but the account is disabled. A distinct 403 (not
 		// the generic 401) so the sign-in screen can explain it; only reachable with
-		// the right password, so it discloses nothing to an attacker without it.
+		// the right password, so it discloses nothing to an attacker without it. The
+		// denied attempt is audited (attributed to the disabled principal).
+		if pr != nil {
+			_ = a.gw.WriteAuthEvent(ctx, pr.ID, "login_denied")
+		}
 		return nil, huma.Error403Forbidden("account disabled")
 	case err != nil:
 		return nil, huma.Error500InternalServerError("login failed")
@@ -291,6 +302,9 @@ func (a *authenticator) loginHandler(ctx context.Context, in *loginInput) (*sess
 		return nil, huma.Error500InternalServerError("login failed")
 	}
 	if _, err := a.gw.IssueBearerCredential(ctx, pr.Human.Username, hash, prefix); err != nil {
+		return nil, huma.Error500InternalServerError("login failed")
+	}
+	if err := a.gw.WriteAuthEvent(ctx, pr.ID, "login"); err != nil {
 		return nil, huma.Error500InternalServerError("login failed")
 	}
 	return &sessionOutput{SetCookie: a.sessionCookie(token)}, nil
@@ -306,7 +320,13 @@ type logoutInput struct {
 // already-invalid session.
 func (a *authenticator) logoutHandler(ctx context.Context, in *logoutInput) (*sessionOutput, error) {
 	if tok, ok := sessionCookieToken(in.Cookie); ok {
-		_ = a.gw.RevokeBearer(ctx, auth.HashToken(tok))
+		hash := auth.HashToken(tok)
+		// Resolve the principal before revoking so the logout is attributed; a
+		// best-effort audit (logout must clear the cookie regardless).
+		if pr, err := a.gw.AuthenticateBearer(ctx, hash); err == nil {
+			_ = a.gw.WriteAuthEvent(ctx, pr.ID, "logout")
+		}
+		_ = a.gw.RevokeBearer(ctx, hash)
 	}
 	return &sessionOutput{SetCookie: a.clearedCookie()}, nil
 }

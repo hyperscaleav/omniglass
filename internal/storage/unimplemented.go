@@ -64,6 +64,10 @@ func (UnimplementedGateway) SetPrincipalActive(context.Context, string, string, 
 func (UnimplementedGateway) RevokeBearer(context.Context, []byte) error { return nil }
 func (UnimplementedGateway) AnyHuman(context.Context) (bool, error)     { return false, nil }
 func (UnimplementedGateway) ListRoles(context.Context) ([]Role, error) { return nil, nil }
+func (UnimplementedGateway) ListAuditLog(context.Context, AuditFilter) ([]AuditEntry, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) WriteAuthEvent(context.Context, string, string) error { return nil }
 func (UnimplementedGateway) UpsertLocationType(context.Context, LocationType) error {
 	return nil
 }
