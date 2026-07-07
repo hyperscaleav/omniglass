@@ -145,6 +145,11 @@ type Gateway interface {
 	UpsertInterfaceType(ctx context.Context, it InterfaceType) error
 	ListInterfaceTypes(ctx context.Context) ([]InterfaceType, error)
 
+	// The observed-metric sink. reject-not-project is applied by the caller
+	// (collection.Registry) before the write.
+	InsertMetricDatapoints(ctx context.Context, evs []MetricDatapointEvent) error
+	LatestMetric(ctx context.Context, componentName, key string) (*MetricDatapoint, error)
+
 	// Close releases the underlying connection pool. Idempotent at the pool
 	// level; call once on shutdown.
 	Close()

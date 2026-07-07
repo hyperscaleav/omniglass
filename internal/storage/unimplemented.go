@@ -138,4 +138,10 @@ func (UnimplementedGateway) UpsertInterfaceType(context.Context, InterfaceType) 
 func (UnimplementedGateway) ListInterfaceTypes(context.Context) ([]InterfaceType, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) InsertMetricDatapoints(context.Context, []MetricDatapointEvent) error {
+	return nil
+}
+func (UnimplementedGateway) LatestMetric(context.Context, string, string) (*MetricDatapoint, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) Close() {}
