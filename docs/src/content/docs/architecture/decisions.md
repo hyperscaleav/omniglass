@@ -48,7 +48,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0011](#adr-0011-grant-scope-is-an-operator-not-a-boolean-modifier) | 2026-07-06 | Accepted | Generalize the `exclude_root` boolean into a `scope_op` operator (`subtree` / `subtree_excl_root` / `self`), a flat enum, not a predicate-expression tree |
 | [ADR-0012](#adr-0012-owner-accounts-are-un-impersonatable-impersonation-stays-capability-gated-not-scope-intersected) | 2026-07-07 | Accepted | Owner accounts are un-impersonatable by anyone; impersonate stays swept by `principal:*`; drop act-as scope intersection (#101) |
 | [ADR-0013](#adr-0013-a-grant-cannot-confer-capabilities-the-granter-lacks) | 2026-07-07 | Accepted | Grant creation is refused when the granted role's capabilities exceed the granter's all-scope capabilities (admin cannot self-promote to owner) |
-| [ADR-0016](#adr-0016-node-enrollment-is-a-standalone-table-with-static-per-connection-nats-subject-permissions) | 2026-07-07 | Accepted | A node is a standalone `node` table (not a `principal`), and per-node NATS isolation is static per-connection subject permissions via an in-process auth callback; nkey/JWT deferred |
+| [ADR-0016](#adr-0016-a-node-is-a-kindnode-principal-with-an-interim-bearer-credential-and-static-per-connection-nats-subject-permissions) | 2026-07-07 | Accepted | A node is a `principal` of `kind=node` with a 1:1 detail table and a bearer `credential` row (interim shared secret), and per-node NATS isolation is static per-connection subject permissions via an in-process auth callback; nkey/JWT deferred |
 
 ## Entries
 
@@ -286,30 +286,36 @@ below from the project's history. From here it grows one slice at a time.
 - **Refines:** [ADR-0010](#adr-0010-impersonation-is-a-session-not-a-credential-guarded-by-capability-cover) (reuses its capability-cover primitive on the grant path).
 - **Closes the gap:** issue [#109](https://github.com/hyperscaleav/omniglass/issues/109).
 
-### ADR-0016: Node enrollment is a standalone table with static per-connection NATS subject permissions
+### ADR-0016: A node is a kind=node principal with an interim bearer credential and static per-connection NATS subject permissions
 
 - **Date:** 2026-07-07 | **Status:** Accepted | **Pages:** [nodes](/architecture/nodes/), [identity and access](/architecture/identity-access/)
-- **Decision:** The collection slice's node runtime ships with three deliberate calls that diverge from the
-  present-tense design, all reversible in later slices. (1) A node is its own `node` table (name PK, enrollment
-  columns), **not** a `principal` of `kind=node`; its credential lives on that row, not in `credential`. (2)
+- **Decision:** A node is a first-class `principal` of `kind='node'` with a 1:1 `node` detail table (keyed by
+  `principal_id`, alongside `human` and `service`), exactly as [identity and access](/architecture/identity-access/)
+  describes. Its `name` is `not null unique` on the detail table and stays the estate address the collection FKs
+  (`interface.node_name`, `task.node_name`, `metric_datapoint.node_id`) reference. The node runtime ships with
+  two deliberate calls that diverge from the present-tense design, both reversible in a later hardening slice.
+  (1) The node's credential is a **bearer `credential` row** on its principal, minted, stored (only as
+  `sha256`), and verified through the **same helpers a service bearer token uses** (`AuthenticateBearer`), and
+  the enrollment token **doubles as the node's NATS password** (a shared secret), rather than being a single-use
+  bootstrap exchanged for a distinct long-lived credential. The decentralized **nkey/JWT operator-account**
+  model that identity and access describes for nodes (a `nats` credential kind, a signed nonce, a JWT carrying
+  the node's subject permissions) is deferred; the `credential` kind CHECK is **not** widened for it here. (2)
   Per-node NATS isolation is **static per-connection subject permissions**: the embedded `nats-server` runs an
-  in-process `CustomClientAuthentication` callback that resolves each connecting node's credential and
-  registers a user whose publish/subscribe grants are scoped to that node's own `og.v1.*.<node>` subjects, so a
-  node cannot publish or pull as another. The decentralized **nkey/JWT operator-account** model that
-  [identity and access](/architecture/identity-access/) describes is deferred. (3) The enrollment token
-  **doubles as the node's NATS password** (a shared secret, stored only as a hex sha256), rather than being a
-  single-use bootstrap exchanged for a distinct long-lived credential.
+  in-process `CustomClientAuthentication` callback that resolves each connecting node by name, verifies its
+  bearer credential, and registers a user whose publish/subscribe grants are scoped to that node's own
+  `og.v1.*.<node>` subjects, so a node cannot publish or pull as another.
 - **Context:** Checkpoint 2 of the reachability slice needed a real, negatively-tested per-node isolation
   mechanic against an embedded server, without carrying the full JWT/nkey machinery a single slice should not.
   The auth-callback path adds per-node users **dynamically at enrollment time with no config reload**, which is
   the simplest mechanism that keeps the isolation invariant real: the negative test proves node A cannot use
-  node B's subjects, and a wrong credential is rejected at connect. The subject encodes the node name in its
-  last token and the callback grants only that node's subjects, so the subject **is** the transport isolation
-  boundary (the payload-owner admission fence is a later checkpoint). Modeling a node as its own table matches
-  the storage tier already shipped (checkpoint 1) and keeps the node lane off the human/service credential
-  path; folding nodes into `principal` and swapping the shared secret for per-node nkey/JWT are the tightening
-  a later hardening slice performs. JetStream is enabled on the server now (it boots and shuts down cleanly),
-  but the control-plane messages (worklist, heartbeat) are JSON over core NATS; the protobuf telemetry `Event`
-  over JetStream is the next checkpoint.
-- **Closes the gap:** the nkey/JWT node identity, the principal-backed node, and the single-use enrollment
-  token are tracked with the node-identity hardening slice.
+  node B's subjects (and a confused-deputy reply cannot forge another node's liveness), and a wrong credential
+  is rejected at connect. The subject encodes the node name in its last token and the callback grants only that
+  node's subjects, so the subject **is** the transport isolation boundary (the payload-owner admission fence is
+  a later checkpoint). Modeling the node as a `kind=node` principal (rather than the standalone table an earlier
+  checkpoint built) puts it on the shared identity spine from the start: it has a real `principal_id` so it can
+  be an audit actor, its credential rides the audited human/service machinery, and only the credential *scheme*
+  (interim bearer vs nkey/JWT) remains to tighten. JetStream is enabled on the server now (it boots and shuts
+  down cleanly), but the control-plane messages (worklist, heartbeat) are JSON over core NATS; the protobuf
+  telemetry `Event` over JetStream is the next checkpoint.
+- **Closes the gap:** the nkey/JWT node identity (the `nats` credential kind and the signed-nonce admission)
+  and the single-use enrollment token are tracked with the node-identity hardening slice.
