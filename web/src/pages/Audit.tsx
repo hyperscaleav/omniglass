@@ -13,9 +13,9 @@ import { describeError } from "../lib/format";
 // Colour a verb so the trail scans at a glance: destructive red, additive green,
 // auth blue, the rest neutral.
 const verbClass = (verb: string): string => {
-  if (verb === "delete") return "badge-soft badge-error";
+  if (verb === "delete" || verb === "login_failed") return "badge-soft badge-error";
   if (verb === "create") return "badge-soft badge-success";
-  if (verb === "update" || verb === "change_password") return "badge-soft badge-warning";
+  if (verb === "update" || verb === "change_password" || verb === "login_denied") return "badge-soft badge-warning";
   if (verb === "login" || verb === "logout") return "badge-soft badge-info";
   if (verb === "impersonate") return "badge-soft badge-primary";
   return "badge-ghost";

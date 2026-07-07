@@ -83,6 +83,28 @@ func TestAuditLogAPI(t *testing.T) {
 		t.Fatalf("no create-principal event in the audit log")
 	}
 
+	// A wrong password on a REAL account is audited as login_failed, attributed to
+	// that account; an attempt on an UNKNOWN username is not (no flood from scanning).
+	postLogin := func(user, pw string) {
+		b, _ := json.Marshal(map[string]string{"username": user, "password": pw})
+		r, e := http.Post(srv.URL+"/api/v1/auth/login", "application/json", bytes.NewReader(b))
+		if e == nil {
+			r.Body.Close()
+		}
+	}
+	postLogin("alice", "wrong-password")   // real account, wrong pw -> audited
+	postLogin("ghost", "whatever")         // unknown user -> not audited
+	failed := 0
+	for _, e := range list(ownerTok, "?verb=login_failed") {
+		failed++
+		if e.ActorName != "alice" {
+			t.Fatalf("login_failed event not attributed to alice: %+v", e)
+		}
+	}
+	if failed != 1 {
+		t.Fatalf("want exactly one login_failed (alice), got %d (an unknown-user attempt must not be audited)", failed)
+	}
+
 	// The resource filter narrows to auth events only.
 	authOnly := list(ownerTok, "?resource=auth")
 	if len(authOnly) == 0 {

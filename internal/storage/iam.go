@@ -261,13 +261,23 @@ func (p *PG) AuthenticatePassword(ctx context.Context, username, password string
 	if err != nil {
 		return nil, fmt.Errorf("storage: verify password: %w", err)
 	}
-	if !found || !ok {
+	if !found {
+		// Unknown user (or no password credential): nothing to attribute, so the
+		// handler must not audit it (a per-attempt row for any random username would
+		// let an unauthenticated caller flood the audit log). Client sees the same
+		// generic error, so this discloses nothing.
 		return nil, ErrBadCredentials
+	}
+	if !ok {
+		// A real account, wrong password: return the principal id (server-side only,
+		// the client error is unchanged) so the handler can audit a failed attempt on
+		// a real account, a security signal worth recording.
+		return &Principal{ID: pr.ID, Kind: pr.Kind}, ErrBadCredentials
 	}
 	if !active {
 		// Correct password against a disabled account: a distinct, disclosable
 		// signal, reachable only with the right password (not an enumeration oracle).
-		return nil, ErrAccountDisabled
+		return &Principal{ID: pr.ID, Kind: pr.Kind}, ErrAccountDisabled
 	}
 	if err := p.loadPrincipal(ctx, &pr); err != nil {
 		return nil, err
