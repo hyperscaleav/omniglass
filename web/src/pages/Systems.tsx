@@ -161,12 +161,12 @@ export default function Systems() {
         </div>
         <div class="flex flex-wrap items-center gap-2 border-t border-base-300 pt-4">
           <Show when={can(me.data, "system", "delete")}>
-            <button class="btn btn-ghost btn-sm text-error" onClick={() => { ctx.closeBlades(); del(n); }}>Delete</button>
+            <button class="btn btn-danger btn-sm" onClick={() => { ctx.closeBlades(); del(n); }}>Delete</button>
           </Show>
           <span class="flex-1" />
           <button class="btn btn-sm gap-1.5" onClick={() => navigate(`/components?system=${encodeURIComponent(n.raw.name)}`)}>Components <ArrowRight size={14} /></button>
           <Show when={can(me.data, "system", "update")}>
-            <button class="btn btn-primary btn-sm" onClick={() => ctx.openEdit(n)}>Edit</button>
+            <button class="btn btn-action btn-sm" onClick={() => ctx.openEdit(n)}>Edit</button>
           </Show>
         </div>
       </div>
@@ -244,8 +244,8 @@ export default function Systems() {
           </div>
         </Show>
         <div class="mt-1 flex justify-end gap-2">
-          <button type="button" class="btn btn-ghost btn-sm" onClick={p.close}>Cancel</button>
-          <button type="submit" class="btn btn-primary btn-sm" disabled={busy()}>{editing ? "Save changes" : "Create system"}</button>
+          <button type="button" class="btn btn-quiet btn-sm" onClick={p.close}>Cancel</button>
+          <button type="submit" class="btn btn-action btn-sm" disabled={busy()}>{editing ? "Save changes" : "Create system"}</button>
         </div>
       </form>
     );
@@ -282,7 +282,7 @@ export default function Systems() {
     renderDetail: (n, ctx) => detail(n, ctx),
     renderBlade: (n, ctx): Blade => ({
       title: n.display,
-      headerExtra: <button class="btn btn-ghost btn-sm btn-square" title="Open full page" onClick={() => { ctx.closeBlades(); ctx.openFull(n); }}><Maximize size={15} /></button>,
+      headerExtra: <button class="btn btn-quiet btn-sm btn-square" title="Open full page" onClick={() => { ctx.closeBlades(); ctx.openFull(n); }}><Maximize size={15} /></button>,
       body: detail(n, ctx),
     }),
     FormBody,

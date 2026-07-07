@@ -96,6 +96,25 @@
 .badge-unknown  { color: var(--og-unknown);  background: color-mix(in oklch, var(--og-unknown) 15%, transparent);  border-color: color-mix(in oklch, var(--og-unknown) 45%, transparent); }
 .badge-snoozed  { color: var(--og-snoozed);  background: color-mix(in oklch, var(--og-snoozed) 15%, transparent);  border-color: color-mix(in oklch, var(--og-snoozed) 45%, transparent); }
 
+/* ===== button intents: the app's semantic button vocabulary =====
+   One intent class per button, composed from daisyUI theme tokens so a future
+   theme restyles every button centrally (the tokens live in the theme blocks
+   above). Structural `btn` and size (`btn-sm` / `btn-xs`) and shape (`btn-square`)
+   still come from daisyUI; the intent below carries emphasis and color:
+     .btn-action  primary, filled     the main action (Save, Create, Edit, New)
+     .btn-quiet   ghost, low-emphasis  secondary, Cancel, icon buttons
+     .btn-danger  ghost + error color  destructive (revoke, delete)
+     .btn-warn / .btn-ok  ghost + state color  a reversible state toggle
+       (Disable is a warning, Enable a success), so the toggle reads its state.
+   Add `btn-square` for an icon-only button; compose a size modifier as needed. */
+@layer components {
+  .btn-action { @apply btn-primary; }
+  .btn-quiet  { @apply btn-ghost; }
+  .btn-danger { @apply btn-ghost text-error; }
+  .btn-warn   { @apply btn-ghost text-warning; }
+  .btn-ok     { @apply btn-ghost text-success; }
+}
+
 /* type system: IBM Plex Sans for UI, JetBrains Mono for data/IDs/counts. */
 :root {
   --og-font-ui: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;

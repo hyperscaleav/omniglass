@@ -149,11 +149,11 @@ export default function Components() {
         </Show>
         <div class="flex items-center gap-2 border-t border-base-300 pt-4">
           <Show when={can(me.data, "component", "delete")}>
-            <button class="btn btn-ghost btn-sm gap-1.5 text-error" onClick={() => { ctx.closeBlades(); del(n); }}>Delete</button>
+            <button class="btn btn-danger btn-sm gap-1.5" onClick={() => { ctx.closeBlades(); del(n); }}>Delete</button>
           </Show>
           <span class="flex-1" />
           <Show when={can(me.data, "component", "update")}>
-            <button class="btn btn-primary btn-sm" onClick={() => ctx.openEdit(n)}>Edit</button>
+            <button class="btn btn-action btn-sm" onClick={() => ctx.openEdit(n)}>Edit</button>
           </Show>
         </div>
       </div>
@@ -249,8 +249,8 @@ export default function Components() {
           )}
         </Show>
         <div class="mt-1 flex justify-end gap-2">
-          <button type="button" class="btn btn-ghost btn-sm" onClick={p.close}>Cancel</button>
-          <button type="submit" class="btn btn-primary btn-sm" disabled={busy()}>{editing ? "Save changes" : "Create component"}</button>
+          <button type="button" class="btn btn-quiet btn-sm" onClick={p.close}>Cancel</button>
+          <button type="submit" class="btn btn-action btn-sm" disabled={busy()}>{editing ? "Save changes" : "Create component"}</button>
         </div>
       </form>
     );
@@ -294,7 +294,7 @@ export default function Components() {
     renderDetail: (n, ctx) => detail(n, ctx),
     renderBlade: (n, ctx): Blade => ({
       title: n.display,
-      headerExtra: <button class="btn btn-ghost btn-sm btn-square" title="Open full page" onClick={() => { ctx.closeBlades(); ctx.openFull(n); }}><Maximize size={15} /></button>,
+      headerExtra: <button class="btn btn-quiet btn-sm btn-square" title="Open full page" onClick={() => { ctx.closeBlades(); ctx.openFull(n); }}><Maximize size={15} /></button>,
       body: detail(n, ctx),
     }),
     FormBody,

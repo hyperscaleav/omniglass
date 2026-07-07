@@ -214,7 +214,7 @@ export default function FilterBar<T>(props: {
           </Show>
         </div>
         <Show when={props.clearable && props.chips.length > 0}>
-          <button class="btn btn-ghost btn-sm flex-none text-xs" onClick={() => props.onChips([])}>Clear</button>
+          <button class="btn btn-quiet btn-sm flex-none text-xs" onClick={() => props.onChips([])}>Clear</button>
         </Show>
         <Show when={props.trailing}>
           <div class="ml-auto flex flex-none items-center gap-1.5">{props.trailing}</div>

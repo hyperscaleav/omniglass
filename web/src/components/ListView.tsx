@@ -362,7 +362,7 @@ export default function ListView<N extends ListNode>(props: { config: ListConfig
     <>
       <Show when={!cfg.flat}>
         <button
-          class="btn btn-ghost btn-sm btn-square"
+          class="btn btn-quiet btn-sm btn-square"
           title={viewMode() === "list" ? "Switch to tree view" : "Switch to list view"}
           onClick={() => setViewMode(viewMode() === "list" ? "tree" : "list")}
         >
@@ -370,14 +370,14 @@ export default function ListView<N extends ListNode>(props: { config: ListConfig
         </button>
       </Show>
       <Show when={!flatten()}>
-        <button class="btn btn-ghost btn-sm btn-square" title={allExpanded() ? "Collapse all" : "Expand all"} onClick={toggleAll}>
+        <button class="btn btn-quiet btn-sm btn-square" title={allExpanded() ? "Collapse all" : "Expand all"} onClick={toggleAll}>
           {allExpanded() ? <ChevronsDownUp size={15} /> : <ChevronsUpDown size={15} />}
         </button>
       </Show>
       <ColumnMenu columns={cfg.columns} columnKeys={cfg.columnKeys} cols={cols} onToggle={toggleCol} onMove={moveCol} />
       <span class="mx-1 h-5 w-px flex-none bg-base-300" />
       <Show when={allow("create")}>
-        <button class="btn btn-primary btn-sm" onClick={() => ctxFull.openCreate(null)}>
+        <button class="btn btn-action btn-sm" onClick={() => ctxFull.openCreate(null)}>
           <Plus size={15} /> New {cfg.entity.name}
         </button>
       </Show>
@@ -456,21 +456,21 @@ export default function ListView<N extends ListNode>(props: { config: ListConfig
         </For>
         <td>
           <div class="flex justify-end gap-0.5 opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100">
-            <button class="btn btn-ghost btn-xs btn-square" title="Open full page" onClick={(e) => { e.stopPropagation(); openFull(n); }}>
+            <button class="btn btn-quiet btn-xs btn-square" title="Open full page" onClick={(e) => { e.stopPropagation(); openFull(n); }}>
               <Maximize size={15} />
             </button>
             <Show when={cfg.canAddChild?.(n) && allow("create")}>
-              <button class="btn btn-ghost btn-xs btn-square" title="Add child" onClick={(e) => { e.stopPropagation(); ctxFull.openCreate(n); }}>
+              <button class="btn btn-quiet btn-xs btn-square" title="Add child" onClick={(e) => { e.stopPropagation(); ctxFull.openCreate(n); }}>
                 <Plus size={15} />
               </button>
             </Show>
             <Show when={allow("update")}>
-              <button class="btn btn-ghost btn-xs btn-square" title="Edit" onClick={(e) => { e.stopPropagation(); ctxFull.openEdit(n); }}>
+              <button class="btn btn-quiet btn-xs btn-square" title="Edit" onClick={(e) => { e.stopPropagation(); ctxFull.openEdit(n); }}>
                 <Pencil size={15} />
               </button>
             </Show>
             <Show when={allow("delete") && cfg.onDelete}>
-              <button class="btn btn-ghost btn-xs btn-square text-error" title="Delete" onClick={(e) => { e.stopPropagation(); cfg.onDelete!(n, ctxFull); }}>
+              <button class="btn btn-danger btn-xs btn-square" title="Delete" onClick={(e) => { e.stopPropagation(); cfg.onDelete!(n, ctxFull); }}>
                 <Trash size={15} />
               </button>
             </Show>
@@ -495,7 +495,7 @@ export default function ListView<N extends ListNode>(props: { config: ListConfig
               <div class="flex min-w-0 flex-1 flex-wrap gap-2">
                 <For each={board().filter((id) => W[id])}>{(id) => W[id].badge(ctxFull)}</For>
               </div>
-              <button class="btn btn-ghost btn-sm btn-square flex-none" title="Expand summary" onClick={() => setSummaryOpen(true)}>
+              <button class="btn btn-quiet btn-sm btn-square flex-none" title="Expand summary" onClick={() => setSummaryOpen(true)}>
                 <span class="inline-flex" style={{ transform: "rotate(-90deg)" }}><ChevronDown size={16} /></span>
               </button>
             </div>
@@ -505,7 +505,7 @@ export default function ListView<N extends ListNode>(props: { config: ListConfig
             <span class="eyebrow">Summary</span>
             <span class="flex-1" />
             <details class="dropdown dropdown-end">
-              <summary class="btn btn-ghost btn-sm gap-1.5"><Columns size={14} /> Customize</summary>
+              <summary class="btn btn-quiet btn-sm gap-1.5"><Columns size={14} /> Customize</summary>
               <ul class="dropdown-content menu z-40 mt-1.5 w-56 rounded-box border border-base-300 bg-base-100 p-1.5 shadow-2xl">
                 <li class="menu-title px-2 pb-1.5 text-[10.5px]">Show widgets · personal</li>
                 <For each={catalog}>
@@ -520,7 +520,7 @@ export default function ListView<N extends ListNode>(props: { config: ListConfig
                 </For>
               </ul>
             </details>
-            <button class="btn btn-ghost btn-sm gap-1.5" onClick={() => setSummaryOpen(false)}>Collapse <ChevronDown size={14} /></button>
+            <button class="btn btn-quiet btn-sm gap-1.5" onClick={() => setSummaryOpen(false)}>Collapse <ChevronDown size={14} /></button>
           </div>
           <div class="flex flex-wrap items-stretch gap-3">
             <For each={board().filter((id) => W[id])}>
@@ -586,7 +586,7 @@ export default function ListView<N extends ListNode>(props: { config: ListConfig
 
   const FullPage = (props2: { node: N }) => (
     <section class="fade-in flex max-w-3xl flex-col gap-4">
-      <button class="btn btn-ghost btn-sm flex-none gap-1.5 self-start" onClick={back}>
+      <button class="btn btn-quiet btn-sm flex-none gap-1.5 self-start" onClick={back}>
         {"←"} {cfg.entity.plural}
       </button>
       <div class="flex flex-col gap-2">
@@ -648,7 +648,7 @@ export default function ListView<N extends ListNode>(props: { config: ListConfig
                       <header class="flex items-center justify-between gap-3 border-b border-base-300 px-4 py-3">
                         <div class="flex min-w-0 items-center gap-2">
                           <Show when={i()}>
-                            <button class="btn btn-ghost btn-sm btn-square" title="Back" onClick={popBlade}>
+                            <button class="btn btn-quiet btn-sm btn-square" title="Back" onClick={popBlade}>
                               <ChevronLeft size={16} />
                             </button>
                           </Show>
@@ -656,7 +656,7 @@ export default function ListView<N extends ListNode>(props: { config: ListConfig
                         </div>
                         <div class="flex flex-none items-center gap-1">
                           {blade().headerExtra}
-                          <button class="btn btn-ghost btn-sm btn-square" title="Close" aria-label="Close" onClick={closeBlades}>
+                          <button class="btn btn-quiet btn-sm btn-square" title="Close" aria-label="Close" onClick={closeBlades}>
                             <X size={16} />
                           </button>
                         </div>

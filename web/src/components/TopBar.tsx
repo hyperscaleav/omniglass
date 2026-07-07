@@ -27,10 +27,10 @@ export default function TopBar(props: { section: string; onOpenPalette: () => vo
           <kbd class="kbd kbd-sm leading-none">K</kbd>
         </span>
       </button>
-      <button class="btn btn-ghost btn-sm btn-square sm:hidden" onClick={props.onOpenPalette} title="Search and jump">
+      <button class="btn btn-quiet btn-sm btn-square sm:hidden" onClick={props.onOpenPalette} title="Search and jump">
         <Search size={17} />
       </button>
-      <button class="btn btn-ghost btn-sm btn-square" title={theme() === "dark" ? "Light mode" : "Dark mode"} onClick={toggleTheme}>
+      <button class="btn btn-quiet btn-sm btn-square" title={theme() === "dark" ? "Light mode" : "Dark mode"} onClick={toggleTheme}>
         <Show when={theme() === "dark"} fallback={<Moon size={16} />}><Sun size={16} /></Show>
       </button>
     </header>

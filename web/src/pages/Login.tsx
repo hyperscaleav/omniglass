@@ -124,7 +124,7 @@ export default function Login() {
             <Show when={error()}>
               <div role="alert" class="alert alert-error alert-soft text-sm"><span>{error()}</span></div>
             </Show>
-            <button type="submit" class="btn btn-primary w-full" disabled={busy() || !canSubmit()}>
+            <button type="submit" class="btn btn-action w-full" disabled={busy() || !canSubmit()}>
               <Show when={busy()}><span class="loading loading-spinner loading-xs" /></Show>
               {busy() ? "Signing in…" : "Sign in"}
             </button>

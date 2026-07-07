@@ -61,6 +61,24 @@ CLI is generated the same way. `make gen` regenerates all of it; a non-empty dif
   real or lab-simulated data, not a static diagram. The flow/graph library for these lands with
   the explore/learn surfaces.
 
+## Button vocabulary
+
+Buttons use a small set of **semantic intent classes** defined in `app.css`, never the raw daisyUI
+color/emphasis classes, so styling is unified and a future theme restyles every button from the
+theme tokens in one place. One intent per button; structural `btn`, size (`btn-sm` / `btn-xs`), and
+shape (`btn-square`) still come from daisyUI.
+
+| Intent | Class | Use |
+|---|---|---|
+| Primary action | `btn-action` | the main action (Save, Create, Edit, New) |
+| Secondary / quiet | `btn-quiet` | Cancel, icon buttons, low-emphasis actions |
+| Destructive | `btn-danger` | revoke, delete |
+| State toggle | `btn-warn` / `btn-ok` | a reversible toggle that reads its state (Disable is a warning, Enable a success) |
+
+The intents are `@apply`-composed from daisyUI in `app.css`, so they inherit the active theme's
+tokens. A `style-guard` test scans the source and fails the build on a raw `btn-primary` /
+`btn-ghost`, so the vocabulary cannot drift back to one-off button styling.
+
 ## Primitives (the reuse target)
 
 `ListView`, `FilterBar`, `Drawer`, `Donut`, `Badge`, `Fact`, `Page`, `DataTable`,
