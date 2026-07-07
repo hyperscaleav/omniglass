@@ -167,11 +167,11 @@ type ServiceProfile struct{ Label string }
 // Grant is one (role x scope) pairing on a principal, addressable by its id (so
 // the admin surface can revoke a specific one).
 type Grant struct {
-	ID          string
-	Role        string
-	ScopeKind   string
-	ScopeID     *string
-	ExcludeRoot bool // the grant's write scope excludes its own root (descendants only)
+	ID        string
+	Role      string
+	ScopeKind string
+	ScopeID   *string
+	ScopeOp   string // how ScopeID matches the tree: subtree, subtree_excl_root, or self
 }
 
 // ErrBadCredentials is returned by AuthenticatePassword when the username is
@@ -626,10 +626,10 @@ var (
 // GrantSpec is a role x scope to assign to a principal. ScopeID is empty for the
 // "all" scope; for any other kind it names the scope root.
 type GrantSpec struct {
-	Role        string
-	ScopeKind   string
-	ScopeID     string
-	ExcludeRoot bool
+	Role      string
+	ScopeKind string
+	ScopeID   string
+	ScopeOp   string // subtree (default), subtree_excl_root, or self; empty means subtree
 }
 
 // CreateGrant assigns a role x scope to a principal, audited. Requires an
@@ -640,9 +640,15 @@ func (p *PG) CreateGrant(ctx context.Context, actorID, principalID string, spec 
 	if !action.All {
 		return nil, ErrPrincipalForbidden
 	}
+	if spec.ScopeOp == "" {
+		spec.ScopeOp = scope.OpSubtree // the default: root + descendants
+	}
+	if spec.ScopeOp != scope.OpSubtree && spec.ScopeOp != scope.OpSubtreeExclRoot && spec.ScopeOp != scope.OpSelf {
+		return nil, ErrBadScope // an unknown operator
+	}
 	if spec.ScopeKind == "all" {
-		spec.ScopeID = ""        // the all scope has no id
-		spec.ExcludeRoot = false // and no root to exclude
+		spec.ScopeID = ""              // the all scope has no id
+		spec.ScopeOp = scope.OpSubtree // and no root to narrow: the operator is moot
 	} else if spec.ScopeID == "" {
 		return nil, ErrBadScope // a scoped grant must name its root
 	}
@@ -675,12 +681,12 @@ func (p *PG) CreateGrant(ctx context.Context, actorID, principalID string, spec 
 
 	var gid string
 	err = tx.QueryRow(ctx,
-		`insert into principal_grant (principal_id, role_id, scope_kind, scope_id, exclude_root) values ($1, $2, $3, $4, $5) returning id`,
-		principalID, spec.Role, spec.ScopeKind, nullize(spec.ScopeID), spec.ExcludeRoot).Scan(&gid)
+		`insert into principal_grant (principal_id, role_id, scope_kind, scope_id, scope_op) values ($1, $2, $3, $4, $5) returning id`,
+		principalID, spec.Role, spec.ScopeKind, nullize(spec.ScopeID), spec.ScopeOp).Scan(&gid)
 	if err != nil {
 		return nil, mapGrantWriteErr(err)
 	}
-	g := Grant{ID: gid, Role: spec.Role, ScopeKind: spec.ScopeKind, ExcludeRoot: spec.ExcludeRoot}
+	g := Grant{ID: gid, Role: spec.Role, ScopeKind: spec.ScopeKind, ScopeOp: spec.ScopeOp}
 	if spec.ScopeID != "" {
 		g.ScopeID = &spec.ScopeID
 	}
@@ -709,8 +715,8 @@ func (p *PG) RevokeGrant(ctx context.Context, actorID, principalID, grantID stri
 
 	var g Grant
 	err = tx.QueryRow(ctx,
-		`select id, role_id, scope_kind, scope_id from principal_grant where id = $1 and principal_id = $2`,
-		grantID, principalID).Scan(&g.ID, &g.Role, &g.ScopeKind, &g.ScopeID)
+		`select id, role_id, scope_kind, scope_id, scope_op from principal_grant where id = $1 and principal_id = $2`,
+		grantID, principalID).Scan(&g.ID, &g.Role, &g.ScopeKind, &g.ScopeID, &g.ScopeOp)
 	var pgErr *pgconn.PgError
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
@@ -848,14 +854,14 @@ func (p *PG) loadPrincipal(ctx context.Context, pr *Principal) error {
 	}
 
 	rows, err := p.pool.Query(ctx,
-		`select id, role_id, scope_kind, scope_id, exclude_root from principal_grant where principal_id = $1 order by created_at`, pr.ID)
+		`select id, role_id, scope_kind, scope_id, scope_op from principal_grant where principal_id = $1 order by created_at`, pr.ID)
 	if err != nil {
 		return fmt.Errorf("storage: load grants: %w", err)
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var g Grant
-		if err := rows.Scan(&g.ID, &g.Role, &g.ScopeKind, &g.ScopeID, &g.ExcludeRoot); err != nil {
+		if err := rows.Scan(&g.ID, &g.Role, &g.ScopeKind, &g.ScopeID, &g.ScopeOp); err != nil {
 			return fmt.Errorf("storage: scan grant: %w", err)
 		}
 		pr.Grants = append(pr.Grants, g)

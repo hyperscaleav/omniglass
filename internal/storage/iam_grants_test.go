@@ -80,12 +80,34 @@ func TestGrantsAndOwnerInvariant(t *testing.T) {
 		t.Fatalf("scoped grant by id: %v", err)
 	}
 
-	// Revoke the viewer@all grant; it disappears.
+	// An unknown scope operator is refused.
+	if _, err := gw.CreateGrant(ctx, owner.ID, alice.ID, storage.GrantSpec{Role: "viewer", ScopeKind: "location", ScopeID: hq.ID, ScopeOp: "bogus"}, all); !errors.Is(err, storage.ErrBadScope) {
+		t.Fatalf("bad scope_op: want ErrBadScope, got %v", err)
+	}
+	// The operator is part of a grant's identity: viewer @ hq with a DIFFERENT op is a
+	// distinct grant, not a duplicate (the dedup index includes scope_op). It persists
+	// and round-trips.
+	if _, err := gw.CreateGrant(ctx, owner.ID, alice.ID, storage.GrantSpec{Role: "viewer", ScopeKind: "location", ScopeID: hq.ID, ScopeOp: "self"}, all); err != nil {
+		t.Fatalf("viewer @ hq (self) alongside viewer @ hq (subtree): %v", err)
+	}
+	got, _ := gw.GetPrincipal(ctx, alice.ID, all)
+	var sawSelf bool
+	for _, gr := range got.Grants {
+		if gr.Role == "viewer" && gr.ScopeKind == "location" && gr.ScopeOp == "self" {
+			sawSelf = true
+		}
+	}
+	if !sawSelf {
+		t.Fatalf("self-op grant did not round-trip: %+v", got.Grants)
+	}
+
+	// Revoke the viewer@all grant; it disappears, leaving the two scoped grants
+	// (viewer @ hq subtree and viewer @ hq self).
 	if err := gw.RevokeGrant(ctx, owner.ID, alice.ID, g.ID, all); err != nil {
 		t.Fatalf("revoke: %v", err)
 	}
-	if got, _ := gw.GetPrincipal(ctx, alice.ID, all); len(got.Grants) != 1 {
-		t.Fatalf("expected only the scoped grant to remain: %+v", got.Grants)
+	if got, _ := gw.GetPrincipal(ctx, alice.ID, all); len(got.Grants) != 2 {
+		t.Fatalf("expected the two scoped grants to remain: %+v", got.Grants)
 	}
 
 	// The owner invariant: root's single owner grant cannot be revoked.

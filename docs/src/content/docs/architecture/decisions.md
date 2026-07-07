@@ -43,8 +43,9 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0006](#adr-0006-the-owner-invariant-is-enforced-by-bootstrap-for-now) | 2026-06-27 | Resolved | The single-owner invariant is now a DEFERRABLE constraint trigger, landed with grant revocation |
 | [ADR-0007](#adr-0007-principals-are-gated-at-all-scope-not-scope-tree) | 2026-07-01 | Accepted | A principal is not a scope-tree entity; the `principal` capability confers access only at all-scope |
 | [ADR-0008](#adr-0008-disable-is-hard-revocation-no-token-version-column) | 2026-07-06 | Accepted | Disable revokes live sessions via the per-request `active` re-read; no token-version column (nothing consumes it) |
-| [ADR-0009](#adr-0009-root-exclusion-lives-on-the-grant-not-a-new-scope-kind) | 2026-07-06 | Accepted | The deploy "act on the subtree but not the root" capability is an `exclude_root` grant modifier, not a new scope kind |
+| [ADR-0009](#adr-0009-root-exclusion-lives-on-the-grant-not-a-new-scope-kind) | 2026-07-06 | Superseded by [ADR-0011](#adr-0011-grant-scope-is-an-operator-not-a-boolean-modifier) | The deploy "act on the subtree but not the root" capability is an `exclude_root` grant modifier, not a new scope kind |
 | [ADR-0010](#adr-0010-impersonation-is-a-session-not-a-credential-guarded-by-capability-cover) | 2026-07-06 | Accepted | Impersonation ships view-as + act-as as an `impersonation_session` (not a credential), guarded by capability-cover, with a real-actor audit column |
+| [ADR-0011](#adr-0011-grant-scope-is-an-operator-not-a-boolean-modifier) | 2026-07-06 | Accepted | Generalize the `exclude_root` boolean into a `scope_op` operator (`subtree` / `subtree_excl_root` / `self`), a flat enum, not a predicate-expression tree |
 
 ## Entries
 
@@ -208,3 +209,31 @@ below from the project's history. From here it grows one slice at a time.
   scoped admin's own scope by intersecting the target's scope with the caller's ([#101](https://github.com/hyperscaleav/omniglass/issues/101)),
   rather than the current all-scope-only act-as rule.
 - **Closes the gap:** issue [#85](https://github.com/hyperscaleav/omniglass/issues/85).
+
+### ADR-0011: Grant scope is an operator, not a boolean modifier
+
+- **Date:** 2026-07-06 | **Status:** Accepted | **Pages:** [identity and access](/architecture/identity-access/)
+- **Decision:** Generalize the `exclude_root` boolean ([ADR-0009](#adr-0009-root-exclusion-lives-on-the-grant-not-a-new-scope-kind))
+  into a `scope_op` operator on `principal_grant` (issue [#102](https://github.com/hyperscaleav/omniglass/issues/102)):
+  `subtree` (root + descendants, the default, == old `exclude_root=false`), `subtree_excl_root` (descendants
+  only for update/delete, root kept for read/create, == old `exclude_root=true`), and `self` (the root row
+  only for read/update/delete, no descendants and no create-placement, a leaf-lock, net-new). The operator is a **flat enum column**, not a full predicate-expression
+  tree or a per-grant tuple list. It is part of a grant's identity: the dedup index includes `scope_op`, so the
+  same role at the same root with a different operator is a distinct grant.
+- **Context:** Grant scope wants one composable axis, not a growing pile of booleans; the grant builder is
+  already a filter-bar-style operator UI, so the operator vocabulary is the natural fit. The flat enum was
+  chosen over a predicate-expression scope and a per-grant tuple list (negation, multi-root `in`): those buy
+  expressiveness the boolean's two states never needed, at the cost of a much larger blast radius on the two
+  authorization invariants (permission-on-every-route, scope-on-every-query). `self` is the cheap third value
+  (a scalar `= any()` arm, no new recursive CTE) that turns a boolean rename into a real operator, and grant on
+  exactly one node is a frequently-wanted capability the boolean could never express. The pure `scope.Resolve`
+  gains a `SelfIDs` set; the three gateway walks (`inScopeTree`, `InScopeIDs`, `scopedListSQL`) gain a self arm.
+  The migration also recreates the dedup index to include `scope_op`, fixing a latent collision, and threads
+  `scope_op` through `RevokeGrant`'s audit SELECT (previously dropped). The operator model does **not** subsume
+  the act-as scope intersection ([#101](https://github.com/hyperscaleav/omniglass/issues/101)): that blocker is
+  plumbing (carry the real actor's grants and intersect two Sets per row), unchanged by how a Set is expressed.
+  A future tuple model (negation, multi-root) stays a documented path if a real carve-out requirement lands.
+  The console grant builder gains an operator stage (role -> kind -> entity -> operator), so [#99](https://github.com/hyperscaleav/omniglass/issues/99)
+  (setting the modifier from the console) ships here too.
+- **Supersedes:** [ADR-0009](#adr-0009-root-exclusion-lives-on-the-grant-not-a-new-scope-kind) (the boolean is retired for the operator).
+- **Closes the gap:** issue [#102](https://github.com/hyperscaleav/omniglass/issues/102).

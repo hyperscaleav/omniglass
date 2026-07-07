@@ -58,17 +58,19 @@ func scopeKindTable(kind string) (scopeTable, bool) {
 // inScopeTree reports whether targetID falls within a resolved scope on tbl: an
 // all scope always holds; otherwise the target is in scope when itself or an
 // ancestor is an inclusive scope root, OR a STRICT ancestor is an excluded root
-// (an ExcludeRoot grant covers a root's descendants but not the root itself, for
-// the modify actions). Inclusive and excluded roots are disjoint; a broader
-// inclusive ancestor still admits an id that is another grant's excluded root
-// (inclusive wins). The ancestor walk is cheaper than expanding every root's
-// subtree; the CYCLE clause guards a corrupted parent edge.
+// (a subtree_excl_root grant covers a root's descendants but not the root itself,
+// for the modify actions), OR the target is itself a self root (a self grant
+// matches exactly the one row, no descendant walk). Inclusive and excluded roots
+// are disjoint; a broader inclusive ancestor still admits an id that is another
+// grant's excluded root (inclusive wins). The ancestor walk is cheaper than
+// expanding every root's subtree; the CYCLE clause guards a corrupted parent edge.
 func inScopeTree(ctx context.Context, q querier, tbl scopeTable, targetID string, set scope.Set) (bool, error) {
 	if set.All {
 		return true, nil
 	}
 	roots := uuidRoots(set.IDs)
-	if len(roots) == 0 {
+	selfIDs := uuidRoots(set.SelfIDs)
+	if len(roots) == 0 && len(selfIDs) == 0 {
 		return false, nil
 	}
 	excluded := uuidRoots(set.ExcludeRootIDs)
@@ -80,9 +82,10 @@ func inScopeTree(ctx context.Context, q querier, tbl scopeTable, targetID string
 			union all
 			select t.id, t.parent_id from `+string(tbl)+` t join anc on t.id = anc.parent_id
 		) cycle id set is_cycle using path
-		select exists(select 1 from anc where id = any($2::uuid[]))
+		select $1::uuid = any($4::uuid[])
+		    or exists(select 1 from anc where id = any($2::uuid[]))
 		    or exists(select 1 from anc where id = any($3::uuid[]) and id <> $1)`,
-		targetID, inclusive, excluded).Scan(&ok)
+		targetID, inclusive, excluded, selfIDs).Scan(&ok)
 	if err != nil {
 		return false, fmt.Errorf("storage: scope check on %s: %w", tbl, err)
 	}
@@ -111,7 +114,8 @@ func (p *PG) InScopeIDs(ctx context.Context, resource string, ids []string, set 
 	}
 	roots := uuidRoots(set.IDs)
 	candidates := uuidRoots(ids)
-	if len(roots) == 0 || len(candidates) == 0 {
+	selfIDs := uuidRoots(set.SelfIDs)
+	if len(candidates) == 0 || (len(roots) == 0 && len(selfIDs) == 0) {
 		return out, nil
 	}
 	excluded := uuidRoots(set.ExcludeRootIDs)
@@ -129,8 +133,8 @@ func (p *PG) InScopeIDs(ctx context.Context, resource string, ids []string, set 
 		) cycle id set subx_cyc using subx_path
 		select id from `+string(tbl)+`
 		where id = any($3::uuid[])
-		  and (id in (select id from sub) or id in (select id from subx where not is_root))`,
-		inclusive, excluded, candidates)
+		  and (id in (select id from sub) or id in (select id from subx where not is_root) or id = any($4::uuid[]))`,
+		inclusive, excluded, candidates, selfIDs)
 	if err != nil {
 		return nil, fmt.Errorf("storage: in-scope ids on %s: %w", tbl, err)
 	}
@@ -165,9 +169,11 @@ func subtractRoots(a, b []string) []string {
 }
 
 // scopedListSQL builds the list query for tbl selecting cols, ordered by name.
-// An all scope selects every row (no args); a rooted scope expands each root to
-// its subtree (the recursive descendant walk, cycle-guarded) and filters to it,
-// taking the root id array as $1.
+// An all scope selects every row (no args); a rooted scope expands each subtree
+// root to its descendants (the recursive descendant walk, cycle-guarded) and also
+// matches any self root by id equality, taking the subtree root array as $1 and
+// the self root array as $2. A list is always a read, and read never excludes a
+// root, so there is no exclude-root arm here.
 func scopedListSQL(tbl scopeTable, cols string, all bool) string {
 	if all {
 		return `select ` + cols + ` from ` + string(tbl) + ` order by name`
@@ -179,6 +185,6 @@ func scopedListSQL(tbl scopeTable, cols string, all bool) string {
 			select t.id from ` + string(tbl) + ` t join sub on t.parent_id = sub.id
 		) cycle id set is_cycle using path
 		select ` + cols + ` from ` + string(tbl) + `
-		where id in (select id from sub)
+		where id in (select id from sub) or id = any($2::uuid[])
 		order by name`
 }

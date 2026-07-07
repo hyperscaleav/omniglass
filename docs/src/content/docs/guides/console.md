@@ -56,12 +56,17 @@ location-scoped admin cannot list users.
 - With `principal_grant:create` / `:delete`, the detail panel's **grant builder** stages a set of
   changes and applies them only on **Save**, so there are no accidental edits. Type a role, then Tab
   or Enter to the scope kind, then (for a non-`all` scope) the specific location, system, or
-  component from an indented tree: each commit becomes a `role @ scope` chip. Removing an existing
-  grant marks it (dimmed and struck, undoable), staging a new one shows it in green, and a
-  pending-diff line ("+N to grant, -M to revoke") previews exactly what **Save** will do. That is how
-  a fresh user gets permissions. A scope targets the entity by its internal id, so a grant survives a
-  rename of that entity. One rule the server always holds: the **last owner grant cannot be
-  revoked**, so the platform can never be locked out of administration.
+  component from an indented tree, then the **operator** that says how that entity matches the tree:
+  each commit becomes a `role @ operator scope` chip. The operator is one of **at or under** (`≥`,
+  the entity and everything beneath it, the default), **under only** (`>`, the descendants but not
+  the entity itself, for update and delete), or **just this** (`=`, exactly the one entity, no
+  descendants and no adding children under it), so you can grant a field tech everything inside a room
+  without letting them rename the room, or lock an operator to a single node. Removing an existing grant marks it (dimmed and
+  struck, undoable), staging a new one shows it in green, and a pending-diff line ("+N to grant, -M
+  to revoke") previews exactly what **Save** will do. That is how a fresh user gets permissions. A
+  scope targets the entity by its internal id, so a grant survives a rename of that entity. One rule
+  the server always holds: the **last owner grant cannot be revoked**, so the platform can never be
+  locked out of administration.
 - With `principal:update`, **Disable** turns off a principal: it can no longer sign in or use a
   token, but its audit history is kept (accounts are disabled, never deleted). **Enable** restores
   access. A disabled account reads **inactive** in the grid. The **last active owner cannot be

@@ -116,9 +116,6 @@ components:
           format: uri
           readOnly: true
           type: string
-        exclude_root:
-          description: Exclude the scope root itself from update/delete (descendants only); read and create-placement keep the root. Ignored for the all scope.
-          type: boolean
         role:
           description: A role id (viewer, operator, admin, owner, or a custom role)
           minLength: 1
@@ -134,6 +131,13 @@ components:
             - system
             - component
             - group
+          type: string
+        scope_op:
+          description: "How the scope root matches the tree: subtree (root + descendants, the default), subtree_excl_root (descendants only for update/delete, root kept for read/create), or self (the root row only). Moot for the all scope."
+          enum:
+            - subtree
+            - subtree_excl_root
+            - self
           type: string
       required:
         - role
@@ -294,8 +298,6 @@ components:
           format: uri
           readOnly: true
           type: string
-        exclude_root:
-          type: boolean
         id:
           type: string
         role:
@@ -303,6 +305,13 @@ components:
         scope_id:
           type: string
         scope_kind:
+          type: string
+        scope_op:
+          description: "How the scope root matches the tree: subtree (root + descendants), subtree_excl_root (descendants only for update/delete, root kept for read/create), or self (the root row only). Empty means subtree. Moot for the all scope."
+          enum:
+            - subtree
+            - subtree_excl_root
+            - self
           type: string
       required:
         - role

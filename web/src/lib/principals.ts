@@ -4,7 +4,7 @@ import { api } from "../api/client";
 // the admin directory page stays declarative and unit-testable against a mocked
 // client. Shapes follow the OpenAPI (see api/principals.go). Credentials are never
 // returned, so there is no secret here to leak.
-export type Grant = { id?: string; role: string; scope_kind: string; scope_id?: string };
+export type Grant = { id?: string; role: string; scope_kind: string; scope_id?: string; scope_op?: string };
 
 export type Principal = {
   id: string;
@@ -52,7 +52,7 @@ export async function updatePrincipal(id: string, body: UpdatePrincipal): Promis
 
 export type ScopeKind = "all" | "location" | "system" | "component" | "group";
 
-export type CreateGrant = { role: string; scope_kind: ScopeKind; scope_id?: string };
+export type CreateGrant = { role: string; scope_kind: ScopeKind; scope_id?: string; scope_op?: "subtree" | "subtree_excl_root" | "self" };
 
 export async function createGrant(principalId: string, body: CreateGrant): Promise<Grant> {
   const { data, error } = await api.POST("/principals/{id}/grants", { params: { path: { id: principalId } }, body });

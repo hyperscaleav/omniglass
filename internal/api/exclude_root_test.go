@@ -49,7 +49,7 @@ func TestExcludeRootDeployScopeAPI(t *testing.T) {
 	// An integrator scoped to room-42 with exclude_root (the deploy role: create +
 	// update on the three tree tiers, read via the viewer floor).
 	deployTok := principalWithGrants(t, ctx, dsn, "integrator",
-		[]grant{{role: "deploy", scopeKind: "location", scopeID: roomID, excludeRoot: true}})
+		[]grant{{role: "deploy", scopeKind: "location", scopeID: roomID, scopeOp: "subtree_excl_root"}})
 	patch := map[string]any{"display_name": "x"}
 
 	// Read keeps the root: the integrator can see the room it deploys into.

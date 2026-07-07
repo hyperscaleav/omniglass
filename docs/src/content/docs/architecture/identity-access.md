@@ -194,18 +194,34 @@ Whether a scope may mix include and exclude (e.g. "all except group X").
 
 A scope of entity E includes E **and everything structurally beneath it** (a location -> its systems -> their components -> their datapoints and alarms). The visible set is **parameterized by action**: `visible_set(P, action)` = the union, over **only the grants whose role carries `action`**, of each scope entity plus its descendants. There is no single global visible set. **`:read` is an implicit floor on every grant**: holding any grant on an entity confers `read` on it, so `visible_set(P, read)` is always the widest set and `visible_set(P, action)` is always a subset of it. The floor is realized as a **capability injection at role-index build** (next): every `<resource>:<action>` permission implies `<resource>:read`, so the implied reads are present in the fast-reject union, in `canDo`'s `perms`, and in `/auth/me.permissions`, not only in the scope layer. A verb-only role (`alarm:ack` without `alarm:read`, no `viewer` inheritance) is therefore **not** hard-403'd on the read. The asymmetry runs one way only: a principal can **read** an entity it cannot **act** on (in `visible_set(P, read)` but outside `visible_set(P, ack)`, via a read-only grant), but never the reverse. So there is no "actionable but not readable" case, and the status split below stays three-way. Dynamic-group scopes recompute as membership changes. Each per-action set is bounded by **fleet size (entities)**, not data volume.
 
-### Root-excluded grants (the deploy modifier)
+### Scope operators (how a grant's root matches the tree)
 
-A grant carries an optional **`exclude_root`** flag that narrows only its **modify** actions to the root's
-descendants: the holder can create under, and update or delete within, the subtree, but cannot update or
-delete the root entity itself. Read and create-placement still include the root, so the holder can see the
-boundary of its scope and place children under it. This is the integrator / deploy grant: `deploy @
-location:room-42 (exclude_root)` lets a field tech add and edit the systems and components inside room-42
-without being able to rename or delete room-42. A `PATCH` on the root is the readable-but-out-of-write-scope
-**403** (not a 404: the target is readable), while a `POST` under the root and a `PATCH` on a descendant
-succeed. The modifier lives **on the grant**, not as a new scope kind, so it composes with the additive-grant
-model and confines the change to one predicate; an inclusive grant on the same root wins over an excluding
-one (an inclusive parent grant likewise re-admits a descendant). It is ignored for the `all` scope.
+A grant carries a **`scope_op`** that says how its root matches the tree, a small operator instead of a pile
+of boolean modifiers. It lives **on the grant**, not as a new scope kind, so it composes with the
+additive-grant model and confines the change to one predicate. It is moot for the `all` scope.
+
+| operator | glyph | in scope | for |
+| --- | --- | --- | --- |
+| `subtree` (default) | ≥ | the root **and** everything beneath it | every action |
+| `subtree_excl_root` | > | the root's descendants; **not** the root itself | update / delete (read and create keep the root) |
+| `self` | = | **exactly** the root row, no descendants | read / update / delete (**not** create: no children) |
+
+`subtree` is the ordinary case. `subtree_excl_root` is the integrator / deploy grant: `deploy @
+location:room-42 (>)` lets a field tech add and edit the systems and components inside room-42 without being
+able to rename or delete room-42. It narrows only the **modify** actions to the descendants; read and
+create-placement still include the root so the holder can see the boundary of its scope and place children
+under it. A `PATCH` on the root is then the readable-but-out-of-write-scope **403** (not a 404: the target is
+readable), while a `POST` under the root and a `PATCH` on a descendant succeed. `self` is the tightest grant, a
+leaf-lock on one node: exactly its own row for read, update, and delete, never a descendant, and (unlike the
+two subtree operators) **not** create-placement, so it grants no authority to grow the tree under the node. So
+`operator @ location:room-42 (=)` sees and edits only room-42, cannot add a child under it (a `POST` under it
+is a **403**), and the list returns only room-42.
+
+Operators combine by union across grants, resolved per action: an inclusive `subtree` grant on a root wins
+over an excluding one, and a `self` grant re-admits a root that a `subtree_excl_root` grant stripped (the
+subtree walk still skips the root; the self predicate matches its row). The operator is part of a grant's
+identity: the same role at the same root with a different operator is a **distinct** grant, so changing an
+operator is a revoke plus a grant.
 
 ## The owner invariant
 
