@@ -387,7 +387,7 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   account is `login_failed` (attributed to that principal) and a correct password against a disabled account is
   `login_denied` (#97), while an attempt on an unknown username is not written (so scanning cannot flood the
   log). The console gains a read-only **Audit** page (`Settings > Audit`): every action and sign-in, with an
-  **as <admin>** tag on anything done while impersonating. It is **admin/owner-only**: `audit` is a sensitive
+  `as <actor>` tag on anything done while impersonating. It is **admin/owner-only**: `audit` is a sensitive
   resource, so a `viewer`'s `*:read` does **not** confer `audit:read`, only an explicit grant or `*:*` (a small
   `rbac` sensitive-resource carve-out, ADR-0014). Proven by an rbac unit test (the carve-out: `*:read` denied,
   `*:*` and explicit allowed), a storage round-trip, a real-binary API test (a login appears, a real-account
