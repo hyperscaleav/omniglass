@@ -217,7 +217,7 @@ below from the project's history. From here it grows one slice at a time.
   into a `scope_op` operator on `principal_grant` (issue [#102](https://github.com/hyperscaleav/omniglass/issues/102)):
   `subtree` (root + descendants, the default, == old `exclude_root=false`), `subtree_excl_root` (descendants
   only for update/delete, root kept for read/create, == old `exclude_root=true`), and `self` (the root row
-  only, no descendant walk, net-new). The operator is a **flat enum column**, not a full predicate-expression
+  only for read/update/delete, no descendants and no create-placement, a leaf-lock, net-new). The operator is a **flat enum column**, not a full predicate-expression
   tree or a per-grant tuple list. It is part of a grant's identity: the dedup index includes `scope_op`, so the
   same role at the same root with a different operator is a distinct grant.
 - **Context:** Grant scope wants one composable axis, not a growing pile of booleans; the grant builder is

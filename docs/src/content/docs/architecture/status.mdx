@@ -312,8 +312,8 @@ capabilities ship, so an early slice can prove a seam without moving any page of
 - **Identity: grant scope operators (`scope_op`).** The `exclude_root` boolean generalizes into a `scope_op`
   operator on `principal_grant` (ADR-0011): **`subtree`** (root + descendants, the default, == old
   `exclude_root=false`), **`subtree_excl_root`** (descendants only for update/delete, root kept for
-  read/create, == old `exclude_root=true`), and **`self`** (exactly the root row, no descendant walk, uniform
-  across actions) which is **net-new**, a grant on exactly one node. The pure `scope.Resolve` gains a `SelfIDs`
+  read/create, == old `exclude_root=true`), and **`self`** (exactly the root row for read/update/delete, no
+  descendants and no create-placement, a leaf-lock) which is **net-new**, a grant on exactly one node. The pure `scope.Resolve` gains a `SelfIDs`
   set (matched by id equality, never subtree-expanded; a `self` grant re-adds a root a `subtree_excl_root` grant
   stripped), and the three gateway walks (`inScopeTree`, `InScopeIDs`, `scopedListSQL`) gain a self arm. The
   migration recreates the dedup index to include `scope_op` (fixing a latent collision where two grants

@@ -15,7 +15,7 @@ import "github.com/hyperscaleav/omniglass/internal/rbac"
 const (
 	OpSubtree         = "subtree"           // root + descendants, every action
 	OpSubtreeExclRoot = "subtree_excl_root" // root + descendants for read/create, descendants only for modify
-	OpSelf            = "self"              // the root row only, no descendant walk, uniform across actions
+	OpSelf            = "self"              // the root row only (read/update/delete); no descendants, no create-placement
 )
 
 // Grant is the scope-relevant view of a principal's grant: the role it carries
@@ -28,7 +28,8 @@ type Grant struct {
 	// ScopeOp says how ScopeID matches the tree: OpSubtree (root + descendants),
 	// OpSubtreeExclRoot (descendants only for modify, root kept for read/create, so
 	// a deploy/integrator grant manages within a subtree without editing its own
-	// boundary), or OpSelf (exactly the root row, no descendants). Empty means
+	// boundary), or OpSelf (exactly the root row for read/update/delete, no
+	// descendants and no create-placement, a leaf-lock on one node). Empty means
 	// OpSubtree. Ignored for the "all" scope.
 	ScopeOp string
 }
@@ -63,8 +64,10 @@ func Resolve(grants []Grant, idx rbac.RoleIndex, resource, action string) Set {
 	kinds := applicableKinds(resource)
 	// subtree_excl_root narrows only the modify actions; read and create-placement
 	// keep the root so the holder can see the scope boundary and place children
-	// under it. self is uniform (the root row) across every action.
+	// under it. self is the root row for read/update/delete but NOT create: a
+	// leaf-lock grants no authority to grow the tree under its node.
 	excludes := action != "read" && action != "create"
+	selfApplies := action != "create"
 	var set Set
 	seen := map[string]bool{}    // a root already added to IDs (subtree ops)
 	selfSeen := map[string]bool{}
@@ -87,8 +90,10 @@ func Resolve(grants []Grant, idx rbac.RoleIndex, resource, action string) Set {
 			op = OpSubtree
 		}
 		if op == OpSelf {
-			self[g.ScopeID] = true
-			continue // self roots never enter IDs: no subtree expansion
+			if selfApplies {
+				self[g.ScopeID] = true
+			}
+			continue // self roots never enter IDs (no subtree expansion), and never grant create
 		}
 		if !seen[g.ScopeID] {
 			seen[g.ScopeID] = true

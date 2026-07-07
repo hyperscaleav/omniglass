@@ -57,6 +57,13 @@ func TestSelfScopeAPI(t *testing.T) {
 	c.do(selfTok, http.MethodGet, "/locations/room-42", nil, http.StatusOK)
 	c.do(selfTok, http.MethodPatch, "/locations/room-42", patch, http.StatusOK)
 
+	// But self is a leaf-lock: it grants no create-placement, so a child cannot be
+	// added under the node even though the role carries location:create. The room is
+	// readable but outside the create scope, so this is a 403 (not a 404).
+	if code, _ := c.send(selfTok, http.MethodPost, "/locations", body("under-self", "room-42")); code != http.StatusForbidden {
+		t.Fatalf("self grant creating a child: want 403 (no create-placement), got %d", code)
+	}
+
 	// Descendants are NOT in scope: a child is invisible (404, non-disclosing), not a
 	// readable-but-forbidden 403, because self never walks the subtree.
 	if code, _ := c.send(selfTok, http.MethodGet, "/locations/rack-1", nil); code != http.StatusNotFound {

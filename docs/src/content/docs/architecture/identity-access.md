@@ -204,16 +204,18 @@ additive-grant model and confines the change to one predicate. It is moot for th
 | --- | --- | --- | --- |
 | `subtree` (default) | ≥ | the root **and** everything beneath it | every action |
 | `subtree_excl_root` | > | the root's descendants; **not** the root itself | update / delete (read and create keep the root) |
-| `self` | = | **exactly** the root row, no descendants | every action |
+| `self` | = | **exactly** the root row, no descendants | read / update / delete (**not** create: no children) |
 
 `subtree` is the ordinary case. `subtree_excl_root` is the integrator / deploy grant: `deploy @
 location:room-42 (>)` lets a field tech add and edit the systems and components inside room-42 without being
 able to rename or delete room-42. It narrows only the **modify** actions to the descendants; read and
 create-placement still include the root so the holder can see the boundary of its scope and place children
 under it. A `PATCH` on the root is then the readable-but-out-of-write-scope **403** (not a 404: the target is
-readable), while a `POST` under the root and a `PATCH` on a descendant succeed. `self` is the tightest grant:
-exactly one node, its own row, for every action, and never a descendant, so `viewer @ location:room-42 (=)`
-sees and (with the capability) edits only room-42, and the list returns only room-42.
+readable), while a `POST` under the root and a `PATCH` on a descendant succeed. `self` is the tightest grant, a
+leaf-lock on one node: exactly its own row for read, update, and delete, never a descendant, and (unlike the
+two subtree operators) **not** create-placement, so it grants no authority to grow the tree under the node. So
+`operator @ location:room-42 (=)` sees and edits only room-42, cannot add a child under it (a `POST` under it
+is a **403**), and the list returns only room-42.
 
 Operators combine by union across grants, resolved per action: an inclusive `subtree` grant on a root wins
 over an excluding one, and a `self` grant re-admits a root that a `subtree_excl_root` grant stripped (the

@@ -107,11 +107,12 @@ func TestResolveSubtreeExclRootInclusiveWins(t *testing.T) {
 
 func TestResolveSelf(t *testing.T) {
 	idx := index()
-	// scope_op = self: exactly the ROOM row, no descendant walk, uniform across every
-	// action. The root goes to SelfIDs (matched by id equality), never to IDs (which
-	// the gateway would expand into a subtree).
+	// scope_op = self: exactly the ROOM row, no descendant walk. The root goes to
+	// SelfIDs (matched by id equality), never to IDs (which the gateway would expand
+	// into a subtree). It applies to read/update/delete but NOT create: a leaf-lock
+	// grants no authority to place children under its node.
 	grants := []scope.Grant{{Role: "loc-editor", ScopeKind: "location", ScopeID: "ROOM", ScopeOp: "self"}}
-	for _, action := range []string{"read", "create", "update", "delete"} {
+	for _, action := range []string{"read", "update", "delete"} {
 		s := scope.Resolve(grants, idx, "location", action)
 		if len(s.SelfIDs) != 1 || s.SelfIDs[0] != "ROOM" || len(s.IDs) != 0 || len(s.ExcludeRootIDs) != 0 {
 			t.Fatalf("%s self scope = %+v, want ROOM as a self id only", action, s)
@@ -119,6 +120,11 @@ func TestResolveSelf(t *testing.T) {
 		if s.Empty() {
 			t.Fatalf("%s self scope should not be Empty, got %+v", action, s)
 		}
+	}
+	// Create is out of a self grant's scope entirely: it cannot place a child.
+	c := scope.Resolve(grants, idx, "location", "create")
+	if !c.Empty() {
+		t.Fatalf("self create scope = %+v, want empty (no create-placement)", c)
 	}
 }
 

@@ -18,7 +18,7 @@ export const SCOPE_OPS: ScopeOp[] = ["subtree", "subtree_excl_root", "self"];
 export const TREE_OP: Record<ScopeOp, { glyph: string; label: string; hint: string }> = {
   subtree: { glyph: "≥", label: "at or under", hint: "entity and all under it" },
   subtree_excl_root: { glyph: ">", label: "under only", hint: "under it, not the entity" },
-  self: { glyph: "=", label: "just this", hint: "exactly this entity" },
+  self: { glyph: "=", label: "just this", hint: "this node only, no children" },
 };
 
 // A grant identity: role at a scope. scope_id is absent for the all scope;

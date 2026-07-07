@@ -60,8 +60,8 @@ location-scoped admin cannot list users.
   each commit becomes a `role @ operator scope` chip. The operator is one of **at or under** (`≥`,
   the entity and everything beneath it, the default), **under only** (`>`, the descendants but not
   the entity itself, for update and delete), or **just this** (`=`, exactly the one entity, no
-  descendants), so you can grant a field tech everything inside a room without letting them rename
-  the room, or scope an operator to a single node. Removing an existing grant marks it (dimmed and
+  descendants and no adding children under it), so you can grant a field tech everything inside a room
+  without letting them rename the room, or lock an operator to a single node. Removing an existing grant marks it (dimmed and
   struck, undoable), staging a new one shows it in green, and a pending-diff line ("+N to grant, -M
   to revoke") previews exactly what **Save** will do. That is how a fresh user gets permissions. A
   scope targets the entity by its internal id, so a grant survives a rename of that entity. One rule
