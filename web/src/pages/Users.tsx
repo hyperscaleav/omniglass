@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import Page from "../components/Page";
 import GrantBuilder from "../components/GrantBuilder";
 import type { TreeNode } from "../lib/treeselect";
-import type { ExistingGrant, GrantRef } from "../lib/grantdraft";
+import type { ExistingGrant, GrantRef, ScopeOp } from "../lib/grantdraft";
 import { type Principal, type ScopeKind, PRINCIPALS_KEY, ROLES_KEY, listPrincipals, createPrincipal, updatePrincipal, createGrant, revokeGrant, setPrincipalActive, listRoles, principalName } from "../lib/principals";
 import { useMe, can } from "../lib/auth";
 import { impersonate } from "../lib/impersonation";
@@ -234,7 +234,7 @@ function GrantEditor(props: { principal: Principal; canGrant: boolean; canRevoke
   const current = createMemo<ExistingGrant[]>(() =>
     props.principal.grants
       .filter((g) => g.id)
-      .map((g) => ({ id: g.id!, role: g.role, scope_kind: g.scope_kind as ScopeKind, scope_id: g.scope_id ?? undefined })),
+      .map((g) => ({ id: g.id!, role: g.role, scope_kind: g.scope_kind as ScopeKind, scope_id: g.scope_id ?? undefined, scope_op: (g.scope_op as ScopeOp) || undefined })),
   );
 
   // The scope entities of a kind as TreeNodes, so the entity stage reads as an
@@ -247,7 +247,12 @@ function GrantEditor(props: { principal: Principal; canGrant: boolean; canRevoke
   async function onSave(diff: { adds: GrantRef[]; removes: ExistingGrant[] }) {
     try {
       for (const a of diff.adds) {
-        await createGrant(props.principal.id, { role: a.role, scope_kind: a.scope_kind, scope_id: a.scope_kind === "all" ? undefined : a.scope_id });
+        await createGrant(props.principal.id, {
+          role: a.role,
+          scope_kind: a.scope_kind,
+          scope_id: a.scope_kind === "all" ? undefined : a.scope_id,
+          scope_op: a.scope_kind === "all" ? undefined : a.scope_op,
+        });
       }
       for (const r of diff.removes) {
         await revokeGrant(props.principal.id, r.id);

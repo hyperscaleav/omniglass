@@ -16,16 +16,23 @@ import {
 // sent until save. These pure functions compute the draft, its per-chip visual
 // state, and the add/remove diff the save applies. No I/O, no framework.
 
-const existing = (id: string, role: string, kind: GrantRef["scope_kind"], scope?: string): ExistingGrant =>
-  ({ id, role, scope_kind: kind, scope_id: scope });
-const ref = (role: string, kind: GrantRef["scope_kind"], scope?: string): GrantRef =>
-  ({ role, scope_kind: kind, scope_id: scope });
+const existing = (id: string, role: string, kind: GrantRef["scope_kind"], scope?: string, op?: GrantRef["scope_op"]): ExistingGrant =>
+  ({ id, role, scope_kind: kind, scope_id: scope, scope_op: op });
+const ref = (role: string, kind: GrantRef["scope_kind"], scope?: string, op?: GrantRef["scope_op"]): GrantRef =>
+  ({ role, scope_kind: kind, scope_id: scope, scope_op: op });
 
 describe("grantKey", () => {
   it("identifies a grant by role and scope, ignoring the server id and the all scope's phantom id", () => {
     expect(grantKey(ref("admin", "all"))).toBe(grantKey(ref("admin", "all", "ignored")));
-    expect(grantKey(ref("admin", "location", "boi"))).toBe("admin@location:boi");
+    expect(grantKey(ref("admin", "location", "boi"))).toBe("admin@location:boi#subtree");
     expect(grantKey(ref("admin", "all"))).toBe("admin@all");
+  });
+  it("defaults an absent operator to subtree, so a server subtree grant matches a staged one", () => {
+    expect(grantKey(ref("admin", "location", "boi"))).toBe(grantKey(ref("admin", "location", "boi", "subtree")));
+  });
+  it("distinguishes the same role@scope at different operators (a distinct grant, not a duplicate)", () => {
+    expect(grantKey(ref("admin", "location", "boi", "self"))).not.toBe(grantKey(ref("admin", "location", "boi", "subtree")));
+    expect(grantKey(ref("admin", "location", "boi", "self"))).toBe("admin@location:boi#self");
   });
   it("distinguishes the same role at different scopes and different roles at one scope", () => {
     expect(grantKey(ref("admin", "location", "boi"))).not.toBe(grantKey(ref("admin", "location", "sjc")));
@@ -49,13 +56,13 @@ describe("toggleGrant", () => {
   const current = [existing("g1", "admin", "location", "boi")];
   it("marks an existing kept grant for removal (drops it from the draft)", () => {
     const draft = [ref("admin", "location", "boi")];
-    expect(toggleGrant(current, draft, "admin@location:boi")).toEqual([]);
+    expect(toggleGrant(current, draft, "admin@location:boi#subtree")).toEqual([]);
   });
   it("undoes a removal by re-adding the existing grant from the server set", () => {
     const draft: GrantRef[] = []; // admin@boi marked for removal
-    const out = toggleGrant(current, draft, "admin@location:boi");
+    const out = toggleGrant(current, draft, "admin@location:boi#subtree");
     expect(out).toHaveLength(1);
-    expect(grantKey(out[0])).toBe("admin@location:boi");
+    expect(grantKey(out[0])).toBe("admin@location:boi#subtree");
   });
   it("cancels a pending add", () => {
     const draft = [ref("admin", "location", "boi"), ref("viewer", "all")];
@@ -70,7 +77,7 @@ describe("chipStates", () => {
     const draft = [ref("admin", "location", "boi"), ref("operator", "location", "sjc")];
     const states = chipStates(current, draft);
     expect(states.map((s) => s.kind)).toEqual(["unchanged", "removed", "added"]);
-    expect(grantKey(states[2].grant)).toBe("operator@location:sjc");
+    expect(grantKey(states[2].grant)).toBe("operator@location:sjc#subtree");
   });
 });
 
@@ -87,6 +94,13 @@ describe("pendingDiff / isDirty", () => {
     expect(adds).toEqual([ref("operator", "location", "sjc")]);
     expect(removes).toEqual([existing("g2", "viewer", "all")]);
     expect(isDirty(current, draft)).toBe(true);
+  });
+  it("treats an operator change on an existing grant as a revoke plus a grant", () => {
+    const one = [existing("g1", "admin", "location", "boi", "subtree")];
+    const draft = [ref("admin", "location", "boi", "self")]; // same role@scope, new op
+    const { adds, removes } = pendingDiff(one, draft);
+    expect(adds).toEqual([ref("admin", "location", "boi", "self")]);
+    expect(removes).toEqual([existing("g1", "admin", "location", "boi", "subtree")]);
   });
 });
 

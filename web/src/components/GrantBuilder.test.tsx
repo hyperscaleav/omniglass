@@ -30,6 +30,9 @@ const typeEnter = (input: HTMLElement, value: string) => {
   fireEvent.input(input, { target: { value } });
   fireEvent.keyDown(input, { key: "Enter" });
 };
+// enter accepts the pre-selected suggestion (the op stage pre-selects subtree, so a
+// bare Enter takes the default operator).
+const enter = (input: HTMLElement) => fireEvent.keyDown(input, { key: "Enter" });
 
 describe("GrantBuilder", () => {
   it("stages an all-scope grant through the keyboard pipeline and applies it only on save", () => {
@@ -47,14 +50,37 @@ describe("GrantBuilder", () => {
     expect(onSave.mock.calls[0][0]).toEqual({ adds: [{ role: "admin", scope_kind: "all", scope_id: undefined }], removes: [] });
   });
 
-  it("stages a scoped grant (role -> kind -> entity), resolving the entity name in the chip", () => {
-    const { getByRole, queryByLabelText } = mount([]);
+  it("stages a scoped grant (role -> kind -> entity -> op), resolving the entity name and default operator in the chip", () => {
+    const { onSave, getByRole, queryByLabelText, getByText } = mount([]);
     const input = getByRole("combobox");
     typeEnter(input, "viewer"); // role
     typeEnter(input, "location"); // scope kind
-    typeEnter(input, "boi"); // entity by name
+    typeEnter(input, "boi"); // entity by name -> op stage
+    enter(input); // accept the default operator (subtree)
 
-    expect(queryByLabelText("Remove staged viewer @ location:boi")).toBeTruthy();
+    // The default operator renders its glyph in the chip.
+    expect(queryByLabelText("Remove staged viewer @ ≥ location:boi")).toBeTruthy();
+    fireEvent.click(getByText("Save grants"));
+    expect(onSave.mock.calls[0][0]).toEqual({
+      adds: [{ role: "viewer", scope_kind: "location", scope_id: "loc-boi", scope_op: "subtree" }],
+      removes: [],
+    });
+  });
+
+  it("stages a self grant when the 'just this' operator is chosen, sending scope_op self", () => {
+    const { onSave, getByRole, queryByLabelText, getByText } = mount([]);
+    const input = getByRole("combobox");
+    typeEnter(input, "viewer"); // role
+    typeEnter(input, "location"); // scope kind
+    typeEnter(input, "boi"); // entity -> op stage
+    typeEnter(input, "just"); // filter to "just this" (self) and commit
+
+    expect(queryByLabelText("Remove staged viewer @ = location:boi")).toBeTruthy();
+    fireEvent.click(getByText("Save grants"));
+    expect(onSave.mock.calls[0][0]).toEqual({
+      adds: [{ role: "viewer", scope_kind: "location", scope_id: "loc-boi", scope_op: "self" }],
+      removes: [],
+    });
   });
 
   it("marks an existing grant for removal and saves it as a revoke, not a live delete", () => {
@@ -111,7 +137,8 @@ describe("GrantBuilder", () => {
     typeEnter(input, "location"); // kind -> entity stage, tree still empty
     setLocs(locNodes); // the refetch lands
     typeEnter(input, "boi"); // only resolvable if the memo re-tracked the new data
-    expect(queryByLabelText("Remove staged viewer @ location:boi")).toBeTruthy();
+    enter(input); // accept the default operator
+    expect(queryByLabelText("Remove staged viewer @ ≥ location:boi")).toBeTruthy();
   });
 
   it("cancels all staged changes", () => {

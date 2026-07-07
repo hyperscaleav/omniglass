@@ -9,8 +9,11 @@ import {
   stageGrant,
   toggleGrant,
   validateStage,
+  SCOPE_OPS,
+  TREE_OP,
   type ExistingGrant,
   type GrantRef,
+  type ScopeOp,
 } from "../lib/grantdraft";
 import type { ScopeKind } from "../lib/principals";
 import { describeError } from "../lib/format";
@@ -26,11 +29,12 @@ import { X } from "./icons";
 type ScopedKind = Exclude<ScopeKind, "all" | "group">;
 const SCOPE_KINDS: ScopeKind[] = ["all", "location", "system", "component"];
 
-type Stage = "role" | "kind" | "entity";
+type Stage = "role" | "kind" | "entity" | "op";
 type Suggestion =
   | { kind: "role"; value: string; label: string; depth?: number }
   | { kind: "scope"; value: ScopeKind; label: string; depth?: number }
-  | { kind: "entity"; value: string; label: string; depth: number };
+  | { kind: "entity"; value: string; label: string; depth: number }
+  | { kind: "op"; value: ScopeOp; label: string; hint: string; depth?: number };
 
 const errMsg = (e: "role-required" | "entity-required" | "duplicate"): string =>
   e === "duplicate" ? "That role is already granted at that scope." : e === "entity-required" ? "Pick an entity for that scope." : "Pick a role.";
@@ -49,6 +53,7 @@ export default function GrantBuilder(props: {
   const [stage, setStage] = createSignal<Stage>("role");
   const [pendRole, setPendRole] = createSignal("");
   const [pendKind, setPendKind] = createSignal<ScopedKind>("location");
+  const [pendEntity, setPendEntity] = createSignal("");
   const [text, setText] = createSignal("");
   const [open, setOpen] = createSignal(false);
   const [sel, setSel] = createSignal(-1);
@@ -66,6 +71,7 @@ export default function GrantBuilder(props: {
     setStage("role");
     setPendRole("");
     setPendKind("location");
+    setPendEntity("");
     setText("");
     setSel(-1);
   };
@@ -83,13 +89,18 @@ export default function GrantBuilder(props: {
     if (stage() === "kind") {
       return SCOPE_KINDS.filter((k) => k.includes(t)).map((k) => ({ kind: "scope", value: k, label: k }) as Suggestion);
     }
+    if (stage() === "op") {
+      return SCOPE_OPS.filter((o) => TREE_OP[o].label.toLowerCase().includes(t) || o.includes(t)).map(
+        (o) => ({ kind: "op", value: o, label: `${TREE_OP[o].glyph}  ${TREE_OP[o].label}`, hint: TREE_OP[o].hint }) as Suggestion,
+      );
+    }
     return flattenTree(props.entities(pendKind()))
       .filter((o) => o.label.toLowerCase().includes(t))
       .map((o) => ({ kind: "entity", value: o.value, label: o.label, depth: o.depth }) as Suggestion);
   });
 
-  const commit = (role: string, kind: ScopeKind, scopeId?: string) => {
-    const candidate: GrantRef = { role, scope_kind: kind, scope_id: scopeId };
+  const commit = (role: string, kind: ScopeKind, scopeId?: string, op?: ScopeOp) => {
+    const candidate: GrantRef = { role, scope_kind: kind, scope_id: scopeId, scope_op: op };
     const bad = validateStage(draft(), candidate);
     if (bad) {
       setErr(errMsg(bad));
@@ -125,13 +136,24 @@ export default function GrantBuilder(props: {
       inputRef?.focus();
       return;
     }
-    commit(pendRole(), pendKind(), s.value);
+    if (s.kind === "entity") {
+      // The operator applies to the chosen entity: advance to the op stage, where
+      // subtree is pre-selected so Enter commits the common case immediately.
+      setPendEntity(s.value);
+      setStage("op");
+      setText("");
+      setSel(0);
+      inputRef?.focus();
+      return;
+    }
+    commit(pendRole(), pendKind(), pendEntity(), s.value);
   };
 
   // Backspace on an empty input steps back a stage, or removes the last chip when
   // already at the role stage (mirrors FilterBar's chip backspace).
   const stepBack = () => {
-    if (stage() === "entity") setStage("kind");
+    if (stage() === "op") setStage("entity");
+    else if (stage() === "entity") setStage("kind");
     else if (stage() === "kind") {
       setStage("role");
       setPendRole("");
@@ -170,10 +192,22 @@ export default function GrantBuilder(props: {
     }
   };
 
-  const placeholder = () => (stage() === "role" ? "role…" : stage() === "kind" ? "scope: all, location, system, component" : `${pendKind()}…`);
+  const placeholder = () =>
+    stage() === "role"
+      ? "role…"
+      : stage() === "kind"
+        ? "scope: all, location, system, component"
+        : stage() === "op"
+          ? "match: at or under, under only, just this"
+          : `${pendKind()}…`;
 
-  const chipLabel = (g: GrantRef): string =>
-    g.scope_kind === "all" ? `${g.role} @ all` : `${g.role} @ ${g.scope_kind}:${(g.scope_id && props.scopeName(g.scope_id)) || g.scope_id}`;
+  // A scoped chip shows the operator glyph so the scope is legible at a glance
+  // (= just this, ≥ at or under, > under only); the all scope has no operator.
+  const chipLabel = (g: GrantRef): string => {
+    if (g.scope_kind === "all") return `${g.role} @ all`;
+    const name = (g.scope_id && props.scopeName(g.scope_id)) || g.scope_id;
+    return `${g.role} @ ${TREE_OP[g.scope_op ?? "subtree"].glyph} ${g.scope_kind}:${name}`;
+  };
 
   const diff = createMemo(() => pendingDiff(props.current, draft()));
   const dirty = createMemo(() => isDirty(props.current, draft()));
@@ -229,7 +263,7 @@ export default function GrantBuilder(props: {
         </For>
       </div>
 
-      {/* Staged combobox: role -> kind -> entity, each commit a chip. */}
+      {/* Staged combobox: role -> kind -> entity -> op, each commit a chip. */}
       <Show when={props.canGrant}>
         <div class="relative mt-2.5">
           <div
@@ -237,7 +271,10 @@ export default function GrantBuilder(props: {
             onClick={(e) => e.currentTarget === e.target && inputRef?.focus()}
           >
             <Show when={pendRole()}>
-              <span class="font-data text-[11px] text-base-content/60">{pendRole()} @{stage() === "entity" ? ` ${pendKind()}:` : ""}</span>
+              <span class="font-data text-[11px] text-base-content/60">
+                {pendRole()} @
+                {stage() === "entity" ? ` ${pendKind()}:` : stage() === "op" ? ` ${pendKind()}:${(pendEntity() && props.scopeName(pendEntity())) || pendEntity()} ` : ""}
+              </span>
             </Show>
             <input
               ref={inputRef}
@@ -262,7 +299,7 @@ export default function GrantBuilder(props: {
             />
           </div>
           <Show when={open() && suggestions().length > 0}>
-            <ul id={listId} role="listbox" class="absolute z-40 mt-1.5 max-h-64 w-72 overflow-auto rounded-box border border-base-300 bg-base-100 p-1.5 shadow-2xl">
+            <ul id={listId} role="listbox" class="absolute z-40 mt-1.5 max-h-64 w-80 overflow-auto rounded-box border border-base-300 bg-base-100 p-1.5 shadow-2xl">
               <For each={suggestions()}>
                 {(s, i) => (
                   <li>
@@ -279,9 +316,12 @@ export default function GrantBuilder(props: {
                       }}
                       onMouseEnter={() => setSel(i())}
                     >
-                      <span classList={{ "font-data": s.kind !== "scope" }}>{s.label}</span>
+                      <span classList={{ "font-data": s.kind !== "scope" && s.kind !== "op" }}>{s.label}</span>
                       <Show when={stage() === "role"}>
                         <span class="ml-auto text-xs text-base-content/40">role</span>
+                      </Show>
+                      <Show when={s.kind === "op"}>
+                        <span class="ml-auto pl-2 text-right text-[11px] text-base-content/40">{(s as { hint: string }).hint}</span>
                       </Show>
                     </button>
                   </li>
