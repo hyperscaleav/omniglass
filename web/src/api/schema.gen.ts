@@ -411,7 +411,7 @@ export interface paths {
         put?: never;
         /**
          * Impersonate a principal (view-as or act-as)
-         * @description Mints a bounded, revocable token to view as (read-only) or act as (full) the target. Gated by principal:impersonate (all-scope). Refused on self, when it would grant a capability the caller lacks (the escalation guard), or from within an existing impersonation.
+         * @description Mints a bounded, revocable token to view as (read-only) or act as (full) the target. Gated by principal:impersonate (all-scope). Refused on self, on an owner target (owners are un-impersonatable by anyone), when it would grant a capability the caller lacks (the escalation guard), or from within an existing impersonation.
          */
         post: operations["impersonate-principal"];
         delete?: never;

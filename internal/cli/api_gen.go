@@ -572,7 +572,7 @@ func generatedCommands() []*cobra.Command {
 			cmd := &cobra.Command{
 				Use:     "impersonate",
 				Short:   "Impersonate a principal (view-as or act-as)",
-				Long:    "Mints a bounded, revocable token to view as (read-only) or act as (full) the target. Gated by principal:impersonate (all-scope). Refused on self, when it would grant a capability the caller lacks (the escalation guard), or from within an existing impersonation.",
+				Long:    "Mints a bounded, revocable token to view as (read-only) or act as (full) the target. Gated by principal:impersonate (all-scope). Refused on self, on an owner target (owners are un-impersonatable by anyone), when it would grant a capability the caller lacks (the escalation guard), or from within an existing impersonation.",
 				Example: "  omniglass principal impersonate --mode mode",
 				Args:    cobra.ExactArgs(0),
 				RunE: func(cmd *cobra.Command, args []string) error {

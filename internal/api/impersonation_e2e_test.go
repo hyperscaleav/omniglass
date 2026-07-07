@@ -156,6 +156,16 @@ func TestImpersonationAPI(t *testing.T) {
 		t.Fatalf("admin impersonating owner: want 403 (escalation), got %d (%s)", code, b)
 	}
 
+	// --- OWNER PROTECTION: an owner target is un-impersonatable by ANYONE, including
+	// another owner (not just blocked by the capability-cover arithmetic). Both modes. ---
+	otherOwnerTok := principalWithGrants(t, ctx, dsn, "other-owner", []grant{{role: "owner", scopeKind: "all"}})
+	otherOwnerID := meID(t, c, otherOwnerTok)
+	for _, mode := range []string{"view_as", "act_as"} {
+		if code, b := c.send(ownerTok, http.MethodPost, "/principals/"+otherOwnerID+":impersonate", map[string]any{"mode": mode}); code != http.StatusForbidden {
+			t.Fatalf("owner impersonating another owner (%s): want 403 (owner protection), got %d (%s)", mode, code, b)
+		}
+	}
+
 	// --- SELF: refused ---
 	begin(ownerID, "act_as", http.StatusUnprocessableEntity)
 

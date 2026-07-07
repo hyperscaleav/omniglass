@@ -40,7 +40,7 @@ func registerImpersonationRoutes(api huma.API, a *authenticator, gw storage.Gate
 		Path:          "/principals/{id}:impersonate",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Impersonate a principal (view-as or act-as)",
-		Description:   "Mints a bounded, revocable token to view as (read-only) or act as (full) the target. Gated by principal:impersonate (all-scope). Refused on self, when it would grant a capability the caller lacks (the escalation guard), or from within an existing impersonation.",
+		Description:   "Mints a bounded, revocable token to view as (read-only) or act as (full) the target. Gated by principal:impersonate (all-scope). Refused on self, on an owner target (owners are un-impersonatable by anyone), when it would grant a capability the caller lacks (the escalation guard), or from within an existing impersonation.",
 		Errors:        []int{http.StatusForbidden, http.StatusNotFound, http.StatusUnprocessableEntity},
 		Middlewares:   huma.Middlewares{a.authn, a.require("principal", "impersonate")},
 	}, func(ctx context.Context, in *impersonateInput) (*impersonateOutput, error) {
@@ -59,6 +59,17 @@ func registerImpersonationRoutes(api huma.API, a *authenticator, gw storage.Gate
 		target, err := gw.GetPrincipal(ctx, in.ID, a.scopeFor(ctx, "principal", "read"))
 		if err != nil {
 			return nil, mapPrincipalErr(err)
+		}
+		// Owner protection: an owner (a principal holding owner@all) is
+		// un-impersonatable by anyone, including another owner, in either mode. An
+		// owner is the highest-trust account, so impersonating one is a full-takeover
+		// vector; this removes it entirely rather than relying on the capability-cover
+		// arithmetic below (which already blocks a lesser caller but not owner->owner).
+		// The owner@all check is the same hardcoded-owner lane as the owner invariant.
+		for _, g := range target.Grants {
+			if g.Role == "owner" && g.ScopeKind == "all" {
+				return nil, huma.Error403Forbidden("an owner cannot be impersonated")
+			}
 		}
 		// Escalation guard: the caller's capabilities must cover the target's, so
 		// impersonation can never confer a capability the caller lacks (a lesser
