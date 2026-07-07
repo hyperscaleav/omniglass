@@ -22,6 +22,9 @@ type Config struct {
 	// Once runs a single claim + pull + heartbeat cycle and returns, for tests
 	// and one-shot invocations.
 	Once bool
+	// Dialer is the tcp probe primitive the node runs its tcp tasks with. Nil
+	// defaults to the real collection.NewTCPDialer(); tests inject a fake.
+	Dialer collection.TCPDialer
 }
 
 // Run claims the node's NATS credential, connects outbound-only to the bus,
@@ -42,9 +45,17 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	}
 	defer nc.Close()
 
+	dialer := cfg.Dialer
+	if dialer == nil {
+		dialer = collection.NewTCPDialer()
+	}
+
 	wl, err := pullWorklist(nc, cfg.Name)
 	if err != nil {
 		return collection.WorklistReply{}, err
+	}
+	if err := runTasks(ctx, nc, cfg.Name, wl, dialer); err != nil {
+		return wl, err
 	}
 	if err := publishHeartbeat(nc, cfg.Name); err != nil {
 		return wl, err
@@ -73,6 +84,9 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 			if next, err := pullWorklist(nc, cfg.Name); err == nil {
 				wl = next
 			}
+			// Run the worklist's tcp tasks and publish their telemetry. A publish
+			// failure is non-fatal (retry next tick).
+			_ = runTasks(ctx, nc, cfg.Name, wl, dialer)
 		}
 	}
 }

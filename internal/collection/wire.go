@@ -17,6 +17,9 @@ const (
 	// (single-token node wildcard), so a node name is always one subject token.
 	WorklistWildcard  = subjectPrefix + "worklist.*"
 	HeartbeatWildcard = subjectPrefix + "heartbeat.*"
+	// TelemetryWildcard is the server-side JetStream stream subject: every node's
+	// telemetry publish (single-token node wildcard), mirroring WorklistWildcard.
+	TelemetryWildcard = subjectPrefix + "telemetry.*"
 )
 
 // WorklistSubject is where a node requests its worklist (request-reply).
