@@ -119,4 +119,10 @@ describe("validateStage", () => {
   it("accepts a valid, novel grant", () => {
     expect(validateStage(draft, { role: "operator", scope_kind: "location", scope_id: "sjc" })).toBeNull();
   });
+  it("treats a different operator on an already-staged role@scope as novel, not a duplicate", () => {
+    // draft holds admin @ location:boi (subtree default); admin @ boi (self) is distinct.
+    expect(validateStage(draft, { role: "admin", scope_kind: "location", scope_id: "boi", scope_op: "self" })).toBeNull();
+    // ...but the same operator (explicit or default) is still a duplicate.
+    expect(validateStage(draft, { role: "admin", scope_kind: "location", scope_id: "boi", scope_op: "subtree" })).toBe("duplicate");
+  });
 });

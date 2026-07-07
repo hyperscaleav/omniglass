@@ -22,6 +22,11 @@ create unique index if not exists principal_grant_unique
 alter table principal_grant drop column if exists exclude_root;
 
 -- migrate:down
+-- Best-effort reversal (dev only): if the operator capability was exercised (two
+-- grants on one root differing only by scope_op, or any self grant), recreating the
+-- op-less unique index below can fail on a now-duplicate key, and self collapses to
+-- exclude_root=false (a widening). Rolling back removes the feature that gave those
+-- grants meaning, so this is acceptable for the ephemeral dev database.
 alter table principal_grant add column if not exists exclude_root boolean not null default false;
 update principal_grant set exclude_root = true where scope_op = 'subtree_excl_root';
 drop index if exists principal_grant_unique;

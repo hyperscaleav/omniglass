@@ -106,12 +106,14 @@ export function isDirty(current: ExistingGrant[], draft: GrantRef[]): boolean {
 export type StageError = "role-required" | "entity-required" | "duplicate";
 
 // validateStage checks a would-be grant against the draft: a role is required, a
-// scoped kind needs an entity, and the role@scope must not already be staged.
+// scoped kind needs an entity, and the role@scope@operator must not already be
+// staged. The operator is part of the key, so the same role@scope at a different
+// operator is a distinct grant, not a duplicate.
 export function validateStage(draft: GrantRef[], candidate: Partial<GrantRef>): StageError | null {
   if (!candidate.role) return "role-required";
   const kind = candidate.scope_kind ?? "all";
   if (kind !== "all" && !candidate.scope_id) return "entity-required";
-  const key = grantKey({ role: candidate.role, scope_kind: kind, scope_id: candidate.scope_id });
+  const key = grantKey({ role: candidate.role, scope_kind: kind, scope_id: candidate.scope_id, scope_op: candidate.scope_op });
   if (draft.some((g) => grantKey(g) === key)) return "duplicate";
   return null;
 }
