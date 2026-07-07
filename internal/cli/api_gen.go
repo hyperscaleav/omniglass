@@ -485,6 +485,108 @@ func generatedCommands() []*cobra.Command {
 	}
 	{
 		parent := &cobra.Command{
+			Use:   "node",
+			Short: "Commands for the node resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			var fName string
+			var fToken string
+			cmd := &cobra.Command{
+				Use:     "claim",
+				Short:   "Claim a node identity in exchange for its NATS credential",
+				Long:    "The node-facing exchange: a node presents its enrollment token and receives its NATS credential (url, username, password). Public (the token is the authentication); an invalid token is a 401.",
+				Example: "  omniglass node claim --name name --token token",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/nodes:claim")
+					body := map[string]any{}
+					if cmd.Flags().Changed("name") {
+						body["name"] = fName
+					}
+					if cmd.Flags().Changed("token") {
+						body["token"] = fToken
+					}
+					return runAPICommand(cmd, "POST", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fName, "name", "", "")
+			_ = cmd.MarkFlagRequired("name")
+			cmd.Flags().StringVar(&fToken, "token", "", "")
+			_ = cmd.MarkFlagRequired("token")
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			var fDescription string
+			var fName string
+			cmd := &cobra.Command{
+				Use:     "create",
+				Short:   "Create a node",
+				Long:    "Registers an edge node server-side (day-one enrollment: create, then :enroll to mint its token). Gated by node:create.",
+				Example: "  omniglass node create --name name",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/nodes")
+					body := map[string]any{}
+					if cmd.Flags().Changed("description") {
+						body["description"] = fDescription
+					}
+					if cmd.Flags().Changed("name") {
+						body["name"] = fName
+					}
+					return runAPICommand(cmd, "POST", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fDescription, "description", "", "")
+			cmd.Flags().StringVar(&fName, "name", "", "Globally unique node name (also its NATS subject token, so no dots or whitespace)")
+			_ = cmd.MarkFlagRequired("name")
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "enroll",
+				Short:   "Mint a node's enrollment token",
+				Long:    "Mints (or re-mints) the node's enrollment token and returns it once. The token is stored only as a hash; it is never logged. Gated by node:enroll.",
+				Example: "  omniglass node enroll",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/nodes/{name}:enroll")
+					return runAPICommand(cmd, "POST", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "get <name>",
+				Short:   "Get a node",
+				Long:    "Fetches a node by name. Requires an all-scope read. Gated by node:read.",
+				Example: "  omniglass node get <name>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/nodes/%s", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "list",
+				Short:   "List nodes",
+				Long:    "Lists the edge nodes. A node is estate-wide, so listing requires an all-scope read. Gated by node:read.",
+				Example: "  omniglass node list",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/nodes")
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		roots = append(roots, parent)
+	}
+	{
+		parent := &cobra.Command{
 			Use:   "principal",
 			Short: "Commands for the principal resource",
 		}

@@ -272,6 +272,90 @@ export interface paths {
         patch: operations["update-location"];
         trace?: never;
     };
+    "/nodes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List nodes
+         * @description Lists the edge nodes. A node is estate-wide, so listing requires an all-scope read. Gated by node:read.
+         */
+        get: operations["list-nodes"];
+        put?: never;
+        /**
+         * Create a node
+         * @description Registers an edge node server-side (day-one enrollment: create, then :enroll to mint its token). Gated by node:create.
+         */
+        post: operations["create-node"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/nodes/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a node
+         * @description Fetches a node by name. Requires an all-scope read. Gated by node:read.
+         */
+        get: operations["get-node"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/nodes/{name}:enroll": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mint a node's enrollment token
+         * @description Mints (or re-mints) the node's enrollment token and returns it once. The token is stored only as a hash; it is never logged. Gated by node:enroll.
+         */
+        post: operations["enroll-node"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/nodes:claim": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Claim a node identity in exchange for its NATS credential
+         * @description The node-facing exchange: a node presents its enrollment token and receives its NATS credential (url, username, password). Public (the token is the authentication); an invalid token is a 401.
+         */
+        post: operations["claim-node"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/principals": {
         parameters: {
             query?: never;
@@ -517,6 +601,30 @@ export interface components {
             /** @description The new password (at least 8 characters) */
             new_password: string;
         };
+        ClaimNodeInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ClaimNodeInputBody.json
+             */
+            readonly $schema?: string;
+            name: string;
+            token: string;
+        };
+        ClaimOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ClaimOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The NATS URL the node dials */
+            nats_url: string;
+            /** @description The node's NATS password (its enrollment token) */
+            password: string;
+            /** @description The node's NATS username (its node name) */
+            username: string;
+        };
         ComponentBody: {
             /**
              * Format: uri
@@ -590,6 +698,17 @@ export interface components {
             /** @description Parent location name; omit for a root location */
             parent?: string;
         };
+        CreateNodeInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateNodeInputBody.json
+             */
+            readonly $schema?: string;
+            description?: string;
+            /** @description Globally unique node name (also its NATS subject token, so no dots or whitespace) */
+            name: string;
+        };
         CreatePrincipalInputBody: {
             /**
              * Format: uri
@@ -620,6 +739,17 @@ export interface components {
             parent?: string;
             /** @description A system_type id */
             system_type: string;
+        };
+        EnrollOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/EnrollOutputBody.json
+             */
+            readonly $schema?: string;
+            name: string;
+            /** @description The enrollment token, shown once. Hand it to the node deployment; the node presents it to claim its NATS credential. */
+            token: string;
         };
         ErrorDetail: {
             /** @description Where the error occurred, e.g. 'body.items[3].tags' or 'path.thing-id' */
@@ -766,6 +896,15 @@ export interface components {
             readonly $schema?: string;
             locations: components["schemas"]["LocationBody"][] | null;
         };
+        ListNodesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListNodesOutputBody.json
+             */
+            readonly $schema?: string;
+            nodes: components["schemas"]["NodeBody"][] | null;
+        };
         ListPrincipalsOutputBody: {
             /**
              * Format: uri
@@ -829,6 +968,21 @@ export interface components {
             permissions: string[] | null;
             principal: components["schemas"]["PrincipalStruct"];
             service?: components["schemas"]["SvcBody"];
+        };
+        NodeBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/NodeBody.json
+             */
+            readonly $schema?: string;
+            description?: string;
+            enrolled: boolean;
+            /** Format: date-time */
+            enrolled_at?: string;
+            /** Format: date-time */
+            last_heartbeat_at?: string;
+            name: string;
         };
         PrincipalBody: {
             /**
@@ -1562,6 +1716,183 @@ export interface operations {
             };
             /** @description Error */
             default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-nodes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListNodesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-node": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateNodeInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NodeBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-node": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The node's unique name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NodeBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "enroll-node": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The node's unique name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnrollOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "claim-node": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClaimNodeInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClaimOutputBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };
