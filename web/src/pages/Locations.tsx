@@ -16,7 +16,7 @@ import {
 } from "../lib/locations";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
-import { ChevronRight, Maximize, Plus } from "../components/icons";
+import { ChevronRight, Maximize, Plus, resolveIcon } from "../components/icons";
 
 // Locations: the place tree on the generic ListView (campuses, buildings, floors,
 // rooms). Replaces the standalone Locations page/new/detail trio with the same
@@ -57,6 +57,13 @@ export default function Locations() {
 
   const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations }));
   const locationTypes = useQuery(() => ({ queryKey: LOCATION_TYPES_KEY, queryFn: listLocationTypes }));
+
+  // type id -> icon key, from the registry; drives each tree node's leading glyph.
+  const typeIcon = createMemo(() => {
+    const m = new Map<string, string>();
+    for (const t of locationTypes.data ?? []) m.set(t.id, t.icon);
+    return m;
+  });
 
   const nodes = createMemo<LocNode[]>(() => {
     const list = locations.data ?? [];
@@ -311,6 +318,12 @@ export default function Locations() {
     loading: () => locations.isLoading,
     error: () => locations.error,
     filterPlaceholder: "Filter by name, type…",
+    // Each node wears its type's glyph, tinted the same hue as its type badge, so
+    // campus vs building vs floor reads at a glance without opening the row.
+    leadIcon: (n) => {
+      const Ico = resolveIcon(typeIcon().get(n.type));
+      return <span class="opacity-80" style={{ color: TYPE_COLOR[n.type] ?? "var(--color-base-content)" }}><Ico size={15} /></span>;
+    },
     nameWeight: (n) => (TYPE_RANK[n.type] === 0 ? 600 : n.type === "room" ? 400 : 500),
     canAddChild: (n) => n.type !== "room",
     cellFor: (key, n, ctx) => {

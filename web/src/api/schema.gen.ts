@@ -801,6 +801,7 @@ export interface components {
         };
         LocationTypeBody: {
             display_name: string;
+            icon: string;
             id: string;
             official: boolean;
             /** Format: int64 */

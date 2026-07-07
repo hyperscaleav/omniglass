@@ -35,11 +35,13 @@ type listLocationsOutput struct {
 
 // locationTypeBody is the wire shape of a location_type registry row: the stable
 // id a location is classified by, its display_name, the rank that orders the
-// registry, and whether it ships with the binary.
+// registry, the icon the console renders as each location's leading tree glyph,
+// and whether it ships with the binary.
 type locationTypeBody struct {
 	ID          string `json:"id"`
 	DisplayName string `json:"display_name"`
 	Rank        int    `json:"rank"`
+	Icon        string `json:"icon"`
 	Official    bool   `json:"official"`
 }
 
@@ -125,7 +127,7 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		out.Body.LocationTypes = make([]locationTypeBody, 0, len(types))
 		for i := range types {
 			out.Body.LocationTypes = append(out.Body.LocationTypes, locationTypeBody{
-				ID: types[i].ID, DisplayName: types[i].DisplayName, Rank: types[i].Rank, Official: types[i].Official,
+				ID: types[i].ID, DisplayName: types[i].DisplayName, Rank: types[i].Rank, Icon: types[i].Icon, Official: types[i].Official,
 			})
 		}
 		return out, nil

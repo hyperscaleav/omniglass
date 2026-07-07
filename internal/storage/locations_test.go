@@ -16,18 +16,19 @@ func TestLocationTypeRegistry(t *testing.T) {
 	ctx := context.Background()
 
 	if err := gw.UpsertLocationType(ctx, storage.LocationType{
-		ID: "building", Official: true, DisplayName: "Building", Rank: 20,
+		ID: "building", Official: true, DisplayName: "Building", Rank: 20, Icon: "building",
 	}); err != nil {
 		t.Fatalf("upsert building: %v", err)
 	}
 	if err := gw.UpsertLocationType(ctx, storage.LocationType{
-		ID: "campus", Official: true, DisplayName: "Campus", Rank: 10,
+		ID: "campus", Official: true, DisplayName: "Campus", Rank: 10, Icon: "landmark",
 	}); err != nil {
 		t.Fatalf("upsert campus: %v", err)
 	}
-	// Re-upsert building with a new display_name: idempotent update, not a dup.
+	// Re-upsert building with a new display_name and icon: idempotent update, not
+	// a dup, and the icon is part of what the update carries.
 	if err := gw.UpsertLocationType(ctx, storage.LocationType{
-		ID: "building", Official: true, DisplayName: "Bldg", Rank: 20,
+		ID: "building", Official: true, DisplayName: "Bldg", Rank: 20, Icon: "building-2",
 	}); err != nil {
 		t.Fatalf("re-upsert building: %v", err)
 	}
@@ -45,5 +46,12 @@ func TestLocationTypeRegistry(t *testing.T) {
 	}
 	if types[1].DisplayName != "Bldg" {
 		t.Errorf("building display_name = %q, want Bldg (the update took)", types[1].DisplayName)
+	}
+	// The icon round-trips, and the re-upsert updated it in place.
+	if types[0].Icon != "landmark" {
+		t.Errorf("campus icon = %q, want landmark", types[0].Icon)
+	}
+	if types[1].Icon != "building-2" {
+		t.Errorf("building icon = %q, want building-2 (the update took)", types[1].Icon)
 	}
 }

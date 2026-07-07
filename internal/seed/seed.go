@@ -41,6 +41,7 @@ type locationTypesDoc struct {
 		ID          string `yaml:"id"`
 		DisplayName string `yaml:"display_name"`
 		Rank        int    `yaml:"rank"`
+		Icon        string `yaml:"icon"`
 	} `yaml:"location_types"`
 }
 
@@ -143,6 +144,7 @@ func seedLocationTypes(ctx context.Context, gw storage.Gateway) error {
 			Official:    true,
 			DisplayName: lt.DisplayName,
 			Rank:        lt.Rank,
+			Icon:        lt.Icon,
 		}); err != nil {
 			return err
 		}

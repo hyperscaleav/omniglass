@@ -40,6 +40,7 @@ func TestLocationTypesAPI(t *testing.T) {
 			ID          string `json:"id"`
 			DisplayName string `json:"display_name"`
 			Rank        int    `json:"rank"`
+			Icon        string `json:"icon"`
 			Official    bool   `json:"official"`
 		} `json:"location_types"`
 	}
@@ -64,6 +65,14 @@ func TestLocationTypesAPI(t *testing.T) {
 	for _, lt := range body.LocationTypes {
 		if lt.DisplayName == "" || !lt.Official {
 			t.Errorf("type %q: display_name=%q official=%v, want non-empty label + official", lt.ID, lt.DisplayName, lt.Official)
+		}
+	}
+	// The icon travels the wire so the console can render each type's leading tree
+	// glyph without a second lookup.
+	wantIcons := map[string]string{"campus": "landmark", "building": "building", "floor": "layers", "room": "door-open"}
+	for _, lt := range body.LocationTypes {
+		if lt.Icon != wantIcons[lt.ID] {
+			t.Errorf("type %q: icon=%q, want %q", lt.ID, lt.Icon, wantIcons[lt.ID])
 		}
 	}
 }
