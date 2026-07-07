@@ -108,7 +108,7 @@ export default function Profile() {
             </div>
             <Note note={profileMsg()} />
             <div class="card-actions">
-              <button type="submit" class="btn btn-primary btn-sm" disabled={profileBusy()}>
+              <button type="submit" class="btn btn-action btn-sm" disabled={profileBusy()}>
                 <Show when={profileBusy()}><span class="loading loading-spinner loading-xs" /></Show>
                 Save profile
               </button>
@@ -163,7 +163,7 @@ export default function Profile() {
             </div>
             <Note note={pwMsg()} />
             <div class="card-actions">
-              <button type="submit" class="btn btn-primary btn-sm" disabled={pwBusy() || !current() || !next()}>
+              <button type="submit" class="btn btn-action btn-sm" disabled={pwBusy() || !current() || !next()}>
                 <Show when={pwBusy()}><span class="loading loading-spinner loading-xs" /></Show>
                 Change password
               </button>

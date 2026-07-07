@@ -24,7 +24,7 @@ export default function ColumnMenu(props: ColumnMenuProps) {
   const [drag, setDrag] = createSignal<number | null>(null);
   return (
     <Popover placement="bottom-end" gutter={6}>
-      <Popover.Trigger class="btn btn-ghost btn-sm btn-square" title="Columns" aria-label="Columns">
+      <Popover.Trigger class="btn btn-quiet btn-sm btn-square" title="Columns" aria-label="Columns">
         <Columns size={15} />
       </Popover.Trigger>
       <Popover.Portal>

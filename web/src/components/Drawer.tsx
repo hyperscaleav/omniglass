@@ -22,7 +22,7 @@ export default function Drawer(props: {
             <Dialog.Title class="min-w-0 flex-1 truncate text-sm font-semibold">{props.title}</Dialog.Title>
             <div class="flex flex-none items-center gap-1">
               <Show when={props.headerExtra}>{props.headerExtra}</Show>
-              <Dialog.CloseButton class="btn btn-ghost btn-sm btn-square" aria-label="Close">
+              <Dialog.CloseButton class="btn btn-quiet btn-sm btn-square" aria-label="Close">
                 <X size={16} />
               </Dialog.CloseButton>
             </div>
