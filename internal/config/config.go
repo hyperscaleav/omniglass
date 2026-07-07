@@ -7,7 +7,10 @@
 // through this same package so there remains exactly one config seam.
 package config
 
-import "os"
+import (
+	"os"
+	"path/filepath"
+)
 
 // Defaults applied when the corresponding env var is unset or empty.
 const (
@@ -17,6 +20,13 @@ const (
 	DefaultDSN = "postgres://omniglass:omniglass@localhost:5432/omniglass?sslmode=disable"
 	// DefaultAddr is the HTTP API listen address. Override with OMNIGLASS_ADDR.
 	DefaultAddr = ":8080"
+	// DefaultNatsAddr is the embedded NATS listen address (host:port). Override
+	// with OMNIGLASS_NATS_ADDR. Bound to loopback by default: a node reaches it
+	// through the same host the API is on.
+	DefaultNatsAddr = "127.0.0.1:4222"
+	// DefaultNatsURL is the URL the node-claim exchange advertises. Override with
+	// OMNIGLASS_NATS_URL when the node reaches the bus at a different address.
+	DefaultNatsURL = "nats://127.0.0.1:4222"
 )
 
 // Config is the resolved runtime configuration for one process.
@@ -28,6 +38,12 @@ type Config struct {
 	// SecureCookies marks the session cookie Secure (https only). Set
 	// OMNIGLASS_SECURE_COOKIES=true behind TLS; off by default for local http dev.
 	SecureCookies bool
+	// NatsAddr is the host:port the embedded NATS server binds.
+	NatsAddr string
+	// NatsStoreDir is the JetStream store directory.
+	NatsStoreDir string
+	// NatsURL is the address the node-claim reply advertises to nodes.
+	NatsURL string
 }
 
 // Load resolves the configuration from the environment, applying defaults for
@@ -43,6 +59,9 @@ func Load() Config {
 		DSN:           resolveDSN(),
 		Addr:          firstNonEmpty(os.Getenv("OMNIGLASS_ADDR"), DefaultAddr),
 		SecureCookies: os.Getenv("OMNIGLASS_SECURE_COOKIES") == "true",
+		NatsAddr:      firstNonEmpty(os.Getenv("OMNIGLASS_NATS_ADDR"), DefaultNatsAddr),
+		NatsStoreDir:  firstNonEmpty(os.Getenv("OMNIGLASS_NATS_STORE_DIR"), filepath.Join(os.TempDir(), "omniglass-nats")),
+		NatsURL:       firstNonEmpty(os.Getenv("OMNIGLASS_NATS_URL"), DefaultNatsURL),
 	}
 }
 
