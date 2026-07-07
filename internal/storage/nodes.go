@@ -20,6 +20,7 @@ var (
 	ErrNodeExists        = errors.New("storage: node name already exists")
 	ErrNodeForbidden     = errors.New("storage: action not permitted on nodes")
 	ErrEnrollmentInvalid = errors.New("storage: enrollment token invalid")
+	ErrInvalidNodeName   = errors.New("storage: node name is not a valid subject token")
 )
 
 // Node is the edge runtime's server-side record: the detail row of its
@@ -312,8 +313,13 @@ func (p *PG) ListNodes(ctx context.Context, read scope.Set) ([]Node, error) {
 
 func mapNodeWriteErr(err error) error {
 	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-		return ErrNodeExists
+	if errors.As(err, &pgErr) {
+		switch pgErr.Code {
+		case "23505": // unique_violation
+			return ErrNodeExists
+		case "23514": // check_violation (node_name_subject_safe_check)
+			return ErrInvalidNodeName
+		}
 	}
 	return fmt.Errorf("storage: node write: %w", err)
 }

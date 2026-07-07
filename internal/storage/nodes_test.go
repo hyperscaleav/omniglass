@@ -165,3 +165,41 @@ func TestNodeGateway(t *testing.T) {
 		t.Fatalf("unknown node worklist: want empty/0, got %+v", empty)
 	}
 }
+
+// TestNodeNameSubjectSafety proves the node-name invariant is enforced at the
+// Storage Gateway, not only by validNodeName at the API layer: a node name
+// becomes a NATS subject token (og.v1.telemetry.<name>, ...) and its per-node
+// subject grant, so a name containing a dot, a subject wildcard ('*', '>'), or
+// whitespace must be rejected by the node table's CHECK constraint, with
+// CreateNode surfacing a clean ErrInvalidNodeName rather than a raw pg error.
+// Skipped under -short.
+func TestNodeNameSubjectSafety(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	dsn := storagetest.NewDSN(t)
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	all := scope.Set{All: true}
+
+	for _, bad := range []string{"bad.name", "*", ">", "has space", "tab\tname"} {
+		if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: bad, Description: "subject-unsafe"}, all); !errors.Is(err, storage.ErrInvalidNodeName) {
+			t.Fatalf("create node %q: want ErrInvalidNodeName, got %v", bad, err)
+		}
+		if _, err := gw.GetNode(ctx, bad, all); !errors.Is(err, storage.ErrNodeNotFound) {
+			t.Fatalf("get node %q after rejected create: want ErrNodeNotFound (no row), got %v", bad, err)
+		}
+	}
+
+	// A subject-safe name still succeeds.
+	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "node-safe", Description: "ok"}, all); err != nil {
+		t.Fatalf("create valid node: %v", err)
+	}
+}

@@ -192,6 +192,8 @@ func mapNodeErr(err error) error {
 		return huma.Error403Forbidden("forbidden")
 	case errors.Is(err, storage.ErrEnrollmentInvalid):
 		return huma.Error401Unauthorized("invalid enrollment token")
+	case errors.Is(err, storage.ErrInvalidNodeName):
+		return huma.Error422UnprocessableEntity("node name must be a single subject token (no dots, whitespace, or wildcards)")
 	default:
 		return huma.Error500InternalServerError("node operation failed")
 	}

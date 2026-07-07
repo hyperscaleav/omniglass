@@ -13,6 +13,13 @@
 -- interface/task/metric_datapoint keep resolving a node by name. The enrollment
 -- secret is a bearer credential ROW on the principal (see internal/storage), not
 -- a column here. enrolled_at is stamped on the first claim.
+--
+-- name is also a NATS subject token (og.v1.telemetry.<name>, og.v1.worklist.<name>,
+-- etc.) and the node's per-node subject grant, so the CHECK below rejects the
+-- characters that would break the subject model or forge a wildcard grant: a dot
+-- (token separator), '*'/'>' (subject wildcards), and whitespace. This mirrors
+-- validNodeName in internal/api/nodes.go; the API layer stays belt-and-suspenders,
+-- but the Storage Gateway is the enforcement boundary.
 create table if not exists node (
     principal_id      uuid        primary key references principal (id) on delete cascade,
     name              text        not null unique,
@@ -21,7 +28,8 @@ create table if not exists node (
     enrolled_at       timestamptz,
     labels            jsonb       not null default '{}'::jsonb,
     created_at        timestamptz not null default now(),
-    updated_at        timestamptz not null default now()
+    updated_at        timestamptz not null default now(),
+    constraint node_name_subject_safe_check check (name ~ '^[^.*> \t\n\r]+$')
 );
 
 -- The interface_type registry: which connection kinds exist and which have a
