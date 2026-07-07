@@ -144,4 +144,26 @@ func (UnimplementedGateway) InsertMetricDatapoints(context.Context, []MetricData
 func (UnimplementedGateway) LatestMetric(context.Context, string, string) (*MetricDatapoint, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) CreateNode(context.Context, string, NodeSpec, scope.Set) (*Node, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) SetEnrollmentToken(context.Context, string, string, string, scope.Set) (*Node, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) ClaimNode(context.Context, string, string) (*Node, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) AuthenticateNode(context.Context, string, string) (bool, error) {
+	return false, nil
+}
+func (UnimplementedGateway) RecordHeartbeat(context.Context, string) error { return nil }
+func (UnimplementedGateway) NodeWorklist(context.Context, string) (Worklist, error) {
+	return Worklist{}, nil
+}
+func (UnimplementedGateway) GetNode(context.Context, string, scope.Set) (*Node, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) ListNodes(context.Context, scope.Set) ([]Node, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) Close() {}

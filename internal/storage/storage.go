@@ -150,6 +150,19 @@ type Gateway interface {
 	InsertMetricDatapoints(ctx context.Context, evs []MetricDatapointEvent) error
 	LatestMetric(ctx context.Context, componentName, key string) (*MetricDatapoint, error)
 
+	// The node tier: the edge runtime's enrollment lifecycle and worklist. A node
+	// is estate-wide (all-scope create/enroll/read, like a principal). The claim,
+	// authenticate, heartbeat, and worklist paths are the node's own lane (gated by
+	// the enrollment token or the node's NATS subject grant, not RBAC scope).
+	CreateNode(ctx context.Context, actorID string, spec NodeSpec, create scope.Set) (*Node, error)
+	SetEnrollmentToken(ctx context.Context, actorID, name, tokenHashHex string, action scope.Set) (*Node, error)
+	ClaimNode(ctx context.Context, name, tokenHashHex string) (*Node, error)
+	AuthenticateNode(ctx context.Context, name, tokenHashHex string) (bool, error)
+	RecordHeartbeat(ctx context.Context, name string) error
+	NodeWorklist(ctx context.Context, name string) (Worklist, error)
+	GetNode(ctx context.Context, name string, read scope.Set) (*Node, error)
+	ListNodes(ctx context.Context, read scope.Set) ([]Node, error)
+
 	// Close releases the underlying connection pool. Idempotent at the pool
 	// level; call once on shutdown.
 	Close()
