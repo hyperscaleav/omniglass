@@ -20,6 +20,11 @@ type ctxKey int
 const (
 	principalCtxKey ctxKey = iota
 	permsCtxKey
+	// impModeCtxKey carries "view_as" / "act_as" when the request is impersonated,
+	// and impSessionCtxKey the session id (so the caller can end it). The real
+	// actor rides storage.RealActorContextKey so the audit writer records it.
+	impModeCtxKey
+	impSessionCtxKey
 )
 
 func principalFrom(ctx context.Context) (*storage.Principal, bool) {
@@ -30,6 +35,13 @@ func principalFrom(ctx context.Context) (*storage.Principal, bool) {
 func permsFrom(ctx context.Context) (rbac.Set, bool) {
 	s, ok := ctx.Value(permsCtxKey).(rbac.Set)
 	return s, ok
+}
+
+// impersonationMode returns the impersonation mode ("view_as"/"act_as") for the
+// request, empty when the caller is not impersonating.
+func impersonationMode(ctx context.Context) string {
+	m, _ := ctx.Value(impModeCtxKey).(string)
+	return m
 }
 
 // authenticator resolves bearer tokens to principals and lazily caches the role
@@ -83,20 +95,30 @@ func (a *authenticator) authn(ctx huma.Context, next func(huma.Context)) {
 		return
 	}
 	var pr *storage.Principal
+	var realActorID, impMode, impSession string
 	for _, tok := range candidates {
-		p, err := a.gw.AuthenticateBearer(ctx.Context(), auth.HashToken(tok))
-		switch {
-		case err == nil:
+		h := auth.HashToken(tok)
+		p, err := a.gw.AuthenticateBearer(ctx.Context(), h)
+		if err == nil {
 			pr = p
-		case errors.Is(err, storage.ErrCredentialNotFound):
-			continue
-		default:
+			break
+		}
+		if !errors.Is(err, storage.ErrCredentialNotFound) {
 			_ = huma.WriteErr(a.api, ctx, http.StatusInternalServerError, "authentication failed")
 			return
 		}
-		if pr != nil {
+		// Bearer miss: try the impersonation-session fallback for the same token. It
+		// resolves to the TARGET principal, carrying the real actor and the mode.
+		ip, ra, mode, sid, ierr := a.gw.AuthenticateImpersonation(ctx.Context(), h)
+		if ierr == nil {
+			pr, realActorID, impMode, impSession = ip, ra, mode, sid
 			break
 		}
+		if !errors.Is(ierr, storage.ErrCredentialNotFound) {
+			_ = huma.WriteErr(a.api, ctx, http.StatusInternalServerError, "authentication failed")
+			return
+		}
+		// both a bearer and an impersonation miss: try the next candidate token
 	}
 	if pr == nil {
 		_ = huma.WriteErr(a.api, ctx, http.StatusUnauthorized, "unauthenticated")
@@ -113,6 +135,23 @@ func (a *authenticator) authn(ctx huma.Context, next func(huma.Context)) {
 	}
 	c := huma.WithValue(ctx, principalCtxKey, pr)
 	c = huma.WithValue(c, permsCtxKey, idx.Flatten(roleIDs))
+	if impMode != "" {
+		// Impersonated request: mark the mode and session, and set the real actor so
+		// every audited mutation records who is really acting, never just the
+		// impersonated principal.
+		c = huma.WithValue(c, impModeCtxKey, impMode)
+		c = huma.WithValue(c, impSessionCtxKey, impSession)
+		c = huma.WithValue(c, storage.RealActorContextKey, realActorID)
+	}
+	// A view-as session is strictly read-only across EVERY route, enforced here in
+	// authn (not in require), because the self-scoped routes (update-me,
+	// change-password) skip the capability middleware. The HTTP method is the
+	// reliable mutation signal; only ending the session (stop-impersonation) is
+	// exempt. This is the single choke point a new mutating route cannot forget.
+	if impMode == "view_as" && ctx.Method() != http.MethodGet && ctx.Method() != http.MethodHead && ctx.Operation().OperationID != "stop-impersonation" {
+		_ = huma.WriteErr(a.api, ctx, http.StatusForbidden, "read-only while viewing as another principal")
+		return
+	}
 	next(c)
 }
 
@@ -121,6 +160,8 @@ func (a *authenticator) authn(ctx huma.Context, next func(huma.Context)) {
 // Scope (which entities) is the gateway's job and lands when entities exist.
 func (a *authenticator) require(resource, action string) func(huma.Context, func(huma.Context)) {
 	return func(ctx huma.Context, next func(huma.Context)) {
+		// view-as read-only is enforced in authn (a method-based choke point over
+		// every route, including the capability-less self-scoped ones), not here.
 		perms, ok := permsFrom(ctx.Context())
 		if !ok || !perms.Allows(resource, action) {
 			_ = huma.WriteErr(a.api, ctx, http.StatusForbidden, "forbidden")

@@ -13,6 +13,7 @@ package storage
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -42,6 +43,14 @@ type Gateway interface {
 	// principal, its kind profile, and its grants. Returns ErrCredentialNotFound
 	// if no credential matches.
 	AuthenticateBearer(ctx context.Context, hash []byte) (*Principal, error)
+	// The impersonation surface: an admin views/acts as another principal, audited
+	// with the real actor. BeginImpersonation persists a session (the API enforces
+	// the escalation guard first); AuthenticateImpersonation is the authn fallback
+	// on a bearer miss, resolving the token to the target principal plus the real
+	// actor, mode, and session id; EndImpersonation revokes a session.
+	BeginImpersonation(ctx context.Context, realActorID, targetID, mode string, ttl time.Duration) (string, *ImpersonationSession, error)
+	AuthenticateImpersonation(ctx context.Context, hash []byte) (pr *Principal, realActorID, mode, sessionID string, err error)
+	EndImpersonation(ctx context.Context, sessionID string) error
 	// AuthenticatePassword verifies a human's password against their argon2id
 	// credential and resolves the principal. Returns ErrBadCredentials for an
 	// unknown user, no password set, or a wrong password.

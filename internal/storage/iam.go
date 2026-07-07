@@ -283,13 +283,26 @@ func (p *PG) SetPassword(ctx context.Context, username, encoded string) (bool, e
 	case err != nil:
 		return false, fmt.Errorf("storage: lookup human %q: %w", username, err)
 	}
-	if _, err := p.pool.Exec(ctx, `
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return false, fmt.Errorf("storage: begin set password: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, `
 		insert into credential (principal_id, kind, secret_hash, prefix)
 		values ($1, 'password', $2, '')
 		on conflict (principal_id) where kind = 'password'
 			do update set secret_hash = excluded.secret_hash`,
 		pid, []byte(encoded)); err != nil {
 		return false, fmt.Errorf("storage: set password: %w", err)
+	}
+	// Audit the credential change (never the secret) so a password change leaves a
+	// trail and an impersonated change records the real actor.
+	if err := writeAuditRes(ctx, tx, pid, "change_password", "credential", pid, nil, nil); err != nil {
+		return false, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return false, fmt.Errorf("storage: commit set password: %w", err)
 	}
 	return true, nil
 }
@@ -315,13 +328,33 @@ func (p *PG) UpdateHumanProfile(ctx context.Context, principalID string, patch H
 	if patch.Email != nil {
 		email = nullize(*patch.Email)
 	}
-	if _, err := p.pool.Exec(ctx, `
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("storage: begin update human profile: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, `
 		update human set
 			display_name = case when $2 then $3 else display_name end,
 			email        = case when $4 then $5 else email end
 		where principal_id = $1`,
 		principalID, setDisplay, display, setEmail, email); err != nil {
 		return fmt.Errorf("storage: update human profile: %w", err)
+	}
+	// Audit the self-profile change so an impersonated (act-as) edit records the
+	// real actor, and every profile edit leaves a trail. Log the changed fields.
+	summary := map[string]any{}
+	if patch.DisplayName != nil {
+		summary["display_name"] = *patch.DisplayName
+	}
+	if patch.Email != nil {
+		summary["email"] = *patch.Email
+	}
+	if err := writeAuditRes(ctx, tx, principalID, "update", "principal", principalID, nil, summary); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("storage: commit update human profile: %w", err)
 	}
 	return nil
 }

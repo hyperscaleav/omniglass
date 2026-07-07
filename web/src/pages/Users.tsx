@@ -6,6 +6,7 @@ import type { TreeNode } from "../lib/treeselect";
 import type { ExistingGrant, GrantRef } from "../lib/grantdraft";
 import { type Principal, type ScopeKind, PRINCIPALS_KEY, ROLES_KEY, listPrincipals, createPrincipal, updatePrincipal, createGrant, revokeGrant, setPrincipalActive, listRoles, principalName } from "../lib/principals";
 import { useMe, can } from "../lib/auth";
+import { impersonate } from "../lib/impersonation";
 import { describeError } from "../lib/format";
 import { listLocations } from "../lib/locations";
 import { listSystems } from "../lib/systems";
@@ -37,6 +38,12 @@ export default function Users() {
     } catch (e) {
       setActErr(describeError(e));
     }
+  }
+
+  async function doImpersonate(p: Principal, mode: "view_as" | "act_as") {
+    setActErr(null);
+    const r = await impersonate(qc, p.id, principalName(p), mode);
+    if (!r.ok) setActErr(r.message);
   }
 
   const initials = (p: Principal) => principalName(p).slice(0, 2).toUpperCase();
@@ -150,6 +157,14 @@ export default function Users() {
                       <Show when={p().human}>
                         <button class="btn btn-action btn-sm" onClick={() => setEditOpen(true)}>Edit</button>
                       </Show>
+                    </div>
+                  </Show>
+                  <Show when={can(me.data, "principal", "impersonate") && p().id !== me.data?.principal?.id}>
+                    <div class="flex items-center gap-2 border-t border-base-300 pt-3">
+                      <span class="text-xs text-base-content/50">Impersonate to troubleshoot</span>
+                      <span class="flex-1" />
+                      <button class="btn btn-quiet btn-sm" onClick={() => doImpersonate(p(), "view_as")}>View as</button>
+                      <button class="btn btn-warn btn-sm" onClick={() => doImpersonate(p(), "act_as")}>Act as</button>
                     </div>
                   </Show>
                 </>

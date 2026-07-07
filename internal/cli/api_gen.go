@@ -464,6 +464,27 @@ func generatedCommands() []*cobra.Command {
 	}
 	{
 		parent := &cobra.Command{
+			Use:   "me",
+			Short: "Commands for the me resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "stopImpersonation",
+				Short:   "Stop the current impersonation session",
+				Long:    "Revokes the impersonation session presented by the request token, ending the view-as / act-as. Requires an impersonation token.",
+				Example: "  omniglass me stopImpersonation",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/auth/me:stopImpersonation")
+					return runAPICommand(cmd, "POST", path, nil)
+				},
+			}
+			return cmd
+		}())
+		roots = append(roots, parent)
+	}
+	{
+		parent := &cobra.Command{
 			Use:   "principal",
 			Short: "Commands for the principal resource",
 		}
@@ -543,6 +564,32 @@ func generatedCommands() []*cobra.Command {
 					return runAPICommand(cmd, "GET", path, nil)
 				},
 			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			var fDurationMinutes string
+			var fMode string
+			cmd := &cobra.Command{
+				Use:     "impersonate",
+				Short:   "Impersonate a principal (view-as or act-as)",
+				Long:    "Mints a bounded, revocable token to view as (read-only) or act as (full) the target. Gated by principal:impersonate (all-scope). Refused on self, when it would grant a capability the caller lacks (the escalation guard), or from within an existing impersonation.",
+				Example: "  omniglass principal impersonate --mode mode",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/principals/{id}:impersonate")
+					body := map[string]any{}
+					if cmd.Flags().Changed("duration-minutes") {
+						body["duration_minutes"] = fDurationMinutes
+					}
+					if cmd.Flags().Changed("mode") {
+						body["mode"] = fMode
+					}
+					return runAPICommand(cmd, "POST", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fDurationMinutes, "duration-minutes", "", "Session lifetime in minutes (default 30, max 1440)")
+			cmd.Flags().StringVar(&fMode, "mode", "", "view_as is read-only; act_as is full, with mutations attributed to both the real actor and the impersonated principal")
+			_ = cmd.MarkFlagRequired("mode")
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {

@@ -26,7 +26,7 @@ func TestCovers(t *testing.T) {
 	}
 	// A non-owner must NOT cover an owner: specific/partial perms never cover *:*.
 	if admin.Covers(owner) {
-		t.Error("admin must not cover owner (*:*) — no impersonation escalation to owner")
+		t.Error("admin must not cover owner (*:*): no impersonation escalation to owner")
 	}
 	if viewer.Covers(owner) {
 		t.Error("viewer must not cover owner")

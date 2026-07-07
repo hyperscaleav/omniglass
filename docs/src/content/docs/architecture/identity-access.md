@@ -220,6 +220,31 @@ COMMIT;  -- trigger fires here, sees the new grant, passes.
 
 Attempting to remove the last owner (by grant delete, principal delete, principal disable, or role change) raises a check-violation. The Gateway translates this into a 400 with a clear remediation message.
 
+## Impersonation (view-as and act-as)
+
+An owner or all-scope admin holding `principal:impersonate` can temporarily see and act through another
+principal, for troubleshooting. Two modes: **view-as** resolves reads under the target's `visible_set` and
+refuses every write (read-only), while **act-as** is full, and its mutations are attributed to **both** the
+impersonated principal and the real admin. `POST /principals/{id}:impersonate` mints a bounded (default 30
+minutes, revocable) bearer token stored as an `impersonation_session`, a table deliberately distinct from
+`credential`: a credential authenticates a principal **as itself**, a session authenticates one principal
+**as another on someone's behalf**, a materially different fact with its own expiry, revoke, and "who is
+impersonating whom" listing. The client sends that token, and `authn` resolves it on a bearer miss to the
+**target** principal, tagging the request with the real actor and the mode; `POST /auth/me:stopImpersonation`
+revokes it.
+
+Two guarantees make it safe. The **escalation guard**: a caller may impersonate a target only when the
+caller's capabilities **cover** the target's (`rbac.Set.Covers`), so impersonation can never confer a
+capability the caller lacks (a lesser admin cannot impersonate an owner). Scope is where the modes differ:
+view-as is cross-scope (read-only grants no write authority), but **act-as** additionally requires the caller
+be all-scope for the target's tree-write capabilities, since an impersonated mutation resolves its scope from
+the target: without it a split-grant admin (all-scope user management, campus-scoped infra) could act-as a
+different campus's admin and gain write there. And **accountability**: every audited mutation taken while
+impersonating records `real_actor_principal_id` alongside the impersonated `actor_principal_id`, so the true
+actor is never lost (the self-service `/auth/me` profile and password edits audit too). Self-impersonation is refused, nesting is refused, and
+disabling either the target or the real admin kills the session on its next request (the same per-request
+`active` re-read that makes disable hard revocation).
+
 ## Enforcement: where each check lives
 
 There is **no RLS and no direct database access** (no PostgREST). The **Storage Gateway is the only door to the database** and the API is its only caller, so authz lives entirely in the app. A targeted mutation passes three checkpoints in order: the **capability fast-reject** at the route, the **`canDo` decision** in the handler, and the **per-action scope plus audit** injected by the gateway. Each is one code seam:
@@ -359,7 +384,7 @@ TLS on the HTTP API (terminated at the binary when given a cert + key, or at the
 
 ## Audit
 
-Every API operation records the resolved **actor** (the principal id) in `audit_log`. Secret decrypts are always audited, never filterable. Node-mode writes record the node principal as actor; system-mode writes record `actor = 'system'` (or `'bootstrap'` for the seed phase) so the audit trail distinguishes operator action from platform internals. An AI tool acts via OAuth as a `human` or `service` principal, so its writes record that principal as actor.
+Every API operation records the resolved **actor** (the principal id) in `audit_log`. Secret decrypts are always audited, never filterable. Node-mode writes record the node principal as actor; system-mode writes record `actor = 'system'` (or `'bootstrap'` for the seed phase) so the audit trail distinguishes operator action from platform internals. An AI tool acts via OAuth as a `human` or `service` principal, so its writes record that principal as actor. When a request is **impersonated**, the row also records `real_actor_principal_id`, the true admin behind the impersonated actor, so accountability survives impersonation (see [impersonation](#impersonation-view-as-and-act-as)).
 
 ## Bootstrap
 
