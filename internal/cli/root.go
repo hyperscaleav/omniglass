@@ -26,6 +26,7 @@ func newRoot(version string) *cobra.Command {
 	// Hand-written commands: the run modes and the trusted bootstrap lane.
 	root.AddCommand(
 		newServerCmd(version),
+		newNodeCmd(),
 		newMigrateCmd(),
 		newBootstrapCmd(),
 		newTokenCmd(),
