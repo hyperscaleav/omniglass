@@ -48,7 +48,8 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0011](#adr-0011-grant-scope-is-an-operator-not-a-boolean-modifier) | 2026-07-06 | Accepted | Generalize the `exclude_root` boolean into a `scope_op` operator (`subtree` / `subtree_excl_root` / `self`), a flat enum, not a predicate-expression tree |
 | [ADR-0012](#adr-0012-owner-accounts-are-un-impersonatable-impersonation-stays-capability-gated-not-scope-intersected) | 2026-07-07 | Accepted | Owner accounts are un-impersonatable by anyone; impersonate stays swept by `principal:*`; drop act-as scope intersection (#101) |
 | [ADR-0013](#adr-0013-a-grant-cannot-confer-capabilities-the-granter-lacks) | 2026-07-07 | Accepted | Grant creation is refused when the granted role's capabilities exceed the granter's all-scope capabilities (admin cannot self-promote to owner) |
-| [ADR-0014](#adr-0014-the-audit-trail-is-a-sensitive-read-not-reached-by-a-partial-global-wildcard) | 2026-07-07 | Accepted | The audit trail is admin/owner-only: `audit` is a sensitive resource that `*:read` does not confer, only an explicit `audit:read` or `*:*` |
+| [ADR-0014](#adr-0014-the-audit-trail-is-a-sensitive-read-not-reached-by-a-partial-global-wildcard) | 2026-07-07 | Superseded by [ADR-0015](#adr-0015-permissions-are-topic-patterns-single-token-and-tail-wildcards) | The audit trail is admin/owner-only: `audit` is a sensitive resource that `*:read` does not confer, only an explicit `audit:read` or `*:*` |
+| [ADR-0015](#adr-0015-permissions-are-topic-patterns-single-token-and-tail-wildcards) | 2026-07-07 | Accepted | Permissions match like NATS subjects (`*` one token, `>` tail); admin-sensitivity is a deeper `:admin` token no partial wildcard reaches; owner is `>` |
 
 ## Entries
 
@@ -305,3 +306,32 @@ below from the project's history. From here it grows one slice at a time.
   **global** `*:read` wildcard over a sensitive **read**). The set is extensible if other sensitive reads
   appear (it holds only `audit` today).
 - **Closes the gap:** issue [#116](https://github.com/hyperscaleav/omniglass/issues/116).
+- **Superseded by** [ADR-0015](#adr-0015-permissions-are-topic-patterns-single-token-and-tail-wildcards): the
+  carve-out is replaced by consistent topic-pattern matching, where `:admin` is a deeper token no partial
+  wildcard reaches.
+
+### ADR-0015: Permissions are topic patterns (single-token and tail wildcards)
+
+- **Date:** 2026-07-07 | **Status:** Accepted | **Pages:** [identity and access](/architecture/identity-access/)
+- **Decision:** Permissions match like **NATS subjects** (which the node path already uses, so the stack shares
+  one wildcard convention): a colon-delimited token path where a literal matches itself, **`*` matches exactly
+  one token**, and **`>` matches one or more tokens and must be last**. A normal permission is
+  `resource:action`; an admin-sensitive one is `resource:action:admin`. Because `*` is a single token, a
+  two-token pattern (`*:read`, `*:*`, `principal:*`) structurally cannot match a three-token `:admin`
+  permission: admin-sensitivity is a **deeper token**, not a special case. The whole-estate superuser is `>`
+  (issue [#118](https://github.com/hyperscaleav/omniglass/issues/118)).
+- **Context:** The prior ad-hoc wildcard let a two-token `*:*` match a three-token `x:y:z`, an inconsistency:
+  the second `*` was silently absorbing a tail. Making matching a real topic match removes every special case,
+  the [ADR-0014](#adr-0014-the-audit-trail-is-a-sensitive-read-not-reached-by-a-partial-global-wildcard)
+  `sensitiveResources` set is **deleted**. `viewer`'s `*:read` misses `audit:read:admin` because two tokens
+  cannot match three; `owner` reaches it via `>`; `admin` carries `audit:read:admin` explicitly. It also fixes,
+  for free, a boundary wart from the [grant guard](#adr-0013-a-grant-cannot-confer-capabilities-the-granter-lacks):
+  `principal:*` is now `principal:<one token>`, so it does **not** sweep an admin-tier `principal:<action>:admin`,
+  those stay owner-only unless granted explicitly. `Set.Allows` matches by token; `Set.Covers` (the impersonation
+  and grant-escalation guard) becomes pattern subsumption plus the `:read` floor, staying conservative (a reach
+  covered only by the union of several patterns returns false, deny). The only seed change is `owner`'s `*:*`
+  becoming `>`; every other permission keeps its meaning because `*` already meant a single token. A closed
+  grammar also makes "what does this pattern set grant" exactly enumerable against a permission **catalog** (the
+  set of all `resource:action[:admin]` the routes declare), the basis for a future custom-role preview.
+- **Supersedes:** [ADR-0014](#adr-0014-the-audit-trail-is-a-sensitive-read-not-reached-by-a-partial-global-wildcard).
+- **Closes the gap:** issue [#118](https://github.com/hyperscaleav/omniglass/issues/118).

@@ -48,8 +48,8 @@ func TestSeedRolesIdempotent(t *testing.T) {
 	if err := conn.QueryRow(ctx, `select permissions from role where id = 'owner'`).Scan(&ownerPerms); err != nil {
 		t.Fatalf("read owner role: %v", err)
 	}
-	if len(ownerPerms) != 1 || ownerPerms[0] != "*:*" {
-		t.Errorf("owner permissions = %v, want [*:*]", ownerPerms)
+	if len(ownerPerms) != 1 || ownerPerms[0] != ">" {
+		t.Errorf("owner permissions = %v, want [>] (the superuser tail wildcard)", ownerPerms)
 	}
 
 	// The four official location types seed alongside the roles, ranked and

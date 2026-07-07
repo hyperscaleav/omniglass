@@ -59,12 +59,16 @@ func TestRolesViewAPI(t *testing.T) {
 	}
 
 	owner, ok := byID["owner"]
-	if !ok || owner.display != "Owner" || owner.desc == "" || !slices.Contains(owner.eff, "*:*") {
-		t.Fatalf("owner role = %+v, want display Owner, a description, and *:* effective", owner)
+	if !ok || owner.display != "Owner" || owner.desc == "" || !slices.Contains(owner.eff, ">") {
+		t.Fatalf("owner role = %+v, want display Owner, a description, and > effective (the superuser tail)", owner)
 	}
 	admin, ok := byID["admin"]
-	if !ok || admin.display != "Administrator" || slices.Contains(admin.eff, "*:*") {
-		t.Fatalf("admin role = %+v, want display Administrator and NO *:* (bounded)", admin)
+	if !ok || admin.display != "Administrator" || slices.Contains(admin.eff, ">") || slices.Contains(admin.eff, "*:*") {
+		t.Fatalf("admin role = %+v, want display Administrator and NO > or *:* (bounded)", admin)
+	}
+	// admin reads the audit trail via the explicit admin-tier grant, not a wildcard.
+	if !slices.Contains(admin.eff, "audit:read:admin") {
+		t.Fatalf("admin effective perms = %v, want audit:read:admin", admin.eff)
 	}
 	// admin still holds the broad management wildcards it enumerates.
 	if !slices.Contains(admin.eff, "principal:*") {

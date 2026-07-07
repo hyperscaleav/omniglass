@@ -156,14 +156,17 @@ func (a *authenticator) authn(ctx huma.Context, next func(huma.Context)) {
 }
 
 // require is Huma operation middleware enforcing a capability. It runs after
-// authn; a principal whose flattened permissions do not allow the action is 403.
-// Scope (which entities) is the gateway's job and lands when entities exist.
-func (a *authenticator) require(resource, action string) func(huma.Context, func(huma.Context)) {
+// authn; a principal whose flattened permissions do not allow the required
+// permission is 403. The permission is given as its tokens, so a normal route
+// declares require("location", "read") and an admin-sensitive one declares the
+// third token, require("audit", "read", "admin"). Scope (which entities) is the
+// gateway's job and lands when entities exist.
+func (a *authenticator) require(tokens ...string) func(huma.Context, func(huma.Context)) {
 	return func(ctx huma.Context, next func(huma.Context)) {
 		// view-as read-only is enforced in authn (a method-based choke point over
 		// every route, including the capability-less self-scoped ones), not here.
 		perms, ok := permsFrom(ctx.Context())
-		if !ok || !perms.Allows(resource, action) {
+		if !ok || !perms.Allows(tokens...) {
 			_ = huma.WriteErr(a.api, ctx, http.StatusForbidden, "forbidden")
 			return
 		}

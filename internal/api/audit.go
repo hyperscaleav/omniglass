@@ -44,8 +44,8 @@ func registerAuditRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodGet,
 		Path:        "/audit-log",
 		Summary:     "List audit-trail events",
-		Description: "Recent audit-trail events, newest first, each with the actor and, for an impersonated action, the real actor behind it. Read-only; gated by audit:read.",
-		Middlewares: huma.Middlewares{a.authn, a.require("audit", "read")},
+		Description: "Recent audit-trail events, newest first, each with the actor and, for an impersonated action, the real actor behind it. Read-only; gated by audit:read:admin (admin/owner only, since the audit trail is admin-sensitive).",
+		Middlewares: huma.Middlewares{a.authn, a.require("audit", "read", "admin")},
 	}, func(ctx context.Context, in *auditListInput) (*auditListOutput, error) {
 		entries, err := gw.ListAuditLog(ctx, storage.AuditFilter{Limit: in.Limit, Resource: in.Resource, Verb: in.Verb, Before: in.Before})
 		if err != nil {

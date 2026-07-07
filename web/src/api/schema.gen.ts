@@ -13,7 +13,7 @@ export interface paths {
         };
         /**
          * List audit-trail events
-         * @description Recent audit-trail events, newest first, each with the actor and, for an impersonated action, the real actor behind it. Read-only; gated by audit:read.
+         * @description Recent audit-trail events, newest first, each with the actor and, for an impersonated action, the real actor behind it. Read-only; gated by audit:read:admin (admin/owner only, since the audit trail is admin-sensitive).
          */
         get: operations["list-audit-log"];
         put?: never;
