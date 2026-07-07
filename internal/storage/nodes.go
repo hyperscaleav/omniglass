@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"crypto/subtle"
 	"errors"
 	"fmt"
 	"time"
@@ -149,7 +150,7 @@ func (p *PG) ClaimNode(ctx context.Context, name, tokenHashHex string) (*Node, e
 	} else if err != nil {
 		return nil, fmt.Errorf("storage: claim node %q: %w", name, err)
 	}
-	if stored == nil || *stored != tokenHashHex {
+	if stored == nil || subtle.ConstantTimeCompare([]byte(*stored), []byte(tokenHashHex)) != 1 {
 		return nil, ErrEnrollmentInvalid
 	}
 	// coalesce keeps the original enrolled_at on a re-claim (idempotent).
@@ -174,7 +175,7 @@ func (p *PG) AuthenticateNode(ctx context.Context, name, tokenHashHex string) (b
 	} else if err != nil {
 		return false, fmt.Errorf("storage: authenticate node %q: %w", name, err)
 	}
-	return stored != nil && *stored == tokenHashHex, nil
+	return stored != nil && subtle.ConstantTimeCompare([]byte(*stored), []byte(tokenHashHex)) == 1, nil
 }
 
 // RecordHeartbeat stamps the node's last_heartbeat_at. Keyed by the node name the
