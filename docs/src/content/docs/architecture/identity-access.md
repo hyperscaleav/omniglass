@@ -249,9 +249,13 @@ impersonating whom" listing. The client sends that token, and `authn` resolves i
 **target** principal, tagging the request with the real actor and the mode; `POST /auth/me:stopImpersonation`
 revokes it.
 
-Two guarantees make it safe. The **escalation guard**: a caller may impersonate a target only when the
+Two guarantees make it safe, over a hard floor. **Owner protection**: a principal holding `owner @ all` is
+un-impersonatable by **anyone**, including another owner, in either mode; an owner is the highest-trust
+account, so impersonating one is a full-takeover vector, removed entirely rather than left to the cover
+arithmetic. The **escalation guard**: a caller may impersonate a (non-owner) target only when the
 caller's capabilities **cover** the target's (`rbac.Set.Covers`), so impersonation can never confer a
-capability the caller lacks (a lesser admin cannot impersonate an owner). Scope is where the modes differ:
+capability the caller lacks (a lesser admin cannot impersonate an owner, and owner protection makes that
+absolute). Scope is where the modes differ:
 view-as is cross-scope (read-only grants no write authority), but **act-as** additionally requires the
 caller's **all-scope grants alone** to cover the target, since an impersonated request resolves its scope from
 the target: a capability the caller holds only through a narrower grant does not count. Without it a
