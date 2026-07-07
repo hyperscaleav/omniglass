@@ -30,6 +30,27 @@ func generatedCommands() []*cobra.Command {
 	}())
 	{
 		parent := &cobra.Command{
+			Use:   "audit-log",
+			Short: "Commands for the audit-log resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "list",
+				Short:   "List audit-trail events",
+				Long:    "Recent audit-trail events, newest first, each with the actor and, for an impersonated action, the real actor behind it. Read-only; gated by audit:read.",
+				Example: "  omniglass audit-log list",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/audit-log")
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		roots = append(roots, parent)
+	}
+	{
+		parent := &cobra.Command{
 			Use:   "auth",
 			Short: "Commands for the auth resource",
 		}

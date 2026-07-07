@@ -83,11 +83,26 @@ func NewSet(perms []string) Set {
 	return s
 }
 
+// sensitiveResources are not reached by a PARTIAL global wildcard: a `*:<action>`
+// grant (e.g. viewer's `*:read`) does not confer them, only an explicit grant on
+// the resource or the full `*:*` superuser wildcard. The audit trail is the case:
+// it is admin/owner information (logins, impersonations, access changes), so a
+// read-only user's `*:read` must not open it.
+var sensitiveResources = map[string]bool{"audit": true}
+
 // Allows reports whether the set permits action on resource. The :read floor
-// applies: holding any permission on a resource implies read on it.
+// applies: holding any permission on a resource implies read on it. A sensitive
+// resource is exempt from a partial global wildcard (see sensitiveResources).
 func (s Set) Allows(resource, action string) bool {
 	for _, e := range s.entries {
-		if e.resource != "*" && e.resource != resource {
+		wildcard := e.resource == "*"
+		if !wildcard && e.resource != resource {
+			continue
+		}
+		// A `*:<action>` wildcard does not reach a sensitive resource; only an
+		// explicit entry on it, or the full `*:*` superuser wildcard (allActions),
+		// does. This keeps `*:read` covering everything except the audit trail.
+		if wildcard && !e.allActions && sensitiveResources[resource] {
 			continue
 		}
 		// The resource matches this entry.

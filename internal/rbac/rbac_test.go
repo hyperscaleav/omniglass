@@ -25,6 +25,14 @@ func TestSetAllows(t *testing.T) {
 		{"comma actions deny delete", []string{"component:create,update"}, "component", "delete", false},
 		{"resource wildcard action", []string{"component:*"}, "component", "anything", true},
 		{"empty set denies", nil, "x", "read", false},
+		// Sensitive resources (audit) are exempt from a partial global wildcard: a
+		// viewer's *:read must not open the audit trail, but *:* and an explicit
+		// grant do.
+		{"star-read does NOT reach audit (sensitive)", []string{"*:read"}, "audit", "read", false},
+		{"star-star (owner) reaches audit", []string{"*:*"}, "audit", "read", true},
+		{"explicit audit:read reaches audit", []string{"audit:read"}, "audit", "read", true},
+		{"explicit audit:read does not imply audit:delete", []string{"audit:read"}, "audit", "delete", false},
+		{"star-read still reaches non-sensitive reads", []string{"*:read"}, "component", "read", true},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

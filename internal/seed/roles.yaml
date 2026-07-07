@@ -53,6 +53,7 @@ roles:
       - "credential:*"
       - "principal_grant:*"
       - "role:*"
+      - "audit:read"
       - "datapoint_type:create"
       - "tag:create"
       - "unit:create"

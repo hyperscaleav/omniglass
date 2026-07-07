@@ -293,6 +293,9 @@ func (a *authenticator) loginHandler(ctx context.Context, in *loginInput) (*sess
 	if _, err := a.gw.IssueBearerCredential(ctx, pr.Human.Username, hash, prefix); err != nil {
 		return nil, huma.Error500InternalServerError("login failed")
 	}
+	if err := a.gw.WriteAuthEvent(ctx, pr.ID, "login"); err != nil {
+		return nil, huma.Error500InternalServerError("login failed")
+	}
 	return &sessionOutput{SetCookie: a.sessionCookie(token)}, nil
 }
 
@@ -306,7 +309,13 @@ type logoutInput struct {
 // already-invalid session.
 func (a *authenticator) logoutHandler(ctx context.Context, in *logoutInput) (*sessionOutput, error) {
 	if tok, ok := sessionCookieToken(in.Cookie); ok {
-		_ = a.gw.RevokeBearer(ctx, auth.HashToken(tok))
+		hash := auth.HashToken(tok)
+		// Resolve the principal before revoking so the logout is attributed; a
+		// best-effort audit (logout must clear the cookie regardless).
+		if pr, err := a.gw.AuthenticateBearer(ctx, hash); err == nil {
+			_ = a.gw.WriteAuthEvent(ctx, pr.ID, "logout")
+		}
+		_ = a.gw.RevokeBearer(ctx, hash)
 	}
 	return &sessionOutput{SetCookie: a.clearedCookie()}, nil
 }

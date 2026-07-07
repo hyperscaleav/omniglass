@@ -88,6 +88,15 @@ least to most powerful (viewer, operator, deploy, admin, owner). It is a teachin
 seeded roles, not a static table. Custom-role creation and editing are coming; today the built-in roles are
 read-only.
 
+## Audit
+
+**Settings > Audit** (with `audit:read`, so **administrators and owners** only) is the read-only audit trail:
+every privileged action and every sign-in, newest first, each with when it happened, who did it, the action,
+and the resource. An action taken while impersonating carries an **as <admin>** tag naming the real
+administrator behind it, so impersonation never hides who actually acted. A read-only user (a viewer) does not
+see this page: the audit trail is admin-level information, so a plain "read everything" grant does not open it.
+Failed sign-ins (wrong password) are not shown here by design.
+
 ## The layout
 
 - The **sidebar** is the information architecture: sections grouped into Inventory, Catalog,
