@@ -191,9 +191,31 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Path:          "/principals/{id}/grants",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Grant a role to a principal",
-		Description:   "Assigns a role at a scope to a principal. Gated by principal_grant:create (all-scope). A duplicate is 409, an unknown role or bad scope 422.",
+		Description:   "Assigns a role at a scope to a principal. Gated by principal_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own (no promoting anyone, including yourself, to a higher tier such as owner). A duplicate is 409, an unknown role or bad scope 422.",
 		Middlewares:   huma.Middlewares{a.authn, a.require("principal_grant", "create")},
 	}, func(ctx context.Context, in *createGrantInput) (*grantOutput, error) {
+		// Escalation guard: a grant cannot confer a capability the granter lacks at
+		// all-scope, so no caller can promote anyone (including itself) to a tier above
+		// its own, e.g. admin granting owner (*:*). Mirrors the impersonation guard: only
+		// the caller's all-scope grants count, so a capability held through a narrower
+		// grant cannot be conferred estate-wide.
+		actor, ok := principalFrom(ctx)
+		if !ok {
+			return nil, huma.Error401Unauthorized("unauthenticated")
+		}
+		idx, err := a.roleIndex(ctx)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("grant failed")
+		}
+		allScopeRoleIDs := make([]string, 0, len(actor.Grants))
+		for _, gr := range actor.Grants {
+			if gr.ScopeKind == "all" {
+				allScopeRoleIDs = append(allScopeRoleIDs, gr.Role)
+			}
+		}
+		if !idx.Flatten(allScopeRoleIDs).Covers(idx.Flatten([]string{in.Body.Role})) {
+			return nil, huma.Error403Forbidden("cannot grant a role whose capabilities exceed yours")
+		}
 		g, err := gw.CreateGrant(ctx, actorID(ctx), in.ID, storage.GrantSpec{
 			Role: in.Body.Role, ScopeKind: in.Body.ScopeKind, ScopeID: in.Body.ScopeID, ScopeOp: in.Body.ScopeOp,
 		}, a.scopeFor(ctx, "principal_grant", "create"))

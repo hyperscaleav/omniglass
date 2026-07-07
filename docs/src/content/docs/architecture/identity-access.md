@@ -236,6 +236,10 @@ COMMIT;  -- trigger fires here, sees the new grant, passes.
 
 Attempting to remove the last owner (by grant delete, principal delete, principal disable, or role change) raises a check-violation. The Gateway translates this into a 400 with a clear remediation message.
 
+### Grants cannot exceed the granter
+
+Creating a grant is refused (403) when the granted role's capabilities are not **covered** by the granter's own **all-scope** capabilities (`rbac.Set.Covers`, the same primitive as the impersonation escalation guard). So no caller can promote anyone, including itself, to a tier above its own: an **admin cannot grant `owner`** (`*:*`), because admin is an enumerated role that does not cover the global wildcard, and it therefore cannot self-promote to the superuser tier. Only the caller's **all-scope** grants count, so a capability held through a narrower grant cannot be conferred estate-wide. This makes the owner tier a real capability firewall: an admin is deliberately bounded (the top management role, not the superuser), and a self-grant is not a path from admin to owner. The same rule will apply to role editing when it lands (you cannot edit a role above your own tier).
+
 ## Impersonation (view-as and act-as)
 
 An owner or all-scope admin holding `principal:impersonate` can temporarily see and act through another

@@ -331,7 +331,7 @@ export interface paths {
         put?: never;
         /**
          * Grant a role to a principal
-         * @description Assigns a role at a scope to a principal. Gated by principal_grant:create (all-scope). A duplicate is 409, an unknown role or bad scope 422.
+         * @description Assigns a role at a scope to a principal. Gated by principal_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own (no promoting anyone, including yourself, to a higher tier such as owner). A duplicate is 409, an unknown role or bad scope 422.
          */
         post: operations["create-grant"];
         delete?: never;

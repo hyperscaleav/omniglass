@@ -230,7 +230,7 @@ func generatedCommands() []*cobra.Command {
 			cmd := &cobra.Command{
 				Use:     "create <id>",
 				Short:   "Grant a role to a principal",
-				Long:    "Assigns a role at a scope to a principal. Gated by principal_grant:create (all-scope). A duplicate is 409, an unknown role or bad scope 422.",
+				Long:    "Assigns a role at a scope to a principal. Gated by principal_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own (no promoting anyone, including yourself, to a higher tier such as owner). A duplicate is 409, an unknown role or bad scope 422.",
 				Example: "  omniglass grant create <id> --role role --scope-kind scope_kind",
 				Args:    cobra.ExactArgs(1),
 				RunE: func(cmd *cobra.Command, args []string) error {
