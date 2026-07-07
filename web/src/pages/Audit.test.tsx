@@ -73,13 +73,15 @@ describe("Audit page", () => {
       return new Response(JSON.stringify({ events: before ? [] : full }), { status: 200, headers: { "Content-Type": "application/json" } });
     });
 
-    const { findByText } = render(() => <Audit />);
-    const btn = (await findByText("Load older")) as HTMLButtonElement;
-    // Wait for the first load to finish so the button is live (not the no-op it is
-    // while the initial page is in flight).
-    await waitFor(() => expect(btn.disabled).toBe(false));
+    const { findByText, getByText } = render(() => <Audit />);
+    await findByText("Load older");
+    // Re-query each poll: the footer re-renders (replacing the button node) as the
+    // loaded-count updates, so a captured reference would go stale. Wait for the
+    // first load to finish so the button is live (not the no-op it is in flight).
+    const btn = () => getByText("Load older") as HTMLButtonElement;
+    await waitFor(() => expect(btn().disabled).toBe(false));
     expect(beforeParams).toEqual([null]); // first page has no cursor
-    fireEvent.click(btn);
+    fireEvent.click(btn());
     // The load-older page asks for events strictly older than the oldest loaded row.
     await waitFor(() => expect(beforeParams).toContain(oldestTs));
   });
