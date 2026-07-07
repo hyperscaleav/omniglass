@@ -128,6 +128,14 @@ func parse(p string) ([]pattern, error) {
 		}
 		pat := pattern{segs[0], a}
 		pat = append(pat, segs[2:]...)
+		// The tail wildcard is valid only as the final token. Re-check on the built
+		// pattern, not just the colon-segments, so a `>` inside the comma action list
+		// (`audit:read,>:admin` -> [audit, >, admin]) cannot smuggle a non-final tail.
+		for i, tok := range pat {
+			if tok == ">" && i != len(pat)-1 {
+				return nil, fmt.Errorf("rbac: tail wildcard not last in %q", p)
+			}
+		}
 		out = append(out, pat)
 	}
 	return out, nil

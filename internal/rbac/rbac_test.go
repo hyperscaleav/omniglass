@@ -110,6 +110,29 @@ func TestCoversSubsumption(t *testing.T) {
 	}
 }
 
+// TestParseRejectsMalformed pins the parser's grammar guards: a malformed
+// permission grants nothing (it must not silently widen access). The pointed case
+// is a `>` smuggled inside the comma action list, which would otherwise become a
+// non-final tail wildcard matching too much.
+func TestParseRejectsMalformed(t *testing.T) {
+	// `>` inside a comma list is a non-final tail: the whole permission is rejected,
+	// so it grants nothing (no `audit:>`-style tail leaks in).
+	smuggle := rbac.NewSet([]string{"audit:read,>:admin"})
+	if smuggle.Allows("audit", "delete", "admin") || smuggle.Allows("audit", "read", "admin") || len(smuggle.Strings()) != 0 {
+		t.Errorf("audit:read,>:admin must be rejected wholesale, got %v", smuggle.Strings())
+	}
+	// A legitimate tail still parses and reaches an :admin permission.
+	if !rbac.NewSet([]string{"audit:>"}).Allows("audit", "read", "admin") {
+		t.Error("audit:> should grant audit:read:admin")
+	}
+	// Other malformed forms parse to nothing (empty tokens, misplaced tail, bare resource).
+	for _, bad := range []string{"", ":read", "audit:", "audit::admin", ">:read", "audit", "a:>:b"} {
+		if got := rbac.NewSet([]string{bad}).Strings(); len(got) != 0 {
+			t.Errorf("malformed %q should parse to nothing, got %v", bad, got)
+		}
+	}
+}
+
 func TestFlattenInheritance(t *testing.T) {
 	idx := rbac.NewRoleIndex([]rbac.Role{
 		{ID: "viewer", Permissions: []string{"*:read"}},
