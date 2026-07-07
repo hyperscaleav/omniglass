@@ -50,7 +50,11 @@ func TestCLIEndToEnd(t *testing.T) {
 	srvCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	srv := exec.CommandContext(srvCtx, binPath, "server")
-	srv.Env = append(dbEnv, "OMNIGLASS_ADDR="+addr)
+	srv.Env = append(dbEnv,
+		"OMNIGLASS_ADDR="+addr,
+		"OMNIGLASS_NATS_ADDR=127.0.0.1:"+freePort(t),
+		"OMNIGLASS_NATS_STORE_DIR="+t.TempDir(),
+	)
 	srv.Stdout, srv.Stderr = os.Stderr, os.Stderr
 	if err := srv.Start(); err != nil {
 		t.Fatalf("start server: %v", err)
