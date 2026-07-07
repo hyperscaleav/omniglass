@@ -50,3 +50,41 @@ func TestICMPPingerReal(t *testing.T) {
 		t.Fatalf("icmp unreachable: want a non-empty down reason (data, not no-data), got %q", res.Reason)
 	}
 }
+
+// TestICMPPingerReal_ContextCancellation is the regression gate for context
+// cancellation: Ping must abort an in-flight probe when its ctx is canceled,
+// not block to the pinger's own Timeout. 192.0.2.1 (TEST-NET-1) never answers,
+// so a full run waits out the whole Timeout; a ctx canceled well before that
+// must make Ping return promptly. Against the un-fixed pinger.Run() (which
+// always runs with context.Background()) this blocks for the full Timeout;
+// the fix (pinger.RunWithContext(ctx)) returns as soon as ctx is done.
+func TestICMPPingerReal_ContextCancellation(t *testing.T) {
+	if testing.Short() {
+		t.Skip("capability integration test opens a real ICMP socket")
+	}
+	p := collection.NewICMPPinger()
+
+	const fullRunTimeout = 5 * time.Second
+	const cancelAfter = 200 * time.Millisecond
+
+	ctx, cancel := context.WithTimeout(context.Background(), cancelAfter)
+	defer cancel()
+
+	start := time.Now()
+	res, err := p.Ping(ctx, "192.0.2.1", 50, fullRunTimeout)
+	elapsed := time.Since(start)
+
+	const wantUnder = fullRunTimeout / 2
+	if elapsed >= wantUnder {
+		t.Fatalf("icmp cancellation: Ping took %v, want well under %v (fullRunTimeout=%v); ctx cancellation is not honored", elapsed, wantUnder, fullRunTimeout)
+	}
+	// A canceled ctx is not a node-incapable verdict: this node's ICMP capability
+	// was never in question, so the cancellation must not surface as the
+	// inconclusive "cannot ICMP at all" error.
+	if err != nil {
+		t.Fatalf("icmp cancellation: want a clean data return on ctx cancel, got err %v", err)
+	}
+	if res.Reason == "" || res.Reason.Up() {
+		t.Fatalf("icmp cancellation: want a non-empty down reason, got %q", res.Reason)
+	}
+}

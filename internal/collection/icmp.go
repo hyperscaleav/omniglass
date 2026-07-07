@@ -65,7 +65,7 @@ func (p ICMPPinger) capable() bool {
 // Ping runs one icmp probe against target. A non-answer is data (Received==0 with
 // a down reason); an error is returned only when the node cannot do ICMP at all
 // or the host is unresolvable.
-func (p ICMPPinger) Ping(_ context.Context, target string, count int, timeout time.Duration) (PingResult, error) {
+func (p ICMPPinger) Ping(ctx context.Context, target string, count int, timeout time.Duration) (PingResult, error) {
 	pinger, err := probing.NewPinger(target)
 	if err != nil {
 		return PingResult{}, fmt.Errorf("collection: icmp new pinger %s: %w", target, err)
@@ -76,7 +76,7 @@ func (p ICMPPinger) Ping(_ context.Context, target string, count int, timeout ti
 	pinger.Count = count
 	pinger.Timeout = timeout
 	pinger.SetPrivileged(false)
-	if err := pinger.Run(); err != nil {
+	if err := pinger.RunWithContext(ctx); err != nil {
 		// A run error is either "this node cannot ICMP at all" (inconclusive: only
 		// when the loopback self-check also fails) or "this target's probe was
 		// refused/blocked/unrouteable" (a reachability verdict: down + reason).
