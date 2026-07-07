@@ -13,8 +13,9 @@ generated tree on the same root.
 
 `make dev` brings up the whole stack for a browser session: a dev Postgres (docker
 compose, matching the default DSN), the migrations and boot seed, a bootstrapped `dev`
-owner whose token is printed once, and the server with the operator console at
-`http://localhost:8080/web`. Ctrl-C stops the server; `make down` stops Postgres (the
+owner whose token is printed once, a dev example estate (a few campuses with rooms, a few
+sign-in-able users, and their grants, so the console is not empty), and the server with
+the operator console at `http://localhost:8080/web`. Ctrl-C stops the server; `make down` stops Postgres (the
 named volume persists data between runs; `docker compose down -v` wipes it and re-mints a
 token next run). `make up` / `make down` manage just the database. Tests never touch this
 stack: they spin their own ephemeral Postgres via testcontainers.
@@ -64,6 +65,11 @@ omniglass token ops
 
 # Set or rotate a user's password (direct-DB, owner lane).
 omniglass set-password ops 'new-s3cret-pw'
+
+# Seed a dev database with an example estate (locations, users, grants). Idempotent and
+# dev-only; `make dev` runs it for you, so a fresh console is populated instead of empty.
+# Never for production: these are operator rows, not ship-with reference data.
+omniglass seed-dev
 ```
 
 Once a server is running, a signed-in principal manages **its own** account through the

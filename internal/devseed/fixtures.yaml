@@ -1,0 +1,99 @@
+# Dev-only example estate, applied by `make dev` (via `omniglass seed-dev`) so a
+# fresh dev environment comes up populated instead of empty: a few campuses (a
+# multi-site estate), a few users, and their grants. Idempotent: re-running leaves
+# anything that already exists untouched.
+#
+# This is NOT the boot seed (internal/seed, ship-with reference data that runs on
+# every server start in every environment) and it must NEVER run in production:
+# these are operator rows. It references reference data (location types, roles) by
+# id, so the boot seed must run first.
+locations:
+  # Headquarters: the deepest site (campus -> building -> floor -> rooms).
+  - name: hq
+    display_name: Headquarters
+    type: campus
+  - name: hq-west
+    display_name: West Building
+    type: building
+    parent: hq
+  - name: hq-west-2
+    display_name: Level 2
+    type: floor
+    parent: hq-west
+  - name: hq-west-2-boardroom
+    display_name: Boardroom
+    type: room
+    parent: hq-west-2
+  - name: hq-west-2-huddle
+    display_name: Huddle Room
+    type: room
+    parent: hq-west-2
+
+  # East Campus: a second site.
+  - name: east
+    display_name: East Campus
+    type: campus
+  - name: east-hall
+    display_name: Innovation Hall
+    type: building
+    parent: east
+  - name: east-hall-1
+    display_name: Level 1
+    type: floor
+    parent: east-hall
+  - name: east-hall-1-auditorium
+    display_name: Auditorium
+    type: room
+    parent: east-hall-1
+  - name: east-hall-1-lab
+    display_name: Media Lab
+    type: room
+    parent: east-hall-1
+
+  # Airport Office: a small third site (campus -> building -> room).
+  - name: airport
+    display_name: Airport Office
+    type: campus
+  - name: airport-annex
+    display_name: Annex
+    type: building
+    parent: airport
+  - name: airport-annex-briefing
+    display_name: Briefing Room
+    type: room
+    parent: airport-annex
+
+users:
+  # Username convention: a user limited to a region carries that region in its name
+  # (viewer-hq, tech-east); an estate-wide user carries none (operator). No `-dev`
+  # suffix, since this fixture only ever seeds a dev environment. All share the
+  # password `dev`.
+
+  # A broad operator, all-scoped across every site: no region, since the grant is
+  # estate-wide. The everyday driver for demos.
+  - username: operator
+    password: dev
+    display_name: Operator
+    grants:
+      - role: operator
+        scope_kind: all
+  # A read-only viewer confined to the Headquarters campus.
+  - username: viewer-hq
+    password: dev
+    display_name: HQ Viewer
+    grants:
+      - role: viewer
+        scope_kind: location
+        scope_ref: hq
+        scope_op: subtree
+  # A field tech scoped to the East campus, who builds out rooms under it but cannot
+  # touch the campus root itself (exercises subtree_excl_root, on a different site than
+  # the viewer, so the seed shows per-site scoping).
+  - username: tech-east
+    password: dev
+    display_name: East Field Tech
+    grants:
+      - role: deploy
+        scope_kind: location
+        scope_ref: east
+        scope_op: subtree_excl_root
