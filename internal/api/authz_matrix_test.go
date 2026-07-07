@@ -17,9 +17,10 @@ import (
 
 // grant is a (role x scope) pair for building test principals.
 type grant struct {
-	role      string
-	scopeKind string
-	scopeID   string // "" for the all scope
+	role        string
+	scopeKind   string
+	scopeID     string // "" for the all scope
+	excludeRoot bool   // exclude the scope root from the modify actions
 }
 
 // scopedEntity describes a scoped tree entity so the authorization conformance
@@ -210,8 +211,8 @@ func principalWithGrants(t *testing.T, ctx context.Context, dsn, label string, g
 			scopeID = g.scopeID
 		}
 		if _, err := conn.Exec(ctx,
-			`insert into principal_grant (principal_id, role_id, scope_kind, scope_id) values ($1, $2, $3, $4)`,
-			pid, g.role, g.scopeKind, scopeID); err != nil {
+			`insert into principal_grant (principal_id, role_id, scope_kind, scope_id, exclude_root) values ($1, $2, $3, $4, $5)`,
+			pid, g.role, g.scopeKind, scopeID, g.excludeRoot); err != nil {
 			t.Fatalf("insert grant %+v: %v", g, err)
 		}
 	}

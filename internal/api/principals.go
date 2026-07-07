@@ -31,7 +31,7 @@ func toPrincipalBody(pr *storage.Principal) principalBody {
 		b.Service = &svcBody{Label: pr.Service.Label}
 	}
 	for _, g := range pr.Grants {
-		gb := grantBody{ID: g.ID, Role: g.Role, ScopeKind: g.ScopeKind}
+		gb := grantBody{ID: g.ID, Role: g.Role, ScopeKind: g.ScopeKind, ExcludeRoot: g.ExcludeRoot}
 		if g.ScopeID != nil {
 			gb.ScopeID = *g.ScopeID
 		}
@@ -79,9 +79,10 @@ type updatePrincipalInput struct {
 type createGrantInput struct {
 	ID   string `path:"id" doc:"The principal's id (uuid)"`
 	Body struct {
-		Role      string `json:"role" minLength:"1" doc:"A role id (viewer, operator, admin, owner, or a custom role)"`
-		ScopeKind string `json:"scope_kind" enum:"all,location,system,component,group" doc:"The scope kind; 'all' confers the whole estate"`
-		ScopeID   string `json:"scope_id,omitempty" doc:"The scope root id; omit for the all scope"`
+		Role        string `json:"role" minLength:"1" doc:"A role id (viewer, operator, admin, owner, or a custom role)"`
+		ScopeKind   string `json:"scope_kind" enum:"all,location,system,component,group" doc:"The scope kind; 'all' confers the whole estate"`
+		ScopeID     string `json:"scope_id,omitempty" doc:"The scope root id; omit for the all scope"`
+		ExcludeRoot bool   `json:"exclude_root,omitempty" doc:"Exclude the scope root itself from update/delete (descendants only); read and create-placement keep the root. Ignored for the all scope."`
 	}
 }
 
@@ -194,12 +195,12 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Middlewares:   huma.Middlewares{a.authn, a.require("principal_grant", "create")},
 	}, func(ctx context.Context, in *createGrantInput) (*grantOutput, error) {
 		g, err := gw.CreateGrant(ctx, actorID(ctx), in.ID, storage.GrantSpec{
-			Role: in.Body.Role, ScopeKind: in.Body.ScopeKind, ScopeID: in.Body.ScopeID,
+			Role: in.Body.Role, ScopeKind: in.Body.ScopeKind, ScopeID: in.Body.ScopeID, ExcludeRoot: in.Body.ExcludeRoot,
 		}, a.scopeFor(ctx, "principal_grant", "create"))
 		if err != nil {
 			return nil, mapPrincipalErr(err)
 		}
-		out := &grantOutput{Body: grantBody{ID: g.ID, Role: g.Role, ScopeKind: g.ScopeKind}}
+		out := &grantOutput{Body: grantBody{ID: g.ID, Role: g.Role, ScopeKind: g.ScopeKind, ExcludeRoot: g.ExcludeRoot}}
 		if g.ScopeID != nil {
 			out.Body.ScopeID = *g.ScopeID
 		}

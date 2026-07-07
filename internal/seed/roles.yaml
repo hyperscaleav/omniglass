@@ -16,6 +16,16 @@ roles:
       - "rule:create,update"
       - "config:create,update"
       - "alarm:ack,snooze,resolve"
+  - id: deploy
+    # An integrator / field tech role: granted at a location with exclude_root, it
+    # can add a room and populate it with systems and components (and edit those
+    # children), but cannot modify the root of its own scope. Delete is deliberately
+    # off the initial cut. Inherits viewer for the read floor over its subtree.
+    inherits: ["viewer"]
+    permissions:
+      - "location:create,update"
+      - "system:create,update"
+      - "component:create,update"
   - id: admin
     inherits: ["operator"]
     permissions:

@@ -10,13 +10,14 @@ import (
 )
 
 type componentBody struct {
-	ID            string  `json:"id"`
-	Name          string  `json:"name"`
-	DisplayName   string  `json:"display_name,omitempty"`
-	ComponentType string  `json:"component_type"`
-	ParentID      *string `json:"parent_id,omitempty"`
-	SystemID      *string `json:"system_id,omitempty"`
-	LocationID    *string `json:"location_id,omitempty"`
+	ID            string   `json:"id"`
+	Name          string   `json:"name"`
+	DisplayName   string   `json:"display_name,omitempty"`
+	ComponentType string   `json:"component_type"`
+	ParentID      *string  `json:"parent_id,omitempty"`
+	SystemID      *string  `json:"system_id,omitempty"`
+	LocationID    *string  `json:"location_id,omitempty"`
+	Actions       []string `json:"actions,omitempty" doc:"The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces."`
 }
 
 func toComponentBody(c *storage.Component) componentBody {
@@ -74,10 +75,20 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		if err != nil {
 			return nil, huma.Error500InternalServerError("list components")
 		}
+		ids := make([]string, len(comps))
+		for i := range comps {
+			ids[i] = comps[i].ID
+		}
+		acts, err := a.rowActions(ctx, gw, "component", ids)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("list components")
+		}
 		out := &listComponentsOutput{}
 		out.Body.Components = make([]componentBody, 0, len(comps))
 		for i := range comps {
-			out.Body.Components = append(out.Body.Components, toComponentBody(&comps[i]))
+			b := toComponentBody(&comps[i])
+			b.Actions = acts[comps[i].ID]
+			out.Body.Components = append(out.Body.Components, b)
 		}
 		return out, nil
 	})

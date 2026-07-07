@@ -42,6 +42,9 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0005](#adr-0005-the-first-owner-is-omniglass-bootstrap) | 2026-06-27 | Resolved | `omniglass bootstrap <username> [--password]`; the password-on-create path shipped, the `iam` namespace is deferred |
 | [ADR-0006](#adr-0006-the-owner-invariant-is-enforced-by-bootstrap-for-now) | 2026-06-27 | Resolved | The single-owner invariant is now a DEFERRABLE constraint trigger, landed with grant revocation |
 | [ADR-0007](#adr-0007-principals-are-gated-at-all-scope-not-scope-tree) | 2026-07-01 | Accepted | A principal is not a scope-tree entity; the `principal` capability confers access only at all-scope |
+| [ADR-0008](#adr-0008-disable-is-hard-revocation-no-token-version-column) | 2026-07-06 | Accepted | Disable revokes live sessions via the per-request `active` re-read; no token-version column (nothing consumes it) |
+| [ADR-0009](#adr-0009-root-exclusion-lives-on-the-grant-not-a-new-scope-kind) | 2026-07-06 | Accepted | The deploy "act on the subtree but not the root" capability is an `exclude_root` grant modifier, not a new scope kind |
+| [ADR-0010](#adr-0010-impersonation-is-a-session-not-a-credential-guarded-by-capability-cover) | 2026-07-06 | Accepted | Impersonation ships view-as + act-as as an `impersonation_session` (not a credential), guarded by capability-cover, with a real-actor audit column |
 
 ## Entries
 
@@ -137,3 +140,71 @@ below from the project's history. From here it grows one slice at a time.
   making all-scope explicit keeps the capability honest and surfaces the error. The same rule governs the later
   principal-mutation and grant surfaces.
 - **Closes the gap:** n/a (a design decision, not a divergence).
+
+### ADR-0008: Disable is hard revocation; no token-version column
+
+- **Date:** 2026-07-06 | **Status:** Accepted | **Pages:** [identity and access](/architecture/identity-access/)
+- **Decision:** Disabling a principal revokes its live sessions immediately, achieved by the authn path
+  re-reading `principal.active` on **every** request, not by a session-version / epoch column.
+  `AuthenticateBearer` and `AuthenticatePassword` both filter `and pr.active` in the credential lookup on
+  every call, with no caching anywhere in the authn path, so the very next request on an already-issued
+  bearer or session cookie after a disable gets zero rows and a 401. `SetPrincipalActive` flips the flag in
+  one statement: disable **is** revocation, atomically. No `token_version` column is added.
+- **Context:** Issue [#94](https://github.com/hyperscaleav/omniglass/issues/94) asked for "hard session
+  revocation on disable", assuming disable was soft (a propagation delay). It is not: the per-request active
+  check already is the hard-revocation mechanism, proven end to end by `TestDisableRevokesLiveSessionAPI` (a
+  live token is 401 on its next request the moment it is disabled) and `TestDisablePrincipal`. A
+  `token_version` column would matter only as an invalidation signal for an authn-result cache, which does
+  not exist; adding it now would be a dead column with no reader, against the primitive-first and
+  meaningful-migration disciplines. Revisit if any cache/memoization is introduced in the authn path (an
+  epoch bump would then be its invalidation signal).
+- **Closes the gap:** issue [#94](https://github.com/hyperscaleav/omniglass/issues/94), closed as already satisfied.
+
+### ADR-0009: Root exclusion lives on the grant, not a new scope kind
+
+- **Date:** 2026-07-06 | **Status:** Accepted | **Pages:** [identity and access](/architecture/identity-access/)
+- **Decision:** The "act on the subtree but not the root" capability (the deploy / integrator case, issue
+  [#87](https://github.com/hyperscaleav/omniglass/issues/87)) is a boolean `exclude_root` modifier on
+  `principal_grant`, not a new `scope_kind` (e.g. `location_descendants`) and not a role-level flag. It narrows
+  only the **modify** actions (update, delete) to the root's descendants; read and create-placement keep the
+  root. An inclusive grant on the same root wins over an excluding one.
+- **Context:** A new scope_kind would fork the kind handling three ways (location / system / component) and
+  grow the scope vocabulary; a role-level flag could not vary per grant (the same deploy role granted
+  root-inclusive in one place and root-excluded in another). The grant modifier composes with the
+  additive-grant model and confines the change to one predicate (`inScopeTree`) shared by all three tree
+  entities. Keeping read and create-placement inclusive means a `PATCH` on the root is the existing
+  readable-but-out-of-write-scope 403, so `exclude_root` reuses the three-way status split rather than adding a
+  fourth case. Shipped with a new `deploy` official role (create + update on the three tree tiers, read via the
+  viewer floor). The grant-builder toggle to set it from the console is a fast-follow ([#99](https://github.com/hyperscaleav/omniglass/issues/99)).
+- **Closes the gap:** issue [#87](https://github.com/hyperscaleav/omniglass/issues/87).
+
+### ADR-0010: Impersonation is a session, not a credential; guarded by capability cover
+
+- **Date:** 2026-07-06 | **Status:** Accepted | **Pages:** [identity and access](/architecture/identity-access/)
+- **Decision:** Admin/owner impersonation ships with **both** modes (view-as read-only, act-as full) in one
+  slice. An impersonation token is an `impersonation_session` row (its own table: target, real actor, mode,
+  expiry, revoke), **not** a `credential` (which authenticates a principal as itself). Authorization to
+  impersonate is the escalation guard `actor.Covers(target)` (the caller's capabilities must cover the
+  target's) plus the `principal:impersonate` capability at all-scope. Capability cover applies to both modes;
+  **scope** is where the modes diverge: **view-as** is cross-scope (read-only grants no write authority, and
+  seeing another scope is the troubleshooting case), but **act-as** additionally requires the caller's
+  **all-scope grants alone** to cover the target: a capability held only through a narrower grant does not
+  count. Without that, act-as would let a split-grant admin (all-scope user management, but infra scoped to
+  campus X) impersonate a campus-Y admin and gain write in Y, since an impersonated request resolves its ABAC
+  scope from the target: a scope escalation. Because the rule is capability-cover against the caller's
+  all-scope grants (not a hardcoded list of scoped resources), it closes non-tree escalation too: a user-admin
+  who holds grant authority only through a scoped grant (empty effective scope, cannot create a grant directly)
+  cannot launder all-scope grant authority by acting-as a grant admin. Accountability
+  is a nullable `audit_log.real_actor_principal_id` written on the row directly, not reconstructed from a
+  time-window join (clock skew and concurrent sessions make that unreliable for an accountability record), and
+  the self-service mutations (`/auth/me` profile and password) audit too so an act-as edit is never untracked.
+- **Context:** view-as is enforced by refusing every non-read action when the request carries a view-as
+  claim; act-as threads the real actor through the audit writer via a request-scoped context value
+  (`storage.WithRealActor`), so no mutating gateway signature changes. `authn` tries the impersonation session
+  on a bearer-hash miss, so the same `Authorization: Bearer` path serves both. Disabling either party kills
+  the session via the per-request `active` re-read ([ADR-0008](#adr-0008-disable-is-hard-revocation-no-token-version-column)).
+  The console ships an Impersonate action (view-as / act-as) and an acting-as banner. Deferred: re-checking
+  the escalation guard on every request (bounded instead by a short TTL plus revoke), and act-as within a
+  scoped admin's own scope by intersecting the target's scope with the caller's ([#101](https://github.com/hyperscaleav/omniglass/issues/101)),
+  rather than the current all-scope-only act-as rule.
+- **Closes the gap:** issue [#85](https://github.com/hyperscaleav/omniglass/issues/85).

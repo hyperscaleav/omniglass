@@ -2,6 +2,7 @@ import { type ParentComponent, createMemo, createSignal, createEffect, onCleanup
 import { useLocation } from "@solidjs/router";
 import Sidebar from "./components/Sidebar";
 import TopBar from "./components/TopBar";
+import ImpersonationBanner from "./components/ImpersonationBanner";
 import CommandPalette from "./components/CommandPalette";
 import { sectionLabel } from "./lib/nav";
 import { useTheme, applyTheme } from "./lib/theme";
@@ -35,6 +36,7 @@ const App: ParentComponent = (props) => {
       <Sidebar collapsed={collapsed()} onToggle={() => setCollapsed(!collapsed())} />
       <div class="flex min-w-0 flex-1 flex-col">
         <TopBar section={section()} onOpenPalette={() => setPaletteOpen(true)} />
+        <ImpersonationBanner />
         <main id="scroll-main" class="mx-auto w-full max-w-330 flex-1 overflow-y-auto px-8 pb-16 pt-7">
           {props.children}
         </main>

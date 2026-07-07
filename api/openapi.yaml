@@ -47,6 +47,13 @@ components:
           format: uri
           readOnly: true
           type: string
+        actions:
+          description: The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces.
+          items:
+            type: string
+          type:
+            - array
+            - "null"
         component_type:
           type: string
         display_name:
@@ -109,6 +116,9 @@ components:
           format: uri
           readOnly: true
           type: string
+        exclude_root:
+          description: Exclude the scope root itself from update/delete (descendants only); read and create-placement keep the root. Ignored for the all scope.
+          type: boolean
         role:
           description: A role id (viewer, operator, admin, owner, or a custom role)
           minLength: 1
@@ -284,6 +294,8 @@ components:
           format: uri
           readOnly: true
           type: string
+        exclude_root:
+          type: boolean
         id:
           type: string
         role:
@@ -334,6 +346,56 @@ components:
           type: string
       required:
         - username
+      type: object
+    ImpersonateInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ImpersonateInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        duration_minutes:
+          description: Session lifetime in minutes (default 30, max 1440)
+          format: int64
+          maximum: 1440
+          minimum: 1
+          type: integer
+        mode:
+          description: view_as is read-only; act_as is full, with mutations attributed to both the real actor and the impersonated principal
+          enum:
+            - view_as
+            - act_as
+          type: string
+      required:
+        - mode
+      type: object
+    ImpersonateOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ImpersonateOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        expires_at:
+          type: string
+        mode:
+          type: string
+        target_id:
+          type: string
+        token:
+          description: The bearer token to send while impersonating; shown once
+          type: string
+      required:
+        - token
+        - mode
+        - target_id
+        - expires_at
       type: object
     ListComponentsOutputBody:
       additionalProperties: false
@@ -440,6 +502,13 @@ components:
           format: uri
           readOnly: true
           type: string
+        actions:
+          description: The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces.
+          items:
+            type: string
+          type:
+            - array
+            - "null"
         display_name:
           type: string
         id:
@@ -629,6 +698,13 @@ components:
           format: uri
           readOnly: true
           type: string
+        actions:
+          description: The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces.
+          items:
+            type: string
+          type:
+            - array
+            - "null"
         display_name:
           type: string
         id:
@@ -737,7 +813,7 @@ openapi: 3.1.0
 paths:
   /auth/login:
     post:
-      description: Verifies a human's password and sets an httpOnly session cookie. Public; a bad credential is a flat 401.
+      description: Verifies a human's password and sets an httpOnly session cookie. Public; a bad credential is a flat 401, and a correct password against a disabled account is a distinct 403 so the screen can explain it.
       operationId: login
       requestBody:
         content:
@@ -752,12 +828,30 @@ paths:
             Set-Cookie:
               schema:
                 type: string
-        default:
+        "401":
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ErrorModel"
-          description: Error
+          description: Unauthorized
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Forbidden
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Internal Server Error
       summary: Log in with a username and password
   /auth/logout:
     post:
@@ -843,6 +937,26 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Change your own password
+  /auth/me:stopImpersonation:
+    post:
+      description: Revokes the impersonation session presented by the request token, ending the view-as / act-as. Requires an impersonation token.
+      operationId: stop-impersonation
+      responses:
+        "204":
+          description: No Content
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Forbidden
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Internal Server Error
+      summary: Stop the current impersonation session
   /auth/status:
     get:
       description: "Public: reports whether any owner has been bootstrapped, so the login screen can hide the bootstrap hint."
@@ -1345,6 +1459,56 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Enable a principal
+  /principals/{id}:impersonate:
+    post:
+      description: Mints a bounded, revocable token to view as (read-only) or act as (full) the target. Gated by principal:impersonate (all-scope). Refused on self, when it would grant a capability the caller lacks (the escalation guard), or from within an existing impersonation.
+      operationId: impersonate-principal
+      parameters:
+        - description: The principal to impersonate (uuid)
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The principal to impersonate (uuid)
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImpersonateInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImpersonateOutputBody"
+          description: Created
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Not Found
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Internal Server Error
+      summary: Impersonate a principal (view-as or act-as)
   /roles:
     get:
       description: Lists the roles. Gated by the role:read capability.

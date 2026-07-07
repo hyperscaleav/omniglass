@@ -223,6 +223,7 @@ func generatedCommands() []*cobra.Command {
 			Short: "Commands for the grant resource",
 		}
 		parent.AddCommand(func() *cobra.Command {
+			var fExcludeRoot string
 			var fRole string
 			var fScopeId string
 			var fScopeKind string
@@ -235,6 +236,9 @@ func generatedCommands() []*cobra.Command {
 				RunE: func(cmd *cobra.Command, args []string) error {
 					path := fmt.Sprintf("/api/v1/principals/%s/grants", url.PathEscape(args[0]))
 					body := map[string]any{}
+					if cmd.Flags().Changed("exclude-root") {
+						body["exclude_root"] = fExcludeRoot
+					}
 					if cmd.Flags().Changed("role") {
 						body["role"] = fRole
 					}
@@ -247,6 +251,7 @@ func generatedCommands() []*cobra.Command {
 					return runAPICommand(cmd, "POST", path, body)
 				},
 			}
+			cmd.Flags().StringVar(&fExcludeRoot, "exclude-root", "", "Exclude the scope root itself from update/delete (descendants only); read and create-placement keep the root. Ignored for the all scope.")
 			cmd.Flags().StringVar(&fRole, "role", "", "A role id (viewer, operator, admin, owner, or a custom role)")
 			_ = cmd.MarkFlagRequired("role")
 			cmd.Flags().StringVar(&fScopeId, "scope-id", "", "The scope root id; omit for the all scope")
@@ -413,7 +418,7 @@ func generatedCommands() []*cobra.Command {
 			cmd := &cobra.Command{
 				Use:     "create",
 				Short:   "Log in with a username and password",
-				Long:    "Verifies a human's password and sets an httpOnly session cookie. Public; a bad credential is a flat 401.",
+				Long:    "Verifies a human's password and sets an httpOnly session cookie. Public; a bad credential is a flat 401, and a correct password against a disabled account is a distinct 403 so the screen can explain it.",
 				Example: "  omniglass login create --password password --username username",
 				Args:    cobra.ExactArgs(0),
 				RunE: func(cmd *cobra.Command, args []string) error {
@@ -450,6 +455,27 @@ func generatedCommands() []*cobra.Command {
 				Args:    cobra.ExactArgs(0),
 				RunE: func(cmd *cobra.Command, args []string) error {
 					path := fmt.Sprintf("/api/v1/auth/logout")
+					return runAPICommand(cmd, "POST", path, nil)
+				},
+			}
+			return cmd
+		}())
+		roots = append(roots, parent)
+	}
+	{
+		parent := &cobra.Command{
+			Use:   "me",
+			Short: "Commands for the me resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "stopImpersonation",
+				Short:   "Stop the current impersonation session",
+				Long:    "Revokes the impersonation session presented by the request token, ending the view-as / act-as. Requires an impersonation token.",
+				Example: "  omniglass me stopImpersonation",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/auth/me:stopImpersonation")
 					return runAPICommand(cmd, "POST", path, nil)
 				},
 			}
@@ -538,6 +564,32 @@ func generatedCommands() []*cobra.Command {
 					return runAPICommand(cmd, "GET", path, nil)
 				},
 			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			var fDurationMinutes string
+			var fMode string
+			cmd := &cobra.Command{
+				Use:     "impersonate",
+				Short:   "Impersonate a principal (view-as or act-as)",
+				Long:    "Mints a bounded, revocable token to view as (read-only) or act as (full) the target. Gated by principal:impersonate (all-scope). Refused on self, when it would grant a capability the caller lacks (the escalation guard), or from within an existing impersonation.",
+				Example: "  omniglass principal impersonate --mode mode",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/principals/{id}:impersonate")
+					body := map[string]any{}
+					if cmd.Flags().Changed("duration-minutes") {
+						body["duration_minutes"] = fDurationMinutes
+					}
+					if cmd.Flags().Changed("mode") {
+						body["mode"] = fMode
+					}
+					return runAPICommand(cmd, "POST", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fDurationMinutes, "duration-minutes", "", "Session lifetime in minutes (default 30, max 1440)")
+			cmd.Flags().StringVar(&fMode, "mode", "", "view_as is read-only; act_as is full, with mutations attributed to both the real actor and the impersonated principal")
+			_ = cmd.MarkFlagRequired("mode")
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {

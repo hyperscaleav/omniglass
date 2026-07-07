@@ -105,8 +105,9 @@ func registerRoutes(api huma.API, gw storage.Gateway, o options) {
 		Method:        http.MethodPost,
 		Path:          "/auth/login",
 		Summary:       "Log in with a username and password",
-		Description:   "Verifies a human's password and sets an httpOnly session cookie. Public; a bad credential is a flat 401.",
+		Description:   "Verifies a human's password and sets an httpOnly session cookie. Public; a bad credential is a flat 401, and a correct password against a disabled account is a distinct 403 so the screen can explain it.",
 		DefaultStatus: http.StatusNoContent,
+		Errors:        []int{http.StatusUnauthorized, http.StatusForbidden},
 	}, a.loginHandler)
 
 	huma.Register(api, huma.Operation{
@@ -159,6 +160,7 @@ func registerRoutes(api huma.API, gw storage.Gateway, o options) {
 	registerSystemRoutes(api, a, gw)
 	registerComponentRoutes(api, a, gw)
 	registerPrincipalRoutes(api, a, gw)
+	registerImpersonationRoutes(api, a, gw)
 }
 
 // apiConfig is the shared Huma config for the live server and the spec dump. It

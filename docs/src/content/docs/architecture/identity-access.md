@@ -194,6 +194,19 @@ Whether a scope may mix include and exclude (e.g. "all except group X").
 
 A scope of entity E includes E **and everything structurally beneath it** (a location -> its systems -> their components -> their datapoints and alarms). The visible set is **parameterized by action**: `visible_set(P, action)` = the union, over **only the grants whose role carries `action`**, of each scope entity plus its descendants. There is no single global visible set. **`:read` is an implicit floor on every grant**: holding any grant on an entity confers `read` on it, so `visible_set(P, read)` is always the widest set and `visible_set(P, action)` is always a subset of it. The floor is realized as a **capability injection at role-index build** (next): every `<resource>:<action>` permission implies `<resource>:read`, so the implied reads are present in the fast-reject union, in `canDo`'s `perms`, and in `/auth/me.permissions`, not only in the scope layer. A verb-only role (`alarm:ack` without `alarm:read`, no `viewer` inheritance) is therefore **not** hard-403'd on the read. The asymmetry runs one way only: a principal can **read** an entity it cannot **act** on (in `visible_set(P, read)` but outside `visible_set(P, ack)`, via a read-only grant), but never the reverse. So there is no "actionable but not readable" case, and the status split below stays three-way. Dynamic-group scopes recompute as membership changes. Each per-action set is bounded by **fleet size (entities)**, not data volume.
 
+### Root-excluded grants (the deploy modifier)
+
+A grant carries an optional **`exclude_root`** flag that narrows only its **modify** actions to the root's
+descendants: the holder can create under, and update or delete within, the subtree, but cannot update or
+delete the root entity itself. Read and create-placement still include the root, so the holder can see the
+boundary of its scope and place children under it. This is the integrator / deploy grant: `deploy @
+location:room-42 (exclude_root)` lets a field tech add and edit the systems and components inside room-42
+without being able to rename or delete room-42. A `PATCH` on the root is the readable-but-out-of-write-scope
+**403** (not a 404: the target is readable), while a `POST` under the root and a `PATCH` on a descendant
+succeed. The modifier lives **on the grant**, not as a new scope kind, so it composes with the additive-grant
+model and confines the change to one predicate; an inclusive grant on the same root wins over an excluding
+one (an inclusive parent grant likewise re-admits a descendant). It is ignored for the `all` scope.
+
 ## The owner invariant
 
 At least one active `owner @ all` grant must exist at all times. Enforced as a deferrable constraint trigger in Postgres (fires at `COMMIT`, so the swap-owners pattern works in one transaction):
@@ -206,6 +219,34 @@ COMMIT;  -- trigger fires here, sees the new grant, passes.
 ```
 
 Attempting to remove the last owner (by grant delete, principal delete, principal disable, or role change) raises a check-violation. The Gateway translates this into a 400 with a clear remediation message.
+
+## Impersonation (view-as and act-as)
+
+An owner or all-scope admin holding `principal:impersonate` can temporarily see and act through another
+principal, for troubleshooting. Two modes: **view-as** resolves reads under the target's `visible_set` and
+refuses every write (read-only), while **act-as** is full, and its mutations are attributed to **both** the
+impersonated principal and the real admin. `POST /principals/{id}:impersonate` mints a bounded (default 30
+minutes, revocable) bearer token stored as an `impersonation_session`, a table deliberately distinct from
+`credential`: a credential authenticates a principal **as itself**, a session authenticates one principal
+**as another on someone's behalf**, a materially different fact with its own expiry, revoke, and "who is
+impersonating whom" listing. The client sends that token, and `authn` resolves it on a bearer miss to the
+**target** principal, tagging the request with the real actor and the mode; `POST /auth/me:stopImpersonation`
+revokes it.
+
+Two guarantees make it safe. The **escalation guard**: a caller may impersonate a target only when the
+caller's capabilities **cover** the target's (`rbac.Set.Covers`), so impersonation can never confer a
+capability the caller lacks (a lesser admin cannot impersonate an owner). Scope is where the modes differ:
+view-as is cross-scope (read-only grants no write authority), but **act-as** additionally requires the
+caller's **all-scope grants alone** to cover the target, since an impersonated request resolves its scope from
+the target: a capability the caller holds only through a narrower grant does not count. Without it a
+split-grant admin (all-scope user management, campus-scoped infra) could act-as a different campus's admin and
+gain write there. The rule is resource-agnostic, so it also closes escalation through non-tree writes
+(`principal_grant`, `role`) whose scoped grants resolve to an empty effective scope: a user-admin who cannot
+create a single grant directly cannot launder all-scope grant authority by acting-as a grant admin either. And **accountability**: every audited mutation taken while
+impersonating records `real_actor_principal_id` alongside the impersonated `actor_principal_id`, so the true
+actor is never lost (the self-service `/auth/me` profile and password edits audit too). Self-impersonation is refused, nesting is refused, and
+disabling either the target or the real admin kills the session on its next request (the same per-request
+`active` re-read that makes disable hard revocation).
 
 ## Enforcement: where each check lives
 
@@ -346,7 +387,7 @@ TLS on the HTTP API (terminated at the binary when given a cert + key, or at the
 
 ## Audit
 
-Every API operation records the resolved **actor** (the principal id) in `audit_log`. Secret decrypts are always audited, never filterable. Node-mode writes record the node principal as actor; system-mode writes record `actor = 'system'` (or `'bootstrap'` for the seed phase) so the audit trail distinguishes operator action from platform internals. An AI tool acts via OAuth as a `human` or `service` principal, so its writes record that principal as actor.
+Every API operation records the resolved **actor** (the principal id) in `audit_log`. Secret decrypts are always audited, never filterable. Node-mode writes record the node principal as actor; system-mode writes record `actor = 'system'` (or `'bootstrap'` for the seed phase) so the audit trail distinguishes operator action from platform internals. An AI tool acts via OAuth as a `human` or `service` principal, so its writes record that principal as actor. When a request is **impersonated**, the row also records `real_actor_principal_id`, the true admin behind the impersonated actor, so accountability survives impersonation (see [impersonation](#impersonation-view-as-and-act-as)).
 
 ## Bootstrap
 

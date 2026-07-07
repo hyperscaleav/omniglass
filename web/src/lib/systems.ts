@@ -11,6 +11,7 @@ export type System = {
   system_type: string;
   location_id?: string;
   parent_id?: string;
+  actions?: string[];
 };
 
 export const SYSTEMS_KEY = ["systems"] as const;

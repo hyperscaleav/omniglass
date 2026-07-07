@@ -167,16 +167,42 @@ type ServiceProfile struct{ Label string }
 // Grant is one (role x scope) pairing on a principal, addressable by its id (so
 // the admin surface can revoke a specific one).
 type Grant struct {
-	ID        string
-	Role      string
-	ScopeKind string
-	ScopeID   *string
+	ID          string
+	Role        string
+	ScopeKind   string
+	ScopeID     *string
+	ExcludeRoot bool // the grant's write scope excludes its own root (descendants only)
 }
 
 // ErrBadCredentials is returned by AuthenticatePassword when the username is
 // unknown, has no password set, or the password does not match: one error for all
 // three so the handler cannot leak which.
 var ErrBadCredentials = errors.New("storage: bad credentials")
+
+// ErrAccountDisabled is returned by AuthenticatePassword when the password is
+// CORRECT but the principal is disabled. It is a success-of-password signal, not a
+// peer of ErrBadCredentials: it is reachable only after the password verifies, so
+// a wrong password against a disabled account is still ErrBadCredentials and the
+// endpoint cannot be used to enumerate accounts or their state.
+var ErrAccountDisabled = errors.New("storage: account disabled")
+
+// dummyPasswordHash is a throwaway argon2id hash the unknown-user / no-password
+// path verifies against, so AuthenticatePassword runs one argon2 derivation
+// whether or not the user exists (no early return before the compare). It is
+// generated via auth.HashPassword so it carries the real argon parameters by
+// construction: a hand-written literal with weaker params would make the miss path
+// measurably faster and reopen a timing oracle. argon2 dominates the response
+// time; the pre-existing delta of a single credential-row fetch between a hit and
+// a miss is unchanged (this is not claimed to be perfectly constant-time).
+var dummyPasswordHash = mustDummyHash()
+
+func mustDummyHash() string {
+	h, err := auth.HashPassword("og-dummy-password-not-a-secret")
+	if err != nil {
+		panic(fmt.Sprintf("storage: init dummy password hash: %v", err))
+	}
+	return h
+}
 
 // AuthenticateBearer resolves a bearer credential by its sha256 hash to the
 // principal, its kind profile, and its grants. ErrCredentialNotFound if none.
@@ -205,24 +231,39 @@ func (p *PG) AuthenticateBearer(ctx context.Context, hash []byte) (*Principal, e
 func (p *PG) AuthenticatePassword(ctx context.Context, username, password string) (*Principal, error) {
 	pr := Principal{Kind: "human"}
 	var encoded []byte
+	var active bool
+	// Do NOT filter on pr.active here: the row must be fetched for a disabled user
+	// so their real hash is compared, and the active flag must not steer control
+	// flow before the password compare (that would leak account state by timing).
 	err := p.pool.QueryRow(ctx, `
-		select h.principal_id, c.secret_hash
+		select h.principal_id, c.secret_hash, pr.active
 		from human h
 		join principal pr on pr.id = h.principal_id
 		join credential c on c.principal_id = h.principal_id and c.kind = 'password'
-		where h.username = $1 and pr.active`, username).Scan(&pr.ID, &encoded)
+		where h.username = $1`, username).Scan(&pr.ID, &encoded, &active)
+	found := true
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
-		return nil, ErrBadCredentials
+		// Unknown user or no password credential: verify against the dummy hash so
+		// this path does the same argon2 work as a real user, then fail generically.
+		found = false
+		encoded = []byte(dummyPasswordHash)
 	case err != nil:
 		return nil, fmt.Errorf("storage: authenticate password: %w", err)
 	}
+	// Always verify; branch on found/active only AFTER, so response time does not
+	// reveal whether the user exists or is disabled.
 	ok, err := auth.VerifyPassword(password, string(encoded))
 	if err != nil {
 		return nil, fmt.Errorf("storage: verify password: %w", err)
 	}
-	if !ok {
+	if !found || !ok {
 		return nil, ErrBadCredentials
+	}
+	if !active {
+		// Correct password against a disabled account: a distinct, disclosable
+		// signal, reachable only with the right password (not an enumeration oracle).
+		return nil, ErrAccountDisabled
 	}
 	if err := p.loadPrincipal(ctx, &pr); err != nil {
 		return nil, err
@@ -242,13 +283,26 @@ func (p *PG) SetPassword(ctx context.Context, username, encoded string) (bool, e
 	case err != nil:
 		return false, fmt.Errorf("storage: lookup human %q: %w", username, err)
 	}
-	if _, err := p.pool.Exec(ctx, `
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return false, fmt.Errorf("storage: begin set password: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, `
 		insert into credential (principal_id, kind, secret_hash, prefix)
 		values ($1, 'password', $2, '')
 		on conflict (principal_id) where kind = 'password'
 			do update set secret_hash = excluded.secret_hash`,
 		pid, []byte(encoded)); err != nil {
 		return false, fmt.Errorf("storage: set password: %w", err)
+	}
+	// Audit the credential change (never the secret) so a password change leaves a
+	// trail and an impersonated change records the real actor.
+	if err := writeAuditRes(ctx, tx, pid, "change_password", "credential", pid, nil, nil); err != nil {
+		return false, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return false, fmt.Errorf("storage: commit set password: %w", err)
 	}
 	return true, nil
 }
@@ -274,13 +328,33 @@ func (p *PG) UpdateHumanProfile(ctx context.Context, principalID string, patch H
 	if patch.Email != nil {
 		email = nullize(*patch.Email)
 	}
-	if _, err := p.pool.Exec(ctx, `
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("storage: begin update human profile: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, `
 		update human set
 			display_name = case when $2 then $3 else display_name end,
 			email        = case when $4 then $5 else email end
 		where principal_id = $1`,
 		principalID, setDisplay, display, setEmail, email); err != nil {
 		return fmt.Errorf("storage: update human profile: %w", err)
+	}
+	// Audit the self-profile change so an impersonated (act-as) edit records the
+	// real actor, and every profile edit leaves a trail. Log the changed fields.
+	summary := map[string]any{}
+	if patch.DisplayName != nil {
+		summary["display_name"] = *patch.DisplayName
+	}
+	if patch.Email != nil {
+		summary["email"] = *patch.Email
+	}
+	if err := writeAuditRes(ctx, tx, principalID, "update", "principal", principalID, nil, summary); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("storage: commit update human profile: %w", err)
 	}
 	return nil
 }
@@ -552,9 +626,10 @@ var (
 // GrantSpec is a role x scope to assign to a principal. ScopeID is empty for the
 // "all" scope; for any other kind it names the scope root.
 type GrantSpec struct {
-	Role      string
-	ScopeKind string
-	ScopeID   string
+	Role        string
+	ScopeKind   string
+	ScopeID     string
+	ExcludeRoot bool
 }
 
 // CreateGrant assigns a role x scope to a principal, audited. Requires an
@@ -566,7 +641,8 @@ func (p *PG) CreateGrant(ctx context.Context, actorID, principalID string, spec 
 		return nil, ErrPrincipalForbidden
 	}
 	if spec.ScopeKind == "all" {
-		spec.ScopeID = "" // the all scope has no id
+		spec.ScopeID = ""        // the all scope has no id
+		spec.ExcludeRoot = false // and no root to exclude
 	} else if spec.ScopeID == "" {
 		return nil, ErrBadScope // a scoped grant must name its root
 	}
@@ -599,12 +675,12 @@ func (p *PG) CreateGrant(ctx context.Context, actorID, principalID string, spec 
 
 	var gid string
 	err = tx.QueryRow(ctx,
-		`insert into principal_grant (principal_id, role_id, scope_kind, scope_id) values ($1, $2, $3, $4) returning id`,
-		principalID, spec.Role, spec.ScopeKind, nullize(spec.ScopeID)).Scan(&gid)
+		`insert into principal_grant (principal_id, role_id, scope_kind, scope_id, exclude_root) values ($1, $2, $3, $4, $5) returning id`,
+		principalID, spec.Role, spec.ScopeKind, nullize(spec.ScopeID), spec.ExcludeRoot).Scan(&gid)
 	if err != nil {
 		return nil, mapGrantWriteErr(err)
 	}
-	g := Grant{ID: gid, Role: spec.Role, ScopeKind: spec.ScopeKind}
+	g := Grant{ID: gid, Role: spec.Role, ScopeKind: spec.ScopeKind, ExcludeRoot: spec.ExcludeRoot}
 	if spec.ScopeID != "" {
 		g.ScopeID = &spec.ScopeID
 	}
@@ -772,14 +848,14 @@ func (p *PG) loadPrincipal(ctx context.Context, pr *Principal) error {
 	}
 
 	rows, err := p.pool.Query(ctx,
-		`select id, role_id, scope_kind, scope_id from principal_grant where principal_id = $1 order by created_at`, pr.ID)
+		`select id, role_id, scope_kind, scope_id, exclude_root from principal_grant where principal_id = $1 order by created_at`, pr.ID)
 	if err != nil {
 		return fmt.Errorf("storage: load grants: %w", err)
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var g Grant
-		if err := rows.Scan(&g.ID, &g.Role, &g.ScopeKind, &g.ScopeID); err != nil {
+		if err := rows.Scan(&g.ID, &g.Role, &g.ScopeKind, &g.ScopeID, &g.ExcludeRoot); err != nil {
 			return fmt.Errorf("storage: scan grant: %w", err)
 		}
 		pr.Grants = append(pr.Grants, g)

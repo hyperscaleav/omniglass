@@ -50,6 +50,10 @@ export function useLogin() {
     // Drop any stale bearer token so it cannot shadow the new session cookie.
     clearToken();
     const { error, response } = await api.POST("/auth/login", { body: { username, password } });
+    if (response.status === 403) {
+      // The password was correct but the account is disabled (a distinct 403).
+      return { ok: false, message: "This account is disabled. Contact your administrator." };
+    }
     if (response.status === 401) {
       return { ok: false, message: "Invalid username or password." };
     }

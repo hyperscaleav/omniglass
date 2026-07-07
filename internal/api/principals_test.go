@@ -333,8 +333,24 @@ func TestDisableAPI(t *testing.T) {
 	if code, _ := c.send(ownerTok, "POST", "/principals/"+alice.ID+":disable", nil); code != http.StatusNoContent {
 		t.Fatalf("disable: want 204, got %d", code)
 	}
-	if login() != http.StatusUnauthorized {
-		t.Fatal("a disabled user must not sign in")
+	// A disabled account with the CORRECT password gets a distinct 403 ("account
+	// disabled"), not the generic 401, so the sign-in screen can explain it.
+	if login() != http.StatusForbidden {
+		t.Fatal("a disabled user with the right password should get 403 account-disabled")
+	}
+	// A WRONG password against the disabled account stays a generic 401: no
+	// account-state oracle at the HTTP layer for someone without the password.
+	badLogin := func() int {
+		body, _ := json.Marshal(map[string]string{"username": "alice", "password": "nope-wrong"})
+		resp, err := http.Post(srv.URL+"/api/v1/auth/login", "application/json", bytes.NewReader(body))
+		if err != nil {
+			t.Fatalf("login: %v", err)
+		}
+		resp.Body.Close()
+		return resp.StatusCode
+	}
+	if badLogin() != http.StatusUnauthorized {
+		t.Fatal("a disabled user with a wrong password should get a generic 401")
 	}
 	if _, body := c.send(ownerTok, "GET", "/principals/"+alice.ID, nil); !bytes.Contains(body, []byte(`"active":false`)) {
 		t.Fatalf("alice should read inactive: %s", body)

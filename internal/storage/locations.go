@@ -263,9 +263,9 @@ func writeAuditRes(ctx context.Context, tx pgx.Tx, actorID, verb, resource, reso
 		return err
 	}
 	if _, err := tx.Exec(ctx, `
-		insert into audit_log (actor_principal_id, verb, resource, resource_id, old, new)
-		values ($1, $2, $3, $4, $5, $6)`,
-		nullize(actorID), verb, resource, resourceID, oldJSON, newJSON); err != nil {
+		insert into audit_log (actor_principal_id, real_actor_principal_id, verb, resource, resource_id, old, new)
+		values ($1, $2, $3, $4, $5, $6, $7)`,
+		nullize(actorID), nullize(realActorFrom(ctx)), verb, resource, resourceID, oldJSON, newJSON); err != nil {
 		return fmt.Errorf("storage: write audit: %w", err)
 	}
 	return nil

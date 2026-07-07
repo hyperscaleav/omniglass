@@ -1,10 +1,12 @@
 import { For, Show, createMemo, createSignal } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import Page from "../components/Page";
-import TreeSelect from "../components/TreeSelect";
+import GrantBuilder from "../components/GrantBuilder";
 import type { TreeNode } from "../lib/treeselect";
-import { type Principal, type Grant, type ScopeKind, PRINCIPALS_KEY, ROLES_KEY, listPrincipals, createPrincipal, updatePrincipal, createGrant, revokeGrant, setPrincipalActive, listRoles, principalName } from "../lib/principals";
+import type { ExistingGrant, GrantRef } from "../lib/grantdraft";
+import { type Principal, type ScopeKind, PRINCIPALS_KEY, ROLES_KEY, listPrincipals, createPrincipal, updatePrincipal, createGrant, revokeGrant, setPrincipalActive, listRoles, principalName } from "../lib/principals";
 import { useMe, can } from "../lib/auth";
+import { impersonate } from "../lib/impersonation";
 import { describeError } from "../lib/format";
 import { listLocations } from "../lib/locations";
 import { listSystems } from "../lib/systems";
@@ -36,6 +38,12 @@ export default function Users() {
     } catch (e) {
       setActErr(describeError(e));
     }
+  }
+
+  async function doImpersonate(p: Principal, mode: "view_as" | "act_as") {
+    setActErr(null);
+    const r = await impersonate(qc, p.id, principalName(p), mode);
+    if (!r.ok) setActErr(r.message);
   }
 
   const initials = (p: Principal) => principalName(p).slice(0, 2).toUpperCase();
@@ -151,6 +159,14 @@ export default function Users() {
                       </Show>
                     </div>
                   </Show>
+                  <Show when={can(me.data, "principal", "impersonate") && p().id !== me.data?.principal?.id}>
+                    <div class="flex items-center gap-2 border-t border-base-300 pt-3">
+                      <span class="text-xs text-base-content/50">Impersonate to troubleshoot</span>
+                      <span class="flex-1" />
+                      <button class="btn btn-quiet btn-sm" onClick={() => doImpersonate(p(), "view_as")}>View as</button>
+                      <button class="btn btn-warn btn-sm" onClick={() => doImpersonate(p(), "act_as")}>Act as</button>
+                    </div>
+                  </Show>
                 </>
               )}
             </Show>
@@ -192,21 +208,17 @@ function Fact(props: { label: string; value: unknown }) {
   );
 }
 
-// SCOPE_KINDS the grant form offers. "group" is deferred (no group entity yet), so
-// it is not offered; the server also rejects it.
-const SCOPE_KINDS: Exclude<ScopeKind, "group">[] = ["all", "location", "system", "component"];
-
-// GrantEditor shows a principal's role grants (each a role at a scope), lets an
-// admin revoke one (the x, gated principal_grant:delete) and add one (the form,
-// gated principal_grant:create). A scoped grant targets a real entity by id: the
-// form is a picker of the chosen kind (value = id, label = name), and the chips
-// resolve the stored id back to its name. The server enforces the owner invariant
-// (the last owner grant cannot be revoked) and answers 409.
+// GrantEditor is the data edge for the grant builder: it fetches the role catalog
+// and the scope-entity trees, renders the staged GrantBuilder over the principal's
+// grants, and applies the saved diff (create the adds, revoke the removes). Adds
+// run before removes so an owner swap never trips the last-owner guard mid-batch.
+// The server enforces the owner invariant and answers 409.
 function GrantEditor(props: { principal: Principal; canGrant: boolean; canRevoke: boolean; onChange: () => void | Promise<void> }) {
+  const needTrees = () => props.canGrant || props.canRevoke;
   const roles = useQuery(() => ({ queryKey: ROLES_KEY, queryFn: listRoles, enabled: props.canGrant }));
-  const locations = useQuery(() => ({ queryKey: ["locations"], queryFn: listLocations, enabled: props.canGrant }));
-  const systems = useQuery(() => ({ queryKey: ["systems"], queryFn: listSystems, enabled: props.canGrant }));
-  const components = useQuery(() => ({ queryKey: ["components"], queryFn: listComponents, enabled: props.canGrant }));
+  const locations = useQuery(() => ({ queryKey: ["locations"], queryFn: listLocations, enabled: needTrees() }));
+  const systems = useQuery(() => ({ queryKey: ["systems"], queryFn: listSystems, enabled: needTrees() }));
+  const components = useQuery(() => ({ queryKey: ["components"], queryFn: listComponents, enabled: needTrees() }));
 
   // id -> name across the tree tiers, for turning a stored scope id back into a
   // readable grant chip.
@@ -217,101 +229,47 @@ function GrantEditor(props: { principal: Principal; canGrant: boolean; canRevoke
     for (const e of components.data ?? []) m.set(e.id, e.name);
     return m;
   });
-  const label = (g: Grant) => {
-    if (g.scope_kind === "all") return `${g.role} @ all`;
-    const name = g.scope_id ? nameOf().get(g.scope_id) ?? g.scope_id : g.scope_id;
-    return `${g.role} @ ${g.scope_kind}:${name}`;
-  };
-  // The scope entities of the chosen kind, as TreeNodes so the picker reads as an
-  // indented tree (value = id, ordered by the parent_id tree) rather than a flat
-  // alphabetical list.
-  const scopeItems = (kind: string): TreeNode[] => {
-    const list = kind === "location" ? locations.data ?? [] : kind === "system" ? systems.data ?? [] : kind === "component" ? components.data ?? [] : [];
+
+  // The principal's grants as the current server set the draft diffs against.
+  const current = createMemo<ExistingGrant[]>(() =>
+    props.principal.grants
+      .filter((g) => g.id)
+      .map((g) => ({ id: g.id!, role: g.role, scope_kind: g.scope_kind as ScopeKind, scope_id: g.scope_id ?? undefined })),
+  );
+
+  // The scope entities of a kind as TreeNodes, so the entity stage reads as an
+  // indented tree (value = id, ordered by parent_id) not a flat list.
+  const entities = (kind: "location" | "system" | "component"): TreeNode[] => {
+    const list = kind === "location" ? locations.data ?? [] : kind === "system" ? systems.data ?? [] : components.data ?? [];
     return list.map((e) => ({ id: e.id, value: e.id, label: e.name, parentId: e.parent_id, rank: 0 }));
   };
 
-  const [role, setRole] = createSignal("");
-  const [scopeKind, setScopeKind] = createSignal<Exclude<ScopeKind, "group">>("all");
-  const [scopeId, setScopeId] = createSignal("");
-  const [busy, setBusy] = createSignal(false);
-  const [err, setErr] = createSignal<string | null>(null);
-
-  async function add(e: SubmitEvent) {
-    e.preventDefault();
-    setBusy(true);
-    setErr(null);
+  async function onSave(diff: { adds: GrantRef[]; removes: ExistingGrant[] }) {
     try {
-      await createGrant(props.principal.id, {
-        role: role(),
-        scope_kind: scopeKind(),
-        scope_id: scopeKind() === "all" ? undefined : scopeId() || undefined,
-      });
-      setRole("");
-      setScopeKind("all");
-      setScopeId("");
-      await props.onChange();
-    } catch (er) {
-      setErr(describeError(er));
+      for (const a of diff.adds) {
+        await createGrant(props.principal.id, { role: a.role, scope_kind: a.scope_kind, scope_id: a.scope_kind === "all" ? undefined : a.scope_id });
+      }
+      for (const r of diff.removes) {
+        await revokeGrant(props.principal.id, r.id);
+      }
     } finally {
-      setBusy(false);
-    }
-  }
-  async function remove(g: Grant) {
-    if (!g.id) return;
-    setErr(null);
-    try {
-      await revokeGrant(props.principal.id, g.id);
+      // Resync the current set regardless of outcome, so a partial batch reflects
+      // what actually persisted.
       await props.onChange();
-    } catch (er) {
-      setErr(describeError(er));
     }
   }
 
   return (
-    <div>
-      <div class="eyebrow mb-1.5">Role grants</div>
-      <div class="flex flex-wrap gap-1.5">
-        <For each={props.principal.grants} fallback={<span class="text-xs text-base-content/40">No grants yet. This principal can sign in but has no permissions.</span>}>
-          {(g) => (
-            <span class="badge badge-soft badge-primary gap-1 font-data text-[11px]">
-              {label(g)}
-              <Show when={props.canRevoke && g.id}>
-                <button type="button" class="leading-none hover:text-error" title="Revoke" aria-label={`Revoke ${label(g)}`} onClick={() => remove(g)}>&times;</button>
-              </Show>
-            </span>
-          )}
-        </For>
-      </div>
-      <Show when={err()}>
-        <p class="mt-2 text-[11px] text-error">{err()}</p>
-      </Show>
-      <Show when={props.canGrant}>
-        <form class="mt-3 flex flex-wrap items-end gap-2" onSubmit={add}>
-          <select class="select select-bordered select-sm" value={role()} onChange={(e) => setRole(e.currentTarget.value)} required aria-label="Role">
-            <option value="" disabled>Role…</option>
-            <For each={roles.data}>{(r) => <option value={r.id}>{r.id}</option>}</For>
-          </select>
-          <select
-            class="select select-bordered select-sm"
-            value={scopeKind()}
-            onChange={(e) => { setScopeKind(e.currentTarget.value as Exclude<ScopeKind, "group">); setScopeId(""); }}
-            aria-label="Scope kind"
-          >
-            <For each={SCOPE_KINDS}>{(k) => <option value={k}>{k}</option>}</For>
-          </select>
-          <Show when={scopeKind() !== "all"}>
-            <TreeSelect
-              class="select select-bordered select-sm"
-              items={scopeItems(scopeKind())}
-              value={scopeId()}
-              onChange={setScopeId}
-              rootLabel={`Select a ${scopeKind()}…`}
-            />
-          </Show>
-          <button type="submit" class="btn btn-action btn-sm" disabled={busy() || !role() || (scopeKind() !== "all" && !scopeId())}>Grant</button>
-        </form>
-      </Show>
-    </div>
+    <GrantBuilder
+      principalId={props.principal.id}
+      current={current()}
+      roles={(roles.data ?? []).map((r) => r.id)}
+      entities={entities}
+      scopeName={(id) => nameOf().get(id)}
+      canGrant={props.canGrant}
+      canRevoke={props.canRevoke}
+      onSave={onSave}
+    />
   );
 }
 

@@ -38,6 +38,11 @@ import {
 export interface ListNode {
   id: string;
   display: string;
+  // The scope-aware actions the server says the caller may perform on THIS row
+  // (create a child, update, delete), from the read-side `actions` field. When
+  // present, the row gates its affordances on this rather than the coarse
+  // capability, so a scoped operator sees only the buttons the server would allow.
+  actions?: string[];
   // polymorphic so a concrete node's children carry its own type (a CompNode's
   // children are CompNode[]), letting pages drill without casting.
   children: this[];
@@ -133,6 +138,10 @@ export default function ListView<N extends ListNode>(props: { config: ListConfig
   const cfg = props.config;
   const me = useMe();
   const allow = (action: string) => can(me.data, cfg.entity.name, action);
+  // Per-row gating: when the server annotated the row with scope-aware `actions`,
+  // honor it (a scoped operator sees only what it may do to THIS row); otherwise
+  // fall back to the coarse capability. The server is always the authority.
+  const rowAllow = (n: N, action: string) => (n.actions ? n.actions.includes(action) : allow(action));
 
   // The stored value is the visible columns IN ORDER (visibility + reorder in one
   // client preference; the eventual home is a per-principal user-preferences
@@ -459,17 +468,17 @@ export default function ListView<N extends ListNode>(props: { config: ListConfig
             <button class="btn btn-quiet btn-xs btn-square" title="Open full page" onClick={(e) => { e.stopPropagation(); openFull(n); }}>
               <Maximize size={15} />
             </button>
-            <Show when={cfg.canAddChild?.(n) && allow("create")}>
+            <Show when={cfg.canAddChild?.(n) && rowAllow(n, "create")}>
               <button class="btn btn-quiet btn-xs btn-square" title="Add child" onClick={(e) => { e.stopPropagation(); ctxFull.openCreate(n); }}>
                 <Plus size={15} />
               </button>
             </Show>
-            <Show when={allow("update")}>
+            <Show when={rowAllow(n, "update")}>
               <button class="btn btn-quiet btn-xs btn-square" title="Edit" onClick={(e) => { e.stopPropagation(); ctxFull.openEdit(n); }}>
                 <Pencil size={15} />
               </button>
             </Show>
-            <Show when={allow("delete") && cfg.onDelete}>
+            <Show when={rowAllow(n, "delete") && cfg.onDelete}>
               <button class="btn btn-danger btn-xs btn-square" title="Delete" onClick={(e) => { e.stopPropagation(); cfg.onDelete!(n, ctxFull); }}>
                 <Trash size={15} />
               </button>

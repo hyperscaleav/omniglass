@@ -12,6 +12,7 @@ export type Component = {
   location_id?: string;
   parent_id?: string;
   system_id?: string;
+  actions?: string[];
 };
 
 export const COMPONENTS_KEY = ["components"] as const;

@@ -48,8 +48,15 @@ func TestDisablePrincipal(t *testing.T) {
 	if err := gw.SetPrincipalActive(ctx, root.ID, alice.ID, false, all); err != nil {
 		t.Fatalf("disable: %v", err)
 	}
-	if _, err := gw.AuthenticatePassword(ctx, "alice", "alice-s3cret"); !errors.Is(err, storage.ErrBadCredentials) {
-		t.Fatalf("disabled password: want ErrBadCredentials, got %v", err)
+	// A correct password against a disabled account is a distinct, disclosable
+	// signal (so the sign-in screen can say "account disabled").
+	if _, err := gw.AuthenticatePassword(ctx, "alice", "alice-s3cret"); !errors.Is(err, storage.ErrAccountDisabled) {
+		t.Fatalf("disabled + correct password: want ErrAccountDisabled, got %v", err)
+	}
+	// A WRONG password against a disabled account stays generic, so the endpoint is
+	// not an account-state oracle for an attacker who does not hold the password.
+	if _, err := gw.AuthenticatePassword(ctx, "alice", "wrong-pw"); !errors.Is(err, storage.ErrBadCredentials) {
+		t.Fatalf("disabled + wrong password: want ErrBadCredentials, got %v", err)
 	}
 	if _, err := gw.AuthenticateBearer(ctx, bh); !errors.Is(err, storage.ErrCredentialNotFound) {
 		t.Fatalf("disabled bearer: want ErrCredentialNotFound, got %v", err)

@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/scope"
 )
@@ -23,6 +24,13 @@ func (UnimplementedGateway) IssueBearerCredential(context.Context, string, []byt
 func (UnimplementedGateway) AuthenticateBearer(context.Context, []byte) (*Principal, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) BeginImpersonation(context.Context, string, string, string, time.Duration) (string, *ImpersonationSession, error) {
+	return "", nil, nil
+}
+func (UnimplementedGateway) AuthenticateImpersonation(context.Context, []byte) (*Principal, string, string, string, error) {
+	return nil, "", "", "", nil
+}
+func (UnimplementedGateway) EndImpersonation(context.Context, string) error { return nil }
 func (UnimplementedGateway) AuthenticatePassword(context.Context, string, string) (*Principal, error) {
 	return nil, nil
 }
@@ -60,6 +68,9 @@ func (UnimplementedGateway) UpsertLocationType(context.Context, LocationType) er
 	return nil
 }
 func (UnimplementedGateway) ListLocationTypes(context.Context) ([]LocationType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) InScopeIDs(context.Context, string, []string, scope.Set) (map[string]bool, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) ListLocations(context.Context, scope.Set) ([]Location, error) {

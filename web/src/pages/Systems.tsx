@@ -69,6 +69,7 @@ export default function Systems() {
         id: s.name,
         display: s.display_name || s.name,
         children: [],
+        actions: s.actions,
         type: s.system_type,
         locationName: s.location_id ? label(lm.get(s.location_id) ?? { name: s.location_id }) : "",
         raw: s,
