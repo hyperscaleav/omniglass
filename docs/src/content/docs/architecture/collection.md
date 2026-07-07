@@ -3,9 +3,20 @@ title: Data collection
 description: "Data collection is built from functions: a versioned component template declares interfaces and a set of functions, each a trigger plus a DAG of steps that runs at the edge and parses on the spot."
 sidebar:
   badge:
-    text: Design
-    variant: caution
+    text: Partial
+    variant: note
 ---
+
+:::note[Partial]
+The first collection path is live end to end: an edge node runs a real **tcp reachability probe** against a
+component's interface target, ships the result as a protobuf `Event` over a JetStream durable consumer, and the
+`tcp.open` / `tcp.connect_time` datapoints land in `metric_datapoint` owned by the target component. The owner is
+bound **server-side** from the task's interface (the node stamps no component identity), and the ingest consumer
+confines a node to its own tasks (an Event carrying another node's `task_id` is orphan-dropped) and rejects
+unregistered datapoint names. The full function/DAG authoring model below (multi-step, cross-interface, branching)
+is still design; only the inline tcp probe is built. See
+[ADR-0017](/architecture/decisions/#adr-0017-telemetry-is-a-protobuf-event-over-jetstream-with-an-inline-owner-confining-consumer).
+:::
 
 Collection is built from **functions**. A versioned `ComponentTemplate` declares how to reach a
 class of device (its interfaces) and a set of **functions**, each a discrete unit of device logic

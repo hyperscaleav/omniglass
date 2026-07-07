@@ -3,9 +3,18 @@ title: Datapoints
 description: "The core data model: datapoints and their three kinds, provenance, the registries, key scope, divergence, fusion, and how a value reads back."
 sidebar:
   badge:
-    text: Design
-    variant: caution
+    text: Partial
+    variant: note
 ---
+
+:::note[Partial]
+The observed **metric** path is built for reachability: a node's tcp probe produces `tcp.open` /
+`tcp.connect_time`, and the ingest consumer writes them to `metric_datapoint` with `provenance=observed`, the
+owner bound server-side from the task's interface (`owner_kind=component`) and reject-not-project enforced
+against the `datapoint_type` registry. State and log datapoints, calculated provenance, fusion, and the live
+NATS data-lane described below are still design; the built slice is the observed-metric write path. See
+[ADR-0017](/architecture/decisions/#adr-0017-telemetry-is-a-protobuf-event-over-jetstream-with-an-inline-owner-confining-consumer).
+:::
 
 This is the heart of the authoritative data model: what a datapoint is, the two axes that define it, how we know a value (provenance), and how values reconcile, diverge, and read back. The physical layout (tables, partitioning, the lineage CHECK, tiering) lives in storage; the spine is [the architecture overview](/architecture/). Events, calc rules, and the response layer get their own pages: [events](/architecture/events/), [calculations](/architecture/calculations/), and [alarms and actions](/architecture/alarms-actions/).
 
