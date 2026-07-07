@@ -20,6 +20,32 @@ describe("can", () => {
     expect(can(me(["location:create"]), "location", "read")).toBe(true);
     expect(can(me(["alarm:ack,snooze"]), "location", "update")).toBe(false);
   });
+  // Topic-pattern parity with the server rbac core: `>` is the whole-estate tail
+  // (owner), `*` matches exactly one token, and a two-token pattern cannot reach a
+  // three-token `:admin` permission. Regression: owner's only grant is `>`, and a
+  // splitting matcher left every gated nav tab hidden for the owner.
+  it("treats `>` as the whole-estate superuser (owner)", () => {
+    expect(can(me([">"]), "principal", "read")).toBe(true);
+    expect(can(me([">"]), "role", "read")).toBe(true);
+    expect(can(me([">"]), "audit", "read", "admin")).toBe(true);
+    expect(can(me([">"]), "anything", "delete")).toBe(true);
+  });
+  it("matches `*` as exactly one token, so a 2-token pattern misses a 3-token :admin", () => {
+    // A resource:action holder can read that resource (floor) but not reach an :admin tier.
+    expect(can(me(["*:read"]), "location", "read")).toBe(true);
+    expect(can(me(["*:read"]), "audit", "read", "admin")).toBe(false);
+    expect(can(me(["principal:*"]), "principal", "delete")).toBe(true);
+    expect(can(me(["principal:*"]), "principal", "delete", "admin")).toBe(false);
+  });
+  it("resolves an explicit :admin tier and its read floor", () => {
+    expect(can(me(["audit:read:admin"]), "audit", "read", "admin")).toBe(true);
+    expect(can(me(["audit:read:admin"]), "audit", "read")).toBe(true); // via the read floor
+    expect(can(me(["audit:read:admin"]), "audit", "delete", "admin")).toBe(false);
+  });
+  it("drops a malformed permission (grants nothing)", () => {
+    expect(can(me([":read"]), "location", "read")).toBe(false);
+    expect(can(me(["location:"]), "location", "read")).toBe(false);
+  });
 });
 
 // The auth hooks are the unit under test; fetch is the seam we fake, so these
