@@ -126,4 +126,16 @@ func (UnimplementedGateway) UpdateComponent(context.Context, string, string, Com
 func (UnimplementedGateway) DeleteComponent(context.Context, string, string, scope.Set, scope.Set) error {
 	return nil
 }
+func (UnimplementedGateway) UpsertDatapointType(context.Context, DatapointType) error {
+	return nil
+}
+func (UnimplementedGateway) ListDatapointTypes(context.Context) ([]DatapointType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) UpsertInterfaceType(context.Context, InterfaceType) error {
+	return nil
+}
+func (UnimplementedGateway) ListInterfaceTypes(context.Context) ([]InterfaceType, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) Close() {}

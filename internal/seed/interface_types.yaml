@@ -1,0 +1,10 @@
+# The official interface_types, seeded idempotently at boot. built marks that a
+# node-side adapter ships. Slice 1 ships the two inline reachability probes; the
+# pollable protocols (snmp, http, ssh) arrive with their slices.
+interface_types:
+  - name: icmp
+    description: ICMP echo / ping reachability and RTT.
+    built: true
+  - name: tcp
+    description: Raw TCP connect / port-open check.
+    built: true

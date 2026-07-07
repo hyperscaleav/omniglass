@@ -138,6 +138,13 @@ type Gateway interface {
 	UpdateComponent(ctx context.Context, actorID, name string, patch ComponentPatch, read, action scope.Set) (*Component, error)
 	DeleteComponent(ctx context.Context, actorID, name string, read, action scope.Set) error
 
+	// The collection registries: estate-wide reference data (no scope.Set),
+	// seeded official and operator-extensible at org/template scope later.
+	UpsertDatapointType(ctx context.Context, dt DatapointType) error
+	ListDatapointTypes(ctx context.Context) ([]DatapointType, error)
+	UpsertInterfaceType(ctx context.Context, it InterfaceType) error
+	ListInterfaceTypes(ctx context.Context) ([]InterfaceType, error)
+
 	// Close releases the underlying connection pool. Idempotent at the pool
 	// level; call once on shutdown.
 	Close()

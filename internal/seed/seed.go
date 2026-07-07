@@ -8,6 +8,7 @@ package seed
 import (
 	"context"
 	_ "embed"
+	"encoding/json"
 	"fmt"
 
 	"github.com/hyperscaleav/omniglass/internal/storage"
@@ -25,6 +26,12 @@ var systemTypesYAML []byte
 
 //go:embed component_types.yaml
 var componentTypesYAML []byte
+
+//go:embed datapoint_types.yaml
+var datapointTypesYAML []byte
+
+//go:embed interface_types.yaml
+var interfaceTypesYAML []byte
 
 type rolesDoc struct {
 	Roles []struct {
@@ -61,6 +68,26 @@ type componentTypesDoc struct {
 	} `yaml:"component_types"`
 }
 
+type datapointTypesDoc struct {
+	DatapointTypes []struct {
+		Name        string         `yaml:"name"`
+		Kind        string         `yaml:"kind"`
+		ValueType   string         `yaml:"value_type"`
+		Unit        string         `yaml:"unit"`
+		Validation  map[string]any `yaml:"validation"`
+		DisplayName string         `yaml:"display_name"`
+		Description string         `yaml:"description"`
+	} `yaml:"datapoint_types"`
+}
+
+type interfaceTypesDoc struct {
+	InterfaceTypes []struct {
+		Name        string `yaml:"name"`
+		Description string `yaml:"description"`
+		Built       bool   `yaml:"built"`
+	} `yaml:"interface_types"`
+}
+
 // Run upserts the ship-with reference data: the official roles and location
 // types. Idempotent, so it is safe to call on every boot; a release that changes
 // a default takes effect on the next start.
@@ -74,7 +101,58 @@ func Run(ctx context.Context, gw storage.Gateway) error {
 	if err := seedSystemTypes(ctx, gw); err != nil {
 		return err
 	}
-	return seedComponentTypes(ctx, gw)
+	if err := seedComponentTypes(ctx, gw); err != nil {
+		return err
+	}
+	if err := seedInterfaceTypes(ctx, gw); err != nil {
+		return err
+	}
+	return seedDatapointTypes(ctx, gw)
+}
+
+func seedInterfaceTypes(ctx context.Context, gw storage.Gateway) error {
+	var doc interfaceTypesDoc
+	if err := yaml.Unmarshal(interfaceTypesYAML, &doc); err != nil {
+		return fmt.Errorf("seed: parse interface_types: %w", err)
+	}
+	for _, it := range doc.InterfaceTypes {
+		if err := gw.UpsertInterfaceType(ctx, storage.InterfaceType{
+			Name: it.Name, Official: true, Description: it.Description, Built: it.Built,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func seedDatapointTypes(ctx context.Context, gw storage.Gateway) error {
+	var doc datapointTypesDoc
+	if err := yaml.Unmarshal(datapointTypesYAML, &doc); err != nil {
+		return fmt.Errorf("seed: parse datapoint_types: %w", err)
+	}
+	for _, dt := range doc.DatapointTypes {
+		var unit *string
+		if dt.Unit != "" {
+			u := dt.Unit
+			unit = &u
+		}
+		var validation []byte
+		if len(dt.Validation) > 0 {
+			b, err := json.Marshal(dt.Validation)
+			if err != nil {
+				return fmt.Errorf("seed: marshal validation for %q: %w", dt.Name, err)
+			}
+			validation = b
+		}
+		if err := gw.UpsertDatapointType(ctx, storage.DatapointType{
+			Scope: "official", Name: dt.Name, DisplayName: dt.DisplayName,
+			Kind: dt.Kind, ValueType: dt.ValueType, Unit: unit,
+			Validation: validation, Description: dt.Description,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func seedComponentTypes(ctx context.Context, gw storage.Gateway) error {
