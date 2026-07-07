@@ -24,6 +24,23 @@ func TestParseTCPTask(t *testing.T) {
 	}
 }
 
+// TestParseICMPTask: the ping target, count, and timeout come off the interface
+// params; an empty target is a usage error the caller skips on.
+func TestParseICMPTask(t *testing.T) {
+	spec := collection.TaskSpec{ID: "t1", InterfaceType: "icmp", InterfaceParams: json.RawMessage(`{"target":"10.0.0.5","count":3,"timeout":"2s"}`)}
+	got, err := parseICMPTask(spec)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if got.Target != "10.0.0.5" || got.Count != 3 || got.Timeout.String() != "2s" {
+		t.Fatalf("parse = %+v, want target 10.0.0.5 count 3 timeout 2s", got)
+	}
+
+	if _, err := parseICMPTask(collection.TaskSpec{ID: "t2", InterfaceType: "icmp", InterfaceParams: json.RawMessage(`{}`)}); err == nil {
+		t.Fatal("empty target: want error")
+	}
+}
+
 // TestBuildEvent: the Event carries the task id and node id, no component
 // identity, and one proto datapoint per produced datapoint with double_value set.
 func TestBuildEvent(t *testing.T) {

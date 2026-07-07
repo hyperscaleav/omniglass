@@ -41,6 +41,20 @@ func (r Reachability) Up() bool { return r == Responded }
 // the two are distinguishable downstream.
 const ReasonLabel = "reason"
 
+// pingReason resolves the reason an icmp probe result carries. It prefers the
+// reason the pinger classified; a fake that left Reason unset falls back to the
+// received-count verdict (any echo is Responded, none is a silent Timedout) so
+// the reachable datapoint always carries a non-empty reason.
+func pingReason(res PingResult) Reachability {
+	if res.Reason != "" {
+		return res.Reason
+	}
+	if res.Received > 0 {
+		return Responded
+	}
+	return Timedout
+}
+
 // Classify maps a connect error to the reachability reason it represents. ok is
 // false when the error is NOT a reachability verdict, i.e. a resolve/setup
 // failure (the node could not even form the probe), which the caller treats as

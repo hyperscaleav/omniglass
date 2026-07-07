@@ -25,6 +25,9 @@ type Config struct {
 	// Dialer is the tcp probe primitive the node runs its tcp tasks with. Nil
 	// defaults to the real collection.NewTCPDialer(); tests inject a fake.
 	Dialer collection.TCPDialer
+	// Pinger is the icmp probe primitive the node runs its icmp tasks with. Nil
+	// defaults to the real collection.NewICMPPinger(); tests inject a fake.
+	Pinger collection.Pinger
 }
 
 // Run claims the node's NATS credential, connects outbound-only to the bus,
@@ -49,12 +52,16 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	if dialer == nil {
 		dialer = collection.NewTCPDialer()
 	}
+	pinger := cfg.Pinger
+	if pinger == nil {
+		pinger = collection.NewICMPPinger()
+	}
 
 	wl, err := pullWorklist(nc, cfg.Name)
 	if err != nil {
 		return collection.WorklistReply{}, err
 	}
-	if err := runTasks(ctx, nc, cfg.Name, wl, dialer); err != nil {
+	if err := runTasks(ctx, nc, cfg.Name, wl, dialer, pinger); err != nil {
 		return wl, err
 	}
 	if err := publishHeartbeat(nc, cfg.Name); err != nil {
@@ -86,7 +93,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 			}
 			// Run the worklist's tcp tasks and publish their telemetry. A publish
 			// failure is non-fatal (retry next tick).
-			_ = runTasks(ctx, nc, cfg.Name, wl, dialer)
+			_ = runTasks(ctx, nc, cfg.Name, wl, dialer, pinger)
 		}
 	}
 }

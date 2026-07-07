@@ -8,13 +8,17 @@ sidebar:
 ---
 
 :::note[Partial]
-The first collection path is live end to end: an edge node runs a real **tcp reachability probe** against a
-component's interface target, ships the result as a protobuf `Event` over a JetStream durable consumer, and the
-`tcp.open` / `tcp.connect_time` datapoints land in `metric_datapoint` owned by the target component. The owner is
+The first collection path is live end to end: an edge node runs real **inline reachability probes** (a **tcp**
+connect probe and an **icmp** ping probe) against a component's interface target, ships the result as a protobuf
+`Event` over a JetStream durable consumer, and the `tcp.open` / `tcp.connect_time` and `icmp.reachable` /
+`icmp.rtt_avg` datapoints land in `metric_datapoint` owned by the target component. The owner is
 bound **server-side** from the task's interface (the node stamps no component identity), and the ingest consumer
 confines a node to its own tasks (an Event carrying another node's `task_id` is orphan-dropped) and rejects
-unregistered datapoint names. The full function/DAG authoring model below (multi-step, cross-interface, branching)
-is still design; only the inline tcp probe is built. See
+unregistered datapoint names. The icmp probe rides the same pipeline unchanged (the consumer does not branch on
+probe type); a target that does not answer is DATA (`icmp.reachable=0` with a reason), and an error is reserved
+for a node that cannot do ICMP at all, told apart by a once-cached loopback capability self-check. The full
+function/DAG authoring model below (multi-step, cross-interface, branching) is still design; only the inline tcp
+and icmp probes are built. See
 [ADR-0017](/architecture/decisions/#adr-0017-telemetry-is-a-protobuf-event-over-jetstream-with-an-inline-owner-confining-consumer).
 :::
 

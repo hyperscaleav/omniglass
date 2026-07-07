@@ -31,7 +31,7 @@ func index(dps []collection.Datapoint) map[string]collection.Datapoint {
 // TestCollectTCPOpen: an open port yields tcp.open=1 plus a present connect_time.
 func TestCollectTCPOpen(t *testing.T) {
 	r := &collection.Runner{TCP: fakeTCP{ms: 4, reach: collection.Responded}}
-	dps, err := r.Collect(context.Background(), collection.TCPTask{Target: "10.0.0.5:22", Timeout: 2 * time.Second})
+	dps, err := r.CollectTCP(context.Background(), collection.TCPTask{Target: "10.0.0.5:22", Timeout: 2 * time.Second})
 	if err != nil {
 		t.Fatalf("collect: %v", err)
 	}
@@ -53,7 +53,7 @@ func TestCollectTCPOpen(t *testing.T) {
 // tcp.connect_time is ABSENT.
 func TestCollectTCPClosed(t *testing.T) {
 	r := &collection.Runner{TCP: fakeTCP{reach: collection.Refused}}
-	dps, err := r.Collect(context.Background(), collection.TCPTask{Target: "10.0.0.5:22"})
+	dps, err := r.CollectTCP(context.Background(), collection.TCPTask{Target: "10.0.0.5:22"})
 	if err != nil {
 		t.Fatalf("collect: %v", err)
 	}
@@ -74,7 +74,7 @@ func TestCollectTCPClosed(t *testing.T) {
 // inconclusive, surfaced as an error so the caller records no false down.
 func TestCollectTCPSetupError(t *testing.T) {
 	r := &collection.Runner{TCP: fakeTCP{err: context.DeadlineExceeded}}
-	if _, err := r.Collect(context.Background(), collection.TCPTask{Target: "bad:1"}); err == nil {
+	if _, err := r.CollectTCP(context.Background(), collection.TCPTask{Target: "bad:1"}); err == nil {
 		t.Fatal("collect: want error on probe setup failure, got nil")
 	}
 }

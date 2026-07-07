@@ -9,7 +9,7 @@ sidebar:
 
 :::note[Partial]
 The observed **metric** path is built for reachability: a node's tcp probe produces `tcp.open` /
-`tcp.connect_time`, and the ingest consumer writes them to `metric_datapoint` with `provenance=observed`, the
+`tcp.connect_time` and its icmp (ping) probe produces `icmp.reachable` / `icmp.rtt_avg`, and the ingest consumer writes them to `metric_datapoint` with `provenance=observed`, the
 owner bound server-side from the task's interface (`owner_kind=component`) and reject-not-project enforced
 against the `datapoint_type` registry. State and log datapoints, calculated provenance, fusion, and the live
 NATS data-lane described below are still design; the built slice is the observed-metric write path. See
