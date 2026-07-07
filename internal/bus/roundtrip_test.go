@@ -141,6 +141,89 @@ func TestNodeRoundTrip(t *testing.T) {
 	}
 }
 
+// TestWorklistReplyConfusedDeputy proves the worklist responder refuses to reply
+// to any subject outside the requesting node's own inbox. The responder answers
+// with the server's FULL-PERMISSION internal client, and msg.Reply is
+// attacker-controlled, so an enrolled node that points the reply at another
+// node's heartbeat subject would otherwise forge that node's liveness (and, once
+// a stream exists, redirect to $JS/$SYS). node-a requests its own worklist
+// subject (allowed by its grant) but sets the reply to node-b's heartbeat
+// subject; node-b's last_heartbeat_at must stay nil, and node-a's legitimate
+// pull (a real inbox reply) must still return its worklist.
+func TestWorklistReplyConfusedDeputy(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres + nats-server")
+	}
+	ctx := context.Background()
+	dsn := storagetest.NewDSN(t)
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	all := scope.Set{All: true}
+
+	// node-a is enrolled and connects; node-b is enrolled but never heartbeats
+	// and never connects (its liveness can only come from a forge).
+	for _, name := range []string{"node-a", "node-b"} {
+		if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: name}, all); err != nil {
+			t.Fatalf("create %s: %v", name, err)
+		}
+	}
+	tokenA := "secret-a"
+	if _, err := gw.SetEnrollmentToken(ctx, "", "node-a", hashHex(tokenA), all); err != nil {
+		t.Fatalf("mint a: %v", err)
+	}
+	if _, err := gw.SetEnrollmentToken(ctx, "", "node-b", hashHex("secret-b"), all); err != nil {
+		t.Fatalf("mint b: %v", err)
+	}
+
+	srv, err := bus.New(bus.Config{Host: "127.0.0.1", Port: -1}, gw)
+	if err != nil {
+		t.Fatalf("start bus: %v", err)
+	}
+	defer srv.Shutdown()
+	url := srv.ClientURL()
+
+	ncA, err := nats.Connect(url,
+		nats.UserInfo("node-a", tokenA),
+		nats.CustomInboxPrefix(collection.InboxPrefix("node-a")),
+	)
+	if err != nil {
+		t.Fatalf("node-a connect: %v", err)
+	}
+	defer ncA.Close()
+
+	// The forge: request node-a's own worklist subject (permitted) but aim the
+	// reply at node-b's heartbeat subject. If the responder honored msg.Reply, the
+	// internal client would publish node-a's worklist to og.v1.heartbeat.node-b,
+	// the heartbeat sink would consume it, and node-b's liveness would be forged.
+	if err := ncA.PublishRequest(collection.WorklistSubject("node-a"), collection.HeartbeatSubject("node-b"), nil); err != nil {
+		t.Fatalf("node-a forge publish: %v", err)
+	}
+	_ = ncA.Flush()
+
+	// A legitimate pull round-trips through the same worklist handler, so once its
+	// reply returns the forge request has already been fully handled (including any
+	// Respond it would emit). The happy path must not regress.
+	msg, err := ncA.Request(collection.WorklistSubject("node-a"), nil, 3*time.Second)
+	if err != nil {
+		t.Fatalf("node-a legitimate worklist pull: %v", err)
+	}
+	var reply collection.WorklistReply
+	if err := json.Unmarshal(msg.Data, &reply); err != nil {
+		t.Fatalf("decode worklist: %v", err)
+	}
+
+	// Let the heartbeat hop (the only remaining async step) land, then assert the
+	// forge was blocked: node-b's last_heartbeat_at is still nil.
+	time.Sleep(300 * time.Millisecond)
+	waitHeartbeat(t, ctx, gw, "node-b", false)
+}
+
 func heartbeatBytes(t *testing.T, node string) []byte {
 	t.Helper()
 	b, err := json.Marshal(collection.Heartbeat{Node: node, At: time.Now().UTC()})

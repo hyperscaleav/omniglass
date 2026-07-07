@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
@@ -90,6 +91,16 @@ func (s *Server) subscribe() error {
 
 	wl, err := nc.Subscribe(collection.WorklistWildcard, func(msg *nats.Msg) {
 		node := collection.NodeFromSubject(msg.Subject)
+		// Confused-deputy guard: the responder answers with the FULL-PERMISSION
+		// internal client, and msg.Reply is attacker-controlled, so honor it only
+		// when it lands in the requesting node's own inbox. Otherwise a node could
+		// aim the reply at another node's subject (heartbeat forge) or, once a
+		// stream exists, at $JS.API.*/$SYS.*. The node client dials this inbox via
+		// nats.CustomInboxPrefix(collection.InboxPrefix(node)), so a real reply is
+		// InboxPrefix(node)+"."+<token>.
+		if msg.Reply == "" || !strings.HasPrefix(msg.Reply, collection.InboxPrefix(node)+".") {
+			return
+		}
 		reply, err := s.buildWorklistReply(node)
 		if err != nil {
 			return // read failed; drop, the node re-pulls next tick
