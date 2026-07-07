@@ -27,6 +27,7 @@ var ungated = map[string]bool{
 	"POST /auth/login":  true, // public by necessity: it establishes a session
 	"POST /auth/logout": true, // public: clearing a session must always succeed
 	"POST /auth/me:changePassword": true, // authn-only, self-scoped: changes only the caller's own password
+	"POST /nodes:claim":            true, // public by necessity: the node is not yet a principal; the enrollment token is the authentication, exchanged for its NATS credential
 }
 
 // TestEveryRouteIsGated is the no-unguarded-route guard. It enumerates every
