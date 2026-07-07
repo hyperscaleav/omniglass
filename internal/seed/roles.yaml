@@ -1,13 +1,21 @@
-# The four official roles, seeded idempotently at boot (ON CONFLICT DO UPDATE).
+# The five official roles, seeded idempotently at boot (ON CONFLICT DO UPDATE).
 # permissions are <resource>:<action> strings; one entry per resource, actions
 # comma-separated; a wildcard stands alone. inherits names parent role ids.
 # Inheritance, wildcard expansion, and the :read floor are resolved at runtime in
 # the role index, not stored expanded here. A release may patch a default here.
+# display_name and description are operator-facing (the Roles view and the
+# grant-builder tooltips).
 roles:
   - id: viewer
+    display_name: Viewer
+    description: Read-only access to everything. The floor every other role inherits.
     permissions:
       - "*:read"
   - id: operator
+    display_name: Operator
+    description: >-
+      Day-to-day operations: acknowledge, snooze, and resolve alarms, and create
+      or edit components, interfaces, tasks, rules, and config. Inherits Viewer.
     inherits: ["viewer"]
     permissions:
       - "component:create,update"
@@ -17,17 +25,25 @@ roles:
       - "config:create,update"
       - "alarm:ack,snooze,resolve"
   - id: deploy
-    # An integrator / field tech role: granted at a location with the
-    # subtree_excl_root operator, it can add a room and populate it with systems and
-    # components (and edit those children), but cannot modify the root of its own
-    # scope. Delete is deliberately
-    # off the initial cut. Inherits viewer for the read floor over its subtree.
+    display_name: Deploy
+    description: >-
+      Integrator or field tech. Granted at a location with the "under only"
+      operator, it builds out and edits everything inside a subtree (add rooms,
+      systems, and components) without editing the scope root. No delete. Inherits
+      Viewer for the read floor over its subtree.
     inherits: ["viewer"]
     permissions:
       - "location:create,update"
       - "system:create,update"
       - "component:create,update"
   - id: admin
+    display_name: Administrator
+    description: >-
+      Manages the estate, users, roles, and grants: full create, update, and
+      delete on locations, systems, and components, and on principals,
+      credentials, grants, and roles. Deliberately NOT the superuser: it cannot
+      grant a role above its own tier, so it cannot make itself owner. Inherits
+      Operator.
     inherits: ["operator"]
     permissions:
       - "component:delete"
@@ -44,5 +60,10 @@ roles:
       - "severity_level:create"
       - "source:create"
   - id: owner
+    display_name: Owner
+    description: >-
+      Full control of everything, the break-glass superuser (the global wildcard,
+      so it covers every capability including future ones). At least one active
+      owner always exists, and an owner account cannot be impersonated.
     permissions:
       - "*:*"

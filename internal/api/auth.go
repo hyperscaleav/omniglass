@@ -453,14 +453,24 @@ type rolesOutput struct {
 
 type roleBody struct {
 	ID          string   `json:"id"`
+	DisplayName string   `json:"display_name,omitempty"`
+	Description string   `json:"description,omitempty"`
 	Official    bool     `json:"official"`
 	Permissions []string `json:"permissions"`
 	Inherits    []string `json:"inherits"`
+	// EffectivePermissions is what the role actually confers, flattened through the
+	// role index (inheritance, wildcard, and the :read floor resolved), so the UI
+	// shows a role's real reach without re-implementing the resolution.
+	EffectivePermissions []string `json:"effective_permissions"`
 }
 
-func rolesHandler(gw storage.Gateway) func(context.Context, *struct{}) (*rolesOutput, error) {
+func (a *authenticator) rolesHandler(gw storage.Gateway) func(context.Context, *struct{}) (*rolesOutput, error) {
 	return func(ctx context.Context, _ *struct{}) (*rolesOutput, error) {
 		roles, err := gw.ListRoles(ctx)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("list roles")
+		}
+		idx, err := a.roleIndex(ctx)
 		if err != nil {
 			return nil, huma.Error500InternalServerError("list roles")
 		}
@@ -468,7 +478,9 @@ func rolesHandler(gw storage.Gateway) func(context.Context, *struct{}) (*rolesOu
 		out.Body.Roles = make([]roleBody, 0, len(roles))
 		for _, r := range roles {
 			out.Body.Roles = append(out.Body.Roles, roleBody{
-				ID: r.ID, Official: r.Official, Permissions: r.Permissions, Inherits: r.Inherits,
+				ID: r.ID, DisplayName: r.DisplayName, Description: r.Description,
+				Official: r.Official, Permissions: r.Permissions, Inherits: r.Inherits,
+				EffectivePermissions: idx.Flatten([]string{r.ID}).Strings(),
 			})
 		}
 		return out, nil

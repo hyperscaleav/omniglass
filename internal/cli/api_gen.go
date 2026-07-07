@@ -647,7 +647,7 @@ func generatedCommands() []*cobra.Command {
 			cmd := &cobra.Command{
 				Use:     "list",
 				Short:   "List roles",
-				Long:    "Lists the roles. Gated by the role:read capability.",
+				Long:    "Lists the roles with their metadata and effective (flattened) permissions. Gated by the role:read capability.",
 				Example: "  omniglass role list",
 				Args:    cobra.ExactArgs(0),
 				RunE: func(cmd *cobra.Command, args []string) error {

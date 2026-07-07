@@ -10,7 +10,7 @@ import type { ExistingGrant } from "../lib/grantdraft";
 // handed to onSave. The staging semantics are unit-tested in lib/grantdraft; this
 // proves the wiring, including that nothing is applied until Save (stage -> preview
 // -> save).
-const roles = ["admin", "viewer", "operator"];
+const roles = ["admin", "viewer", "operator"].map((id) => ({ id, label: id, title: `${id} permissions` }));
 const locNodes: TreeNode[] = [
   { id: "loc-boi", value: "loc-boi", label: "boi", parentId: null, rank: 0 },
   { id: "loc-sjc", value: "loc-sjc", label: "sjc", parentId: null, rank: 0 },

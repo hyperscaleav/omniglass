@@ -104,20 +104,25 @@ A role is a **capability set**: permissions per `(resource, action)`. Roles live
 
 **No overrides**: a role id is globally unique across both kinds (the create paths refuse an `official: false` role whose id matches an `official: true` one, and the seed phase fails-safe with a loud warning if it would collide with an existing operator role). This is a deliberate divergence from `datapoint_type` (where an org-scoped key may shadow an official one of the same name): role override risks lockout with no compensating use case, so a role id resolves to exactly one row.
 
-### The four official roles
+### The five official roles
+
+Each role carries a `display_name` and a `description` alongside its permissions (surfaced in the console's Roles view and the grant-builder tooltips). Inheritance (transitive): each role's **effective** permissions are the union of its own and all transitively-inherited roles' permissions, with wildcards and the `:read` floor resolved. `viewer` is the common floor; `operator` and `deploy` are two branches off it, and `admin` extends `operator`:
 
 ```
-viewer    <-  operator  <-  admin  <-  owner
+viewer  <-  operator  <-  admin  <-  owner
+   \
+    <-  deploy
 ```
-
-Linear inheritance (transitive): each role's effective permissions are the union of its own permissions and all transitively-inherited roles' permissions.
 
 | role | what it can do |
 |---|---|
 | `viewer` | Read every operator-facing resource within scope. |
 | `operator` | viewer + create/update on components, interfaces, tasks, rules, config; ack/snooze/resolve alarms. |
-| `admin` | operator + delete on managed resources + manage IAM (principals, credentials, grants, custom roles) + curate registries (`<registry>:create`). IAM management is meaningful only from an `@ all` grant (a scoped `admin @ subtree` keeps the operator powers within its subtree but gets no IAM); registry curation is a plain capability, so a custom role can carry `<registry>:create` alone for a non-admin curator. Cannot delete `official` roles. |
-| `owner` | god mode (`*:*`). The unkillable role: at least one active `owner@all` grant must exist at all times (enforced by DB trigger). The bootstrap creates the first owner; only an owner can revoke another owner. |
+| `deploy` | viewer + create/update on locations, systems, and components (the integrator / field-tech role, typically granted with the `subtree_excl_root` operator to build out a subtree without editing its root). No delete. |
+| `admin` | operator + delete on managed resources + manage IAM (principals, credentials, grants, custom roles) + curate registries (`<registry>:create`). IAM management is meaningful only from an `@ all` grant (a scoped `admin @ subtree` keeps the operator powers within its subtree but gets no IAM); registry curation is a plain capability, so a custom role can carry `<registry>:create` alone for a non-admin curator. Deliberately **not** the superuser: it cannot grant a role above its own tier ([ADR-0013](/architecture/decisions/#adr-0013-a-grant-cannot-confer-capabilities-the-granter-lacks)), so it cannot make itself owner, and it cannot delete `official` roles. |
+| `owner` | The break-glass superuser (`*:*`, the global wildcard, covering every capability including future ones). The unkillable role: at least one active `owner@all` grant must exist at all times (enforced by DB trigger), and an owner account cannot be impersonated. The bootstrap creates the first owner. |
+
+The console **Roles view** (`GET /roles`, gated `role:read`) lists these read-only with each role's display name, description, inheritance, and **effective permissions**, so an operator sees exactly what a role grants before assigning it. Custom-role editing is a later slice.
 
 ### Custom roles
 

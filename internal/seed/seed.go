@@ -29,6 +29,8 @@ var componentTypesYAML []byte
 type rolesDoc struct {
 	Roles []struct {
 		ID          string   `yaml:"id"`
+		DisplayName string   `yaml:"display_name"`
+		Description string   `yaml:"description"`
 		Permissions []string `yaml:"permissions"`
 		Inherits    []string `yaml:"inherits"`
 	} `yaml:"roles"`
@@ -121,6 +123,8 @@ func seedRoles(ctx context.Context, gw storage.Gateway) error {
 			Official:    true,
 			Permissions: r.Permissions,
 			Inherits:    r.Inherits,
+			DisplayName: r.DisplayName,
+			Description: r.Description,
 		}); err != nil {
 			return err
 		}

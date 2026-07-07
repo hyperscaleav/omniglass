@@ -268,7 +268,11 @@ function GrantEditor(props: { principal: Principal; canGrant: boolean; canRevoke
     <GrantBuilder
       principalId={props.principal.id}
       current={current()}
-      roles={(roles.data ?? []).map((r) => r.id)}
+      roles={(roles.data ?? []).map((r) => ({
+        id: r.id,
+        label: r.display_name || r.id,
+        title: [r.description, `Grants: ${(r.effective_permissions ?? r.permissions).join(", ")}`].filter(Boolean).join("\n\n"),
+      }))}
       entities={entities}
       scopeName={(id) => nameOf().get(id)}
       canGrant={props.canGrant}
