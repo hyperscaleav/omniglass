@@ -1,7 +1,14 @@
 import { describe, it, expect } from "vitest";
 import { filterNav, navItems, type NavItem } from "./nav";
+import { can, type Me } from "./auth";
 
 const Dummy = () => null;
+
+// A real nav gate: filter the live nav through the actual can() over a set of
+// permission strings, exactly as the sidebar does, and read a section's children.
+const meWith = (permissions: string[]): Me => ({ principal: { id: "p", kind: "human" }, permissions, grants: [] });
+const section = (label: string, permissions: string[]): string[] =>
+  filterNav(navItems, (tokens) => can(meWith(permissions), ...tokens)).find((i) => i.label === label)?.children?.map((c) => c.label) ?? [];
 
 describe("filterNav", () => {
   it("keeps every tab for a principal that can read everything", () => {
@@ -25,7 +32,7 @@ describe("filterNav", () => {
       ] },
       { label: "Empty", icon: Dummy, hint: "", children: [{ label: "X", path: "/x", hint: "", resource: "x" }] },
     ];
-    const out = filterNav(nav, (r) => r === "system");
+    const out = filterNav(nav, (tokens) => tokens[0] === "system");
     expect(out.map((i) => i.label)).toEqual(["Inv"]);
     expect(out[0].children!.map((c) => c.label)).toEqual(["Systems"]);
   });
@@ -38,12 +45,30 @@ describe("filterNav", () => {
   });
 
   it("on the real nav, a principal without system/component/location read loses those tabs but keeps the stubs", () => {
-    const out = filterNav(navItems, (r) => !["system", "component", "location"].includes(r));
+    const out = filterNav(navItems, (tokens) => !["system", "component", "location"].includes(tokens[0]));
     const inv = out.find((i) => i.label === "Inventory");
     const labels = inv?.children?.map((c) => c.label) ?? [];
     expect(labels).not.toContain("Systems");
     expect(labels).not.toContain("Components");
     expect(labels).not.toContain("Locations");
     expect(labels).toContain("Interfaces"); // a resource-less stub stays
+  });
+
+  // The owner regression (owner's only grant is the `>` tail): every gated tab must
+  // return, driven through the real can() the sidebar uses.
+  it("restores every Settings tab for the owner (`>`)", () => {
+    expect(section("Settings", [">"])).toContain("Users");
+    expect(section("Settings", [">"])).toContain("Roles");
+    expect(section("Settings", [">"])).toContain("Audit");
+  });
+
+  // The Audit tab is gated on the admin tier, not a bare read: a viewer whose
+  // `*:read` the server 403s at the 3-token audit route must not see the tab, while
+  // an explicit `audit:read:admin` (admin) and `>` (owner) do.
+  it("gates Audit on the admin tier, matching the server's audit:read:admin route", () => {
+    expect(section("Settings", ["*:read"])).not.toContain("Audit");
+    expect(section("Settings", ["*:read"])).toContain("Users"); // a normal 2-token read still shows
+    expect(section("Settings", ["audit:read:admin"])).toContain("Audit");
+    expect(section("Settings", [">"])).toContain("Audit");
   });
 });

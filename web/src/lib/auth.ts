@@ -134,17 +134,57 @@ export function useChangePassword() {
   };
 }
 
-// can reports whether the principal's flattened permissions allow a
-// resource:action, with the wildcard and :read floor the server applies. A UI
-// hint only; the server is the authority. A permission's action part may be a
-// comma-joined list ("create,update,delete"), so it is split before matching.
-export function can(me: Me | null | undefined, resource: string, action: string): boolean {
+// A permission is a colon-delimited topic pattern, matched exactly like the server
+// rbac core that authorizes the request: a literal matches itself, `*` matches
+// exactly one token, and `>` matches one or more trailing tokens (and is last). A
+// two-token pattern therefore cannot reach a three-token `:admin` permission, so
+// sensitivity is a deeper token, not a special case. The action token may be a
+// comma list ("create,update,delete"), which expands to one pattern per action; a
+// malformed permission (an empty token) is dropped so it cannot widen access.
+function permPatterns(perms: string[]): string[][] {
+  const out: string[][] = [];
+  for (const perm of perms) {
+    const segs = perm.split(":");
+    if (segs.some((s) => s === "")) continue; // malformed: grants nothing
+    if (segs.length === 1) {
+      if (segs[0] === ">") out.push([">"]);
+      continue; // a bare resource has no action; it grants nothing
+    }
+    for (const raw of segs[1].split(",")) {
+      const act = raw.trim();
+      if (act) out.push([segs[0], act, ...segs.slice(2)]);
+    }
+  }
+  return out;
+}
+
+// matchTopic mirrors the server's match: `>` covers the non-empty remainder, `*`
+// covers a single token, a literal covers itself, and both must exhaust together.
+function matchTopic(pat: string[], path: string[]): boolean {
+  let i = 0;
+  for (; i < pat.length; i++) {
+    if (pat[i] === ">") return path.length - i >= 1;
+    if (i >= path.length) return false;
+    if (pat[i] !== "*" && pat[i] !== path[i]) return false;
+  }
+  return i === path.length;
+}
+
+// can reports whether the principal's flattened permissions allow a permission,
+// given as its tokens (e.g. can(me, "location", "read") or, for a sensitive tier,
+// can(me, "audit", "read", "admin")). It mirrors the server's Allows, including
+// the :read floor (holding any permission on a resource implies read on it, but
+// only for a two-token read query, so the floor never reaches a `:admin` tier), so
+// the console hides exactly what the server would deny. A UI hint only; the server
+// is the authority.
+export function can(me: Me | null | undefined, ...tokens: string[]): boolean {
   if (!me) return false;
-  for (const perm of me.permissions) {
-    const [r, a] = perm.split(":");
-    if (r !== "*" && r !== resource) continue;
-    const actions = (a ?? "").split(",");
-    if (action === "read" || actions.includes("*") || actions.includes(action)) return true;
+  const pats = permPatterns(me.permissions);
+  for (const pat of pats) if (matchTopic(pat, tokens)) return true;
+  if (tokens.length === 2 && tokens[1] === "read") {
+    for (const pat of pats) {
+      if (pat.length > 0 && (pat[0] === "*" || pat[0] === ">" || pat[0] === tokens[0])) return true;
+    }
   }
   return false;
 }

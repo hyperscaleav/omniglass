@@ -18,32 +18,60 @@ const tierRank = (id: string) => {
 };
 
 // groupPerms turns ["location:create,update", "system:read"] into a per-resource
-// map for legible display: { location: ["create","update"], system: ["read"] }.
-// A "*" resource or action is kept verbatim.
-function groupPerms(perms: string[]): { resource: string; actions: string[] }[] {
-  const by = new Map<string, Set<string>>();
+// map for legible display, keeping the admin tier: `location:create,update` groups
+// under location, `audit:read:admin` marks read as admin, and `>` (the superuser
+// tail) surfaces as a single "everything" entry. Tokens are `resource:action`
+// or `resource:action:admin`; `*` is kept verbatim.
+type PermAction = { action: string; admin: boolean };
+function groupPerms(perms: string[]): { all: boolean; groups: { resource: string; actions: PermAction[] }[] } {
+  let all = false;
+  const by = new Map<string, Map<string, boolean>>();
   for (const p of perms) {
-    const [resource, actions] = p.split(":");
-    if (!resource || !actions) continue;
-    const set = by.get(resource) ?? new Set<string>();
-    for (const a of actions.split(",")) set.add(a.trim());
-    by.set(resource, set);
+    if (p === ">") {
+      all = true;
+      continue;
+    }
+    const [resource, actionSeg, tier] = p.split(":");
+    if (!resource || !actionSeg) continue;
+    const admin = tier === "admin";
+    const actions = by.get(resource) ?? new Map<string, boolean>();
+    for (const a of actionSeg.split(",")) {
+      const key = a.trim();
+      actions.set(key, (actions.get(key) ?? false) || admin);
+    }
+    by.set(resource, actions);
   }
-  return [...by.entries()]
+  const groups = [...by.entries()]
     .sort(([a], [b]) => (a === "*" ? -1 : b === "*" ? 1 : a.localeCompare(b)))
-    .map(([resource, actions]) => ({ resource, actions: [...actions] }));
+    .map(([resource, actions]) => ({ resource, actions: [...actions].map(([action, admin]) => ({ action, admin })) }));
+  return { all, groups };
 }
 
 function PermGrid(props: { perms: string[] }) {
-  const groups = createMemo(() => groupPerms(props.perms));
+  const grouped = createMemo(() => groupPerms(props.perms));
   return (
     <div class="flex flex-wrap gap-1.5">
-      <For each={groups()} fallback={<span class="text-xs text-base-content/40">No permissions.</span>}>
+      <Show when={grouped().all}>
+        <span class="inline-flex items-center gap-1 rounded-field border border-warning/40 bg-warning/10 py-[3px] pl-2 pr-2 font-data text-[11px] text-warning">
+          <span class="font-bold">&gt;</span> everything
+        </span>
+      </Show>
+      <For each={grouped().groups} fallback={<Show when={!grouped().all}><span class="text-xs text-base-content/40">No permissions.</span></Show>}>
         {(g) => (
           <span class="inline-flex items-center gap-1 rounded-field border border-base-300 bg-base-100 py-[3px] pl-2 pr-2 font-data text-[11px]">
             <span class="text-base-content/70">{g.resource}</span>
             <span class="text-base-content/30">:</span>
-            <span classList={{ "text-warning": g.actions.includes("*"), "text-base-content/90": !g.actions.includes("*") }}>{g.actions.join(", ")}</span>
+            <span class="inline-flex flex-wrap gap-x-1">
+              <For each={g.actions}>
+                {(a, i) => (
+                  <span classList={{ "text-warning": a.action === "*", "text-base-content/90": a.action !== "*" }}>
+                    {a.action}
+                    <Show when={a.admin}><span class="ml-0.5 text-error/80" title="admin-sensitive">:admin</span></Show>
+                    <Show when={i() < g.actions.length - 1}>,</Show>
+                  </span>
+                )}
+              </For>
+            </span>
           </span>
         )}
       </For>

@@ -16,6 +16,11 @@ export type NavChild = {
   // live (its server route already gates on the same resource); leave unset while
   // the section is a stub so its "soon" entry stays visible.
   resource?: string;
+  // The exact permission a sensitive tab requires, as a topic string, for when a
+  // bare <resource>:read does not describe the route's gate (the audit route
+  // requires the admin tier `audit:read:admin`). Takes precedence over `resource`,
+  // so the sidebar hides the tab from exactly whoever the server would 403.
+  perm?: string;
 };
 
 export type NavItem = {
@@ -26,6 +31,7 @@ export type NavItem = {
   live?: boolean;
   issue?: number;
   resource?: string;
+  perm?: string;
   children?: NavChild[];
 };
 
@@ -63,17 +69,20 @@ export const navItems: NavItem[] = [
       { label: "Users", path: "/users", live: true, resource: "principal", hint: "Users and service accounts: status, grants, and tokens." },
       { label: "Roles", path: "/roles", live: true, resource: "role", hint: "The built-in roles: what each permission bundle grants, and how they inherit." },
       { label: "Groups", path: "/groups", hint: "User groups: membership and grants." },
-      { label: "Audit", path: "/audit", live: true, resource: "audit", hint: "The audit trail of every privileged action and sign-in." },
+      { label: "Audit", path: "/audit", live: true, perm: "audit:read:admin", hint: "The audit trail of every privileged action and sign-in." },
     ],
   },
 ];
 
-// filterNav drops the tabs a principal cannot read: a leaf with no resource is
-// always kept; a leaf with a resource is kept only when canRead(resource); a group
-// is kept only if it has at least one kept child (with its children filtered). The
-// server gates the route regardless; this hides what the caller cannot use.
-export function filterNav(items: NavItem[], canRead: (resource: string) => boolean): NavItem[] {
-  const ok = (n: { resource?: string }) => !n.resource || canRead(n.resource);
+// filterNav drops the tabs a principal cannot reach: an ungated leaf is always
+// kept; a gated leaf is kept only when `allow` passes its required permission
+// tokens (an explicit `perm`, else `<resource>:read`); a group is kept only if it
+// has at least one kept child (with its children filtered). The server gates the
+// route regardless; this hides what the caller cannot use. `allow` takes the token
+// path so a sensitive tab can require a deeper tier (e.g. `audit:read:admin`).
+export function filterNav(items: NavItem[], allow: (tokens: string[]) => boolean): NavItem[] {
+  const ok = (n: { resource?: string; perm?: string }) =>
+    n.perm ? allow(n.perm.split(":")) : !n.resource || allow([n.resource, "read"]);
   const out: NavItem[] = [];
   for (const item of items) {
     if (item.children) {
