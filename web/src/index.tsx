@@ -46,7 +46,7 @@ render(
         <Route path="/login" component={Login} />
         <Route path="/" component={ProtectedShell}>
           <Route path="/" component={Home} />
-          {/* Inventory pages on the generic ListView. The :name route opens the
+          {/* Inventory pages on the generic TreeList. The :name route opens the
               same page focused on one entity (the addressable full-page detail). */}
           <Route path="/locations" component={Locations} />
           <Route path="/locations/:name" component={Locations} />

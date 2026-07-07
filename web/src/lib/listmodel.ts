@@ -1,7 +1,7 @@
-// The pure list-model behind the ListView shell: building the flattened index
+// The pure list-model behind the TreeList shell: building the flattened index
 // from a forest, ancestor paths, the flatten/tree row sets, and parsing the
 // client preferences (column order, widget board). Kept free of Solid and the DOM
-// so the genuinely tricky derivations are unit-tested without rendering. ListView
+// so the genuinely tricky derivations are unit-tested without rendering. TreeList
 // is the thin reactive wrapper that feeds these from signals.
 import { buildPredicate, type Chip, type FilterKey } from "./predicate";
 

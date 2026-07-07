@@ -1,7 +1,7 @@
 import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { useNavigate, useParams, useSearchParams } from "@solidjs/router";
-import ListView, { type Blade, type ListConfig, type ListCtx, type ListNode, type PageDescriptor } from "../components/ListView";
+import TreeList, { type Blade, type ListConfig, type ListCtx, type ListNode, type PageDescriptor } from "../components/TreeList";
 import {
   type Component as Comp,
   COMPONENTS_KEY,
@@ -16,7 +16,7 @@ import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { ChevronRight, Maximize } from "../components/icons";
 
-// Components: the device inventory, the first page built on the generic ListView.
+// Components: the device inventory, the first page built on the generic TreeList.
 // Components form a tree (parent_id) and each is bound to a primary system and a
 // location. The live API carries names/types/placement only (no health or metrics
 // yet, those land with component.state), so the columns and facets are the real
@@ -301,14 +301,14 @@ export default function Components() {
     FormBody,
   };
 
-  // No page H1: inventory pages built on ListView let the top bar label them, and
+  // No page H1: inventory pages built on TreeList let the top bar label them, and
   // the full-page detail renders its own heading (see Page.tsx).
   return (
     <div class="og-stack flex flex-col">
       <Show when={err()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
       </Show>
-      <ListView config={cfg} />
+      <TreeList config={cfg} />
     </div>
   );
 }
