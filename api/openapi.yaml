@@ -1365,7 +1365,7 @@ paths:
       summary: Update a principal
   /principals/{id}/grants:
     post:
-      description: Assigns a role at a scope to a principal. Gated by principal_grant:create (all-scope). A duplicate is 409, an unknown role or bad scope 422.
+      description: Assigns a role at a scope to a principal. Gated by principal_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own (no promoting anyone, including yourself, to a higher tier such as owner). A duplicate is 409, an unknown role or bad scope 422.
       operationId: create-grant
       parameters:
         - description: The principal's id (uuid)

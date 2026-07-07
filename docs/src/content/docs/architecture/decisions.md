@@ -47,6 +47,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0010](#adr-0010-impersonation-is-a-session-not-a-credential-guarded-by-capability-cover) | 2026-07-06 | Accepted | Impersonation ships view-as + act-as as an `impersonation_session` (not a credential), guarded by capability-cover, with a real-actor audit column |
 | [ADR-0011](#adr-0011-grant-scope-is-an-operator-not-a-boolean-modifier) | 2026-07-06 | Accepted | Generalize the `exclude_root` boolean into a `scope_op` operator (`subtree` / `subtree_excl_root` / `self`), a flat enum, not a predicate-expression tree |
 | [ADR-0012](#adr-0012-owner-accounts-are-un-impersonatable-impersonation-stays-capability-gated-not-scope-intersected) | 2026-07-07 | Accepted | Owner accounts are un-impersonatable by anyone; impersonate stays swept by `principal:*`; drop act-as scope intersection (#101) |
+| [ADR-0013](#adr-0013-a-grant-cannot-confer-capabilities-the-granter-lacks) | 2026-07-07 | Accepted | Grant creation is refused when the granted role's capabilities exceed the granter's all-scope capabilities (admin cannot self-promote to owner) |
 
 ## Entries
 
@@ -262,3 +263,24 @@ below from the project's history. From here it grows one slice at a time.
   surfacing it is a later auth-event audit slice.
 - **Refines:** [ADR-0010](#adr-0010-impersonation-is-a-session-not-a-credential-guarded-by-capability-cover).
 - **Closes the gap:** issue [#106](https://github.com/hyperscaleav/omniglass/issues/106); closes [#101](https://github.com/hyperscaleav/omniglass/issues/101) as dropped.
+
+### ADR-0013: A grant cannot confer capabilities the granter lacks
+
+- **Date:** 2026-07-07 | **Status:** Accepted | **Pages:** [identity and access](/architecture/identity-access/)
+- **Decision:** Grant creation is refused (403) when the granted role's capabilities are not covered by the
+  granter's **all-scope** capabilities (`rbac.Set.Covers`, the same primitive as the impersonation escalation
+  guard). So no caller can promote anyone, including itself, to a tier above its own: an **admin cannot grant
+  `owner`** (`*:*`), because admin is an enumerated role that does not cover the global wildcard. Issue
+  [#109](https://github.com/hyperscaleav/omniglass/issues/109).
+- **Context:** `CreateGrant` previously checked only that the granter held all-scope `principal_grant:create`
+  (`action.All`), not that the granter covered the granted role, so an admin could grant itself `owner@all` and
+  log in as a superuser, leaving the admin/owner distinction unenforced. The check lives in the `create-grant`
+  handler (capability is a route/handler concern; ABAC scope stays the gateway's), mirroring the impersonation
+  guard. Only the caller's **all-scope** grants count, so a capability held through a narrower grant cannot be
+  conferred estate-wide (the same reason act-as requires all-scope cover). The consequence is a deliberate
+  stance: **admin is bounded on purpose**, the top management role, never the superuser, and does not auto-gain
+  future resources; `owner` (`*:*`) is the break-glass superuser and the [owner-invariant](#the-owner-invariant)
+  anchor. The same cover rule must extend to role editing when it lands (you cannot edit a role above your own
+  tier); tracked with that slice.
+- **Refines:** [ADR-0010](#adr-0010-impersonation-is-a-session-not-a-credential-guarded-by-capability-cover) (reuses its capability-cover primitive on the grant path).
+- **Closes the gap:** issue [#109](https://github.com/hyperscaleav/omniglass/issues/109).
