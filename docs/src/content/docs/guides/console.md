@@ -171,6 +171,82 @@ URL. Rows are keyboard-operable: Tab to a row and press Enter to open it.
   allows; the address and placement are fixed after creation.
 - **Delete** removes it, with a confirm. These actions appear only if your grants allow them.
 
+## Nodes
+
+**Inventory > Nodes** (with `node:read`, which must be **all-scope**, since a node is
+estate-wide, a location-scoped operator cannot list nodes) is the collection-daemon
+inventory. Each row shows the node's name, a **liveness pill** (up, down, or never, derived
+from its last heartbeat against the server's down window), and when it last checked in.
+Click a row to open its detail, where an **Enroll / Re-enroll** action lives.
+
+Enrollment is a day-one handshake, and the **token is shown once**:
+
+- With `node:create` and `node:enroll`, **New node** registers a node (the name is its
+  permanent address, no dots or whitespace; a description is optional) and immediately mints
+  its enrollment token. A modal reveals the token **once**, with a copy button and a clear
+  "shown once, cannot be retrieved again" warning. Copy it now and hand it to the node
+  deployment; the node presents it to claim its credential. The server stores only a hash of
+  the token and never logs it.
+- From a node's detail, **Enroll** (or **Re-enroll**, if it is already enrolled) re-mints the
+  token and shows the new one in the same once-only modal. A re-enroll **invalidates the
+  previous token**, so it is both the recovery path when a token is lost and a rotation.
+- The detail also shows whether the node is enrolled and when it last sent a heartbeat.
+
+## Interfaces
+
+**Inventory > Interfaces** (with `interface:read`) lists the **connection endpoints** on
+components. Each row shows the interface name (its address), its type (`icmp` or `tcp`), its
+owning component (or **server-hosted**), its node placement, and its probed target. A row
+opens the detail.
+
+- With `interface:create`, **New interface** creates one: a name, a type (the built types
+  `icmp` and `tcp`), an owning component (or server-hosted, which needs an all-scope grant),
+  a node placement, and a target (host:port for tcp, host for icmp).
+- With `interface:update`, **Edit** changes only the **node placement** and the **target**;
+  the name, type, and owning component are fixed at creation, and a left-blank field is left
+  unchanged.
+- With `interface:delete`, **Delete** removes it, refused while a task still references it.
+
+Because an interface belongs to a component, it inherits that component's scope: an interface
+on a component outside your scope is not listed, and its URL is a plain not-found.
+
+## Tasks
+
+**Inventory > Tasks** (with `task:read`) lists the **collection work** scheduled over
+interfaces. Each row shows the task (its display name, or its id), its interface, its mode
+(`poll` or `listen`), an **enabled** pill, and its node placement. A row opens the detail.
+
+- With `task:create`, **New task** schedules work over an interface (chosen from the
+  interfaces list), a mode (**poll** runs it on a cadence; **listen** waits for the device to
+  push), an optional display name, and an enabled toggle (whether it is on the worklist).
+- With `task:update`, **Edit** changes only the **display name** and the **enabled** toggle;
+  the interface and mode form the task's content-addressed identity and are fixed after
+  creation.
+- With `task:delete`, **Delete** removes it.
+
+## Reachability
+
+Every component's detail carries a **Reachability** panel: is each of its interfaces
+reachable, and why. One row per interface shows the interface and its endpoint, an
+**availability strip** built from the verdict's recent up/down history (with an "N% up"
+hint), and a **verdict pill**: **responding** (green, up and fresh), **down** (red), **stale**
+(yellow, a verdict older than the freshness window of about two and a half minutes), or
+**unknown** (no check yet).
+
+Expand a row for the **layered gate**: one line per probe layer (ping at L3, port at L4) with
+its signal and timing detail, then the composed verdict (the interface is up only when every
+applicable probe passed). A down interface also shows a plain-language **why** line: a host
+that answers ping but refuses the port is a service fault on a live box, while a host that
+fails ping is unreachable on the network outright. The rows are read-only, and every value is
+derived from real collected datapoints, so the panel teaches the concept it operates on.
+
+**Add check** in the panel header (with both `interface:create` and `task:create`) authors a
+reachability check the way a node runs one: pick a protocol (`tcp` or `icmp`), a target
+(host:port for tcp, host for icmp), and a node, and it creates an interface owned by this
+component **and** a poll task over it in one step. If the task cannot be scheduled after the
+interface is already created, the form says so and offers to **retry** just the task, rather
+than hiding the partial state.
+
 ## What you see is your scope
 
 The data is filtered to your scope on the server: a campus-scoped operator sees only that
