@@ -557,11 +557,11 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   a row per unit of work (display name or content-addressed id, interface, mode, an enabled pill, node) with
   interface / mode / enabled facets. A row opens a detail Drawer (facts plus an inline edit of the mutable fields
   and a delete), and **New interface** / **New task** open the create Drawer. Because there is no `interface_type`
-  list endpoint, the type picker offers the built types (`icmp`, `tcp`) this slice ships; a future
-  `GET /interface-types` registry route can replace the static options. The **Add reachability check** button on
-  the Reachability panel (gated on `interface:create` *and* `task:create`) authors a check the way the node runs
-  one: it creates the interface (`type` = the chosen protocol, owned by that component, `params.target` the
-  `host[:port]` the probe dials) then a **poll** task over it (`mode=poll`, enabled), then invalidates the
+  list endpoint, the type picker offers the built transports (`icmp`, `tcp`, `ssh`, `http`) this slice ships; a
+  future `GET /interface-types` registry route can replace the static options. The **Add reachability check** button
+  on the Reachability panel (gated on `interface:create` *and* `task:create`) authors a check the way the node runs
+  one: it creates the interface (`type` = the chosen transport, **named by its protocol**, owned by that component,
+  `params.target` the `host[:port]` the probe dials) then a **poll** task over it (`mode=poll`, enabled), then invalidates the
   reachability, interfaces, and tasks queries so the panel and pages refresh. The two writes are handled honestly:
   if the task create fails after the interface exists, the affordance surfaces the partial state (the interface is
   created; the operator retries just the task) instead of swallowing it. Every nav tab and action gates on the
@@ -572,3 +572,14 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   derivation), both pages (rows, the create gate hidden without the perm, the type / mode / interface pickers),
   and the Add-check affordance (the gate needs both perms, submit fires the interface then the task create with
   the right bodies, and the two-step error path surfaces). This closes the collection slice's authoring surfaces.
+- **Collection slice (checkpoint 5e): the interface model reframe.** Before its PR, the interface model was
+  corrected: an **interface is an API we intend to call** (named by the protocol it speaks, `web` / `qrc`,
+  unique per component), **not** a network interface; `interface_type` is the **transport** (the reach gate), not
+  the protocol driver. Reachability is the first gate of a ladder (reach, auth, responds, collecting). The built
+  transports grew from `tcp`/`icmp` to also cover `ssh` and `http` (all reach by opening the tcp port; icmp
+  pings), the Add-check picker separates the transport **type** from the protocol **name**, and the dev seed now
+  models a lab **polaris DSP** with two protocol-named APIs on one device (`web` over http, `qrc` over tcp) so
+  `make dev` shows the "two APIs on one box" story. The driver layer that turns a device API into a normalized
+  menu of datapoints and functions (OIDs, commands, parse) is a separate, later concern, decided in
+  [ADR-0019](/architecture/decisions/#adr-0019-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver);
+  this slice ships only the transport / reach tier of it.

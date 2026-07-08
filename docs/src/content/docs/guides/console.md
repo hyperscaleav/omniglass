@@ -241,11 +241,12 @@ fails ping is unreachable on the network outright. The rows are read-only, and e
 derived from real collected datapoints, so the panel teaches the concept it operates on.
 
 **Add check** in the panel header (with both `interface:create` and `task:create`) authors a
-reachability check the way a node runs one: pick a protocol (`tcp` or `icmp`), a target
-(host:port for tcp, host for icmp), and a node, and it creates an interface owned by this
-component **and** a poll task over it in one step. If the task cannot be scheduled after the
-interface is already created, the form says so and offers to **retry** just the task, rather
-than hiding the partial state.
+reachability check the way a node runs one: pick a **type** (the transport: `tcp`, `icmp`,
+`ssh`, or `http`), a **name** (the protocol the interface speaks, like `web` or `qrc`, unique
+on this component and defaulted to the type), a target (host:port for tcp/ssh/http, host for
+icmp), and a node, and it creates an interface owned by this component **and** a poll task over
+it in one step. If the task cannot be scheduled after the interface is already created, the form
+says so and offers to **retry** just the task, rather than hiding the partial state.
 
 ## What you see is your scope
 

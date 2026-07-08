@@ -101,13 +101,13 @@ func TestNodeRunOnce(t *testing.T) {
 }
 
 // TestNodeVerdictPerInterface pins the per-component-name regression: two
-// components each carry an interface named "tcp" (the friendly default the
-// Add-check affordance suggests) on the SAME node. Before interface names went
-// per-component this collision could not occur; now it is the common case. The
-// node's verdict-dedup map must be keyed by the node-unique task id, not the
-// interface name, or the second component's reachability verdict is silently
-// suppressed as a repeat of the first. Both verdicts must land. Skipped under
-// -short.
+// components each carry an interface named "api" on the SAME node, over different
+// transports (http and tcp). Before interface names went per-component this
+// collision could not occur; now it is the common case. The node's verdict-dedup
+// map must be keyed by the node-unique task id, not the interface name, or the
+// second component's reachability verdict is silently suppressed as a repeat of the
+// first. Both verdicts must land, which also proves http and tcp both route to the
+// tcp-connect reach probe. Skipped under -short.
 func TestNodeVerdictPerInterface(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server")
@@ -150,19 +150,22 @@ func TestNodeVerdictPerInterface(t *testing.T) {
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	for _, comp := range []string{"disp-1", "disp-2"} {
-		if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: comp, ComponentType: "display"}, all); err != nil {
-			t.Fatalf("create component %s: %v", comp, err)
+	for _, c := range []struct{ comp, itype string }{
+		{"disp-1", "http"},
+		{"disp-2", "tcp"},
+	} {
+		if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: c.comp, ComponentType: "display"}, all); err != nil {
+			t.Fatalf("create component %s: %v", c.comp, err)
 		}
 		if _, err := conn.Exec(ctx,
-			`insert into interface (name, type, component, node_name, params) values ('tcp', 'tcp', $1, 'site-a', $2::jsonb)`,
-			comp, fmt.Sprintf(`{"target":%q}`, target)); err != nil {
-			t.Fatalf("insert interface for %s: %v", comp, err)
+			`insert into interface (name, type, component, node_name, params) values ('api', $1, $2, 'site-a', $3::jsonb)`,
+			c.itype, c.comp, fmt.Sprintf(`{"target":%q}`, target)); err != nil {
+			t.Fatalf("insert interface for %s: %v", c.comp, err)
 		}
 		if _, err := conn.Exec(ctx,
-			`insert into task (id, mode, interface_id, node_name, spec, enabled) values ($1, 'poll', (select id from interface where component = $2 and name = 'tcp'), 'site-a', '{}'::jsonb, true)`,
-			"t-"+comp, comp); err != nil {
-			t.Fatalf("insert task for %s: %v", comp, err)
+			`insert into task (id, mode, interface_id, node_name, spec, enabled) values ($1, 'poll', (select id from interface where component = $2 and name = 'api'), 'site-a', '{}'::jsonb, true)`,
+			"t-"+c.comp, c.comp); err != nil {
+			t.Fatalf("insert task for %s: %v", c.comp, err)
 		}
 	}
 	conn.Close(ctx)
@@ -185,13 +188,14 @@ func TestNodeVerdictPerInterface(t *testing.T) {
 		t.Fatalf("worklist = %d tasks, want 2", len(wl.Tasks))
 	}
 
-	// Both components' reachability verdicts land. The regression: keyed by
-	// interface name, disp-2's "tcp" verdict was dropped as a repeat of disp-1's,
-	// so disp-2 would have no verdict here.
+	// Both components' reachability verdicts land. The regression: keyed by interface
+	// name, disp-2's "api" verdict was dropped as a repeat of disp-1's, so disp-2 would
+	// have no verdict here. disp-1 (over http) also proves the transport routes to the
+	// tcp-connect reach probe.
 	deadline := time.Now().Add(5 * time.Second)
 	for _, comp := range []string{"disp-1", "disp-2"} {
 		for {
-			v, err := gw.LatestState(ctx, comp, "interface.reachable", "tcp")
+			v, err := gw.LatestState(ctx, comp, "interface.reachable", "api")
 			if err != nil {
 				t.Fatalf("latest state %s: %v", comp, err)
 			}

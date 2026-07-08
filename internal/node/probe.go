@@ -96,10 +96,13 @@ func appendVerdict(dps []collection.Datapoint, taskID string, verdicts map[strin
 // collectTask dispatches a task to its probe by interface type and returns the
 // produced datapoints. A nil, nil return is an interface type this node does not
 // run (skip, nothing to publish); an error is an unusable config or an
-// inconclusive probe (skip, no false down).
+// inconclusive probe (skip, no false down). The transport is the reachability
+// axis: tcp, ssh, and http all reach by opening the tcp port (the driver that
+// speaks the protocol over the transport is a later collection layer), so they
+// share the tcp-connect probe; icmp pings.
 func collectTask(ctx context.Context, runner *collection.Runner, task collection.TaskSpec) ([]collection.Datapoint, error) {
 	switch task.InterfaceType {
-	case "tcp":
+	case "tcp", "ssh", "http":
 		t, err := parseTCPTask(task)
 		if err != nil {
 			return nil, err

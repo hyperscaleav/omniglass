@@ -14,6 +14,9 @@ component_types:
   - id: speaker
     display_name: Speaker
     rank: 40
+  - id: dsp
+    display_name: Audio DSP
+    rank: 45
   - id: codec
     display_name: Codec
     rank: 50

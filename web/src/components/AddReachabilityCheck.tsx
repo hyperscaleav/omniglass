@@ -11,14 +11,17 @@ import { REACHABILITY_KEY } from "../lib/reachability";
 
 // AddReachabilityCheck is the component-scoped "Add check" affordance on the
 // Reachability panel. It authors a valid reachability check the way the node runs
-// one: an interface (type = the chosen protocol, owned by THIS component, on a node,
-// with params.target) and then a poll task over it (mode = poll, enabled). Creating
-// the check is two writes, so it handles the seam honestly: if the task create fails
-// after the interface already exists, it says so (the interface is created; retry
-// only re-attempts the task) instead of swallowing the error. Gated on BOTH
-// interface:create and task:create, the two permissions the writes need; the server
-// is still the authority.
-const PROTOCOLS = ["tcp", "icmp"] as const;
+// one: an interface (its TYPE = the transport, owned by THIS component, on a node,
+// with params.target) and then a poll task over it (mode = poll, enabled). An
+// interface is NAMED by the protocol it speaks (web, qrc, ttp), defaulting to the
+// transport; reachability is the first gate and just opens the port (or pings), so
+// the transport is all it needs (a driver that speaks the protocol over the transport
+// is a later collection layer). Creating the check is two writes, so it handles the
+// seam honestly: if the task create fails after the interface already exists, it says
+// so (the interface is created; retry only re-attempts the task) instead of swallowing
+// the error. Gated on BOTH interface:create and task:create, the two permissions the
+// writes need; the server is still the authority.
+const TRANSPORTS = ["tcp", "icmp", "ssh", "http"] as const;
 
 export default function AddReachabilityCheck(props: { component: string }) {
   const me = useMe();
@@ -42,10 +45,10 @@ export default function AddReachabilityCheck(props: { component: string }) {
 function AddCheckForm(props: { component: string; close: () => void }) {
   const qc = useQueryClient();
   const nodes = useQuery(() => ({ queryKey: NODES_KEY, queryFn: () => listNodes() }));
-  const [protocol, setProtocol] = createSignal<string>(PROTOCOLS[0]);
-  const [name, setName] = createSignal<string>(PROTOCOLS[0]);
+  const [transport, setTransport] = createSignal<string>(TRANSPORTS[0]);
+  const [name, setName] = createSignal<string>(TRANSPORTS[0]);
   // Whether the operator has typed a name; until then the name field tracks the
-  // protocol default, so switching protocol re-defaults the (untouched) name.
+  // transport default, so switching transport re-defaults the (untouched) name.
   const [nameTouched, setNameTouched] = createSignal(false);
   const [target, setTarget] = createSignal("");
   const [node, setNode] = createSignal("");
@@ -55,9 +58,9 @@ function AddCheckForm(props: { component: string; close: () => void }) {
   // straight to the task (re-creating the interface would be a duplicate-name 409).
   const [createdIface, setCreatedIface] = createSignal<Interface | null>(null);
 
-  function onProtocol(p: string) {
-    setProtocol(p);
-    if (!nameTouched()) setName(p); // keep the default name in step with the protocol
+  function onTransport(t: string) {
+    setTransport(t);
+    if (!nameTouched()) setName(t); // default the protocol name to the transport
   }
 
   async function submit(e: SubmitEvent) {
@@ -67,11 +70,12 @@ function AddCheckForm(props: { component: string; close: () => void }) {
     try {
       let iface = createdIface();
       if (!iface) {
-        // Step 1: the interface. type = protocol, owner = THIS component, friendly
-        // name (defaulted to the protocol, unique on this component), target in params.
+        // Step 1: the interface. type = the transport, owner = THIS component, named
+        // by its protocol (defaulted to the transport, unique on this component),
+        // target in params.
         iface = await createInterface({
-          name: (name().trim() || protocol()),
-          type: protocol(),
+          name: (name().trim() || transport()),
+          type: transport(),
           component: props.component,
           node: node() || undefined,
           params: { target: target().trim() },
@@ -111,20 +115,21 @@ function AddCheckForm(props: { component: string; close: () => void }) {
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
       </Show>
       <div>
-        <label class="eyebrow mb-1.5 block" for="add-check-protocol">Protocol</label>
-        <select id="add-check-protocol" class="select select-bordered w-full" value={protocol()} onChange={(e) => onProtocol(e.currentTarget.value)} disabled={busy() || !!createdIface()}>
-          <For each={PROTOCOLS}>{(p) => <option value={p}>{p}</option>}</For>
+        <label class="eyebrow mb-1.5 block" for="add-check-transport">Type</label>
+        <select id="add-check-transport" class="select select-bordered w-full" value={transport()} onChange={(e) => onTransport(e.currentTarget.value)} disabled={busy() || !!createdIface()}>
+          <For each={TRANSPORTS}>{(t) => <option value={t}>{t}</option>}</For>
         </select>
+        <p class="mt-1 text-[11px] text-base-content/40">The transport. Reachability opens the port (or pings for icmp).</p>
       </div>
       <div>
         <label class="eyebrow mb-1.5 block" for="add-check-name">Name</label>
         <input id="add-check-name" autocomplete="off" class="input input-bordered w-full font-data" value={name()} onInput={(e) => { setNameTouched(true); setName(e.currentTarget.value); }} disabled={busy() || !!createdIface()} required />
-        <p class="mt-1 text-[11px] text-base-content/40">A friendly name, unique on this component (defaults to the protocol).</p>
+        <p class="mt-1 text-[11px] text-base-content/40">The protocol it speaks (web, qrc, ttp), unique on this component; defaults to the type.</p>
       </div>
       <div>
         <label class="eyebrow mb-1.5 block" for="add-check-target">Target</label>
-        <input id="add-check-target" autocomplete="off" class="input input-bordered w-full font-data" value={target()} placeholder={protocol() === "tcp" ? "10.0.0.1:5000" : "10.0.0.1"} onInput={(e) => setTarget(e.currentTarget.value)} disabled={busy() || !!createdIface()} required />
-        <p class="mt-1 text-[11px] text-base-content/40">host:port for tcp, host for icmp.</p>
+        <input id="add-check-target" autocomplete="off" class="input input-bordered w-full font-data" value={target()} placeholder={transport() === "icmp" ? "10.0.0.1" : "10.0.0.1:80"} onInput={(e) => setTarget(e.currentTarget.value)} disabled={busy() || !!createdIface()} required />
+        <p class="mt-1 text-[11px] text-base-content/40">host:port for tcp/ssh/http, host for icmp.</p>
       </div>
       <div>
         <label class="eyebrow mb-1.5 block" for="add-check-node">Node</label>

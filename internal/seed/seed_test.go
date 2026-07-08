@@ -95,7 +95,7 @@ func TestSeedRolesIdempotent(t *testing.T) {
 	if err := conn.QueryRow(ctx, `select count(*) from component_type where official`).Scan(&compTypeCount); err != nil {
 		t.Fatalf("count component_types: %v", err)
 	}
-	if compTypeCount != 10 {
-		t.Errorf("official component_types = %d, want 10", compTypeCount)
+	if compTypeCount != 11 {
+		t.Errorf("official component_types = %d, want 11", compTypeCount)
 	}
 }

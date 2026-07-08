@@ -8,8 +8,9 @@ sidebar:
 ---
 
 :::note[Partial]
-The first collection path is live end to end: an edge node runs real **inline reachability probes** (a **tcp**
-connect probe and an **icmp** ping probe) against a component's interface target, ships the result as a protobuf
+The first collection path is live end to end: an edge node runs real **reachability probes** against a
+component's interfaces (each an **API named by the protocol it speaks** and typed by its **transport**: `tcp`,
+`ssh`, and `http` interfaces reach by opening the tcp port, `icmp` pings), ships the result as a protobuf
 `Event` over a JetStream durable consumer, and the `tcp.open` / `tcp.connect_time` and `icmp.reachable` /
 `icmp.rtt_avg` datapoints land in `metric_datapoint` owned by the target component. The owner is
 bound **server-side** from the task's interface (the node stamps no component identity), and the ingest consumer
@@ -27,9 +28,12 @@ the cobra CLI, and the typed client): both carry the two authorization layers, w
 owning component** (an interface inherits its component's read/action scope, a task its interface's component's,
 so an out-of-scope component's interface and task are a non-disclosing 404, reusing the component tier with no new
 scope kind). The full function/DAG authoring model below (multi-step, cross-interface, branching) is still design;
-only the inline tcp and icmp probes are built. See
-[ADR-0017](/architecture/decisions/#adr-0017-telemetry-is-a-protobuf-event-over-jetstream-with-an-inline-owner-confining-consumer)
-and [ADR-0018](/architecture/decisions/#adr-0018-the-reachability-verdict-is-a-built-in-state).
+what is built is the reach gate over four transports (`tcp`/`ssh`/`http` open the port, `icmp` pings). The
+protocol **drivers** that collect a normalized menu of datapoints and functions over a transport are the next
+slices. See
+[ADR-0017](/architecture/decisions/#adr-0017-telemetry-is-a-protobuf-event-over-jetstream-with-an-inline-owner-confining-consumer),
+[ADR-0018](/architecture/decisions/#adr-0018-the-reachability-verdict-is-a-built-in-state),
+and [ADR-0019](/architecture/decisions/#adr-0019-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver).
 :::
 
 Collection is built from **functions**. A versioned `ComponentTemplate` declares how to reach a
@@ -70,13 +74,17 @@ A **function** is the device-level unit. The platform-level workflow that *respo
 the thing that opens tickets, notifies, and orchestrates, is a [flow](/architecture/alarms-actions/);
 a flow can call a function, but the two live at different layers.
 
-## Interfaces: connections, declared once
+## Interfaces: the device's APIs, declared once
 
-A top-level `interfaces` array, each a named connection. The connection is **decoupled from the
-work**: a function's steps reference an interface by `id`; the interface owns the connection, not
-the step. Declaring it once removes per-step duplication, and the decoupling lets a
-**persistent session outlive any single function run**, so subscriptions and inbound streams
-attach to a connection established once.
+An **interface is an API we intend to call** on a component (its `web`, `qrc`, `ttp`, `snmp`
+endpoint), **not** a network interface; a host or IP is a variable it consumes, not its identity. It
+is **named by the protocol it speaks**, unique within its component (so a device has one `web`, one
+`qrc`), never a hand-typed label. Reachability is the **first gate of a ladder** (reach, then auth,
+then responds, then collecting), and it needs only the interface's transport. A top-level
+`interfaces` array declares each one; the connection is **decoupled from the work**: a function's
+steps reference an interface by `id`, the interface owns the connection, not the step. Declaring it
+once removes per-step duplication, and the decoupling lets a **persistent session outlive any single
+function run**, so subscriptions and inbound streams attach to a connection established once.
 
 ```yaml
 interfaces:
@@ -93,10 +101,13 @@ interfaces:
     persistent: true               # stateful session, outlives function runs
 ```
 
-- **Type is an `interface_type` registry entry**: the registry knows which protocol adapters exist
-  and carries each one's connection-param schema. It covers `snmp`, `http`, `ssh`, `telnet`, `tcp`,
-  `icmp`, `webhook`, `mqtt`, `syslog`, and `websocket`. The per-type schema is registry-driven, so
-  config lints against exactly the adapter the registry holds.
+- **Type is the `interface_type`, which is the transport**: the wire the interface speaks over, not
+  the protocol driver. The registry covers `snmp`, `http`, `ssh`, `telnet`, `tcp`, `icmp`, `webhook`,
+  `mqtt`, `syslog`, and `websocket`, and carries each transport's connection-param schema and its
+  default reachability probe. The protocol handler that turns a device's API into a normalized menu of
+  datapoints and functions (the OIDs, the commands, the parse) is a separate **driver** layer, so the
+  same protocol can run over several transports and a device's OIDs live in its driver, never on a
+  template. See [ADR-0019](/architecture/decisions/#adr-0019-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver).
 - **`liveness`** is the per-interface reachability gate; it decides whether the interface's
   functions run. See [nodes](/architecture/nodes/).
 - **`persistent: true`** keeps a session open across function runs (interface lifecycle contains
