@@ -133,3 +133,8 @@ export const roleFilterKeys: FilterKey<Role>[] = [
 export function principalName(p: Principal): string {
   return p.human?.display_name || p.human?.username || p.service?.label || p.kind;
 }
+
+// Presentational helpers shared by the directory columns and the detail body, so a
+// principal reads the same in the list and its blade.
+export const kindBadge = (kind: string) => `badge badge-soft badge-sm capitalize ${kind === "service" ? "badge-info" : "badge-primary"}`;
+export const principalInitials = (p: Principal): string => principalName(p).slice(0, 2).toUpperCase();

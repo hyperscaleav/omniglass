@@ -1,12 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { render } from "@solidjs/testing-library";
+import { render, fireEvent, screen } from "@solidjs/testing-library";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import Roles from "./Roles";
 import { ROLES_KEY, type Role } from "../lib/principals";
 
-// The Roles page is a read-only, self-teaching catalog: it renders each role's
-// display name, description, inheritance, and effective (flattened) permissions,
-// ordered by tier. Data is seeded into the query cache so no server is needed.
+// The Roles page is now a config over the shared FlatList (the same list shell and
+// blade detail as Users and Groups): a directory row per role, ordered by tier, and
+// a read-only blade with the effective (flattened) permission grid. Data is seeded
+// into the query cache so no server is needed.
 const seed: Role[] = [
   { id: "owner", official: true, display_name: "Owner", description: "Full control, break-glass.", permissions: [">"], inherits: [], effective_permissions: [">"] },
   { id: "admin", official: true, display_name: "Administrator", description: "Manage the estate.", permissions: ["audit:read:admin"], inherits: ["operator"], effective_permissions: ["*:read", "principal:*", "audit:read:admin"] },
@@ -25,39 +26,38 @@ function mount() {
 }
 
 describe("Roles page", () => {
-  it("renders each role's display name, description, and effective permissions", () => {
-    const { getByText, getAllByText } = mount();
-    expect(getByText("Owner")).toBeTruthy();
-    expect(getByText("Full control, break-glass.")).toBeTruthy();
-    expect(getByText("Read only.")).toBeTruthy();
-    // effective permission chips are grouped per resource; the actions render.
-    expect(getAllByText("read").length).toBeGreaterThan(0); // *:read on viewer + operator
-    expect(getByText("ack")).toBeTruthy(); // operator's effective alarm:ack
+  it("renders a directory row per role, ordered by tier (viewer before owner)", () => {
+    mount();
+    expect(screen.getByText("Owner")).toBeTruthy();
+    expect(screen.getByText("Viewer")).toBeTruthy();
+    expect(screen.getByText("Administrator")).toBeTruthy();
+    const body = document.body.textContent ?? "";
+    expect(body.indexOf("Viewer")).toBeLessThan(body.indexOf("Owner"));
   });
 
-  it("renders the > superuser as an 'everything' chip and marks an :admin permission", () => {
-    const { getByText } = mount();
-    expect(getByText("everything")).toBeTruthy(); // owner's `>`
-    expect(getByText(":admin")).toBeTruthy(); // admin's audit:read:admin tier marker
+  it("opens a read-only blade with the effective permission grid and description", async () => {
+    mount();
+    fireEvent.click(screen.getByText("Viewer"));
+    expect(await screen.findByText("Read only.")).toBeTruthy();
+    // *:read renders a `read` action chip in the grid.
+    expect(screen.getAllByText("read").length).toBeGreaterThan(0);
   });
 
-  it("orders roles by tier, least powerful first (viewer, operator, admin, owner)", () => {
-    const { getAllByRole } = mount();
-    const headings = getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
-    expect(headings).toEqual(["Viewer", "Operator", "Administrator", "Owner"]);
+  it("shows the > superuser as an 'everything' chip in the owner blade", async () => {
+    mount();
+    fireEvent.click(screen.getByText("Owner"));
+    expect(await screen.findByText("everything")).toBeTruthy();
   });
 
-  it("shows what a role inherits", () => {
-    const { getAllByText } = mount();
-    expect(getAllByText(/inherits/).length).toBeGreaterThan(0);
-    // "viewer" appears as its own id badge AND in operator's inheritance.
-    expect(getAllByText("viewer").length).toBeGreaterThanOrEqual(2);
+  it("shows what a role inherits in its row", () => {
+    mount();
+    // viewer appears as its own id badge AND in operator's Inherits cell.
+    expect(screen.getAllByText("viewer").length).toBeGreaterThanOrEqual(2);
   });
 
   it("wraps the catalog in the shared ListShell filter bar", () => {
-    const { getByRole, getByPlaceholderText } = mount();
-    // The FilterBar combobox is present, so the catalog now wears the shell chrome.
-    expect(getByRole("combobox")).toBeTruthy();
-    expect(getByPlaceholderText("filter roles by name or permission")).toBeTruthy();
+    mount();
+    expect(screen.getByRole("combobox")).toBeTruthy();
+    expect(screen.getByPlaceholderText("filter roles by name or permission")).toBeTruthy();
   });
 });
