@@ -48,6 +48,43 @@ describe("Groups page", () => {
     expect(screen.getByText("Support crew")).toBeTruthy();
   });
 
+  it("opens read-only and reveals edit controls only behind the header pencil", async () => {
+    mount();
+    fireEvent.click(screen.getByText("Help Desk"));
+    const blade = await waitFor(() => {
+      const el = asides()[0];
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    // Read mode: no Delete, no member Remove, no display-name input.
+    expect(within(blade).queryByText("Delete group")).toBeNull();
+    expect(within(blade).queryByLabelText("Remove")).toBeNull();
+    // The header pencil opens edit mode.
+    fireEvent.click(within(blade).getByLabelText("Edit"));
+    expect(within(blade).getByText("Delete group")).toBeTruthy();
+    expect(within(blade).getByText("Save")).toBeTruthy();
+    expect(within(blade).getAllByLabelText("Remove").length).toBeGreaterThan(0);
+  });
+
+  it("stages a member removal in edit mode and Cancel reverts it", async () => {
+    mount();
+    fireEvent.click(screen.getByText("Help Desk"));
+    const blade = await waitFor(() => {
+      const el = asides()[0];
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    fireEvent.click(within(blade).getByLabelText("Edit"));
+    expect(within(blade).getByText("alice")).toBeTruthy();
+    // Staging a removal drops the member from the effective list (not yet committed).
+    fireEvent.click(within(blade).getAllByLabelText("Remove")[0]);
+    expect(within(blade).queryByText("alice")).toBeNull();
+    // Cancel reverts the staging and returns to read mode.
+    fireEvent.click(within(blade).getByText("Cancel"));
+    expect(within(blade).getByText("alice")).toBeTruthy();
+    expect(within(blade).queryByText("Delete group")).toBeNull();
+  });
+
   it("drills from a group member to a user blade nested over the group (group -> user)", async () => {
     mount();
     fireEvent.click(screen.getByText("Help Desk")); // open the group blade
