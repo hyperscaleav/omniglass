@@ -1,18 +1,19 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, fireEvent, screen, waitFor } from "@solidjs/testing-library";
+import { render, fireEvent, screen, waitFor, within } from "@solidjs/testing-library";
 import { Router, Route } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import Users from "./Users";
 import { PRINCIPALS_KEY, ROLES_KEY, type Principal } from "../lib/principals";
+import { GROUPS_KEY } from "../lib/groups";
 import { ME_KEY, type Me } from "../lib/auth";
 
 // The Users page is a config over the shared FlatList: a directory row per
-// principal, a row opening the side Drawer detail (facts, grants, disable / enable,
-// impersonate, and an inline edit), and a create Drawer. Data is seeded into the
-// query cache so no server is needed; `>` grants the caller every permission, so
-// every gated affordance is present.
+// principal, a row opening the detail blade (facts, the groups it belongs to, grants,
+// disable / enable, impersonate, and an inline edit), and a create Drawer. Data is
+// seeded into the query cache so no server is needed; `>` grants the caller every
+// permission, so every gated affordance is present.
 const seed: Principal[] = [
-  { id: "u-alice", kind: "human", active: true, human: { username: "alice", email: "alice@example.com", display_name: "Alice Ng" }, grants: [{ id: "g1", role: "admin", scope_kind: "all" }] },
+  { id: "u-alice", kind: "human", active: true, human: { username: "alice", email: "alice@example.com", display_name: "Alice Ng" }, grants: [{ id: "g1", role: "admin", scope_kind: "all" }], groups: [{ id: "g-hd", name: "Help Desk" }] },
   { id: "u-svc", kind: "service", active: true, service: { label: "ingest-bot" }, grants: [] },
   { id: "u-bob", kind: "human", active: false, human: { username: "bob" }, grants: [] },
 ];
@@ -28,8 +29,12 @@ function mount() {
   qc.setQueryData(["locations"], []);
   qc.setQueryData(["systems"], []);
   qc.setQueryData(["components"], []);
-  // A Router wraps the page so its router hooks (the inherited-grant clickthrough
-  // uses useNavigate) have a context; a catch-all route renders Users.
+  // The group a user drills into (its blade self-fetches these by id).
+  qc.setQueryData([...GROUPS_KEY, "g-hd"], { id: "g-hd", name: "help-desk", display_name: "Help Desk" });
+  qc.setQueryData([...GROUPS_KEY, "g-hd", "members"], []);
+  qc.setQueryData([...GROUPS_KEY, "g-hd", "grants"], []);
+  // A Router wraps the page so its router hooks (the ?u= deep-link uses
+  // useSearchParams) have a context; a catch-all route renders Users.
   return render(() => (
     <QueryClientProvider client={qc}>
       <Router>
@@ -95,6 +100,21 @@ describe("Users page", () => {
     // (only present in the detail view) shows, and the create submit is gone.
     expect(await screen.findByText("carol@example.com")).toBeTruthy();
     await waitFor(() => expect(screen.queryByText("Create user")).toBeNull());
+  });
+
+  it("drills from a user's group to a group blade nested over the user (user -> group)", async () => {
+    mount();
+    fireEvent.click(screen.getByText("Alice Ng"));
+    // The user blade lists the groups the user belongs to.
+    const userBlade = await waitFor(() => {
+      const el = document.querySelector("aside[data-blade]");
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    // Click the group inside the blade (not the list badge behind it): a second
+    // blade (the group) opens over the user.
+    fireEvent.click(within(userBlade).getByText("Help Desk"));
+    await waitFor(() => expect(document.querySelectorAll("aside[data-blade]").length).toBe(2));
   });
 
   it("narrows the directory through the FilterBar (kind:service keeps only the bot)", async () => {

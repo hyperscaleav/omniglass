@@ -45,7 +45,8 @@ each with the roles granted to it. You see it only if you hold `principal:read`,
 principal is not part of any location or system tree, that grant must be **all-scope**: a
 location-scoped admin cannot list users.
 
-- Pick a row to see a principal's profile and its **role grants** (each a role at a scope).
+- Pick a row to open its **blade**: a principal's profile, the **groups** it belongs to (open
+  one to stack that group's blade over the user), and its **role grants** (each a role at a scope).
 - With `principal:create`, **New user** creates a human with a username and an optional initial
   password. The new user can sign in right away and change that password themselves; a fresh
   account holds no grants (so it can sign in but do nothing) until you assign a role.
@@ -80,21 +81,21 @@ grants, so you can see what you are assigning before you stage it.
 
 ## Roles
 
-**Settings > Roles** (with `role:read`) is a read-only catalog of the built-in roles, so you can see what
-each one grants before assigning it. Each role shows its display name, id, description, what it **inherits**,
-and its **effective permissions**, the full set it confers once inheritance, wildcards, and the read floor are
-resolved (so `owner` reads as `> everything`, while `admin` is broad but not the superuser, and an
-admin-sensitive permission like `audit:read:admin` is marked with its `:admin` tier). The roles are ordered
-least to most powerful (viewer, operator, deploy, admin, owner). It is a teaching surface: it renders the real
-seeded roles, not a static table. Custom-role creation and editing are coming; today the built-in roles are
-read-only.
+**Settings > Roles** (with `role:read`) is the catalog of the built-in roles on the same list surface as Users
+and Groups: a directory row per role (its id, whether it is **official**, what it inherits, and how many
+permissions it confers), ordered least to most powerful (viewer, operator, deploy, admin, owner). Open a row for
+its read-only **blade**: the description and its **effective permissions**, the full set it confers once
+inheritance, wildcards, and the read floor are resolved (so `owner` reads as `> everything`, while `admin` is
+broad but not the superuser, and an admin-sensitive permission like `audit:read:admin` is marked with its
+`:admin` tier). It is a teaching surface: it renders the real seeded roles, not a static table. Custom-role
+creation and editing are coming; today the built-in roles are read-only.
 
 ## Groups
 
 **Settings > Groups** (with `principal_group:read`) is the admin surface for **user groups**: a group holds
 `role @ scope` grants, and every member **inherits** them, so you assign access to a team once instead of per
-user. Pick a row to open a group's detail: its **members** (add any principal, or remove one) and its **grants**,
-built with the same grant builder the user detail uses. A grant added to the group takes effect for every member
+user. Pick a row to open the group's **blade**: its **members** (add any principal, remove one, or open a member to
+stack that user's blade over the group) and its **grants**, built with the same grant builder the user detail uses. A grant added to the group takes effect for every member
 immediately, and is bounded by the same rule as a direct grant (you cannot grant a role above your own tier).
 **New group** creates one (name, display name, description); deleting a group drops the memberships and the
 inherited grants, but members keep their own direct grants.
@@ -179,6 +180,12 @@ details. From a blade you can drill into a child (it stacks another blade behind
 step back with the breadcrumb, or **Maximize** to the full detail page. The full page has its
 own URL, so it is shareable and bookmarkable; a blade is a quick look that does not change the
 URL. Rows are keyboard-operable: Tab to a row and press Enter to open it.
+
+The identity pages (Users, Groups, and Roles) use the same blade, and there drilling crosses entities: from a
+user you open a group's blade over it, and from a group you open a member's user blade, each stacking so you can
+trace where access comes from without leaving the page. Each page roots one entity and drills one direction (a
+user's groups, a group's members), so the stack stays shallow and the reverse relation on the far blade is a
+read-only reference.
 
 ### Create, edit, delete
 

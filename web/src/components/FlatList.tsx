@@ -1,6 +1,8 @@
 import { type Accessor, type JSX, For, Show, createEffect, createMemo, createSignal } from "solid-js";
 import ListShell from "./ListShell";
 import Drawer from "./Drawer";
+import BladeStack from "./BladeStack";
+import { type BladeController, type BladeDef, BladesContext, createBladeController } from "../lib/blades";
 import { ChevronDown, ChevronRight, Plus } from "./icons";
 import type { Chip, FilterKey } from "../lib/predicate";
 
@@ -50,6 +52,11 @@ export type FlatConfig<T> = {
   // detail Drawer opens once (closing it does not re-open, until openId changes).
   rowId?: (r: T) => string;
   openId?: () => string | undefined;
+  // When present, a row (and openId) opens a cross-entity blade stack instead of
+  // the single Drawer detail. `rootKind` is the kind a row opens; `registry` maps
+  // each kind to its blade renderers; a body drills via useBlades(). Requires rowId.
+  // The blade stack and the Drawer detail are mutually exclusive; a config sets one.
+  blades?: { registry: Record<string, BladeDef>; rootKind: string; controller?: BladeController };
 };
 
 type SortState = { key: string; dir: 1 | -1 } | null;
@@ -60,6 +67,13 @@ export default function FlatList<T>(props: { config: FlatConfig<T> }) {
   const [selected, setSelected] = createSignal<T | null>(null);
   const [createOpen, setCreateOpen] = createSignal(false);
 
+  // A row opens either a blade (cross-entity stack) or the single Drawer detail.
+  const blades = cfg.blades?.controller ?? createBladeController();
+  const openRow = (r: T) => {
+    if (cfg.blades && cfg.rowId) blades.push({ kind: cfg.blades.rootKind, id: cfg.rowId(r) });
+    else setSelected(() => r);
+  };
+
   // Deep-link: when openId names a loaded row, open its detail once. Guarded by the
   // last-opened id so closing the Drawer does not immediately re-open it.
   const [openedId, setOpenedId] = createSignal<string | undefined>();
@@ -68,7 +82,7 @@ export default function FlatList<T>(props: { config: FlatConfig<T> }) {
     if (!id || id === openedId() || !cfg.rowId) return;
     const row = cfg.rows().find((r) => cfg.rowId!(r) === id);
     if (row) {
-      setSelected(() => row);
+      openRow(row);
       setOpenedId(id);
     }
   });
@@ -115,7 +129,7 @@ export default function FlatList<T>(props: { config: FlatConfig<T> }) {
   );
 
   return (
-    <>
+    <BladesContext.Provider value={blades}>
       <ListShell
         filterKeys={cfg.filterKeys}
         rows={cfg.rows()}
@@ -128,8 +142,8 @@ export default function FlatList<T>(props: { config: FlatConfig<T> }) {
         {(filtered, chips) => {
           const shown = createMemo(() => applySort(filtered()));
           const filtering = () => chips().length > 0;
-          const hasDetail = !!cfg.detail;
-          const span = () => cfg.columns.length + (hasDetail ? 1 : 0);
+          const openable = !!cfg.detail || !!cfg.blades;
+          const span = () => cfg.columns.length + (openable ? 1 : 0);
           return (
             <>
               <div class="overflow-x-auto">
@@ -137,13 +151,13 @@ export default function FlatList<T>(props: { config: FlatConfig<T> }) {
                   <Show when={cfg.columns.some((c) => c.width)}>
                     <colgroup>
                       <For each={cfg.columns}>{(c) => <col style={c.width ? { width: c.width } : undefined} />}</For>
-                      <Show when={hasDetail}><col style={{ width: "40px" }} /></Show>
+                      <Show when={openable}><col style={{ width: "40px" }} /></Show>
                     </colgroup>
                   </Show>
                   <thead>
                     <tr>
                       <For each={cfg.columns}>{(c) => <Th col={c} />}</For>
-                      <Show when={hasDetail}><th /></Show>
+                      <Show when={openable}><th /></Show>
                     </tr>
                   </thead>
                   <tbody>
@@ -159,11 +173,11 @@ export default function FlatList<T>(props: { config: FlatConfig<T> }) {
                     >
                       {(r) => (
                         <tr
-                          class={`border-base-200 ${cfg.rowClass?.(r) ?? ""} ${hasDetail ? "cursor-pointer hover:bg-base-100" : ""}`}
-                          onClick={hasDetail ? () => setSelected(() => r) : undefined}
+                          class={`border-base-200 ${cfg.rowClass?.(r) ?? ""} ${openable ? "cursor-pointer hover:bg-base-100" : ""}`}
+                          onClick={openable ? () => openRow(r) : undefined}
                         >
                           <For each={cfg.columns}>{(c) => <td>{c.cell(r)}</td>}</For>
-                          <Show when={hasDetail}>
+                          <Show when={openable}>
                             <td class="text-base-content/30"><ChevronRight size={15} /></td>
                           </Show>
                         </tr>
@@ -198,12 +212,16 @@ export default function FlatList<T>(props: { config: FlatConfig<T> }) {
           {cfg.create!.body({
             close: () => setCreateOpen(false),
             select: (row) => {
-              setSelected(() => row);
+              openRow(row);
               setCreateOpen(false);
             },
           })}
         </Drawer>
       </Show>
-    </>
+
+      <Show when={cfg.blades}>
+        <BladeStack controller={blades} registry={cfg.blades!.registry} />
+      </Show>
+    </BladesContext.Provider>
   );
 }
