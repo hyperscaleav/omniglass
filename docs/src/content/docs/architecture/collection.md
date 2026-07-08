@@ -21,7 +21,12 @@ raw probe metrics the node now computes the per-interface **reachability verdict
 the AND of that interface's probe results) and emits it as a built-in **state** datapoint; the ingest consumer
 **routes by the registry kind** (metric to `metric_datapoint`, state to `state_datapoint`) under the same
 confinement, and the state series is **transition-only** (one row per flip, guarded both at the node and at
-ingest). The full function/DAG authoring model below (multi-step, cross-interface, branching) is still design;
+ingest). The two collection primitives this pipeline reads, the **interface** and the **task**, now have an
+operator **CRUD API** (gateway + Huma routes at `/interfaces` and `/tasks`, generated into the OpenAPI document,
+the cobra CLI, and the typed client): both carry the two authorization layers, with **scope cascading through the
+owning component** (an interface inherits its component's read/action scope, a task its interface's component's,
+so an out-of-scope component's interface and task are a non-disclosing 404, reusing the component tier with no new
+scope kind). The full function/DAG authoring model below (multi-step, cross-interface, branching) is still design;
 only the inline tcp and icmp probes are built. See
 [ADR-0017](/architecture/decisions/#adr-0017-telemetry-is-a-protobuf-event-over-jetstream-with-an-inline-owner-confining-consumer)
 and [ADR-0018](/architecture/decisions/#adr-0018-the-reachability-verdict-is-a-built-in-state).
