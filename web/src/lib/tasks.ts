@@ -19,8 +19,10 @@ export type Task = {
 
 export const TASKS_KEY = ["tasks"] as const;
 
-// The poll/listen axis a task runs on.
+// The poll/listen axis a task runs on. The mode is a fixed enum server-side, so the
+// create body's mode is the literal union, not a free string.
 export const TASK_MODES = ["poll", "listen"] as const;
+export type TaskMode = (typeof TASK_MODES)[number];
 
 // taskLabel is the row's display: its display name when set, else its
 // content-addressed id (the address).
@@ -42,7 +44,7 @@ export async function getTask(id: string): Promise<Task> {
 
 export type CreateTask = {
   interface: string;
-  mode: string;
+  mode: TaskMode;
   enabled?: boolean;
   display_name?: string;
   node?: string;

@@ -4,6 +4,7 @@ import FlatList, { type FlatColumn } from "../components/FlatList";
 import { Clock } from "../components/icons";
 import {
   type Task,
+  type TaskMode,
   TASKS_KEY,
   TASK_MODES,
   taskLabel,
@@ -226,7 +227,7 @@ function CreateTaskForm(props: { close: () => void; onCreated: (t: Task) => void
   const qc = useQueryClient();
   const interfaces = useQuery(() => ({ queryKey: INTERFACES_KEY, queryFn: () => listInterfaces() }));
   const [iface, setIface] = createSignal("");
-  const [mode, setMode] = createSignal<string>(TASK_MODES[0]);
+  const [mode, setMode] = createSignal<TaskMode>(TASK_MODES[0]);
   const [displayName, setDisplayName] = createSignal("");
   const [enabled, setEnabled] = createSignal(true);
   const [busy, setBusy] = createSignal(false);
@@ -267,7 +268,7 @@ function CreateTaskForm(props: { close: () => void; onCreated: (t: Task) => void
       </div>
       <div>
         <label class="eyebrow mb-1.5 block" for="new-task-mode">Mode</label>
-        <select id="new-task-mode" class="select select-bordered w-full" value={mode()} onChange={(e) => setMode(e.currentTarget.value)} disabled={busy()}>
+        <select id="new-task-mode" class="select select-bordered w-full" value={mode()} onChange={(e) => setMode(e.currentTarget.value as TaskMode)} disabled={busy()}>
           <For each={TASK_MODES}>{(m) => <option value={m}>{m}</option>}</For>
         </select>
       </div>

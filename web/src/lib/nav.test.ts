@@ -51,7 +51,7 @@ describe("filterNav", () => {
     expect(labels).not.toContain("Systems");
     expect(labels).not.toContain("Components");
     expect(labels).not.toContain("Locations");
-    expect(labels).toContain("Interfaces"); // a resource-less stub stays
+    expect(labels).toContain("Interfaces"); // gated on interface:read, which this filter allows
   });
 
   // The owner regression (owner's only grant is the `>` tail): every gated tab must
@@ -81,6 +81,8 @@ describe("routeTokens", () => {
     expect(routeTokens("/web/locations")).toEqual(["location", "read"]);
     expect(routeTokens("/web/components")).toEqual(["component", "read"]);
     expect(routeTokens("/web/systems")).toEqual(["system", "read"]);
+    expect(routeTokens("/web/interfaces")).toEqual(["interface", "read"]);
+    expect(routeTokens("/web/tasks")).toEqual(["task", "read"]);
     expect(routeTokens("/web/users")).toEqual(["principal", "read"]);
     expect(routeTokens("/web/roles")).toEqual(["role", "read"]);
     expect(routeTokens("/web/audit")).toEqual(["audit", "read", "admin"]); // the admin tier

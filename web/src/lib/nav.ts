@@ -45,9 +45,9 @@ export const navItems: NavItem[] = [
       { label: "Components", path: "/components", live: true, resource: "component", hint: "The component inventory, with declared config, props, and tags." },
       { label: "Systems", path: "/systems", live: true, resource: "system", hint: "Location and system trees, navigable, with health at each level." },
       { label: "Locations", path: "/locations", live: true, resource: "location", hint: "The place tree: campuses, buildings, floors, and rooms." },
-      { label: "Interfaces", path: "/interfaces", hint: "Connection endpoints on components, with their device credentials." },
+      { label: "Interfaces", path: "/interfaces", live: true, resource: "interface", hint: "Connection endpoints on components, with their device credentials." },
       { label: "Nodes", path: "/nodes", live: true, resource: "node", hint: "Collection daemons: their assigned tasks, health, and enrollment." },
-      { label: "Tasks", path: "/tasks", hint: "Collection task assignments across nodes." },
+      { label: "Tasks", path: "/tasks", live: true, resource: "task", hint: "Collection task assignments across nodes." },
     ],
   },
   {
