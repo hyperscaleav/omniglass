@@ -195,6 +195,42 @@ func TestResolveSystemKind(t *testing.T) {
 	}
 }
 
+func TestResolveInterfaceTaskCascade(t *testing.T) {
+	// interface and task inherit the component tier: a component-scoped grant whose
+	// role carries interface:<action> / task:<action> confers that scope on the
+	// interface/task, while a wrong-tier (location/system) grant does not.
+	idx := rbac.NewRoleIndex([]rbac.Role{
+		{ID: "viewer", Permissions: []string{"*:read"}},
+		{ID: "operator", Permissions: []string{"interface:create,update", "task:create,update"}},
+		{ID: "owner", Permissions: []string{"*:*"}},
+	})
+	for _, resource := range []string{"interface", "task"} {
+		// A component-scoped operator grant cascades onto the interface/task.
+		s := scope.Resolve([]scope.Grant{{Role: "operator", ScopeKind: "component", ScopeID: "comp-a"}}, idx, resource, "update")
+		if s.All || len(s.IDs) != 1 || s.IDs[0] != "comp-a" {
+			t.Fatalf("%s update via component grant = %+v, want [comp-a]", resource, s)
+		}
+		// The read floor also cascades (holding any action implies read).
+		r := scope.Resolve([]scope.Grant{{Role: "operator", ScopeKind: "component", ScopeID: "comp-a"}}, idx, resource, "read")
+		if len(r.IDs) != 1 || r.IDs[0] != "comp-a" {
+			t.Fatalf("%s read floor via component grant = %+v, want [comp-a]", resource, r)
+		}
+		// A location- or system-tier grant does NOT confer interface/task scope: the
+		// cascade is exactly through the component, no wider.
+		for _, kind := range []string{"location", "system"} {
+			w := scope.Resolve([]scope.Grant{{Role: "owner", ScopeKind: kind, ScopeID: "x"}}, idx, resource, "read")
+			if !w.Empty() {
+				t.Fatalf("%s via %s grant = %+v, want empty (cascade is component-only)", resource, kind, w)
+			}
+		}
+		// An all grant still short-circuits to All.
+		a := scope.Resolve([]scope.Grant{{Role: "owner", ScopeKind: "all"}}, idx, resource, "delete")
+		if !a.All {
+			t.Fatalf("%s delete via all grant = %+v, want All", resource, a)
+		}
+	}
+}
+
 func TestResolveDedupRoots(t *testing.T) {
 	idx := index()
 	// Two grants to the same root via different roles collapse to one id.

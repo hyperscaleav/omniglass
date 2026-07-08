@@ -131,15 +131,21 @@ func Resolve(grants []Grant, idx rbac.RoleIndex, resource, action string) Set {
 
 // applicableKinds returns the scope kinds that can contain a resource: "all"
 // always, plus the resource's own tier. The cross-tier cascade (a location scope
-// also covering its systems and components) is a later slice; today each entity
-// is scoped by its own kind. component and group join as those entities land.
+// also covering its systems and components) is a later slice; today each estate
+// tree entity is scoped by its own kind. interface and task are the exception:
+// they are not tree entities of their own, they hang off a component (an
+// interface owns a component, a task owns an interface), so they cascade through
+// the COMPONENT tier. A component-scoped grant that carries interface:<action> /
+// task:<action> confers that scope on the interface/task; the gateway then
+// filters by "the owning component is in this component-tier scope". group joins
+// as it lands.
 func applicableKinds(resource string) map[string]bool {
 	switch resource {
 	case "location":
 		return map[string]bool{"location": true}
 	case "system":
 		return map[string]bool{"system": true}
-	case "component":
+	case "component", "interface", "task":
 		return map[string]bool{"component": true}
 	default:
 		return map[string]bool{}
