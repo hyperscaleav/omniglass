@@ -171,6 +171,7 @@ func registerRoutes(api huma.API, gw storage.Gateway, o options) {
 	registerNodeRoutes(api, a, gw, o.natsURL)
 	registerPrincipalRoutes(api, a, gw)
 	registerImpersonationRoutes(api, a, gw)
+	registerAuditRoutes(api, a, gw)
 }
 
 // apiConfig is the shared Huma config for the live server and the spec dump. It

@@ -27,9 +27,10 @@ export default function Sidebar(props: { collapsed: boolean; onToggle: () => voi
     const name = m.human?.display_name || m.human?.username || m.service?.label || m.principal.kind;
     return { name, role: m.grants[0]?.role ?? m.principal.kind };
   };
-  // The tabs this principal may see: those with no resource (Home, Explore, Learn,
-  // and the still-stubbed sections) plus those whose resource it can read.
-  const items = createMemo(() => filterNav(navItems, (r) => can(me.data, r, "read")));
+  // The tabs this principal may see: the ungated ones (Home, Explore, Learn, and
+  // the still-stubbed sections) plus those whose required permission it holds (a
+  // bare <resource>:read, or an explicit tier like audit:read:admin).
+  const items = createMemo(() => filterNav(navItems, (tokens) => can(me.data, ...tokens)));
 
   return (
     <aside

@@ -83,10 +83,27 @@ grants, so you can see what you are assigning before you stage it.
 **Settings > Roles** (with `role:read`) is a read-only catalog of the built-in roles, so you can see what
 each one grants before assigning it. Each role shows its display name, id, description, what it **inherits**,
 and its **effective permissions**, the full set it confers once inheritance, wildcards, and the read floor are
-resolved (so `owner` reads as `*:*`, while `admin` is broad but deliberately not `*:*`). The roles are ordered
+resolved (so `owner` reads as `> everything`, while `admin` is broad but not the superuser, and an
+admin-sensitive permission like `audit:read:admin` is marked with its `:admin` tier). The roles are ordered
 least to most powerful (viewer, operator, deploy, admin, owner). It is a teaching surface: it renders the real
 seeded roles, not a static table. Custom-role creation and editing are coming; today the built-in roles are
 read-only.
+
+## Audit
+
+**Settings > Audit** (with `audit:read`, so **administrators and owners** only) is the read-only audit trail:
+every privileged action and every sign-in, newest first, each with when it happened, who did it, the action,
+and the resource. An action taken while impersonating shows the **real administrator** as the actor, with an
+`as <account>` tag naming the principal whose identity they assumed (for example `admin as bob`), so
+accountability lands on the human who acted and impersonation never hides them. A read-only user (a viewer) does not
+see this page: the audit trail is admin-level information, so a plain "read everything" grant does not open it.
+Failed sign-ins on a real account show as **login failed** (and a sign-in to a disabled account as **login
+denied**), so you can spot a brute-force attempt; attempts on usernames that do not exist are not recorded.
+
+The page uses the same faceted search as the inventory lists: filter by **who**, **action**, **resource**, or
+**id** (type a term for a quick actor search, or `action:login` to pin a facet), and combine chips to narrow.
+Filtering runs over the rows already loaded; **Load older** pages further back in time, so a search that comes
+up short is a cue to load older and look deeper.
 
 ## The layout
 
@@ -96,8 +113,11 @@ read-only.
 - The **top bar** shows the current section, a **Search (⌘K)** button, and the light/dark
   toggle.
 - You only see what you can use: a tab you have no read grant for is **hidden**, and an
-  action you cannot perform (create, edit, delete) does not render. The server is the
-  authority on every request; the console only hides what it knows you cannot reach.
+  action you cannot perform (create, edit, delete) does not render. The same permission
+  map also **guards the route**, so a hidden tab is an unreachable URL: typing or
+  bookmarking a page you cannot read redirects you to Home. The server is the authority on
+  every request (it refuses regardless); the console hides what it knows you cannot reach so
+  it never paints a page you cannot use.
 
 ## Jump anywhere: ⌘K
 

@@ -66,6 +66,14 @@ Each is a gate; a red one blocks the ship.
    under `.github/screenshots/` and embed by **immutable commit SHA**
    (`https://raw.githubusercontent.com/<owner>/<repo>/<sha>/.github/screenshots/...`), so the
    link survives the branch being deleted on squash-merge.
+8. **Audit coverage.** Every privileged **mutation** and every **auth event** the slice adds
+   writes an `audit_log` row: an estate or IAM mutation through `writeAuditRes` **in the same
+   transaction** as the change (a committed change without its audit row is a red gate), and an
+   auth event (login, logout, a denied sign-in) through `WriteAuthEvent` on the read/no-tx path.
+   Grep the diff for new gateway writes and new handlers; each names an actor (and, under
+   impersonation, carries the real actor via the request context). A new privileged write with no
+   audit row, or an auth event that is silently unlogged, is a red gate. Reads are not audited
+   (except secret decrypts, which always are).
 
 ## The ship-review (emit this, in chat and as the PR body)
 

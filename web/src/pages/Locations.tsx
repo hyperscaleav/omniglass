@@ -1,7 +1,7 @@
 import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { useNavigate, useParams } from "@solidjs/router";
-import ListView, { type Blade, type ListConfig, type ListCtx, type ListNode, type PageDescriptor, type Widget } from "../components/ListView";
+import TreeList, { type Blade, type ListConfig, type ListCtx, type ListNode, type PageDescriptor, type Widget } from "../components/TreeList";
 import Donut from "../components/Donut";
 import TreeSelect from "../components/TreeSelect";
 import {
@@ -18,7 +18,7 @@ import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { ChevronRight, Maximize, Plus, resolveIcon } from "../components/icons";
 
-// Locations: the place tree on the generic ListView (campuses, buildings, floors,
+// Locations: the place tree on the generic TreeList (campuses, buildings, floors,
 // rooms). Replaces the standalone Locations page/new/detail trio with the same
 // config-driven shell every inventory page uses: embedded filter, action rail,
 // tree, blades, full-page detail, create/edit Drawer. The tree comes from
@@ -362,7 +362,7 @@ export default function Locations() {
       <Show when={err()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
       </Show>
-      <ListView config={cfg} />
+      <TreeList config={cfg} />
     </div>
   );
 }

@@ -54,6 +54,7 @@ roles:
       - "principal_grant:*"
       - "role:*"
       - "node:*"
+      - "audit:read:admin"
       - "datapoint_type:create"
       - "tag:create"
       - "unit:create"
@@ -63,8 +64,9 @@ roles:
   - id: owner
     display_name: Owner
     description: >-
-      Full control of everything, the break-glass superuser (the global wildcard,
-      so it covers every capability including future ones). At least one active
-      owner always exists, and an owner account cannot be impersonated.
+      Full control of everything, the break-glass superuser (the tail wildcard,
+      so it covers every capability at every tier, including admin-sensitive ones
+      and future resources). At least one active owner always exists, and an owner
+      account cannot be impersonated.
     permissions:
-      - "*:*"
+      - ">"

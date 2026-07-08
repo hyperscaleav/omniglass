@@ -3,7 +3,7 @@ import { Popover } from "@kobalte/core/popover";
 import { Columns, Check, GripVertical } from "./icons";
 
 // ColumnMenu: the inventory grid's column hide/show/reorder popup, lifted out of
-// ListView so the floating panel is a self-contained primitive (and testable in
+// TreeList so the floating panel is a self-contained primitive (and testable in
 // isolation). Visible columns render in order, draggable to reorder; hidden
 // columns sit below, click to append. The panel floats over the grid via a
 // Kobalte popover, which portals the content to the document body so it is never

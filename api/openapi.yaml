@@ -1,5 +1,51 @@
 components:
   schemas:
+    AuditEventBody:
+      additionalProperties: false
+      properties:
+        actor:
+          type: string
+        actor_name:
+          type: string
+        id:
+          type: string
+        real_actor:
+          type: string
+        real_actor_name:
+          type: string
+        resource:
+          type: string
+        resource_id:
+          type: string
+        ts:
+          type: string
+        verb:
+          type: string
+      required:
+        - id
+        - ts
+        - verb
+        - resource
+      type: object
+    AuditListOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/AuditListOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        events:
+          items:
+            $ref: "#/components/schemas/AuditEventBody"
+          type:
+            - array
+            - "null"
+      required:
+        - events
+      type: object
     AuthStatusOutputBody:
       additionalProperties: false
       properties:
@@ -1074,6 +1120,54 @@ info:
   version: 0.0.1-skeleton
 openapi: 3.1.0
 paths:
+  /audit-log:
+    get:
+      description: Recent audit-trail events, newest first, each with the actor and, for an impersonated action, the real actor behind it. Read-only; gated by audit:read:admin (admin/owner only, since the audit trail is admin-sensitive).
+      operationId: list-audit-log
+      parameters:
+        - description: Max rows to return, newest first (default 100, capped at 500)
+          explode: false
+          in: query
+          name: limit
+          schema:
+            description: Max rows to return, newest first (default 100, capped at 500)
+            format: int64
+            type: integer
+        - description: Filter to one resource kind (e.g. auth, principal_grant)
+          explode: false
+          in: query
+          name: resource
+          schema:
+            description: Filter to one resource kind (e.g. auth, principal_grant)
+            type: string
+        - description: Filter to one verb (e.g. login, create)
+          explode: false
+          in: query
+          name: verb
+          schema:
+            description: Filter to one verb (e.g. login, create)
+            type: string
+        - description: Only events strictly older than this RFC3339 timestamp (paging backward)
+          explode: false
+          in: query
+          name: before
+          schema:
+            description: Only events strictly older than this RFC3339 timestamp (paging backward)
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditListOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List audit-trail events
   /auth/login:
     post:
       description: Verifies a human's password and sets an httpOnly session cookie. Public; a bad credential is a flat 401, and a correct password against a disabled account is a distinct 403 so the screen can explain it.

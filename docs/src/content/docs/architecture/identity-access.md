@@ -120,7 +120,7 @@ viewer  <-  operator  <-  admin  <-  owner
 | `operator` | viewer + create/update on components, interfaces, tasks, rules, config; ack/snooze/resolve alarms. |
 | `deploy` | viewer + create/update on locations, systems, and components (the integrator / field-tech role, typically granted with the `subtree_excl_root` operator to build out a subtree without editing its root). No delete. |
 | `admin` | operator + delete on managed resources + manage IAM (principals, credentials, grants, custom roles) + curate registries (`<registry>:create`). IAM management is meaningful only from an `@ all` grant (a scoped `admin @ subtree` keeps the operator powers within its subtree but gets no IAM); registry curation is a plain capability, so a custom role can carry `<registry>:create` alone for a non-admin curator. Deliberately **not** the superuser: it cannot grant a role above its own tier ([ADR-0013](/architecture/decisions/#adr-0013-a-grant-cannot-confer-capabilities-the-granter-lacks)), so it cannot make itself owner, and it cannot delete `official` roles. |
-| `owner` | The break-glass superuser (`*:*`, the global wildcard, covering every capability including future ones). The unkillable role: at least one active `owner@all` grant must exist at all times (enforced by DB trigger), and an owner account cannot be impersonated. The bootstrap creates the first owner. |
+| `owner` | The break-glass superuser (`>`, the tail wildcard, covering every capability at every tier, including admin-sensitive ones and future resources). The unkillable role: at least one active `owner@all` grant must exist at all times (enforced by DB trigger), and an owner account cannot be impersonated. The bootstrap creates the first owner. |
 
 The console **Roles view** (`GET /roles`, gated `role:read`) lists these read-only with each role's display name, description, inheritance, and **effective permissions**, so an operator sees exactly what a role grants before assigning it. Custom-role editing is a later slice.
 
@@ -135,33 +135,29 @@ Because of the no-override rule, `inherits: [viewer]` is unambiguous (every id r
 
 ### Permission format
 
-Permissions are strings: `<resource>:<action>`. One entry per resource per role; actions are comma-separated; wildcards stand alone.
+Permissions are **topic patterns**, matched like [NATS](/architecture/messaging/) subjects (which the node path already uses, so the whole stack shares one wildcard convention): a colon-delimited token path where a **literal** matches itself, **`*` matches exactly one token**, and **`>` matches one or more tokens and must be last** ([ADR-0015](/architecture/decisions/#adr-0015-permissions-are-topic-patterns-single-token-and-tail-wildcards)). One entry per resource per role; the action segment may be comma-separated (a shorthand that expands to one permission each).
 
 ```
-component:read                <- single action
-component:create,update       <- multiple actions, one resource
+component:read                <- one permission
+component:create,update       <- expands to component:create and component:update
 alarm:ack,snooze,resolve      <- domain verbs alongside CRUD
 datapoint_type:create         <- a registry curator capability (tag/unit/event_type/severity_level/source likewise)
-principal:*                   <- any action on this resource
-*:*                           <- any action on any resource (owner only)
+principal:*                   <- any single action on this resource (a two-token pattern)
+audit:read:admin              <- an admin-sensitive permission (three tokens)
+>                             <- everything, at every tier (the owner superuser)
 ```
 
-Actions are HTTP-aligned: `read` (GET), `create` (POST), `update` (PATCH/PUT), `delete` (DELETE), plus resource-specific verbs (`ack`, `snooze`, `resolve` for alarms; future kinds add their own). The aggregate `write` does not exist as an alias; `*` is the wildcard and reads as honestly.
+A normal permission is `resource:action` (two tokens); an **admin-sensitive** one carries a third `admin` token (`audit:read:admin`). Because `*` matches exactly one token, a two-token pattern like `*:read` (viewer) or `*:*` or `principal:*` **structurally cannot** match a three-token `:admin` permission: admin-sensitivity is a **deeper token**, not a special case in the matcher. The whole-estate superuser is `>` (owner); `<resource>:>` grants everything under one resource including its admin tier. Actions are HTTP-aligned: `read` (GET), `create` (POST), `update` (PATCH/PUT), `delete` (DELETE), plus resource-specific verbs (`ack`, `snooze`, `resolve` for alarms; future kinds add their own). The aggregate `write` does not exist as an alias.
 
-Inheritance composes permissions **per resource by union of actions**:
+Inheritance composes permissions **by union**:
 
 ```
 parent: component:create,update
 child:  component:delete
-child effective:  component:{create, update, delete}
+child effective:  component:create, component:update, component:delete
 ```
 
-There are no negative permissions. To narrow a parent's capability set, define a fresh role rather than inherit.
-
-:::caution[Open question]
-Whether to add custom-role permission granularity beyond `(resource x action)` (e.g. a Zoom-style
-data-claim suffix `<resource>:<action>:<modifier>`), pending a use case.
-:::
+There are no negative permissions. To narrow a parent's capability set, define a fresh role rather than inherit. The escalation guard (`rbac.Set.Covers`) uses **pattern subsumption**: a broader pattern covers a narrower one, `>` covers everything, and no partial wildcard covers `>` (so an admin, holding no `>`, can neither impersonate nor grant an owner).
 
 ## Authorization: grants = role x scope
 
@@ -243,7 +239,7 @@ Attempting to remove the last owner (by grant delete, principal delete, principa
 
 ### Grants cannot exceed the granter
 
-Creating a grant is refused (403) when the granted role's capabilities are not **covered** by the granter's own **all-scope** capabilities (`rbac.Set.Covers`, the same primitive as the impersonation escalation guard). So no caller can promote anyone, including itself, to a tier above its own: an **admin cannot grant `owner`** (`*:*`), because admin is an enumerated role that does not cover the global wildcard, and it therefore cannot self-promote to the superuser tier. Only the caller's **all-scope** grants count, so a capability held through a narrower grant cannot be conferred estate-wide. This makes the owner tier a real capability firewall: an admin is deliberately bounded (the top management role, not the superuser), and a self-grant is not a path from admin to owner. The same rule will apply to role editing when it lands (you cannot edit a role above your own tier).
+Creating a grant is refused (403) when the granted role's capabilities are not **covered** by the granter's own **all-scope** capabilities (`rbac.Set.Covers`, the same primitive as the impersonation escalation guard). So no caller can promote anyone, including itself, to a tier above its own: an **admin cannot grant `owner`** (`>`), because admin is an enumerated role whose patterns do not subsume the superuser tail, and it therefore cannot self-promote to the superuser tier. Only the caller's **all-scope** grants count, so a capability held through a narrower grant cannot be conferred estate-wide. This makes the owner tier a real capability firewall: an admin is deliberately bounded (the top management role, not the superuser), and a self-grant is not a path from admin to owner. The same rule will apply to role editing when it lands (you cannot edit a role above your own tier).
 
 ## Impersonation (view-as and act-as)
 
@@ -417,6 +413,8 @@ TLS on the HTTP API (terminated at the binary when given a cert + key, or at the
 ## Audit
 
 Every API operation records the resolved **actor** (the principal id) in `audit_log`. Secret decrypts are always audited, never filterable. Node-mode writes record the node principal as actor; system-mode writes record `actor = 'system'` (or `'bootstrap'` for the seed phase) so the audit trail distinguishes operator action from platform internals. An AI tool acts via OAuth as a `human` or `service` principal, so its writes record that principal as actor. When a request is **impersonated**, the row also records `real_actor_principal_id`, the true admin behind the impersonated actor, so accountability survives impersonation (see [impersonation](#impersonation-view-as-and-act-as)).
+
+**Two write paths, one read path.** Estate mutations write their `audit_log` row **in the same transaction** as the change (via the Storage Gateway, so a committed change always has its audit row). **Auth events** (login, logout) fire on read/no-tx paths, so they emit through a separate non-transactional seam and record `resource = 'auth'`. The read side is `GET /audit-log` (newest first, filterable by resource and verb, backward-paged by a `before` timestamp), which resolves each actor and real-actor to a username. It is **admin/owner-only**: the route requires the admin-sensitive `audit:read:admin` (three tokens), which a two-token wildcard like `viewer`'s `*:read` cannot match, so only `admin` (which carries it explicitly) or `owner` (`>`) reaches it ([ADR-0015](/architecture/decisions/#adr-0015-permissions-are-topic-patterns-single-token-and-tail-wildcards)), and a read-only operator cannot see the security trail. **Failed sign-ins** are captured for accountability: a wrong password on a **real** account is `login_failed` (attributed to that principal, a brute-force signal), and a correct password against a **disabled** account is `login_denied`. An attempt on an **unknown** username is deliberately **not** written, so scanning random usernames cannot flood the log; bounding a targeted brute force against a real account is the job of endpoint rate limiting (a later slice), not suppressing the audit.
 
 ## Bootstrap
 

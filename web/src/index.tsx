@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import "./app.css";
 import App from "./App";
 import { AuthGuard } from "./components/AuthGuard";
+import { RouteGuard } from "./components/RouteGuard";
 import Login from "./pages/Login";
 import Home from "./pages/Home";
 import Locations from "./pages/Locations";
@@ -14,6 +15,7 @@ import Components from "./pages/Components";
 import Profile from "./pages/Profile";
 import Users from "./pages/Users";
 import Roles from "./pages/Roles";
+import Audit from "./pages/Audit";
 import SectionStub from "./pages/SectionStub";
 import NotFound from "./pages/NotFound";
 
@@ -27,7 +29,9 @@ const queryClient = new QueryClient();
 // page. Login is a sibling route outside the shell.
 const ProtectedShell: ParentComponent = (props) => (
   <AuthGuard>
-    <App>{props.children}</App>
+    <App>
+      <RouteGuard>{props.children}</RouteGuard>
+    </App>
   </AuthGuard>
 );
 
@@ -35,7 +39,7 @@ const ProtectedShell: ParentComponent = (props) => (
 const STUBS = [
   "/dashboards", "/alarms", "/interfaces", "/nodes", "/tasks",
   "/templates", "/types", "/tags", "/rules", "/explore", "/learn",
-  "/config", "/secrets", "/groups", "/audit",
+  "/config", "/secrets", "/groups",
 ];
 
 render(
@@ -45,7 +49,7 @@ render(
         <Route path="/login" component={Login} />
         <Route path="/" component={ProtectedShell}>
           <Route path="/" component={Home} />
-          {/* Inventory pages on the generic ListView. The :name route opens the
+          {/* Inventory pages on the generic TreeList. The :name route opens the
               same page focused on one entity (the addressable full-page detail). */}
           <Route path="/locations" component={Locations} />
           <Route path="/locations/:name" component={Locations} />
@@ -56,6 +60,7 @@ render(
           <Route path="/profile" component={Profile} />
           <Route path="/users" component={Users} />
           <Route path="/roles" component={Roles} />
+          <Route path="/audit" component={Audit} />
           {STUBS.map((p) => <Route path={p} component={SectionStub} />)}
           <Route path="*" component={NotFound} />
         </Route>

@@ -379,6 +379,53 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   password credentials, three grants of the expected scope, all stable across the second run), plus the
   `seed-dev` command driven end-to-end against a real Postgres. The `/ship-slice` gate now requires any slice that adds a new operator entity to seed an
   example of it here.
+- **Identity: the auth event log.** The `audit_log` already recorded every privileged mutation (with `actor`
+  and, for impersonated actions, `real_actor`); this adds the read surface and captures auth events. `GET
+  /audit-log` (newest first, filter by resource / verb, backward-paged by `before`) resolves each actor and
+  real-actor to a username, and **login / logout are now captured** (`resource = 'auth'`, via a non-transactional
+  emit seam, since login is a read/no-tx path), and so are **failed sign-ins**: a wrong password on a real
+  account is `login_failed` (attributed to that principal) and a correct password against a disabled account is
+  `login_denied` (#97), while an attempt on an unknown username is not written (so scanning cannot flood the
+  log). The console gains a read-only **Audit** page (`Settings > Audit`): every action and sign-in, with an
+  `as <actor>` tag on anything done while impersonating. It is **admin/owner-only**: `audit` is a sensitive
+  resource, so a `viewer`'s `*:read` does **not** confer `audit:read`, only an explicit grant or `*:*` (a small
+  `rbac` sensitive-resource carve-out, ADR-0014). Proven by an rbac unit test (the carve-out: `*:read` denied,
+  `*:*` and explicit allowed), a storage round-trip, a real-binary API test (a login appears, a real-account
+  failed login is attributed while an unknown-user attempt is not, a viewer is 403, the resource filter
+  narrows, and an impersonated action carries `real_actor`), and web tests (the Audit page renders and marks
+  impersonated rows). Deferred: a failed-login rate-limit counter.
+- **Identity: permissions are topic patterns.** The capability matcher became a consistent NATS-style topic
+  match (ADR-0015, superseding the ADR-0014 carve-out): `*` matches exactly one token and `>` matches the tail,
+  so a two-token pattern (`*:read`, `*:*`, `principal:*`) structurally cannot reach a three-token `:admin`
+  permission, and admin-sensitivity is a deeper token rather than a special case. `audit:read` became the
+  admin-sensitive `audit:read:admin` (the audit route requires it), `owner` became `>`, and the
+  `sensitiveResources` set and `grantsAll` helper were deleted. `Set.Allows` matches by token (with the
+  unchanged `:read` floor); `Set.Covers` (the impersonation and grant-escalation guard) became pattern
+  subsumption plus the floor, staying conservative. The one seed change is `owner`'s `*:*` -> `>`; every other
+  permission keeps its meaning (`*` already meant a single token). As a free consequence, `principal:*` no
+  longer sweeps a future admin-tier `principal:<action>:admin`. Proven by an rbac unit matrix (`*` one token,
+  `>` tail, `*:read`/`*:*`/`principal:*` miss `:admin`, `>` and explicit hit it, Covers subsumption), the whole
+  authz suite (the viewer is still 403 on the audit trail, now structurally), and web tests (the Roles view
+  renders `>` as an "everything" chip and marks an `:admin` tier). The console Roles view and grant-builder
+  render the new grammar. Foundational for a custom-role permission preview (a permission catalog).
+- **Identity: the audit page joins the list-view standard.** The Audit page swaps its bare table for the
+  console's shared **FilterBar** faceted search (the same one the inventory lists use): filter by `who`,
+  `action`, `resource`, or `id`, chips combining to narrow, matched client-side over the loaded rows via the
+  `lib/predicate` engine. **Load older** pages backward through the server `before` cursor, so a filter that
+  comes up short is a cue to load deeper. Proven by a predicate unit test (each facet, within-chip OR and
+  cross-chip AND, the sorted value catalog) and a component test (the FilterBar narrows the rows, and load-older
+  asks for events older than the oldest loaded). Deferred: a chip time-range facet (the shared `matchOp`
+  compares `gt`/`lt` numerically, so an ISO-timestamp facet needs a date-aware operator in the predicate
+  primitive first).
+- **Console: the list surface splits into a shell plus swappable bodies.** `ListShell` owns the chrome every
+  list wears (the FilterBar chip state and client-side predicate, the card, the error banner, a trailing
+  action slot) and hands its body the filtered rows; `FlatList` is the flat body (a sortable table, an
+  optional row-to-Drawer detail, an optional create Drawer, an optional footer). The Audit page becomes a thin
+  `FlatList` config, behaviour-preserving. This is the primitive-first factoring of the four list idioms that
+  had grown up (tree ListView, the Users split-panel, the Roles catalog, the Audit table): the tree pages move
+  onto `ListShell` + a `TreeList` body, and Users onto `FlatList`, in follow-up slices; Roles stays the
+  read-only catalog until custom-role CRUD. Proven by the Audit component test (unchanged behaviour on the new
+  primitives) and the existing web suite.
 - **Collection slice (checkpoints 1-2): the storage tier and the node runtime.** The first cut of the
   [collection](/architecture/collection/) engine. Checkpoint 1 landed the storage tier: the `node`,
   `interface_type`, `interface`, `task`, `datapoint_type`, and `metric_datapoint` tables (an idempotent
