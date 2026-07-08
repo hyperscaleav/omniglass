@@ -447,8 +447,9 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   and the verdict's transition history (`StateTransitions` over a window). The operator console gains a
   **Reachability panel** on the component detail: one row per interface with a verdict pill (`responding` /
   `down` / `stale` / `unknown`, staleness derived at read time), an **availability strip** drawn from the state
-  transitions (up/down over time, not a latency trend), and an expandable L3/L4/L7 gate breakdown with the
-  reason a down interface is down. It renders only real API fields. The availability-percentage SLI
+  transitions (up/down over time, not a latency trend), and an expandable L3/L4 gate breakdown (ping and port,
+  the inline probes this slice ships; the L7 app-layer gate lands with the snmp/http/ssh interface types) with
+  the reason a down interface is down. It renders only real API fields. The availability-percentage SLI
   (`time_in_state` over the verdict) still rides in with the health slice; the panel shows the transitions
   directly. Interface and task authoring (the "add check" affordance and the flat Nodes / Interfaces / Tasks
   pages) are checkpoints 5c and 5d.
