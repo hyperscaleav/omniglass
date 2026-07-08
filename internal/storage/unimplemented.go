@@ -58,6 +58,38 @@ func (UnimplementedGateway) CreateGrant(context.Context, string, string, GrantSp
 func (UnimplementedGateway) RevokeGrant(context.Context, string, string, string, scope.Set) error {
 	return nil
 }
+func (UnimplementedGateway) CreateGroup(context.Context, string, GroupSpec, scope.Set) (*Group, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) ListGroups(context.Context, scope.Set) ([]Group, error) { return nil, nil }
+func (UnimplementedGateway) GetGroup(context.Context, string, scope.Set) (*Group, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) UpdateGroup(context.Context, string, string, GroupPatch, scope.Set) (*Group, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteGroup(context.Context, string, string, scope.Set) error { return nil }
+func (UnimplementedGateway) AddGroupMember(context.Context, string, string, string, scope.Set) error {
+	return nil
+}
+func (UnimplementedGateway) RemoveGroupMember(context.Context, string, string, string, scope.Set) error {
+	return nil
+}
+func (UnimplementedGateway) ListGroupMembers(context.Context, string, scope.Set) ([]GroupMember, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) ListGroupsForPrincipal(context.Context, string, scope.Set) ([]Group, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) CreateGroupGrant(context.Context, string, string, GrantSpec, scope.Set) (*Grant, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) RevokeGroupGrant(context.Context, string, string, string, scope.Set) error {
+	return nil
+}
+func (UnimplementedGateway) ListGroupGrants(context.Context, string, scope.Set) ([]Grant, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) SetPrincipalActive(context.Context, string, string, bool, scope.Set) error {
 	return nil
 }

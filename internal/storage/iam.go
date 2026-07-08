@@ -176,6 +176,11 @@ type Grant struct {
 	ScopeKind string
 	ScopeID   *string
 	ScopeOp   string // how ScopeID matches the tree: subtree, subtree_excl_root, or self
+	// GroupID is set when this grant is inherited from a group the principal
+	// belongs to (nil for a direct grant), so a caller can show inherited access
+	// distinctly from direct. A principal's effective grants are its direct grants
+	// unioned with its groups' grants; both flatten and scope-resolve the same way.
+	GroupID *string
 }
 
 // ErrBadCredentials is returned by AuthenticatePassword when the username is
@@ -867,15 +872,24 @@ func (p *PG) loadPrincipal(ctx context.Context, pr *Principal) error {
 		pr.Service = &s
 	}
 
+	// A principal's effective grants are its direct grants unioned with the grants
+	// of every group it belongs to. This is the one seam group access rides: the
+	// permission flatten (roleIDs) and the gateway's per-action scope resolution
+	// both read pr.Grants, so a member inherits a group's role and scope here and
+	// nowhere else. group_id tags an inherited grant so callers can tell it apart.
 	rows, err := p.pool.Query(ctx,
-		`select id, role_id, scope_kind, scope_id, scope_op from principal_grant where principal_id = $1 order by created_at`, pr.ID)
+		`select id, role_id, scope_kind, scope_id, scope_op, group_id
+		   from principal_grant
+		  where principal_id = $1
+		     or group_id in (select group_id from principal_group_member where principal_id = $1)
+		  order by group_id nulls first, created_at`, pr.ID)
 	if err != nil {
 		return fmt.Errorf("storage: load grants: %w", err)
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var g Grant
-		if err := rows.Scan(&g.ID, &g.Role, &g.ScopeKind, &g.ScopeID, &g.ScopeOp); err != nil {
+		if err := rows.Scan(&g.ID, &g.Role, &g.ScopeKind, &g.ScopeID, &g.ScopeOp, &g.GroupID); err != nil {
 			return fmt.Errorf("storage: scan grant: %w", err)
 		}
 		pr.Grants = append(pr.Grants, g)

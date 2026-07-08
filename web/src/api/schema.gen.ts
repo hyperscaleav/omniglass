@@ -292,6 +292,146 @@ export interface paths {
         patch: operations["update-location"];
         trace?: never;
     };
+    "/principal-groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List principal groups
+         * @description Every principal group. Gated by principal_group:read (all-scope).
+         */
+        get: operations["list-groups"];
+        put?: never;
+        /**
+         * Create a principal group
+         * @description Creates a principal group. Gated by principal_group:create (all-scope). A duplicate name is 409.
+         */
+        post: operations["create-group"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/principal-groups/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a principal group
+         * @description One principal group by id. Gated by principal_group:read (all-scope).
+         */
+        get: operations["get-group"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a principal group
+         * @description Removes a group and, by cascade, its memberships and grants. Gated by principal_group:delete (all-scope).
+         */
+        delete: operations["delete-group"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a principal group
+         * @description Updates a group's name and presentational fields. Gated by principal_group:update (all-scope). A duplicate name is 409.
+         */
+        patch: operations["update-group"];
+        trace?: never;
+    };
+    "/principal-groups/{id}/grants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a group's grants
+         * @description The role x scope grants a group confers on its members. Gated by principal_group:read (all-scope).
+         */
+        get: operations["list-group-grants"];
+        put?: never;
+        /**
+         * Grant a role to a group
+         * @description Assigns a role at a scope to a group; its members inherit it. Gated by principal_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own, exactly as for a direct grant. A duplicate is 409.
+         */
+        post: operations["create-group-grant"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/principal-groups/{id}/grants/{grantId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke a group grant
+         * @description Removes one grant from a group. Gated by principal_grant:delete (all-scope).
+         */
+        delete: operations["revoke-group-grant"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/principal-groups/{id}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a group's members
+         * @description The principals in a group. Gated by principal_group:read (all-scope).
+         */
+        get: operations["list-group-members"];
+        put?: never;
+        /**
+         * Add a member to a group
+         * @description Adds a principal to a group; its members inherit the group's grants. Gated by principal_group:update (all-scope). Idempotent.
+         */
+        post: operations["add-group-member"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/principal-groups/{id}/members/{principalId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove a member from a group
+         * @description Removes a principal from a group; it stops inheriting the group's grants. Gated by principal_group:update (all-scope).
+         */
+        delete: operations["remove-group-member"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/principals": {
         parameters: {
             query?: never;
@@ -516,6 +656,16 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AddMemberInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/AddMemberInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The principal to add to the group */
+            principal_id: string;
+        };
         AuditEventBody: {
             actor?: string;
             actor_name?: string;
@@ -614,6 +764,40 @@ export interface components {
              * @enum {string}
              */
             scope_op?: "subtree" | "subtree_excl_root" | "self";
+        };
+        CreateGroupGrantInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateGroupGrantInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description A role id (viewer, operator, admin, owner, or a custom role) */
+            role: string;
+            /** @description The scope root id; omit for the all scope */
+            scope_id?: string;
+            /**
+             * @description The scope kind; 'all' confers the whole estate
+             * @enum {string}
+             */
+            scope_kind: "all" | "location" | "system" | "component" | "group";
+            /**
+             * @description How the scope root matches the tree; moot for the all scope
+             * @enum {string}
+             */
+            scope_op?: "subtree" | "subtree_excl_root" | "self";
+        };
+        CreateGroupInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateGroupInputBody.json
+             */
+            readonly $schema?: string;
+            description?: string;
+            display_name?: string;
+            /** @description Unique group name */
+            name: string;
         };
         CreateLocationInputBody: {
             /**
@@ -725,6 +909,18 @@ export interface components {
              */
             scope_op?: "subtree" | "subtree_excl_root" | "self";
         };
+        GroupBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/GroupBody.json
+             */
+            readonly $schema?: string;
+            description?: string;
+            display_name?: string;
+            id: string;
+            name: string;
+        };
         HealthOutputBody: {
             /**
              * Format: uri
@@ -788,6 +984,24 @@ export interface components {
             readonly $schema?: string;
             components: components["schemas"]["ComponentBody"][] | null;
         };
+        ListGroupGrantsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListGroupGrantsOutputBody.json
+             */
+            readonly $schema?: string;
+            grants: components["schemas"]["GrantBody"][] | null;
+        };
+        ListGroupsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListGroupsOutputBody.json
+             */
+            readonly $schema?: string;
+            groups: components["schemas"]["GroupBody"][] | null;
+        };
         ListLocationTypesOutputBody: {
             /**
              * Format: uri
@@ -805,6 +1019,15 @@ export interface components {
              */
             readonly $schema?: string;
             locations: components["schemas"]["LocationBody"][] | null;
+        };
+        ListMembersOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListMembersOutputBody.json
+             */
+            readonly $schema?: string;
+            members: components["schemas"]["MemberBody"][] | null;
         };
         ListPrincipalsOutputBody: {
             /**
@@ -870,6 +1093,12 @@ export interface components {
             principal: components["schemas"]["PrincipalStruct"];
             service?: components["schemas"]["SvcBody"];
         };
+        MemberBody: {
+            display_name?: string;
+            kind: string;
+            principal_id: string;
+            username?: string;
+        };
         PrincipalBody: {
             /**
              * Format: uri
@@ -934,6 +1163,20 @@ export interface components {
             readonly $schema?: string;
             component_type?: string;
             display_name?: string;
+        };
+        UpdateGroupInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/UpdateGroupInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Description; empty clears it */
+            description?: string;
+            /** @description Display name; empty clears it */
+            display_name?: string;
+            /** @description Group name; renaming is safe */
+            name?: string;
         };
         UpdateLocationInputBody: {
             /**
@@ -1637,6 +1880,364 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["LocationBody"];
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListGroupsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-group": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateGroupInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-group": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The group's id (uuid) */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-group": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The group's id (uuid) */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "update-group": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The group's id (uuid) */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateGroupInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-group-grants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The group's id (uuid) */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListGroupGrantsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-group-grant": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The group's id (uuid) */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateGroupGrantInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GrantBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "revoke-group-grant": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The group's id (uuid) */
+                id: string;
+                /** @description The grant's id (uuid) */
+                grantId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-group-members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The group's id (uuid) */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListMembersOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "add-group-member": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The group's id (uuid) */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddMemberInputBody"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "remove-group-member": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The group's id (uuid) */
+                id: string;
+                /** @description The member principal's id (uuid) */
+                principalId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {

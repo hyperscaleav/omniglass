@@ -250,6 +250,43 @@ func generatedCommands() []*cobra.Command {
 			var fScopeOp string
 			cmd := &cobra.Command{
 				Use:     "create <id>",
+				Short:   "Grant a role to a group",
+				Long:    "Assigns a role at a scope to a group; its members inherit it. Gated by principal_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own, exactly as for a direct grant. A duplicate is 409.",
+				Example: "  omniglass grant create <id> --role role --scope-kind scope_kind",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/principal-groups/%s/grants", url.PathEscape(args[0]))
+					body := map[string]any{}
+					if cmd.Flags().Changed("role") {
+						body["role"] = fRole
+					}
+					if cmd.Flags().Changed("scope-id") {
+						body["scope_id"] = fScopeId
+					}
+					if cmd.Flags().Changed("scope-kind") {
+						body["scope_kind"] = fScopeKind
+					}
+					if cmd.Flags().Changed("scope-op") {
+						body["scope_op"] = fScopeOp
+					}
+					return runAPICommand(cmd, "POST", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fRole, "role", "", "A role id (viewer, operator, admin, owner, or a custom role)")
+			_ = cmd.MarkFlagRequired("role")
+			cmd.Flags().StringVar(&fScopeId, "scope-id", "", "The scope root id; omit for the all scope")
+			cmd.Flags().StringVar(&fScopeKind, "scope-kind", "", "The scope kind; 'all' confers the whole estate")
+			_ = cmd.MarkFlagRequired("scope-kind")
+			cmd.Flags().StringVar(&fScopeOp, "scope-op", "", "How the scope root matches the tree; moot for the all scope")
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			var fRole string
+			var fScopeId string
+			var fScopeKind string
+			var fScopeOp string
+			cmd := &cobra.Command{
+				Use:     "create <id>",
 				Short:   "Grant a role to a principal",
 				Long:    "Assigns a role at a scope to a principal. Gated by principal_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own (no promoting anyone, including yourself, to a higher tier such as owner). A duplicate is 409, an unknown role or bad scope 422.",
 				Example: "  omniglass grant create <id> --role role --scope-kind scope_kind",
@@ -283,6 +320,20 @@ func generatedCommands() []*cobra.Command {
 		parent.AddCommand(func() *cobra.Command {
 			cmd := &cobra.Command{
 				Use:     "delete <id> <grantId>",
+				Short:   "Revoke a group grant",
+				Long:    "Removes one grant from a group. Gated by principal_grant:delete (all-scope).",
+				Example: "  omniglass grant delete <id> <grantId>",
+				Args:    cobra.ExactArgs(2),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/principal-groups/%s/grants/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+					return runAPICommand(cmd, "DELETE", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "delete <id> <grantId>",
 				Short:   "Revoke a grant",
 				Long:    "Removes one grant from a principal. Gated by principal_grant:delete (all-scope). The last owner grant cannot be revoked.",
 				Example: "  omniglass grant delete <id> <grantId>",
@@ -290,6 +341,20 @@ func generatedCommands() []*cobra.Command {
 				RunE: func(cmd *cobra.Command, args []string) error {
 					path := fmt.Sprintf("/api/v1/principals/%s/grants/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
 					return runAPICommand(cmd, "DELETE", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "list <id>",
+				Short:   "List a group's grants",
+				Long:    "The role x scope grants a group confers on its members. Gated by principal_group:read (all-scope).",
+				Example: "  omniglass grant list <id>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/principal-groups/%s/grants", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "GET", path, nil)
 				},
 			}
 			return cmd
@@ -506,6 +571,62 @@ func generatedCommands() []*cobra.Command {
 	}
 	{
 		parent := &cobra.Command{
+			Use:   "member",
+			Short: "Commands for the member resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			var fPrincipalId string
+			cmd := &cobra.Command{
+				Use:     "create <id>",
+				Short:   "Add a member to a group",
+				Long:    "Adds a principal to a group; its members inherit the group's grants. Gated by principal_group:update (all-scope). Idempotent.",
+				Example: "  omniglass member create <id> --principal-id principal_id",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/principal-groups/%s/members", url.PathEscape(args[0]))
+					body := map[string]any{}
+					if cmd.Flags().Changed("principal-id") {
+						body["principal_id"] = fPrincipalId
+					}
+					return runAPICommand(cmd, "POST", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fPrincipalId, "principal-id", "", "The principal to add to the group")
+			_ = cmd.MarkFlagRequired("principal-id")
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "delete <id> <principalId>",
+				Short:   "Remove a member from a group",
+				Long:    "Removes a principal from a group; it stops inheriting the group's grants. Gated by principal_group:update (all-scope).",
+				Example: "  omniglass member delete <id> <principalId>",
+				Args:    cobra.ExactArgs(2),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/principal-groups/%s/members/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+					return runAPICommand(cmd, "DELETE", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "list <id>",
+				Short:   "List a group's members",
+				Long:    "The principals in a group. Gated by principal_group:read (all-scope).",
+				Example: "  omniglass member list <id>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/principal-groups/%s/members", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		roots = append(roots, parent)
+	}
+	{
+		parent := &cobra.Command{
 			Use:   "principal",
 			Short: "Commands for the principal resource",
 		}
@@ -655,6 +776,116 @@ func generatedCommands() []*cobra.Command {
 			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "Display name; empty clears it")
 			cmd.Flags().StringVar(&fEmail, "email", "", "Email; empty clears it")
 			cmd.Flags().StringVar(&fUsername, "username", "", "Sign-in name; renaming is safe")
+			return cmd
+		}())
+		roots = append(roots, parent)
+	}
+	{
+		parent := &cobra.Command{
+			Use:   "principal-group",
+			Short: "Commands for the principal-group resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			var fDescription string
+			var fDisplayName string
+			var fName string
+			cmd := &cobra.Command{
+				Use:     "create",
+				Short:   "Create a principal group",
+				Long:    "Creates a principal group. Gated by principal_group:create (all-scope). A duplicate name is 409.",
+				Example: "  omniglass principal-group create --name name",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/principal-groups")
+					body := map[string]any{}
+					if cmd.Flags().Changed("description") {
+						body["description"] = fDescription
+					}
+					if cmd.Flags().Changed("display-name") {
+						body["display_name"] = fDisplayName
+					}
+					if cmd.Flags().Changed("name") {
+						body["name"] = fName
+					}
+					return runAPICommand(cmd, "POST", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fDescription, "description", "", "")
+			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
+			cmd.Flags().StringVar(&fName, "name", "", "Unique group name")
+			_ = cmd.MarkFlagRequired("name")
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "delete <id>",
+				Short:   "Delete a principal group",
+				Long:    "Removes a group and, by cascade, its memberships and grants. Gated by principal_group:delete (all-scope).",
+				Example: "  omniglass principal-group delete <id>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/principal-groups/%s", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "DELETE", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "get <id>",
+				Short:   "Get a principal group",
+				Long:    "One principal group by id. Gated by principal_group:read (all-scope).",
+				Example: "  omniglass principal-group get <id>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/principal-groups/%s", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "list",
+				Short:   "List principal groups",
+				Long:    "Every principal group. Gated by principal_group:read (all-scope).",
+				Example: "  omniglass principal-group list",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/principal-groups")
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			var fDescription string
+			var fDisplayName string
+			var fName string
+			cmd := &cobra.Command{
+				Use:     "update <id>",
+				Short:   "Update a principal group",
+				Long:    "Updates a group's name and presentational fields. Gated by principal_group:update (all-scope). A duplicate name is 409.",
+				Example: "  omniglass principal-group update <id>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/principal-groups/%s", url.PathEscape(args[0]))
+					body := map[string]any{}
+					if cmd.Flags().Changed("description") {
+						body["description"] = fDescription
+					}
+					if cmd.Flags().Changed("display-name") {
+						body["display_name"] = fDisplayName
+					}
+					if cmd.Flags().Changed("name") {
+						body["name"] = fName
+					}
+					return runAPICommand(cmd, "PATCH", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fDescription, "description", "", "Description; empty clears it")
+			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "Display name; empty clears it")
+			cmd.Flags().StringVar(&fName, "name", "", "Group name; renaming is safe")
 			return cmd
 		}())
 		roots = append(roots, parent)
