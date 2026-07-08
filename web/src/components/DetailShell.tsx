@@ -1,16 +1,16 @@
 import { type JSX, For, Show, createSignal } from "solid-js";
 import { ChevronRight, Plus, Trash } from "./icons";
 
-// DetailShell: the shared chrome every entity detail body wears, so a user, a
-// group, a role, and a location all read the same. Three pieces:
+// DetailShell: the shared body chrome every entity detail wears, so a user, a
+// group, a role, and a location all read the same. Two pieces:
 //   Fact          a labelled value in the facts grid.
 //   RelatedList   a list of related entities (members, groups, children): one row
 //                 idiom, an optional drill (onOpen -> a blade), an optional remove,
 //                 an optional add-picker. Group members and a user's groups both
 //                 render through this, so "related principals" looks identical
 //                 wherever it appears.
-//   DetailActions the footer action row: destructive on the LEFT, primary on the
-//                 RIGHT, matching the inventory (Locations) blade.
+// The footer action bar (Edit / Delete / secondary) is not here: it is chrome the
+// BladeStack owns, driven by what the body registers (see lib/blades).
 
 export function Fact(props: { label: string; value: JSX.Element }): JSX.Element {
   return (
@@ -92,12 +92,3 @@ export function RelatedList(props: {
   );
 }
 
-export function DetailActions(props: { destructive?: JSX.Element; primary?: JSX.Element }): JSX.Element {
-  return (
-    <div class="flex items-center gap-2 border-t border-base-300 pt-4">
-      {props.destructive}
-      <span class="flex-1" />
-      {props.primary}
-    </div>
-  );
-}

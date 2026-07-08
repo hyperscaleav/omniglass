@@ -68,6 +68,13 @@ export function useBlades(): BladeController {
 // caller's permission, so it decides whether to `bind` (and passes an optional
 // `editable` predicate). A body that never binds (a read-only blade like a role) is
 // not editable, so no pencil renders.
+// The footer action bar's non-edit slots, also registered by the body: a single
+// destructive action (Delete for a group, Disable / Enable for a user), always
+// available, and a list of secondary actions (Impersonate, copy id) shown in a
+// kebab. Both are accessors so their label / tone stay reactive (Disable <-> Enable).
+export type BladeDestructive = { label: string; tone?: "danger" | "warn"; onClick: () => void };
+export type BladeSecondary = { label: string; onClick: () => void };
+
 export type BladeEdit = {
   editable: () => boolean;
   editing: () => boolean;
@@ -75,7 +82,15 @@ export type BladeEdit = {
   begin: () => void;
   cancel: () => void;
   save: () => Promise<void>;
-  bind: (h: { editable?: () => boolean; save: () => Promise<void>; cancel?: () => void }) => void;
+  destructive: () => BladeDestructive | undefined;
+  secondary: () => BladeSecondary[];
+  bind: (h: {
+    editable?: () => boolean;
+    save?: () => Promise<void>;
+    cancel?: () => void;
+    destructive?: () => BladeDestructive | undefined;
+    secondary?: () => BladeSecondary[];
+  }) => void;
 };
 
 export function createEditSlot(): BladeEdit {
@@ -83,7 +98,9 @@ export function createEditSlot(): BladeEdit {
   const [saving, setSaving] = createSignal(false);
   const [bound, setBound] = createSignal(false);
   let handler: { save: () => Promise<void>; cancel: () => void } = { save: async () => {}, cancel: () => {} };
-  let editablePred: () => boolean = () => true;
+  let editablePred: () => boolean = () => false;
+  let destructivePred: () => BladeDestructive | undefined = () => undefined;
+  let secondaryPred: () => BladeSecondary[] = () => [];
   return {
     editable: () => bound() && editablePred(),
     editing,
@@ -102,9 +119,15 @@ export function createEditSlot(): BladeEdit {
         setSaving(false);
       }
     },
+    destructive: () => (bound() ? destructivePred() : undefined),
+    secondary: () => (bound() ? secondaryPred() : []),
     bind: (h) => {
-      editablePred = h.editable ?? (() => true);
-      handler = { save: h.save, cancel: h.cancel ?? (() => {}) };
+      // A body that supplies a saver is editable (unless it gates with `editable`);
+      // one that only registers a destructive / secondary action is not.
+      editablePred = h.editable ?? (() => !!h.save);
+      handler = { save: h.save ?? (async () => {}), cancel: h.cancel ?? (() => {}) };
+      destructivePred = h.destructive ?? (() => undefined);
+      secondaryPred = h.secondary ?? (() => []);
       setBound(true);
     },
   };

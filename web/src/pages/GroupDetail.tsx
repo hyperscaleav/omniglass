@@ -1,7 +1,7 @@
 import { createEffect, createMemo, createSignal, on, Show } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import GrantBuilder from "../components/GrantBuilder";
-import { Fact, RelatedList, DetailActions } from "../components/DetailShell";
+import { Fact, RelatedList } from "../components/DetailShell";
 import { useBlades, useBladeEdit } from "../lib/blades";
 import type { BladeDef } from "../lib/blades";
 import type { TreeNode } from "../lib/treeselect";
@@ -18,7 +18,6 @@ import { listSystems } from "../lib/systems";
 import { listComponents } from "../lib/components";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
-import { Trash } from "../components/icons";
 
 // GroupDetail is a group's blade body under the read -> Edit -> Save contract. Read
 // mode shows the profile, members (a drill to the member's user blade when the
@@ -92,6 +91,7 @@ export function GroupDetail(props: { id: string }) {
 
   edit.bind({
     editable: canManage,
+    destructive: () => (canDelete() ? { label: "Delete group", tone: "danger", onClick: removeGroup } : undefined),
     save: async () => {
       setErr(null);
       try {
@@ -179,10 +179,6 @@ export function GroupDetail(props: { id: string }) {
           onBind={(h) => { grantCommit = h.commit; grantCancel = h.cancel; }}
         />
       </div>
-
-      <Show when={editing() && canDelete()}>
-        <DetailActions destructive={<button class="btn btn-danger btn-sm gap-1.5" onClick={removeGroup}><Trash size={14} /> Delete group</button>} />
-      </Show>
     </div>
   );
 }

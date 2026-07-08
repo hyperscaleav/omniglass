@@ -1,6 +1,6 @@
 import { type JSX, For, Show, createEffect, onCleanup } from "solid-js";
 import { Dynamic } from "solid-js/web";
-import { ChevronLeft, Pencil, X } from "./icons";
+import { Ban, ChevronLeft, MoreHorizontal, Pencil, Trash, X } from "./icons";
 import { type BladeController, type BladeDef, BladeEditContext, createEditSlot } from "../lib/blades";
 
 // BladeStack: the Azure-style right-hand blade stack, lifted out of TreeList so
@@ -104,22 +104,6 @@ export default function BladeStack(props: {
                         </div>
                       </div>
                       <div class="flex flex-none items-center gap-1">
-                        <Show when={edit.editable()}>
-                          <Show
-                            when={edit.editing()}
-                            fallback={
-                              <button class="btn btn-quiet btn-sm btn-square text-primary" title="Edit" aria-label="Edit" onClick={() => edit.begin()}>
-                                <Pencil size={15} />
-                              </button>
-                            }
-                          >
-                            <button class="btn btn-quiet btn-sm" onClick={() => edit.cancel()} disabled={edit.saving()}>Cancel</button>
-                            <button class="btn btn-action btn-sm gap-1.5" onClick={() => void edit.save()} disabled={edit.saving()}>
-                              <Show when={edit.saving()}><span class="loading loading-spinner loading-xs" /></Show>
-                              Save
-                            </button>
-                          </Show>
-                        </Show>
                         <Show when={d().headerExtra}>
                           <Dynamic component={d().headerExtra!} id={ref.id} />
                         </Show>
@@ -131,6 +115,55 @@ export default function BladeStack(props: {
                     <div class="flex-1 overflow-auto p-5" classList={{ "pointer-events-none opacity-55": !isTop() }}>
                       <Dynamic component={d().Body} id={ref.id} />
                     </div>
+                    {/* The action bar: the entity's actions, not the blade's chrome.
+                        Destructive (Delete / Disable) sits left and is always available;
+                        secondary actions fold into a kebab; Edit / Save / Cancel is the
+                        right cluster. Rendered only when the body registers an action, so
+                        a read-only blade (a role) has no bar. */}
+                    <Show when={edit.editable() || !!edit.destructive() || edit.secondary().length > 0}>
+                      <footer class="flex flex-none items-center gap-2 border-t border-base-300 bg-base-100 px-4 py-3" classList={{ "pointer-events-none opacity-55": !isTop() }}>
+                        <Show when={edit.destructive()}>
+                          {(dst) => (
+                            <button
+                              class="btn btn-sm gap-1.5"
+                              classList={{ "btn-danger": dst().tone !== "warn", "btn-warn": dst().tone === "warn" }}
+                              onClick={() => dst().onClick()}
+                            >
+                              {dst().tone === "warn" ? <Ban size={14} /> : <Trash size={14} />}
+                              {dst().label}
+                            </button>
+                          )}
+                        </Show>
+                        <div class="ml-auto flex items-center gap-2">
+                          <Show when={!edit.editing() && edit.secondary().length > 0}>
+                            <div class="dropdown dropdown-top dropdown-end">
+                              <button type="button" tabindex={0} class="btn btn-quiet btn-sm btn-square" aria-label="More actions">
+                                <MoreHorizontal size={16} />
+                              </button>
+                              <ul tabindex={0} class="dropdown-content menu z-50 mb-1.5 w-48 rounded-box border border-base-300 bg-base-100 p-1.5 shadow-2xl">
+                                <For each={edit.secondary()}>{(s) => <li><button onClick={() => s.onClick()}>{s.label}</button></li>}</For>
+                              </ul>
+                            </div>
+                          </Show>
+                          <Show when={edit.editable()}>
+                            <Show
+                              when={edit.editing()}
+                              fallback={
+                                <button class="btn btn-quiet btn-sm gap-1.5 text-primary" aria-label="Edit" onClick={() => edit.begin()}>
+                                  <Pencil size={15} /> Edit
+                                </button>
+                              }
+                            >
+                              <button class="btn btn-quiet btn-sm" onClick={() => edit.cancel()} disabled={edit.saving()}>Cancel</button>
+                              <button class="btn btn-action btn-sm gap-1.5" onClick={() => { edit.save().catch(() => {}); }} disabled={edit.saving()}>
+                                <Show when={edit.saving()}><span class="loading loading-spinner loading-xs" /></Show>
+                                Save
+                              </button>
+                            </Show>
+                          </Show>
+                        </div>
+                      </footer>
+                    </Show>
                     {/* Clicking a covered blade returns to it: push its own ref, which
                         truncates-to-existing and folds the stack back to this depth. */}
                     <Show when={!isTop()}>

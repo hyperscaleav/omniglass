@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, fireEvent, screen } from "@solidjs/testing-library";
-import { RelatedList, DetailActions, type RelatedItem } from "./DetailShell";
+import { RelatedList, type RelatedItem } from "./DetailShell";
 
 const items: RelatedItem[] = [
   { id: "u-1", kind: "user", name: "alice", badge: "human" },
@@ -46,19 +46,5 @@ describe("RelatedList", () => {
     fireEvent.change(select, { target: { value: "u-9" } });
     fireEvent.click(screen.getByText("Add"));
     expect(onAdd).toHaveBeenCalledWith("u-9");
-  });
-});
-
-describe("DetailActions", () => {
-  it("places the destructive action before the primary (destructive-left)", () => {
-    const { container } = render(() => (
-      <DetailActions
-        destructive={<button>Delete</button>}
-        primary={<button>Edit</button>}
-      />
-    ));
-    const text = container.textContent ?? "";
-    expect(text.indexOf("Delete")).toBeLessThan(text.indexOf("Edit"));
-    expect(text.indexOf("Delete")).toBeGreaterThanOrEqual(0);
   });
 });

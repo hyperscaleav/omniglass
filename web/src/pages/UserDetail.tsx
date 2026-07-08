@@ -1,7 +1,7 @@
 import { For, Show, createEffect, createMemo, createSignal, on } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import GrantBuilder from "../components/GrantBuilder";
-import { Fact, RelatedList, DetailActions } from "../components/DetailShell";
+import { Fact, RelatedList } from "../components/DetailShell";
 import { useBlades, useBladeEdit } from "../lib/blades";
 import type { BladeDef } from "../lib/blades";
 import type { TreeNode } from "../lib/treeselect";
@@ -57,6 +57,22 @@ export function UserDetail(props: { id: string }) {
 
   edit.bind({
     editable: canUpdate,
+    // A user is disabled, never deleted (the accounts-never-deleted invariant), so
+    // the destructive action toggles active state.
+    destructive: () => {
+      const pr = p();
+      if (!pr || !canUpdate()) return undefined;
+      return { label: pr.active ? "Disable" : "Enable", tone: "warn", onClick: () => toggleActive(pr) };
+    },
+    // Impersonate is a secondary action (troubleshoot), in the kebab. Not on self.
+    secondary: () => {
+      const pr = p();
+      if (!pr || !can(me.data, "principal", "impersonate") || pr.id === me.data?.principal?.id) return [];
+      return [
+        { label: "View as", onClick: () => doImpersonate(pr, "view_as") },
+        { label: "Act as", onClick: () => doImpersonate(pr, "act_as") },
+      ];
+    },
     save: async () => {
       setActErr(null);
       try {
@@ -166,27 +182,6 @@ export function UserDetail(props: { id: string }) {
             canRevoke={can(me.data, "principal_grant", "delete")}
             onBind={(h) => { grantCommit = h.commit; grantCancel = h.cancel; }}
           />
-
-          {/* Destructive action: Disable / Enable, in the edit footer. */}
-          <Show when={editing() && canUpdate()}>
-            <DetailActions
-              destructive={
-                <button class="btn btn-sm" classList={{ "btn-warn": pr().active, "btn-ok": !pr().active }} onClick={() => toggleActive(pr())}>
-                  {pr().active ? "Disable" : "Enable"}
-                </button>
-              }
-            />
-          </Show>
-
-          {/* Impersonate is a read-mode action (troubleshoot), not part of an edit session. */}
-          <Show when={!editing() && can(me.data, "principal", "impersonate") && pr().id !== me.data?.principal?.id}>
-            <div class="flex items-center gap-2 border-t border-base-300 pt-3">
-              <span class="text-xs text-base-content/50">Impersonate to troubleshoot</span>
-              <span class="flex-1" />
-              <button class="btn btn-quiet btn-sm" onClick={() => doImpersonate(pr(), "view_as")}>View as</button>
-              <button class="btn btn-warn btn-sm" onClick={() => doImpersonate(pr(), "act_as")}>Act as</button>
-            </div>
-          </Show>
         </div>
       )}
     </Show>

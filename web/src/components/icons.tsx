@@ -81,6 +81,12 @@ export const Pencil: Component<P> = (p) => (
 export const Trash: Component<P> = (p) => (
   <Svg size={p.size}><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" /></Svg>
 );
+export const MoreHorizontal: Component<P> = (p) => (
+  <Svg size={p.size} fill><circle cx="5" cy="12" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="19" cy="12" r="1.6" /></Svg>
+);
+export const Ban: Component<P> = (p) => (
+  <Svg size={p.size}><circle cx="12" cy="12" r="9" /><path d="m5.6 5.6 12.8 12.8" /></Svg>
+);
 export const ChevronRight: Component<P> = (p) => (
   <Svg size={p.size}><path d="m9 6 6 6-6 6" /></Svg>
 );
