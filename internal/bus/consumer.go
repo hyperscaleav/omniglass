@@ -2,6 +2,7 @@ package bus
 
 import (
 	"context"
+	"log/slog"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
@@ -15,15 +16,25 @@ import (
 // publish; telemetryConsumer is the server's durable, at-least-once worker over
 // it. The durable consumer IS the ingest worklist (no separate Postgres queue in
 // this checkpoint): its handler derives, confines, writes, and acks inline.
+//
+// maxTelemetryDeliveries bounds how many times a single Event is redelivered
+// before nakOrTerm gives up on it: without a bound, a permanently-failing
+// message (a row the handler will never manage to write) would redeliver
+// forever, the mirror problem to the stream's own retention (see
+// startTelemetryConsumer).
 const (
-	telemetryStream   = "OG_TELEMETRY"
-	telemetryConsumer = "og-telemetry-worker"
+	telemetryStream        = "OG_TELEMETRY"
+	telemetryConsumer      = "og-telemetry-worker"
+	maxTelemetryDeliveries = 5
 )
 
 // startTelemetryConsumer creates (idempotently) the telemetry stream + durable
 // consumer over the full-permission internal client and begins consuming. The
-// stream persists an Event the instant a node publishes it; the consumer redelivers
-// until the handler acks, so a transient DB error never loses a datapoint.
+// stream persists an Event the instant a node publishes it, and (WorkQueuePolicy)
+// deletes it the instant it is acked, so disk stays bounded to the current
+// backlog rather than growing forever; the consumer redelivers a transient
+// failure up to maxTelemetryDeliveries (nakOrTerm), so a DB hiccup never loses a
+// datapoint but a permanently-failing one still leaves the queue.
 func (s *Server) startTelemetryConsumer() error {
 	js, err := jetstream.New(s.nc)
 	if err != nil {
@@ -32,15 +43,17 @@ func (s *Server) startTelemetryConsumer() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	stream, err := js.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
-		Name:     telemetryStream,
-		Subjects: []string{collection.TelemetryWildcard},
+		Name:      telemetryStream,
+		Subjects:  []string{collection.TelemetryWildcard},
+		Retention: jetstream.WorkQueuePolicy,
 	})
 	if err != nil {
 		return err
 	}
 	cons, err := stream.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{
-		Durable:   telemetryConsumer,
-		AckPolicy: jetstream.AckExplicitPolicy,
+		Durable:    telemetryConsumer,
+		AckPolicy:  jetstream.AckExplicitPolicy,
+		MaxDeliver: maxTelemetryDeliveries,
 	})
 	if err != nil {
 		return err
@@ -58,7 +71,8 @@ func (s *Server) startTelemetryConsumer() error {
 // datapoints, and ack. The ack discipline is deliberate: a permanent condition
 // (undecodable payload, or an orphan the confinement fence drops) is terminated /
 // acked so it is not redelivered; only a transient failure (DB, registry read) is
-// left unacked (Nak) so JetStream redelivers.
+// left for nakOrTerm, which redelivers (Nak) up to maxTelemetryDeliveries and then
+// terminates the message so it does not loop forever.
 func (s *Server) handleTelemetry(msg jetstream.Msg) {
 	ctx := context.Background()
 	// The node published only its own telemetry subject (per-node grant), so the
@@ -79,7 +93,7 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 	// placed on.
 	owner, ok, err := s.store.ResolveTaskOwner(ctx, ev.GetTaskId(), node)
 	if err != nil {
-		_ = msg.Nak() // transient DB failure: redeliver
+		s.nakOrTerm(msg) // transient DB failure: redeliver (bounded)
 		return
 	}
 	if !ok {
@@ -89,7 +103,7 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 
 	types, err := s.store.ListDatapointTypes(ctx)
 	if err != nil {
-		_ = msg.Nak()
+		s.nakOrTerm(msg) // transient registry read failure: redeliver (bounded)
 		return
 	}
 	reg := collection.NewRegistry(types)
@@ -101,7 +115,7 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 	metrics, states := deriveDatapoints(&ev, owner, reg)
 	if len(metrics) > 0 {
 		if err := s.store.InsertMetricDatapoints(ctx, metrics); err != nil {
-			_ = msg.Nak() // DB write failed: redeliver
+			s.nakOrTerm(msg) // DB write failed: redeliver (bounded)
 			return
 		}
 	}
@@ -111,16 +125,38 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 	// node restart that re-emits an unchanged verdict.
 	fresh, err := s.dedupeStates(ctx, states)
 	if err != nil {
-		_ = msg.Nak() // latest-state read failed: redeliver
+		s.nakOrTerm(msg) // latest-state read failed: redeliver (bounded)
 		return
 	}
 	if len(fresh) > 0 {
 		if err := s.store.InsertStateDatapoints(ctx, fresh); err != nil {
-			_ = msg.Nak()
+			s.nakOrTerm(msg) // DB write failed: redeliver (bounded)
 			return
 		}
 	}
 	_ = msg.Ack()
+}
+
+// nakOrTerm redelivers a telemetry message that failed for a transient reason
+// (Nak), unless it has already been delivered maxTelemetryDeliveries times (or
+// its delivery count can't be read), in which case it is Term'd: deleted from
+// the OG_TELEMETRY work queue rather than left to redeliver forever. A message
+// that only ever Nak's never leaves a work-queue-retention stream on its own, so
+// this is what actually bounds the redelivery loop; ConsumerConfig.MaxDeliver is
+// the JetStream-side backstop for the same bound.
+func (s *Server) nakOrTerm(msg jetstream.Msg) {
+	meta, err := msg.Metadata()
+	if err != nil {
+		_ = msg.Term()
+		slog.Warn("telemetry message dropped: could not read delivery metadata", "subject", msg.Subject(), "error", err)
+		return
+	}
+	if meta.NumDelivered >= maxTelemetryDeliveries {
+		_ = msg.Term()
+		slog.Warn("telemetry message dropped after repeated failures", "subject", msg.Subject(), "delivered", meta.NumDelivered)
+		return
+	}
+	_ = msg.Nak()
 }
 
 // dedupeStates drops any state event whose value equals the latest stored value
@@ -131,10 +167,12 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 // Correctness of this read-then-insert guard depends on the telemetry consumer
 // dispatching messages serially (one fully processed before the next is read),
 // which the current ConsumerConfig gives us (AckExplicit, no MaxAckPending, no
-// per-message goroutine). Adding concurrent handlers or batched in-flight acks
-// would make this racy: two identical in-flight duplicates could both read an
-// older latest and both insert. Keep dispatch serial, or move the transition
-// check into the insert (a conditional write) before parallelizing.
+// per-message goroutine); MaxDeliver bounds how many times a failed message is
+// redelivered but does not affect this serial-dispatch property. Adding
+// concurrent handlers or batched in-flight acks would make this racy: two
+// identical in-flight duplicates could both read an older latest and both
+// insert. Keep dispatch serial, or move the transition check into the insert (a
+// conditional write) before parallelizing.
 func (s *Server) dedupeStates(ctx context.Context, states []storage.StateDatapointEvent) ([]storage.StateDatapointEvent, error) {
 	if len(states) == 0 {
 		return nil, nil
