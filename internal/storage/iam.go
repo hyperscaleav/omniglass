@@ -162,7 +162,14 @@ type Principal struct {
 	Human   *HumanProfile
 	Service *ServiceProfile
 	Grants  []Grant
+	// Groups are the principal groups this principal belongs to (id + label), so the
+	// admin directory can show membership without a per-row fetch. The grants those
+	// groups confer already ride Grants (tagged with GroupID); this names them.
+	Groups []PrincipalGroupRef
 }
+
+// PrincipalGroupRef is a lightweight reference to a group a principal belongs to.
+type PrincipalGroupRef struct{ ID, Name string }
 
 // HumanProfile and ServiceProfile carry the kind-specific attributes.
 type HumanProfile struct{ Username, Email, DisplayName string }
@@ -181,6 +188,9 @@ type Grant struct {
 	// distinctly from direct. A principal's effective grants are its direct grants
 	// unioned with its groups' grants; both flatten and scope-resolve the same way.
 	GroupID *string
+	// GroupName is the source group's label (display name or name), set alongside
+	// GroupID, so a caller can name where an inherited grant comes from.
+	GroupName *string
 }
 
 // ErrBadCredentials is returned by AuthenticatePassword when the username is
@@ -878,18 +888,19 @@ func (p *PG) loadPrincipal(ctx context.Context, pr *Principal) error {
 	// both read pr.Grants, so a member inherits a group's role and scope here and
 	// nowhere else. group_id tags an inherited grant so callers can tell it apart.
 	rows, err := p.pool.Query(ctx,
-		`select id, role_id, scope_kind, scope_id, scope_op, group_id
-		   from principal_grant
-		  where principal_id = $1
-		     or group_id in (select group_id from principal_group_member where principal_id = $1)
-		  order by group_id nulls first, created_at`, pr.ID)
+		`select g.id, g.role_id, g.scope_kind, g.scope_id, g.scope_op, g.group_id, coalesce(pg.display_name, pg.name)
+		   from principal_grant g
+		   left join principal_group pg on pg.id = g.group_id
+		  where g.principal_id = $1
+		     or g.group_id in (select group_id from principal_group_member where principal_id = $1)
+		  order by g.group_id nulls first, g.created_at`, pr.ID)
 	if err != nil {
 		return fmt.Errorf("storage: load grants: %w", err)
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var g Grant
-		if err := rows.Scan(&g.ID, &g.Role, &g.ScopeKind, &g.ScopeID, &g.ScopeOp, &g.GroupID); err != nil {
+		if err := rows.Scan(&g.ID, &g.Role, &g.ScopeKind, &g.ScopeID, &g.ScopeOp, &g.GroupID, &g.GroupName); err != nil {
 			return fmt.Errorf("storage: scan grant: %w", err)
 		}
 		pr.Grants = append(pr.Grants, g)
@@ -897,7 +908,25 @@ func (p *PG) loadPrincipal(ctx context.Context, pr *Principal) error {
 	if err := rows.Err(); err != nil {
 		return fmt.Errorf("storage: grants: %w", err)
 	}
-	return nil
+
+	// The principal's group memberships (id + label), so the admin directory can
+	// show where a principal's inherited access comes from.
+	grows, err := p.pool.Query(ctx,
+		`select g.id, coalesce(g.display_name, g.name)
+		   from principal_group_member m join principal_group g on g.id = m.group_id
+		  where m.principal_id = $1 order by g.name`, pr.ID)
+	if err != nil {
+		return fmt.Errorf("storage: load groups: %w", err)
+	}
+	defer grows.Close()
+	for grows.Next() {
+		var ref PrincipalGroupRef
+		if err := grows.Scan(&ref.ID, &ref.Name); err != nil {
+			return fmt.Errorf("storage: scan group ref: %w", err)
+		}
+		pr.Groups = append(pr.Groups, ref)
+	}
+	return grows.Err()
 }
 
 // ListRoles returns every role, for building the in-process role index.

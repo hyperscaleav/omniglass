@@ -5,7 +5,10 @@ import type { FilterKey } from "./predicate";
 // the admin directory page stays declarative and unit-testable against a mocked
 // client. Shapes follow the OpenAPI (see api/principals.go). Credentials are never
 // returned, so there is no secret here to leak.
-export type Grant = { id?: string; role: string; scope_kind: string; scope_id?: string; scope_op?: string };
+// group_id / group_name are set on a grant inherited from a group the principal
+// belongs to (absent for a direct grant). An inherited grant is read-only on the
+// principal: it is revoked by editing the group, not the member.
+export type Grant = { id?: string; role: string; scope_kind: string; scope_id?: string; scope_op?: string; group_id?: string; group_name?: string };
 
 export type Principal = {
   id: string;
@@ -14,6 +17,9 @@ export type Principal = {
   human?: { username: string; email?: string; display_name?: string };
   service?: { label: string };
   grants: Grant[];
+  // The principal groups this principal belongs to; the grants they confer ride
+  // grants (tagged group_id), this names them for the directory and clickthrough.
+  groups?: { id: string; name: string }[];
 };
 
 export const PRINCIPALS_KEY = ["principals"] as const;

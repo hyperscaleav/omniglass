@@ -89,6 +89,23 @@ least to most powerful (viewer, operator, deploy, admin, owner). It is a teachin
 seeded roles, not a static table. Custom-role creation and editing are coming; today the built-in roles are
 read-only.
 
+## Groups
+
+**Settings > Groups** (with `principal_group:read`) is the admin surface for **user groups**: a group holds
+`role @ scope` grants, and every member **inherits** them, so you assign access to a team once instead of per
+user. Pick a row to open a group's detail: its **members** (add any principal, or remove one) and its **grants**,
+built with the same grant builder the user detail uses. A grant added to the group takes effect for every member
+immediately, and is bounded by the same rule as a direct grant (you cannot grant a role above your own tier).
+**New group** creates one (name, display name, description); deleting a group drops the memberships and the
+inherited grants, but members keep their own direct grants.
+
+On a **user's** detail, grants split into two: the ones you granted the user **directly** (editable in the grant
+builder) and the ones **inherited from a group** (shown read-only, tagged `from <group>`), so it is always clear
+where a user's access comes from. To change an inherited grant, edit the group, not the user.
+
+From the CLI the surface is `omniglass principal-group list` / `get` / `create` / `update` / `delete`, plus its
+member and grant subcommands.
+
 ## Audit
 
 **Settings > Audit** (with `audit:read`, so **administrators and owners** only) is the read-only audit trail:

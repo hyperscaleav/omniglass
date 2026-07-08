@@ -20,8 +20,10 @@ assignment** (`POST` / `DELETE /principals/{id}/grants`) with the **owner-invari
 that the last `owner @ all` grant cannot be revoked, and **soft disable** (`POST /principals/{id}:disable`
 / `:enable`, which refuses authentication for a disabled principal and cannot disable the last active
 owner; all-scope gated), and the per-action `visible_set` resolver enforced in the
-Storage Gateway across locations, systems, and components. Still `Design`: OIDC / SAML auth,
-`principal_group`s, the node / NATS path, the permission cache, service-account and custom-role
+Storage Gateway across locations, systems, and components, and **principal groups**
+(`GET` / `POST` / `PATCH` / `DELETE /principal-groups`, membership, and group grants) whose members
+**inherit** the group's grants through the grant-loader union, gated by `principal_group` (the console
+Groups surface is the next slice). Still `Design`: OIDC / SAML auth, the node / NATS path, the permission cache, service-account and custom-role
 management, and the tenant-policy lever (a principal is disabled, never hard-deleted, since the audit
 trail references it). The per-slice
 breakdown is on [implementation status](/architecture/status/).

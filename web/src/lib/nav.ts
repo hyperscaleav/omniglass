@@ -68,7 +68,7 @@ export const navItems: NavItem[] = [
       { label: "Secrets", path: "/secrets", hint: "Shared device and platform credentials, with rotation and policy." },
       { label: "Users", path: "/users", live: true, resource: "principal", hint: "Users and service accounts: status, grants, and tokens." },
       { label: "Roles", path: "/roles", live: true, resource: "role", hint: "The built-in roles: what each permission bundle grants, and how they inherit." },
-      { label: "Groups", path: "/groups", hint: "User groups: membership and grants." },
+      { label: "Groups", path: "/groups", live: true, resource: "principal_group", hint: "User groups: membership and the grants members inherit." },
       { label: "Audit", path: "/audit", live: true, perm: "audit:read:admin", hint: "The audit trail of every privileged action and sign-in." },
     ],
   },

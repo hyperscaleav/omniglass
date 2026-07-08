@@ -35,6 +35,11 @@ type Group struct {
 	Description string
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
+	// MemberCount and GrantCount are populated by the list/get reads (0 from create
+	// and update, which return the fresh row before any membership or grants), so a
+	// list surface can show a group's size and reach without a per-row fetch.
+	MemberCount int
+	GrantCount  int
 }
 
 // GroupSpec is the input to create a group.
@@ -61,6 +66,20 @@ type GroupMember struct {
 }
 
 const groupCols = `id, name, coalesce(display_name, ''), coalesce(description, ''), created_at, updated_at`
+
+// groupColsWithCounts adds the member and grant counts as correlated subqueries,
+// aliasing the table `g`, for the list and get reads that display a group's size.
+const groupColsWithCounts = `g.id, g.name, coalesce(g.display_name, ''), coalesce(g.description, ''), g.created_at, g.updated_at,
+	(select count(*) from principal_group_member m where m.group_id = g.id),
+	(select count(*) from principal_grant pg where pg.group_id = g.id)`
+
+func scanGroupFull(row interface{ Scan(...any) error }) (*Group, error) {
+	var g Group
+	if err := row.Scan(&g.ID, &g.Name, &g.DisplayName, &g.Description, &g.CreatedAt, &g.UpdatedAt, &g.MemberCount, &g.GrantCount); err != nil {
+		return nil, err
+	}
+	return &g, nil
+}
 
 func scanGroup(row interface{ Scan(...any) error }) (*Group, error) {
 	var g Group
@@ -102,14 +121,14 @@ func (p *PG) ListGroups(ctx context.Context, read scope.Set) ([]Group, error) {
 	if !read.All {
 		return nil, ErrPrincipalForbidden
 	}
-	rows, err := p.pool.Query(ctx, `select `+groupCols+` from principal_group order by name`)
+	rows, err := p.pool.Query(ctx, `select `+groupColsWithCounts+` from principal_group g order by g.name`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list groups: %w", err)
 	}
 	defer rows.Close()
 	out := []Group{}
 	for rows.Next() {
-		g, err := scanGroup(rows)
+		g, err := scanGroupFull(rows)
 		if err != nil {
 			return nil, fmt.Errorf("storage: scan group: %w", err)
 		}
@@ -124,7 +143,7 @@ func (p *PG) GetGroup(ctx context.Context, id string, read scope.Set) (*Group, e
 	if !read.All {
 		return nil, ErrPrincipalForbidden
 	}
-	g, err := scanGroup(p.pool.QueryRow(ctx, `select `+groupCols+` from principal_group where id = $1`, id))
+	g, err := scanGroupFull(p.pool.QueryRow(ctx, `select `+groupColsWithCounts+` from principal_group g where g.id = $1`, id))
 	if err != nil {
 		return nil, notFoundOr(err, ErrGroupNotFound)
 	}

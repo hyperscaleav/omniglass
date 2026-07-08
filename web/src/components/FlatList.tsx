@@ -1,4 +1,4 @@
-import { type Accessor, type JSX, For, Show, createMemo, createSignal } from "solid-js";
+import { type Accessor, type JSX, For, Show, createEffect, createMemo, createSignal } from "solid-js";
 import ListShell from "./ListShell";
 import Drawer from "./Drawer";
 import { ChevronDown, ChevronRight, Plus } from "./icons";
@@ -44,6 +44,12 @@ export type FlatConfig<T> = {
   // A trailing row under the table (counts, load-older); receives the shown/total
   // counts and whether a filter is active.
   footer?: (info: { shown: number; total: number; filtering: boolean }) => JSX.Element;
+  // Open a row's detail by id (a stable key), so another surface can deep-link to
+  // it (e.g. clicking a group on a user's detail opens that group here). `rowId`
+  // supplies the key; when `openId` changes to a new value whose row is loaded, its
+  // detail Drawer opens once (closing it does not re-open, until openId changes).
+  rowId?: (r: T) => string;
+  openId?: () => string | undefined;
 };
 
 type SortState = { key: string; dir: 1 | -1 } | null;
@@ -53,6 +59,19 @@ export default function FlatList<T>(props: { config: FlatConfig<T> }) {
   const [sort, setSort] = createSignal<SortState>(null);
   const [selected, setSelected] = createSignal<T | null>(null);
   const [createOpen, setCreateOpen] = createSignal(false);
+
+  // Deep-link: when openId names a loaded row, open its detail once. Guarded by the
+  // last-opened id so closing the Drawer does not immediately re-open it.
+  const [openedId, setOpenedId] = createSignal<string | undefined>();
+  createEffect(() => {
+    const id = cfg.openId?.();
+    if (!id || id === openedId() || !cfg.rowId) return;
+    const row = cfg.rows().find((r) => cfg.rowId!(r) === id);
+    if (row) {
+      setSelected(() => row);
+      setOpenedId(id);
+    }
+  });
 
   const colByKey = (key: string) => cfg.columns.find((c) => c.key === key);
   const toggleSort = (key: string) => {
