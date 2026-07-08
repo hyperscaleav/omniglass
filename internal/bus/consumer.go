@@ -127,6 +127,14 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 // for its series (owner component + key + instance), so a repeated identical
 // verdict does not add a consecutive-duplicate row. A LatestState read error is
 // returned so the caller can leave the message unacked for redelivery.
+//
+// Correctness of this read-then-insert guard depends on the telemetry consumer
+// dispatching messages serially (one fully processed before the next is read),
+// which the current ConsumerConfig gives us (AckExplicit, no MaxAckPending, no
+// per-message goroutine). Adding concurrent handlers or batched in-flight acks
+// would make this racy: two identical in-flight duplicates could both read an
+// older latest and both insert. Keep dispatch serial, or move the transition
+// check into the insert (a conditional write) before parallelizing.
 func (s *Server) dedupeStates(ctx context.Context, states []storage.StateDatapointEvent) ([]storage.StateDatapointEvent, error) {
 	if len(states) == 0 {
 		return nil, nil
