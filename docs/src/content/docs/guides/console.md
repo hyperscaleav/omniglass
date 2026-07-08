@@ -50,7 +50,8 @@ location-scoped admin cannot list users.
 - With `principal:create`, **New user** creates a human with a username and an optional initial
   password. The new user can sign in right away and change that password themselves; a fresh
   account holds no grants (so it can sign in but do nothing) until you assign a role.
-- With `principal:update`, **Edit** changes a user's display name, email, and **username**.
+- With `principal:update`, the header **pencil** opens edit mode, where you change a user's display name,
+  email, and **username**, adjust its grants, or Disable it, and **Save** commits the lot.
   Renaming is safe: their credentials and grants follow the account (they key on an internal id,
   not the username), so a renamed user keeps their password and access. Only an administrator can
   change a username; the user cannot change their own.
@@ -186,6 +187,13 @@ user you open a group's blade over it, and from a group you open a member's user
 trace where access comes from without leaving the page. Each page roots one entity and drills one direction (a
 user's groups, a group's members), so the stack stays shallow and the reverse relation on the far blade is a
 read-only reference.
+
+A detail blade opens **read-only**, and the same workflow edits every entity: the **blue pencil** in the blade
+header (top right, beside Close) opens **edit mode**, where the profile becomes inputs and the members and grants
+go live, and the header swaps the pencil for **Cancel** and **Save**. Changes stage locally so you can check your
+work first; **Save** commits them together, **Cancel** discards them. The **destructive** action lives in the
+edit footer: a red **Delete** for a group (a user is disabled, never deleted, so a user's footer is **Disable /
+Enable** instead). Edit appears only if your grants allow it.
 
 ### Create, edit, delete
 

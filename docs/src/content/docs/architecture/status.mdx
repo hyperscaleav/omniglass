@@ -450,6 +450,17 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   onto the same `FlatList` + read-only blade. Behaviour-preserving for the inventory pages (the Locations blade
   is identical); proven by the web suite (the `BladeStack`, `DetailShell`, and both-way identity drill tests)
   and tsc.
+- **Console: the read -> Edit -> Save contract on the identity blades.** Every detail blade opens read-only; a
+  `createEditSlot` per blade holds the edit state, `BladeStack` renders the header chrome (the blue pencil, then
+  Save / Cancel), and the body reads `useBladeEdit().editing()` to switch its sections read-only vs live.
+  Editability comes from the body's `bind` (only the body knows the caller's permission), so a read-only blade
+  (a role) shows no pencil. In edit mode the profile becomes inputs, member add / remove stages locally, and the
+  `GrantBuilder` gains a `bind` so its diff commits as part of the one blade Save; the destructive action sits in
+  the edit footer (Delete for a group, Disable / Enable for a user, per the accounts-never-deleted invariant).
+  Save commits the staged session together and Cancel reverts. A single consolidated audit event and a config
+  restore point (one backend action per Save) remain deferred to a batched endpoint; the user deactivate / purge
+  lifecycle is its own slice. Proven by the web suite (the edit-slot, `BladeStack` edit-chrome, and Group / User
+  read-vs-edit tests) and tsc.
 - **Identity: the Groups console + inherited-vs-direct grants, UI.** A **Groups** page (`Settings > Groups`,
   gated `principal_group:read`) as a config over the shared `FlatList`: list and create, and a row Drawer with
   member add/remove and the grant builder (reused, wired to the group grant endpoints, so a group's members
