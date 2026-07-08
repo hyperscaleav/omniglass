@@ -15,6 +15,7 @@ import { LOCATIONS_KEY, listLocations } from "../lib/locations";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { ChevronRight, Maximize } from "../components/icons";
+import ReachabilityPanel from "../components/ReachabilityPanel";
 
 // Components: the device inventory, the first page built on the generic ListView.
 // Components form a tree (parent_id) and each is bound to a primary system and a
@@ -148,6 +149,7 @@ export default function Components() {
             </div>
           </div>
         </Show>
+        <ReachabilityPanel name={n.raw.name} />
         <div class="flex items-center gap-2 border-t border-base-300 pt-4">
           <Show when={can(me.data, "component", "delete")}>
             <button class="btn btn-danger btn-sm gap-1.5" onClick={() => { ctx.closeBlades(); del(n); }}>Delete</button>
