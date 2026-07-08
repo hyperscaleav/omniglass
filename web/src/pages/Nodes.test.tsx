@@ -58,6 +58,15 @@ describe("Nodes page", () => {
     expect(screen.getByText("New node")).toBeTruthy();
   });
 
+  it("hides the Re-enroll action in the detail drawer without node:enroll", async () => {
+    mount(reader);
+    fireEvent.click(screen.getByText("edge-hq"));
+    // Wait for the detail drawer to render (a fact always present) before
+    // asserting the gated action is absent, not just not-yet-rendered.
+    await screen.findByText("Enrolled");
+    expect(screen.queryByText(/Re-?enroll/i)).toBeNull();
+  });
+
   it("reveals the enrollment token once, copies it to the clipboard, and clears it on close", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });

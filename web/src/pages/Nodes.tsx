@@ -87,7 +87,7 @@ export default function Nodes() {
           }),
           create: {
             label: "New node",
-            can: () => can(me.data, "node", "create"),
+            can: () => can(me.data, "node", "create") && can(me.data, "node", "enroll"),
             body: (ctx) => <CreateNodeForm close={ctx.close} onEnrolled={(out) => { setEnrollResult(out); ctx.close(); }} />,
           },
         }}
