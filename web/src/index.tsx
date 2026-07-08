@@ -13,6 +13,7 @@ import Locations from "./pages/Locations";
 import Systems from "./pages/Systems";
 import Components from "./pages/Components";
 import Profile from "./pages/Profile";
+import Nodes from "./pages/Nodes";
 import Users from "./pages/Users";
 import Roles from "./pages/Roles";
 import Audit from "./pages/Audit";
@@ -37,7 +38,7 @@ const ProtectedShell: ParentComponent = (props) => (
 
 // Stubbed sections: backends not built yet. The design draws them as stubs too.
 const STUBS = [
-  "/dashboards", "/alarms", "/interfaces", "/nodes", "/tasks",
+  "/dashboards", "/alarms", "/interfaces", "/tasks",
   "/templates", "/types", "/tags", "/rules", "/explore", "/learn",
   "/config", "/secrets", "/groups",
 ];
@@ -57,6 +58,7 @@ render(
           <Route path="/systems/:name" component={Systems} />
           <Route path="/components" component={Components} />
           <Route path="/components/:name" component={Components} />
+          <Route path="/nodes" component={Nodes} />
           <Route path="/profile" component={Profile} />
           <Route path="/users" component={Users} />
           <Route path="/roles" component={Roles} />
