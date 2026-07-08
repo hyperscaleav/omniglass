@@ -81,6 +81,68 @@ omniglass auth update-profile --display-name "Ops Lead"
 omniglass auth change-password --current-password 's3cret-pw' --new-password 'brand-new-pw'
 ```
 
+## Collection commands
+
+The [collection](/architecture/collection/) surface regenerates into four command groups:
+`node`, `interface`, `task`, and `reachability`. They follow the same derivation as every
+other resource (`POST /interfaces` is `interface create`, `GET /tasks/{id}` is `task get
+<id>`), so nothing here is special-cased. All examples require the matching permission on
+the running server.
+
+Register and enroll an edge node (the day-one handshake):
+
+```sh
+omniglass node list
+omniglass node create --name edge-hq --description "HQ network closet"   # needs node:create (all-scope)
+omniglass node get edge-hq
+```
+
+The node-facing `claim` exchange is public (the enrollment token is the authentication), so
+a node presents its name and token to receive its NATS credential:
+
+```sh
+omniglass node claim --name edge-hq --token ogp_...
+```
+
+:::note[Thin cut: `node enroll`]
+`omniglass node enroll` regenerates as a command, but the `{name}` path parameter of the
+`:enroll` custom method is not yet bound (it takes no positional argument), so it cannot
+target a specific node from the CLI today. Mint an enrollment token from the console (the
+Nodes page) or against the API until that binding lands. `node claim`, which carries its
+name in the body, works as shown.
+:::
+
+Author a reachability check (an interface plus a poll task over it):
+
+```sh
+# An interface owned by a component, placed on a node, with its probe target in params.
+omniglass interface create \
+  --name disp-1-tcp --type tcp --component disp-1 --node edge-hq \
+  --params '{"target":"10.0.0.1:22"}'                          # needs interface:create
+
+omniglass interface list
+omniglass interface get disp-1-tcp
+omniglass interface update disp-1-tcp --node edge-hq --params '{"target":"10.0.0.2:22"}'
+omniglass interface delete disp-1-tcp                          # refused (409) while a task references it
+
+# A poll task over the interface, put on the node's worklist.
+omniglass task create --interface disp-1-tcp --mode poll        # needs task:create; --enabled defaults to true
+omniglass task list
+omniglass task update <id> --display-name "HQ display ping"     # id is content-addressed; interface/mode are fixed
+omniglass task delete <id>
+```
+
+The two built interface types are `icmp` and `tcp`. An interface `update` changes only its
+node placement and params; a task `update` changes only its display name, enabled toggle,
+node, and spec (the interface and mode form its content-addressed id and are fixed).
+
+Read a component's composed reachability (the verdict, the probe-layer signals, and the
+recent transitions the availability strip draws):
+
+```sh
+omniglass reachability list disp-1                              # needs component:read
+```
+
 ## Generated versus hand-written
 
 - **Generated** (`internal/cli/api_gen.go`, do not edit): one command per API operation.
