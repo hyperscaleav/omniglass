@@ -3,9 +3,11 @@
 -- The collection tier: a node (the edge runtime), the interface_type and
 -- datapoint_type registries, an interface (a placement-bound connection), a
 -- task (a node's content-addressed unit of work), and metric_datapoint (the
--- observed-metric sink). DDL is idempotent. Enums are text + CHECK. Owners are
--- the estate address (name), not the uuid. reject-not-project is enforced in the
--- app, so metric_datapoint.key has no FK to datapoint_type.
+-- observed-metric sink). DDL is idempotent. Enums are text + CHECK. A datapoint
+-- owner is addressed by its estate name, not a uuid; the interface and task each
+-- carry their own surrogate uuid key (an interface name is unique only within its
+-- component). reject-not-project is enforced in the app, so metric_datapoint.key
+-- has no FK to datapoint_type.
 
 -- The edge runtime is a first-class principal of kind='node' (alongside human
 -- and service), so this is its 1:1 per-kind detail table keyed by principal_id.

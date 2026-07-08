@@ -250,14 +250,18 @@ func seedReachability(ctx context.Context, gw storage.Gateway, actorID string) e
 	}
 
 	// The datapoints. Owner = the component, instance = the interface (the datapoint
-	// instance dimension). The story: a brief outage that has just recovered, so the
-	// verdict is a fresh "up" and the availability strip shows a down->up blip. The box
-	// answered ping throughout (icmp up); only the control port flapped (tcp closed
-	// then open again). Only canonical datapoint_type names are used.
+	// instance dimension). The story: a healthy interface that took a brief outage and
+	// has just recovered, so the strip reads mostly up with a thin down blip and the
+	// verdict is a fresh "up". The up baseline before the outage is what makes the
+	// availability window read healthy (~95% up) instead of anchoring at the outage.
+	// The box answered ping throughout (icmp up); only the control port flapped (tcp
+	// closed then open again). Only canonical datapoint_type names are used.
 	now := time.Now().UTC()
-	outage := now.Add(-5 * time.Minute)
+	baseline := now.Add(-2 * time.Hour)
+	outage := now.Add(-6 * time.Minute)
 	recovered := now.Add(-30 * time.Second)
 	if err := gw.InsertStateDatapoints(ctx, []storage.StateDatapointEvent{
+		{OwnerKind: "component", OwnerID: reachComponent, Key: "interface.reachable", Instance: reachInterface, Value: "up", Source: "reachability", TS: baseline},
 		{OwnerKind: "component", OwnerID: reachComponent, Key: "interface.reachable", Instance: reachInterface, Value: "down", Source: "reachability", TS: outage},
 		{OwnerKind: "component", OwnerID: reachComponent, Key: "interface.reachable", Instance: reachInterface, Value: "up", Source: "reachability", TS: recovered},
 	}); err != nil {

@@ -225,7 +225,7 @@ func (p *PG) CreateInterface(ctx context.Context, actorID string, spec Interface
 	if err != nil {
 		return nil, mapInterfaceWriteErr(err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "create", "interface", it.Name, nil, it); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "create", "interface", it.ID, nil, it); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -259,7 +259,7 @@ func (p *PG) UpdateInterface(ctx context.Context, actorID, id string, patch Inte
 	if err != nil {
 		return nil, mapInterfaceWriteErr(err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "update", "interface", after.Name, before, after); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "update", "interface", after.ID, before, after); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -286,7 +286,7 @@ func (p *PG) DeleteInterface(ctx context.Context, actorID, id string, read, acti
 	if _, err := tx.Exec(ctx, `delete from interface where id = $1`, before.ID); err != nil {
 		return mapInterfaceWriteErr(err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "delete", "interface", before.Name, before, nil); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "delete", "interface", before.ID, before, nil); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {

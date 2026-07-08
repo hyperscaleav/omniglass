@@ -57,9 +57,10 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 		pinger = collection.NewICMPPinger()
 	}
 
-	// verdicts remembers the last reachability verdict per interface across ticks,
-	// so the node emits interface.reachable only on a flip or first observation
-	// (transition-only). It lives for the whole run, not per tick.
+	// verdicts remembers the last reachability verdict per task (keyed by the
+	// node-unique task id, since interface names collide across components) across
+	// ticks, so the node emits interface.reachable only on a flip or first
+	// observation (transition-only). It lives for the whole run, not per tick.
 	verdicts := map[string]string{}
 
 	wl, err := pullWorklist(nc, cfg.Name)

@@ -222,9 +222,11 @@ func TestRunIdempotent(t *testing.T) {
 	}
 
 	// The datapoints populate the reachability read the panel composes: a fresh "up"
-	// verdict, a down->up transition pair for the availability strip, and both probe
-	// layers green. The transition count proves the datapoints did not double on the
-	// second Run (they are append-only, so the sentinel must have skipped them).
+	// verdict, an up->down->up transition sequence (a healthy baseline, a brief
+	// outage, a recovery) that renders as a mostly-up availability strip with a thin
+	// down blip, and both probe layers green. The transition count proves the
+	// datapoints did not double on the second Run (they are append-only, so the
+	// sentinel must have skipped them).
 	verdict, err := gw.LatestState(ctx, "hq-boardroom-display", "interface.reachable", "boardroom-tcp")
 	if err != nil {
 		t.Fatalf("latest verdict: %v", err)
@@ -236,8 +238,8 @@ func TestRunIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("state transitions: %v", err)
 	}
-	if len(transitions) != 2 {
-		t.Errorf("verdict transitions = %d, want 2 (down->up), idempotent across two Runs", len(transitions))
+	if len(transitions) != 3 {
+		t.Errorf("verdict transitions = %d, want 3 (up->down->up), idempotent across two Runs", len(transitions))
 	}
 	tcpOpen, err := gw.LatestMetricInstance(ctx, "hq-boardroom-display", "tcp.open", "boardroom-tcp")
 	if err != nil {

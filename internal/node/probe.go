@@ -43,10 +43,15 @@ func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.Wor
 		}
 		// Compute and, on a transition only, append the interface reachability
 		// verdict as a state datapoint. The node remembers the last verdict per
-		// interface and emits interface.reachable only on a flip or first
-		// observation, so the state series is transition-only, not one row per tick.
-		// The ingest-side latest-value guard is the net for a node restart.
-		dps = appendVerdict(dps, task.InterfaceName, verdicts)
+		// task and emits interface.reachable only on a flip or first observation,
+		// so the state series is transition-only, not one row per tick. The key is
+		// the task id, not the interface name: interface names are unique only per
+		// component, so a node routinely probes two components' interfaces that
+		// share a friendly name (the default is the protocol), and a name-keyed map
+		// would suppress the second one's verdict. The task id is node-unique (a
+		// content hash over the interface). The ingest-side latest-value guard is
+		// the net for a node restart.
+		dps = appendVerdict(dps, task.ID, verdicts)
 		ev := buildEvent(task.ID, node, dps)
 		b, err := proto.Marshal(ev)
 		if err != nil {
@@ -61,11 +66,13 @@ func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.Wor
 
 // appendVerdict computes the interface reachability verdict from a probe's
 // datapoints and appends it (a state Datapoint carrying up/down) only when it
-// differs from the last verdict remembered for that interface, or is the first
-// observation. It records the emitted verdict in verdicts so the next tick can
-// tell a flip from a repeat. When the probe produced no reachability metric
-// (nothing to judge) or the verdict is unchanged, dps is returned untouched.
-func appendVerdict(dps []collection.Datapoint, interfaceName string, verdicts map[string]string) []collection.Datapoint {
+// differs from the last verdict remembered for that task, or is the first
+// observation. It records the emitted verdict in verdicts (keyed by the
+// node-unique task id, since interface names collide across components) so the
+// next tick can tell a flip from a repeat. When the probe produced no
+// reachability metric (nothing to judge) or the verdict is unchanged, dps is
+// returned untouched.
+func appendVerdict(dps []collection.Datapoint, taskID string, verdicts map[string]string) []collection.Datapoint {
 	up, ok := collection.InterfaceVerdict(dps)
 	if !ok {
 		return dps
@@ -74,10 +81,10 @@ func appendVerdict(dps []collection.Datapoint, interfaceName string, verdicts ma
 	if up {
 		verdict = collection.VerdictUp
 	}
-	if prev, seen := verdicts[interfaceName]; seen && prev == verdict {
+	if prev, seen := verdicts[taskID]; seen && prev == verdict {
 		return dps // no transition: transition-only, emit nothing
 	}
-	verdicts[interfaceName] = verdict
+	verdicts[taskID] = verdict
 	return append(dps, collection.Datapoint{
 		Name:   collection.DatapointInterfaceReachable,
 		Text:   verdict,
