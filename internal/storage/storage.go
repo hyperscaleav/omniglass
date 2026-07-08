@@ -150,6 +150,15 @@ type Gateway interface {
 	InsertMetricDatapoints(ctx context.Context, evs []MetricDatapointEvent) error
 	LatestMetric(ctx context.Context, componentName, key string) (*MetricDatapoint, error)
 
+	// The observed-state sink: the mirror of the metric sink for categorical
+	// verdicts (interface.reachable). reject-not-project and the transition-only
+	// guard are applied by the caller before the write. LatestState backs the
+	// ingest-side transition guard; StateTransitions is the ordered flip series
+	// the availability strip reads.
+	InsertStateDatapoints(ctx context.Context, evs []StateDatapointEvent) error
+	LatestState(ctx context.Context, componentName, key, instance string) (*StateDatapoint, error)
+	StateTransitions(ctx context.Context, componentName, key, instance string, since time.Time) ([]StateDatapoint, error)
+
 	// The node tier: the edge runtime's enrollment lifecycle and worklist. A node
 	// is estate-wide (all-scope create/enroll/read, like a principal). The claim,
 	// authenticate, heartbeat, and worklist paths are the node's own lane (gated by

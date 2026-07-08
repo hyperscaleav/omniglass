@@ -144,6 +144,15 @@ func (UnimplementedGateway) InsertMetricDatapoints(context.Context, []MetricData
 func (UnimplementedGateway) LatestMetric(context.Context, string, string) (*MetricDatapoint, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) InsertStateDatapoints(context.Context, []StateDatapointEvent) error {
+	return nil
+}
+func (UnimplementedGateway) LatestState(context.Context, string, string, string) (*StateDatapoint, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) StateTransitions(context.Context, string, string, string, time.Time) ([]StateDatapoint, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) CreateNode(context.Context, string, NodeSpec, scope.Set) (*Node, error) {
 	return nil, nil
 }
