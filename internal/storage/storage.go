@@ -148,6 +148,28 @@ type Gateway interface {
 	UpdateComponent(ctx context.Context, actorID, name string, patch ComponentPatch, read, action scope.Set) (*Component, error)
 	DeleteComponent(ctx context.Context, actorID, name string, read, action scope.Set) error
 
+	// The interface tier: operator CRUD over placement-bound connections. An
+	// interface is not a scope-tree entity of its own; it hangs off a component
+	// (interface.component), so every method's scope cascades THROUGH that component
+	// (a component-tier scope.Set, from applicableKinds). A component-less
+	// (server-hosted) interface is reachable only under an all scope. The read/action
+	// split drives the non-disclosing 404 versus 403.
+	ListInterfaces(ctx context.Context, read scope.Set) ([]Interface, error)
+	GetInterface(ctx context.Context, name string, read scope.Set) (*Interface, error)
+	CreateInterface(ctx context.Context, actorID string, spec InterfaceSpec, create scope.Set) (*Interface, error)
+	UpdateInterface(ctx context.Context, actorID, name string, patch InterfacePatch, read, action scope.Set) (*Interface, error)
+	DeleteInterface(ctx context.Context, actorID, name string, read, action scope.Set) error
+
+	// The task tier: operator CRUD over content-addressed collection work. A task
+	// hangs off an interface (task.interface_name), so its scope cascades through
+	// the interface's owning component, the same component-tier cascade as the
+	// interface itself.
+	ListTasks(ctx context.Context, read scope.Set) ([]Task, error)
+	GetTask(ctx context.Context, id string, read scope.Set) (*Task, error)
+	CreateTask(ctx context.Context, actorID string, spec TaskSpec, create scope.Set) (*Task, error)
+	UpdateTask(ctx context.Context, actorID, id string, patch TaskPatch, read, action scope.Set) (*Task, error)
+	DeleteTask(ctx context.Context, actorID, id string, read, action scope.Set) error
+
 	// The collection registries: estate-wide reference data (no scope.Set),
 	// seeded official and operator-extensible at org/template scope later.
 	UpsertDatapointType(ctx context.Context, dt DatapointType) error
