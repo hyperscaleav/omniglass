@@ -24,7 +24,7 @@ describe("tasks data layer", () => {
 
   it("lists tasks and unwraps the envelope", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ tasks: [{ id: "t-1", interface: "disp-1-tcp", mode: "poll", enabled: true }] }),
+      jsonResponse({ tasks: [{ id: "t-1", interface_id: "if-tcp", mode: "poll", enabled: true }] }),
     );
     const tasks = await listTasks();
     expect(tasks).toHaveLength(1);
@@ -39,27 +39,27 @@ describe("tasks data layer", () => {
   });
 
   it("gets a task by id", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ id: "t-1", interface: "disp-1-tcp", mode: "poll", enabled: true }));
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ id: "t-1", interface_id: "if-tcp", mode: "poll", enabled: true }));
     const t = await getTask("t-1");
     expect(t.id).toBe("t-1");
     const req = fetchMock.mock.calls[0][0] as Request;
     expect(req.url).toContain("/api/v1/tasks/t-1");
   });
 
-  it("posts the create body (interface, mode, enabled) and returns the created task", async () => {
+  it("posts the create body (interface_id, mode, enabled) and returns the created task", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ id: "t-9", interface: "disp-1-tcp", mode: "poll", enabled: true }, 201),
+      jsonResponse({ id: "t-9", interface_id: "if-tcp", mode: "poll", enabled: true }, 201),
     );
-    const created = await createTask({ interface: "disp-1-tcp", mode: "poll", enabled: true });
+    const created = await createTask({ interface_id: "if-tcp", mode: "poll", enabled: true });
     expect(created.id).toBe("t-9");
     const req = fetchMock.mock.calls[0][0] as Request;
     expect(req.method).toBe("POST");
     expect(req.url).toContain("/api/v1/tasks");
-    expect(await req.json()).toMatchObject({ interface: "disp-1-tcp", mode: "poll", enabled: true });
+    expect(await req.json()).toMatchObject({ interface_id: "if-tcp", mode: "poll", enabled: true });
   });
 
   it("patches only the mutable fields (enabled, display_name, node) on update", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ id: "t-1", interface: "disp-1-tcp", mode: "poll", enabled: false }));
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ id: "t-1", interface_id: "if-tcp", mode: "poll", enabled: false }));
     await updateTask("t-1", { enabled: false, display_name: "HQ ping" });
     const req = fetchMock.mock.calls[0][0] as Request;
     expect(req.method).toBe("PATCH");
@@ -77,32 +77,36 @@ describe("tasks data layer", () => {
 
   it("throws on an error status (e.g. a duplicate content-addressed task, 409)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ detail: "task already exists" }, 409));
-    await expect(createTask({ interface: "disp-1-tcp", mode: "poll" })).rejects.toBeTruthy();
+    await expect(createTask({ interface_id: "if-tcp", mode: "poll" })).rejects.toBeTruthy();
   });
 });
 
 // taskLabel renders the display name when set, else the content-addressed id.
 describe("taskLabel", () => {
   it("prefers the display name", () => {
-    expect(taskLabel({ id: "t-1", interface: "i", mode: "poll", enabled: true, display_name: "HQ ping" })).toBe("HQ ping");
+    expect(taskLabel({ id: "t-1", interface_id: "if-i", mode: "poll", enabled: true, display_name: "HQ ping" })).toBe("HQ ping");
   });
   it("falls back to the id (the address)", () => {
-    expect(taskLabel({ id: "t-1", interface: "i", mode: "poll", enabled: true })).toBe("t-1");
+    expect(taskLabel({ id: "t-1", interface_id: "if-i", mode: "poll", enabled: true })).toBe("t-1");
   });
 });
 
-// taskFilterKeys are the console's shared faceted search: interface (exact), mode
-// (exact), and enabled (exact, over the boolean rendered as true/false). Matching is
-// client-side via lib/predicate.
+// taskFilterKeys are the console's shared faceted search: interface (exact, resolved
+// from interface_id to the friendly name via nameOf), mode (exact), and enabled
+// (exact, over the boolean rendered as true/false). Matching is client-side via
+// lib/predicate.
 const tasks: Task[] = [
-  { id: "t-1", interface: "disp-1-tcp", mode: "poll", enabled: true },
-  { id: "t-2", interface: "disp-1-icmp", mode: "poll", enabled: false },
-  { id: "t-3", interface: "sess-1", mode: "listen", enabled: true },
+  { id: "t-1", interface_id: "if-tcp", mode: "poll", enabled: true },
+  { id: "t-2", interface_id: "if-icmp", mode: "poll", enabled: false },
+  { id: "t-3", interface_id: "if-sess", mode: "listen", enabled: true },
 ];
-const matched = (chips: Chip[]): string[] => tasks.filter(buildPredicate(taskFilterKeys, chips)).map((t) => t.id);
+const IFACE_NAME: Record<string, string> = { "if-tcp": "disp-1-tcp", "if-icmp": "disp-1-icmp", "if-sess": "sess-1" };
+const nameOf = (id: string): string => IFACE_NAME[id] ?? id;
+const keys = taskFilterKeys(nameOf);
+const matched = (chips: Chip[]): string[] => tasks.filter(buildPredicate(keys, chips)).map((t) => t.id);
 
 describe("taskFilterKeys", () => {
-  it("filters by interface (exact)", () => {
+  it("filters by interface (exact, over the resolved friendly name)", () => {
     expect(matched([{ key: "interface", op: "eq", values: ["disp-1-tcp"] }])).toEqual(["t-1"]);
   });
   it("filters by mode (exact)", () => {
@@ -112,8 +116,9 @@ describe("taskFilterKeys", () => {
     expect(matched([{ key: "enabled", op: "eq", values: ["true"] }])).toEqual(["t-1", "t-3"]);
     expect(matched([{ key: "enabled", op: "eq", values: ["false"] }])).toEqual(["t-2"]);
   });
-  it("offers the enabled value catalog", () => {
-    const byKey = Object.fromEntries(taskFilterKeys.map((k) => [k.key, k]));
+  it("offers the interface (resolved name) and enabled value catalogs", () => {
+    const byKey = Object.fromEntries(keys.map((k) => [k.key, k]));
+    expect(byKey.interface.values!(tasks)).toEqual(["disp-1-icmp", "disp-1-tcp", "sess-1"]);
     expect(byKey.enabled.values!(tasks)).toEqual(["false", "true"]);
   });
 });

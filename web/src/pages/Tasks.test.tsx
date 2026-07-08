@@ -10,9 +10,9 @@ import { ME_KEY, type Me } from "../lib/auth";
 // the side Drawer detail (facts + inline edit + delete), and a create Drawer. Data is
 // seeded into the query cache so no server is needed.
 const seed: Task[] = [
-  { id: "t-tcp", interface: "disp-1-tcp", mode: "poll", enabled: true, display_name: "HQ display TCP" },
-  { id: "t-icmp", interface: "disp-1-icmp", mode: "poll", enabled: false },
-  { id: "t-sess", interface: "sess-1", mode: "listen", enabled: true },
+  { id: "t-tcp", interface_id: "if-tcp", mode: "poll", enabled: true, display_name: "HQ display TCP" },
+  { id: "t-icmp", interface_id: "if-icmp", mode: "poll", enabled: false },
+  { id: "t-sess", interface_id: "if-sess", mode: "listen", enabled: true },
 ];
 
 const owner: Me = { principal: { id: "p", kind: "human" }, permissions: [">"], grants: [] };
@@ -22,8 +22,9 @@ function mount(me: Me) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...TASKS_KEY], seed);
   qc.setQueryData([...INTERFACES_KEY], [
-    { name: "disp-1-tcp", type: "tcp", component: "disp-1" },
-    { name: "disp-1-icmp", type: "icmp", component: "disp-1" },
+    { id: "if-tcp", name: "disp-1-tcp", type: "tcp", component: "disp-1" },
+    { id: "if-icmp", name: "disp-1-icmp", type: "icmp", component: "disp-1" },
+    { id: "if-sess", name: "sess-1", type: "tcp", component: "disp-1" },
   ]);
   qc.setQueryData([...ME_KEY], me);
   return render(() => (
@@ -69,13 +70,16 @@ describe("Tasks page", () => {
     fireEvent.click(screen.getByText("New task"));
     const ifaceSelect = (await screen.findByLabelText("Interface")) as HTMLSelectElement;
     const ifaceOptions = Array.from(ifaceSelect.options).map((o) => o.value).filter(Boolean);
-    expect(ifaceOptions).toEqual(["disp-1-tcp", "disp-1-icmp"]);
+    expect(ifaceOptions).toEqual(["if-tcp", "if-icmp", "if-sess"]);
+    // The options display the friendly interface name, not the surrogate id.
+    const ifaceLabels = Array.from(ifaceSelect.options).map((o) => o.textContent).filter((t) => t && !t.startsWith("Select"));
+    expect(ifaceLabels).toEqual(["disp-1-tcp (tcp)", "disp-1-icmp (icmp)", "sess-1 (tcp)"]);
     const modeSelect = screen.getByLabelText("Mode") as HTMLSelectElement;
     expect(Array.from(modeSelect.options).map((o) => o.value)).toEqual(["poll", "listen"]);
   });
 
   it("posts the create body (interface + mode + enabled) and lands on the new row", async () => {
-    const created: Task = { id: "t-new", interface: "disp-1-icmp", mode: "listen", enabled: false };
+    const created: Task = { id: "t-new", interface_id: "if-icmp", mode: "listen", enabled: false };
     const calls: { url: string; method: string; body: unknown }[] = [];
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
@@ -90,7 +94,7 @@ describe("Tasks page", () => {
     mount(owner);
     fireEvent.click(screen.getByText("New task"));
     const ifaceSelect = (await screen.findByLabelText("Interface")) as HTMLSelectElement;
-    fireEvent.change(ifaceSelect, { target: { value: "disp-1-icmp" } });
+    fireEvent.change(ifaceSelect, { target: { value: "if-icmp" } });
     fireEvent.change(screen.getByLabelText("Mode"), { target: { value: "listen" } });
     fireEvent.click(screen.getByLabelText("On the worklist (enabled)"));
     fireEvent.click(screen.getByText("Create task"));
@@ -100,7 +104,7 @@ describe("Tasks page", () => {
       expect(posts.length).toBe(1);
     });
     const post = calls.find((c) => c.method === "POST" && c.url.includes("/tasks"))!;
-    expect(post.body).toMatchObject({ interface: "disp-1-icmp", mode: "listen", enabled: false });
+    expect(post.body).toMatchObject({ interface_id: "if-icmp", mode: "listen", enabled: false });
     await waitFor(() => expect(screen.queryByText("Create task")).toBeNull());
   });
 });

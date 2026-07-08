@@ -11,9 +11,9 @@ import { ME_KEY, type Me } from "../lib/auth";
 // row opening the side Drawer detail (facts + inline edit + delete), and a create
 // Drawer. Data is seeded into the query cache so no server is needed.
 const seed: Interface[] = [
-  { name: "disp-1-tcp", type: "tcp", component: "disp-1", node: "edge-hq", params: { target: "10.0.0.1:22" } },
-  { name: "disp-1-icmp", type: "icmp", component: "disp-1", params: { target: "10.0.0.1" } },
-  { name: "srv-tcp", type: "tcp", params: { target: "10.0.0.9:80" } },
+  { id: "if-1", name: "disp-1-tcp", type: "tcp", component: "disp-1", node: "edge-hq", params: { target: "10.0.0.1:22" } },
+  { id: "if-2", name: "disp-1-icmp", type: "icmp", component: "disp-1", params: { target: "10.0.0.1" } },
+  { id: "if-3", name: "srv-tcp", type: "tcp", params: { target: "10.0.0.9:80" } },
 ];
 
 const owner: Me = { principal: { id: "p", kind: "human" }, permissions: [">"], grants: [] };
@@ -73,7 +73,7 @@ describe("Interfaces page", () => {
   });
 
   it("posts the create body (type + component + node + params.target) and lands on the new row", async () => {
-    const created: Interface = { name: "disp-1-tcp2", type: "tcp", component: "disp-1", node: "edge-east", params: { target: "10.0.0.2:80" } };
+    const created: Interface = { id: "if-9", name: "disp-1-tcp2", type: "tcp", component: "disp-1", node: "edge-east", params: { target: "10.0.0.2:80" } };
     const calls: { url: string; method: string; body: unknown }[] = [];
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;

@@ -37,9 +37,9 @@ function seam(taskStatus = 201) {
     const method = typeof input === "string" ? "GET" : req.method;
     const body = method === "POST" ? await req.clone().json() : null;
     calls.push({ url, method, body });
-    if (url.includes("/interfaces") && method === "POST") return json({ name: "disp-1-tcp", type: "tcp", component: "disp-1" }, 201);
+    if (url.includes("/interfaces") && method === "POST") return json({ id: "if-9", name: "tcp", type: "tcp", component: "disp-1" }, 201);
     if (url.includes("/tasks") && method === "POST") {
-      return taskStatus === 201 ? json({ id: "t-9", interface: "disp-1-tcp", mode: "poll", enabled: true }, 201) : json({ detail: "the interface already has a task." }, taskStatus);
+      return taskStatus === 201 ? json({ id: "t-9", interface_id: "if-9", mode: "poll", enabled: true }, 201) : json({ detail: "the interface already has a task." }, taskStatus);
     }
     // Any refetch after invalidation resolves to an empty envelope.
     return json({ interfaces: [], tasks: [], nodes: [] });
@@ -75,10 +75,11 @@ describe("AddReachabilityCheck", () => {
     const posts = calls.filter((c) => c.method === "POST");
     const ifacePost = posts.find((c) => c.url.includes("/interfaces"))!;
     const taskPost = posts.find((c) => c.url.includes("/tasks"))!;
-    // The interface: type = protocol, owner = THIS component, target in params.
-    expect(ifacePost.body).toMatchObject({ name: "disp-1-tcp", type: "tcp", component: "disp-1", params: { target: "10.0.0.1:5000" } });
-    // The task: over the created interface, poll mode, enabled.
-    expect(taskPost.body).toMatchObject({ interface: "disp-1-tcp", mode: "poll", enabled: true });
+    // The interface: friendly name defaults to the protocol, owner = THIS component,
+    // target in params.
+    expect(ifacePost.body).toMatchObject({ name: "tcp", type: "tcp", component: "disp-1", params: { target: "10.0.0.1:5000" } });
+    // The task: over the created interface (by its returned id), poll mode, enabled.
+    expect(taskPost.body).toMatchObject({ interface_id: "if-9", mode: "poll", enabled: true });
     // The interface create ran before the task create (it names the task's interface).
     expect(posts.indexOf(ifacePost)).toBeLessThan(posts.indexOf(taskPost));
   });

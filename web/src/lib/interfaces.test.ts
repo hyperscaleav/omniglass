@@ -24,7 +24,7 @@ describe("interfaces data layer", () => {
 
   it("lists interfaces and unwraps the envelope", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ interfaces: [{ name: "disp-1-tcp", type: "tcp", component: "disp-1" }] }),
+      jsonResponse({ interfaces: [{ id: "if-1", name: "disp-1-tcp", type: "tcp", component: "disp-1" }] }),
     );
     const ifaces = await listInterfaces();
     expect(ifaces).toHaveLength(1);
@@ -38,53 +38,53 @@ describe("interfaces data layer", () => {
     expect(await listInterfaces()).toEqual([]);
   });
 
-  it("gets an interface by name", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ name: "disp-1-tcp", type: "tcp" }));
-    const i = await getInterface("disp-1-tcp");
+  it("gets an interface by id", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ id: "if-1", name: "disp-1-tcp", type: "tcp" }));
+    const i = await getInterface("if-1");
     expect(i.name).toBe("disp-1-tcp");
     const req = fetchMock.mock.calls[0][0] as Request;
-    expect(req.url).toContain("/api/v1/interfaces/disp-1-tcp");
+    expect(req.url).toContain("/api/v1/interfaces/if-1");
   });
 
-  it("posts the create body (type, component, node, params.target) and returns the created interface", async () => {
+  it("posts the create body (name, type, component, node, params.target) and returns the created interface", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ name: "disp-1-tcp", type: "tcp", component: "disp-1" }, 201),
+      jsonResponse({ id: "if-1", name: "disp-1-tcp", type: "tcp", component: "disp-1" }, 201),
     );
     const created = await createInterface({ name: "disp-1-tcp", type: "tcp", component: "disp-1", node: "edge-hq", params: { target: "10.0.0.1:22" } });
-    expect(created.name).toBe("disp-1-tcp");
+    expect(created.id).toBe("if-1");
     const req = fetchMock.mock.calls[0][0] as Request;
     expect(req.method).toBe("POST");
     expect(req.url).toContain("/api/v1/interfaces");
     expect(await req.json()).toMatchObject({ name: "disp-1-tcp", type: "tcp", component: "disp-1", node: "edge-hq", params: { target: "10.0.0.1:22" } });
   });
 
-  it("patches only the mutable fields (node, params) on update", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ name: "disp-1-tcp", type: "tcp" }));
-    await updateInterface("disp-1-tcp", { node: "edge-east", params: { target: "9.9.9.9" } });
+  it("patches only the mutable fields (node, params) on update, addressed by id", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ id: "if-1", name: "disp-1-tcp", type: "tcp" }));
+    await updateInterface("if-1", { node: "edge-east", params: { target: "9.9.9.9" } });
     const req = fetchMock.mock.calls[0][0] as Request;
     expect(req.method).toBe("PATCH");
-    expect(req.url).toContain("/api/v1/interfaces/disp-1-tcp");
+    expect(req.url).toContain("/api/v1/interfaces/if-1");
     expect(await req.json()).toEqual({ node: "edge-east", params: { target: "9.9.9.9" } });
   });
 
-  it("deletes an interface by name", async () => {
+  it("deletes an interface by id", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
-    await deleteInterface("disp-1-tcp");
+    await deleteInterface("if-1");
     const req = fetchMock.mock.calls[0][0] as Request;
     expect(req.method).toBe("DELETE");
-    expect(req.url).toContain("/api/v1/interfaces/disp-1-tcp");
+    expect(req.url).toContain("/api/v1/interfaces/if-1");
   });
 
   it("throws on an error status (e.g. a delete refused while a task references it)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ detail: "interface still referenced" }, 409));
-    await expect(deleteInterface("disp-1-tcp")).rejects.toBeTruthy();
+    await expect(deleteInterface("if-1")).rejects.toBeTruthy();
   });
 });
 
 // interfaceTarget renders the probed endpoint from the interface params, mirroring
 // the read side: target, with :port appended only when a separate port is present.
 describe("interfaceTarget", () => {
-  const iface = (params?: Interface["params"]): Interface => ({ name: "i", type: "tcp", params });
+  const iface = (params?: Interface["params"]): Interface => ({ id: "if-i", name: "i", type: "tcp", params });
   it("returns the bare target when there is no separate port", () => {
     expect(interfaceTarget(iface({ target: "10.0.0.1" }))).toBe("10.0.0.1");
   });
@@ -103,9 +103,9 @@ describe("interfaceTarget", () => {
 // interfaceFilterKeys are the console's shared faceted search: name (substring), type
 // (exact), and component (exact). Matching is client-side via lib/predicate.
 const rows: Interface[] = [
-  { name: "disp-1-tcp", type: "tcp", component: "disp-1", params: { target: "10.0.0.1:22" } },
-  { name: "disp-1-icmp", type: "icmp", component: "disp-1", params: { target: "10.0.0.1" } },
-  { name: "srv-tcp", type: "tcp", params: { target: "10.0.0.9:80" } },
+  { id: "if-1", name: "disp-1-tcp", type: "tcp", component: "disp-1", params: { target: "10.0.0.1:22" } },
+  { id: "if-2", name: "disp-1-icmp", type: "icmp", component: "disp-1", params: { target: "10.0.0.1" } },
+  { id: "if-3", name: "srv-tcp", type: "tcp", params: { target: "10.0.0.9:80" } },
 ];
 const matched = (chips: Chip[]): string[] => rows.filter(buildPredicate(interfaceFilterKeys, chips)).map((r) => r.name);
 

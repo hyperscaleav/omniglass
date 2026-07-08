@@ -37,7 +37,7 @@ const columns: FlatColumn<Interface>[] = [
   },
   {
     key: "type", label: "Type", width: "110px", sortVal: (i) => i.type,
-    cell: (i) => <span class="badge badge-soft badge-neutral badge-sm">{i.type}</span>,
+    cell: (i) => <span class="badge badge-ghost badge-sm">{i.type}</span>,
   },
   {
     key: "component", label: "Component", width: "180px", sortVal: (i) => (i.component ?? "").toLowerCase(),
@@ -68,7 +68,7 @@ export default function Interfaces() {
         filterPlaceholder: "filter by name, type, component",
         columns,
         empty: "No interfaces yet.",
-        detail: (i) => ({ title: <span class="font-data">{i.name}</span>, body: <InterfaceDetail name={i.name} /> }),
+        detail: (i) => ({ title: <span class="font-data">{i.name}</span>, body: <InterfaceDetail id={i.id} /> }),
         create: {
           label: "New interface",
           can: () => can(me.data, "interface", "create"),
@@ -89,14 +89,14 @@ function Fact(props: { label: string; value: unknown }) {
 }
 
 // InterfaceDetail is the row's side-Drawer body. It re-derives the interface from
-// the live query by name (not the row snapshot), so an edit reflects after the
+// the live query by id (not the row snapshot), so an edit reflects after the
 // invalidate. The read view carries the facts, an inline edit (mutable fields only),
 // and a delete; both actions are gated by the matching permission.
-function InterfaceDetail(props: { name: string }) {
+function InterfaceDetail(props: { id: string }) {
   const qc = useQueryClient();
   const me = useMe();
   const interfaces = useQuery(() => ({ queryKey: INTERFACES_KEY, queryFn: () => listInterfaces() }));
-  const i = createMemo(() => interfaces.data?.find((x) => x.name === props.name) ?? null);
+  const i = createMemo(() => interfaces.data?.find((x) => x.id === props.id) ?? null);
   const [editing, setEditing] = createSignal(false);
   const [err, setErr] = createSignal<string | null>(null);
   const [busy, setBusy] = createSignal(false);
@@ -106,7 +106,7 @@ function InterfaceDetail(props: { name: string }) {
     setErr(null);
     setBusy(true);
     try {
-      await deleteInterface(iface.name);
+      await deleteInterface(iface.id);
       await qc.invalidateQueries({ queryKey: INTERFACES_KEY });
     } catch (e) {
       setErr(describeError(e));
@@ -121,7 +121,7 @@ function InterfaceDetail(props: { name: string }) {
         <div class="flex flex-col gap-3">
           <div class="flex items-center gap-3">
             <span class="text-base-content/40"><Sliders size={22} /></span>
-            <span class="badge badge-soft badge-neutral badge-sm">{iface().type}</span>
+            <span class="badge badge-ghost badge-sm">{iface().type}</span>
           </div>
 
           <Show when={err()}>
@@ -189,7 +189,7 @@ function EditInterfaceForm(props: { iface: Interface; onDone: () => void }) {
       const patch: { node?: string; params?: { target: string } } = {};
       if (node() && node() !== (props.iface.node ?? "")) patch.node = node();
       if (target() && target() !== interfaceTarget(props.iface)) patch.params = { target: target().trim() };
-      await updateInterface(props.iface.name, patch);
+      await updateInterface(props.iface.id, patch);
       await qc.invalidateQueries({ queryKey: INTERFACES_KEY });
       props.onDone();
     } catch (er) {

@@ -14,9 +14,16 @@ import {
   deleteTask,
   taskFilterKeys,
 } from "../lib/tasks";
-import { INTERFACES_KEY, listInterfaces } from "../lib/interfaces";
+import { INTERFACES_KEY, listInterfaces, type Interface } from "../lib/interfaces";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
+
+// nameOf resolves a task's interface_id to its friendly interface name from the
+// loaded interfaces list; a task carries the surrogate id, not the name. Falls back
+// to the id when the interface is not (yet) loaded, so a row is never blank.
+function nameFor(interfaces: Interface[] | undefined, id: string): string {
+  return interfaces?.find((i) => i.id === id)?.name ?? id;
+}
 
 // Tasks: the collection-work inventory, a config over the shared FlatList. A row per
 // task with its interface, mode (poll/listen), enabled toggle, and node placement; a
@@ -29,40 +36,44 @@ function EnabledPill(props: { on: boolean }) {
   return <span class={`badge badge-soft badge-sm ${props.on ? "badge-success" : "badge-neutral"}`}>{props.on ? "enabled" : "disabled"}</span>;
 }
 
-const columns: FlatColumn<Task>[] = [
-  {
-    key: "name", label: "Task", sortVal: (t) => taskLabel(t).toLowerCase(),
-    cell: (t) => (
-      <div class="flex items-center gap-2.5">
-        <span class="text-base-content/40"><Clock size={16} /></span>
-        <div class="min-w-0 leading-tight">
-          <div class="truncate text-sm font-medium">{taskLabel(t)}</div>
-          <Show when={t.display_name}><div class="truncate font-data text-[11px] text-base-content/40">{t.id}</div></Show>
+function taskColumns(nameOf: (id: string) => string): FlatColumn<Task>[] {
+  return [
+    {
+      key: "name", label: "Task", sortVal: (t) => taskLabel(t).toLowerCase(),
+      cell: (t) => (
+        <div class="flex items-center gap-2.5">
+          <span class="text-base-content/40"><Clock size={16} /></span>
+          <div class="min-w-0 leading-tight">
+            <div class="truncate text-sm font-medium">{taskLabel(t)}</div>
+            <Show when={t.display_name}><div class="truncate font-data text-[11px] text-base-content/40">{t.id}</div></Show>
+          </div>
         </div>
-      </div>
-    ),
-  },
-  {
-    key: "interface", label: "Interface", width: "180px", sortVal: (t) => t.interface.toLowerCase(),
-    cell: (t) => <span class="font-data text-sm text-base-content/70">{t.interface}</span>,
-  },
-  {
-    key: "mode", label: "Mode", width: "110px", sortVal: (t) => t.mode,
-    cell: (t) => <span class="badge badge-soft badge-neutral badge-sm">{t.mode}</span>,
-  },
-  {
-    key: "enabled", label: "Enabled", width: "120px", sortVal: (t) => String(t.enabled),
-    cell: (t) => <EnabledPill on={t.enabled} />,
-  },
-  {
-    key: "node", label: "Node", width: "150px", sortVal: (t) => (t.node ?? "").toLowerCase(),
-    cell: (t) => (t.node ? <span class="font-data text-sm text-base-content/70">{t.node}</span> : <span class="text-base-content/30">-</span>),
-  },
-];
+      ),
+    },
+    {
+      key: "interface", label: "Interface", width: "180px", sortVal: (t) => nameOf(t.interface_id).toLowerCase(),
+      cell: (t) => <span class="font-data text-sm text-base-content/70">{nameOf(t.interface_id)}</span>,
+    },
+    {
+      key: "mode", label: "Mode", width: "110px", sortVal: (t) => t.mode,
+      cell: (t) => <span class="badge badge-ghost badge-sm">{t.mode}</span>,
+    },
+    {
+      key: "enabled", label: "Enabled", width: "120px", sortVal: (t) => String(t.enabled),
+      cell: (t) => <EnabledPill on={t.enabled} />,
+    },
+    {
+      key: "node", label: "Node", width: "150px", sortVal: (t) => (t.node ?? "").toLowerCase(),
+      cell: (t) => (t.node ? <span class="font-data text-sm text-base-content/70">{t.node}</span> : <span class="text-base-content/30">-</span>),
+    },
+  ];
+}
 
 export default function Tasks() {
   const me = useMe();
   const tasks = useQuery(() => ({ queryKey: TASKS_KEY, queryFn: () => listTasks() }));
+  const interfaces = useQuery(() => ({ queryKey: INTERFACES_KEY, queryFn: () => listInterfaces() }));
+  const nameOf = (id: string) => nameFor(interfaces.data, id);
 
   return (
     <FlatList<Task>
@@ -71,9 +82,9 @@ export default function Tasks() {
         rows: () => tasks.data ?? [],
         loading: () => tasks.isLoading,
         error: () => tasks.error,
-        filterKeys: taskFilterKeys,
+        filterKeys: taskFilterKeys(nameOf),
         filterPlaceholder: "filter by interface, mode, enabled",
-        columns,
+        columns: taskColumns(nameOf),
         empty: "No tasks yet.",
         detail: (t) => ({ title: <span class="font-data">{taskLabel(t)}</span>, body: <TaskDetail id={t.id} /> }),
         create: {
@@ -103,6 +114,7 @@ function TaskDetail(props: { id: string }) {
   const qc = useQueryClient();
   const me = useMe();
   const tasks = useQuery(() => ({ queryKey: TASKS_KEY, queryFn: () => listTasks() }));
+  const interfaces = useQuery(() => ({ queryKey: INTERFACES_KEY, queryFn: () => listInterfaces() }));
   const t = createMemo(() => tasks.data?.find((x) => x.id === props.id) ?? null);
   const [editing, setEditing] = createSignal(false);
   const [err, setErr] = createSignal<string | null>(null);
@@ -128,7 +140,7 @@ function TaskDetail(props: { id: string }) {
         <div class="flex flex-col gap-3">
           <div class="flex items-center gap-3">
             <span class="text-base-content/40"><Clock size={22} /></span>
-            <span class="badge badge-soft badge-neutral badge-sm">{task().mode}</span>
+            <span class="badge badge-ghost badge-sm">{task().mode}</span>
             <EnabledPill on={task().enabled} />
           </div>
 
@@ -141,7 +153,7 @@ function TaskDetail(props: { id: string }) {
             fallback={
               <>
                 <div class="grid grid-cols-2 gap-3 text-sm">
-                  <Fact label="Interface" value={<span class="font-data">{task().interface}</span>} />
+                  <Fact label="Interface" value={<span class="font-data">{nameFor(interfaces.data, task().interface_id)}</span>} />
                   <Fact label="Mode" value={task().mode} />
                   <Fact label="Node" value={task().node ? <span class="font-data">{task().node}</span> : <span class="text-base-content/40">unassigned</span>} />
                   <Fact label="ID" value={<span class="font-data text-xs text-base-content/50">{task().id}</span>} />
@@ -239,7 +251,7 @@ function CreateTaskForm(props: { close: () => void; onCreated: (t: Task) => void
     setErr(null);
     try {
       const created = await createTask({
-        interface: iface(),
+        interface_id: iface(),
         mode: mode(),
         enabled: enabled(),
         display_name: displayName().trim() || undefined,
@@ -263,7 +275,7 @@ function CreateTaskForm(props: { close: () => void; onCreated: (t: Task) => void
         <label class="eyebrow mb-1.5 block" for="new-task-interface">Interface</label>
         <select id="new-task-interface" class="select select-bordered w-full" value={iface()} onChange={(e) => setIface(e.currentTarget.value)} disabled={busy()} required>
           <option value="" disabled>Select an interface</option>
-          <For each={interfaces.data}>{(i) => <option value={i.name}>{i.name} ({i.type})</option>}</For>
+          <For each={interfaces.data}>{(i) => <option value={i.id}>{i.name} ({i.type})</option>}</For>
         </select>
       </div>
       <div>

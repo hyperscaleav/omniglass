@@ -4,7 +4,7 @@ import Drawer from "./Drawer";
 import { Plus } from "./icons";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
-import { createInterface, INTERFACES_KEY } from "../lib/interfaces";
+import { createInterface, INTERFACES_KEY, type Interface } from "../lib/interfaces";
 import { createTask, TASKS_KEY } from "../lib/tasks";
 import { NODES_KEY, listNodes } from "../lib/nodes";
 import { REACHABILITY_KEY } from "../lib/reachability";
@@ -43,36 +43,45 @@ function AddCheckForm(props: { component: string; close: () => void }) {
   const qc = useQueryClient();
   const nodes = useQuery(() => ({ queryKey: NODES_KEY, queryFn: () => listNodes() }));
   const [protocol, setProtocol] = createSignal<string>(PROTOCOLS[0]);
+  const [name, setName] = createSignal<string>(PROTOCOLS[0]);
+  // Whether the operator has typed a name; until then the name field tracks the
+  // protocol default, so switching protocol re-defaults the (untouched) name.
+  const [nameTouched, setNameTouched] = createSignal(false);
   const [target, setTarget] = createSignal("");
   const [node, setNode] = createSignal("");
   const [busy, setBusy] = createSignal(false);
   const [err, setErr] = createSignal<string | null>(null);
   // The interface, once created, so a retry after a failed task create skips
   // straight to the task (re-creating the interface would be a duplicate-name 409).
-  const [createdIface, setCreatedIface] = createSignal<string | null>(null);
+  const [createdIface, setCreatedIface] = createSignal<Interface | null>(null);
+
+  function onProtocol(p: string) {
+    setProtocol(p);
+    if (!nameTouched()) setName(p); // keep the default name in step with the protocol
+  }
 
   async function submit(e: SubmitEvent) {
     e.preventDefault();
     setBusy(true);
     setErr(null);
     try {
-      let ifaceName = createdIface();
-      if (!ifaceName) {
-        // Step 1: the interface. type = protocol, owner = THIS component, target in params.
-        const created = await createInterface({
-          name: `${props.component}-${protocol()}`,
+      let iface = createdIface();
+      if (!iface) {
+        // Step 1: the interface. type = protocol, owner = THIS component, friendly
+        // name (defaulted to the protocol, unique on this component), target in params.
+        iface = await createInterface({
+          name: (name().trim() || protocol()),
           type: protocol(),
           component: props.component,
           node: node() || undefined,
           params: { target: target().trim() },
         });
-        ifaceName = created.name;
-        setCreatedIface(ifaceName);
+        setCreatedIface(iface);
         // Surface the new interface right away, even if the task step then fails.
         await qc.invalidateQueries({ queryKey: INTERFACES_KEY });
       }
-      // Step 2: the poll task over the interface, on the worklist.
-      await createTask({ interface: ifaceName, mode: "poll", enabled: true });
+      // Step 2: the poll task over the interface (by its surrogate id), on the worklist.
+      await createTask({ interface_id: iface.id, mode: "poll", enabled: true });
       await Promise.all([
         qc.invalidateQueries({ queryKey: REACHABILITY_KEY(props.component) }),
         qc.invalidateQueries({ queryKey: INTERFACES_KEY }),
@@ -82,8 +91,9 @@ function AddCheckForm(props: { component: string; close: () => void }) {
     } catch (er) {
       // Two-step honesty: distinguish a failure after the interface already exists
       // from a clean first-step failure. Do not swallow the partial state.
-      if (createdIface()) {
-        setErr(`The interface "${createdIface()}" was created, but the task could not be scheduled: ${describeError(er)} Retry to add the task.`);
+      const created = createdIface();
+      if (created) {
+        setErr(`The interface "${created.name}" was created, but the task could not be scheduled: ${describeError(er)} Retry to add the task.`);
       } else {
         setErr(describeError(er));
       }
@@ -102,9 +112,14 @@ function AddCheckForm(props: { component: string; close: () => void }) {
       </Show>
       <div>
         <label class="eyebrow mb-1.5 block" for="add-check-protocol">Protocol</label>
-        <select id="add-check-protocol" class="select select-bordered w-full" value={protocol()} onChange={(e) => setProtocol(e.currentTarget.value)} disabled={busy() || !!createdIface()}>
+        <select id="add-check-protocol" class="select select-bordered w-full" value={protocol()} onChange={(e) => onProtocol(e.currentTarget.value)} disabled={busy() || !!createdIface()}>
           <For each={PROTOCOLS}>{(p) => <option value={p}>{p}</option>}</For>
         </select>
+      </div>
+      <div>
+        <label class="eyebrow mb-1.5 block" for="add-check-name">Name</label>
+        <input id="add-check-name" autocomplete="off" class="input input-bordered w-full font-data" value={name()} onInput={(e) => { setNameTouched(true); setName(e.currentTarget.value); }} disabled={busy() || !!createdIface()} required />
+        <p class="mt-1 text-[11px] text-base-content/40">A friendly name, unique on this component (defaults to the protocol).</p>
       </div>
       <div>
         <label class="eyebrow mb-1.5 block" for="add-check-target">Target</label>

@@ -10,7 +10,7 @@ import type { FilterKey } from "./predicate";
 export type Task = {
   id: string;
   display_name?: string;
-  interface: string;
+  interface_id: string;
   mode: string;
   enabled: boolean;
   node?: string;
@@ -43,7 +43,7 @@ export async function getTask(id: string): Promise<Task> {
 }
 
 export type CreateTask = {
-  interface: string;
+  interface_id: string;
   mode: TaskMode;
   enabled?: boolean;
   display_name?: string;
@@ -74,9 +74,14 @@ export async function deleteTask(id: string): Promise<void> {
 
 // The faceted-search fields the shared FilterBar/ListShell drives: interface (exact),
 // mode (exact, over poll/listen), and enabled (exact, over the boolean rendered as
-// true/false). Matching is client-side over the loaded rows via lib/predicate.
-export const taskFilterKeys: FilterKey<Task>[] = [
-  { key: "interface", type: "string", hint: "exact", get: (t) => t.interface, values: (rows) => [...new Set(rows.map((r) => r.interface))].sort() },
-  { key: "mode", type: "string", hint: "exact", get: (t) => t.mode, values: (rows) => [...new Set(rows.map((r) => r.mode))].sort() },
-  { key: "enabled", type: "string", hint: "exact", get: (t) => String(t.enabled), values: () => ["false", "true"] },
-];
+// true/false). The interface facet resolves the task's interface_id to its friendly
+// name via nameOf (a task carries the surrogate id, not the name), so both the chip
+// value catalog and the match run over readable names. Matching is client-side over
+// the loaded rows via lib/predicate.
+export function taskFilterKeys(nameOf: (id: string) => string): FilterKey<Task>[] {
+  return [
+    { key: "interface", type: "string", hint: "exact", get: (t) => nameOf(t.interface_id), values: (rows) => [...new Set(rows.map((r) => nameOf(r.interface_id)).filter(Boolean))].sort() },
+    { key: "mode", type: "string", hint: "exact", get: (t) => t.mode, values: (rows) => [...new Set(rows.map((r) => r.mode))].sort() },
+    { key: "enabled", type: "string", hint: "exact", get: (t) => String(t.enabled), values: () => ["false", "true"] },
+  ];
+}

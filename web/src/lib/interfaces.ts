@@ -9,6 +9,7 @@ import type { FilterKey } from "./predicate";
 export type InterfaceParams = { target?: string; port?: number | string } & Record<string, unknown>;
 
 export type Interface = {
+  id: string;
   name: string;
   type: string;
   component?: string;
@@ -39,8 +40,8 @@ export async function listInterfaces(): Promise<Interface[]> {
   return (data?.interfaces ?? []) as Interface[];
 }
 
-export async function getInterface(name: string): Promise<Interface> {
-  const { data, error } = await api.GET("/interfaces/{name}", { params: { path: { name } } });
+export async function getInterface(id: string): Promise<Interface> {
+  const { data, error } = await api.GET("/interfaces/{id}", { params: { path: { id } } });
   if (error) throw error;
   return data as Interface;
 }
@@ -60,17 +61,17 @@ export async function createInterface(body: CreateInterface): Promise<Interface>
 }
 
 // Only the node placement and the params are mutable after creation (name, type,
-// and owning component are set at creation).
+// and owning component are set at creation). Addressed by the surrogate id.
 export type UpdateInterface = { node?: string; params?: InterfaceParams };
 
-export async function updateInterface(name: string, body: UpdateInterface): Promise<Interface> {
-  const { data, error } = await api.PATCH("/interfaces/{name}", { params: { path: { name } }, body });
+export async function updateInterface(id: string, body: UpdateInterface): Promise<Interface> {
+  const { data, error } = await api.PATCH("/interfaces/{id}", { params: { path: { id } }, body });
   if (error) throw error;
   return data as Interface;
 }
 
-export async function deleteInterface(name: string): Promise<void> {
-  const { error } = await api.DELETE("/interfaces/{name}", { params: { path: { name } } });
+export async function deleteInterface(id: string): Promise<void> {
+  const { error } = await api.DELETE("/interfaces/{id}", { params: { path: { id } } });
   if (error) throw error;
 }
 
