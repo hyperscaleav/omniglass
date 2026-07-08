@@ -33,7 +33,9 @@ function nameFor(interfaces: Interface[] | undefined, id: string): string {
 // display name, enabled toggle, node, and spec are editable. Every gate is a UI hint;
 // the server is the authority. Renders only real TaskBody fields.
 function EnabledPill(props: { on: boolean }) {
-  return <span class={`badge badge-soft badge-sm ${props.on ? "badge-success" : "badge-neutral"}`}>{props.on ? "enabled" : "disabled"}</span>;
+  // enabled is a soft green; disabled is a neutral ghost (badge-neutral renders
+  // near-black against the dark surface, so it reads as an off/muted state instead).
+  return <span class={`badge badge-sm ${props.on ? "badge-soft badge-success" : "badge-ghost"}`}>{props.on ? "enabled" : "disabled"}</span>;
 }
 
 function taskColumns(nameOf: (id: string) => string): FlatColumn<Task>[] {

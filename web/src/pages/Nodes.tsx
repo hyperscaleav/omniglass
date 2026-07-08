@@ -24,15 +24,18 @@ import { describeError, rel } from "../lib/format";
 // "New node" opening the create Drawer. Day-one enrollment mints a secret token
 // shown ONCE in a modal; it is never cached or logged. Every gate is a UI hint;
 // the server is the authority.
+// Per-status pill class. up/down carry a soft hue; "never" (no heartbeat yet) is a
+// neutral state, so it uses badge-ghost, which reads in both themes (badge-neutral
+// renders near-black against the dark surface).
 const STATUS: Record<NodeStatus, { label: string; badge: string }> = {
-  up: { label: "up", badge: "badge-success" },
-  down: { label: "down", badge: "badge-error" },
-  never: { label: "never", badge: "badge-neutral" },
+  up: { label: "up", badge: "badge-soft badge-success" },
+  down: { label: "down", badge: "badge-soft badge-error" },
+  never: { label: "never", badge: "badge-ghost" },
 };
 
 function StatusPill(props: { node: Node }) {
   const s = () => nodeStatus(props.node);
-  return <span class={`badge badge-soft badge-sm ${STATUS[s()].badge}`}>{STATUS[s()].label}</span>;
+  return <span class={`badge badge-sm ${STATUS[s()].badge}`}>{STATUS[s()].label}</span>;
 }
 
 // The node columns: Name carries a server glyph + the node name (its address) and
