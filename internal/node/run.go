@@ -57,11 +57,16 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 		pinger = collection.NewICMPPinger()
 	}
 
+	// verdicts remembers the last reachability verdict per interface across ticks,
+	// so the node emits interface.reachable only on a flip or first observation
+	// (transition-only). It lives for the whole run, not per tick.
+	verdicts := map[string]string{}
+
 	wl, err := pullWorklist(nc, cfg.Name)
 	if err != nil {
 		return collection.WorklistReply{}, err
 	}
-	if err := runTasks(ctx, nc, cfg.Name, wl, dialer, pinger); err != nil {
+	if err := runTasks(ctx, nc, cfg.Name, wl, dialer, pinger, verdicts); err != nil {
 		return wl, err
 	}
 	if err := publishHeartbeat(nc, cfg.Name); err != nil {
@@ -93,7 +98,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 			}
 			// Run the worklist's tcp tasks and publish their telemetry. A publish
 			// failure is non-fatal (retry next tick).
-			_ = runTasks(ctx, nc, cfg.Name, wl, dialer, pinger)
+			_ = runTasks(ctx, nc, cfg.Name, wl, dialer, pinger, verdicts)
 		}
 	}
 }

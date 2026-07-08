@@ -31,7 +31,7 @@ type interfaceParams struct {
 // never stalls the rest of the worklist. tcp and icmp are the wired probe types;
 // their datapoints ride the same pipeline (the ingest consumer does not branch
 // on probe type).
-func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.WorklistReply, dialer collection.TCPDialer, pinger collection.Pinger) error {
+func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.WorklistReply, dialer collection.TCPDialer, pinger collection.Pinger, verdicts map[string]string) error {
 	runner := &collection.Runner{TCP: dialer, Ping: pinger}
 	for _, task := range wl.Tasks {
 		dps, err := collectTask(ctx, runner, task)
@@ -41,6 +41,12 @@ func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.Wor
 		if dps == nil {
 			continue // an unwired interface type: nothing to publish
 		}
+		// Compute and, on a transition only, append the interface reachability
+		// verdict as a state datapoint. The node remembers the last verdict per
+		// interface and emits interface.reachable only on a flip or first
+		// observation, so the state series is transition-only, not one row per tick.
+		// The ingest-side latest-value guard is the net for a node restart.
+		dps = appendVerdict(dps, task.InterfaceName, verdicts)
 		ev := buildEvent(task.ID, node, dps)
 		b, err := proto.Marshal(ev)
 		if err != nil {
@@ -51,6 +57,33 @@ func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.Wor
 		}
 	}
 	return nil
+}
+
+// appendVerdict computes the interface reachability verdict from a probe's
+// datapoints and appends it (a state Datapoint carrying up/down) only when it
+// differs from the last verdict remembered for that interface, or is the first
+// observation. It records the emitted verdict in verdicts so the next tick can
+// tell a flip from a repeat. When the probe produced no reachability metric
+// (nothing to judge) or the verdict is unchanged, dps is returned untouched.
+func appendVerdict(dps []collection.Datapoint, interfaceName string, verdicts map[string]string) []collection.Datapoint {
+	up, ok := collection.InterfaceVerdict(dps)
+	if !ok {
+		return dps
+	}
+	verdict := collection.VerdictDown
+	if up {
+		verdict = collection.VerdictUp
+	}
+	if prev, seen := verdicts[interfaceName]; seen && prev == verdict {
+		return dps // no transition: transition-only, emit nothing
+	}
+	verdicts[interfaceName] = verdict
+	return append(dps, collection.Datapoint{
+		Name:   collection.DatapointInterfaceReachable,
+		Text:   verdict,
+		IsText: true,
+		TS:     time.Now().UTC(),
+	})
 }
 
 // collectTask dispatches a task to its probe by interface type and returns the
@@ -131,12 +164,17 @@ func buildEvent(taskID, node string, dps []collection.Datapoint) *ogv1.Event {
 		Ts:     timestamppb.New(time.Now().UTC()),
 	}
 	for _, d := range dps {
-		ev.Datapoints = append(ev.Datapoints, &ogv1.Datapoint{
+		pd := &ogv1.Datapoint{
 			Name:   d.Name,
-			Value:  &ogv1.Datapoint_DoubleValue{DoubleValue: d.Value},
 			Ts:     timestamppb.New(d.TS),
 			Labels: d.Labels,
-		})
+		}
+		if d.IsText {
+			pd.Value = &ogv1.Datapoint_StringValue{StringValue: d.Text}
+		} else {
+			pd.Value = &ogv1.Datapoint_DoubleValue{DoubleValue: d.Value}
+		}
+		ev.Datapoints = append(ev.Datapoints, pd)
 	}
 	return ev
 }

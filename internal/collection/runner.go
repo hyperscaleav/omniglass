@@ -26,13 +26,17 @@ const (
 	defaultICMPCount   = 1
 )
 
-// Datapoint is one observation produced by a probe: a canonical name, a numeric
-// value, a timestamp, and labels. Labels (the reason) are not persisted in
-// checkpoint 3 (only the typed row lands), but the probe still produces them, so
-// a later checkpoint can carry them without changing the primitive.
+// Datapoint is one observation produced by a probe or computed by the node: a
+// canonical name, a value, a timestamp, and labels. A metric rides Value (float);
+// a state verdict (interface.reachable) rides Text with IsText set, so the same
+// list carries both to buildEvent, which maps a text datapoint to the proto
+// string_value and a metric to double_value. Labels (the reason) are not
+// persisted yet, but the probe still produces them.
 type Datapoint struct {
 	Name   string
 	Value  float64
+	Text   string
+	IsText bool
 	TS     time.Time
 	Labels map[string]string
 }
