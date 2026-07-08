@@ -42,15 +42,17 @@ describe("blade controller", () => {
 });
 
 describe("edit slot", () => {
-  it("begins editing, runs the bound save, then exits edit mode", async () => {
+  it("is not editable until the body binds, then begins/saves/exits", async () => {
     let saved = 0;
     let disposeFn = () => {};
     const slot = createRoot((dispose) => {
       disposeFn = dispose;
-      return createEditSlot(() => true);
+      return createEditSlot();
     });
+    // No bind yet: not editable, no pencil.
+    expect(slot.editable()).toBe(false);
     slot.bind({ save: async () => { saved++; } });
-    expect(slot.editable()).toBe(true);
+    expect(slot.editable()).toBe(true); // bound with no predicate -> editable
     expect(slot.editing()).toBe(false);
     slot.begin();
     expect(slot.editing()).toBe(true);
@@ -59,6 +61,14 @@ describe("edit slot", () => {
     expect(slot.editing()).toBe(false);
     disposeFn();
   });
+
+  it("respects the bound editable predicate (permission gate)", () =>
+    createRoot((dispose) => {
+      const slot = createEditSlot();
+      slot.bind({ editable: () => false, save: async () => {} });
+      expect(slot.editable()).toBe(false);
+      dispose();
+    }));
 
   it("cancel runs the bound cancel and exits edit without saving", () =>
     createRoot((dispose) => {
@@ -72,13 +82,6 @@ describe("edit slot", () => {
       expect(cancelled).toBe(1);
       expect(saved).toBe(0);
       expect(slot.editing()).toBe(false);
-      dispose();
-    }));
-
-  it("defaults editable to false when no predicate is given", () =>
-    createRoot((dispose) => {
-      const slot = createEditSlot();
-      expect(slot.editable()).toBe(false);
       dispose();
     }));
 });

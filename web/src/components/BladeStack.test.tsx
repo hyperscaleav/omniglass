@@ -63,11 +63,10 @@ describe("BladeStack", () => {
     const save = vi.fn(async () => {});
     const editRegistry: Record<string, BladeDef> = {
       thing: {
-        editable: () => true,
         Title: (p) => <>{`T:${p.id}`}</>,
         Body: (p) => {
           const e = useBladeEdit();
-          e.bind({ save });
+          e.bind({ save }); // binding makes the blade editable (a body with permission)
           return <div>{e.editing() ? `edit ${p.id}` : `read ${p.id}`}</div>;
         },
       },

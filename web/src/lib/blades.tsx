@@ -19,10 +19,6 @@ export type BladeDef = {
   // Optional slot beside Close (e.g. Maximize on a Locations blade, or a
   // "manage in <page>" cross-over on a terminal identity blade).
   headerExtra?: (p: { id: string }) => JSX.Element;
-  // When present and true for this id, the blade offers Edit in its header: read
-  // mode shows a pencil, edit mode shows Save / Cancel (see createEditSlot). The
-  // body reads useBladeEdit().editing() to switch its sections read-only vs live.
-  editable?: (id: string) => boolean;
 };
 
 export type BladeController = {
@@ -67,23 +63,29 @@ export function useBlades(): BladeController {
 // `save` runs the bound saver then leaves edit mode, `cancel` reverts and leaves.
 // BladeStack owns the header chrome (the pencil, and Save / Cancel while editing);
 // the detail body reads `editing` to switch its sections read-only vs live.
+//
+// Editability comes from the body, not the BladeDef: only the body knows the
+// caller's permission, so it decides whether to `bind` (and passes an optional
+// `editable` predicate). A body that never binds (a read-only blade like a role) is
+// not editable, so no pencil renders.
 export type BladeEdit = {
-  editable: () => boolean; // whether Edit is offered (permission + the BladeDef opts in)
+  editable: () => boolean;
   editing: () => boolean;
   saving: () => boolean;
   begin: () => void;
   cancel: () => void;
   save: () => Promise<void>;
-  // The body registers its commit (and optional revert): Save runs `save`, Cancel runs `cancel`.
-  bind: (h: { save: () => Promise<void>; cancel?: () => void }) => void;
+  bind: (h: { editable?: () => boolean; save: () => Promise<void>; cancel?: () => void }) => void;
 };
 
-export function createEditSlot(editable?: () => boolean): BladeEdit {
+export function createEditSlot(): BladeEdit {
   const [editing, setEditing] = createSignal(false);
   const [saving, setSaving] = createSignal(false);
+  const [bound, setBound] = createSignal(false);
   let handler: { save: () => Promise<void>; cancel: () => void } = { save: async () => {}, cancel: () => {} };
+  let editablePred: () => boolean = () => true;
   return {
-    editable: () => (editable ? editable() : false),
+    editable: () => bound() && editablePred(),
     editing,
     saving,
     begin: () => setEditing(true),
@@ -101,7 +103,9 @@ export function createEditSlot(editable?: () => boolean): BladeEdit {
       }
     },
     bind: (h) => {
+      editablePred = h.editable ?? (() => true);
       handler = { save: h.save, cancel: h.cancel ?? (() => {}) };
+      setBound(true);
     },
   };
 }

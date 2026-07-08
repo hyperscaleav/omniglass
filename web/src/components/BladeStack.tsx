@@ -77,7 +77,7 @@ export default function BladeStack(props: {
           // The blade's read/edit/save slot: the header renders the pencil (read) or
           // Save / Cancel (edit); the body reads it to switch its sections. Provided
           // via context so the header chrome and the body share one editing state.
-          const edit = createEditSlot(() => !!def()?.editable?.(ref.id));
+          const edit = createEditSlot();
           return (
             <Show when={def()}>
               {(d) => (
