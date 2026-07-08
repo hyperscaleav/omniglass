@@ -49,3 +49,30 @@ unproven proves nothing about the capability.
   SPA). Assert the user-observable outcome, not internals.
 
 No mocking the system under test. No tests-within-tests.
+
+## The storage test harness
+
+Integration and end-to-end tests share one real-Postgres harness,
+`internal/storage/storagetest`. It starts a single container per test binary
+(lazily, via `sync.Once`) and hands each test a fresh, migrated, isolated
+database, so tests never share mutable state or collide on a host port.
+
+Cleanup is a hard contract, not a convenience. Every package that uses the
+harness **must** route its tests through `storagetest.Main` from a `TestMain`:
+
+```go
+func TestMain(m *testing.M) { os.Exit(storagetest.Main(m)) }
+```
+
+`Main` terminates the shared container after `m.Run()`, in-process, on normal
+exit. This is the reason cleanup is reliable: it does not depend on the
+testcontainers reaper (ryuk), which is only a backstop for hard kills and cannot
+be relied on alone. In some environments (for example Docker Desktop on WSL2)
+ryuk is disabled or torn down before it can reap, so a container with no
+in-process teardown leaks and stays running indefinitely. A new harness-using
+package that omits its `TestMain` reintroduces that leak.
+
+For orphans left by a genuinely hard kill (a `SIGKILL` or a Docker restart before
+either mechanism fires), sweep them with `make clean-testcontainers`. It
+force-removes leftover Postgres test containers, scoped by the testcontainers
+label and the `postgres:18` image so it never touches the compose dev stack.
