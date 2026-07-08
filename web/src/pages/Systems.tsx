@@ -1,7 +1,7 @@
 import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { useNavigate, useParams } from "@solidjs/router";
-import TreeList, { type Blade, type ListConfig, type ListCtx, type ListNode, type PageDescriptor } from "../components/TreeList";
+import TreeList, { type ListConfig, type ListCtx, type ListNode, type PageDescriptor } from "../components/TreeList";
 import TreeSelect from "../components/TreeSelect";
 import {
   type System,
@@ -15,7 +15,7 @@ import { LOCATIONS_KEY, listLocations } from "../lib/locations";
 import { type Component as Comp, COMPONENTS_KEY, listComponents } from "../lib/components";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
-import { ArrowRight, ChevronRight, Maximize } from "../components/icons";
+import { ArrowRight, ChevronRight } from "../components/icons";
 
 // Systems: the system inventory on the generic TreeList, the same shell as
 // Locations and Components. Systems form a tree (parent_id) and are placed at a
@@ -281,11 +281,6 @@ export default function Systems() {
     onBack: () => navigate("/systems"),
     onDelete: (n) => del(n),
     renderDetail: (n, ctx) => detail(n, ctx),
-    renderBlade: (n, ctx): Blade => ({
-      title: n.display,
-      headerExtra: <button class="btn btn-quiet btn-sm btn-square" title="Open full page" onClick={() => { ctx.closeBlades(); ctx.openFull(n); }}><Maximize size={15} /></button>,
-      body: detail(n, ctx),
-    }),
     FormBody,
   };
 
