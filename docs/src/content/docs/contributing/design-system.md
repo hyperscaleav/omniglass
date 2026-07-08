@@ -79,6 +79,18 @@ The intents are `@apply`-composed from daisyUI in `app.css`, so they inherit the
 tokens. A `style-guard` test scans the source and fails the build on a raw `btn-primary` /
 `btn-ghost`, so the vocabulary cannot drift back to one-off button styling.
 
+## Status pills
+
+Status badges use `badge badge-sm` with a **soft hue** for a signalled state (`badge-soft
+badge-success` for up/enabled/responding, `badge-soft badge-error` for down, `badge-soft
+badge-warning` for stale). A **neutral** state (a node that has never checked in, a disabled task,
+an unknown verdict) does **not** use `badge-neutral` or `badge-ghost`: against this theme's dark
+`base-100` (`#080c16`), `badge-neutral` renders near-black and `badge-ghost` renders transparent, so
+both read as invisible. Use a soft grey fill tinted from the text color instead
+(`bg-base-content/10 text-base-content/70 border-transparent`), which reads as a visible pill in both
+themes at the same weight as the soft hues. The same reason keeps `type` values (interface/task
+`type`) as plain `font-data` text, not a `badge-neutral` chip.
+
 ## Primitives (the reuse target)
 
 `ListView`, `FilterBar`, `Drawer`, `Donut`, `Badge`, `Fact`, `Page`, `DataTable`,
