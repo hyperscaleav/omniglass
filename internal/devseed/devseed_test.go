@@ -3,8 +3,10 @@ package devseed_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/devseed"
+	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
@@ -59,11 +61,11 @@ func TestFixturesShape(t *testing.T) {
 	}
 }
 
-// TestRunIdempotent proves devseed.Run lands the example estate through the
-// Storage Gateway and that a second run neither duplicates nor errors: make dev
-// runs it on every start. Reference data (roles, location types) must exist
-// first, so the boot seed runs ahead of it, exactly as bootstrap does. Skipped
-// under -short by the testcontainer harness.
+// TestRunIdempotent proves devseed.Run lands the example estate (and the worked
+// reachability check) through the Storage Gateway and that a second run neither
+// duplicates nor errors: make dev runs it on every start. Reference data (roles,
+// location types, datapoint types) must exist first, so the boot seed runs ahead of
+// it, exactly as bootstrap does. Skipped under -short by the testcontainer harness.
 func TestRunIdempotent(t *testing.T) {
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
@@ -149,6 +151,97 @@ func TestRunIdempotent(t *testing.T) {
 	assertGrant(t, conn, ctx, "operator", "operator", "all", "", "subtree")
 	assertGrant(t, conn, ctx, "viewer-hq", "viewer", "location", "hq", "subtree")
 	assertGrant(t, conn, ctx, "tech-east", "deploy", "location", "east", "subtree_excl_root")
+
+	// The worked reachability check: an enrolled node, a tcp interface owned by the
+	// boardroom-display component and placed on the node, a poll task over it, and the
+	// datapoints the panel reads. Every count is over two Runs, so a duplicate here is
+	// the seed failing to be idempotent.
+	all := scope.Set{All: true}
+
+	// The component the check hangs on, placed under the HQ boardroom.
+	var comps int
+	if err := conn.QueryRow(ctx, `select count(*) from component where name = 'hq-boardroom-display'`).Scan(&comps); err != nil {
+		t.Fatalf("count reachability component: %v", err)
+	}
+	if comps != 1 {
+		t.Errorf("reachability component rows = %d, want 1 (seed not idempotent)", comps)
+	}
+
+	// The node is created, enrolled, and claimed, so it reads as enrolled.
+	node, err := gw.GetNode(ctx, "edge-hq", all)
+	if err != nil {
+		t.Fatalf("get seeded node: %v", err)
+	}
+	if !node.Enrolled {
+		t.Errorf("node edge-hq enrolled = false, want true (created, enrolled, and claimed)")
+	}
+
+	// The interface: type tcp, owned by the component, placed on the node, one row.
+	iface, err := gw.GetInterface(ctx, "hq-boardroom-display-tcp", all)
+	if err != nil {
+		t.Fatalf("get seeded interface: %v", err)
+	}
+	if iface.Type != "tcp" || iface.Component == nil || *iface.Component != "hq-boardroom-display" || iface.Node == nil || *iface.Node != "edge-hq" {
+		t.Errorf("seeded interface = %+v, want tcp on component hq-boardroom-display / node edge-hq", iface)
+	}
+	var ifaceCount int
+	if err := conn.QueryRow(ctx, `select count(*) from interface where name = 'hq-boardroom-display-tcp'`).Scan(&ifaceCount); err != nil {
+		t.Fatalf("count reachability interface: %v", err)
+	}
+	if ifaceCount != 1 {
+		t.Errorf("reachability interface rows = %d, want 1 (seed not idempotent)", ifaceCount)
+	}
+
+	// Exactly one poll task over the interface.
+	tasks, err := gw.ListTasks(ctx, all)
+	if err != nil {
+		t.Fatalf("list tasks: %v", err)
+	}
+	var reachTasks int
+	for i := range tasks {
+		if tasks[i].InterfaceName == "hq-boardroom-display-tcp" {
+			reachTasks++
+			if tasks[i].Mode != "poll" || !tasks[i].Enabled {
+				t.Errorf("reachability task = %+v, want mode poll enabled", tasks[i])
+			}
+		}
+	}
+	if reachTasks != 1 {
+		t.Errorf("reachability task rows = %d, want 1 (seed not idempotent)", reachTasks)
+	}
+
+	// The datapoints populate the reachability read the panel composes: a fresh "up"
+	// verdict, a down->up transition pair for the availability strip, and both probe
+	// layers green. The transition count proves the datapoints did not double on the
+	// second Run (they are append-only, so the sentinel must have skipped them).
+	verdict, err := gw.LatestState(ctx, "hq-boardroom-display", "interface.reachable", "hq-boardroom-display-tcp")
+	if err != nil {
+		t.Fatalf("latest verdict: %v", err)
+	}
+	if verdict == nil || verdict.Value != "up" {
+		t.Fatalf("seeded verdict = %+v, want value up", verdict)
+	}
+	transitions, err := gw.StateTransitions(ctx, "hq-boardroom-display", "interface.reachable", "hq-boardroom-display-tcp", time.Time{})
+	if err != nil {
+		t.Fatalf("state transitions: %v", err)
+	}
+	if len(transitions) != 2 {
+		t.Errorf("verdict transitions = %d, want 2 (down->up), idempotent across two Runs", len(transitions))
+	}
+	tcpOpen, err := gw.LatestMetricInstance(ctx, "hq-boardroom-display", "tcp.open", "hq-boardroom-display-tcp")
+	if err != nil {
+		t.Fatalf("latest tcp.open: %v", err)
+	}
+	if tcpOpen == nil || tcpOpen.Value != 1 {
+		t.Errorf("seeded tcp.open = %+v, want 1", tcpOpen)
+	}
+	icmpReach, err := gw.LatestMetricInstance(ctx, "hq-boardroom-display", "icmp.reachable", "hq-boardroom-display-tcp")
+	if err != nil {
+		t.Fatalf("latest icmp.reachable: %v", err)
+	}
+	if icmpReach == nil || icmpReach.Value != 1 {
+		t.Errorf("seeded icmp.reachable = %+v, want 1", icmpReach)
+	}
 }
 
 // assertGrant checks a seeded user holds exactly the expected role at the
