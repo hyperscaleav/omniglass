@@ -53,9 +53,9 @@ func TestResolveTaskOwner(t *testing.T) {
 		('shared-tcp', 'tcp', null, 'node-a', '{"target":"10.0.0.2:22"}'::jsonb)`); err != nil {
 		t.Fatalf("insert interfaces: %v", err)
 	}
-	if _, err := conn.Exec(ctx, `insert into task (id, mode, interface_name, node_name, enabled) values
-		('t-bound', 'poll', 'disp-1-tcp', 'node-a', true),
-		('t-shared', 'poll', 'shared-tcp', 'node-a', true)`); err != nil {
+	if _, err := conn.Exec(ctx, `insert into task (id, mode, interface_id, node_name, enabled) values
+		('t-bound', 'poll', (select id from interface where name = 'disp-1-tcp'), 'node-a', true),
+		('t-shared', 'poll', (select id from interface where name = 'shared-tcp'), 'node-a', true)`); err != nil {
 		t.Fatalf("insert tasks: %v", err)
 	}
 

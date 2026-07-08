@@ -18,7 +18,7 @@ import (
 var (
 	ErrInterfaceNotFound          = errors.New("storage: interface not found")
 	ErrInterfaceForbidden         = errors.New("storage: action not permitted on this interface")
-	ErrInterfaceExists            = errors.New("storage: interface name already exists")
+	ErrInterfaceExists            = errors.New("storage: interface name already exists on this component")
 	ErrInterfaceOccupied          = errors.New("storage: interface still has tasks")
 	ErrUnknownInterfaceType       = errors.New("storage: unknown interface_type")
 	ErrInterfaceComponentNotFound = errors.New("storage: interface component not found")
@@ -28,8 +28,10 @@ var (
 // Interface is a named, placement-bound connection: type is an interface_type,
 // Component is the owner (nil for a server-hosted interface), Node is the
 // server-assigned placement (nil until assigned), Params is the endpoint/target
-// jsonb. The primary key is Name (the estate address).
+// jsonb. ID is the surrogate primary key (a uuidv7); Name is the friendly address,
+// unique within the owning component.
 type Interface struct {
+	ID        string
 	Name      string
 	Type      string
 	Component *string
@@ -39,7 +41,8 @@ type Interface struct {
 	UpdatedAt time.Time
 }
 
-// InterfaceSpec is the create input.
+// InterfaceSpec is the create input. Name is unique within the owning component
+// (the id is server-generated).
 type InterfaceSpec struct {
 	Name      string
 	Type      string
@@ -58,16 +61,16 @@ type InterfacePatch struct {
 }
 
 // interfaceCols is the bare select list (scan order), for the un-aliased
-// insert/update RETURNING and the by-name load; interfaceColsJoin is the same
+// insert/update RETURNING and the by-id load; interfaceColsJoin is the same
 // list aliased to `i` for the scoped join over the component table.
 const (
-	interfaceCols     = `name, type, component, node_name, params, created_at, updated_at`
-	interfaceColsJoin = `i.name, i.type, i.component, i.node_name, i.params, i.created_at, i.updated_at`
+	interfaceCols     = `id, name, type, component, node_name, params, created_at, updated_at`
+	interfaceColsJoin = `i.id, i.name, i.type, i.component, i.node_name, i.params, i.created_at, i.updated_at`
 )
 
 func scanInterface(row pgx.Row) (*Interface, error) {
 	var it Interface
-	if err := row.Scan(&it.Name, &it.Type, &it.Component, &it.Node, &it.Params, &it.CreatedAt, &it.UpdatedAt); err != nil {
+	if err := row.Scan(&it.ID, &it.Name, &it.Type, &it.Component, &it.Node, &it.Params, &it.CreatedAt, &it.UpdatedAt); err != nil {
 		return nil, err
 	}
 	return &it, nil
@@ -98,14 +101,14 @@ func componentInScope(ctx context.Context, q querier, componentName *string, set
 	return inScopeTree(ctx, q, componentTable, id, set)
 }
 
-// loadInterface reads one interface by name with no scope check; callers layer
+// loadInterface reads one interface by id with no scope check; callers layer
 // scope on top (via componentInScope).
-func loadInterface(ctx context.Context, q querier, name string) (*Interface, error) {
-	it, err := scanInterface(q.QueryRow(ctx, `select `+interfaceCols+` from interface where name = $1`, name))
+func loadInterface(ctx context.Context, q querier, id string) (*Interface, error) {
+	it, err := scanInterface(q.QueryRow(ctx, `select `+interfaceCols+` from interface where id = $1`, id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrInterfaceNotFound
 	} else if err != nil {
-		return nil, fmt.Errorf("storage: load interface %q: %w", name, err)
+		return nil, fmt.Errorf("storage: load interface %q: %w", id, err)
 	}
 	return it, nil
 }
@@ -159,10 +162,10 @@ func (p *PG) ListInterfaces(ctx context.Context, read scope.Set) ([]Interface, e
 	return out, rows.Err()
 }
 
-// GetInterface resolves an interface by name within the caller's read scope;
+// GetInterface resolves an interface by id within the caller's read scope;
 // absent or out of scope is the same non-disclosing ErrInterfaceNotFound.
-func (p *PG) GetInterface(ctx context.Context, name string, read scope.Set) (*Interface, error) {
-	it, err := loadInterface(ctx, p.pool, name)
+func (p *PG) GetInterface(ctx context.Context, id string, read scope.Set) (*Interface, error) {
+	it, err := loadInterface(ctx, p.pool, id)
 	if err != nil {
 		return nil, err
 	}
@@ -234,14 +237,14 @@ func (p *PG) CreateInterface(ctx context.Context, actorID string, spec Interface
 // UpdateInterface patches an interface's node placement or params with the
 // read-then-action scope split (both evaluated against the owning component) and
 // in-transaction audit. Type and component rebind are deferred.
-func (p *PG) UpdateInterface(ctx context.Context, actorID, name string, patch InterfacePatch, read, action scope.Set) (*Interface, error) {
+func (p *PG) UpdateInterface(ctx context.Context, actorID, id string, patch InterfacePatch, read, action scope.Set) (*Interface, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("storage: begin update interface: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	before, err := resolveInterfaceScoped(ctx, tx, name, read, action)
+	before, err := resolveInterfaceScoped(ctx, tx, id, read, action)
 	if err != nil {
 		return nil, err
 	}
@@ -250,9 +253,9 @@ func (p *PG) UpdateInterface(ctx context.Context, actorID, name string, patch In
 			node_name = coalesce($2, node_name),
 			params    = coalesce($3, params),
 			updated_at = now()
-		where name = $1
+		where id = $1
 		returning `+interfaceCols,
-		before.Name, patch.Node, nullableJSON(patch.Params)))
+		before.ID, patch.Node, nullableJSON(patch.Params)))
 	if err != nil {
 		return nil, mapInterfaceWriteErr(err)
 	}
@@ -269,18 +272,18 @@ func (p *PG) UpdateInterface(ctx context.Context, actorID, name string, patch In
 // (through the owning component) and in-transaction audit. A task still
 // referencing it is a foreign-key restrict, mapped to ErrInterfaceOccupied via
 // the write-error mapper.
-func (p *PG) DeleteInterface(ctx context.Context, actorID, name string, read, action scope.Set) error {
+func (p *PG) DeleteInterface(ctx context.Context, actorID, id string, read, action scope.Set) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("storage: begin delete interface: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	before, err := resolveInterfaceScoped(ctx, tx, name, read, action)
+	before, err := resolveInterfaceScoped(ctx, tx, id, read, action)
 	if err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, `delete from interface where name = $1`, before.Name); err != nil {
+	if _, err := tx.Exec(ctx, `delete from interface where id = $1`, before.ID); err != nil {
 		return mapInterfaceWriteErr(err)
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "delete", "interface", before.Name, before, nil); err != nil {
@@ -296,8 +299,8 @@ func (p *PG) DeleteInterface(ctx context.Context, actorID, name string, read, ac
 // scope split through its owning component: out of read scope is the
 // non-disclosing ErrInterfaceNotFound, readable but out of action scope is
 // ErrInterfaceForbidden.
-func resolveInterfaceScoped(ctx context.Context, q querier, name string, read, action scope.Set) (*Interface, error) {
-	it, err := loadInterface(ctx, q, name)
+func resolveInterfaceScoped(ctx context.Context, q querier, id string, read, action scope.Set) (*Interface, error) {
+	it, err := loadInterface(ctx, q, id)
 	if err != nil {
 		return nil, err
 	}
@@ -335,7 +338,7 @@ func mapInterfaceWriteErr(err error) error {
 		case "23505": // unique_violation
 			return ErrInterfaceExists
 		case "23001": // restrict_violation: a task still references this interface
-			if pgErr.ConstraintName == "task_interface_name_fkey" {
+			if pgErr.ConstraintName == "task_interface_id_fkey" {
 				return ErrInterfaceOccupied
 			}
 		case "23503": // foreign_key_violation

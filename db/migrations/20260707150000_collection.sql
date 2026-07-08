@@ -66,27 +66,35 @@ create table if not exists datapoint_type (
     constraint datapoint_type_value_type_check check (value_type in ('int', 'float', 'text', 'json'))
 );
 
--- An interface: a named, placement-bound connection. type is an interface_type;
--- component is the owner (nullable for a server-hosted interface); node_name is
--- the server-assigned placement; params holds the endpoint/target and settings.
+-- An interface: a named, placement-bound connection. id is the surrogate address
+-- (a uuidv7, so a friendly name can be reused across components and renamed later
+-- without breaking a task's reference); name is unique WITHIN its owning component
+-- (unique(component, name)), so operators address it by a friendly name. type is an
+-- interface_type; component is the owner (nullable for a server-hosted interface,
+-- which the unique tuple treats as distinct per NULL, so it is not constrained);
+-- node_name is the server-assigned placement; params holds the endpoint/target and
+-- settings.
 create table if not exists interface (
-    name       text        primary key,
+    id         uuid        primary key default uuidv7(),
+    name       text        not null,
     type       text        not null references interface_type (name),
     component  text        references component (name) on delete set null,
     node_name  text        references node (name) on delete set null,
     params     jsonb       not null default '{}'::jsonb,
     created_at timestamptz not null default now(),
-    updated_at timestamptz not null default now()
+    updated_at timestamptz not null default now(),
+    constraint interface_component_name_key unique (component, name)
 );
 
 -- A task: a node's content-addressed unit of collection work. mode is the
 -- poll/listen axis; spec holds the inline probe type and params. id is a content
--- hash so identical work dedupes.
+-- hash so identical work dedupes. interface_id references the interface's surrogate
+-- id; on delete restrict, so an interface with tasks cannot be dropped.
 create table if not exists task (
     id             text        primary key,
     display_name   text        not null default '',
     mode           text        not null,
-    interface_name text        not null references interface (name) on delete restrict,
+    interface_id   uuid        not null references interface (id) on delete restrict,
     node_name      text        references node (name) on delete set null,
     spec           jsonb       not null default '{}'::jsonb,
     enabled        boolean     not null default true,
@@ -94,7 +102,7 @@ create table if not exists task (
     updated_at     timestamptz not null default now(),
     constraint task_mode_check check (mode in ('poll', 'listen'))
 );
-create index if not exists task_interface_idx on task (interface_name);
+create index if not exists task_interface_idx on task (interface_id);
 create index if not exists task_worklist_idx on task (node_name) where node_name is not null and enabled = true;
 
 -- metric_datapoint: the observed-metric sink. Owner is exactly one of the four

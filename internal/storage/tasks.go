@@ -14,7 +14,7 @@ import (
 )
 
 // Task-layer sentinel errors. A task is not a scope-tree entity of its own; it
-// hangs off an interface (task.interface_name), which hangs off a component, so
+// hangs off an interface (task.interface_id), which hangs off a component, so
 // its scope cascades through that component. NotFound doubles as the
 // non-disclosing "out of read scope"; Forbidden is readable-but-not-actionable.
 var (
@@ -27,30 +27,30 @@ var (
 )
 
 // Task is a node's content-addressed unit of collection work: Mode is the
-// poll/listen axis, InterfaceName the placement-bound connection it runs over,
+// poll/listen axis, InterfaceID the placement-bound connection it runs over,
 // Node the server-assigned placement (nil until assigned), Spec the inline probe
 // jsonb, Enabled the worklist toggle. ID is a content hash of the identity fields
 // (interface + mode + spec) so identical work dedupes.
 type Task struct {
-	ID            string
-	DisplayName   string
-	Mode          string
-	InterfaceName string
-	Node          *string
-	Spec          []byte
-	Enabled       bool
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
+	ID          string
+	DisplayName string
+	Mode        string
+	InterfaceID string
+	Node        *string
+	Spec        []byte
+	Enabled     bool
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
 // TaskSpec is the create input. Enabled defaults to true when nil.
 type TaskSpec struct {
-	DisplayName   string
-	Mode          string
-	InterfaceName string
-	Node          *string
-	Spec          []byte
-	Enabled       *bool
+	DisplayName string
+	Mode        string
+	InterfaceID string
+	Node        *string
+	Spec        []byte
+	Enabled     *bool
 }
 
 // TaskPatch is the update input: nil fields unchanged. The identity fields
@@ -67,9 +67,9 @@ type TaskPatch struct {
 // (interface, mode, spec) so identical work always maps to the same id and a
 // re-create dedupes on the primary key. Display name, node placement, and the
 // enabled toggle are metadata, not identity, so they do not perturb the id.
-func taskID(interfaceName, mode string, spec []byte) string {
+func taskID(interfaceID, mode string, spec []byte) string {
 	h := sha256.New()
-	h.Write([]byte(interfaceName))
+	h.Write([]byte(interfaceID))
 	h.Write([]byte{0})
 	h.Write([]byte(mode))
 	h.Write([]byte{0})
@@ -81,13 +81,13 @@ func taskID(interfaceName, mode string, spec []byte) string {
 // RETURNING; taskColsJoin is the same list aliased to `t` for the load (joined to
 // interface for the owning component) and the scoped list join.
 const (
-	taskCols     = `id, display_name, mode, interface_name, node_name, spec, enabled, created_at, updated_at`
-	taskColsJoin = `t.id, t.display_name, t.mode, t.interface_name, t.node_name, t.spec, t.enabled, t.created_at, t.updated_at`
+	taskCols     = `id, display_name, mode, interface_id, node_name, spec, enabled, created_at, updated_at`
+	taskColsJoin = `t.id, t.display_name, t.mode, t.interface_id, t.node_name, t.spec, t.enabled, t.created_at, t.updated_at`
 )
 
 func scanTask(row pgx.Row) (*Task, error) {
 	var t Task
-	if err := row.Scan(&t.ID, &t.DisplayName, &t.Mode, &t.InterfaceName, &t.Node, &t.Spec, &t.Enabled, &t.CreatedAt, &t.UpdatedAt); err != nil {
+	if err := row.Scan(&t.ID, &t.DisplayName, &t.Mode, &t.InterfaceID, &t.Node, &t.Spec, &t.Enabled, &t.CreatedAt, &t.UpdatedAt); err != nil {
 		return nil, err
 	}
 	return &t, nil
@@ -102,9 +102,9 @@ func loadTask(ctx context.Context, q querier, id string) (*Task, *string, error)
 	)
 	err := q.QueryRow(ctx, `
 		select `+taskColsJoin+`, i.component
-		from task t join interface i on i.name = t.interface_name
+		from task t join interface i on i.id = t.interface_id
 		where t.id = $1`, id).Scan(
-		&t.ID, &t.DisplayName, &t.Mode, &t.InterfaceName, &t.Node, &t.Spec, &t.Enabled, &t.CreatedAt, &t.UpdatedAt, &component)
+		&t.ID, &t.DisplayName, &t.Mode, &t.InterfaceID, &t.Node, &t.Spec, &t.Enabled, &t.CreatedAt, &t.UpdatedAt, &component)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil, ErrTaskNotFound
 	} else if err != nil {
@@ -140,7 +140,7 @@ func (p *PG) ListTasks(ctx context.Context, read scope.Set) ([]Task, error) {
 				select c.id from component c join sub on c.parent_id = sub.id
 			) cycle id set is_cycle using path
 			select `+taskColsJoin+` from task t
-			join interface i on i.name = t.interface_name
+			join interface i on i.id = t.interface_id
 			join component c on c.name = i.component
 			where c.id in (select id from sub) or c.id = any($2::uuid[])
 			order by t.id`, roots, selfIDs)
@@ -190,11 +190,11 @@ func (p *PG) CreateTask(ctx context.Context, actorID string, spec TaskSpec, crea
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	var component *string
-	err = tx.QueryRow(ctx, `select component from interface where name = $1`, spec.InterfaceName).Scan(&component)
+	err = tx.QueryRow(ctx, `select component from interface where id = $1`, spec.InterfaceID).Scan(&component)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrTaskInterfaceNotFound
 	} else if err != nil {
-		return nil, fmt.Errorf("storage: resolve task interface %q: %w", spec.InterfaceName, err)
+		return nil, fmt.Errorf("storage: resolve task interface %q: %w", spec.InterfaceID, err)
 	}
 	in, err := componentInScope(ctx, tx, component, create)
 	if err != nil {
@@ -212,12 +212,12 @@ func (p *PG) CreateTask(ctx context.Context, actorID string, spec TaskSpec, crea
 	if spec.Enabled != nil {
 		enabled = *spec.Enabled
 	}
-	id := taskID(spec.InterfaceName, spec.Mode, body)
+	id := taskID(spec.InterfaceID, spec.Mode, body)
 	t, err := scanTask(tx.QueryRow(ctx, `
-		insert into task (id, display_name, mode, interface_name, node_name, spec, enabled)
+		insert into task (id, display_name, mode, interface_id, node_name, spec, enabled)
 		values ($1, $2, $3, $4, $5, $6, $7)
 		returning `+taskCols,
-		id, spec.DisplayName, spec.Mode, spec.InterfaceName, spec.Node, body, enabled))
+		id, spec.DisplayName, spec.Mode, spec.InterfaceID, spec.Node, body, enabled))
 	if err != nil {
 		return nil, mapTaskWriteErr(err)
 	}
@@ -325,7 +325,7 @@ func mapTaskWriteErr(err error) error {
 			return ErrTaskExists
 		case "23503": // foreign_key_violation
 			switch pgErr.ConstraintName {
-			case "task_interface_name_fkey":
+			case "task_interface_id_fkey":
 				return ErrTaskInterfaceNotFound
 			case "task_node_name_fkey":
 				return ErrTaskNodeNotFound
@@ -362,9 +362,9 @@ func (p *PG) ResolveTaskOwner(ctx context.Context, taskID, nodeName string) (Tas
 		taskNode  *string
 	)
 	err := p.pool.QueryRow(ctx, `
-		select i.component, t.node_name, t.interface_name, i.type
+		select i.component, t.node_name, i.name, i.type
 		from task t
-		join interface i on i.name = t.interface_name
+		join interface i on i.id = t.interface_id
 		where t.id = $1`, taskID).Scan(&component, &taskNode, &owner.InterfaceName, &owner.InterfaceType)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return TaskOwner{}, false, nil

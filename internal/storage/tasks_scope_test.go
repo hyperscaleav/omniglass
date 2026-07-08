@@ -33,27 +33,31 @@ func TestTaskScopeCRUD(t *testing.T) {
 	mustCreateComponent(t, gw, storage.ComponentSpec{Name: "comp-b", ComponentType: "display"}, all)
 	readA := scope.Set{IDs: []string{compA.ID}}
 
-	// An interface on A, on B, and a component-less one.
+	// An interface on A, on B, and a component-less one; keep their surrogate ids
+	// (tasks reference the interface by id now).
+	ifID := map[string]string{}
 	for _, s := range []storage.InterfaceSpec{
 		{Name: "if-a", Type: "tcp", Component: strptr("comp-a")},
 		{Name: "if-b", Type: "tcp", Component: strptr("comp-b")},
 		{Name: "if-null", Type: "icmp"},
 	} {
-		if _, err := gw.CreateInterface(ctx, "", s, all); err != nil {
+		it, err := gw.CreateInterface(ctx, "", s, all)
+		if err != nil {
 			t.Fatalf("create interface %s: %v", s.Name, err)
 		}
+		ifID[s.Name] = it.ID
 	}
 
 	// A task on each interface (owner/all).
-	taskA, err := gw.CreateTask(ctx, "", storage.TaskSpec{Mode: "poll", InterfaceName: "if-a", Spec: []byte(`{"probe":"tcp"}`)}, all)
+	taskA, err := gw.CreateTask(ctx, "", storage.TaskSpec{Mode: "poll", InterfaceID: ifID["if-a"], Spec: []byte(`{"probe":"tcp"}`)}, all)
 	if err != nil {
 		t.Fatalf("create task-a: %v", err)
 	}
-	taskB, err := gw.CreateTask(ctx, "", storage.TaskSpec{Mode: "poll", InterfaceName: "if-b", Spec: []byte(`{"probe":"tcp"}`)}, all)
+	taskB, err := gw.CreateTask(ctx, "", storage.TaskSpec{Mode: "poll", InterfaceID: ifID["if-b"], Spec: []byte(`{"probe":"tcp"}`)}, all)
 	if err != nil {
 		t.Fatalf("create task-b: %v", err)
 	}
-	if _, err := gw.CreateTask(ctx, "", storage.TaskSpec{Mode: "poll", InterfaceName: "if-null"}, all); err != nil {
+	if _, err := gw.CreateTask(ctx, "", storage.TaskSpec{Mode: "poll", InterfaceID: ifID["if-null"]}, all); err != nil {
 		t.Fatalf("create task-null: %v", err)
 	}
 
@@ -74,13 +78,13 @@ func TestTaskScopeCRUD(t *testing.T) {
 
 	// Cascade CREATE: A-scope creates on A's interface, forbidden on B's and on the
 	// component-less one.
-	if _, err := gw.CreateTask(ctx, "", storage.TaskSpec{Mode: "listen", InterfaceName: "if-a"}, readA); err != nil {
+	if _, err := gw.CreateTask(ctx, "", storage.TaskSpec{Mode: "listen", InterfaceID: ifID["if-a"]}, readA); err != nil {
 		t.Errorf("create on if-a with A-scope = %v, want ok", err)
 	}
-	if _, err := gw.CreateTask(ctx, "", storage.TaskSpec{Mode: "poll", InterfaceName: "if-b", Spec: []byte(`{"x":1}`)}, readA); !errors.Is(err, storage.ErrTaskForbidden) {
+	if _, err := gw.CreateTask(ctx, "", storage.TaskSpec{Mode: "poll", InterfaceID: ifID["if-b"], Spec: []byte(`{"x":1}`)}, readA); !errors.Is(err, storage.ErrTaskForbidden) {
 		t.Errorf("create on if-b with A-scope = %v, want ErrTaskForbidden", err)
 	}
-	if _, err := gw.CreateTask(ctx, "", storage.TaskSpec{Mode: "poll", InterfaceName: "if-null", Spec: []byte(`{"x":1}`)}, readA); !errors.Is(err, storage.ErrTaskForbidden) {
+	if _, err := gw.CreateTask(ctx, "", storage.TaskSpec{Mode: "poll", InterfaceID: ifID["if-null"], Spec: []byte(`{"x":1}`)}, readA); !errors.Is(err, storage.ErrTaskForbidden) {
 		t.Errorf("create on component-less if-null with A-scope = %v, want ErrTaskForbidden", err)
 	}
 
@@ -103,18 +107,18 @@ func TestTaskScopeCRUD(t *testing.T) {
 	}
 
 	// Content-addressed dedup: same (interface, mode, spec) collides on the id.
-	if _, err := gw.CreateTask(ctx, "", storage.TaskSpec{Mode: "poll", InterfaceName: "if-b", Spec: []byte(`{"probe":"tcp"}`)}, all); !errors.Is(err, storage.ErrTaskExists) {
+	if _, err := gw.CreateTask(ctx, "", storage.TaskSpec{Mode: "poll", InterfaceID: ifID["if-b"], Spec: []byte(`{"probe":"tcp"}`)}, all); !errors.Is(err, storage.ErrTaskExists) {
 		t.Errorf("dup content task = %v, want ErrTaskExists", err)
 	}
 
-	// FK / value faults.
-	if _, err := gw.CreateTask(ctx, "", storage.TaskSpec{Mode: "poll", InterfaceName: "ghost"}, all); !errors.Is(err, storage.ErrTaskInterfaceNotFound) {
+	// FK / value faults. A well-formed but unknown interface id is a 422.
+	if _, err := gw.CreateTask(ctx, "", storage.TaskSpec{Mode: "poll", InterfaceID: "00000000-0000-0000-0000-000000000000"}, all); !errors.Is(err, storage.ErrTaskInterfaceNotFound) {
 		t.Errorf("unknown interface = %v, want ErrTaskInterfaceNotFound", err)
 	}
-	if _, err := gw.CreateTask(ctx, "", storage.TaskSpec{Mode: "sideways", InterfaceName: "if-a"}, all); !errors.Is(err, storage.ErrInvalidTaskMode) {
+	if _, err := gw.CreateTask(ctx, "", storage.TaskSpec{Mode: "sideways", InterfaceID: ifID["if-a"]}, all); !errors.Is(err, storage.ErrInvalidTaskMode) {
 		t.Errorf("bad mode = %v, want ErrInvalidTaskMode", err)
 	}
-	if _, err := gw.CreateTask(ctx, "", storage.TaskSpec{Mode: "poll", InterfaceName: "if-a", Node: strptr("no-node"), Spec: []byte(`{"n":1}`)}, all); !errors.Is(err, storage.ErrTaskNodeNotFound) {
+	if _, err := gw.CreateTask(ctx, "", storage.TaskSpec{Mode: "poll", InterfaceID: ifID["if-a"], Node: strptr("no-node"), Spec: []byte(`{"n":1}`)}, all); !errors.Is(err, storage.ErrTaskNodeNotFound) {
 		t.Errorf("unknown node = %v, want ErrTaskNodeNotFound", err)
 	}
 

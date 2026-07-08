@@ -172,13 +172,13 @@ type Gateway interface {
 	// (server-hosted) interface is reachable only under an all scope. The read/action
 	// split drives the non-disclosing 404 versus 403.
 	ListInterfaces(ctx context.Context, read scope.Set) ([]Interface, error)
-	GetInterface(ctx context.Context, name string, read scope.Set) (*Interface, error)
+	GetInterface(ctx context.Context, id string, read scope.Set) (*Interface, error)
 	CreateInterface(ctx context.Context, actorID string, spec InterfaceSpec, create scope.Set) (*Interface, error)
-	UpdateInterface(ctx context.Context, actorID, name string, patch InterfacePatch, read, action scope.Set) (*Interface, error)
-	DeleteInterface(ctx context.Context, actorID, name string, read, action scope.Set) error
+	UpdateInterface(ctx context.Context, actorID, id string, patch InterfacePatch, read, action scope.Set) (*Interface, error)
+	DeleteInterface(ctx context.Context, actorID, id string, read, action scope.Set) error
 
 	// The task tier: operator CRUD over content-addressed collection work. A task
-	// hangs off an interface (task.interface_name), so its scope cascades through
+	// hangs off an interface (task.interface_id), so its scope cascades through
 	// the interface's owning component, the same component-tier cascade as the
 	// interface itself.
 	ListTasks(ctx context.Context, read scope.Set) ([]Task, error)
