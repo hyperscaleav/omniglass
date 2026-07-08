@@ -1,4 +1,4 @@
-import { Show, createMemo, createSignal } from "solid-js";
+import { For, Show, createMemo, createSignal } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import GrantBuilder from "../components/GrantBuilder";
@@ -226,12 +226,16 @@ function GrantEditor(props: { principal: Principal; canGrant: boolean; canRevoke
     return m;
   });
 
-  // The principal's grants as the current server set the draft diffs against.
+  // Only DIRECT grants are editable here: an inherited grant (from a group) is
+  // revoked by editing the group, not the member, so it never enters the builder's
+  // draft set. Inherited grants render read-only below.
   const current = createMemo<ExistingGrant[]>(() =>
     props.principal.grants
-      .filter((g) => g.id)
+      .filter((g) => g.id && !g.group_id)
       .map((g) => ({ id: g.id!, role: g.role, scope_kind: g.scope_kind as ScopeKind, scope_id: g.scope_id ?? undefined, scope_op: (g.scope_op as ScopeOp) || undefined })),
   );
+  // Grants inherited from a group: read-only, tagged with their source group.
+  const inherited = createMemo(() => props.principal.grants.filter((g) => g.group_id));
 
   // The scope entities of a kind as TreeNodes, so the entity stage reads as an
   // indented tree (value = id, ordered by parent_id) not a flat list.
@@ -261,20 +265,43 @@ function GrantEditor(props: { principal: Principal; canGrant: boolean; canRevoke
   }
 
   return (
-    <GrantBuilder
-      principalId={props.principal.id}
-      current={current()}
-      roles={(roles.data ?? []).map((r) => ({
-        id: r.id,
-        label: r.display_name || r.id,
-        title: [r.description, `Grants: ${(r.effective_permissions ?? r.permissions).join(", ")}`].filter(Boolean).join("\n\n"),
-      }))}
-      entities={entities}
-      scopeName={(id) => nameOf().get(id)}
-      canGrant={props.canGrant}
-      canRevoke={props.canRevoke}
-      onSave={onSave}
-    />
+    <div class="flex flex-col gap-2.5">
+      <GrantBuilder
+        principalId={props.principal.id}
+        current={current()}
+        roles={(roles.data ?? []).map((r) => ({
+          id: r.id,
+          label: r.display_name || r.id,
+          title: [r.description, `Grants: ${(r.effective_permissions ?? r.permissions).join(", ")}`].filter(Boolean).join("\n\n"),
+        }))}
+        entities={entities}
+        scopeName={(id) => nameOf().get(id)}
+        canGrant={props.canGrant}
+        canRevoke={props.canRevoke}
+        onSave={onSave}
+      />
+      {/* Inherited grants are read-only here: they come from a group, so they are
+          changed by editing the group, not the member. */}
+      <Show when={inherited().length}>
+        <div class="flex flex-col gap-1">
+          <div class="eyebrow">Inherited from groups</div>
+          <div class="flex flex-wrap gap-1.5">
+            <For each={inherited()}>
+              {(g) => (
+                <span
+                  class="inline-flex items-center gap-1 rounded-field border border-dashed border-base-300 bg-base-100 py-[3px] pl-2.5 pr-2 text-xs"
+                  title={`Inherited from the group "${g.group_name}". Edit the group to change it.`}
+                >
+                  <span class="font-data">{g.role} @ {g.scope_kind === "all" ? "all" : nameOf().get(g.scope_id ?? "") ?? g.scope_id}</span>
+                  <span class="text-base-content/40">from</span>
+                  <span class="text-primary">{g.group_name}</span>
+                </span>
+              )}
+            </For>
+          </div>
+        </div>
+      </Show>
+    </div>
   );
 }
 

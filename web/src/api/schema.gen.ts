@@ -899,6 +899,10 @@ export interface components {
              * @example /api/v1/schemas/GrantBody.json
              */
             readonly $schema?: string;
+            /** @description Set when this grant is inherited from a group the principal belongs to (the group's id); absent for a direct grant, which is the only kind revocable from the principal. */
+            group_id?: string;
+            /** @description The source group's label, present when the grant is inherited. */
+            group_name?: string;
             id?: string;
             role: string;
             scope_id?: string;

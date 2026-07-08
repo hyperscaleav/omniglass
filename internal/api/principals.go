@@ -30,12 +30,8 @@ func toPrincipalBody(pr *storage.Principal) principalBody {
 	if pr.Service != nil {
 		b.Service = &svcBody{Label: pr.Service.Label}
 	}
-	for _, g := range pr.Grants {
-		gb := grantBody{ID: g.ID, Role: g.Role, ScopeKind: g.ScopeKind, ScopeOp: g.ScopeOp}
-		if g.ScopeID != nil {
-			gb.ScopeID = *g.ScopeID
-		}
-		b.Grants = append(b.Grants, gb)
+	for i := range pr.Grants {
+		b.Grants = append(b.Grants, toGrantBody(&pr.Grants[i]))
 	}
 	return b
 }
@@ -317,6 +313,12 @@ func toGrantBody(g *storage.Grant) grantBody {
 	b := grantBody{ID: g.ID, Role: g.Role, ScopeKind: g.ScopeKind, ScopeOp: g.ScopeOp}
 	if g.ScopeID != nil {
 		b.ScopeID = *g.ScopeID
+	}
+	if g.GroupID != nil {
+		b.GroupID = *g.GroupID
+	}
+	if g.GroupName != nil {
+		b.GroupName = *g.GroupName
 	}
 	return b
 }
