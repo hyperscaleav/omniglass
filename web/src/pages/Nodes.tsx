@@ -25,12 +25,14 @@ import { describeError, rel } from "../lib/format";
 // shown ONCE in a modal; it is never cached or logged. Every gate is a UI hint;
 // the server is the authority.
 // Per-status pill class. up/down carry a soft hue; "never" (no heartbeat yet) is a
-// neutral state, so it uses badge-ghost, which reads in both themes (badge-neutral
-// renders near-black against the dark surface).
+// neutral state given a soft grey fill (a tint of the text color, so it reads as a
+// visible pill in both themes). badge-neutral renders near-black against the dark
+// surface and badge-ghost renders transparent, so neither works here.
+const NEUTRAL_PILL = "bg-base-content/10 text-base-content/70 border-transparent";
 const STATUS: Record<NodeStatus, { label: string; badge: string }> = {
   up: { label: "up", badge: "badge-soft badge-success" },
   down: { label: "down", badge: "badge-soft badge-error" },
-  never: { label: "never", badge: "badge-ghost" },
+  never: { label: "never", badge: NEUTRAL_PILL },
 };
 
 function StatusPill(props: { node: Node }) {
