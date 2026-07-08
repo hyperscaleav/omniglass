@@ -117,6 +117,9 @@ func (UnimplementedGateway) ListComponents(context.Context, scope.Set) ([]Compon
 func (UnimplementedGateway) GetComponent(context.Context, string, scope.Set) (*Component, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) ListComponentInterfaces(context.Context, string) ([]ComponentInterface, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) CreateComponent(context.Context, string, ComponentSpec, scope.Set) (*Component, error) {
 	return nil, nil
 }
@@ -142,6 +145,9 @@ func (UnimplementedGateway) InsertMetricDatapoints(context.Context, []MetricData
 	return nil
 }
 func (UnimplementedGateway) LatestMetric(context.Context, string, string) (*MetricDatapoint, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) LatestMetricInstance(context.Context, string, string, string) (*MetricDatapoint, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) InsertStateDatapoints(context.Context, []StateDatapointEvent) error {

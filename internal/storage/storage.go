@@ -134,6 +134,10 @@ type Gateway interface {
 	ListComponentTypes(ctx context.Context) ([]ComponentType, error)
 	ListComponents(ctx context.Context, read scope.Set) ([]Component, error)
 	GetComponent(ctx context.Context, name string, read scope.Set) (*Component, error)
+	// ListComponentInterfaces returns a component's interfaces (the reachability
+	// panel's rows). Not scope-injected: the caller gates on the component being
+	// in read scope first, then reads its interfaces by the verified name.
+	ListComponentInterfaces(ctx context.Context, componentName string) ([]ComponentInterface, error)
 	CreateComponent(ctx context.Context, actorID string, spec ComponentSpec, create scope.Set) (*Component, error)
 	UpdateComponent(ctx context.Context, actorID, name string, patch ComponentPatch, read, action scope.Set) (*Component, error)
 	DeleteComponent(ctx context.Context, actorID, name string, read, action scope.Set) error
@@ -149,6 +153,9 @@ type Gateway interface {
 	// (collection.Registry) before the write.
 	InsertMetricDatapoints(ctx context.Context, evs []MetricDatapointEvent) error
 	LatestMetric(ctx context.Context, componentName, key string) (*MetricDatapoint, error)
+	// LatestMetricInstance is the instance-scoped LatestMetric: the reachability
+	// layer signals are per-interface, so each interface resolves its own latest.
+	LatestMetricInstance(ctx context.Context, componentName, key, instance string) (*MetricDatapoint, error)
 
 	// The observed-state sink: the mirror of the metric sink for categorical
 	// verdicts (interface.reachable). reject-not-project and the transition-only

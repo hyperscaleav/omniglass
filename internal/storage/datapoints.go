@@ -105,3 +105,24 @@ func (p *PG) LatestMetric(ctx context.Context, componentName, key string) (*Metr
 	}
 	return &dp, nil
 }
+
+// LatestMetricInstance returns the most recent metric row for a component series
+// (key + instance), or nil if none. The reachability panel's probe metrics
+// (tcp.open, icmp.reachable, and their rtt/connect_time companions) are
+// per-interface instance, so the layer signals must resolve one interface's
+// latest value, not the newest across every interface as LatestMetric does.
+func (p *PG) LatestMetricInstance(ctx context.Context, componentName, key, instance string) (*MetricDatapoint, error) {
+	var dp MetricDatapoint
+	err := p.pool.QueryRow(ctx, `
+		select ts, owner_kind, key, instance, value, provenance, source
+		from metric_datapoint
+		where component_id = $1 and key = $2 and instance = $3
+		order by ts desc
+		limit 1`, componentName, key, instance).Scan(&dp.TS, &dp.OwnerKind, &dp.Key, &dp.Instance, &dp.Value, &dp.Provenance, &dp.Source)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	} else if err != nil {
+		return nil, fmt.Errorf("storage: latest metric %s/%s[%s]: %w", componentName, key, instance, err)
+	}
+	return &dp, nil
+}
