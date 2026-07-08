@@ -74,19 +74,38 @@ describe("Interfaces page", () => {
 
   it("posts the create body (type + component + node + params.target) and lands on the new row", async () => {
     const created: Interface = { name: "disp-1-tcp2", type: "tcp", component: "disp-1", node: "edge-east", params: { target: "10.0.0.2:80" } };
+    const calls: { url: string; method: string; body: unknown }[] = [];
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       const url = typeof input === "string" ? input : req.url;
       const method = typeof input === "string" ? "GET" : req.method;
-      const body = url.includes("/interfaces") && method === "POST" ? created : { interfaces: [...seed, created] };
-      return new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
+      const body = method === "POST" ? await req.clone().json() : null;
+      calls.push({ url, method, body });
+      const resBody = url.includes("/interfaces") && method === "POST" ? created : { interfaces: [...seed, created] };
+      return new Response(JSON.stringify(resBody), { status: 200, headers: { "Content-Type": "application/json" } });
     });
 
     mount(owner);
     fireEvent.click(screen.getByText("New interface"));
     fireEvent.input(await screen.findByLabelText("Name"), { target: { value: "disp-1-tcp2" } });
+    fireEvent.change(screen.getByLabelText("Type"), { target: { value: "tcp" } });
+    fireEvent.change(screen.getByLabelText("Component"), { target: { value: "disp-1" } });
+    fireEvent.change(screen.getByLabelText("Node"), { target: { value: "edge-east" } });
     fireEvent.input(screen.getByLabelText("Target"), { target: { value: "10.0.0.2:80" } });
     fireEvent.click(screen.getByText("Create interface"));
+
+    await waitFor(() => {
+      const posts = calls.filter((c) => c.method === "POST" && c.url.includes("/interfaces"));
+      expect(posts.length).toBe(1);
+    });
+    const post = calls.find((c) => c.method === "POST" && c.url.includes("/interfaces"))!;
+    expect(post.body).toMatchObject({
+      name: "disp-1-tcp2",
+      type: "tcp",
+      component: "disp-1",
+      node: "edge-east",
+      params: { target: "10.0.0.2:80" },
+    });
     // The create Drawer gives way to the new interface's detail Drawer.
     await waitFor(() => expect(screen.queryByText("Create interface")).toBeNull());
   });

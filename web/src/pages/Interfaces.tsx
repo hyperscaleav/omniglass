@@ -15,7 +15,6 @@ import {
 } from "../lib/interfaces";
 import { COMPONENTS_KEY, listComponents } from "../lib/components";
 import { NODES_KEY, listNodes } from "../lib/nodes";
-import { TASKS_KEY } from "../lib/tasks";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
 
@@ -253,7 +252,6 @@ function CreateInterfaceForm(props: { close: () => void; onCreated: (i: Interfac
         params: target().trim() ? { target: target().trim() } : undefined,
       });
       await qc.invalidateQueries({ queryKey: INTERFACES_KEY });
-      await qc.invalidateQueries({ queryKey: TASKS_KEY });
       props.onCreated(created);
     } catch (er) {
       setErr(describeError(er));

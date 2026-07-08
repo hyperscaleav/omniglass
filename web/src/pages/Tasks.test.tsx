@@ -75,20 +75,32 @@ describe("Tasks page", () => {
   });
 
   it("posts the create body (interface + mode + enabled) and lands on the new row", async () => {
-    const created: Task = { id: "t-new", interface: "disp-1-tcp", mode: "poll", enabled: true };
+    const created: Task = { id: "t-new", interface: "disp-1-icmp", mode: "listen", enabled: false };
+    const calls: { url: string; method: string; body: unknown }[] = [];
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       const url = typeof input === "string" ? input : req.url;
       const method = typeof input === "string" ? "GET" : req.method;
-      const body = url.includes("/tasks") && method === "POST" ? created : { tasks: [...seed, created] };
-      return new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
+      const body = method === "POST" ? await req.clone().json() : null;
+      calls.push({ url, method, body });
+      const resBody = url.includes("/tasks") && method === "POST" ? created : { tasks: [...seed, created] };
+      return new Response(JSON.stringify(resBody), { status: 200, headers: { "Content-Type": "application/json" } });
     });
 
     mount(owner);
     fireEvent.click(screen.getByText("New task"));
     const ifaceSelect = (await screen.findByLabelText("Interface")) as HTMLSelectElement;
-    fireEvent.change(ifaceSelect, { target: { value: "disp-1-tcp" } });
+    fireEvent.change(ifaceSelect, { target: { value: "disp-1-icmp" } });
+    fireEvent.change(screen.getByLabelText("Mode"), { target: { value: "listen" } });
+    fireEvent.click(screen.getByLabelText("On the worklist (enabled)"));
     fireEvent.click(screen.getByText("Create task"));
+
+    await waitFor(() => {
+      const posts = calls.filter((c) => c.method === "POST" && c.url.includes("/tasks"));
+      expect(posts.length).toBe(1);
+    });
+    const post = calls.find((c) => c.method === "POST" && c.url.includes("/tasks"))!;
+    expect(post.body).toMatchObject({ interface: "disp-1-icmp", mode: "listen", enabled: false });
     await waitFor(() => expect(screen.queryByText("Create task")).toBeNull());
   });
 });
