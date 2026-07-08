@@ -134,3 +134,42 @@ export function sectionLabel(pathname: string): string {
   }
   return label;
 }
+
+// navPerms maps a gated route path to the permission tokens it requires, from the
+// SAME nav config that hides the sidebar button (an explicit `perm`, else
+// `<resource>:read`). An ungated path (Home, Profile, the stubs) is absent. This is
+// the single source both the sidebar (hide the button) and the route guard (block
+// the URL) read, so the two can never diverge.
+const navPerms: Record<string, string[]> = (() => {
+  const m: Record<string, string[]> = {};
+  const add = (n: { path?: string; resource?: string; perm?: string }) => {
+    if (!n.path) return;
+    if (n.perm) m[n.path] = n.perm.split(":");
+    else if (n.resource) m[n.path] = [n.resource, "read"];
+  };
+  for (const item of navItems) {
+    add(item);
+    for (const child of item.children ?? []) add(child);
+  }
+  return m;
+})();
+
+// routeTokens returns the permission a route requires, or null for an ungated
+// route (always reachable). It resolves by longest prefix like sectionLabel, so a
+// detail route (/locations/hq) inherits its section's gate (/locations). The route
+// guard denies a route whose tokens the caller lacks; the server is still the
+// authority, this only keeps the console from rendering a page the caller cannot
+// use (and, under impersonation, from painting stale cross-principal data).
+export function routeTokens(pathname: string): string[] | null {
+  const path = relative(pathname);
+  let tokens: string[] | null = null;
+  let best = -1;
+  for (const [p, need] of Object.entries(navPerms)) {
+    const hit = path === p || path.startsWith(`${p}/`);
+    if (hit && p.length > best) {
+      tokens = need;
+      best = p.length;
+    }
+  }
+  return tokens;
+}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { filterNav, navItems, type NavItem } from "./nav";
+import { filterNav, navItems, routeTokens, type NavItem } from "./nav";
 import { can, type Me } from "./auth";
 
 const Dummy = () => null;
@@ -70,5 +70,38 @@ describe("filterNav", () => {
     expect(section("Settings", ["*:read"])).toContain("Users"); // a normal 2-token read still shows
     expect(section("Settings", ["audit:read:admin"])).toContain("Audit");
     expect(section("Settings", [">"])).toContain("Audit");
+  });
+});
+
+// routeTokens is the route guard's half of the same map that hides the sidebar
+// button: a gated route returns the permission it needs, an ungated one returns
+// null (always reachable), and a detail route inherits its section's gate.
+describe("routeTokens", () => {
+  it("returns the permission a gated route requires", () => {
+    expect(routeTokens("/web/locations")).toEqual(["location", "read"]);
+    expect(routeTokens("/web/components")).toEqual(["component", "read"]);
+    expect(routeTokens("/web/systems")).toEqual(["system", "read"]);
+    expect(routeTokens("/web/users")).toEqual(["principal", "read"]);
+    expect(routeTokens("/web/roles")).toEqual(["role", "read"]);
+    expect(routeTokens("/web/audit")).toEqual(["audit", "read", "admin"]); // the admin tier
+  });
+  it("inherits a section's gate on its detail route (longest prefix)", () => {
+    expect(routeTokens("/web/locations/hq")).toEqual(["location", "read"]);
+    expect(routeTokens("/web/components/cmp_9f2")).toEqual(["component", "read"]);
+  });
+  it("returns null for an ungated route (Home, Profile, the stubs)", () => {
+    expect(routeTokens("/web/")).toBeNull();
+    expect(routeTokens("/web/profile")).toBeNull();
+    expect(routeTokens("/web/dashboards")).toBeNull(); // a not-yet-built stub
+    expect(routeTokens("/web/groups")).toBeNull();
+  });
+  it("gates exactly what the sidebar hides: routeTokens is set iff the nav entry has a resource/perm", () => {
+    // Every gated nav child's route resolves to a permission; a resource-less stub does not.
+    const settings = navItems.find((i) => i.label === "Settings")!;
+    for (const c of settings.children!) {
+      const need = routeTokens(`/web${c.path}`);
+      if (c.resource || c.perm) expect(need).not.toBeNull();
+      else expect(need).toBeNull();
+    }
   });
 });

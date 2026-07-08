@@ -50,7 +50,11 @@ export async function impersonate(
   const meta: ActingAs = { target: targetName, mode };
   localStorage.setItem(META_KEY, JSON.stringify(meta));
   setActingAs(meta);
-  await qc.invalidateQueries();
+  // Clear, not just invalidate: the principal changed, so every cached query is
+  // now the wrong principal's. Invalidate would keep the stale data visible while
+  // refetching (and keep it forever if the refetch is refused, e.g. impersonating
+  // a no-grant user); clearing drops it so nothing cross-principal can paint.
+  qc.clear();
   return { ok: true };
 }
 
@@ -64,5 +68,7 @@ export async function stopImpersonating(qc: QueryClient): Promise<void> {
   localStorage.removeItem(REAL_TOKEN_KEY);
   localStorage.removeItem(META_KEY);
   setActingAs(null);
-  await qc.invalidateQueries();
+  // Same as impersonate(): the principal changed back, so drop every cached query
+  // rather than show the impersonated principal's rows during the refetch.
+  qc.clear();
 }
