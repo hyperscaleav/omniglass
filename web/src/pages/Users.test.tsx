@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { render, fireEvent, screen } from "@solidjs/testing-library";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { render, fireEvent, screen, waitFor } from "@solidjs/testing-library";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import Users from "./Users";
 import { PRINCIPALS_KEY, ROLES_KEY, type Principal } from "../lib/principals";
@@ -35,6 +35,8 @@ function mount() {
 }
 
 describe("Users page", () => {
+  afterEach(() => vi.restoreAllMocks());
+
   it("renders a directory row per principal: name, username, kind, and grant count", () => {
     const { getByText, getAllByText } = mount();
     expect(getByText("Alice Ng")).toBeTruthy();
@@ -64,6 +66,30 @@ describe("Users page", () => {
     fireEvent.click(screen.getByText("Cancel"));
     expect(await screen.findByText("Edit")).toBeTruthy();
     expect(screen.queryByText("Save changes")).toBeNull();
+  });
+
+  it("lands on the new user's detail Drawer after a successful create", async () => {
+    // The create POST returns the new principal; the directory refetch (triggered
+    // by the invalidate) returns it alongside the seed, so the detail Drawer,
+    // which re-derives by id from the live query, resolves the fresh row.
+    const carol: Principal = { id: "u-carol", kind: "human", active: true, human: { username: "carol", email: "carol@example.com", display_name: "Carol Diaz" }, grants: [] };
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      const url = typeof input === "string" ? input : req.url;
+      const method = typeof input === "string" ? "GET" : req.method;
+      const body = url.includes("/principals") && method === "POST" ? carol : { principals: [...seed, carol] };
+      return new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+
+    mount();
+    fireEvent.click(screen.getByText("New user"));
+    const username = (await screen.findByLabelText("Username")) as HTMLInputElement;
+    fireEvent.input(username, { target: { value: "carol" } });
+    fireEvent.click(screen.getByText("Create user"));
+    // The create Drawer gives way to the new user's detail Drawer: its email fact
+    // (only present in the detail view) shows, and the create submit is gone.
+    expect(await screen.findByText("carol@example.com")).toBeTruthy();
+    await waitFor(() => expect(screen.queryByText("Create user")).toBeNull());
   });
 
   it("narrows the directory through the FilterBar (kind:service keeps only the bot)", async () => {

@@ -36,8 +36,11 @@ export type FlatConfig<T> = {
   rowClass?: (r: T) => string;
   // A row opens this side Drawer detail. Omit for a read-only table (the audit log).
   detail?: (r: T) => FlatDetail;
-  // The primary create action: a rail button that opens a Drawer with `body`.
-  create?: { label: string; can: () => boolean; body: (close: () => void) => JSX.Element };
+  // The primary create action: a rail button that opens a Drawer with `body`. The
+  // body receives a small context: `close` dismisses the create Drawer; `select`
+  // opens a row's detail Drawer (closing create), so a successful create can land
+  // the operator straight on the new row.
+  create?: { label: string; can: () => boolean; body: (ctx: { close: () => void; select: (row: T) => void }) => JSX.Element };
   // A trailing row under the table (counts, load-older); receives the shown/total
   // counts and whether a filter is active.
   footer?: (info: { shown: number; total: number; filtering: boolean }) => JSX.Element;
@@ -173,7 +176,13 @@ export default function FlatList<T>(props: { config: FlatConfig<T> }) {
 
       <Show when={cfg.create && createOpen()}>
         <Drawer open={true} onClose={() => setCreateOpen(false)} title={`New ${cfg.entity.name}`}>
-          {cfg.create!.body(() => setCreateOpen(false))}
+          {cfg.create!.body({
+            close: () => setCreateOpen(false),
+            select: (row) => {
+              setSelected(() => row);
+              setCreateOpen(false);
+            },
+          })}
         </Drawer>
       </Show>
     </>
