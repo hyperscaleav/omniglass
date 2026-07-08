@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import "./app.css";
 import App from "./App";
 import { AuthGuard } from "./components/AuthGuard";
+import { RouteGuard } from "./components/RouteGuard";
 import Login from "./pages/Login";
 import Home from "./pages/Home";
 import Locations from "./pages/Locations";
@@ -28,7 +29,9 @@ const queryClient = new QueryClient();
 // page. Login is a sibling route outside the shell.
 const ProtectedShell: ParentComponent = (props) => (
   <AuthGuard>
-    <App>{props.children}</App>
+    <App>
+      <RouteGuard>{props.children}</RouteGuard>
+    </App>
   </AuthGuard>
 );
 

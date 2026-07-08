@@ -113,8 +113,11 @@ up short is a cue to load older and look deeper.
 - The **top bar** shows the current section, a **Search (⌘K)** button, and the light/dark
   toggle.
 - You only see what you can use: a tab you have no read grant for is **hidden**, and an
-  action you cannot perform (create, edit, delete) does not render. The server is the
-  authority on every request; the console only hides what it knows you cannot reach.
+  action you cannot perform (create, edit, delete) does not render. The same permission
+  map also **guards the route**, so a hidden tab is an unreachable URL: typing or
+  bookmarking a page you cannot read redirects you to Home. The server is the authority on
+  every request (it refuses regardless); the console hides what it knows you cannot reach so
+  it never paints a page you cannot use.
 
 ## Jump anywhere: ⌘K
 
