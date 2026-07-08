@@ -325,7 +325,7 @@ components:
           description: Owning component name; omit for a server-hosted interface (needs an all-scoped grant)
           type: string
         name:
-          description: Globally unique name (the address)
+          description: Friendly name, unique within the owning component
           minLength: 1
           type: string
         node:
@@ -461,9 +461,9 @@ components:
         enabled:
           description: Whether the task is on the worklist; defaults to true
           type: boolean
-        interface:
-          description: The interface name this task runs over
-          minLength: 1
+        interface_id:
+          description: The interface id this task runs over
+          format: uuid
           type: string
         mode:
           description: The poll/listen axis
@@ -478,7 +478,7 @@ components:
           description: Inline probe settings (jsonb)
       required:
         - mode
-        - interface
+        - interface_id
       type: object
     EnrollOutputBody:
       additionalProperties: false
@@ -711,7 +711,11 @@ components:
         component:
           description: The owning component name; absent for a server-hosted interface
           type: string
+        id:
+          description: The interface's surrogate id (the address)
+          type: string
         name:
+          description: The friendly name, unique within the owning component
           type: string
         node:
           description: The node placement name, if assigned
@@ -721,6 +725,7 @@ components:
         type:
           type: string
       required:
+        - id
         - name
         - type
       type: object
@@ -1347,7 +1352,8 @@ components:
           type: boolean
         id:
           type: string
-        interface:
+        interface_id:
+          description: The interface's surrogate id this task runs over
           type: string
         mode:
           type: string
@@ -1359,7 +1365,7 @@ components:
       required:
         - id
         - mode
-        - interface
+        - interface_id
         - enabled
       type: object
     UpdateComponentInputBody:
@@ -1926,17 +1932,17 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Create an interface
-  /interfaces/{name}:
+  /interfaces/{id}:
     delete:
       description: Deletes an interface, refused while a task still references it. Gated by interface:delete; read and delete scopes (through the component) drive the 404 versus 403 split.
       operationId: delete-interface
       parameters:
-        - description: The interface's unique name
+        - description: The interface's surrogate id
           in: path
-          name: name
+          name: id
           required: true
           schema:
-            description: The interface's unique name
+            description: The interface's surrogate id
             type: string
       responses:
         "204":
@@ -1949,15 +1955,15 @@ paths:
           description: Error
       summary: Delete an interface
     get:
-      description: Fetches an interface by name. An interface whose component is out of the caller's read scope is a non-disclosing 404. Gated by interface:read.
+      description: Fetches an interface by id. An interface whose component is out of the caller's read scope is a non-disclosing 404. Gated by interface:read.
       operationId: get-interface
       parameters:
-        - description: The interface's unique name
+        - description: The interface's surrogate id
           in: path
-          name: name
+          name: id
           required: true
           schema:
-            description: The interface's unique name
+            description: The interface's surrogate id
             type: string
       responses:
         "200":
@@ -1978,7 +1984,7 @@ paths:
       operationId: update-interface
       parameters:
         - in: path
-          name: name
+          name: id
           required: true
           schema:
             type: string

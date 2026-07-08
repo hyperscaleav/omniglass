@@ -264,7 +264,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/interfaces/{name}": {
+    "/interfaces/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -273,7 +273,7 @@ export interface paths {
         };
         /**
          * Get an interface
-         * @description Fetches an interface by name. An interface whose component is out of the caller's read scope is a non-disclosing 404. Gated by interface:read.
+         * @description Fetches an interface by id. An interface whose component is out of the caller's read scope is a non-disclosing 404. Gated by interface:read.
          */
         get: operations["get-interface"];
         put?: never;
@@ -1040,7 +1040,7 @@ export interface components {
             readonly $schema?: string;
             /** @description Owning component name; omit for a server-hosted interface (needs an all-scoped grant) */
             component?: string;
-            /** @description Globally unique name (the address) */
+            /** @description Friendly name, unique within the owning component */
             name: string;
             /** @description Node placement name */
             node?: string;
@@ -1116,8 +1116,11 @@ export interface components {
             display_name?: string;
             /** @description Whether the task is on the worklist; defaults to true */
             enabled?: boolean;
-            /** @description The interface name this task runs over */
-            interface: string;
+            /**
+             * Format: uuid
+             * @description The interface id this task runs over
+             */
+            interface_id: string;
             /**
              * @description The poll/listen axis
              * @enum {string}
@@ -1278,6 +1281,9 @@ export interface components {
             readonly $schema?: string;
             /** @description The owning component name; absent for a server-hosted interface */
             component?: string;
+            /** @description The interface's surrogate id (the address) */
+            id: string;
+            /** @description The friendly name, unique within the owning component */
             name: string;
             /** @description The node placement name, if assigned */
             node?: string;
@@ -1574,7 +1580,8 @@ export interface components {
             display_name?: string;
             enabled: boolean;
             id: string;
-            interface: string;
+            /** @description The interface's surrogate id this task runs over */
+            interface_id: string;
             mode: string;
             /** @description The node placement name, if assigned */
             node?: string;
@@ -2257,8 +2264,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The interface's unique name */
-                name: string;
+                /** @description The interface's surrogate id */
+                id: string;
             };
             cookie?: never;
         };
@@ -2289,8 +2296,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The interface's unique name */
-                name: string;
+                /** @description The interface's surrogate id */
+                id: string;
             };
             cookie?: never;
         };
@@ -2319,7 +2326,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                id: string;
             };
             cookie?: never;
         };

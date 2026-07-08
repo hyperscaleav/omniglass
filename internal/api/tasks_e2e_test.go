@@ -52,11 +52,13 @@ func TestTaskAPI(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create comp-b: %v", err)
 	}
-	// An interface on each component to hang tasks off.
-	if _, err := gw.CreateInterface(ctx, "", storage.InterfaceSpec{Name: "if-a", Type: "tcp", Component: ptr("comp-a")}, all); err != nil {
+	// An interface on each component to hang tasks off; keep their surrogate ids.
+	ifA, err := gw.CreateInterface(ctx, "", storage.InterfaceSpec{Name: "if-a", Type: "tcp", Component: ptr("comp-a")}, all)
+	if err != nil {
 		t.Fatalf("create if-a: %v", err)
 	}
-	if _, err := gw.CreateInterface(ctx, "", storage.InterfaceSpec{Name: "if-b", Type: "tcp", Component: ptr("comp-b")}, all); err != nil {
+	ifB, err := gw.CreateInterface(ctx, "", storage.InterfaceSpec{Name: "if-b", Type: "tcp", Component: ptr("comp-b")}, all)
+	if err != nil {
 		t.Fatalf("create if-b: %v", err)
 	}
 
@@ -65,20 +67,20 @@ func TestTaskAPI(t *testing.T) {
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
 	// Owner creates a task on each interface; the id is content-addressed server-side.
-	taskA := createTask(c, ownerTok, map[string]any{"mode": "poll", "interface": "if-a", "spec": map[string]any{"probe": "tcp"}})
-	createTask(c, ownerTok, map[string]any{"mode": "poll", "interface": "if-b", "spec": map[string]any{"probe": "tcp"}})
+	taskA := createTask(c, ownerTok, map[string]any{"mode": "poll", "interface_id": ifA.ID, "spec": map[string]any{"probe": "tcp"}})
+	createTask(c, ownerTok, map[string]any{"mode": "poll", "interface_id": ifB.ID, "spec": map[string]any{"probe": "tcp"}})
 	if got := listTasks(c, ownerTok); len(got) != 2 {
 		t.Fatalf("owner task list = %d, want 2", len(got))
 	}
 	c.do(ownerTok, http.MethodGet, "/tasks/"+taskA.ID, nil, http.StatusOK)
-	// A task over an unknown interface is a 422.
-	c.do(ownerTok, http.MethodPost, "/tasks", map[string]any{"mode": "poll", "interface": "ghost"}, http.StatusUnprocessableEntity)
+	// A task over a well-formed but unknown interface id is a 422.
+	c.do(ownerTok, http.MethodPost, "/tasks", map[string]any{"mode": "poll", "interface_id": "00000000-0000-0000-0000-000000000000"}, http.StatusUnprocessableEntity)
 
 	// PERMISSION GATE: an all-scope viewer reads (the *:read floor) but cannot
 	// create (no task:create) -> a capability 403.
 	viewerAllTok := setupAllViewer(t, ctx, dsn, "viewer-all")
 	c.do(viewerAllTok, http.MethodGet, "/tasks/"+taskA.ID, nil, http.StatusOK)
-	c.do(viewerAllTok, http.MethodPost, "/tasks", map[string]any{"mode": "poll", "interface": "if-a"}, http.StatusForbidden)
+	c.do(viewerAllTok, http.MethodPost, "/tasks", map[string]any{"mode": "poll", "interface_id": ifA.ID}, http.StatusForbidden)
 	c.do(viewerAllTok, http.MethodPatch, "/tasks/"+taskA.ID, map[string]any{"enabled": false}, http.StatusForbidden)
 
 	// SCOPE GATE: an operator scoped to component B holds task:create/update but its
@@ -88,8 +90,8 @@ func TestTaskAPI(t *testing.T) {
 	opBTok := setupScopedViewer(t, ctx, dsn, "op-b", "operator", "component", compB.ID)
 	c.do(opBTok, http.MethodGet, "/tasks/"+taskA.ID, nil, http.StatusNotFound)
 	c.do(opBTok, http.MethodPatch, "/tasks/"+taskA.ID, map[string]any{"enabled": false}, http.StatusNotFound)
-	c.do(opBTok, http.MethodPost, "/tasks", map[string]any{"mode": "poll", "interface": "if-a", "spec": map[string]any{"x": 1}}, http.StatusForbidden)
-	taskB2 := createTask(c, opBTok, map[string]any{"mode": "listen", "interface": "if-b"})
+	c.do(opBTok, http.MethodPost, "/tasks", map[string]any{"mode": "poll", "interface_id": ifA.ID, "spec": map[string]any{"x": 1}}, http.StatusForbidden)
+	taskB2 := createTask(c, opBTok, map[string]any{"mode": "listen", "interface_id": ifB.ID})
 	c.do(opBTok, http.MethodGet, "/tasks/"+taskB2.ID, nil, http.StatusOK)
 	// The scoped operator's list never shows A's task.
 	if got := listTasks(c, opBTok); len(got) == 0 {
@@ -103,10 +105,10 @@ func TestTaskAPI(t *testing.T) {
 }
 
 type taskResp struct {
-	ID        string `json:"id"`
-	Mode      string `json:"mode"`
-	Interface string `json:"interface"`
-	Enabled   bool   `json:"enabled"`
+	ID          string `json:"id"`
+	Mode        string `json:"mode"`
+	InterfaceID string `json:"interface_id"`
+	Enabled     bool   `json:"enabled"`
 }
 
 func createTask(c *apiClient, tok string, body map[string]any) taskResp {

@@ -177,29 +177,40 @@ func TestRunIdempotent(t *testing.T) {
 	}
 
 	// The interface: type tcp, owned by the component, placed on the node, one row.
-	iface, err := gw.GetInterface(ctx, "hq-boardroom-display-tcp", all)
+	// Interfaces are id-keyed now, so resolve the friendly name (unique on its
+	// component) through the scoped list, then keep its id for the task check.
+	var iface *storage.Interface
+	ifaces, err := gw.ListInterfaces(ctx, all)
 	if err != nil {
-		t.Fatalf("get seeded interface: %v", err)
+		t.Fatalf("list interfaces: %v", err)
+	}
+	for i := range ifaces {
+		if ifaces[i].Name == "boardroom-tcp" {
+			iface = &ifaces[i]
+		}
+	}
+	if iface == nil {
+		t.Fatalf("seeded interface boardroom-tcp not found")
 	}
 	if iface.Type != "tcp" || iface.Component == nil || *iface.Component != "hq-boardroom-display" || iface.Node == nil || *iface.Node != "edge-hq" {
 		t.Errorf("seeded interface = %+v, want tcp on component hq-boardroom-display / node edge-hq", iface)
 	}
 	var ifaceCount int
-	if err := conn.QueryRow(ctx, `select count(*) from interface where name = 'hq-boardroom-display-tcp'`).Scan(&ifaceCount); err != nil {
+	if err := conn.QueryRow(ctx, `select count(*) from interface where name = 'boardroom-tcp'`).Scan(&ifaceCount); err != nil {
 		t.Fatalf("count reachability interface: %v", err)
 	}
 	if ifaceCount != 1 {
 		t.Errorf("reachability interface rows = %d, want 1 (seed not idempotent)", ifaceCount)
 	}
 
-	// Exactly one poll task over the interface.
+	// Exactly one poll task over the interface (referenced by its surrogate id).
 	tasks, err := gw.ListTasks(ctx, all)
 	if err != nil {
 		t.Fatalf("list tasks: %v", err)
 	}
 	var reachTasks int
 	for i := range tasks {
-		if tasks[i].InterfaceName == "hq-boardroom-display-tcp" {
+		if tasks[i].InterfaceID == iface.ID {
 			reachTasks++
 			if tasks[i].Mode != "poll" || !tasks[i].Enabled {
 				t.Errorf("reachability task = %+v, want mode poll enabled", tasks[i])
@@ -214,28 +225,28 @@ func TestRunIdempotent(t *testing.T) {
 	// verdict, a down->up transition pair for the availability strip, and both probe
 	// layers green. The transition count proves the datapoints did not double on the
 	// second Run (they are append-only, so the sentinel must have skipped them).
-	verdict, err := gw.LatestState(ctx, "hq-boardroom-display", "interface.reachable", "hq-boardroom-display-tcp")
+	verdict, err := gw.LatestState(ctx, "hq-boardroom-display", "interface.reachable", "boardroom-tcp")
 	if err != nil {
 		t.Fatalf("latest verdict: %v", err)
 	}
 	if verdict == nil || verdict.Value != "up" {
 		t.Fatalf("seeded verdict = %+v, want value up", verdict)
 	}
-	transitions, err := gw.StateTransitions(ctx, "hq-boardroom-display", "interface.reachable", "hq-boardroom-display-tcp", time.Time{})
+	transitions, err := gw.StateTransitions(ctx, "hq-boardroom-display", "interface.reachable", "boardroom-tcp", time.Time{})
 	if err != nil {
 		t.Fatalf("state transitions: %v", err)
 	}
 	if len(transitions) != 2 {
 		t.Errorf("verdict transitions = %d, want 2 (down->up), idempotent across two Runs", len(transitions))
 	}
-	tcpOpen, err := gw.LatestMetricInstance(ctx, "hq-boardroom-display", "tcp.open", "hq-boardroom-display-tcp")
+	tcpOpen, err := gw.LatestMetricInstance(ctx, "hq-boardroom-display", "tcp.open", "boardroom-tcp")
 	if err != nil {
 		t.Fatalf("latest tcp.open: %v", err)
 	}
 	if tcpOpen == nil || tcpOpen.Value != 1 {
 		t.Errorf("seeded tcp.open = %+v, want 1", tcpOpen)
 	}
-	icmpReach, err := gw.LatestMetricInstance(ctx, "hq-boardroom-display", "icmp.reachable", "hq-boardroom-display-tcp")
+	icmpReach, err := gw.LatestMetricInstance(ctx, "hq-boardroom-display", "icmp.reachable", "boardroom-tcp")
 	if err != nil {
 		t.Fatalf("latest icmp.reachable: %v", err)
 	}

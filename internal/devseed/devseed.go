@@ -155,7 +155,7 @@ const (
 	reachComponent = "hq-boardroom-display"
 	reachLocation  = "hq-west-2-boardroom"
 	reachNode      = "edge-hq"
-	reachInterface = "hq-boardroom-display-tcp"
+	reachInterface = "boardroom-tcp"
 	reachTarget    = "127.0.0.1:22"
 )
 
@@ -169,11 +169,16 @@ const (
 func seedReachability(ctx context.Context, gw storage.Gateway, actorID string) error {
 	all := scope.Set{All: true}
 
-	// Sentinel: the interface. Present means this block ran on an earlier start.
-	if _, err := gw.GetInterface(ctx, reachInterface, all); err == nil {
-		return nil
-	} else if !errors.Is(err, storage.ErrInterfaceNotFound) {
+	// Sentinel: the interface (addressed by its friendly name on its component, since
+	// interfaces are now id-keyed). Present means this block ran on an earlier start.
+	existing, err := gw.ListComponentInterfaces(ctx, reachComponent)
+	if err != nil {
 		return fmt.Errorf("devseed: check reachability interface: %w", err)
+	}
+	for _, it := range existing {
+		if it.Name == reachInterface {
+			return nil
+		}
 	}
 
 	// The component the check hangs on, placed in the HQ boardroom. Tolerate an
@@ -217,27 +222,29 @@ func seedReachability(ctx context.Context, gw storage.Gateway, actorID string) e
 	}
 
 	// The interface: a tcp reachability interface owned by the component and placed on
-	// the node, with its probe target in params.
+	// the node, with its probe target in params. Its friendly name is unique on the
+	// component; the returned surrogate id binds the task below.
 	comp := reachComponent
 	node := reachNode
-	if _, err := gw.CreateInterface(ctx, actorID, storage.InterfaceSpec{
+	iface, err := gw.CreateInterface(ctx, actorID, storage.InterfaceSpec{
 		Name:      reachInterface,
 		Type:      "tcp",
 		Component: &comp,
 		Node:      &node,
 		Params:    []byte(fmt.Sprintf(`{"target":%q}`, reachTarget)),
-	}, all); err != nil {
+	}, all)
+	if err != nil {
 		return fmt.Errorf("devseed: create reachability interface: %w", err)
 	}
 
 	// The poll task over the interface, on the worklist.
 	enabled := true
 	if _, err := gw.CreateTask(ctx, actorID, storage.TaskSpec{
-		DisplayName:   "HQ boardroom display reachability",
-		Mode:          "poll",
-		InterfaceName: reachInterface,
-		Node:          &node,
-		Enabled:       &enabled,
+		DisplayName: "HQ boardroom display reachability",
+		Mode:        "poll",
+		InterfaceID: iface.ID,
+		Node:        &node,
+		Enabled:     &enabled,
 	}, all); err != nil {
 		return fmt.Errorf("devseed: create reachability task: %w", err)
 	}

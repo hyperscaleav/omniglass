@@ -18,7 +18,8 @@ import (
 // through as raw JSON.
 
 type interfaceBody struct {
-	Name      string          `json:"name"`
+	ID        string          `json:"id" doc:"The interface's surrogate id (the address)"`
+	Name      string          `json:"name" doc:"The friendly name, unique within the owning component"`
 	Type      string          `json:"type"`
 	Component *string         `json:"component,omitempty" doc:"The owning component name; absent for a server-hosted interface"`
 	Node      *string         `json:"node,omitempty" doc:"The node placement name, if assigned"`
@@ -26,7 +27,7 @@ type interfaceBody struct {
 }
 
 func toInterfaceBody(it *storage.Interface) interfaceBody {
-	b := interfaceBody{Name: it.Name, Type: it.Type, Component: it.Component, Node: it.Node}
+	b := interfaceBody{ID: it.ID, Name: it.Name, Type: it.Type, Component: it.Component, Node: it.Node}
 	if len(it.Params) > 0 {
 		b.Params = json.RawMessage(it.Params)
 	}
@@ -44,12 +45,12 @@ type interfaceOutput struct {
 }
 
 type interfacePathInput struct {
-	Name string `path:"name" doc:"The interface's unique name"`
+	ID string `path:"id" doc:"The interface's surrogate id"`
 }
 
 type createInterfaceInput struct {
 	Body struct {
-		Name      string          `json:"name" minLength:"1" doc:"Globally unique name (the address)"`
+		Name      string          `json:"name" minLength:"1" doc:"Friendly name, unique within the owning component"`
 		Type      string          `json:"type" minLength:"1" doc:"An interface_type name"`
 		Component *string         `json:"component,omitempty" doc:"Owning component name; omit for a server-hosted interface (needs an all-scoped grant)"`
 		Node      *string         `json:"node,omitempty" doc:"Node placement name"`
@@ -58,7 +59,7 @@ type createInterfaceInput struct {
 }
 
 type updateInterfaceInput struct {
-	Name string `path:"name"`
+	ID   string `path:"id"`
 	Body struct {
 		Node   *string         `json:"node,omitempty" doc:"Reassign the node placement"`
 		Params json.RawMessage `json:"params,omitempty" doc:"Replace the endpoint/target settings (jsonb)"`
@@ -91,12 +92,12 @@ func registerInterfaceRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 	huma.Register(api, huma.Operation{
 		OperationID: "get-interface",
 		Method:      http.MethodGet,
-		Path:        "/interfaces/{name}",
+		Path:        "/interfaces/{id}",
 		Summary:     "Get an interface",
-		Description: "Fetches an interface by name. An interface whose component is out of the caller's read scope is a non-disclosing 404. Gated by interface:read.",
+		Description: "Fetches an interface by id. An interface whose component is out of the caller's read scope is a non-disclosing 404. Gated by interface:read.",
 		Middlewares: huma.Middlewares{a.authn, a.require("interface", "read")},
 	}, func(ctx context.Context, in *interfacePathInput) (*interfaceOutput, error) {
-		it, err := gw.GetInterface(ctx, in.Name, a.scopeFor(ctx, "interface", "read"))
+		it, err := gw.GetInterface(ctx, in.ID, a.scopeFor(ctx, "interface", "read"))
 		if err != nil {
 			return nil, mapInterfaceErr(err)
 		}
@@ -128,12 +129,12 @@ func registerInterfaceRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 	huma.Register(api, huma.Operation{
 		OperationID: "update-interface",
 		Method:      http.MethodPatch,
-		Path:        "/interfaces/{name}",
+		Path:        "/interfaces/{id}",
 		Summary:     "Update an interface",
 		Description: "Patches an interface's node placement or params. Gated by interface:update; read and update scopes (through the component) drive the 404 versus 403 split.",
 		Middlewares: huma.Middlewares{a.authn, a.require("interface", "update")},
 	}, func(ctx context.Context, in *updateInterfaceInput) (*interfaceOutput, error) {
-		it, err := gw.UpdateInterface(ctx, actorID(ctx), in.Name, storage.InterfacePatch{
+		it, err := gw.UpdateInterface(ctx, actorID(ctx), in.ID, storage.InterfacePatch{
 			Node:   in.Body.Node,
 			Params: []byte(in.Body.Params),
 		}, a.scopeFor(ctx, "interface", "read"), a.scopeFor(ctx, "interface", "update"))
@@ -146,13 +147,13 @@ func registerInterfaceRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 	huma.Register(api, huma.Operation{
 		OperationID:   "delete-interface",
 		Method:        http.MethodDelete,
-		Path:          "/interfaces/{name}",
+		Path:          "/interfaces/{id}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete an interface",
 		Description:   "Deletes an interface, refused while a task still references it. Gated by interface:delete; read and delete scopes (through the component) drive the 404 versus 403 split.",
 		Middlewares:   huma.Middlewares{a.authn, a.require("interface", "delete")},
 	}, func(ctx context.Context, in *interfacePathInput) (*struct{}, error) {
-		if err := gw.DeleteInterface(ctx, actorID(ctx), in.Name,
+		if err := gw.DeleteInterface(ctx, actorID(ctx), in.ID,
 			a.scopeFor(ctx, "interface", "read"), a.scopeFor(ctx, "interface", "delete")); err != nil {
 			return nil, mapInterfaceErr(err)
 		}
@@ -167,7 +168,7 @@ func mapInterfaceErr(err error) error {
 	case errors.Is(err, storage.ErrInterfaceForbidden):
 		return huma.Error403Forbidden("forbidden")
 	case errors.Is(err, storage.ErrInterfaceExists):
-		return huma.Error409Conflict("interface name already exists")
+		return huma.Error409Conflict("an interface with that name already exists on this component")
 	case errors.Is(err, storage.ErrInterfaceOccupied):
 		return huma.Error409Conflict("interface still has tasks")
 	case errors.Is(err, storage.ErrUnknownInterfaceType):

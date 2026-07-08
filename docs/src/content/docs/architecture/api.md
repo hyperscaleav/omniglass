@@ -150,10 +150,10 @@ shape the [Shape](#shape-resources-and-verb-methods) section describes.
 | POST | `/nodes/{name}:enroll` | `node:enroll` |
 | POST | `/nodes:claim` | none (public) |
 | GET | `/interfaces` | `interface:read` |
-| GET | `/interfaces/{name}` | `interface:read` |
+| GET | `/interfaces/{id}` | `interface:read` |
 | POST | `/interfaces` | `interface:create` |
-| PATCH | `/interfaces/{name}` | `interface:update` |
-| DELETE | `/interfaces/{name}` | `interface:delete` |
+| PATCH | `/interfaces/{id}` | `interface:update` |
+| DELETE | `/interfaces/{id}` | `interface:delete` |
 | GET | `/tasks` | `task:read` |
 | GET | `/tasks/{id}` | `task:read` |
 | POST | `/tasks` | `task:create` |
@@ -170,12 +170,15 @@ because the token itself is the authentication, so it carries no permission and 
 **401** (a claim must not disclose which nodes exist). A node is estate-wide, so `node:read` and `node:create`
 require an **all-scope** grant, not a tree-scoped one.
 
-**Interface and task scope cascades through the owning component.** An interface belongs to a component (or
+**Interface and task scope cascades through the owning component.** An interface is addressed by a surrogate
+`id` and carries a friendly `name` that is unique **within its component** (so the same name can be reused
+across components); a task references its interface by `interface_id`. An interface belongs to a component (or
 is server-hosted, which needs an all-scoped grant), and a task belongs to an interface, so both inherit the
 component's [scope](/architecture/identity-access/): an out-of-read-scope component's interface or task is a
 non-disclosing **404**, exactly the [403/404 split](#errors-one-problemjson-envelope) above. A task's id is
 **content-addressed** over its interface, mode, and spec, so identical work always maps to the same id and a
-re-create of an identical task dedupes rather than duplicating (a distinct duplicate is a **409**).
+re-create of an identical task dedupes rather than duplicating (a distinct duplicate is a **409**). A duplicate
+interface name on one component is a **409**.
 
 **The reachability read is a typed composed read, not yet a view.** `GET /components/{name}/reachability`
 composes, per interface, the latest verdict state (`interface.reachable`), the probe-layer signals that

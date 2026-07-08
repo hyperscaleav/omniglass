@@ -400,7 +400,7 @@ func generatedCommands() []*cobra.Command {
 				},
 			}
 			cmd.Flags().StringVar(&fComponent, "component", "", "Owning component name; omit for a server-hosted interface (needs an all-scoped grant)")
-			cmd.Flags().StringVar(&fName, "name", "", "Globally unique name (the address)")
+			cmd.Flags().StringVar(&fName, "name", "", "Friendly name, unique within the owning component")
 			_ = cmd.MarkFlagRequired("name")
 			cmd.Flags().StringVar(&fNode, "node", "", "Node placement name")
 			cmd.Flags().StringVar(&fParams, "params", "", "Endpoint/target settings (jsonb)")
@@ -410,10 +410,10 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := &cobra.Command{
-				Use:     "delete <name>",
+				Use:     "delete <id>",
 				Short:   "Delete an interface",
 				Long:    "Deletes an interface, refused while a task still references it. Gated by interface:delete; read and delete scopes (through the component) drive the 404 versus 403 split.",
-				Example: "  omniglass interface delete <name>",
+				Example: "  omniglass interface delete <id>",
 				Args:    cobra.ExactArgs(1),
 				RunE: func(cmd *cobra.Command, args []string) error {
 					path := fmt.Sprintf("/api/v1/interfaces/%s", url.PathEscape(args[0]))
@@ -424,10 +424,10 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := &cobra.Command{
-				Use:     "get <name>",
+				Use:     "get <id>",
 				Short:   "Get an interface",
-				Long:    "Fetches an interface by name. An interface whose component is out of the caller's read scope is a non-disclosing 404. Gated by interface:read.",
-				Example: "  omniglass interface get <name>",
+				Long:    "Fetches an interface by id. An interface whose component is out of the caller's read scope is a non-disclosing 404. Gated by interface:read.",
+				Example: "  omniglass interface get <id>",
 				Args:    cobra.ExactArgs(1),
 				RunE: func(cmd *cobra.Command, args []string) error {
 					path := fmt.Sprintf("/api/v1/interfaces/%s", url.PathEscape(args[0]))
@@ -454,10 +454,10 @@ func generatedCommands() []*cobra.Command {
 			var fNode string
 			var fParams string
 			cmd := &cobra.Command{
-				Use:     "update <name>",
+				Use:     "update <id>",
 				Short:   "Update an interface",
 				Long:    "Patches an interface's node placement or params. Gated by interface:update; read and update scopes (through the component) drive the 404 versus 403 split.",
-				Example: "  omniglass interface update <name>",
+				Example: "  omniglass interface update <id>",
 				Args:    cobra.ExactArgs(1),
 				RunE: func(cmd *cobra.Command, args []string) error {
 					path := fmt.Sprintf("/api/v1/interfaces/%s", url.PathEscape(args[0]))
@@ -1295,7 +1295,7 @@ func generatedCommands() []*cobra.Command {
 		parent.AddCommand(func() *cobra.Command {
 			var fDisplayName string
 			var fEnabled string
-			var fInterface string
+			var fInterfaceId string
 			var fMode string
 			var fNode string
 			var fSpec string
@@ -1303,7 +1303,7 @@ func generatedCommands() []*cobra.Command {
 				Use:     "create",
 				Short:   "Create a task",
 				Long:    "Creates a content-addressed task over an interface. The create scope cascades through the interface's owning component. A duplicate (identical) task is a 409. Gated by task:create.",
-				Example: "  omniglass task create --interface interface --mode mode",
+				Example: "  omniglass task create --interface-id interface_id --mode mode",
 				Args:    cobra.ExactArgs(0),
 				RunE: func(cmd *cobra.Command, args []string) error {
 					path := fmt.Sprintf("/api/v1/tasks")
@@ -1314,8 +1314,8 @@ func generatedCommands() []*cobra.Command {
 					if cmd.Flags().Changed("enabled") {
 						body["enabled"] = fEnabled
 					}
-					if cmd.Flags().Changed("interface") {
-						body["interface"] = fInterface
+					if cmd.Flags().Changed("interface-id") {
+						body["interface_id"] = fInterfaceId
 					}
 					if cmd.Flags().Changed("mode") {
 						body["mode"] = fMode
@@ -1331,8 +1331,8 @@ func generatedCommands() []*cobra.Command {
 			}
 			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
 			cmd.Flags().StringVar(&fEnabled, "enabled", "", "Whether the task is on the worklist; defaults to true")
-			cmd.Flags().StringVar(&fInterface, "interface", "", "The interface name this task runs over")
-			_ = cmd.MarkFlagRequired("interface")
+			cmd.Flags().StringVar(&fInterfaceId, "interface-id", "", "The interface id this task runs over")
+			_ = cmd.MarkFlagRequired("interface-id")
 			cmd.Flags().StringVar(&fMode, "mode", "", "The poll/listen axis")
 			_ = cmd.MarkFlagRequired("mode")
 			cmd.Flags().StringVar(&fNode, "node", "", "Node placement name")

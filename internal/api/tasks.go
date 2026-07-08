@@ -22,7 +22,7 @@ type taskBody struct {
 	ID          string          `json:"id"`
 	DisplayName string          `json:"display_name,omitempty"`
 	Mode        string          `json:"mode"`
-	Interface   string          `json:"interface"`
+	InterfaceID string          `json:"interface_id" doc:"The interface's surrogate id this task runs over"`
 	Node        *string         `json:"node,omitempty" doc:"The node placement name, if assigned"`
 	Spec        json.RawMessage `json:"spec,omitempty" doc:"The inline probe settings (jsonb)"`
 	Enabled     bool            `json:"enabled"`
@@ -31,7 +31,7 @@ type taskBody struct {
 func toTaskBody(t *storage.Task) taskBody {
 	b := taskBody{
 		ID: t.ID, DisplayName: t.DisplayName, Mode: t.Mode,
-		Interface: t.InterfaceName, Node: t.Node, Enabled: t.Enabled,
+		InterfaceID: t.InterfaceID, Node: t.Node, Enabled: t.Enabled,
 	}
 	if len(t.Spec) > 0 {
 		b.Spec = json.RawMessage(t.Spec)
@@ -57,7 +57,7 @@ type createTaskInput struct {
 	Body struct {
 		DisplayName string          `json:"display_name,omitempty"`
 		Mode        string          `json:"mode" enum:"poll,listen" doc:"The poll/listen axis"`
-		Interface   string          `json:"interface" minLength:"1" doc:"The interface name this task runs over"`
+		InterfaceID string          `json:"interface_id" format:"uuid" doc:"The interface id this task runs over"`
 		Node        *string         `json:"node,omitempty" doc:"Node placement name"`
 		Spec        json.RawMessage `json:"spec,omitempty" doc:"Inline probe settings (jsonb)"`
 		Enabled     *bool           `json:"enabled,omitempty" doc:"Whether the task is on the worklist; defaults to true"`
@@ -122,12 +122,12 @@ func registerTaskRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Middlewares:   huma.Middlewares{a.authn, a.require("task", "create")},
 	}, func(ctx context.Context, in *createTaskInput) (*taskOutput, error) {
 		t, err := gw.CreateTask(ctx, actorID(ctx), storage.TaskSpec{
-			DisplayName:   in.Body.DisplayName,
-			Mode:          in.Body.Mode,
-			InterfaceName: in.Body.Interface,
-			Node:          in.Body.Node,
-			Spec:          []byte(in.Body.Spec),
-			Enabled:       in.Body.Enabled,
+			DisplayName: in.Body.DisplayName,
+			Mode:        in.Body.Mode,
+			InterfaceID: in.Body.InterfaceID,
+			Node:        in.Body.Node,
+			Spec:        []byte(in.Body.Spec),
+			Enabled:     in.Body.Enabled,
 		}, a.scopeFor(ctx, "task", "create"))
 		if err != nil {
 			return nil, mapTaskErr(err)
