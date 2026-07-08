@@ -180,6 +180,26 @@ export interface paths {
         patch: operations["update-component"];
         trace?: never;
     };
+    "/components/{name}/reachability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read a component's per-interface reachability
+         * @description Composes, per interface, the latest reachability verdict, the probe-layer signals that compose it, and the recent verdict transitions for the availability strip. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+         */
+        get: operations["get-component-reachability"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/healthz": {
         parameters: {
             query?: never;
@@ -1002,6 +1022,64 @@ export interface components {
             id: string;
             kind: string;
         };
+        ReachHistoryBody: {
+            /** Format: date-time */
+            ts: string;
+            value: string;
+        };
+        ReachInterfaceBody: {
+            /** @description The probed endpoint (target[:port]) from the interface params */
+            endpoint?: string;
+            /** @description The recent verdict transitions, oldest first, for the availability strip */
+            history: components["schemas"]["ReachHistoryBody"][] | null;
+            /** @description The interface name */
+            interface: string;
+            /** @description The per-layer probe signals that compose the verdict */
+            layers: components["schemas"]["ReachLayerBody"][] | null;
+            /** @description The node that probes this interface */
+            node?: string;
+            /** @description The interface type (icmp, tcp, ...) */
+            type: string;
+            /** @description The latest reachability verdict, or null if none yet */
+            verdict: components["schemas"]["ReachVerdictBody"];
+        };
+        ReachLayerBody: {
+            /** @description The datapoint_type key of the primary signal */
+            check: string;
+            /** @description A human timing detail (rtt / connect time), when present */
+            detail?: string;
+            /** @description The probe layer word (ping, port) */
+            layer: string;
+            /**
+             * Format: date-time
+             * @description When the signal was observed
+             */
+            ts: string;
+            /**
+             * Format: double
+             * @description The latest signal value (1 = reachable/open, 0 = not)
+             */
+            value: number;
+        };
+        ReachVerdictBody: {
+            /**
+             * Format: date-time
+             * @description When the verdict was observed
+             */
+            ts: string;
+            /** @description The latest stored verdict value (up/down) */
+            value: string;
+        };
+        ReachabilityOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ReachabilityOutputBody.json
+             */
+            readonly $schema?: string;
+            component: string;
+            interfaces: components["schemas"]["ReachInterfaceBody"][] | null;
+        };
         RoleBody: {
             description?: string;
             display_name?: string;
@@ -1495,6 +1573,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ComponentBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-component-reachability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The component's unique name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReachabilityOutputBody"];
                 };
             };
             /** @description Error */

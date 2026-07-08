@@ -775,6 +775,119 @@ components:
         - id
         - kind
       type: object
+    ReachHistoryBody:
+      additionalProperties: false
+      properties:
+        ts:
+          format: date-time
+          type: string
+        value:
+          type: string
+      required:
+        - ts
+        - value
+      type: object
+    ReachInterfaceBody:
+      additionalProperties: false
+      properties:
+        endpoint:
+          description: The probed endpoint (target[:port]) from the interface params
+          type: string
+        history:
+          description: The recent verdict transitions, oldest first, for the availability strip
+          items:
+            $ref: "#/components/schemas/ReachHistoryBody"
+          type:
+            - array
+            - "null"
+        interface:
+          description: The interface name
+          type: string
+        layers:
+          description: The per-layer probe signals that compose the verdict
+          items:
+            $ref: "#/components/schemas/ReachLayerBody"
+          type:
+            - array
+            - "null"
+        node:
+          description: The node that probes this interface
+          type: string
+        type:
+          description: The interface type (icmp, tcp, ...)
+          type: string
+        verdict:
+          $ref: "#/components/schemas/ReachVerdictBody"
+          description: The latest reachability verdict, or null if none yet
+      required:
+        - interface
+        - type
+        - verdict
+        - layers
+        - history
+      type: object
+    ReachLayerBody:
+      additionalProperties: false
+      properties:
+        check:
+          description: The datapoint_type key of the primary signal
+          type: string
+        detail:
+          description: A human timing detail (rtt / connect time), when present
+          type: string
+        layer:
+          description: The probe layer word (ping, port)
+          type: string
+        ts:
+          description: When the signal was observed
+          format: date-time
+          type: string
+        value:
+          description: The latest signal value (1 = reachable/open, 0 = not)
+          format: double
+          type: number
+      required:
+        - layer
+        - check
+        - value
+        - ts
+      type: object
+    ReachVerdictBody:
+      additionalProperties: false
+      properties:
+        ts:
+          description: When the verdict was observed
+          format: date-time
+          type: string
+        value:
+          description: The latest stored verdict value (up/down)
+          type: string
+      required:
+        - value
+        - ts
+      type: object
+    ReachabilityOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ReachabilityOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        component:
+          type: string
+        interfaces:
+          items:
+            $ref: "#/components/schemas/ReachInterfaceBody"
+          type:
+            - array
+            - "null"
+      required:
+        - component
+        - interfaces
+      type: object
     RoleBody:
       additionalProperties: false
       properties:
@@ -1242,6 +1355,32 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Update a component
+  /components/{name}/reachability:
+    get:
+      description: Composes, per interface, the latest reachability verdict, the probe-layer signals that compose it, and the recent verdict transitions for the availability strip. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+      operationId: get-component-reachability
+      parameters:
+        - description: The component's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The component's unique name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReachabilityOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Read a component's per-interface reachability
   /healthz:
     get:
       description: Reports process health and the database leg, pinged through the Storage Gateway.
