@@ -54,6 +54,7 @@ roles:
       - "principal:*"
       - "credential:*"
       - "principal_grant:*"
+      - "principal_group:*"
       - "role:*"
       - "node:*"
       - "audit:read:admin"

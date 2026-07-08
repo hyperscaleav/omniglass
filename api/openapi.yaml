@@ -1,5 +1,22 @@
 components:
   schemas:
+    AddMemberInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/AddMemberInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        principal_id:
+          description: The principal to add to the group
+          minLength: 1
+          type: string
+      required:
+        - principal_id
+      type: object
     AuditEventBody:
       additionalProperties: false
       properties:
@@ -232,6 +249,67 @@ components:
       required:
         - role
         - scope_kind
+      type: object
+    CreateGroupGrantInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateGroupGrantInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        role:
+          description: A role id (viewer, operator, admin, owner, or a custom role)
+          minLength: 1
+          type: string
+        scope_id:
+          description: The scope root id; omit for the all scope
+          type: string
+        scope_kind:
+          description: The scope kind; 'all' confers the whole estate
+          enum:
+            - all
+            - location
+            - system
+            - component
+            - group
+          type: string
+        scope_op:
+          description: How the scope root matches the tree; moot for the all scope
+          enum:
+            - subtree
+            - subtree_excl_root
+            - self
+          type: string
+      required:
+        - role
+        - scope_kind
+      type: object
+    CreateGroupInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateGroupInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        description:
+          maxLength: 1000
+          type: string
+        display_name:
+          maxLength: 200
+          type: string
+        name:
+          description: Unique group name
+          maxLength: 200
+          minLength: 1
+          type: string
+      required:
+        - name
       type: object
     CreateInterfaceInputBody:
       additionalProperties: false
@@ -509,6 +587,28 @@ components:
         - role
         - scope_kind
       type: object
+    GroupBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/GroupBody.json
+          format: uri
+          readOnly: true
+          type: string
+        description:
+          type: string
+        display_name:
+          type: string
+        id:
+          type: string
+        name:
+          type: string
+      required:
+        - id
+        - name
+      type: object
     HealthOutputBody:
       additionalProperties: false
       properties:
@@ -643,6 +743,44 @@ components:
       required:
         - components
       type: object
+    ListGroupGrantsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListGroupGrantsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        grants:
+          items:
+            $ref: "#/components/schemas/GrantBody"
+          type:
+            - array
+            - "null"
+      required:
+        - grants
+      type: object
+    ListGroupsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListGroupsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        groups:
+          items:
+            $ref: "#/components/schemas/GroupBody"
+          type:
+            - array
+            - "null"
+      required:
+        - groups
+      type: object
     ListInterfacesOutputBody:
       additionalProperties: false
       properties:
@@ -699,6 +837,25 @@ components:
             - "null"
       required:
         - locations
+      type: object
+    ListMembersOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListMembersOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        members:
+          items:
+            $ref: "#/components/schemas/MemberBody"
+          type:
+            - array
+            - "null"
+      required:
+        - members
       type: object
     ListNodesOutputBody:
       additionalProperties: false
@@ -879,6 +1036,21 @@ components:
         - principal
         - permissions
         - grants
+      type: object
+    MemberBody:
+      additionalProperties: false
+      properties:
+        display_name:
+          type: string
+        kind:
+          type: string
+        principal_id:
+          type: string
+        username:
+          type: string
+      required:
+        - principal_id
+        - kind
       type: object
     NodeBody:
       additionalProperties: false
@@ -1203,6 +1375,30 @@ components:
         component_type:
           type: string
         display_name:
+          type: string
+      type: object
+    UpdateGroupInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/UpdateGroupInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        description:
+          description: Description; empty clears it
+          maxLength: 1000
+          type: string
+        display_name:
+          description: Display name; empty clears it
+          maxLength: 200
+          type: string
+        name:
+          description: Group name; renaming is safe
+          maxLength: 200
+          minLength: 1
           type: string
       type: object
     UpdateInterfaceInputBody:
@@ -2070,6 +2266,293 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Internal Server Error
       summary: Claim a node identity in exchange for its NATS credential
+  /principal-groups:
+    get:
+      description: Every principal group. Gated by principal_group:read (all-scope).
+      operationId: list-groups
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListGroupsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List principal groups
+    post:
+      description: Creates a principal group. Gated by principal_group:create (all-scope). A duplicate name is 409.
+      operationId: create-group
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateGroupInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GroupBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Create a principal group
+  /principal-groups/{id}:
+    delete:
+      description: Removes a group and, by cascade, its memberships and grants. Gated by principal_group:delete (all-scope).
+      operationId: delete-group
+      parameters:
+        - description: The group's id (uuid)
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The group's id (uuid)
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Delete a principal group
+    get:
+      description: One principal group by id. Gated by principal_group:read (all-scope).
+      operationId: get-group
+      parameters:
+        - description: The group's id (uuid)
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The group's id (uuid)
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GroupBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get a principal group
+    patch:
+      description: Updates a group's name and presentational fields. Gated by principal_group:update (all-scope). A duplicate name is 409.
+      operationId: update-group
+      parameters:
+        - description: The group's id (uuid)
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The group's id (uuid)
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateGroupInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GroupBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Update a principal group
+  /principal-groups/{id}/grants:
+    get:
+      description: The role x scope grants a group confers on its members. Gated by principal_group:read (all-scope).
+      operationId: list-group-grants
+      parameters:
+        - description: The group's id (uuid)
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The group's id (uuid)
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListGroupGrantsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List a group's grants
+    post:
+      description: Assigns a role at a scope to a group; its members inherit it. Gated by principal_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own, exactly as for a direct grant. A duplicate is 409.
+      operationId: create-group-grant
+      parameters:
+        - description: The group's id (uuid)
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The group's id (uuid)
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateGroupGrantInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GrantBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Grant a role to a group
+  /principal-groups/{id}/grants/{grantId}:
+    delete:
+      description: Removes one grant from a group. Gated by principal_grant:delete (all-scope).
+      operationId: revoke-group-grant
+      parameters:
+        - description: The group's id (uuid)
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The group's id (uuid)
+            type: string
+        - description: The grant's id (uuid)
+          in: path
+          name: grantId
+          required: true
+          schema:
+            description: The grant's id (uuid)
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Revoke a group grant
+  /principal-groups/{id}/members:
+    get:
+      description: The principals in a group. Gated by principal_group:read (all-scope).
+      operationId: list-group-members
+      parameters:
+        - description: The group's id (uuid)
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The group's id (uuid)
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListMembersOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List a group's members
+    post:
+      description: Adds a principal to a group; its members inherit the group's grants. Gated by principal_group:update (all-scope). Idempotent.
+      operationId: add-group-member
+      parameters:
+        - description: The group's id (uuid)
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The group's id (uuid)
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddMemberInputBody"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Add a member to a group
+  /principal-groups/{id}/members/{principalId}:
+    delete:
+      description: Removes a principal from a group; it stops inheriting the group's grants. Gated by principal_group:update (all-scope).
+      operationId: remove-group-member
+      parameters:
+        - description: The group's id (uuid)
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The group's id (uuid)
+            type: string
+        - description: The member principal's id (uuid)
+          in: path
+          name: principalId
+          required: true
+          schema:
+            description: The member principal's id (uuid)
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Remove a member from a group
   /principals:
     get:
       description: Lists all principals (humans and service accounts) with their grants. Gated by principal:read, which confers access only at all-scope.

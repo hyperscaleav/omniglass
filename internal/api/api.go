@@ -172,6 +172,7 @@ func registerRoutes(api huma.API, gw storage.Gateway, o options) {
 	registerReachabilityRoutes(api, a, gw)
 	registerNodeRoutes(api, a, gw, o.natsURL)
 	registerPrincipalRoutes(api, a, gw)
+	registerPrincipalGroupRoutes(api, a, gw)
 	registerImpersonationRoutes(api, a, gw)
 	registerAuditRoutes(api, a, gw)
 }

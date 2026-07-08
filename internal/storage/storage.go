@@ -86,6 +86,23 @@ type Gateway interface {
 	// grant. Unknown grant is ErrGrantNotFound; revoking the last owner grant is
 	// ErrLastOwner (the deferred owner-invariant trigger).
 	RevokeGrant(ctx context.Context, actorID, principalID, grantID string, action scope.Set) error
+	// Principal groups: a group holds role x scope grants its members inherit. All
+	// group management is all-scope admin work (like the principal directory). A
+	// member's effective grants are its direct grants unioned with its groups'
+	// grants, resolved in the grant loader, so a group grant scopes and flattens
+	// exactly like a direct one.
+	CreateGroup(ctx context.Context, actorID string, spec GroupSpec, action scope.Set) (*Group, error)
+	ListGroups(ctx context.Context, read scope.Set) ([]Group, error)
+	GetGroup(ctx context.Context, id string, read scope.Set) (*Group, error)
+	UpdateGroup(ctx context.Context, actorID, id string, patch GroupPatch, action scope.Set) (*Group, error)
+	DeleteGroup(ctx context.Context, actorID, id string, action scope.Set) error
+	AddGroupMember(ctx context.Context, actorID, groupID, principalID string, action scope.Set) error
+	RemoveGroupMember(ctx context.Context, actorID, groupID, principalID string, action scope.Set) error
+	ListGroupMembers(ctx context.Context, groupID string, read scope.Set) ([]GroupMember, error)
+	ListGroupsForPrincipal(ctx context.Context, principalID string, read scope.Set) ([]Group, error)
+	CreateGroupGrant(ctx context.Context, actorID, groupID string, spec GrantSpec, action scope.Set) (*Grant, error)
+	RevokeGroupGrant(ctx context.Context, actorID, groupID, grantID string, action scope.Set) error
+	ListGroupGrants(ctx context.Context, groupID string, read scope.Set) ([]Grant, error)
 	// SetPrincipalActive enables or disables a principal (soft), audited. Requires
 	// an all-scope grant. Disabling the last active owner is ErrLastOwner; a
 	// disabled principal cannot authenticate.

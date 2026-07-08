@@ -1,7 +1,7 @@
 # Local dev loop + the build/run flow for the single binary. Production deploy
 # is BYO Postgres; tests use ephemeral testcontainer Postgres.
 
-.PHONY: build build-web web image gen gen-proto gen-web test test-short test-e2e tidy up down dev release-plan release-apply release-snapshot
+.PHONY: build build-web web image gen gen-proto gen-web test test-short test-e2e clean-testcontainers tidy up down dev release-plan release-apply release-snapshot
 
 # Build the single binary (no console embedded; serves the build-the-console
 # placeholder under /web).
@@ -65,6 +65,14 @@ test-short:
 # Playwright. Needs the browser once: (cd web && npx playwright install chromium).
 test-e2e:
 	bash web/e2e/run.sh
+
+# Backstop cleanup: force-remove any orphaned Postgres test containers left by
+# an interrupted run (a hard kill before the harness TestMain or the ryuk reaper
+# could reclaim them). Scoped by the testcontainers label AND the postgres:18
+# image so it never touches the compose dev stack (`make up`) or a running ryuk.
+# Destructive by design; run it deliberately.
+clean-testcontainers:
+	docker ps -aq --filter "label=org.testcontainers=true" --filter "ancestor=postgres:18" | xargs -r docker rm -f
 
 # ---- release ---------------------------------------------------------------
 # Releases are cut MANUALLY (not on merge to main). `release-plan` is the
