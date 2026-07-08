@@ -233,6 +233,36 @@ components:
         - role
         - scope_kind
       type: object
+    CreateInterfaceInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateInterfaceInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        component:
+          description: Owning component name; omit for a server-hosted interface (needs an all-scoped grant)
+          type: string
+        name:
+          description: Globally unique name (the address)
+          minLength: 1
+          type: string
+        node:
+          description: Node placement name
+          type: string
+        params:
+          description: Endpoint/target settings (jsonb)
+        type:
+          description: An interface_type name
+          minLength: 1
+          type: string
+      required:
+        - name
+        - type
+      type: object
     CreateLocationInputBody:
       additionalProperties: false
       properties:
@@ -337,6 +367,40 @@ components:
       required:
         - name
         - system_type
+      type: object
+    CreateTaskInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateTaskInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        display_name:
+          type: string
+        enabled:
+          description: Whether the task is on the worklist; defaults to true
+          type: boolean
+        interface:
+          description: The interface name this task runs over
+          minLength: 1
+          type: string
+        mode:
+          description: The poll/listen axis
+          enum:
+            - poll
+            - listen
+          type: string
+        node:
+          description: Node placement name
+          type: string
+        spec:
+          description: Inline probe settings (jsonb)
+      required:
+        - mode
+        - interface
       type: object
     EnrollOutputBody:
       additionalProperties: false
@@ -534,6 +598,32 @@ components:
         - target_id
         - expires_at
       type: object
+    InterfaceBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/InterfaceBody.json
+          format: uri
+          readOnly: true
+          type: string
+        component:
+          description: The owning component name; absent for a server-hosted interface
+          type: string
+        name:
+          type: string
+        node:
+          description: The node placement name, if assigned
+          type: string
+        params:
+          description: The endpoint/target settings (jsonb)
+        type:
+          type: string
+      required:
+        - name
+        - type
+      type: object
     ListComponentsOutputBody:
       additionalProperties: false
       properties:
@@ -552,6 +642,25 @@ components:
             - "null"
       required:
         - components
+      type: object
+    ListInterfacesOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListInterfacesOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        interfaces:
+          items:
+            $ref: "#/components/schemas/InterfaceBody"
+          type:
+            - array
+            - "null"
+      required:
+        - interfaces
       type: object
     ListLocationTypesOutputBody:
       additionalProperties: false
@@ -647,6 +756,25 @@ components:
             - "null"
       required:
         - systems
+      type: object
+    ListTasksOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListTasksOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        tasks:
+          items:
+            $ref: "#/components/schemas/TaskBody"
+          type:
+            - array
+            - "null"
+      required:
+        - tasks
       type: object
     LocationBody:
       additionalProperties: false
@@ -1031,6 +1159,37 @@ components:
         - name
         - system_type
       type: object
+    TaskBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/TaskBody.json
+          format: uri
+          readOnly: true
+          type: string
+        display_name:
+          type: string
+        enabled:
+          type: boolean
+        id:
+          type: string
+        interface:
+          type: string
+        mode:
+          type: string
+        node:
+          description: The node placement name, if assigned
+          type: string
+        spec:
+          description: The inline probe settings (jsonb)
+      required:
+        - id
+        - mode
+        - interface
+        - enabled
+      type: object
     UpdateComponentInputBody:
       additionalProperties: false
       properties:
@@ -1045,6 +1204,22 @@ components:
           type: string
         display_name:
           type: string
+      type: object
+    UpdateInterfaceInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/UpdateInterfaceInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        node:
+          description: Reassign the node placement
+          type: string
+        params:
+          description: Replace the endpoint/target settings (jsonb)
       type: object
     UpdateLocationInputBody:
       additionalProperties: false
@@ -1114,6 +1289,27 @@ components:
           type: string
         system_type:
           type: string
+      type: object
+    UpdateTaskInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/UpdateTaskInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        display_name:
+          type: string
+        enabled:
+          description: Toggle the task on/off the worklist
+          type: boolean
+        node:
+          description: Reassign the node placement
+          type: string
+        spec:
+          description: Replace the inline probe settings (jsonb)
       type: object
 info:
   title: Omniglass
@@ -1493,6 +1689,123 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Liveness and database-reachability probe
+  /interfaces:
+    get:
+      description: Lists the interfaces whose owning component the caller may read (the component cascade). Gated by interface:read.
+      operationId: list-interfaces
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListInterfacesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List interfaces in scope
+    post:
+      description: Creates an interface owned by a component (or a server-hosted one, which needs an all-scoped grant). The create scope cascades through the owning component. Gated by interface:create.
+      operationId: create-interface
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateInterfaceInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InterfaceBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Create an interface
+  /interfaces/{name}:
+    delete:
+      description: Deletes an interface, refused while a task still references it. Gated by interface:delete; read and delete scopes (through the component) drive the 404 versus 403 split.
+      operationId: delete-interface
+      parameters:
+        - description: The interface's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The interface's unique name
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Delete an interface
+    get:
+      description: Fetches an interface by name. An interface whose component is out of the caller's read scope is a non-disclosing 404. Gated by interface:read.
+      operationId: get-interface
+      parameters:
+        - description: The interface's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The interface's unique name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InterfaceBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get an interface
+    patch:
+      description: Patches an interface's node placement or params. Gated by interface:update; read and update scopes (through the component) drive the 404 versus 403 split.
+      operationId: update-interface
+      parameters:
+        - in: path
+          name: name
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateInterfaceInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InterfaceBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Update an interface
   /location-types:
     get:
       description: Lists the location_type registry (the shape-definers a location is classified by), ordered by rank. Populates the type picker on the location form. Gated by location:read.
@@ -2156,6 +2469,123 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Update a system
+  /tasks:
+    get:
+      description: Lists the tasks whose interface's owning component the caller may read (the component cascade). Gated by task:read.
+      operationId: list-tasks
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListTasksOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List tasks in scope
+    post:
+      description: Creates a content-addressed task over an interface. The create scope cascades through the interface's owning component. A duplicate (identical) task is a 409. Gated by task:create.
+      operationId: create-task
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTaskInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Create a task
+  /tasks/{id}:
+    delete:
+      description: Deletes a task. Gated by task:delete; read and delete scopes (through the component) drive the 404 versus 403 split.
+      operationId: delete-task
+      parameters:
+        - description: The task's content-addressed id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The task's content-addressed id
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Delete a task
+    get:
+      description: Fetches a task by id. A task whose component is out of the caller's read scope is a non-disclosing 404. Gated by task:read.
+      operationId: get-task
+      parameters:
+        - description: The task's content-addressed id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The task's content-addressed id
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get a task
+    patch:
+      description: Patches a task's display name, enabled toggle, node placement, or spec. Gated by task:update; read and update scopes (through the component) drive the 404 versus 403 split.
+      operationId: update-task
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTaskInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Update a task
 servers:
   - url: /api/v1
 
