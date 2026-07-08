@@ -16,10 +16,15 @@ bound **server-side** from the task's interface (the node stamps no component id
 confines a node to its own tasks (an Event carrying another node's `task_id` is orphan-dropped) and rejects
 unregistered datapoint names. The icmp probe rides the same pipeline unchanged (the consumer does not branch on
 probe type); a target that does not answer is DATA (`icmp.reachable=0` with a reason), and an error is reserved
-for a node that cannot do ICMP at all, told apart by a once-cached loopback capability self-check. The full
-function/DAG authoring model below (multi-step, cross-interface, branching) is still design; only the inline tcp
-and icmp probes are built. See
-[ADR-0017](/architecture/decisions/#adr-0017-telemetry-is-a-protobuf-event-over-jetstream-with-an-inline-owner-confining-consumer).
+for a node that cannot do ICMP at all, told apart by a once-cached loopback capability self-check. On top of the
+raw probe metrics the node now computes the per-interface **reachability verdict** `interface.reachable` (up/down,
+the AND of that interface's probe results) and emits it as a built-in **state** datapoint; the ingest consumer
+**routes by the registry kind** (metric to `metric_datapoint`, state to `state_datapoint`) under the same
+confinement, and the state series is **transition-only** (one row per flip, guarded both at the node and at
+ingest). The full function/DAG authoring model below (multi-step, cross-interface, branching) is still design;
+only the inline tcp and icmp probes are built. See
+[ADR-0017](/architecture/decisions/#adr-0017-telemetry-is-a-protobuf-event-over-jetstream-with-an-inline-owner-confining-consumer)
+and [ADR-0018](/architecture/decisions/#adr-0018-the-reachability-verdict-is-a-built-in-state).
 :::
 
 Collection is built from **functions**. A versioned `ComponentTemplate` declares how to reach a
