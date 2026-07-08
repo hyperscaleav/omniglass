@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, fireEvent, screen, waitFor } from "@solidjs/testing-library";
+import { Router, Route } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import Users from "./Users";
 import { PRINCIPALS_KEY, ROLES_KEY, type Principal } from "../lib/principals";
@@ -27,9 +28,13 @@ function mount() {
   qc.setQueryData(["locations"], []);
   qc.setQueryData(["systems"], []);
   qc.setQueryData(["components"], []);
+  // A Router wraps the page so its router hooks (the inherited-grant clickthrough
+  // uses useNavigate) have a context; a catch-all route renders Users.
   return render(() => (
     <QueryClientProvider client={qc}>
-      <Users />
+      <Router>
+        <Route path="*" component={() => <Users />} />
+      </Router>
     </QueryClientProvider>
   ));
 }

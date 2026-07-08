@@ -1,4 +1,5 @@
 import { For, Show, createMemo, createSignal } from "solid-js";
+import { useNavigate } from "@solidjs/router";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import GrantBuilder from "../components/GrantBuilder";
@@ -63,6 +64,16 @@ const columns: FlatColumn<Principal>[] = [
   {
     key: "grants", label: "Grants", width: "100px", sortVal: (p) => p.grants.length,
     cell: (p) => <span class="tnum text-base-content/60">{p.grants.length}</span>,
+  },
+  {
+    key: "groups", label: "Groups",
+    cell: (p) => (
+      <Show when={p.groups?.length} fallback={<span class="text-base-content/30">—</span>}>
+        <span class="inline-flex flex-wrap gap-1">
+          <For each={p.groups}>{(g) => <span class="badge badge-ghost badge-sm">{g.name}</span>}</For>
+        </span>
+      </Show>
+    ),
   },
 ];
 
@@ -210,6 +221,7 @@ function UserDetail(props: { id: string }) {
 // run before removes so an owner swap never trips the last-owner guard mid-batch.
 // The server enforces the owner invariant and answers 409.
 function GrantEditor(props: { principal: Principal; canGrant: boolean; canRevoke: boolean; onChange: () => void | Promise<void> }) {
+  const navigate = useNavigate();
   const needTrees = () => props.canGrant || props.canRevoke;
   const roles = useQuery(() => ({ queryKey: ROLES_KEY, queryFn: listRoles, enabled: props.canGrant }));
   const locations = useQuery(() => ({ queryKey: ["locations"], queryFn: listLocations, enabled: needTrees() }));
@@ -294,7 +306,7 @@ function GrantEditor(props: { principal: Principal; canGrant: boolean; canRevoke
                 >
                   <span class="font-data">{g.role} @ {g.scope_kind === "all" ? "all" : nameOf().get(g.scope_id ?? "") ?? g.scope_id}</span>
                   <span class="text-base-content/40">from</span>
-                  <span class="text-primary">{g.group_name}</span>
+                  <button class="text-primary hover:underline" title="Open this group" onClick={() => navigate(`/groups?g=${g.group_id}`)}>{g.group_name}</button>
                 </span>
               )}
             </For>

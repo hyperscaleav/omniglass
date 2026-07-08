@@ -922,7 +922,17 @@ export interface components {
             readonly $schema?: string;
             description?: string;
             display_name?: string;
+            /**
+             * Format: int64
+             * @description How many grants the group confers on its members.
+             */
+            grant_count: number;
             id: string;
+            /**
+             * Format: int64
+             * @description How many principals belong to the group (populated on list and get; 0 from create/update).
+             */
+            member_count: number;
             name: string;
         };
         HealthOutputBody: {
@@ -1112,10 +1122,15 @@ export interface components {
             readonly $schema?: string;
             active: boolean;
             grants: components["schemas"]["GrantBody"][] | null;
+            groups: components["schemas"]["PrincipalGroupRef"][] | null;
             human?: components["schemas"]["HumanBody"];
             id: string;
             kind: string;
             service?: components["schemas"]["SvcBody"];
+        };
+        PrincipalGroupRef: {
+            id: string;
+            name: string;
         };
         PrincipalStruct: {
             id: string;

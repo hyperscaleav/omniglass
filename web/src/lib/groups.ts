@@ -5,7 +5,7 @@ import type { Grant, CreateGrant } from "./principals";
 // members inherit. A thin typed wrapper over the generated client, gated by
 // principal_group (management) and principal_grant (granting) on the server.
 
-export type Group = { id: string; name: string; display_name?: string; description?: string };
+export type Group = { id: string; name: string; display_name?: string; description?: string; member_count?: number; grant_count?: number };
 export type GroupMember = { principal_id: string; kind: string; username?: string; display_name?: string };
 
 export const GROUPS_KEY = ["principal-groups"] as const;

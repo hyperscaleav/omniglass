@@ -13,17 +13,25 @@ import (
 // principalBody is the wire shape of a principal in the admin directory: its id
 // and kind, the kind profile, and its grants. Credentials are deliberately not
 // included, so no secret ever leaves the API.
+// principalGroupRef names a group a principal belongs to, so the console can show
+// membership and link through to the group.
+type principalGroupRef struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
 type principalBody struct {
-	ID      string      `json:"id"`
-	Kind    string      `json:"kind"`
-	Active  bool        `json:"active"`
-	Human   *humanBody  `json:"human,omitempty"`
-	Service *svcBody    `json:"service,omitempty"`
-	Grants  []grantBody `json:"grants"`
+	ID      string              `json:"id"`
+	Kind    string              `json:"kind"`
+	Active  bool                `json:"active"`
+	Human   *humanBody          `json:"human,omitempty"`
+	Service *svcBody            `json:"service,omitempty"`
+	Grants  []grantBody         `json:"grants"`
+	Groups  []principalGroupRef `json:"groups"`
 }
 
 func toPrincipalBody(pr *storage.Principal) principalBody {
-	b := principalBody{ID: pr.ID, Kind: pr.Kind, Active: pr.Active, Grants: make([]grantBody, 0, len(pr.Grants))}
+	b := principalBody{ID: pr.ID, Kind: pr.Kind, Active: pr.Active, Grants: make([]grantBody, 0, len(pr.Grants)), Groups: make([]principalGroupRef, 0, len(pr.Groups))}
 	if pr.Human != nil {
 		b.Human = &humanBody{Username: pr.Human.Username, Email: pr.Human.Email, DisplayName: pr.Human.DisplayName}
 	}
@@ -32,6 +40,9 @@ func toPrincipalBody(pr *storage.Principal) principalBody {
 	}
 	for i := range pr.Grants {
 		b.Grants = append(b.Grants, toGrantBody(&pr.Grants[i]))
+	}
+	for _, gr := range pr.Groups {
+		b.Groups = append(b.Groups, principalGroupRef{ID: gr.ID, Name: gr.Name})
 	}
 	return b
 }

@@ -162,7 +162,14 @@ type Principal struct {
 	Human   *HumanProfile
 	Service *ServiceProfile
 	Grants  []Grant
+	// Groups are the principal groups this principal belongs to (id + label), so the
+	// admin directory can show membership without a per-row fetch. The grants those
+	// groups confer already ride Grants (tagged with GroupID); this names them.
+	Groups []PrincipalGroupRef
 }
+
+// PrincipalGroupRef is a lightweight reference to a group a principal belongs to.
+type PrincipalGroupRef struct{ ID, Name string }
 
 // HumanProfile and ServiceProfile carry the kind-specific attributes.
 type HumanProfile struct{ Username, Email, DisplayName string }
@@ -901,7 +908,25 @@ func (p *PG) loadPrincipal(ctx context.Context, pr *Principal) error {
 	if err := rows.Err(); err != nil {
 		return fmt.Errorf("storage: grants: %w", err)
 	}
-	return nil
+
+	// The principal's group memberships (id + label), so the admin directory can
+	// show where a principal's inherited access comes from.
+	grows, err := p.pool.Query(ctx,
+		`select g.id, coalesce(g.display_name, g.name)
+		   from principal_group_member m join principal_group g on g.id = m.group_id
+		  where m.principal_id = $1 order by g.name`, pr.ID)
+	if err != nil {
+		return fmt.Errorf("storage: load groups: %w", err)
+	}
+	defer grows.Close()
+	for grows.Next() {
+		var ref PrincipalGroupRef
+		if err := grows.Scan(&ref.ID, &ref.Name); err != nil {
+			return fmt.Errorf("storage: scan group ref: %w", err)
+		}
+		pr.Groups = append(pr.Groups, ref)
+	}
+	return grows.Err()
 }
 
 // ListRoles returns every role, for building the in-process role index.

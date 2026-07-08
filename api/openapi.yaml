@@ -461,13 +461,23 @@ components:
           type: string
         display_name:
           type: string
+        grant_count:
+          description: How many grants the group confers on its members.
+          format: int64
+          type: integer
         id:
           type: string
+        member_count:
+          description: How many principals belong to the group (populated on list and get; 0 from create/update).
+          format: int64
+          type: integer
         name:
           type: string
       required:
         - id
         - name
+        - member_count
+        - grant_count
       type: object
     HealthOutputBody:
       additionalProperties: false
@@ -847,6 +857,12 @@ components:
           type:
             - array
             - "null"
+        groups:
+          items:
+            $ref: "#/components/schemas/PrincipalGroupRef"
+          type:
+            - array
+            - "null"
         human:
           $ref: "#/components/schemas/HumanBody"
         id:
@@ -860,6 +876,18 @@ components:
         - kind
         - active
         - grants
+        - groups
+      type: object
+    PrincipalGroupRef:
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+      required:
+        - id
+        - name
       type: object
     PrincipalStruct:
       additionalProperties: false

@@ -1,4 +1,5 @@
 import { For, Show, createMemo, createSignal } from "solid-js";
+import { useSearchParams } from "@solidjs/router";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import GrantBuilder from "../components/GrantBuilder";
@@ -35,6 +36,8 @@ const columns: FlatColumn<Group>[] = [
       </span>
     ),
   },
+  { key: "members", label: "Members", width: "110px", sortVal: (g) => g.member_count ?? 0, cell: (g) => <span class="tnum text-base-content/60">{g.member_count ?? 0}</span> },
+  { key: "grants", label: "Grants", width: "100px", sortVal: (g) => g.grant_count ?? 0, cell: (g) => <span class="tnum text-base-content/60">{g.grant_count ?? 0}</span> },
   { key: "description", label: "Description", cell: (g) => <span class="text-sm text-base-content/60">{g.description || ""}</span> },
 ];
 
@@ -45,7 +48,10 @@ const filterKeys: FilterKey<Group>[] = [
 
 export default function Groups() {
   const me = useMe();
+  const [params] = useSearchParams();
   const groups = useQuery(() => ({ queryKey: GROUPS_KEY, queryFn: listGroups }));
+  // ?g=<id> deep-links to a group (e.g. from an inherited grant on a user detail).
+  const openId = () => (Array.isArray(params.g) ? params.g[0] : params.g) || undefined;
 
   return (
     <FlatList<Group>
@@ -58,6 +64,8 @@ export default function Groups() {
         filterPlaceholder: "filter by name or description",
         columns,
         empty: "No groups yet.",
+        rowId: (g) => g.id,
+        openId,
         detail: (g) => ({ title: groupName(g), body: <GroupDetail id={g.id} /> }),
         create: can(me.data, "principal_group", "create")
           ? { label: "New group", can: () => can(me.data, "principal_group", "create"), body: (ctx) => <CreateGroupForm onCreated={(g) => ctx.select(g)} /> }

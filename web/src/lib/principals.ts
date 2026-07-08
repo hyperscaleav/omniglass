@@ -17,6 +17,9 @@ export type Principal = {
   human?: { username: string; email?: string; display_name?: string };
   service?: { label: string };
   grants: Grant[];
+  // The principal groups this principal belongs to; the grants they confer ride
+  // grants (tagged group_id), this names them for the directory and clickthrough.
+  groups?: { id: string; name: string }[];
 };
 
 export const PRINCIPALS_KEY = ["principals"] as const;
