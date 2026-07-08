@@ -19,6 +19,10 @@ export type BladeDef = {
   // Optional slot beside Close (e.g. Maximize on a Locations blade, or a
   // "manage in <page>" cross-over on a terminal identity blade).
   headerExtra?: (p: { id: string }) => JSX.Element;
+  // When present and true for this id, the blade offers Edit in its header: read
+  // mode shows a pencil, edit mode shows Save / Cancel (see createEditSlot). The
+  // body reads useBladeEdit().editing() to switch its sections read-only vs live.
+  editable?: (id: string) => boolean;
 };
 
 export type BladeController = {
@@ -56,4 +60,56 @@ export function useBlades(): BladeController {
   const c = useContext(BladesContext);
   if (!c) throw new Error("useBlades called outside a BladesContext provider");
   return c;
+}
+
+// The per-blade edit slot: the uniform read -> Edit -> Save contract. A blade opens
+// read-only; `begin` enters edit mode; the body `bind`s how to commit and revert;
+// `save` runs the bound saver then leaves edit mode, `cancel` reverts and leaves.
+// BladeStack owns the header chrome (the pencil, and Save / Cancel while editing);
+// the detail body reads `editing` to switch its sections read-only vs live.
+export type BladeEdit = {
+  editable: () => boolean; // whether Edit is offered (permission + the BladeDef opts in)
+  editing: () => boolean;
+  saving: () => boolean;
+  begin: () => void;
+  cancel: () => void;
+  save: () => Promise<void>;
+  // The body registers its commit (and optional revert): Save runs `save`, Cancel runs `cancel`.
+  bind: (h: { save: () => Promise<void>; cancel?: () => void }) => void;
+};
+
+export function createEditSlot(editable?: () => boolean): BladeEdit {
+  const [editing, setEditing] = createSignal(false);
+  const [saving, setSaving] = createSignal(false);
+  let handler: { save: () => Promise<void>; cancel: () => void } = { save: async () => {}, cancel: () => {} };
+  return {
+    editable: () => (editable ? editable() : false),
+    editing,
+    saving,
+    begin: () => setEditing(true),
+    cancel: () => {
+      handler.cancel();
+      setEditing(false);
+    },
+    save: async () => {
+      setSaving(true);
+      try {
+        await handler.save();
+        setEditing(false);
+      } finally {
+        setSaving(false);
+      }
+    },
+    bind: (h) => {
+      handler = { save: h.save, cancel: h.cancel ?? (() => {}) };
+    },
+  };
+}
+
+export const BladeEditContext: Context<BladeEdit | undefined> = createContext<BladeEdit>();
+
+export function useBladeEdit(): BladeEdit {
+  const e = useContext(BladeEditContext);
+  if (!e) throw new Error("useBladeEdit called outside a BladeEditContext provider");
+  return e;
 }
