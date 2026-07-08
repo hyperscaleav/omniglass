@@ -175,6 +175,61 @@ func TestTelemetryRoundTrip(t *testing.T) {
 		t.Fatalf("reject-not-project breached: unregistered name was written: %+v", got)
 	}
 
+	// --- STATE PATH (cp5a): interface.reachable is a STATE datapoint, routed by
+	// the datapoint_type kind to state_datapoint, under the SAME confinement and
+	// reject-not-project as a metric, plus the ingest-side transition-only guard.
+
+	// node-a publishes interface.reachable=up for its own t-a. The registry kind is
+	// state, so it lands in state_datapoint (not metric_datapoint), owned disp-1 and
+	// instanced by the interface (disp-1-tcp).
+	publishEvent(t, ncA, "node-a", &ogv1.Event{
+		TaskId:     "t-a",
+		NodeId:     "node-a",
+		Datapoints: []*ogv1.Datapoint{{Name: "interface.reachable", Value: &ogv1.Datapoint_StringValue{StringValue: "up"}}},
+	})
+	waitState(t, ctx, gw, "disp-1", "interface.reachable", "disp-1-tcp", func(d *storage.StateDatapoint) bool { return d != nil && d.Value == "up" })
+
+	// CONFINEMENT (state path): node-a publishes interface.reachable=up for t-b,
+	// which belongs to node-b (owner disp-2). The same fence that drops a foreign
+	// metric drops a foreign state: disp-2 gets no verdict.
+	publishEvent(t, ncA, "node-a", &ogv1.Event{
+		TaskId:     "t-b",
+		NodeId:     "node-a",
+		Datapoints: []*ogv1.Datapoint{{Name: "interface.reachable", Value: &ogv1.Datapoint_StringValue{StringValue: "up"}}},
+	})
+
+	// TRANSITION-ONLY (ingest guard): a repeated identical up must NOT add a second
+	// row (the latest-value guard skips it); only a flip to down writes. The first
+	// up is already committed (waitState above), so the guard sees it deterministically.
+	publishEvent(t, ncA, "node-a", &ogv1.Event{
+		TaskId:     "t-a",
+		NodeId:     "node-a",
+		Datapoints: []*ogv1.Datapoint{{Name: "interface.reachable", Value: &ogv1.Datapoint_StringValue{StringValue: "up"}}},
+	})
+	publishEvent(t, ncA, "node-a", &ogv1.Event{
+		TaskId:     "t-a",
+		NodeId:     "node-a",
+		Datapoints: []*ogv1.Datapoint{{Name: "interface.reachable", Value: &ogv1.Datapoint_StringValue{StringValue: "down"}}},
+	})
+	waitState(t, ctx, gw, "disp-1", "interface.reachable", "disp-1-tcp", func(d *storage.StateDatapoint) bool { return d != nil && d.Value == "down" })
+
+	// The series is exactly [up, down]: the duplicate up was guarded out, so the
+	// availability strip has one row per transition, not one per publish.
+	trans, err := gw.StateTransitions(ctx, "disp-1", "interface.reachable", "disp-1-tcp", time.Time{})
+	if err != nil {
+		t.Fatalf("state transitions: %v", err)
+	}
+	if len(trans) != 2 || trans[0].Value != "up" || trans[1].Value != "down" {
+		t.Fatalf("transition-only breached: want [up down], got %+v", trans)
+	}
+
+	// Confinement held for the state path: disp-2 (node-b's component) got no verdict.
+	if got, err := gw.LatestState(ctx, "disp-2", "interface.reachable", "disp-2-tcp"); err != nil {
+		t.Fatalf("latest state disp-2: %v", err)
+	} else if got != nil {
+		t.Fatalf("state confinement breached: node-a landed a verdict on disp-2: %+v", got)
+	}
+
 	// Telemetry publish isolation: node-a cannot publish to node-b's telemetry
 	// subject (a permissions violation), the same fence as worklist/heartbeat.
 	if err := ncA.Publish(collection.TelemetrySubject("node-b"), []byte("x")); err != nil {
@@ -196,6 +251,25 @@ func publishEvent(t *testing.T, nc *nats.Conn, node string, ev *ogv1.Event) {
 		t.Fatalf("publish telemetry %s: %v", node, err)
 	}
 	_ = nc.Flush()
+}
+
+// waitState polls LatestState until pred is satisfied or a deadline passes.
+func waitState(t *testing.T, ctx context.Context, gw storage.Gateway, comp, key, instance string, pred func(*storage.StateDatapoint) bool) *storage.StateDatapoint {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		dp, err := gw.LatestState(ctx, comp, key, instance)
+		if err != nil {
+			t.Fatalf("latest state %s/%s[%s]: %v", comp, key, instance, err)
+		}
+		if pred(dp) {
+			return dp
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("state %s/%s[%s] never satisfied the predicate (last=%+v)", comp, key, instance, dp)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
 }
 
 // waitMetric polls LatestMetric until pred is satisfied or a deadline passes.

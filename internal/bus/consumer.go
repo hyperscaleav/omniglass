@@ -94,44 +94,104 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 	}
 	reg := collection.NewRegistry(types)
 
-	evs := deriveDatapoints(&ev, owner, reg)
-	if len(evs) > 0 {
-		if err := s.store.InsertMetricDatapoints(ctx, evs); err != nil {
+	// Route by the registry kind (the cp3-deferred "route by kind" note): a metric
+	// name lands in metric_datapoint, a state name in state_datapoint. Both survive
+	// the SAME owner-confinement and reject-not-project above; the split is only the
+	// sink, not a second trust decision.
+	metrics, states := deriveDatapoints(&ev, owner, reg)
+	if len(metrics) > 0 {
+		if err := s.store.InsertMetricDatapoints(ctx, metrics); err != nil {
 			_ = msg.Nak() // DB write failed: redeliver
+			return
+		}
+	}
+	// The ingest-side transition guard: a state series is transition-only, so skip a
+	// write whose value equals the latest stored value for that series. The node's
+	// own change detection is the primary defense; this is the robustness net for a
+	// node restart that re-emits an unchanged verdict.
+	fresh, err := s.dedupeStates(ctx, states)
+	if err != nil {
+		_ = msg.Nak() // latest-state read failed: redeliver
+		return
+	}
+	if len(fresh) > 0 {
+		if err := s.store.InsertStateDatapoints(ctx, fresh); err != nil {
+			_ = msg.Nak()
 			return
 		}
 	}
 	_ = msg.Ack()
 }
 
-// deriveDatapoints turns a decoded Event + its resolved owner into the metric
-// rows to persist. Pure: no I/O. reject-not-project drops any datapoint whose
-// name is not a registered metric datapoint_type (an unregistered name, or a
-// state/log kind this checkpoint has no sink for). The owner is stamped from the
-// task's interface: owner_kind=component, source=interface type, instance=
-// interface name; provenance is observed (the insert path fixes that).
-func deriveDatapoints(ev *ogv1.Event, owner storage.TaskOwner, reg collection.Registry) []storage.MetricDatapointEvent {
-	var out []storage.MetricDatapointEvent
+// dedupeStates drops any state event whose value equals the latest stored value
+// for its series (owner component + key + instance), so a repeated identical
+// verdict does not add a consecutive-duplicate row. A LatestState read error is
+// returned so the caller can leave the message unacked for redelivery.
+func (s *Server) dedupeStates(ctx context.Context, states []storage.StateDatapointEvent) ([]storage.StateDatapointEvent, error) {
+	if len(states) == 0 {
+		return nil, nil
+	}
+	fresh := make([]storage.StateDatapointEvent, 0, len(states))
+	for _, ev := range states {
+		latest, err := s.store.LatestState(ctx, ev.OwnerID, ev.Key, ev.Instance)
+		if err != nil {
+			return nil, err
+		}
+		if latest != nil && latest.Value == ev.Value {
+			continue // unchanged verdict: transition-only, skip
+		}
+		fresh = append(fresh, ev)
+	}
+	return fresh, nil
+}
+
+// deriveDatapoints turns a decoded Event + its resolved owner into the typed rows
+// to persist, split by datapoint kind. Pure: no I/O. reject-not-project drops any
+// datapoint whose name is not a registered datapoint_type; the registry kind then
+// routes a metric to the metric slice and a state to the state slice (a log kind
+// has no sink this checkpoint, dropped). The owner is stamped identically for both
+// from the task's interface: owner_kind=component, source=interface type,
+// instance=interface name; provenance is observed (the insert path fixes that).
+func deriveDatapoints(ev *ogv1.Event, owner storage.TaskOwner, reg collection.Registry) ([]storage.MetricDatapointEvent, []storage.StateDatapointEvent) {
+	var metrics []storage.MetricDatapointEvent
+	var states []storage.StateDatapointEvent
 	for _, dp := range ev.GetDatapoints() {
 		kind, ok := reg.Allows(dp.GetName())
-		if !ok || kind != "metric" {
-			continue
-		}
-		val, ok := numericValue(dp)
 		if !ok {
-			continue
+			continue // reject-not-project: unregistered name
 		}
-		out = append(out, storage.MetricDatapointEvent{
-			OwnerKind: "component",
-			OwnerID:   owner.Component,
-			Key:       dp.GetName(),
-			Instance:  owner.InterfaceName,
-			Value:     val,
-			Source:    owner.InterfaceType,
-			TS:        datapointTime(ev, dp),
-		})
+		switch kind {
+		case "metric":
+			val, ok := numericValue(dp)
+			if !ok {
+				continue
+			}
+			metrics = append(metrics, storage.MetricDatapointEvent{
+				OwnerKind: "component",
+				OwnerID:   owner.Component,
+				Key:       dp.GetName(),
+				Instance:  owner.InterfaceName,
+				Value:     val,
+				Source:    owner.InterfaceType,
+				TS:        datapointTime(ev, dp),
+			})
+		case "state":
+			val, ok := stringValue(dp)
+			if !ok {
+				continue
+			}
+			states = append(states, storage.StateDatapointEvent{
+				OwnerKind: "component",
+				OwnerID:   owner.Component,
+				Key:       dp.GetName(),
+				Instance:  owner.InterfaceName,
+				Value:     val,
+				Source:    owner.InterfaceType,
+				TS:        datapointTime(ev, dp),
+			})
+		}
 	}
-	return out
+	return metrics, states
 }
 
 // numericValue extracts a metric's float value from the datapoint's typed oneof.
@@ -146,6 +206,16 @@ func numericValue(dp *ogv1.Datapoint) (float64, bool) {
 	default:
 		return 0, false
 	}
+}
+
+// stringValue extracts a state's categorical value from the datapoint's typed
+// oneof. A state rides string_value; a numeric/json/empty value is not a state
+// verdict and yields ok=false (the caller skips it).
+func stringValue(dp *ogv1.Datapoint) (string, bool) {
+	if v, ok := dp.GetValue().(*ogv1.Datapoint_StringValue); ok {
+		return v.StringValue, true
+	}
+	return "", false
 }
 
 // datapointTime resolves the timestamp for one datapoint: its own ts if set, else

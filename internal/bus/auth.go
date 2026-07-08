@@ -23,6 +23,11 @@ type Store interface {
 	ResolveTaskOwner(ctx context.Context, taskID, nodeName string) (storage.TaskOwner, bool, error)
 	ListDatapointTypes(ctx context.Context) ([]storage.DatapointType, error)
 	InsertMetricDatapoints(ctx context.Context, evs []storage.MetricDatapointEvent) error
+	// The state sink and its transition-only guard: a state datapoint routes here
+	// (by registry kind), and LatestState lets the consumer skip a write whose
+	// value equals the latest stored value for the series.
+	InsertStateDatapoints(ctx context.Context, evs []storage.StateDatapointEvent) error
+	LatestState(ctx context.Context, componentName, key, instance string) (*storage.StateDatapoint, error)
 }
 
 // nodeAuth implements server.Authentication (the in-process

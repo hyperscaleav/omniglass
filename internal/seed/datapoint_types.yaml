@@ -28,3 +28,13 @@ datapoint_types:
     validation: { min: 0 }
     display_name: TCP Connect Time
     description: Time to establish the TCP connection; absent when the port is closed.
+  - name: interface.reachable
+    kind: state
+    value_type: text
+    validation: { values: [up, down] }
+    display_name: Interface Reachable
+    description: >-
+      Per-interface reachability verdict, the AND of the interface's probe
+      results (up = every applicable probe reached the target). A built-in state:
+      availability is time_in_state over it. Unknown/stale are read-time
+      derivations, not stored values.

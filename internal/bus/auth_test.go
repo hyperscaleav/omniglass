@@ -35,6 +35,12 @@ func (f fakeStore) ListDatapointTypes(context.Context) ([]storage.DatapointType,
 func (f fakeStore) InsertMetricDatapoints(context.Context, []storage.MetricDatapointEvent) error {
 	return nil
 }
+func (f fakeStore) InsertStateDatapoints(context.Context, []storage.StateDatapointEvent) error {
+	return nil
+}
+func (f fakeStore) LatestState(context.Context, string, string, string) (*storage.StateDatapoint, error) {
+	return nil, nil
+}
 
 // fakeClientAuth is a minimal server.ClientAuthentication that carries the
 // presented options and captures the RegisterUser call.

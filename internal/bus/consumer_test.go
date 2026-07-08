@@ -27,11 +27,11 @@ func TestDeriveDatapoints(t *testing.T) {
 		},
 	}
 
-	evs := deriveDatapoints(ev, owner, reg)
-	if len(evs) != 2 {
-		t.Fatalf("derived %d rows, want 2 (unregistered name dropped): %+v", len(evs), evs)
+	metrics, states := deriveDatapoints(ev, owner, reg)
+	if len(metrics) != 2 || len(states) != 0 {
+		t.Fatalf("derived %d metrics %d states, want 2/0 (unregistered name dropped): %+v", len(metrics), len(states), metrics)
 	}
-	for _, e := range evs {
+	for _, e := range metrics {
 		if e.OwnerKind != "component" || e.OwnerID != "disp-1" || e.Source != "tcp" || e.Instance != "disp-1-tcp" {
 			t.Fatalf("owner stamping wrong: %+v", e)
 		}
@@ -41,15 +41,33 @@ func TestDeriveDatapoints(t *testing.T) {
 	}
 }
 
-// TestDeriveDatapointsRejectsNonMetricKind: a name registered as state/log has no
-// metric sink in this checkpoint, so it is dropped rather than written.
-func TestDeriveDatapointsRejectsNonMetricKind(t *testing.T) {
-	reg := collection.NewRegistry([]storage.DatapointType{{Name: "some.state", Kind: "state"}})
-	owner := storage.TaskOwner{Component: "disp-1", InterfaceName: "i", InterfaceType: "tcp"}
+// TestDeriveDatapointsRoutesByKind: a name registered as state routes to the state
+// slice (not metric_datapoint), stamped with the same task-interface owner; an
+// unregistered name is still dropped (reject-not-project), and a log kind (no sink
+// this checkpoint) lands in neither.
+func TestDeriveDatapointsRoutesByKind(t *testing.T) {
+	reg := collection.NewRegistry([]storage.DatapointType{
+		{Name: "tcp.open", Kind: "metric"},
+		{Name: "interface.reachable", Kind: "state"},
+		{Name: "some.log", Kind: "log"},
+	})
+	owner := storage.TaskOwner{Component: "disp-1", InterfaceName: "disp-1-tcp", InterfaceType: "tcp"}
 	ev := &ogv1.Event{Datapoints: []*ogv1.Datapoint{
-		{Name: "some.state", Value: &ogv1.Datapoint_StringValue{StringValue: "up"}},
+		{Name: "tcp.open", Value: &ogv1.Datapoint_DoubleValue{DoubleValue: 1}},
+		{Name: "interface.reachable", Value: &ogv1.Datapoint_StringValue{StringValue: "up"}},
+		{Name: "some.log", Value: &ogv1.Datapoint_StringValue{StringValue: "line"}},
+		{Name: "not.registered", Value: &ogv1.Datapoint_StringValue{StringValue: "up"}},
 	}}
-	if evs := deriveDatapoints(ev, owner, reg); len(evs) != 0 {
-		t.Fatalf("non-metric kind should not project to metric_datapoint, got %+v", evs)
+	metrics, states := deriveDatapoints(ev, owner, reg)
+	if len(metrics) != 1 || metrics[0].Key != "tcp.open" {
+		t.Fatalf("metrics = %+v, want one tcp.open", metrics)
+	}
+	if len(states) != 1 {
+		t.Fatalf("states = %+v, want one interface.reachable (log + unregistered dropped)", states)
+	}
+	s := states[0]
+	if s.Key != "interface.reachable" || s.Value != "up" || s.OwnerKind != "component" ||
+		s.OwnerID != "disp-1" || s.Instance != "disp-1-tcp" || s.Source != "tcp" {
+		t.Fatalf("state routing/owner wrong: %+v", s)
 	}
 }
