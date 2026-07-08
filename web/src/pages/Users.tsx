@@ -85,7 +85,7 @@ export default function Users() {
         create: {
           label: "New user",
           can: () => can(me.data, "principal", "create"),
-          body: (close) => <CreateUserForm close={close} />,
+          body: (ctx) => <CreateUserForm close={ctx.close} onCreated={ctx.select} />,
         },
       }}
     />
@@ -280,8 +280,10 @@ function GrantEditor(props: { principal: Principal; canGrant: boolean; canRevoke
 
 // CreateUserForm is the new-human form the create Drawer hosts: username (required),
 // display name, email, and an optional initial password (min 8) the user changes
-// after signing in. On success it invalidates the directory and closes the Drawer.
-function CreateUserForm(props: { close: () => void }) {
+// after signing in. On success it invalidates the directory and hands the created
+// principal to onCreated, which opens its detail Drawer (closing this one), so the
+// operator lands straight on the new user (grants next).
+function CreateUserForm(props: { close: () => void; onCreated: (p: Principal) => void }) {
   const qc = useQueryClient();
   const [username, setUsername] = createSignal("");
   const [displayName, setDisplayName] = createSignal("");
@@ -295,14 +297,16 @@ function CreateUserForm(props: { close: () => void }) {
     setBusy(true);
     setErr(null);
     try {
-      await createPrincipal({
+      const created = await createPrincipal({
         username: username().trim(),
         display_name: displayName().trim() || undefined,
         email: email().trim() || undefined,
         password: password() || undefined,
       });
+      // Invalidate first so the directory (and the detail Drawer's re-derive by id)
+      // has the new row before we select it, then land on it.
       await qc.invalidateQueries({ queryKey: PRINCIPALS_KEY });
-      props.close();
+      props.onCreated(created);
     } catch (er) {
       setErr(describeError(er));
     } finally {
