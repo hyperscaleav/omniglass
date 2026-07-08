@@ -47,6 +47,8 @@ roles:
     inherits: ["operator"]
     permissions:
       - "component:delete"
+      - "interface:*"
+      - "task:*"
       - "system:create,update,delete"
       - "location:create,update,delete"
       - "principal:*"
