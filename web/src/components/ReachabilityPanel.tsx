@@ -20,8 +20,9 @@ import {
 // availability strip built from the verdict's transition history, and a 4-state
 // verdict pill derived at read time. Expanding a row reveals the layered-gate
 // breakdown (ping L3, port L4) plus a "why" reason line when the interface is
-// down. Read-only in 5b: the "Add check" affordance lands in 5d. Renders only
-// the real API fields (no invented latency or history).
+// down. The rows are read-only (verdict/strip/reason derived from real fields, no
+// invented latency or history); the header carries the 5d "Add check" affordance,
+// which authors a valid interface + poll task for this component.
 
 // The pill hue and label per derived verdict word.
 const PILL: Record<VerdictWord, { cls: string; label: string }> = {
