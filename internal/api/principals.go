@@ -194,26 +194,11 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Description:   "Assigns a role at a scope to a principal. Gated by principal_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own (no promoting anyone, including yourself, to a higher tier such as owner). A duplicate is 409, an unknown role or bad scope 422.",
 		Middlewares:   huma.Middlewares{a.authn, a.require("principal_grant", "create")},
 	}, func(ctx context.Context, in *createGrantInput) (*grantOutput, error) {
-		// Escalation guard: a grant cannot confer a capability the granter lacks at
-		// all-scope, so no caller can promote anyone (including itself) to a tier above
-		// its own, e.g. admin granting owner (*:*). Mirrors the impersonation guard: only
-		// the caller's all-scope grants count, so a capability held through a narrower
-		// grant cannot be conferred estate-wide.
-		actor, ok := principalFrom(ctx)
-		if !ok {
-			return nil, huma.Error401Unauthorized("unauthenticated")
-		}
-		idx, err := a.roleIndex(ctx)
+		ok, err := a.grantCoverOK(ctx, in.Body.Role)
 		if err != nil {
-			return nil, huma.Error500InternalServerError("grant failed")
+			return nil, err
 		}
-		allScopeRoleIDs := make([]string, 0, len(actor.Grants))
-		for _, gr := range actor.Grants {
-			if gr.ScopeKind == "all" {
-				allScopeRoleIDs = append(allScopeRoleIDs, gr.Role)
-			}
-		}
-		if !idx.Flatten(allScopeRoleIDs).Covers(idx.Flatten([]string{in.Body.Role})) {
+		if !ok {
 			return nil, huma.Error403Forbidden("cannot grant a role whose capabilities exceed yours")
 		}
 		g, err := gw.CreateGrant(ctx, actorID(ctx), in.ID, storage.GrantSpec{
@@ -222,11 +207,7 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		if err != nil {
 			return nil, mapPrincipalErr(err)
 		}
-		out := &grantOutput{Body: grantBody{ID: g.ID, Role: g.Role, ScopeKind: g.ScopeKind, ScopeOp: g.ScopeOp}}
-		if g.ScopeID != nil {
-			out.Body.ScopeID = *g.ScopeID
-		}
-		return out, nil
+		return &grantOutput{Body: toGrantBody(g)}, nil
 	})
 
 	huma.Register(api, huma.Operation{
@@ -297,7 +278,45 @@ func mapPrincipalErr(err error) error {
 		return huma.Error422UnprocessableEntity("unknown role")
 	case errors.Is(err, storage.ErrBadScope):
 		return huma.Error422UnprocessableEntity("a scoped grant needs a scope_id")
+	case errors.Is(err, storage.ErrGroupNotFound):
+		return huma.Error404NotFound("group not found")
+	case errors.Is(err, storage.ErrGroupExists):
+		return huma.Error409Conflict("that group name already exists")
 	default:
 		return huma.Error500InternalServerError("principal operation failed")
 	}
+}
+
+// grantCoverOK reports whether the caller may grant the given role: the caller's
+// all-scope grants must cover the role's capabilities, so no one promotes anyone
+// (including itself) to a tier above its own, e.g. admin granting owner. Only the
+// caller's all-scope grants count, mirroring the impersonation guard. Shared by
+// the direct-grant and group-grant handlers. A non-nil error is already an HTTP
+// error.
+func (a *authenticator) grantCoverOK(ctx context.Context, role string) (bool, error) {
+	actor, ok := principalFrom(ctx)
+	if !ok {
+		return false, huma.Error401Unauthorized("unauthenticated")
+	}
+	idx, err := a.roleIndex(ctx)
+	if err != nil {
+		return false, huma.Error500InternalServerError("grant failed")
+	}
+	allScopeRoleIDs := make([]string, 0, len(actor.Grants))
+	for _, gr := range actor.Grants {
+		if gr.ScopeKind == "all" {
+			allScopeRoleIDs = append(allScopeRoleIDs, gr.Role)
+		}
+	}
+	return idx.Flatten(allScopeRoleIDs).Covers(idx.Flatten([]string{role})), nil
+}
+
+// toGrantBody renders a stored grant as the API body (the scope id is inlined only
+// when set). Shared by the direct-grant and group-grant surfaces.
+func toGrantBody(g *storage.Grant) grantBody {
+	b := grantBody{ID: g.ID, Role: g.Role, ScopeKind: g.ScopeKind, ScopeOp: g.ScopeOp}
+	if g.ScopeID != nil {
+		b.ScopeID = *g.ScopeID
+	}
+	return b
 }

@@ -52,6 +52,7 @@ roles:
       - "principal:*"
       - "credential:*"
       - "principal_grant:*"
+      - "principal_group:*"
       - "role:*"
       - "audit:read:admin"
       - "datapoint_type:create"

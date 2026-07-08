@@ -86,7 +86,7 @@ undecided.
 The `group` membership mechanism (static list or dynamic filter) is shared across kinds, but the kinds are kept **distinct** (not one polymorphic primitive yet, because their usage differs):
 
 - **`component` / `system` / `location` groups** are **entity-groups**: they carry config bindings (the cascade) and serve as ABAC **scopes**.
-- **`principal_group`** is a collection of principals (SCIM-synced or local): a grant **subject**, carrying no config. It groups over principals, not just humans (members can be any principal kind); in practice it is humans synced from the IdP.
+- **`principal_group`** is a collection of principals (SCIM-synced or local): a grant **subject**, carrying no config. It groups over principals, not just humans (members can be any principal kind); in practice it is humans synced from the IdP. A grant attaches to a group the same way it attaches to a principal (the one `principal_grant` table, keyed by a group instead of a principal), and every member **inherits** it: the grant loader unions a principal's group grants with its direct grants, so an inherited grant flattens to permissions and resolves to scope identically to a direct one. Membership is static (an explicit join) and flat (no nesting) in the first cut; a group grant is bounded by the same escalation cover-check as a direct one (a granter cannot confer a tier above its own).
 
 So `group` appears on **both sides of authZ**: `principal_group`s as subjects, entity-groups as object scopes.
 

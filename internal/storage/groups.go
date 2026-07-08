@@ -254,13 +254,16 @@ func (p *PG) ListGroupMembers(ctx context.Context, groupID string, read scope.Se
 	if !read.All {
 		return nil, ErrPrincipalForbidden
 	}
+	// A group can hold humans and service accounts; show each by its natural name
+	// (a human's username, a service's label), so the roster reads cleanly for both.
 	rows, err := p.pool.Query(ctx,
-		`select p.id, p.kind, coalesce(h.username, ''), coalesce(h.display_name, '')
+		`select p.id, p.kind, coalesce(h.username, ''), coalesce(h.display_name, s.label, '')
 		   from principal_group_member m
 		   join principal p on p.id = m.principal_id
 		   left join human h on h.principal_id = p.id
+		   left join service s on s.principal_id = p.id
 		  where m.group_id = $1
-		  order by coalesce(h.username, p.id::text)`, groupID)
+		  order by coalesce(h.username, s.label, p.id::text)`, groupID)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list members: %w", err)
 	}
