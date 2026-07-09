@@ -78,8 +78,15 @@ type operation struct {
 }
 
 type param struct {
-	Name string `json:"name"`
-	In   string `json:"in"`
+	Name        string      `json:"name"`
+	In          string      `json:"in"`
+	Description string      `json:"description"`
+	Required    bool        `json:"required"`
+	Schema      paramSchema `json:"schema"`
+}
+
+type paramSchema struct {
+	Type string `json:"type"`
 }
 
 type requestBody struct {
@@ -113,6 +120,7 @@ type command struct {
 	APIPath string   // Go format template, e.g. /api/v1/locations/%s
 	Args    []string // positional arg names, in path order
 	Body    []bodyField
+	Query   []queryField // OpenAPI query parameters, as optional flags
 	Short   string
 	Long    string
 	Example string
@@ -122,6 +130,20 @@ type bodyField struct {
 	Name     string
 	Flag     string // hyphenated flag name
 	Var      string // generated Go variable name
+	Desc     string
+	Required bool
+}
+
+// queryField is one OpenAPI query parameter surfaced as a cobra flag. The flag
+// is optional by default: only a flag the operator actually sets is appended to
+// the request query string, so an unset param keeps the server default.
+type queryField struct {
+	Name     string // OpenAPI param name (snake_case), the query-string key
+	Flag     string // kebab-case flag name
+	Var      string // generated Go variable name
+	GoType   string // Go flag variable type: string, bool, int
+	FlagFunc string // cobra flag setter: StringVar, BoolVar, IntVar
+	Zero     string // Go source for the flag default: "", false, 0
 	Desc     string
 	Required bool
 }
@@ -183,8 +205,40 @@ func buildCommand(doc spec, base, path, method string, op operation) command {
 		Long:    op.Description,
 	}
 	c.Body = bodyFields(doc, op)
+	c.Query = queryFields(op)
 	c.Example = example(words, args, c.Body)
 	return c
+}
+
+// queryFields maps an operation's OpenAPI query parameters (in: query) to
+// optional cobra flags, in spec order. The OpenAPI type selects the flag setter
+// (string -> StringVar, boolean -> BoolVar, integer -> IntVar); any other type
+// falls back to a string flag. Path and other parameter locations are ignored.
+func queryFields(op operation) []queryField {
+	var out []queryField
+	for _, p := range op.Parameters {
+		if p.In != "query" {
+			continue
+		}
+		goType, flagFunc, zero := "string", "StringVar", `""`
+		switch p.Schema.Type {
+		case "boolean":
+			goType, flagFunc, zero = "bool", "BoolVar", "false"
+		case "integer":
+			goType, flagFunc, zero = "int", "IntVar", "0"
+		}
+		out = append(out, queryField{
+			Name:     p.Name,
+			Flag:     strings.ReplaceAll(p.Name, "_", "-"),
+			Var:      "q" + goIdent(p.Name),
+			GoType:   goType,
+			FlagFunc: flagFunc,
+			Zero:     zero,
+			Desc:     p.Description,
+			Required: p.Required,
+		})
+	}
+	return out
 }
 
 // commandWords derives the cobra command path. An override wins; otherwise the
@@ -439,6 +493,9 @@ func generatedCommands() []*cobra.Command {
 		{{- range $f := .Body}}
 		var {{$f.Var}} string
 		{{- end}}
+		{{- range $q := .Query}}
+		var {{$q.Var}} {{$q.GoType}}
+		{{- end}}
 		cmd := &cobra.Command{
 			Use:     {{quote .LeafUse}},
 			Short:   {{quote .Short}},
@@ -447,6 +504,17 @@ func generatedCommands() []*cobra.Command {
 			Args:    cobra.ExactArgs({{len .Args}}),
 			RunE: func(cmd *cobra.Command, args []string) error {
 				path := fmt.Sprintf({{quote .APIPath}}{{range $i, $a := .Args}}, url.PathEscape(args[{{$i}}]){{end}})
+				{{- if .Query}}
+				q := url.Values{}
+				{{- range $qp := .Query}}
+				if cmd.Flags().Changed({{quote $qp.Flag}}) {
+					q.Set({{quote $qp.Name}}, fmt.Sprintf("%v", {{$qp.Var}}))
+				}
+				{{- end}}
+				if enc := q.Encode(); enc != "" {
+					path += "?" + enc
+				}
+				{{- end}}
 				{{- if .Body}}
 				body := map[string]any{}
 				{{- range $f := .Body}}
@@ -464,6 +532,12 @@ func generatedCommands() []*cobra.Command {
 		cmd.Flags().StringVar(&{{$f.Var}}, {{quote $f.Flag}}, "", {{quote $f.Desc}})
 		{{- if $f.Required}}
 		_ = cmd.MarkFlagRequired({{quote $f.Flag}})
+		{{- end}}
+		{{- end}}
+		{{- range $qp := .Query}}
+		cmd.Flags().{{$qp.FlagFunc}}(&{{$qp.Var}}, {{quote $qp.Flag}}, {{$qp.Zero}}, {{quote $qp.Desc}})
+		{{- if $qp.Required}}
+		_ = cmd.MarkFlagRequired({{quote $qp.Flag}})
 		{{- end}}
 		{{- end}}
 		return cmd

@@ -34,6 +34,10 @@ func generatedCommands() []*cobra.Command {
 			Short: "Commands for the audit-log resource",
 		}
 		parent.AddCommand(func() *cobra.Command {
+			var qLimit int
+			var qResource string
+			var qVerb string
+			var qBefore string
 			cmd := &cobra.Command{
 				Use:     "list",
 				Short:   "List audit-trail events",
@@ -42,9 +46,29 @@ func generatedCommands() []*cobra.Command {
 				Args:    cobra.ExactArgs(0),
 				RunE: func(cmd *cobra.Command, args []string) error {
 					path := fmt.Sprintf("/api/v1/audit-log")
+					q := url.Values{}
+					if cmd.Flags().Changed("limit") {
+						q.Set("limit", fmt.Sprintf("%v", qLimit))
+					}
+					if cmd.Flags().Changed("resource") {
+						q.Set("resource", fmt.Sprintf("%v", qResource))
+					}
+					if cmd.Flags().Changed("verb") {
+						q.Set("verb", fmt.Sprintf("%v", qVerb))
+					}
+					if cmd.Flags().Changed("before") {
+						q.Set("before", fmt.Sprintf("%v", qBefore))
+					}
+					if enc := q.Encode(); enc != "" {
+						path += "?" + enc
+					}
 					return runAPICommand(cmd, "GET", path, nil)
 				},
 			}
+			cmd.Flags().IntVar(&qLimit, "limit", 0, "Max rows to return, newest first (default 100, capped at 500)")
+			cmd.Flags().StringVar(&qResource, "resource", "", "Filter to one resource kind (e.g. auth, principal_grant)")
+			cmd.Flags().StringVar(&qVerb, "verb", "", "Filter to one verb (e.g. login, create)")
+			cmd.Flags().StringVar(&qBefore, "before", "", "Only events strictly older than this RFC3339 timestamp (paging backward)")
 			return cmd
 		}())
 		roots = append(roots, parent)
@@ -749,6 +773,8 @@ func generatedCommands() []*cobra.Command {
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
+			var qKind string
+			var qIncludeArchived bool
 			cmd := &cobra.Command{
 				Use:     "list",
 				Short:   "List principals",
@@ -757,9 +783,21 @@ func generatedCommands() []*cobra.Command {
 				Args:    cobra.ExactArgs(0),
 				RunE: func(cmd *cobra.Command, args []string) error {
 					path := fmt.Sprintf("/api/v1/principals")
+					q := url.Values{}
+					if cmd.Flags().Changed("kind") {
+						q.Set("kind", fmt.Sprintf("%v", qKind))
+					}
+					if cmd.Flags().Changed("include-archived") {
+						q.Set("include_archived", fmt.Sprintf("%v", qIncludeArchived))
+					}
+					if enc := q.Encode(); enc != "" {
+						path += "?" + enc
+					}
 					return runAPICommand(cmd, "GET", path, nil)
 				},
 			}
+			cmd.Flags().StringVar(&qKind, "kind", "", "Optionally filter by principal kind")
+			cmd.Flags().BoolVar(&qIncludeArchived, "include-archived", false, "Include archived (soft-deleted) principals, hidden by default")
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
