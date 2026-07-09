@@ -53,7 +53,8 @@ location-scoped admin cannot list users.
   validates as you type: a **username** is a lowercase handle (letters, digits, and `. _ -`, no
   capitals or spaces) and an **email** must be well formed, so an invalid field shows an inline
   error and blocks the submit before the round-trip (the same rules the server enforces). The
-  same handle rule and inline check apply when you rename a user in edit mode.
+  same handle rule and inline check apply when you rename a user in edit mode. The new user's blade
+  opens **directly in edit mode**, so you assign its roles right away and one **Save** commits them.
 - With `principal:update`, the footer **Edit** opens edit mode, where you change a user's display name,
   email, and **username**, or adjust its grants, and **Save** commits the lot; **Disable / Enable** sits in the
   footer's left slot, available without entering edit.

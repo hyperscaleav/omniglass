@@ -1,3 +1,4 @@
+import { createSignal } from "solid-js";
 import { api } from "../api/client";
 import type { FilterKey } from "./predicate";
 
@@ -26,6 +27,26 @@ export type Principal = {
 };
 
 export const PRINCIPALS_KEY = ["principals"] as const;
+
+// A just-created user opens its blade directly in edit mode, so grants (and any
+// profile tweak) can be added without a second step. The create flow flags the new
+// id here; UserDetail consumes it once its data has loaded and begins editing. Mirror
+// of the group create flow. A reactive signal so the consuming effect reruns.
+const [pendingEditId, setPendingEditId] = createSignal<string | null>(null);
+
+// openPrincipalInEdit marks a principal to open in edit mode the next time its blade
+// mounts.
+export function openPrincipalInEdit(id: string): void {
+  setPendingEditId(id);
+}
+
+// consumePendingPrincipalEdit returns true (and clears the flag) if this id is the
+// one flagged to open in edit mode, so the caller begins editing exactly once.
+export function consumePendingPrincipalEdit(id: string): boolean {
+  if (pendingEditId() !== id) return false;
+  setPendingEditId(null);
+  return true;
+}
 
 // includeArchived surfaces soft-deleted principals (the "show archived"
 // directory view), so a hidden account can be restored or purged.

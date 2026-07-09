@@ -503,8 +503,8 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   `valid` gate on the blade edit contract disables the footer **Save**). The group create Drawer title now reads
   **New group** (it leaked the `principal_group` resource key), the group create form gained the same
   subtitle the user form has, and the form placeholders are consistent across create and edit. A newly created
-  group opens **directly in edit mode** so its members and grants (child resources that need the group id) are
-  added in one flow rather than a second step. Proven by an API
+  **user or group** opens **directly in edit mode** so its grants (and a group's members, child resources that
+  need the parent id) are added in one flow rather than a second step. Proven by an API
   validation test (a malformed username, name, or email is a 422; a valid one is accepted) and web tests (the
   blade closes without an orphan refetch, and an invalid field blocks create and the footer Save).
 - **Identity: the Groups console + inherited-vs-direct grants, UI.** A **Groups** page (`Settings > Groups`,

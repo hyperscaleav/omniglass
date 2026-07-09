@@ -10,7 +10,7 @@ import type { ExistingGrant, GrantRef, ScopeOp } from "../lib/grantdraft";
 import {
   type Principal, type ScopeKind, type UpdatePrincipal,
   PRINCIPALS_KEY, ROLES_KEY, getPrincipal, updatePrincipal, createGrant, revokeGrant, setPrincipalActive, listRoles,
-  archivePrincipal, restorePrincipal, purgePrincipal,
+  archivePrincipal, restorePrincipal, purgePrincipal, consumePendingPrincipalEdit,
   principalName, kindBadge, principalInitials,
 } from "../lib/principals";
 import { useMe, can } from "../lib/auth";
@@ -122,6 +122,15 @@ export function UserDetail(props: { id: string }) {
       setActErr(null);
       grantCancel();
     },
+  });
+
+  // A just-created user opens straight in edit mode (once its data has loaded and if
+  // the caller can update it), so grants are assigned without a second step. Mirrors
+  // the group create flow; the flag clears so this begins editing exactly once.
+  createEffect(() => {
+    if (principal.data && !edit.editing() && canUpdate() && consumePendingPrincipalEdit(props.id)) {
+      edit.begin();
+    }
   });
 
   async function toggleActive(pr: Principal) {

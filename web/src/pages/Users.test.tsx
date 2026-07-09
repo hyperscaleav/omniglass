@@ -87,17 +87,15 @@ describe("Users page", () => {
     expect(within(blade).queryByLabelText("Username")).toBeNull();
   });
 
-  it("lands on the new user's detail Drawer after a successful create", async () => {
-    // The create POST returns the new principal; the directory refetch (triggered
-    // by the invalidate) returns it alongside the seed, so the detail Drawer,
-    // which re-derives by id from the live query, resolves the fresh row.
+  it("lands on the new user's detail in edit mode after a successful create", async () => {
+    // The create POST returns the new principal; the create flow seeds its detail
+    // cache and flags it to open in edit mode, so the blade opens on carol's seeded,
+    // editable fields (add grants right away) rather than a read-only view.
     const carol: Principal = { id: "u-carol", kind: "human", active: true, human: { username: "carol", email: "carol@example.com", display_name: "Carol Diaz" }, grants: [] };
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       const url = typeof input === "string" ? input : req.url;
       const method = typeof input === "string" ? "GET" : req.method;
-      // POST creates carol; the detail blade fetches GET /principals/{id}; the list
-      // is GET /principals. The detail resolves carol so her blade renders.
       const isDetailGet = method === "GET" && /\/principals\/[^/?]+$/.test(url);
       const body = url.includes("/principals") && method === "POST" ? carol : isDetailGet ? carol : { principals: [...seed, carol] };
       return new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
@@ -108,10 +106,16 @@ describe("Users page", () => {
     const username = (await screen.findByLabelText("Username")) as HTMLInputElement;
     fireEvent.input(username, { target: { value: "carol" } });
     fireEvent.click(screen.getByText("Create user"));
-    // The create Drawer gives way to the new user's detail Drawer: its email fact
-    // (only present in the detail view) shows, and the create submit is gone.
-    expect(await screen.findByText("carol@example.com")).toBeTruthy();
+    // The create Drawer gives way to carol's blade, already in edit mode: the Save
+    // button is present and her email is a seeded input (not a read-only fact).
     await waitFor(() => expect(screen.queryByText("Create user")).toBeNull());
+    const blade = await waitFor(() => {
+      const el = document.querySelector("aside[data-blade]");
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    expect(await within(blade).findByText("Save")).toBeTruthy();
+    expect((within(blade).getByLabelText("Email") as HTMLInputElement).value).toBe("carol@example.com");
   });
 
   it("drills from a user's group to a group blade nested over the user (user -> group)", async () => {

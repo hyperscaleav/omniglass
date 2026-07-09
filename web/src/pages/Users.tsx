@@ -2,7 +2,7 @@ import { For, Show, createSignal } from "solid-js";
 import { useSearchParams } from "@solidjs/router";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
-import { type Principal, PRINCIPALS_KEY, listPrincipals, createPrincipal, principalName, kindBadge, principalInitials } from "../lib/principals";
+import { type Principal, PRINCIPALS_KEY, listPrincipals, createPrincipal, openPrincipalInEdit, principalName, kindBadge, principalInitials } from "../lib/principals";
 import { identityRegistry } from "../lib/identityBlades";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
@@ -134,6 +134,10 @@ function CreateUserForm(props: { close: () => void; onCreated: (p: Principal) =>
         email: email().trim() || undefined,
         password: password() || undefined,
       });
+      // Seed the new user's detail cache so its blade opens instantly, and flag it to
+      // open in edit mode so grants can be assigned right away, then hand it to select.
+      qc.setQueryData([...PRINCIPALS_KEY, created.id], created);
+      openPrincipalInEdit(created.id);
       await qc.invalidateQueries({ queryKey: PRINCIPALS_KEY });
       props.onCreated(created);
     } catch (er) {
