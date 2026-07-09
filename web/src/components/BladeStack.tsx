@@ -125,8 +125,8 @@ export default function BladeStack(props: {
                         <Show when={edit.destructive()}>
                           {(dst) => (
                             <button
-                              class="btn btn-sm gap-1.5"
-                              classList={{ "btn-danger": dst().tone !== "warn", "btn-warn": dst().tone === "warn" }}
+                              class="btn btn-sm btn-soft gap-1.5"
+                              classList={{ "btn-error": dst().tone !== "warn", "btn-warning": dst().tone === "warn" }}
                               onClick={() => dst().onClick()}
                             >
                               {dst().tone === "warn" ? <Ban size={14} /> : <Trash size={14} />}
