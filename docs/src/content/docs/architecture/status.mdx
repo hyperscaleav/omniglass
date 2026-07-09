@@ -535,7 +535,9 @@ capabilities ship, so an early slice can prove a seam without moving any page of
 - **Identity: admin password reset.** An administrator can reset another user's password without the
   user's current one: `POST /principals/{id}:resetPassword` gated by a new `principal:reset-password`
   capability (all-scope; admin holds it via `principal:*`, so a future help-desk role can be granted only
-  the reset), policy-enforced (a 422 on a weak password), and audited with the admin as the actor (the
+  the reset), policy-enforced (a 422 on a weak password), behind the same **takeover guard** as
+  impersonation (an owner cannot be reset by anyone, and a caller cannot reset a principal whose
+  capabilities exceed their own, a shared `checkTakeoverGuard`), and audited with the admin as the actor (the
   storage method `SetPrincipalPassword` sets by id, distinct from the self-service `SetPassword` that keys
   on username and audits the target). The console adds a **Reset password** kebab action on the user blade
   that opens an inline panel reusing the `PasswordField` (Generate, Copy, inline policy check); the set

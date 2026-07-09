@@ -631,7 +631,7 @@ export interface paths {
         put?: never;
         /**
          * Reset a principal's password
-         * @description Sets a new password for a human principal (an administrator action; the target's current password is not required). Gated by principal:reset-password (all-scope). The new password must meet the password policy; a violation is a 422. The action is audited with the administrator as the actor.
+         * @description Sets a new password for a human principal (an administrator action; the target's current password is not required). Gated by principal:reset-password (all-scope). The new password must meet the password policy; a violation is a 422. Refused on an owner (owners cannot be reset by anyone) or when it would exceed the caller's own capabilities (the takeover guard, shared with impersonation). The action is audited with the administrator as the actor.
          */
         post: operations["reset-principal-password"];
         delete?: never;

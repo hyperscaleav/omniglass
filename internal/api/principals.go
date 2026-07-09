@@ -326,13 +326,24 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Path:          "/principals/{id}:resetPassword",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Reset a principal's password",
-		Description:   "Sets a new password for a human principal (an administrator action; the target's current password is not required). Gated by principal:reset-password (all-scope). The new password must meet the password policy; a violation is a 422. The action is audited with the administrator as the actor.",
+		Description:   "Sets a new password for a human principal (an administrator action; the target's current password is not required). Gated by principal:reset-password (all-scope). The new password must meet the password policy; a violation is a 422. Refused on an owner (owners cannot be reset by anyone) or when it would exceed the caller's own capabilities (the takeover guard, shared with impersonation). The action is audited with the administrator as the actor.",
 		Middlewares:   huma.Middlewares{a.authn, a.require("principal", "reset-password")},
 	}, func(ctx context.Context, in *resetPasswordInput) (*struct{}, error) {
 		reset := a.scopeFor(ctx, "principal", "reset-password")
 		target, err := gw.GetPrincipal(ctx, in.ID, reset)
 		if err != nil {
 			return nil, mapPrincipalErr(err)
+		}
+		// Takeover guard (shared with impersonation): a password reset lets the admin
+		// set a known secret and sign in as the target, so an owner cannot be reset by
+		// anyone, and the caller's capabilities must cover the target's.
+		switch err := a.checkTakeoverGuard(ctx, target); {
+		case errors.Is(err, errOwnerTarget):
+			return nil, huma.Error403Forbidden("an owner's password cannot be reset")
+		case errors.Is(err, errCapabilityEscalation):
+			return nil, huma.Error403Forbidden("cannot reset the password of a principal whose capabilities exceed yours")
+		case err != nil:
+			return nil, huma.Error500InternalServerError("reset password")
 		}
 		username := ""
 		if target.Human != nil {

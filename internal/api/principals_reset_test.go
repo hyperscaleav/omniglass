@@ -34,7 +34,9 @@ func TestResetPasswordAPI(t *testing.T) {
 
 	adminTok := principalWithGrants(t, ctx, dsn, "admin-all", []grant{{role: "admin", scopeKind: "all"}})
 	opTok := principalWithGrants(t, ctx, dsn, "op-all", []grant{{role: "operator", scopeKind: "all"}})
+	ownerTok := principalWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+	ownerID := meID(t, c, ownerTok)
 
 	var created struct {
 		ID string `json:"id"`
@@ -50,6 +52,13 @@ func TestResetPasswordAPI(t *testing.T) {
 	// A common password and a username-containing password are both refused.
 	c.do(adminTok, "POST", path, map[string]string{"password": "administrator"}, http.StatusUnprocessableEntity)
 	c.do(adminTok, "POST", path, map[string]string{"password": "alice-new-pass9"}, http.StatusUnprocessableEntity)
+
+	// Owner protection (the takeover guard, mirroring impersonation): an owner cannot
+	// have its password reset by a lesser admin, nor even by another owner.
+	c.do(adminTok, "POST", "/principals/"+ownerID+":resetPassword", map[string]string{"password": "purple-canyon-7"}, http.StatusForbidden)
+	otherOwnerTok := principalWithGrants(t, ctx, dsn, "other-owner", []grant{{role: "owner", scopeKind: "all"}})
+	c.do(otherOwnerTok, "POST", "/principals/"+ownerID+":resetPassword", map[string]string{"password": "purple-canyon-7"}, http.StatusForbidden)
+
 	// The admin resets the password.
 	c.do(adminTok, "POST", path, map[string]string{"password": "purple-canyon-7"}, http.StatusNoContent)
 

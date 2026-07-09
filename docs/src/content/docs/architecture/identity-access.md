@@ -17,7 +17,9 @@ Built and tested today: the `principal` (+ per-kind `human` / `service`) and `cr
 admin **principal directory** (`GET /principals`, `GET /principals/{id}`), human **create**
 (`POST /principals`) and **update** (`PATCH /principals/{id}`: display name, email, username), an
 admin **password reset** (`POST /principals/{id}:resetPassword`, gated `principal:reset-password`,
-policy-enforced, no current password, audited as the admin), **role
+policy-enforced, no current password, audited as the admin, and behind the same **takeover guard** as
+impersonation so an owner cannot be reset and a caller cannot reset a principal whose capabilities
+exceed their own), **role
 assignment** (`POST` / `DELETE /principals/{id}/grants`) with the **owner-invariant trigger** enforcing
 that the last `owner @ all` grant cannot be revoked, and the **principal lifecycle**: reversible
 **disable** (`POST /principals/{id}:disable` / `:enable`, which refuses authentication for a disabled
