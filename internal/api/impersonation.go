@@ -13,7 +13,7 @@ import (
 const defaultImpersonationMinutes = 30
 
 type impersonateInput struct {
-	ID   string `path:"id" doc:"The principal to impersonate (uuid)"`
+	ID   string `path:"id" doc:"The principal to impersonate, addressed by its uuid or a human username"`
 	Body struct {
 		Mode            string `json:"mode" enum:"view_as,act_as" doc:"view_as is read-only; act_as is full, with mutations attributed to both the real actor and the impersonated principal"`
 		DurationMinutes int    `json:"duration_minutes,omitempty" minimum:"1" maximum:"1440" doc:"Session lifetime in minutes (default 30, max 1440)"`
@@ -52,6 +52,13 @@ func registerImpersonationRoutes(api huma.API, a *authenticator, gw storage.Gate
 		if impersonationMode(ctx) != "" {
 			return nil, huma.Error403Forbidden("cannot start impersonation while impersonating")
 		}
+		// Resolve the target (uuid or username) before the self-check, so impersonating
+		// yourself by username is caught too.
+		id, rerr := a.resolvePrincipalRef(ctx, in.ID)
+		if rerr != nil {
+			return nil, rerr
+		}
+		in.ID = id
 		if actor.ID == in.ID {
 			return nil, huma.Error422UnprocessableEntity("cannot impersonate yourself")
 		}

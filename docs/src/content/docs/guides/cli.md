@@ -91,7 +91,9 @@ omniglass auth change-password --current-password 'orange-boat-42x' --new-passwo
   `<resource> <verb> <id>`, so the principal lifecycle is `principal disable`, `principal
   archive`, `principal restore`, and `principal purge <id>`); path parameters are positional args, the request body is
   `--flags`, and `--help` plus the example come from the operation's summary and
-  description.
+  description. A principal `<id>` argument accepts either the uuid or a human's username
+  (`omniglass principal archive alice`), resolved by the server, so you rarely need to look a uuid up
+  first.
 - **Hand-written** (`internal/cli/api_hooks.go` and the run-mode files): the client
   runtime the generated tree calls, plus commands that are not API operations, the
   `server` and `migrate` run modes and the trusted direct-DB owner lane (`bootstrap`,

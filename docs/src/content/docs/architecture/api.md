@@ -37,6 +37,12 @@ Everything lives under `/api/v1`. The path shape is derivable, not special-cased
   [authorization](/architecture/identity-access/) check share one vocabulary.
 - **Singular kind sub-segments** for the typed families: `/rules/calc`, `/datapoints/metric`,
   `/types/component`.
+- **A principal is addressable by uuid or username.** Every `/principals/{id}` route (read, update,
+  grants, the lifecycle verbs, reset, impersonate) accepts either the principal's uuid or a human's
+  current username, resolved server-side (a value that parses as a uuid is used directly; otherwise it
+  is a username lookup, and an unknown one is a 404). The uuid is still the stable identity (a username
+  is mutable and nothing keys on it), so a username is a convenience address resolved at call time.
+  Service principals have no username and stay uuid-addressed.
 
 ## Lists: filter, order, page
 

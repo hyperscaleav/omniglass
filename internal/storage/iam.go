@@ -243,6 +243,27 @@ func mustDummyHash() string {
 	return h
 }
 
+// ResolvePrincipalRef maps a principal reference to the principal id. A value that
+// parses as a uuid is returned as-is (any principal kind, and an unknown uuid still
+// resolves here so the caller's own not-found handling applies unchanged). Otherwise
+// it is treated as a human's username and looked up; an unknown username is
+// ErrPrincipalNotFound. Service principals have no username, so they stay addressable
+// only by uuid. This backs addressing a principal by username on the API and CLI.
+func (p *PG) ResolvePrincipalRef(ctx context.Context, ref string) (string, error) {
+	if _, err := uuid.Parse(ref); err == nil {
+		return ref, nil
+	}
+	var id string
+	err := p.pool.QueryRow(ctx, `select principal_id from human where username = $1`, ref).Scan(&id)
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		return "", ErrPrincipalNotFound
+	case err != nil:
+		return "", fmt.Errorf("storage: resolve principal ref %q: %w", ref, err)
+	}
+	return id, nil
+}
+
 // AuthenticateBearer resolves a bearer credential by its sha256 hash to the
 // principal, its kind profile, and its grants. ErrCredentialNotFound if none, which
 // includes a credential whose expiry has passed (an expired session is treated as

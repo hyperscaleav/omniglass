@@ -43,6 +43,10 @@ type Gateway interface {
 	// principal, its kind profile, and its grants. Returns ErrCredentialNotFound
 	// if no credential matches.
 	AuthenticateBearer(ctx context.Context, hash []byte) (*Principal, error)
+	// ResolvePrincipalRef maps a principal reference (a uuid or a human username) to
+	// the principal id: a uuid passes through, a username is looked up, and an unknown
+	// username is ErrPrincipalNotFound. Backs addressing a principal by username.
+	ResolvePrincipalRef(ctx context.Context, ref string) (string, error)
 	// The impersonation surface: an admin views/acts as another principal, audited
 	// with the real actor. BeginImpersonation persists a session (the API enforces
 	// the escalation guard first); AuthenticateImpersonation is the authn fallback
