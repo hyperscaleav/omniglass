@@ -16,6 +16,7 @@ import Profile from "./pages/Profile";
 import Users from "./pages/Users";
 import Roles from "./pages/Roles";
 import Groups from "./pages/Groups";
+import Secrets from "./pages/Secrets";
 import Audit from "./pages/Audit";
 import SectionStub from "./pages/SectionStub";
 import NotFound from "./pages/NotFound";
@@ -40,7 +41,7 @@ const ProtectedShell: ParentComponent = (props) => (
 const STUBS = [
   "/dashboards", "/alarms", "/interfaces", "/nodes", "/tasks",
   "/templates", "/types", "/tags", "/rules", "/explore", "/learn",
-  "/config", "/secrets",
+  "/config",
 ];
 
 render(
@@ -62,6 +63,7 @@ render(
           <Route path="/users" component={Users} />
           <Route path="/roles" component={Roles} />
           <Route path="/groups" component={Groups} />
+          <Route path="/secrets" component={Secrets} />
           <Route path="/audit" component={Audit} />
           {STUBS.map((p) => <Route path={p} component={SectionStub} />)}
           <Route path="*" component={NotFound} />

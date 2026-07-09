@@ -15,6 +15,7 @@ import { LOCATIONS_KEY, listLocations } from "../lib/locations";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { ChevronRight } from "../components/icons";
+import EffectiveSecrets from "../components/EffectiveSecrets";
 
 // Components: the device inventory, the first page built on the generic TreeList.
 // Components form a tree (parent_id) and each is bound to a primary system and a
@@ -147,6 +148,9 @@ export default function Components() {
               </For>
             </div>
           </div>
+        </Show>
+        <Show when={can(me.data, "secret", "read")}>
+          <EffectiveSecrets component={n.raw.name} />
         </Show>
         <div class="flex items-center gap-2 border-t border-base-300 pt-4">
           <Show when={can(me.data, "component", "delete")}>

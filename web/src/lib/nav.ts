@@ -65,7 +65,7 @@ export const navItems: NavItem[] = [
     label: "Settings", icon: Icons.Settings, hint: "Platform configuration and tenant administration.",
     children: [
       { label: "Config", path: "/config", hint: "Severity levels, schedules, retention, and platform settings." },
-      { label: "Secrets", path: "/secrets", hint: "Shared device and platform credentials, with rotation and policy." },
+      { label: "Secrets", path: "/secrets", live: true, resource: "secret", hint: "Shared device and platform credentials, resolved down the scope cascade." },
       { label: "Users", path: "/users", live: true, resource: "principal", hint: "Users and service accounts: status, grants, and tokens." },
       { label: "Roles", path: "/roles", live: true, resource: "role", hint: "The built-in roles: what each permission bundle grants, and how they inherit." },
       { label: "Groups", path: "/groups", live: true, resource: "principal_group", hint: "User groups: membership and the grants members inherit." },
