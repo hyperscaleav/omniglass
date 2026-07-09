@@ -51,9 +51,6 @@ func runBootstrap(ctx context.Context, username, email, displayName, password st
 	}
 	var passwordHash string
 	if password != "" {
-		if err := auth.ValidatePassword(password, username); err != nil {
-			return fmt.Errorf("password rejected (%s): %w", auth.PasswordRequirements(), err)
-		}
 		if passwordHash, err = auth.HashPassword(password); err != nil {
 			return err
 		}

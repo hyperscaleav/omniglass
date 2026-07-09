@@ -4,7 +4,6 @@ import (
 	"bufio"
 	_ "embed"
 	"errors"
-	"fmt"
 	"strings"
 	"unicode/utf8"
 )
@@ -71,10 +70,4 @@ func ValidatePassword(password, username string) error {
 		return ErrPasswordCommon
 	}
 	return nil
-}
-
-// PasswordRequirements is a human-readable description of the policy, for the API
-// docs, the CLI help, and the console hint. Kept in sync with ValidatePassword.
-func PasswordRequirements() string {
-	return fmt.Sprintf("at least %d characters, not a common password, and not containing the username", MinPasswordLength)
 }
