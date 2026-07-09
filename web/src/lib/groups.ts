@@ -1,3 +1,4 @@
+import { createSignal } from "solid-js";
 import { api } from "../api/client";
 import type { Grant, CreateGrant } from "./principals";
 
@@ -9,6 +10,25 @@ export type Group = { id: string; name: string; display_name?: string; descripti
 export type GroupMember = { principal_id: string; kind: string; username?: string; display_name?: string };
 
 export const GROUPS_KEY = ["principal-groups"] as const;
+
+// A just-created group opens its blade directly in edit mode, so the operator adds
+// members and grants (child resources that need the group's id) without a second
+// step. The create flow flags the new id here; GroupDetail consumes it once its data
+// has loaded and begins editing. A reactive signal so the consuming effect reruns.
+const [pendingEditId, setPendingEditId] = createSignal<string | null>(null);
+
+// openGroupInEdit marks a group to open in edit mode the next time its blade mounts.
+export function openGroupInEdit(id: string): void {
+  setPendingEditId(id);
+}
+
+// consumePendingGroupEdit returns true (and clears the flag) if this id is the one
+// flagged to open in edit mode, so the caller begins editing exactly once.
+export function consumePendingGroupEdit(id: string): boolean {
+  if (pendingEditId() !== id) return false;
+  setPendingEditId(null);
+  return true;
+}
 
 // groupName is a group's human label: its display name, else its name.
 export function groupName(g: Group): string {

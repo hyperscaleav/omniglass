@@ -2,10 +2,11 @@ import { For, Show, createSignal } from "solid-js";
 import { useSearchParams } from "@solidjs/router";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
-import { type Principal, PRINCIPALS_KEY, listPrincipals, createPrincipal, principalName, kindBadge, principalInitials } from "../lib/principals";
+import { type Principal, PRINCIPALS_KEY, listPrincipals, createPrincipal, openPrincipalInEdit, principalName, kindBadge, principalInitials } from "../lib/principals";
 import { identityRegistry } from "../lib/identityBlades";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
+import { handleError, emailError } from "../lib/validate";
 import type { FilterKey } from "../lib/predicate";
 
 // Users: the admin principal directory, a config over the shared FlatList. A row per
@@ -43,11 +44,13 @@ const columns: FlatColumn<Principal>[] = [
     ),
   },
   {
-    key: "kind", label: "Kind", width: "160px", sortVal: (p) => p.kind,
+    key: "kind", label: "Kind", width: "180px", sortVal: (p) => p.kind,
     cell: (p) => (
       <>
         <span class={kindBadge(p.kind)}>{p.kind}</span>
-        <Show when={!p.active}><span class="badge badge-soft badge-warning badge-sm ml-1">inactive</span></Show>
+        <Show when={p.archived_at} fallback={<Show when={!p.active}><span class="badge badge-soft badge-warning badge-sm ml-1">inactive</span></Show>}>
+          <span class="badge badge-soft badge-error badge-sm ml-1">archived</span>
+        </Show>
       </>
     ),
   },
@@ -70,7 +73,10 @@ const columns: FlatColumn<Principal>[] = [
 export default function Users() {
   const me = useMe();
   const [params] = useSearchParams();
-  const principals = useQuery(() => ({ queryKey: PRINCIPALS_KEY, queryFn: () => listPrincipals() }));
+  // Archived (soft-deleted) principals are hidden by default; the toggle includes
+  // them (a distinct query key) so an admin can re-find one to restore or purge.
+  const [showArchived, setShowArchived] = createSignal(false);
+  const principals = useQuery(() => ({ queryKey: [...PRINCIPALS_KEY, showArchived()], queryFn: () => listPrincipals(undefined, showArchived()) }));
   // ?u=<id> deep-links to a user (e.g. the cross-over from a group's member).
   const openId = () => (Array.isArray(params.u) ? params.u[0] : params.u) || undefined;
 
@@ -88,6 +94,12 @@ export default function Users() {
         rowId: (p) => p.id,
         openId,
         blades: { registry: identityRegistry, rootKind: "user" },
+        railExtra: () => (
+          <label class="flex cursor-pointer items-center gap-2 text-xs text-base-content/60">
+            <input type="checkbox" class="toggle toggle-xs" checked={showArchived()} onChange={(e) => setShowArchived(e.currentTarget.checked)} />
+            Show archived
+          </label>
+        ),
         create: {
           label: "New user",
           can: () => can(me.data, "principal", "create"),
@@ -122,6 +134,10 @@ function CreateUserForm(props: { close: () => void; onCreated: (p: Principal) =>
         email: email().trim() || undefined,
         password: password() || undefined,
       });
+      // Seed the new user's detail cache so its blade opens instantly, and flag it to
+      // open in edit mode so grants can be assigned right away, then hand it to select.
+      qc.setQueryData([...PRINCIPALS_KEY, created.id], created);
+      openPrincipalInEdit(created.id);
       await qc.invalidateQueries({ queryKey: PRINCIPALS_KEY });
       props.onCreated(created);
     } catch (er) {
@@ -139,7 +155,8 @@ function CreateUserForm(props: { close: () => void; onCreated: (p: Principal) =>
       </Show>
       <div>
         <label class="eyebrow mb-1.5 block" for="new-username">Username</label>
-        <input id="new-username" autocomplete="off" class="input input-bordered w-full font-data" value={username()} placeholder="jordan" onInput={(e) => setUsername(e.currentTarget.value)} disabled={busy()} required />
+        <input id="new-username" autocomplete="off" class="input input-bordered w-full font-data" classList={{ "input-error": !!handleError(username()) }} value={username()} placeholder="jordan" onInput={(e) => setUsername(e.currentTarget.value)} disabled={busy()} required />
+        <Show when={handleError(username())}>{(msg) => <p class="mt-1 text-[11px] text-error">{msg()}</p>}</Show>
       </div>
       <div>
         <label class="eyebrow mb-1.5 block" for="new-display">Display name</label>
@@ -147,7 +164,8 @@ function CreateUserForm(props: { close: () => void; onCreated: (p: Principal) =>
       </div>
       <div>
         <label class="eyebrow mb-1.5 block" for="new-email">Email</label>
-        <input id="new-email" type="email" autocomplete="off" class="input input-bordered w-full" value={email()} onInput={(e) => setEmail(e.currentTarget.value)} disabled={busy()} />
+        <input id="new-email" type="email" autocomplete="off" class="input input-bordered w-full" classList={{ "input-error": !!emailError(email()) }} value={email()} placeholder="jordan@example.com" onInput={(e) => setEmail(e.currentTarget.value)} disabled={busy()} />
+        <Show when={emailError(email())}>{(msg) => <p class="mt-1 text-[11px] text-error">{msg()}</p>}</Show>
       </div>
       <div>
         <label class="eyebrow mb-1.5 block" for="new-password">Initial password</label>
@@ -156,7 +174,7 @@ function CreateUserForm(props: { close: () => void; onCreated: (p: Principal) =>
       </div>
       <div class="mt-1 flex justify-end gap-2">
         <button type="button" class="btn btn-quiet btn-sm" onClick={props.close} disabled={busy()}>Cancel</button>
-        <button type="submit" class="btn btn-action btn-sm" disabled={busy() || !username().trim()}>
+        <button type="submit" class="btn btn-action btn-sm" disabled={busy() || !username().trim() || !!handleError(username()) || !!emailError(email())}>
           <Show when={busy()}><span class="loading loading-spinner loading-xs" /></Show>
           Create user
         </button>

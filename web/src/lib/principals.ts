@@ -1,3 +1,4 @@
+import { createSignal } from "solid-js";
 import { api } from "../api/client";
 import type { FilterKey } from "./predicate";
 
@@ -14,6 +15,9 @@ export type Principal = {
   id: string;
   kind: string;
   active: boolean;
+  // Set when the principal is archived (soft-deleted): hidden from the default
+  // directory, cannot authenticate, reversible until purged. Absent means live.
+  archived_at?: string;
   human?: { username: string; email?: string; display_name?: string };
   service?: { label: string };
   grants: Grant[];
@@ -24,8 +28,33 @@ export type Principal = {
 
 export const PRINCIPALS_KEY = ["principals"] as const;
 
-export async function listPrincipals(kind?: "human" | "service"): Promise<Principal[]> {
-  const { data, error } = await api.GET("/principals", kind ? { params: { query: { kind } } } : {});
+// A just-created user opens its blade directly in edit mode, so grants (and any
+// profile tweak) can be added without a second step. The create flow flags the new
+// id here; UserDetail consumes it once its data has loaded and begins editing. Mirror
+// of the group create flow. A reactive signal so the consuming effect reruns.
+const [pendingEditId, setPendingEditId] = createSignal<string | null>(null);
+
+// openPrincipalInEdit marks a principal to open in edit mode the next time its blade
+// mounts.
+export function openPrincipalInEdit(id: string): void {
+  setPendingEditId(id);
+}
+
+// consumePendingPrincipalEdit returns true (and clears the flag) if this id is the
+// one flagged to open in edit mode, so the caller begins editing exactly once.
+export function consumePendingPrincipalEdit(id: string): boolean {
+  if (pendingEditId() !== id) return false;
+  setPendingEditId(null);
+  return true;
+}
+
+// includeArchived surfaces soft-deleted principals (the "show archived"
+// directory view), so a hidden account can be restored or purged.
+export async function listPrincipals(kind?: "human" | "service", includeArchived?: boolean): Promise<Principal[]> {
+  const query: { kind?: "human" | "service"; include_archived?: boolean } = {};
+  if (kind) query.kind = kind;
+  if (includeArchived) query.include_archived = true;
+  const { data, error } = await api.GET("/principals", { params: { query } });
   if (error) throw error;
   return (data?.principals ?? []) as Principal[];
 }
@@ -76,6 +105,21 @@ export async function setPrincipalActive(id: string, active: boolean): Promise<v
   const { error } = active
     ? await api.POST("/principals/{id}:enable", { params: { path: { id } } })
     : await api.POST("/principals/{id}:disable", { params: { path: { id } } });
+  if (error) throw error;
+}
+
+// The soft/hard delete lifecycle: archive hides the account (reversible),
+// restore brings it back, and purge hard-deletes an archived one (irreversible).
+export async function archivePrincipal(id: string): Promise<void> {
+  const { error } = await api.POST("/principals/{id}:archive", { params: { path: { id } } });
+  if (error) throw error;
+}
+export async function restorePrincipal(id: string): Promise<void> {
+  const { error } = await api.POST("/principals/{id}:restore", { params: { path: { id } } });
+  if (error) throw error;
+}
+export async function purgePrincipal(id: string): Promise<void> {
+  const { error } = await api.POST("/principals/{id}:purge", { params: { path: { id } } });
   if (error) throw error;
 }
 

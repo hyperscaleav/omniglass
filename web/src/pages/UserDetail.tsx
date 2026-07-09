@@ -1,20 +1,22 @@
-import { For, Show, createEffect, createMemo, createSignal, on } from "solid-js";
+import { type JSX, For, Show, createEffect, createMemo, createSignal, on } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import GrantBuilder from "../components/GrantBuilder";
 import { Fact, RelatedList } from "../components/DetailShell";
-import { Eye, Mask } from "../components/icons";
+import { Ban, Eye, Mask, Trash } from "../components/icons";
 import { useBlades, useBladeEdit } from "../lib/blades";
 import type { BladeDef } from "../lib/blades";
 import type { TreeNode } from "../lib/treeselect";
 import type { ExistingGrant, GrantRef, ScopeOp } from "../lib/grantdraft";
 import {
   type Principal, type ScopeKind, type UpdatePrincipal,
-  PRINCIPALS_KEY, ROLES_KEY, listPrincipals, updatePrincipal, createGrant, revokeGrant, setPrincipalActive, listRoles,
+  PRINCIPALS_KEY, ROLES_KEY, getPrincipal, updatePrincipal, createGrant, revokeGrant, setPrincipalActive, listRoles,
+  archivePrincipal, restorePrincipal, purgePrincipal, consumePendingPrincipalEdit,
   principalName, kindBadge, principalInitials,
 } from "../lib/principals";
 import { useMe, can } from "../lib/auth";
 import { impersonate } from "../lib/impersonation";
 import { describeError } from "../lib/format";
+import { handleError, emailError } from "../lib/validate";
 import { listLocations } from "../lib/locations";
 import { listSystems } from "../lib/systems";
 import { listComponents } from "../lib/components";
@@ -24,17 +26,24 @@ import { listComponents } from "../lib/components";
 // group when the Users page is the root), the grants (read-only chips), and the
 // impersonate actions. The header pencil opens edit mode: the profile becomes
 // inputs, the grant builder goes live, and the footer reveals Disable / Enable;
-// Save commits the profile and grant changes as one session. A user is disabled,
-// never deleted (the accounts-never-deleted invariant), so the destructive action
-// is Disable.
+// Save commits the profile and grant changes as one session. The lifecycle ladder
+// runs Disable (reversible suspend) -> Archive (soft delete, reversible) -> Purge
+// (permanent), the reversible toggle in the left slot and the escalating steps in
+// the kebab.
 export function UserDetail(props: { id: string }) {
   const qc = useQueryClient();
   const me = useMe();
   const blades = useBlades();
   const edit = useBladeEdit();
   const canUpdate = () => can(me.data, "principal", "update");
-  const principals = useQuery(() => ({ queryKey: PRINCIPALS_KEY, queryFn: () => listPrincipals() }));
-  const p = createMemo(() => principals.data?.find((x) => x.id === props.id) ?? null);
+  const canArchive = () => can(me.data, "principal", "archive");
+  const canPurge = () => can(me.data, "principal", "purge", "admin");
+  // Fetch by id, not from the directory list (which hides archived principals),
+  // so the blade still resolves a user it just soft-deleted and can offer Restore
+  // / Purge. Mutations invalidate the PRINCIPALS_KEY prefix, covering this and the list.
+  const principal = useQuery(() => ({ queryKey: [...PRINCIPALS_KEY, props.id], queryFn: () => getPrincipal(props.id) }));
+  const p = () => principal.data ?? null;
+  const refresh = () => qc.invalidateQueries({ queryKey: PRINCIPALS_KEY });
   const [actErr, setActErr] = createSignal<string | null>(null);
 
   const editing = () => edit.editing();
@@ -58,21 +67,38 @@ export function UserDetail(props: { id: string }) {
 
   edit.bind({
     editable: canUpdate,
-    // A user is disabled, never deleted (the accounts-never-deleted invariant), so
-    // the destructive action toggles active state.
+    // Gate the footer Save on the inline rules (the same handle/email rules the
+    // server enforces), so an invalid username or email cannot be committed.
+    valid: () => !handleError(username()) && !emailError(email()),
+    // The left slot is the reversible state toggle for the lifecycle ladder: an
+    // archived account restores (Restore), a live one toggles Disable / Enable.
     destructive: () => {
       const pr = p();
-      if (!pr || !canUpdate()) return undefined;
-      return { label: pr.active ? "Disable" : "Enable", tone: "warn", onClick: () => toggleActive(pr) };
+      if (!pr) return undefined;
+      if (pr.archived_at) {
+        return canArchive() ? { label: "Restore", tone: "ok", onClick: doRestore } : undefined;
+      }
+      if (!canUpdate()) return undefined;
+      return pr.active
+        ? { label: "Disable", tone: "warn", onClick: () => toggleActive(pr) }
+        : { label: "Enable", tone: "ok", onClick: () => toggleActive(pr) };
     },
-    // Impersonate is a secondary action (troubleshoot), in the kebab. Not on self.
+    // The kebab holds the escalating delete (Archive when live, Purge when
+    // archived, both red and confirmed) and impersonate (not on self).
     secondary: () => {
       const pr = p();
-      if (!pr || !can(me.data, "principal", "impersonate") || pr.id === me.data?.principal?.id) return [];
-      return [
-        { label: "View as", icon: <Eye size={15} />, onClick: () => doImpersonate(pr, "view_as") },
-        { label: "Act as", icon: <Mask size={15} />, onClick: () => doImpersonate(pr, "act_as") },
-      ];
+      if (!pr) return [];
+      const items: { label: string; icon?: JSX.Element; tone?: "danger"; onClick: () => void }[] = [];
+      if (pr.archived_at) {
+        if (canPurge()) items.push({ label: "Purge", icon: <Trash size={15} />, tone: "danger", onClick: doPurge });
+      } else if (canArchive()) {
+        items.push({ label: "Archive", icon: <Ban size={15} />, tone: "danger", onClick: doArchive });
+      }
+      if (can(me.data, "principal", "impersonate") && pr.id !== me.data?.principal?.id) {
+        items.push({ label: "View as", icon: <Eye size={15} />, onClick: () => doImpersonate(pr, "view_as") });
+        items.push({ label: "Act as", icon: <Mask size={15} />, onClick: () => doImpersonate(pr, "act_as") });
+      }
+      return items;
     },
     save: async () => {
       setActErr(null);
@@ -98,11 +124,65 @@ export function UserDetail(props: { id: string }) {
     },
   });
 
+  // A just-created user opens straight in edit mode (once its data has loaded and if
+  // the caller can update it), so grants are assigned without a second step. Mirrors
+  // the group create flow; the flag clears so this begins editing exactly once.
+  createEffect(() => {
+    if (principal.data && !edit.editing() && canUpdate() && consumePendingPrincipalEdit(props.id)) {
+      edit.begin();
+    }
+  });
+
   async function toggleActive(pr: Principal) {
     setActErr(null);
     try {
       await setPrincipalActive(pr.id, !pr.active);
-      await qc.invalidateQueries({ queryKey: PRINCIPALS_KEY });
+      await refresh();
+    } catch (e) {
+      setActErr(describeError(e));
+    }
+  }
+
+  async function doArchive() {
+    const pr = p();
+    if (!pr || !confirm(`Archive "${principalName(pr)}"? They will be hidden and cannot sign in, reversibly. You can then purge them.`)) return;
+    setActErr(null);
+    try {
+      await archivePrincipal(pr.id);
+      // Archiving hides the user from the directory, so close its blade (like purge
+      // and group delete). It stays restorable via the Show archived toggle.
+      blades.close();
+      await refresh();
+    } catch (e) {
+      setActErr(describeError(e));
+    }
+  }
+
+  async function doRestore() {
+    const pr = p();
+    if (!pr) return;
+    setActErr(null);
+    try {
+      await restorePrincipal(pr.id);
+      await refresh();
+    } catch (e) {
+      setActErr(describeError(e));
+    }
+  }
+
+  async function doPurge() {
+    const pr = p();
+    if (!pr || !confirm(`Purge "${principalName(pr)}"? This permanently deletes the account and its grants and memberships. It cannot be undone. The audit trail is kept.`)) return;
+    setActErr(null);
+    try {
+      await purgePrincipal(pr.id);
+      // The principal is gone, so close the blade first (this unmounts the body and
+      // deactivates its detail query) and drop the dead detail cache, then refresh the
+      // directory. Refreshing before closing would refetch the purged id and 404,
+      // leaving the blade open on a broken state.
+      blades.close();
+      qc.removeQueries({ queryKey: [...PRINCIPALS_KEY, pr.id] });
+      await refresh();
     } catch (e) {
       setActErr(describeError(e));
     }
@@ -126,7 +206,9 @@ export function UserDetail(props: { id: string }) {
             </div>
             <span class="flex items-center gap-1.5">
               <span class={kindBadge(pr().kind)}>{pr().kind}</span>
-              <Show when={!pr().active}><span class="badge badge-soft badge-warning badge-sm">inactive</span></Show>
+              <Show when={pr().archived_at} fallback={<Show when={!pr().active}><span class="badge badge-soft badge-warning badge-sm">inactive</span></Show>}>
+                <span class="badge badge-soft badge-error badge-sm">archived</span>
+              </Show>
             </span>
           </div>
 
@@ -152,15 +234,17 @@ export function UserDetail(props: { id: string }) {
             <div class="flex flex-col gap-3">
               <div>
                 <label class="eyebrow mb-1.5 block" for="edit-username">Username</label>
-                <input id="edit-username" autocomplete="off" class="input input-bordered w-full font-data" value={username()} onInput={(e) => setUsername(e.currentTarget.value)} />
+                <input id="edit-username" autocomplete="off" class="input input-bordered w-full font-data" classList={{ "input-error": !!handleError(username()) }} value={username()} placeholder="jordan" onInput={(e) => setUsername(e.currentTarget.value)} />
+                <Show when={handleError(username())}>{(msg) => <p class="mt-1 text-[11px] text-error">{msg()}</p>}</Show>
               </div>
               <div>
                 <label class="eyebrow mb-1.5 block" for="edit-display">Display name</label>
-                <input id="edit-display" autocomplete="off" class="input input-bordered w-full" value={displayName()} onInput={(e) => setDisplayName(e.currentTarget.value)} />
+                <input id="edit-display" autocomplete="off" class="input input-bordered w-full" value={displayName()} placeholder="Jordan Rivera" onInput={(e) => setDisplayName(e.currentTarget.value)} />
               </div>
               <div>
                 <label class="eyebrow mb-1.5 block" for="edit-email">Email</label>
-                <input id="edit-email" type="email" autocomplete="off" class="input input-bordered w-full" value={email()} onInput={(e) => setEmail(e.currentTarget.value)} />
+                <input id="edit-email" type="email" autocomplete="off" class="input input-bordered w-full" classList={{ "input-error": !!emailError(email()) }} value={email()} placeholder="jordan@example.com" onInput={(e) => setEmail(e.currentTarget.value)} />
+                <Show when={emailError(email())}>{(msg) => <p class="mt-1 text-[11px] text-error">{msg()}</p>}</Show>
               </div>
             </div>
           </Show>
@@ -269,9 +353,8 @@ function GrantEditor(props: { principal: Principal; editing: boolean; canGrant: 
 }
 
 function UserTitle(props: { id: string }) {
-  const principals = useQuery(() => ({ queryKey: PRINCIPALS_KEY, queryFn: () => listPrincipals() }));
-  const p = () => principals.data?.find((x) => x.id === props.id);
-  return <>{p() ? principalName(p()!) : "User"}</>;
+  const principal = useQuery(() => ({ queryKey: [...PRINCIPALS_KEY, props.id], queryFn: () => getPrincipal(props.id) }));
+  return <>{principal.data ? principalName(principal.data) : "User"}</>;
 }
 
 export const userBlade: BladeDef = {

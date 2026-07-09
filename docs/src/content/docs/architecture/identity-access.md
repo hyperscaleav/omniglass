@@ -19,10 +19,10 @@ admin **principal directory** (`GET /principals`, `GET /principals/{id}`), human
 assignment** (`POST` / `DELETE /principals/{id}/grants`) with the **owner-invariant trigger** enforcing
 that the last `owner @ all` grant cannot be revoked, and the **principal lifecycle**: reversible
 **disable** (`POST /principals/{id}:disable` / `:enable`, which refuses authentication for a disabled
-principal), a stronger **deactivate** (`:deactivate` / `:reactivate`, a soft delete that hides the account
+principal), a stronger **archive** (`:archive` / `:restore`, a soft delete that hides the account
 from the directory and blocks authentication, reversibly until purged), and **purge** (`:purge`, an
-irreversible hard delete, gated on prior deactivation and on the admin-sensitive `principal:purge:admin`);
-disabling or deactivating the last active owner is refused, and a purge preserves the audit trail by
+irreversible hard delete, gated on prior archival and on the admin-sensitive `principal:purge:admin`);
+disabling or archiving the last active owner is refused, and a purge preserves the audit trail by
 denormalizing the actor's label into each row (the audit foreign keys go `ON DELETE SET NULL`), so the
 history survives even after its actor is gone. And the per-action `visible_set` resolver enforced in the
 Storage Gateway across locations, systems, and components, and **principal groups**

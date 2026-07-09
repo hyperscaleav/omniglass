@@ -93,6 +93,9 @@ export const Eye: Component<P> = (p) => (
 export const Mask: Component<P> = (p) => (
   <Svg size={p.size}><path d="M4 6a2 2 0 0 0-2 2v4a5 5 0 0 0 5 5 8 8 0 0 0 5-2 8 8 0 0 0 5 2 5 5 0 0 0 5-5V8a2 2 0 0 0-2-2h-3a8 8 0 0 0-5 2 8 8 0 0 0-5-2z" /><path d="M6 11c1.5 0 2.5.5 3 2" /><path d="M18 11c-1.5 0-2.5.5-3 2" /></Svg>
 );
+export const RotateCcw: Component<P> = (p) => (
+  <Svg size={p.size}><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /></Svg>
+);
 export const ChevronRight: Component<P> = (p) => (
   <Svg size={p.size}><path d="m9 6 6 6-6 6" /></Svg>
 );

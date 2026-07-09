@@ -520,7 +520,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/principals/{id}:deactivate": {
+    "/principals/{id}:archive": {
         parameters: {
             query?: never;
             header?: never;
@@ -530,10 +530,10 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Deactivate a principal
-         * @description Soft-deletes a principal: it is hidden from the directory, can no longer authenticate, and its rows stay intact, reversibly (reactivate) until purged. Gated by principal:deactivate (all-scope). The last active owner cannot be deactivated.
+         * Archive a principal
+         * @description Soft-deletes a principal: it is hidden from the directory, can no longer authenticate, and its rows stay intact, reversibly (restore) until purged. Gated by principal:archive (all-scope). The last active owner cannot be archived.
          */
-        post: operations["deactivate-principal"];
+        post: operations["archive-principal"];
         delete?: never;
         options?: never;
         head?: never;
@@ -611,7 +611,7 @@ export interface paths {
         put?: never;
         /**
          * Purge a principal
-         * @description Hard-deletes a deactivated principal and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. Gated by principal:purge (admin-sensitive, all-scope), and the principal must be deactivated first.
+         * @description Hard-deletes an archived principal and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. Gated by principal:purge (admin-sensitive, all-scope), and the principal must be archived first.
          */
         post: operations["purge-principal"];
         delete?: never;
@@ -620,7 +620,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/principals/{id}:reactivate": {
+    "/principals/{id}:restore": {
         parameters: {
             query?: never;
             header?: never;
@@ -630,10 +630,10 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Reactivate a principal
-         * @description Reverses a deactivation: the account is restored to active and can authenticate again. Gated by principal:deactivate (all-scope).
+         * Restore a principal
+         * @description Reverses an archive: the account is restored to active and can authenticate again. Gated by principal:archive (all-scope).
          */
-        post: operations["reactivate-principal"];
+        post: operations["restore-principal"];
         delete?: never;
         options?: never;
         head?: never;
@@ -856,7 +856,7 @@ export interface components {
             readonly $schema?: string;
             description?: string;
             display_name?: string;
-            /** @description Unique group name */
+            /** @description Unique group name (lowercase letters, digits, and . _ -) */
             name: string;
         };
         CreateLocationInputBody: {
@@ -882,10 +882,11 @@ export interface components {
              */
             readonly $schema?: string;
             display_name?: string;
+            /** Format: email */
             email?: string;
             /** @description Optional initial password; the user changes it after signing in */
             password?: string;
-            /** @description Unique sign-in name */
+            /** @description Unique sign-in name (lowercase letters, digits, and . _ -) */
             username: string;
         };
         CreateSystemInputBody: {
@@ -1183,9 +1184,9 @@ export interface components {
             active: boolean;
             /**
              * Format: date-time
-             * @description Set when the principal is deactivated (soft-deleted); absent means live
+             * @description Set when the principal is archived (soft-deleted); absent means live
              */
-            deactivated_at?: string;
+            archived_at?: string;
             grants: components["schemas"]["GrantBody"][] | null;
             groups: components["schemas"]["PrincipalGroupRef"][] | null;
             human?: components["schemas"]["HumanBody"];
@@ -1259,7 +1260,7 @@ export interface components {
             description?: string;
             /** @description Display name; empty clears it */
             display_name?: string;
-            /** @description Group name; renaming is safe */
+            /** @description Group name (lowercase letters, digits, and . _ -); renaming is safe */
             name?: string;
         };
         UpdateLocationInputBody: {
@@ -1293,7 +1294,7 @@ export interface components {
             display_name?: string;
             /** @description Email; empty clears it */
             email?: string;
-            /** @description Sign-in name; renaming is safe */
+            /** @description Sign-in name (lowercase letters, digits, and . _ -); renaming is safe */
             username?: string;
         };
         UpdateSystemInputBody: {
@@ -2339,6 +2340,8 @@ export interface operations {
             query?: {
                 /** @description Optionally filter by principal kind */
                 kind?: "human" | "service";
+                /** @description Include archived (soft-deleted) principals, hidden by default */
+                include_archived?: boolean;
             };
             header?: never;
             path?: never;
@@ -2535,7 +2538,7 @@ export interface operations {
             };
         };
     };
-    "deactivate-principal": {
+    "archive-principal": {
         parameters: {
             query?: never;
             header?: never;
@@ -2718,7 +2721,7 @@ export interface operations {
             };
         };
     };
-    "reactivate-principal": {
+    "restore-principal": {
         parameters: {
             query?: never;
             header?: never;

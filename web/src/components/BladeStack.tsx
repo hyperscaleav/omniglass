@@ -1,6 +1,6 @@
 import { type JSX, For, Show, createEffect, onCleanup } from "solid-js";
 import { Dynamic } from "solid-js/web";
-import { Ban, Check, ChevronLeft, MoreHorizontal, Pencil, Trash, X } from "./icons";
+import { Ban, Check, ChevronLeft, MoreHorizontal, Pencil, RotateCcw, Trash, X } from "./icons";
 import { type BladeController, type BladeDef, BladeEditContext, createEditSlot } from "../lib/blades";
 
 // BladeStack: the Azure-style right-hand blade stack, lifted out of TreeList so
@@ -126,10 +126,10 @@ export default function BladeStack(props: {
                           {(dst) => (
                             <button
                               class="btn btn-sm btn-soft gap-1.5"
-                              classList={{ "btn-error": dst().tone !== "warn", "btn-warning": dst().tone === "warn" }}
+                              classList={{ "btn-error": dst().tone !== "warn" && dst().tone !== "ok", "btn-warning": dst().tone === "warn", "btn-success": dst().tone === "ok" }}
                               onClick={() => dst().onClick()}
                             >
-                              {dst().tone === "warn" ? <Ban size={14} /> : <Trash size={14} />}
+                              {dst().tone === "warn" ? <Ban size={14} /> : dst().tone === "ok" ? <RotateCcw size={14} /> : <Trash size={14} />}
                               {dst().label}
                             </button>
                           )}
@@ -141,7 +141,7 @@ export default function BladeStack(props: {
                                 <MoreHorizontal size={16} />
                               </button>
                               <ul tabindex={0} class="dropdown-content menu z-50 mb-1.5 w-48 rounded-box border border-base-300 bg-base-100 p-1.5 shadow-2xl">
-                                <For each={edit.secondary()}>{(s) => <li><button class="flex items-center gap-2.5" onClick={() => s.onClick()}>{s.icon}{s.label}</button></li>}</For>
+                                <For each={edit.secondary()}>{(s) => <li><button class="flex items-center gap-2.5" classList={{ "text-error": s.tone === "danger" }} onClick={() => s.onClick()}>{s.icon}{s.label}</button></li>}</For>
                               </ul>
                             </div>
                           </Show>
@@ -157,7 +157,7 @@ export default function BladeStack(props: {
                               <button class="btn btn-quiet btn-sm gap-1.5" onClick={() => edit.cancel()} disabled={edit.saving()}>
                                 <X size={15} /> Cancel
                               </button>
-                              <button class="btn btn-action btn-sm gap-1.5" onClick={() => { edit.save().catch(() => {}); }} disabled={edit.saving()}>
+                              <button class="btn btn-action btn-sm gap-1.5" onClick={() => { edit.save().catch(() => {}); }} disabled={edit.saving() || !edit.valid()}>
                                 <Show when={edit.saving()} fallback={<Check size={15} />}><span class="loading loading-spinner loading-xs" /></Show>
                                 Save
                               </button>

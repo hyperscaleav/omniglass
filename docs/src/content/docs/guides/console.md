@@ -49,7 +49,12 @@ location-scoped admin cannot list users.
   one to stack that group's blade over the user), and its **role grants** (each a role at a scope).
 - With `principal:create`, **New user** creates a human with a username and an optional initial
   password. The new user can sign in right away and change that password themselves; a fresh
-  account holds no grants (so it can sign in but do nothing) until you assign a role.
+  account holds no grants (so it can sign in but do nothing) until you assign a role. The form
+  validates as you type: a **username** is a lowercase handle (letters, digits, and `. _ -`, no
+  capitals or spaces) and an **email** must be well formed, so an invalid field shows an inline
+  error and blocks the submit before the round-trip (the same rules the server enforces). The
+  same handle rule and inline check apply when you rename a user in edit mode. The new user's blade
+  opens **directly in edit mode**, so you assign its roles right away and one **Save** commits them.
 - With `principal:update`, the footer **Edit** opens edit mode, where you change a user's display name,
   email, and **username**, or adjust its grants, and **Save** commits the lot; **Disable / Enable** sits in the
   footer's left slot, available without entering edit.
@@ -70,13 +75,20 @@ location-scoped admin cannot list users.
   scope targets the entity by its internal id, so a grant survives a rename of that entity. One rule
   the server always holds: the **last owner grant cannot be revoked**, so the platform can never be
   locked out of administration.
-- With `principal:update`, **Disable** turns off a principal: it can no longer sign in or use a
-  token, but its audit history is kept (accounts are disabled, never deleted). **Enable** restores
-  access. A disabled account reads **inactive** in the grid. The **last active owner cannot be
-  disabled**, the same invariant that protects the last owner grant.
+- A user has a **lifecycle** in the blade footer, escalating from reversible to permanent, and reads
+  pause to remove to destroy. The left slot is the reversible toggle: **Disable** (`principal:update`)
+  suspends sign-in (the row reads **inactive**), **Enable** restores it. The kebab holds the stronger,
+  red steps: **Archive** (`principal:archive`) soft-deletes a user (hidden from the directory, cannot
+  sign in, reversibly), and **Purge** (`principal:purge`, admin-sensitive so admin and owner only)
+  permanently deletes an archived user and its grants and memberships, with a confirm. The audit trail
+  is kept through a purge. An archived user shows **Restore** in the left slot; the **Show archived**
+  toggle above the directory surfaces hidden accounts so you can re-find one to restore or purge. The
+  **last active owner** cannot be disabled or archived, the same invariant that protects the last
+  owner grant.
 
 From the CLI the same surface is `omniglass principal list` / `get` / `create` / `update` /
-`disable` / `enable`, and `omniglass grant create <id>` / `grant delete <id> <grantId>`.
+`disable` / `enable` / `archive` / `restore` / `purge`, and `omniglass grant create <id>` /
+`grant delete <id> <grantId>`.
 
 In the grant builder itself, hovering a role in the picker shows its description and the permissions it
 grants, so you can see what you are assigning before you stage it.
@@ -99,8 +111,11 @@ creation and editing are coming; today the built-in roles are read-only.
 user. Pick a row to open the group's **blade**: its **members** (add any principal, remove one, or open a member to
 stack that user's blade over the group) and its **grants**, built with the same grant builder the user detail uses. A grant added to the group takes effect for every member
 immediately, and is bounded by the same rule as a direct grant (you cannot grant a role above your own tier).
-**New group** creates one (name, display name, description); deleting a group drops the memberships and the
-inherited grants, but members keep their own direct grants.
+**New group** creates one (name, display name, description); the **name** is a lowercase handle (the same
+rule as a username, validated inline), while the display name is free text. The new group then opens
+**directly in edit mode**, so you add its members and grants right away and one **Save** commits them (they
+are attached to the group once it exists, so creating and populating stay one flow). Deleting a group drops
+the memberships and the inherited grants, but members keep their own direct grants.
 
 On a **user's** detail, grants split into two: the ones you granted the user **directly** (editable in the grant
 builder) and the ones **inherited from a group** (shown read-only, tagged `from <group>`), so it is always clear

@@ -25,7 +25,7 @@ type principalBody struct {
 	ID            string              `json:"id"`
 	Kind          string              `json:"kind"`
 	Active        bool                `json:"active"`
-	DeactivatedAt *time.Time          `json:"deactivated_at,omitempty" doc:"Set when the principal is deactivated (soft-deleted); absent means live"`
+	ArchivedAt    *time.Time          `json:"archived_at,omitempty" doc:"Set when the principal is archived (soft-deleted); absent means live"`
 	Human         *humanBody          `json:"human,omitempty"`
 	Service       *svcBody            `json:"service,omitempty"`
 	Grants        []grantBody         `json:"grants"`
@@ -33,7 +33,7 @@ type principalBody struct {
 }
 
 func toPrincipalBody(pr *storage.Principal) principalBody {
-	b := principalBody{ID: pr.ID, Kind: pr.Kind, Active: pr.Active, DeactivatedAt: pr.DeactivatedAt, Grants: make([]grantBody, 0, len(pr.Grants)), Groups: make([]principalGroupRef, 0, len(pr.Groups))}
+	b := principalBody{ID: pr.ID, Kind: pr.Kind, Active: pr.Active, ArchivedAt: pr.ArchivedAt, Grants: make([]grantBody, 0, len(pr.Grants)), Groups: make([]principalGroupRef, 0, len(pr.Groups))}
 	if pr.Human != nil {
 		b.Human = &humanBody{Username: pr.Human.Username, Email: pr.Human.Email, DisplayName: pr.Human.DisplayName}
 	}
@@ -50,7 +50,8 @@ func toPrincipalBody(pr *storage.Principal) principalBody {
 }
 
 type listPrincipalsInput struct {
-	Kind string `query:"kind" enum:"human,service" doc:"Optionally filter by principal kind"`
+	Kind            string `query:"kind" enum:"human,service" doc:"Optionally filter by principal kind"`
+	IncludeArchived bool   `query:"include_archived" doc:"Include archived (soft-deleted) principals, hidden by default"`
 }
 
 type listPrincipalsOutput struct {
@@ -69,9 +70,9 @@ type principalOutput struct {
 
 type createPrincipalInput struct {
 	Body struct {
-		Username    string `json:"username" minLength:"1" maxLength:"200" doc:"Unique sign-in name"`
+		Username    string `json:"username" minLength:"1" maxLength:"200" pattern:"^[a-z0-9][a-z0-9._-]*$" doc:"Unique sign-in name (lowercase letters, digits, and . _ -)"`
 		DisplayName string `json:"display_name,omitempty" maxLength:"200"`
-		Email       string `json:"email,omitempty" maxLength:"320"`
+		Email       string `json:"email,omitempty" maxLength:"320" format:"email"`
 		Password    string `json:"password,omitempty" minLength:"8" maxLength:"256" doc:"Optional initial password; the user changes it after signing in"`
 	}
 }
@@ -81,7 +82,7 @@ type updatePrincipalInput struct {
 	Body struct {
 		DisplayName *string `json:"display_name,omitempty" maxLength:"200" doc:"Display name; empty clears it"`
 		Email       *string `json:"email,omitempty" maxLength:"320" doc:"Email; empty clears it"`
-		Username    *string `json:"username,omitempty" minLength:"1" maxLength:"200" doc:"Sign-in name; renaming is safe"`
+		Username    *string `json:"username,omitempty" minLength:"1" maxLength:"200" pattern:"^[a-z0-9][a-z0-9._-]*$" doc:"Sign-in name (lowercase letters, digits, and . _ -); renaming is safe"`
 	}
 }
 
@@ -117,7 +118,7 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Description: "Lists all principals (humans and service accounts) with their grants. Gated by principal:read, which confers access only at all-scope.",
 		Middlewares: huma.Middlewares{a.authn, a.require("principal", "read")},
 	}, func(ctx context.Context, in *listPrincipalsInput) (*listPrincipalsOutput, error) {
-		prs, err := gw.ListPrincipals(ctx, a.scopeFor(ctx, "principal", "read"))
+		prs, err := gw.ListPrincipals(ctx, a.scopeFor(ctx, "principal", "read"), in.IncludeArchived)
 		if err != nil {
 			return nil, mapPrincipalErr(err)
 		}
@@ -265,30 +266,30 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 	})
 
 	huma.Register(api, huma.Operation{
-		OperationID:   "deactivate-principal",
+		OperationID:   "archive-principal",
 		Method:        http.MethodPost,
-		Path:          "/principals/{id}:deactivate",
+		Path:          "/principals/{id}:archive",
 		DefaultStatus: http.StatusNoContent,
-		Summary:       "Deactivate a principal",
-		Description:   "Soft-deletes a principal: it is hidden from the directory, can no longer authenticate, and its rows stay intact, reversibly (reactivate) until purged. Gated by principal:deactivate (all-scope). The last active owner cannot be deactivated.",
-		Middlewares:   huma.Middlewares{a.authn, a.require("principal", "deactivate")},
+		Summary:       "Archive a principal",
+		Description:   "Soft-deletes a principal: it is hidden from the directory, can no longer authenticate, and its rows stay intact, reversibly (restore) until purged. Gated by principal:archive (all-scope). The last active owner cannot be archived.",
+		Middlewares:   huma.Middlewares{a.authn, a.require("principal", "archive")},
 	}, func(ctx context.Context, in *principalPathInput) (*struct{}, error) {
-		if err := gw.DeactivatePrincipal(ctx, actorID(ctx), in.ID, a.scopeFor(ctx, "principal", "deactivate")); err != nil {
+		if err := gw.ArchivePrincipal(ctx, actorID(ctx), in.ID, a.scopeFor(ctx, "principal", "archive")); err != nil {
 			return nil, mapPrincipalErr(err)
 		}
 		return nil, nil
 	})
 
 	huma.Register(api, huma.Operation{
-		OperationID:   "reactivate-principal",
+		OperationID:   "restore-principal",
 		Method:        http.MethodPost,
-		Path:          "/principals/{id}:reactivate",
+		Path:          "/principals/{id}:restore",
 		DefaultStatus: http.StatusNoContent,
-		Summary:       "Reactivate a principal",
-		Description:   "Reverses a deactivation: the account is restored to active and can authenticate again. Gated by principal:deactivate (all-scope).",
-		Middlewares:   huma.Middlewares{a.authn, a.require("principal", "deactivate")},
+		Summary:       "Restore a principal",
+		Description:   "Reverses an archive: the account is restored to active and can authenticate again. Gated by principal:archive (all-scope).",
+		Middlewares:   huma.Middlewares{a.authn, a.require("principal", "archive")},
 	}, func(ctx context.Context, in *principalPathInput) (*struct{}, error) {
-		if err := gw.ReactivatePrincipal(ctx, actorID(ctx), in.ID, a.scopeFor(ctx, "principal", "deactivate")); err != nil {
+		if err := gw.RestorePrincipal(ctx, actorID(ctx), in.ID, a.scopeFor(ctx, "principal", "archive")); err != nil {
 			return nil, mapPrincipalErr(err)
 		}
 		return nil, nil
@@ -300,7 +301,7 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Path:          "/principals/{id}:purge",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Purge a principal",
-		Description:   "Hard-deletes a deactivated principal and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. Gated by principal:purge (admin-sensitive, all-scope), and the principal must be deactivated first.",
+		Description:   "Hard-deletes an archived principal and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. Gated by principal:purge (admin-sensitive, all-scope), and the principal must be archived first.",
 		Middlewares:   huma.Middlewares{a.authn, a.require("principal", "purge", "admin")},
 	}, func(ctx context.Context, in *principalPathInput) (*struct{}, error) {
 		if err := gw.PurgePrincipal(ctx, actorID(ctx), in.ID, a.scopeFor(ctx, "principal", "purge")); err != nil {
@@ -324,8 +325,8 @@ func mapPrincipalErr(err error) error {
 		return huma.Error422UnprocessableEntity("only human principals have these fields")
 	case errors.Is(err, storage.ErrLastOwner):
 		return huma.Error409Conflict("cannot revoke the last owner grant")
-	case errors.Is(err, storage.ErrNotDeactivated):
-		return huma.Error409Conflict("a principal must be deactivated before it can be purged")
+	case errors.Is(err, storage.ErrNotArchived):
+		return huma.Error409Conflict("a principal must be archived before it can be purged")
 	case errors.Is(err, storage.ErrGrantNotFound):
 		return huma.Error404NotFound("grant not found")
 	case errors.Is(err, storage.ErrGrantExists):

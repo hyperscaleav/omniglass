@@ -160,11 +160,11 @@ type Principal struct {
 	ID      string
 	Kind    string
 	Active  bool
-	// DeactivatedAt marks a soft delete (the principal lifecycle, issue #143): a
-	// non-nil value means the account is deactivated (hidden, cannot authenticate,
+	// ArchivedAt marks a soft delete (the principal lifecycle, issue #143): a
+	// non-nil value means the account is archived (hidden, cannot authenticate,
 	// reversible until purged). Nil means live. Distinct from Active, which is the
-	// reversible disable toggle.
-	DeactivatedAt *time.Time
+	// reversible disable (suspend) toggle.
+	ArchivedAt *time.Time
 	Human         *HumanProfile
 	Service       *ServiceProfile
 	Grants        []Grant
@@ -420,9 +420,9 @@ func (p *PG) RevokeBearer(ctx context.Context, hash []byte) error {
 // all-scope grant does. The API maps it to 403.
 var ErrPrincipalForbidden = errors.New("storage: principal access requires an all-scope grant")
 
-// ErrNotDeactivated is returned by PurgePrincipal when the target has not been
-// deactivated first (the hard gate between the soft and hard delete).
-var ErrNotDeactivated = errors.New("storage: principal must be deactivated before purge")
+// ErrNotArchived is returned by PurgePrincipal when the target has not been
+// archived first (the hard gate between the soft and hard delete).
+var ErrNotArchived = errors.New("storage: principal must be archived before purge")
 
 // ErrPrincipalNotFound is returned by GetPrincipal when no principal has the id.
 // The API maps it to 404.
@@ -444,23 +444,26 @@ type HumanSpec struct {
 // ListPrincipals returns every principal with its profile and grants, oldest
 // first. Reads require an all-scope grant (a principal is not scope-tree scoped),
 // so a non-all read scope is ErrPrincipalForbidden rather than a silent empty
-// list. Credentials are never loaded, so no secret leaves the gateway.
-func (p *PG) ListPrincipals(ctx context.Context, read scope.Set) ([]Principal, error) {
+// list. Archived (soft-deleted) principals are excluded unless
+// includeArchived is set (the directory's "show archived" view, so a hidden
+// account can be restored or purged). Credentials are never loaded.
+func (p *PG) ListPrincipals(ctx context.Context, read scope.Set, includeArchived bool) ([]Principal, error) {
 	if !read.All {
 		return nil, ErrPrincipalForbidden
 	}
-	rows, err := p.pool.Query(ctx, `select id, kind, active from principal where deactivated_at is null order by created_at`)
+	rows, err := p.pool.Query(ctx, `select id, kind, active, archived_at from principal where ($1 or archived_at is null) order by created_at`, includeArchived)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list principals: %w", err)
 	}
 	type base struct {
-		id, kind string
-		active   bool
+		id, kind   string
+		active     bool
+		archivedAt *time.Time
 	}
 	var bases []base
 	for rows.Next() {
 		var b base
-		if err := rows.Scan(&b.id, &b.kind, &b.active); err != nil {
+		if err := rows.Scan(&b.id, &b.kind, &b.active, &b.archivedAt); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("storage: scan principal: %w", err)
 		}
@@ -473,7 +476,7 @@ func (p *PG) ListPrincipals(ctx context.Context, read scope.Set) ([]Principal, e
 	// loadPrincipal runs its own queries, so the row cursor is drained first.
 	out := make([]Principal, 0, len(bases))
 	for _, b := range bases {
-		pr := Principal{ID: b.id, Kind: b.kind, Active: b.active}
+		pr := Principal{ID: b.id, Kind: b.kind, Active: b.active, ArchivedAt: b.archivedAt}
 		if err := p.loadPrincipal(ctx, &pr); err != nil {
 			return nil, err
 		}
@@ -489,7 +492,7 @@ func (p *PG) GetPrincipal(ctx context.Context, id string, read scope.Set) (*Prin
 		return nil, ErrPrincipalForbidden
 	}
 	pr := Principal{ID: id}
-	err := p.pool.QueryRow(ctx, `select id, kind, active, deactivated_at from principal where id = $1`, id).Scan(&pr.ID, &pr.Kind, &pr.Active, &pr.DeactivatedAt)
+	err := p.pool.QueryRow(ctx, `select id, kind, active, archived_at from principal where id = $1`, id).Scan(&pr.ID, &pr.Kind, &pr.Active, &pr.ArchivedAt)
 	var pgErr *pgconn.PgError
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
@@ -836,7 +839,7 @@ func (p *PG) SetPrincipalActive(ctx context.Context, actorID, id string, active 
 
 // activeOwnerRemains reports whether at least one active owner@all grant still
 // exists within the transaction: the invariant that guards disabling or
-// deactivating the last owner (mirroring the deferred grant trigger, but for the
+// archiving the last owner (mirroring the deferred grant trigger, but for the
 // principal's active flag rather than the grant's existence).
 func activeOwnerRemains(ctx context.Context, tx pgx.Tx) (bool, error) {
 	var ok bool
@@ -849,29 +852,29 @@ func activeOwnerRemains(ctx context.Context, tx pgx.Tx) (bool, error) {
 	return ok, err
 }
 
-// DeactivatePrincipal soft-deletes a principal (the lifecycle, issue #143): it sets
-// deactivated_at and forces the account inactive, so it is hidden from the
-// directory and cannot authenticate, reversibly (ReactivatePrincipal restores it)
-// until PurgePrincipal hard-deletes it. Requires an all-scope grant; deactivating
+// ArchivePrincipal soft-deletes a principal (the lifecycle, issue #143): it sets
+// archived_at and forces the account inactive, so it is hidden from the
+// directory and cannot authenticate, reversibly (RestorePrincipal restores it)
+// until PurgePrincipal hard-deletes it. Requires an all-scope grant; archiving
 // the last active owner is refused (ErrLastOwner).
-func (p *PG) DeactivatePrincipal(ctx context.Context, actorID, id string, action scope.Set) error {
-	return p.setDeactivated(ctx, actorID, id, true, action)
+func (p *PG) ArchivePrincipal(ctx context.Context, actorID, id string, action scope.Set) error {
+	return p.setArchived(ctx, actorID, id, true, action)
 }
 
-// ReactivatePrincipal reverses a deactivation: it clears deactivated_at and
+// RestorePrincipal reverses an archive: it clears archived_at and
 // restores the active flag, so the account is live and can authenticate again.
 // Requires an all-scope grant.
-func (p *PG) ReactivatePrincipal(ctx context.Context, actorID, id string, action scope.Set) error {
-	return p.setDeactivated(ctx, actorID, id, false, action)
+func (p *PG) RestorePrincipal(ctx context.Context, actorID, id string, action scope.Set) error {
+	return p.setArchived(ctx, actorID, id, false, action)
 }
 
-func (p *PG) setDeactivated(ctx context.Context, actorID, id string, deactivate bool, action scope.Set) error {
+func (p *PG) setArchived(ctx context.Context, actorID, id string, archive bool, action scope.Set) error {
 	if !action.All {
 		return ErrPrincipalForbidden
 	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("storage: begin deactivate: %w", err)
+		return fmt.Errorf("storage: begin archive: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
@@ -883,40 +886,40 @@ func (p *PG) setDeactivated(ctx context.Context, actorID, id string, deactivate 
 		case errors.As(err, &pgErr) && pgErr.Code == "22P02":
 			return ErrPrincipalNotFound
 		default:
-			return fmt.Errorf("storage: deactivate lookup: %w", err)
+			return fmt.Errorf("storage: archive lookup: %w", err)
 		}
 	}
 
-	if deactivate {
-		if _, err := tx.Exec(ctx, `update principal set deactivated_at = now(), active = false where id = $1`, id); err != nil {
-			return fmt.Errorf("storage: deactivate: %w", err)
+	if archive {
+		if _, err := tx.Exec(ctx, `update principal set archived_at = now(), active = false where id = $1`, id); err != nil {
+			return fmt.Errorf("storage: archive: %w", err)
 		}
 		remains, err := activeOwnerRemains(ctx, tx)
 		if err != nil {
 			return fmt.Errorf("storage: owner check: %w", err)
 		}
 		if !remains {
-			return ErrLastOwner // rolls back the deactivation
+			return ErrLastOwner // rolls back the archive
 		}
-	} else if _, err := tx.Exec(ctx, `update principal set deactivated_at = null, active = true where id = $1`, id); err != nil {
-		return fmt.Errorf("storage: reactivate: %w", err)
+	} else if _, err := tx.Exec(ctx, `update principal set archived_at = null, active = true where id = $1`, id); err != nil {
+		return fmt.Errorf("storage: restore: %w", err)
 	}
 
-	verb := "reactivate"
-	if deactivate {
-		verb = "deactivate"
+	verb := "restore"
+	if archive {
+		verb = "archive"
 	}
-	if err := writeAuditRes(ctx, tx, actorID, verb, "principal", id, nil, map[string]any{"deactivated": deactivate}); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, verb, "principal", id, nil, map[string]any{"archived": archive}); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("storage: commit deactivate: %w", err)
+		return fmt.Errorf("storage: commit archive: %w", err)
 	}
 	return nil
 }
 
-// PurgePrincipal hard-deletes a principal (issue #143), gated on prior deactivation
-// (ErrNotDeactivated otherwise, the hard gate between the soft and hard delete).
+// PurgePrincipal hard-deletes a principal (issue #143), gated on prior archival
+// (ErrNotArchived otherwise, the hard gate between the soft and hard delete).
 // The delete cascades the principal's owned rows (profile, credentials, grants,
 // group memberships, impersonation sessions); the audit trail survives, because the
 // audit foreign keys are ON DELETE SET NULL and every row keeps a denormalized
@@ -932,9 +935,9 @@ func (p *PG) PurgePrincipal(ctx context.Context, actorID, id string, action scop
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	var deactivatedAt *time.Time
+	var archivedAt *time.Time
 	var pgErr *pgconn.PgError
-	if err := tx.QueryRow(ctx, `select deactivated_at from principal where id = $1`, id).Scan(&deactivatedAt); err != nil {
+	if err := tx.QueryRow(ctx, `select archived_at from principal where id = $1`, id).Scan(&archivedAt); err != nil {
 		switch {
 		case errors.Is(err, pgx.ErrNoRows):
 			return ErrPrincipalNotFound
@@ -944,8 +947,8 @@ func (p *PG) PurgePrincipal(ctx context.Context, actorID, id string, action scop
 			return fmt.Errorf("storage: purge lookup: %w", err)
 		}
 	}
-	if deactivatedAt == nil {
-		return ErrNotDeactivated
+	if archivedAt == nil {
+		return ErrNotArchived
 	}
 	// Audit the purge before the row is gone; the actor is the purger (unaffected by
 	// the delete), and the resource id is a plain text value, not a foreign key.
