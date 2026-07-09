@@ -676,7 +676,7 @@ func generatedCommands() []*cobra.Command {
 			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
 			cmd.Flags().StringVar(&fEmail, "email", "", "")
 			cmd.Flags().StringVar(&fPassword, "password", "", "Optional initial password; the user changes it after signing in")
-			cmd.Flags().StringVar(&fUsername, "username", "", "Unique sign-in name")
+			cmd.Flags().StringVar(&fUsername, "username", "", "Unique sign-in name (lowercase letters, digits, and . _ -)")
 			_ = cmd.MarkFlagRequired("username")
 			return cmd
 		}())
@@ -817,7 +817,7 @@ func generatedCommands() []*cobra.Command {
 			}
 			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "Display name; empty clears it")
 			cmd.Flags().StringVar(&fEmail, "email", "", "Email; empty clears it")
-			cmd.Flags().StringVar(&fUsername, "username", "", "Sign-in name; renaming is safe")
+			cmd.Flags().StringVar(&fUsername, "username", "", "Sign-in name (lowercase letters, digits, and . _ -); renaming is safe")
 			return cmd
 		}())
 		roots = append(roots, parent)
@@ -854,7 +854,7 @@ func generatedCommands() []*cobra.Command {
 			}
 			cmd.Flags().StringVar(&fDescription, "description", "", "")
 			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
-			cmd.Flags().StringVar(&fName, "name", "", "Unique group name")
+			cmd.Flags().StringVar(&fName, "name", "", "Unique group name (lowercase letters, digits, and . _ -)")
 			_ = cmd.MarkFlagRequired("name")
 			return cmd
 		}())
@@ -927,7 +927,7 @@ func generatedCommands() []*cobra.Command {
 			}
 			cmd.Flags().StringVar(&fDescription, "description", "", "Description; empty clears it")
 			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "Display name; empty clears it")
-			cmd.Flags().StringVar(&fName, "name", "", "Group name; renaming is safe")
+			cmd.Flags().StringVar(&fName, "name", "", "Group name (lowercase letters, digits, and . _ -); renaming is safe")
 			return cmd
 		}())
 		roots = append(roots, parent)

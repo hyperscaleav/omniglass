@@ -122,8 +122,12 @@ export function GroupDetail(props: { id: string }) {
     if (!confirm(`Delete the group "${group.data ? groupName(group.data) : ""}"? Members keep their direct grants; they stop inheriting this group's.`)) return;
     try {
       await deleteGroup(props.id);
-      await qc.invalidateQueries({ queryKey: GROUPS_KEY });
+      // The group is gone, so close the blade first (unmounting its detail, members,
+      // and grants queries) and drop the dead detail caches, then refresh the list.
+      // Refreshing before closing would refetch the deleted id and 404.
       blades.close();
+      qc.removeQueries({ queryKey: [...GROUPS_KEY, props.id] });
+      await qc.invalidateQueries({ queryKey: GROUPS_KEY });
     } catch (e) {
       setErr(describeError(e));
     }
@@ -151,7 +155,7 @@ export function GroupDetail(props: { id: string }) {
         <div class="flex flex-col gap-3">
           <label class="flex flex-col gap-1">
             <span class="eyebrow">Display name</span>
-            <input class="input input-bordered w-full" value={displayName()} placeholder={group.data?.name} onInput={(e) => setDisplayName(e.currentTarget.value)} />
+            <input class="input input-bordered w-full" value={displayName()} placeholder="Field Crew" onInput={(e) => setDisplayName(e.currentTarget.value)} />
           </label>
           <label class="flex flex-col gap-1">
             <span class="eyebrow">Description</span>

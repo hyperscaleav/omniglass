@@ -70,9 +70,9 @@ type principalOutput struct {
 
 type createPrincipalInput struct {
 	Body struct {
-		Username    string `json:"username" minLength:"1" maxLength:"200" doc:"Unique sign-in name"`
+		Username    string `json:"username" minLength:"1" maxLength:"200" pattern:"^[a-z0-9][a-z0-9._-]*$" doc:"Unique sign-in name (lowercase letters, digits, and . _ -)"`
 		DisplayName string `json:"display_name,omitempty" maxLength:"200"`
-		Email       string `json:"email,omitempty" maxLength:"320"`
+		Email       string `json:"email,omitempty" maxLength:"320" format:"email"`
 		Password    string `json:"password,omitempty" minLength:"8" maxLength:"256" doc:"Optional initial password; the user changes it after signing in"`
 	}
 }
@@ -82,7 +82,7 @@ type updatePrincipalInput struct {
 	Body struct {
 		DisplayName *string `json:"display_name,omitempty" maxLength:"200" doc:"Display name; empty clears it"`
 		Email       *string `json:"email,omitempty" maxLength:"320" doc:"Email; empty clears it"`
-		Username    *string `json:"username,omitempty" minLength:"1" maxLength:"200" doc:"Sign-in name; renaming is safe"`
+		Username    *string `json:"username,omitempty" minLength:"1" maxLength:"200" pattern:"^[a-z0-9][a-z0-9._-]*$" doc:"Sign-in name (lowercase letters, digits, and . _ -); renaming is safe"`
 	}
 }
 

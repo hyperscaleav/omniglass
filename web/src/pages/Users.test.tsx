@@ -176,6 +176,88 @@ describe("Users page", () => {
     expect(within(blade).getByText("Purge")).toBeTruthy();
   });
 
+  it("purging an archived user closes the blade and does not refetch the dead detail", async () => {
+    const dana: Principal = { id: "u-dana", kind: "human", active: false, archived_at: "2026-01-01T00:00:00Z", human: { username: "dana", display_name: "Dana Vale" }, grants: [] };
+    // Confirm the purge; the POST 204s, the directory refetch returns an empty list,
+    // and a GET of the purged principal's own detail 404s (as the real server would).
+    // The blade must close, and the now-dead detail query must not be refetched (an
+    // orphan 404 that would keep the blade in a broken state).
+    let detailRefetched = false;
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      const url = typeof input === "string" ? input : req.url;
+      const method = typeof input === "string" ? "GET" : req.method;
+      if (url.includes(":purge")) return new Response(null, { status: 204 });
+      if (method === "GET" && /\/principals\/u-dana(\?|$)/.test(url)) {
+        detailRefetched = true;
+        return new Response(JSON.stringify({ title: "not found" }), { status: 404, headers: { "Content-Type": "application/json" } });
+      }
+      return new Response(JSON.stringify({ principals: [] }), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    qc.setQueryData([...PRINCIPALS_KEY, false], []);
+    qc.setQueryData([...PRINCIPALS_KEY, true], [dana]);
+    qc.setQueryData([...PRINCIPALS_KEY, dana.id], dana);
+    qc.setQueryData([...ME_KEY], me);
+    qc.setQueryData([...ROLES_KEY], []);
+    qc.setQueryData(["locations"], []);
+    qc.setQueryData(["systems"], []);
+    qc.setQueryData(["components"], []);
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <Router><Route path="*" component={() => <Users />} /></Router>
+      </QueryClientProvider>
+    ));
+    fireEvent.click(screen.getByRole("checkbox")); // show archived
+    fireEvent.click(await screen.findByText("Dana Vale"));
+    const blade = await waitFor(() => {
+      const el = document.querySelector("aside[data-blade]");
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    fireEvent.click(within(blade).getByLabelText("More actions"));
+    fireEvent.click(within(blade).getByText("Purge"));
+    // The blade closes: no aside remains.
+    await waitFor(() => expect(document.querySelector("aside[data-blade]")).toBeNull());
+    // And the purged principal's own detail query was not refetched (no orphan 404).
+    expect(detailRefetched).toBe(false);
+  });
+
+  it("disables Create and shows an inline error for an invalid username", async () => {
+    mount();
+    fireEvent.click(screen.getByText("New user"));
+    const username = (await screen.findByLabelText("Username")) as HTMLInputElement;
+    const createBtn = () => screen.getByText("Create user").closest("button") as HTMLButtonElement;
+    // Capitals and spaces are refused inline: an error shows and Create is disabled.
+    fireEvent.input(username, { target: { value: "Jordan Smith" } });
+    expect(screen.getByText(/space|capital/i)).toBeTruthy();
+    expect(createBtn().disabled).toBe(true);
+    // A valid lowercase handle clears the error and enables Create.
+    fireEvent.input(username, { target: { value: "jordan" } });
+    expect(screen.queryByText(/space|capital/i)).toBeNull();
+    expect(createBtn().disabled).toBe(false);
+  });
+
+  it("disables the footer Save when an edited username is invalid", async () => {
+    mount();
+    fireEvent.click(screen.getByText("Alice Ng"));
+    const blade = await waitFor(() => {
+      const el = document.querySelector("aside[data-blade]");
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    fireEvent.click(within(blade).getByLabelText("Edit"));
+    const username = (await within(blade).findByLabelText("Username")) as HTMLInputElement;
+    const saveBtn = () => within(blade).getByText("Save").closest("button") as HTMLButtonElement;
+    expect(saveBtn().disabled).toBe(false);
+    fireEvent.input(username, { target: { value: "Alice Ng" } }); // caps + space
+    expect(within(blade).getByText(/space|capital/i)).toBeTruthy();
+    expect(saveBtn().disabled).toBe(true);
+    fireEvent.input(username, { target: { value: "alice" } });
+    expect(saveBtn().disabled).toBe(false);
+  });
+
   it("narrows the directory through the FilterBar (kind:service keeps only the bot)", async () => {
     const { queryByText } = mount();
     const input = screen.getByRole("combobox") as HTMLInputElement;

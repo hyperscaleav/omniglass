@@ -260,9 +260,10 @@ components:
           maxLength: 200
           type: string
         name:
-          description: Unique group name
+          description: Unique group name (lowercase letters, digits, and . _ -)
           maxLength: 200
           minLength: 1
+          pattern: ^[a-z0-9][a-z0-9._-]*$
           type: string
       required:
         - name
@@ -308,6 +309,7 @@ components:
           maxLength: 200
           type: string
         email:
+          format: email
           maxLength: 320
           type: string
         password:
@@ -316,9 +318,10 @@ components:
           minLength: 8
           type: string
         username:
-          description: Unique sign-in name
+          description: Unique sign-in name (lowercase letters, digits, and . _ -)
           maxLength: 200
           minLength: 1
+          pattern: ^[a-z0-9][a-z0-9._-]*$
           type: string
       required:
         - username
@@ -1035,9 +1038,10 @@ components:
           maxLength: 200
           type: string
         name:
-          description: Group name; renaming is safe
+          description: Group name (lowercase letters, digits, and . _ -); renaming is safe
           maxLength: 200
           minLength: 1
+          pattern: ^[a-z0-9][a-z0-9._-]*$
           type: string
       type: object
     UpdateLocationInputBody:
@@ -1089,9 +1093,10 @@ components:
           maxLength: 320
           type: string
         username:
-          description: Sign-in name; renaming is safe
+          description: Sign-in name (lowercase letters, digits, and . _ -); renaming is safe
           maxLength: 200
           minLength: 1
+          pattern: ^[a-z0-9][a-z0-9._-]*$
           type: string
       type: object
     UpdateSystemInputBody:

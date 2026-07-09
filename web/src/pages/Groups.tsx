@@ -7,6 +7,7 @@ import { type Group, GROUPS_KEY, groupName, listGroups, createGroup } from "../l
 import { identityRegistry } from "../lib/identityBlades";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
+import { handleError } from "../lib/validate";
 
 // Groups: the principal-group admin surface, a config over the shared FlatList. A
 // group holds role x scope grants that its members inherit, so an admin assigns
@@ -45,7 +46,7 @@ export default function Groups() {
   return (
     <FlatList<Group>
       config={{
-        entity: { name: "principal_group", plural: "groups" },
+        entity: { name: "group", plural: "groups" },
         rows: () => groups.data ?? [],
         loading: () => groups.isPending,
         error: () => groups.error,
@@ -91,12 +92,14 @@ function CreateGroupForm(props: { onCreated: (g: Group) => void }) {
 
   return (
     <form class="flex flex-col gap-3" onSubmit={submit}>
+      <p class="text-xs text-base-content/50">Creates a group. Members inherit the group's role grants; add members and grants afterwards.</p>
       <Show when={err()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
       </Show>
       <label class="flex flex-col gap-1">
         <span class="eyebrow">Name</span>
-        <input class="input input-bordered w-full font-data" value={name()} placeholder="field-crew" onInput={(e) => setName(e.currentTarget.value)} disabled={busy()} required />
+        <input class="input input-bordered w-full font-data" classList={{ "input-error": !!handleError(name()) }} value={name()} placeholder="field-crew" onInput={(e) => setName(e.currentTarget.value)} disabled={busy()} required />
+        <Show when={handleError(name())}>{(msg) => <p class="text-[11px] text-error">{msg()}</p>}</Show>
       </label>
       <label class="flex flex-col gap-1">
         <span class="eyebrow">Display name</span>
@@ -107,7 +110,7 @@ function CreateGroupForm(props: { onCreated: (g: Group) => void }) {
         <input class="input input-bordered w-full" value={description()} onInput={(e) => setDescription(e.currentTarget.value)} disabled={busy()} />
       </label>
       <div class="mt-1 flex justify-end">
-        <button type="submit" class="btn btn-action btn-sm" disabled={busy() || !name().trim()}>{busy() ? "Creating..." : "Create group"}</button>
+        <button type="submit" class="btn btn-action btn-sm" disabled={busy() || !name().trim() || !!handleError(name())}>{busy() ? "Creating..." : "Create group"}</button>
       </div>
     </form>
   );

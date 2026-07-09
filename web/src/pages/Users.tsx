@@ -6,6 +6,7 @@ import { type Principal, PRINCIPALS_KEY, listPrincipals, createPrincipal, princi
 import { identityRegistry } from "../lib/identityBlades";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
+import { handleError, emailError } from "../lib/validate";
 import type { FilterKey } from "../lib/predicate";
 
 // Users: the admin principal directory, a config over the shared FlatList. A row per
@@ -150,7 +151,8 @@ function CreateUserForm(props: { close: () => void; onCreated: (p: Principal) =>
       </Show>
       <div>
         <label class="eyebrow mb-1.5 block" for="new-username">Username</label>
-        <input id="new-username" autocomplete="off" class="input input-bordered w-full font-data" value={username()} placeholder="jordan" onInput={(e) => setUsername(e.currentTarget.value)} disabled={busy()} required />
+        <input id="new-username" autocomplete="off" class="input input-bordered w-full font-data" classList={{ "input-error": !!handleError(username()) }} value={username()} placeholder="jordan" onInput={(e) => setUsername(e.currentTarget.value)} disabled={busy()} required />
+        <Show when={handleError(username())}>{(msg) => <p class="mt-1 text-[11px] text-error">{msg()}</p>}</Show>
       </div>
       <div>
         <label class="eyebrow mb-1.5 block" for="new-display">Display name</label>
@@ -158,7 +160,8 @@ function CreateUserForm(props: { close: () => void; onCreated: (p: Principal) =>
       </div>
       <div>
         <label class="eyebrow mb-1.5 block" for="new-email">Email</label>
-        <input id="new-email" type="email" autocomplete="off" class="input input-bordered w-full" value={email()} onInput={(e) => setEmail(e.currentTarget.value)} disabled={busy()} />
+        <input id="new-email" type="email" autocomplete="off" class="input input-bordered w-full" classList={{ "input-error": !!emailError(email()) }} value={email()} placeholder="jordan@example.com" onInput={(e) => setEmail(e.currentTarget.value)} disabled={busy()} />
+        <Show when={emailError(email())}>{(msg) => <p class="mt-1 text-[11px] text-error">{msg()}</p>}</Show>
       </div>
       <div>
         <label class="eyebrow mb-1.5 block" for="new-password">Initial password</label>
@@ -167,7 +170,7 @@ function CreateUserForm(props: { close: () => void; onCreated: (p: Principal) =>
       </div>
       <div class="mt-1 flex justify-end gap-2">
         <button type="button" class="btn btn-quiet btn-sm" onClick={props.close} disabled={busy()}>Cancel</button>
-        <button type="submit" class="btn btn-action btn-sm" disabled={busy() || !username().trim()}>
+        <button type="submit" class="btn btn-action btn-sm" disabled={busy() || !username().trim() || !!handleError(username()) || !!emailError(email())}>
           <Show when={busy()}><span class="loading loading-spinner loading-xs" /></Show>
           Create user
         </button>

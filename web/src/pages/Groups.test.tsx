@@ -90,6 +90,48 @@ describe("Groups page", () => {
     expect(within(blade).queryByText("Save")).toBeNull();
   });
 
+  it("deleting a group closes the blade and does not refetch the dead detail", async () => {
+    // The DELETE 204s and the directory refetch returns an empty list; a GET of the
+    // deleted group's own detail 404s (as the real server would). The blade must
+    // close, and the dead detail query must not be refetched (an orphan 404).
+    let detailRefetched = false;
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      const url = typeof input === "string" ? input : req.url;
+      const method = typeof input === "string" ? "GET" : req.method;
+      if (method === "DELETE") return new Response(null, { status: 204 });
+      if (method === "GET" && /\/principal-groups\/g-hd(\/|\?|$)/.test(url)) {
+        detailRefetched = true;
+        return new Response(JSON.stringify({ title: "not found" }), { status: 404, headers: { "Content-Type": "application/json" } });
+      }
+      return new Response(JSON.stringify({ groups: [] }), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+    mount();
+    fireEvent.click(screen.getByText("Help Desk"));
+    const blade = await waitFor(() => {
+      const el = asides()[0];
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    fireEvent.click(within(blade).getByText("Delete group"));
+    await waitFor(() => expect(asides().length).toBe(0));
+    expect(detailRefetched).toBe(false);
+  });
+
+  it("disables Create and shows an inline error for an invalid group name", async () => {
+    mount();
+    fireEvent.click(screen.getByText("New group"));
+    const name = (await screen.findByLabelText("Name")) as HTMLInputElement;
+    const createBtn = () => screen.getByText("Create group").closest("button") as HTMLButtonElement;
+    fireEvent.input(name, { target: { value: "Field Crew" } }); // caps + space
+    expect(screen.getByText(/space|capital/i)).toBeTruthy();
+    expect(createBtn().disabled).toBe(true);
+    fireEvent.input(name, { target: { value: "field-crew" } });
+    expect(screen.queryByText(/space|capital/i)).toBeNull();
+    expect(createBtn().disabled).toBe(false);
+  });
+
   it("drills from a group member to a user blade nested over the group (group -> user)", async () => {
     mount();
     fireEvent.click(screen.getByText("Help Desk")); // open the group blade

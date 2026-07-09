@@ -16,6 +16,7 @@ import {
 import { useMe, can } from "../lib/auth";
 import { impersonate } from "../lib/impersonation";
 import { describeError } from "../lib/format";
+import { handleError, emailError } from "../lib/validate";
 import { listLocations } from "../lib/locations";
 import { listSystems } from "../lib/systems";
 import { listComponents } from "../lib/components";
@@ -66,6 +67,9 @@ export function UserDetail(props: { id: string }) {
 
   edit.bind({
     editable: canUpdate,
+    // Gate the footer Save on the inline rules (the same handle/email rules the
+    // server enforces), so an invalid username or email cannot be committed.
+    valid: () => !handleError(username()) && !emailError(email()),
     // The left slot is the reversible state toggle for the lifecycle ladder: an
     // archived account restores (Restore), a live one toggles Disable / Enable.
     destructive: () => {
@@ -160,8 +164,13 @@ export function UserDetail(props: { id: string }) {
     setActErr(null);
     try {
       await purgePrincipal(pr.id);
-      await refresh();
+      // The principal is gone, so close the blade first (this unmounts the body and
+      // deactivates its detail query) and drop the dead detail cache, then refresh the
+      // directory. Refreshing before closing would refetch the purged id and 404,
+      // leaving the blade open on a broken state.
       blades.close();
+      qc.removeQueries({ queryKey: [...PRINCIPALS_KEY, pr.id] });
+      await refresh();
     } catch (e) {
       setActErr(describeError(e));
     }
@@ -213,15 +222,17 @@ export function UserDetail(props: { id: string }) {
             <div class="flex flex-col gap-3">
               <div>
                 <label class="eyebrow mb-1.5 block" for="edit-username">Username</label>
-                <input id="edit-username" autocomplete="off" class="input input-bordered w-full font-data" value={username()} onInput={(e) => setUsername(e.currentTarget.value)} />
+                <input id="edit-username" autocomplete="off" class="input input-bordered w-full font-data" classList={{ "input-error": !!handleError(username()) }} value={username()} placeholder="jordan" onInput={(e) => setUsername(e.currentTarget.value)} />
+                <Show when={handleError(username())}>{(msg) => <p class="mt-1 text-[11px] text-error">{msg()}</p>}</Show>
               </div>
               <div>
                 <label class="eyebrow mb-1.5 block" for="edit-display">Display name</label>
-                <input id="edit-display" autocomplete="off" class="input input-bordered w-full" value={displayName()} onInput={(e) => setDisplayName(e.currentTarget.value)} />
+                <input id="edit-display" autocomplete="off" class="input input-bordered w-full" value={displayName()} placeholder="Jordan Rivera" onInput={(e) => setDisplayName(e.currentTarget.value)} />
               </div>
               <div>
                 <label class="eyebrow mb-1.5 block" for="edit-email">Email</label>
-                <input id="edit-email" type="email" autocomplete="off" class="input input-bordered w-full" value={email()} onInput={(e) => setEmail(e.currentTarget.value)} />
+                <input id="edit-email" type="email" autocomplete="off" class="input input-bordered w-full" classList={{ "input-error": !!emailError(email()) }} value={email()} placeholder="jordan@example.com" onInput={(e) => setEmail(e.currentTarget.value)} />
+                <Show when={emailError(email())}>{(msg) => <p class="mt-1 text-[11px] text-error">{msg()}</p>}</Show>
               </div>
             </div>
           </Show>

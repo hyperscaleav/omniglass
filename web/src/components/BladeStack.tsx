@@ -157,7 +157,7 @@ export default function BladeStack(props: {
                               <button class="btn btn-quiet btn-sm gap-1.5" onClick={() => edit.cancel()} disabled={edit.saving()}>
                                 <X size={15} /> Cancel
                               </button>
-                              <button class="btn btn-action btn-sm gap-1.5" onClick={() => { edit.save().catch(() => {}); }} disabled={edit.saving()}>
+                              <button class="btn btn-action btn-sm gap-1.5" onClick={() => { edit.save().catch(() => {}); }} disabled={edit.saving() || !edit.valid()}>
                                 <Show when={edit.saving()} fallback={<Check size={15} />}><span class="loading loading-spinner loading-xs" /></Show>
                                 Save
                               </button>

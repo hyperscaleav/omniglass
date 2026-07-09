@@ -25,7 +25,9 @@ export type FlatColumn<T> = {
 export type FlatDetail = { title: JSX.Element; body: JSX.Element };
 
 export type FlatConfig<T> = {
-  // entity.name is the authorization resource; plural labels empty/error copy.
+  // entity.name is the singular display noun (the create Drawer title reads
+  // "New <name>"); plural labels the empty/error copy. Both are UI text, not the
+  // authorization resource (auth is gated explicitly on the create config's `can`).
   entity: { name: string; plural: string };
   rows: Accessor<T[]>;
   loading?: Accessor<boolean>;

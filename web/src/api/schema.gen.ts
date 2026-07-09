@@ -856,7 +856,7 @@ export interface components {
             readonly $schema?: string;
             description?: string;
             display_name?: string;
-            /** @description Unique group name */
+            /** @description Unique group name (lowercase letters, digits, and . _ -) */
             name: string;
         };
         CreateLocationInputBody: {
@@ -882,10 +882,11 @@ export interface components {
              */
             readonly $schema?: string;
             display_name?: string;
+            /** Format: email */
             email?: string;
             /** @description Optional initial password; the user changes it after signing in */
             password?: string;
-            /** @description Unique sign-in name */
+            /** @description Unique sign-in name (lowercase letters, digits, and . _ -) */
             username: string;
         };
         CreateSystemInputBody: {
@@ -1259,7 +1260,7 @@ export interface components {
             description?: string;
             /** @description Display name; empty clears it */
             display_name?: string;
-            /** @description Group name; renaming is safe */
+            /** @description Group name (lowercase letters, digits, and . _ -); renaming is safe */
             name?: string;
         };
         UpdateLocationInputBody: {
@@ -1293,7 +1294,7 @@ export interface components {
             display_name?: string;
             /** @description Email; empty clears it */
             email?: string;
-            /** @description Sign-in name; renaming is safe */
+            /** @description Sign-in name (lowercase letters, digits, and . _ -); renaming is safe */
             username?: string;
         };
         UpdateSystemInputBody: {
