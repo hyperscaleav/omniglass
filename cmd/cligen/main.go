@@ -160,12 +160,14 @@ func buildCommands(doc spec, base string) []command {
 func buildCommand(doc spec, base, path, method string, op operation) command {
 	words := commandWords(path, method, op.OperationID)
 
-	// Path params become positional args and %s slots, in path order.
+	// Path params become positional args and %s slots, in path order. A custom
+	// method fuses the param and the verb in one segment ({id}:archive); the param
+	// still binds as a positional arg and the ":verb" suffix stays literal.
 	apiPath := base
 	var args []string
 	for _, seg := range splitPath(path) {
-		if name, ok := pathParam(seg); ok {
-			apiPath += "/%s"
+		if name, suffix, ok := pathParamSeg(seg); ok {
+			apiPath += "/%s" + suffix
 			args = append(args, name)
 		} else {
 			apiPath += "/" + seg
@@ -332,6 +334,21 @@ func pathParam(seg string) (string, bool) {
 		return seg[1 : len(seg)-1], true
 	}
 	return "", false
+}
+
+// pathParamSeg recognizes a path-parameter segment, including a custom-method
+// segment where the param and the verb are fused ({id}:archive). It returns the
+// param name and any trailing literal (":archive", or "" for a plain {id}). A
+// non-param segment (a collection, or a collection:verb) returns ok == false.
+func pathParamSeg(seg string) (name, suffix string, ok bool) {
+	if !strings.HasPrefix(seg, "{") {
+		return "", "", false
+	}
+	end := strings.Index(seg, "}")
+	if end < 0 {
+		return "", "", false
+	}
+	return seg[1:end], seg[end+1:], true
 }
 
 // singular is a naive depluralizer good enough for the AIP collection nouns in
