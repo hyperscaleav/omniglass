@@ -851,8 +851,8 @@ components:
           type: string
         active:
           type: boolean
-        deactivated_at:
-          description: Set when the principal is deactivated (soft-deleted); absent means live
+        archived_at:
+          description: Set when the principal is archived (soft-deleted); absent means live
           format: date-time
           type: string
         grants:
@@ -1898,12 +1898,12 @@ paths:
               - human
               - service
             type: string
-        - description: Include deactivated (soft-deleted) principals, hidden by default
+        - description: Include archived (soft-deleted) principals, hidden by default
           explode: false
           in: query
-          name: include_deactivated
+          name: include_archived
           schema:
-            description: Include deactivated (soft-deleted) principals, hidden by default
+            description: Include archived (soft-deleted) principals, hidden by default
             type: boolean
       responses:
         "200":
@@ -2060,10 +2060,10 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Revoke a grant
-  /principals/{id}:deactivate:
+  /principals/{id}:archive:
     post:
-      description: "Soft-deletes a principal: it is hidden from the directory, can no longer authenticate, and its rows stay intact, reversibly (reactivate) until purged. Gated by principal:deactivate (all-scope). The last active owner cannot be deactivated."
-      operationId: deactivate-principal
+      description: "Soft-deletes a principal: it is hidden from the directory, can no longer authenticate, and its rows stay intact, reversibly (restore) until purged. Gated by principal:archive (all-scope). The last active owner cannot be archived."
+      operationId: archive-principal
       parameters:
         - description: The principal's id (uuid)
           in: path
@@ -2081,7 +2081,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
-      summary: Deactivate a principal
+      summary: Archive a principal
   /principals/{id}:disable:
     post:
       description: Soft-disables a principal so it can no longer authenticate; its audit trail is kept. Gated by principal:update (all-scope). The last active owner cannot be disabled.
@@ -2178,7 +2178,7 @@ paths:
       summary: Impersonate a principal (view-as or act-as)
   /principals/{id}:purge:
     post:
-      description: Hard-deletes a deactivated principal and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. Gated by principal:purge (admin-sensitive, all-scope), and the principal must be deactivated first.
+      description: Hard-deletes an archived principal and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. Gated by principal:purge (admin-sensitive, all-scope), and the principal must be archived first.
       operationId: purge-principal
       parameters:
         - description: The principal's id (uuid)
@@ -2198,10 +2198,10 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Purge a principal
-  /principals/{id}:reactivate:
+  /principals/{id}:restore:
     post:
-      description: "Reverses a deactivation: the account is restored to active and can authenticate again. Gated by principal:deactivate (all-scope)."
-      operationId: reactivate-principal
+      description: "Reverses an archive: the account is restored to active and can authenticate again. Gated by principal:archive (all-scope)."
+      operationId: restore-principal
       parameters:
         - description: The principal's id (uuid)
           in: path
@@ -2219,7 +2219,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
-      summary: Reactivate a principal
+      summary: Restore a principal
   /roles:
     get:
       description: Lists the roles with their metadata and effective (flattened) permissions. Gated by the role:read capability.

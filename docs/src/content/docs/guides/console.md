@@ -70,19 +70,19 @@ location-scoped admin cannot list users.
   scope targets the entity by its internal id, so a grant survives a rename of that entity. One rule
   the server always holds: the **last owner grant cannot be revoked**, so the platform can never be
   locked out of administration.
-- A user has a **lifecycle** in the blade footer, escalating from reversible to permanent. The left
-  slot is the reversible toggle: **Disable** (`principal:update`) turns off sign-in (the row reads
-  **inactive**), **Enable** restores it. The kebab holds the stronger, red steps: **Deactivate**
-  (`principal:deactivate`) soft-deletes a user (hidden from the directory, cannot sign in, reversibly),
-  and **Purge** (`principal:purge`, admin-sensitive so admin and owner only) permanently deletes a
-  deactivated user and its grants and memberships, with a confirm. The audit trail is kept through a
-  purge. A deactivated user shows **Reactivate** in the left slot; the **Show deactivated** toggle
-  above the directory surfaces hidden accounts so you can re-find one to reactivate or purge. The
-  **last active owner** cannot be disabled or deactivated, the same invariant that protects the last
+- A user has a **lifecycle** in the blade footer, escalating from reversible to permanent, and reads
+  pause to remove to destroy. The left slot is the reversible toggle: **Disable** (`principal:update`)
+  suspends sign-in (the row reads **inactive**), **Enable** restores it. The kebab holds the stronger,
+  red steps: **Archive** (`principal:archive`) soft-deletes a user (hidden from the directory, cannot
+  sign in, reversibly), and **Purge** (`principal:purge`, admin-sensitive so admin and owner only)
+  permanently deletes an archived user and its grants and memberships, with a confirm. The audit trail
+  is kept through a purge. An archived user shows **Restore** in the left slot; the **Show archived**
+  toggle above the directory surfaces hidden accounts so you can re-find one to restore or purge. The
+  **last active owner** cannot be disabled or archived, the same invariant that protects the last
   owner grant.
 
 From the CLI the same surface is `omniglass principal list` / `get` / `create` / `update` /
-`disable` / `enable` / `deactivate` / `reactivate` / `purge`, and `omniglass grant create <id>` /
+`disable` / `enable` / `archive` / `restore` / `purge`, and `omniglass grant create <id>` /
 `grant delete <id> <grantId>`.
 
 In the grant builder itself, hovering a role in the picker shows its description and the permissions it

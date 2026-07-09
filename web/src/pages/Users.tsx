@@ -47,8 +47,8 @@ const columns: FlatColumn<Principal>[] = [
     cell: (p) => (
       <>
         <span class={kindBadge(p.kind)}>{p.kind}</span>
-        <Show when={p.deactivated_at} fallback={<Show when={!p.active}><span class="badge badge-soft badge-warning badge-sm ml-1">inactive</span></Show>}>
-          <span class="badge badge-soft badge-error badge-sm ml-1">deactivated</span>
+        <Show when={p.archived_at} fallback={<Show when={!p.active}><span class="badge badge-soft badge-warning badge-sm ml-1">inactive</span></Show>}>
+          <span class="badge badge-soft badge-error badge-sm ml-1">archived</span>
         </Show>
       </>
     ),
@@ -72,10 +72,10 @@ const columns: FlatColumn<Principal>[] = [
 export default function Users() {
   const me = useMe();
   const [params] = useSearchParams();
-  // Deactivated (soft-deleted) principals are hidden by default; the toggle includes
-  // them (a distinct query key) so an admin can re-find one to reactivate or purge.
-  const [showDeactivated, setShowDeactivated] = createSignal(false);
-  const principals = useQuery(() => ({ queryKey: [...PRINCIPALS_KEY, showDeactivated()], queryFn: () => listPrincipals(undefined, showDeactivated()) }));
+  // Archived (soft-deleted) principals are hidden by default; the toggle includes
+  // them (a distinct query key) so an admin can re-find one to restore or purge.
+  const [showArchived, setShowArchived] = createSignal(false);
+  const principals = useQuery(() => ({ queryKey: [...PRINCIPALS_KEY, showArchived()], queryFn: () => listPrincipals(undefined, showArchived()) }));
   // ?u=<id> deep-links to a user (e.g. the cross-over from a group's member).
   const openId = () => (Array.isArray(params.u) ? params.u[0] : params.u) || undefined;
 
@@ -95,8 +95,8 @@ export default function Users() {
         blades: { registry: identityRegistry, rootKind: "user" },
         railExtra: () => (
           <label class="flex cursor-pointer items-center gap-2 text-xs text-base-content/60">
-            <input type="checkbox" class="toggle toggle-xs" checked={showDeactivated()} onChange={(e) => setShowDeactivated(e.currentTarget.checked)} />
-            Show deactivated
+            <input type="checkbox" class="toggle toggle-xs" checked={showArchived()} onChange={(e) => setShowArchived(e.currentTarget.checked)} />
+            Show archived
           </label>
         ),
         create: {

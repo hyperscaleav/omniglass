@@ -93,10 +93,10 @@ func (UnimplementedGateway) ListGroupGrants(context.Context, string, scope.Set) 
 func (UnimplementedGateway) SetPrincipalActive(context.Context, string, string, bool, scope.Set) error {
 	return nil
 }
-func (UnimplementedGateway) DeactivatePrincipal(context.Context, string, string, scope.Set) error {
+func (UnimplementedGateway) ArchivePrincipal(context.Context, string, string, scope.Set) error {
 	return nil
 }
-func (UnimplementedGateway) ReactivatePrincipal(context.Context, string, string, scope.Set) error {
+func (UnimplementedGateway) RestorePrincipal(context.Context, string, string, scope.Set) error {
 	return nil
 }
 func (UnimplementedGateway) PurgePrincipal(context.Context, string, string, scope.Set) error {

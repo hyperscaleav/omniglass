@@ -631,6 +631,20 @@ func generatedCommands() []*cobra.Command {
 			Short: "Commands for the principal resource",
 		}
 		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "archive",
+				Short:   "Archive a principal",
+				Long:    "Soft-deletes a principal: it is hidden from the directory, can no longer authenticate, and its rows stay intact, reversibly (restore) until purged. Gated by principal:archive (all-scope). The last active owner cannot be archived.",
+				Example: "  omniglass principal archive",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/principals/{id}:archive")
+					return runAPICommand(cmd, "POST", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
 			var fDisplayName string
 			var fEmail string
 			var fPassword string
@@ -664,20 +678,6 @@ func generatedCommands() []*cobra.Command {
 			cmd.Flags().StringVar(&fPassword, "password", "", "Optional initial password; the user changes it after signing in")
 			cmd.Flags().StringVar(&fUsername, "username", "", "Unique sign-in name")
 			_ = cmd.MarkFlagRequired("username")
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := &cobra.Command{
-				Use:     "deactivate",
-				Short:   "Deactivate a principal",
-				Long:    "Soft-deletes a principal: it is hidden from the directory, can no longer authenticate, and its rows stay intact, reversibly (reactivate) until purged. Gated by principal:deactivate (all-scope). The last active owner cannot be deactivated.",
-				Example: "  omniglass principal deactivate",
-				Args:    cobra.ExactArgs(0),
-				RunE: func(cmd *cobra.Command, args []string) error {
-					path := fmt.Sprintf("/api/v1/principals/{id}:deactivate")
-					return runAPICommand(cmd, "POST", path, nil)
-				},
-			}
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
@@ -766,7 +766,7 @@ func generatedCommands() []*cobra.Command {
 			cmd := &cobra.Command{
 				Use:     "purge",
 				Short:   "Purge a principal",
-				Long:    "Hard-deletes a deactivated principal and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. Gated by principal:purge (admin-sensitive, all-scope), and the principal must be deactivated first.",
+				Long:    "Hard-deletes an archived principal and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. Gated by principal:purge (admin-sensitive, all-scope), and the principal must be archived first.",
 				Example: "  omniglass principal purge",
 				Args:    cobra.ExactArgs(0),
 				RunE: func(cmd *cobra.Command, args []string) error {
@@ -778,13 +778,13 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := &cobra.Command{
-				Use:     "reactivate",
-				Short:   "Reactivate a principal",
-				Long:    "Reverses a deactivation: the account is restored to active and can authenticate again. Gated by principal:deactivate (all-scope).",
-				Example: "  omniglass principal reactivate",
+				Use:     "restore",
+				Short:   "Restore a principal",
+				Long:    "Reverses an archive: the account is restored to active and can authenticate again. Gated by principal:archive (all-scope).",
+				Example: "  omniglass principal restore",
 				Args:    cobra.ExactArgs(0),
 				RunE: func(cmd *cobra.Command, args []string) error {
-					path := fmt.Sprintf("/api/v1/principals/{id}:reactivate")
+					path := fmt.Sprintf("/api/v1/principals/{id}:restore")
 					return runAPICommand(cmd, "POST", path, nil)
 				},
 			}

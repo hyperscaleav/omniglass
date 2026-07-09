@@ -64,9 +64,9 @@ type Gateway interface {
 	UpdateHumanProfile(ctx context.Context, principalID string, patch HumanProfilePatch) error
 	// ListPrincipals returns every principal with its profile and grants (the admin
 	// directory). Requires an all-scope read (a principal is not scope-tree scoped);
-	// a non-all scope is ErrPrincipalForbidden. Deactivated principals are excluded
-	// unless includeDeactivated is set. No credential secret is loaded.
-	ListPrincipals(ctx context.Context, read scope.Set, includeDeactivated bool) ([]Principal, error)
+	// a non-all scope is ErrPrincipalForbidden. Archived principals are excluded
+	// unless includeArchived is set. No credential secret is loaded.
+	ListPrincipals(ctx context.Context, read scope.Set, includeArchived bool) ([]Principal, error)
 	// GetPrincipal resolves one principal by id with its profile and grants.
 	// Requires an all-scope read; an unknown id is ErrPrincipalNotFound.
 	GetPrincipal(ctx context.Context, id string, read scope.Set) (*Principal, error)
@@ -108,13 +108,13 @@ type Gateway interface {
 	// an all-scope grant. Disabling the last active owner is ErrLastOwner; a
 	// disabled principal cannot authenticate.
 	SetPrincipalActive(ctx context.Context, actorID, id string, active bool, action scope.Set) error
-	// DeactivatePrincipal soft-deletes a principal (hidden from the directory, cannot
-	// authenticate, reversible); ReactivatePrincipal reverses it; PurgePrincipal
-	// hard-deletes a deactivated one (ErrNotDeactivated if not deactivated first, the
-	// hard gate). All require an all-scope grant; deactivating the last active owner
+	// ArchivePrincipal soft-deletes a principal (hidden from the directory, cannot
+	// authenticate, reversible); RestorePrincipal reverses it; PurgePrincipal
+	// hard-deletes an archived one (ErrNotArchived if not archived first, the
+	// hard gate). All require an all-scope grant; archiving the last active owner
 	// is ErrLastOwner. Purge preserves the audit trail (denormalized actor label).
-	DeactivatePrincipal(ctx context.Context, actorID, id string, action scope.Set) error
-	ReactivatePrincipal(ctx context.Context, actorID, id string, action scope.Set) error
+	ArchivePrincipal(ctx context.Context, actorID, id string, action scope.Set) error
+	RestorePrincipal(ctx context.Context, actorID, id string, action scope.Set) error
 	PurgePrincipal(ctx context.Context, actorID, id string, action scope.Set) error
 	// RevokeBearer deletes the bearer credential with the given sha256 hash
 	// (session logout). A no-op if none matches.

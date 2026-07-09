@@ -76,7 +76,7 @@ export function useBlades(): BladeController {
 // pause), or "ok" (green, a restore). The left footer slot holds one at a time.
 export type BladeDestructive = { label: string; tone?: "danger" | "warn" | "ok"; onClick: () => void };
 // A kebab item; tone "danger" renders it red (a destructive escalation like
-// deactivate or purge sitting among neutral secondary actions).
+// archive or purge sitting among neutral secondary actions).
 export type BladeSecondary = { label: string; icon?: JSX.Element; tone?: "danger"; onClick: () => void };
 
 export type BladeEdit = {

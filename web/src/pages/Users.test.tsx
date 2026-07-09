@@ -22,9 +22,9 @@ const me: Me = { principal: { id: "u-root", kind: "human" }, human: { username: 
 
 function mount() {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
-  // The directory list (keyed on the show-deactivated flag, default false), and each
-  // principal by id (the detail blade fetches getPrincipal so it resolves even a
-  // deactivated user, hidden from the list).
+  // The directory list (keyed on the show-archived flag, default false), and each
+  // principal by id (the detail blade fetches getPrincipal so it resolves even an
+  // archived user, hidden from the list).
   qc.setQueryData([...PRINCIPALS_KEY, false], seed);
   for (const pr of seed) qc.setQueryData([...PRINCIPALS_KEY, pr.id], pr);
   qc.setQueryData([...ME_KEY], me);
@@ -129,7 +129,7 @@ describe("Users page", () => {
     await waitFor(() => expect(document.querySelectorAll("aside[data-blade]").length).toBe(2));
   });
 
-  it("presents the live lifecycle in the footer: Disable in the left slot, Deactivate in the kebab, no Purge", async () => {
+  it("presents the live lifecycle in the footer: Disable in the left slot, Archive in the kebab, no Purge", async () => {
     mount();
     fireEvent.click(screen.getByText("Alice Ng"));
     const blade = await waitFor(() => {
@@ -141,15 +141,15 @@ describe("Users page", () => {
     expect(within(blade).getByText("Disable")).toBeTruthy();
     // Kebab: the escalating soft delete, but not the hard delete (she is live).
     fireEvent.click(within(blade).getByLabelText("More actions"));
-    expect(within(blade).getByText("Deactivate")).toBeTruthy();
+    expect(within(blade).getByText("Archive")).toBeTruthy();
     expect(within(blade).queryByText("Purge")).toBeNull();
   });
 
-  it("a deactivated user (via Show deactivated) offers Reactivate in the slot and Purge in the kebab", async () => {
-    const dana: Principal = { id: "u-dana", kind: "human", active: false, deactivated_at: "2026-01-01T00:00:00Z", human: { username: "dana", display_name: "Dana Vale" }, grants: [] };
+  it("an archived user (via Show archived) offers Restore in the slot and Purge in the kebab", async () => {
+    const dana: Principal = { id: "u-dana", kind: "human", active: false, archived_at: "2026-01-01T00:00:00Z", human: { username: "dana", display_name: "Dana Vale" }, grants: [] };
     const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
     qc.setQueryData([...PRINCIPALS_KEY, false], []); // default directory hides her
-    qc.setQueryData([...PRINCIPALS_KEY, true], [dana]); // the "show deactivated" view
+    qc.setQueryData([...PRINCIPALS_KEY, true], [dana]); // the "show archived" view
     qc.setQueryData([...PRINCIPALS_KEY, dana.id], dana);
     qc.setQueryData([...ME_KEY], me); // `>` grants purge (principal:purge:admin)
     qc.setQueryData([...ROLES_KEY], []);
@@ -161,7 +161,7 @@ describe("Users page", () => {
         <Router><Route path="*" component={() => <Users />} /></Router>
       </QueryClientProvider>
     ));
-    // She is hidden until "Show deactivated" is on.
+    // She is hidden until "Show archived" is on.
     expect(screen.queryByText("Dana Vale")).toBeNull();
     fireEvent.click(screen.getByRole("checkbox"));
     fireEvent.click(await screen.findByText("Dana Vale"));
@@ -171,7 +171,7 @@ describe("Users page", () => {
       return el as HTMLElement;
     });
     // Left slot restores; the kebab offers the irreversible purge.
-    expect(within(blade).getByText("Reactivate")).toBeTruthy();
+    expect(within(blade).getByText("Restore")).toBeTruthy();
     fireEvent.click(within(blade).getByLabelText("More actions"));
     expect(within(blade).getByText("Purge")).toBeTruthy();
   });

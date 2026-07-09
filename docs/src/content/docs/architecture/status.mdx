@@ -461,31 +461,34 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   diff commits as part of the one blade Save; the destructive action (Delete for a group, Disable / Enable for a
   user, per the accounts-never-deleted invariant) confirms and is reachable straight from read mode. Save commits
   the staged session together and Cancel reverts. A single consolidated audit event and a config restore point
-  (one backend action per Save) remain deferred to a batched endpoint; the user deactivate / purge lifecycle is
+  (one backend action per Save) remain deferred to a batched endpoint; the user archive / purge lifecycle is
   its own slice. Proven by the web suite (the edit-slot, the `BladeStack` footer-bar chrome, and the Group / User
   read-vs-edit tests) and tsc.
-- **Identity: the principal lifecycle (deactivate + purge), backend.** Beyond the reversible disable, a principal
-  can be **deactivated** (a soft delete, `deactivated_at`: hidden from the directory, cannot authenticate,
-  reversible) and then **purged** (an irreversible hard delete, gated on prior deactivation and on the
+- **Identity: the principal lifecycle (archive + purge), backend.** Beyond the reversible disable, a principal
+  can be **archived** (a soft delete, `archived_at`: hidden from the directory, cannot authenticate,
+  reversible) and then **purged** (an irreversible hard delete, gated on prior archival and on the
   admin-sensitive `principal:purge:admin`, so admin and owner can purge but a two-token `principal:*` cannot
   reach it). The purge preserves the audit trail: every `audit_log` row now denormalizes the actor's label at
   write time, the audit foreign keys are `ON DELETE SET NULL`, and the read coalesces the live join to the
   snapshot, so a purged actor's history stays legible ([ADR-0016](/architecture/decisions/#adr-0016-a-principal-can-be-purged-and-the-audit-trail-is-denormalized-to-survive-it),
-  retiring the "never hard-deleted" rule). The last-active-owner guard extends to deactivate. Gateway
-  (`DeactivatePrincipal` / `ReactivatePrincipal` / `PurgePrincipal`), the `:deactivate` / `:reactivate` /
+  retiring the "never hard-deleted" rule). The last-active-owner guard extends to archive. Gateway
+  (`ArchivePrincipal` / `RestorePrincipal` / `PurgePrincipal`), the `:archive` / `:restore` /
   `:purge` API custom methods, and the generated CLI / client ship; proven against real Postgres by a storage
   integration test (lifecycle + audit-actor survival + owner guard) and an HTTP end-to-end test (the capability
-  split, the deactivate-before-purge gate, soft-delete visibility). The console UI for the lifecycle is a
+  split, the archive-before-purge gate, soft-delete visibility). The console UI for the lifecycle is a
   follow-up ([#143](https://github.com/hyperscaleav/omniglass/issues/143) backend).
 - **Identity: the principal lifecycle in the console, UI.** The user blade's footer action bar presents the
-  lifecycle by state: the left slot is the reversible toggle (Disable / Enable, or Reactivate for a deactivated
-  account), and the kebab holds the escalating red steps (Deactivate when live, Purge when deactivated and the
+  lifecycle by state: the left slot is the reversible toggle (Disable / Enable, or Restore for an archived
+  account), and the kebab holds the escalating red steps (Archive when live, Purge when archived and the
   caller holds `principal:purge:admin`), each confirmed. The detail fetches the principal by id (not the
-  directory list, which hides deactivated) so a just-soft-deleted user stays resolvable, and a **Show
-  deactivated** toggle on the Users directory (a new `include_deactivated` list param) surfaces hidden accounts
+  directory list, which hides archived) so a just-soft-deleted user stays resolvable, and a **Show
+  archived** toggle on the Users directory (a new `include_archived` list param) surfaces hidden accounts
   to re-find one. `BladeSecondary` gains a red tone and the destructive slot a restore tone; the web `can()`
-  already honours the three-token `principal:purge:admin`. Proven by the web suite (the live and deactivated
-  footer states and the show-deactivated flow) and a storage test for the include-deactivated list; completes
+  already honours the three-token `principal:purge:admin`. This slice also **renamed the soft-delete verb
+  deactivate to archive** (restore, not reactivate) so the ladder reads pause (disable) to remove (archive)
+  to destroy (purge), instead of two pause-synonyms; the column, endpoints, capability, and list param follow.
+  Proven by the web suite (the live and archived footer states and the show-archived flow) and a storage test
+  for the include-archived list; completes
   [#143](https://github.com/hyperscaleav/omniglass/issues/143) / [#146](https://github.com/hyperscaleav/omniglass/issues/146).
 - **Identity: the Groups console + inherited-vs-direct grants, UI.** A **Groups** page (`Settings > Groups`,
   gated `principal_group:read`) as a config over the shared `FlatList`: list and create, and a row Drawer with

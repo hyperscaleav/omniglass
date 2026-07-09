@@ -44,7 +44,7 @@ export type FlatConfig<T> = {
   // the operator straight on the new row.
   create?: { label: string; can: () => boolean; body: (ctx: { close: () => void; select: (row: T) => void }) => JSX.Element };
   // An extra control in the action rail, left of the create button (e.g. a "show
-  // deactivated" toggle on the Users directory).
+  // archived" toggle on the Users directory).
   railExtra?: () => JSX.Element;
   // A trailing row under the table (counts, load-older); receives the shown/total
   // counts and whether a filter is active.
