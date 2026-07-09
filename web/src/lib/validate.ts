@@ -45,3 +45,12 @@ export function passwordError(value: string, username?: string): string | null {
   if (u.length >= 3 && value.toLowerCase().includes(u)) return "Must not contain the username.";
   return null;
 }
+
+// isPasswordPolicyMessage reports whether a server error message is about the
+// password policy, so a form can render it inline under the password field (like the
+// client checks) instead of at the head of the form. The server's policy messages
+// (see mapPasswordErr in internal/api) all begin with "password"; the denylist is the
+// one that reaches a submit past the inline checks.
+export function isPasswordPolicyMessage(message: string | null | undefined): boolean {
+  return /^password\b/i.test((message ?? "").trim());
+}

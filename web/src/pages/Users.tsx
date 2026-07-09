@@ -7,7 +7,7 @@ import { type Principal, PRINCIPALS_KEY, listPrincipals, createPrincipal, openPr
 import { identityRegistry } from "../lib/identityBlades";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
-import { handleError, emailError, passwordError } from "../lib/validate";
+import { handleError, emailError, passwordError, isPasswordPolicyMessage } from "../lib/validate";
 import type { FilterKey } from "../lib/predicate";
 
 // Users: the admin principal directory, a config over the shared FlatList. A row per
@@ -123,11 +123,15 @@ function CreateUserForm(props: { close: () => void; onCreated: (p: Principal) =>
   const [password, setPassword] = createSignal("");
   const [busy, setBusy] = createSignal(false);
   const [err, setErr] = createSignal<string | null>(null);
+  // A password-policy rejection from the server (the denylist) is shown inline under
+  // the password field, not in the head-of-form alert, so it reads like the client checks.
+  const [pwServerError, setPwServerError] = createSignal<string | null>(null);
 
   async function submit(e: SubmitEvent) {
     e.preventDefault();
     setBusy(true);
     setErr(null);
+    setPwServerError(null);
     try {
       const created = await createPrincipal({
         username: username().trim(),
@@ -142,7 +146,9 @@ function CreateUserForm(props: { close: () => void; onCreated: (p: Principal) =>
       await qc.invalidateQueries({ queryKey: PRINCIPALS_KEY });
       props.onCreated(created);
     } catch (er) {
-      setErr(describeError(er));
+      const msg = describeError(er);
+      if (isPasswordPolicyMessage(msg)) setPwServerError(msg);
+      else setErr(msg);
     } finally {
       setBusy(false);
     }
@@ -170,7 +176,7 @@ function CreateUserForm(props: { close: () => void; onCreated: (p: Principal) =>
       </div>
       <div>
         <label class="eyebrow mb-1.5 block" for="new-password">Initial password</label>
-        <PasswordField id="new-password" value={password()} onInput={setPassword} username={username()} disabled={busy()} generate />
+        <PasswordField id="new-password" value={password()} onInput={(v) => { setPassword(v); setPwServerError(null); }} username={username()} disabled={busy()} serverError={pwServerError()} generate />
         <p class="mt-1 text-[11px] text-base-content/40">Optional. At least 12 characters; <strong>Generate</strong> makes a strong one. The user changes it after signing in.</p>
       </div>
       <div class="mt-1 flex justify-end gap-2">

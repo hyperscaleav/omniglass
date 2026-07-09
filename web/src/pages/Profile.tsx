@@ -1,7 +1,7 @@
 import { Show, For, createSignal, createEffect } from "solid-js";
 import Page from "../components/Page";
 import PasswordField from "../components/PasswordField";
-import { passwordError } from "../lib/validate";
+import { passwordError, isPasswordPolicyMessage } from "../lib/validate";
 import { useMe, useUpdateProfile, useChangePassword } from "../lib/auth";
 
 // Profile is the signed-in operator's own account surface: edit your display name
@@ -46,6 +46,9 @@ export default function Profile() {
   const [confirm, setConfirm] = createSignal("");
   const [pwMsg, setPwMsg] = createSignal<Note>(null);
   const [pwBusy, setPwBusy] = createSignal(false);
+  // A password-policy rejection (the server denylist) renders inline under the new
+  // password field, like the client checks; other messages stay in the card note.
+  const [pwFieldError, setPwFieldError] = createSignal<string | null>(null);
   async function savePassword(e: SubmitEvent) {
     e.preventDefault();
     if (next() !== confirm()) {
@@ -54,12 +57,15 @@ export default function Profile() {
     }
     setPwBusy(true);
     setPwMsg(null);
+    setPwFieldError(null);
     const r = await changePassword(current(), next());
     if (r.ok) {
       setPwMsg({ tone: "success", text: "Password changed." });
       setCurrent("");
       setNext("");
       setConfirm("");
+    } else if (isPasswordPolicyMessage(r.message)) {
+      setPwFieldError(r.message);
     } else {
       setPwMsg({ tone: "error", text: r.message });
     }
@@ -137,7 +143,7 @@ export default function Profile() {
             </div>
             <div>
               <label class="eyebrow mb-1.5 block" for="pw-new">New password</label>
-              <PasswordField id="pw-new" value={next()} onInput={setNext} username={human()?.username} disabled={pwBusy()} required generate />
+              <PasswordField id="pw-new" value={next()} onInput={(v) => { setNext(v); setPwFieldError(null); }} username={human()?.username} disabled={pwBusy()} serverError={pwFieldError()} required generate />
               <p class="mt-1 text-[11px] text-base-content/40">At least 12 characters, not a common password. <strong>Generate</strong> makes a strong one.</p>
             </div>
             <div>

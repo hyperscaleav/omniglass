@@ -285,6 +285,28 @@ describe("Users page", () => {
     expect(createBtn().disabled).toBe(false);
   });
 
+  it("renders a server password-policy rejection inline under the field, not as a form alert", async () => {
+    // A common password passes the inline length check but the server denylist refuses
+    // it (422). The message should read like the other inline errors, under the field.
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      const url = typeof input === "string" ? input : req.url;
+      const method = typeof input === "string" ? "GET" : req.method;
+      if (method === "POST" && url.includes("/principals")) {
+        return new Response(JSON.stringify({ detail: "password is too common; choose a less predictable one" }), { status: 422, headers: { "Content-Type": "application/json" } });
+      }
+      return new Response(JSON.stringify({ principals: seed }), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+    mount();
+    fireEvent.click(screen.getByText("New user"));
+    fireEvent.input(await screen.findByLabelText("Username"), { target: { value: "commonpw" } });
+    fireEvent.input(screen.getByLabelText("Initial password"), { target: { value: "administrator" } });
+    fireEvent.click(screen.getByText("Create user"));
+    // The policy message shows (inline), and there is no head-of-form alert carrying it.
+    expect(await screen.findByText(/too common/i)).toBeTruthy();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
   it("disables the footer Save when an edited username is invalid", async () => {
     mount();
     fireEvent.click(screen.getByText("Alice Ng"));

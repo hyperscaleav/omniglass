@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { handleError, emailError, passwordError, MIN_PASSWORD_LENGTH } from "./validate";
+import { handleError, emailError, passwordError, isPasswordPolicyMessage, MIN_PASSWORD_LENGTH } from "./validate";
 
 // The inline rules mirror the server's Huma pattern/format (see the API validation
 // test in internal/api/principals_validation_test.go): a handle is a lowercase
@@ -55,5 +55,18 @@ describe("passwordError", () => {
   });
   it("treats empty as not-an-error (a separate required check owns it)", () => {
     expect(passwordError("", "jordan")).toBeNull();
+  });
+});
+
+describe("isPasswordPolicyMessage", () => {
+  it("matches the server's password-policy messages", () => {
+    expect(isPasswordPolicyMessage("password is too common; choose a less predictable one")).toBe(true);
+    expect(isPasswordPolicyMessage("password must be at least 12 characters")).toBe(true);
+    expect(isPasswordPolicyMessage("password must not contain the username")).toBe(true);
+  });
+  it("does not match unrelated errors", () => {
+    expect(isPasswordPolicyMessage("username already exists")).toBe(false);
+    expect(isPasswordPolicyMessage("current password is incorrect")).toBe(false);
+    expect(isPasswordPolicyMessage(null)).toBe(false);
   });
 });

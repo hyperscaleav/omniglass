@@ -20,10 +20,14 @@ export default function PasswordField(props: {
   disabled?: boolean;
   required?: boolean;
   generate?: boolean;
+  // A server-side policy error (e.g. the common-password denylist) to render inline
+  // under the field, so a post-submit rejection reads like the client checks. The
+  // live client error takes precedence, and the consumer clears this on input.
+  serverError?: string | null;
 }) {
   const [reveal, setReveal] = createSignal(false);
   const [copied, setCopied] = createSignal(false);
-  const error = () => passwordError(props.value, props.username);
+  const error = () => passwordError(props.value, props.username) ?? props.serverError ?? null;
 
   const doGenerate = () => {
     props.onInput(generatePassword());
