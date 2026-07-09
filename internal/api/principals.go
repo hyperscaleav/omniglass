@@ -50,7 +50,8 @@ func toPrincipalBody(pr *storage.Principal) principalBody {
 }
 
 type listPrincipalsInput struct {
-	Kind string `query:"kind" enum:"human,service" doc:"Optionally filter by principal kind"`
+	Kind               string `query:"kind" enum:"human,service" doc:"Optionally filter by principal kind"`
+	IncludeDeactivated bool   `query:"include_deactivated" doc:"Include deactivated (soft-deleted) principals, hidden by default"`
 }
 
 type listPrincipalsOutput struct {
@@ -117,7 +118,7 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Description: "Lists all principals (humans and service accounts) with their grants. Gated by principal:read, which confers access only at all-scope.",
 		Middlewares: huma.Middlewares{a.authn, a.require("principal", "read")},
 	}, func(ctx context.Context, in *listPrincipalsInput) (*listPrincipalsOutput, error) {
-		prs, err := gw.ListPrincipals(ctx, a.scopeFor(ctx, "principal", "read"))
+		prs, err := gw.ListPrincipals(ctx, a.scopeFor(ctx, "principal", "read"), in.IncludeDeactivated)
 		if err != nil {
 			return nil, mapPrincipalErr(err)
 		}

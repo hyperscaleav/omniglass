@@ -444,23 +444,26 @@ type HumanSpec struct {
 // ListPrincipals returns every principal with its profile and grants, oldest
 // first. Reads require an all-scope grant (a principal is not scope-tree scoped),
 // so a non-all read scope is ErrPrincipalForbidden rather than a silent empty
-// list. Credentials are never loaded, so no secret leaves the gateway.
-func (p *PG) ListPrincipals(ctx context.Context, read scope.Set) ([]Principal, error) {
+// list. Deactivated (soft-deleted) principals are excluded unless
+// includeDeactivated is set (the directory's "show deactivated" view, so a hidden
+// account can be reactivated or purged). Credentials are never loaded.
+func (p *PG) ListPrincipals(ctx context.Context, read scope.Set, includeDeactivated bool) ([]Principal, error) {
 	if !read.All {
 		return nil, ErrPrincipalForbidden
 	}
-	rows, err := p.pool.Query(ctx, `select id, kind, active from principal where deactivated_at is null order by created_at`)
+	rows, err := p.pool.Query(ctx, `select id, kind, active, deactivated_at from principal where ($1 or deactivated_at is null) order by created_at`, includeDeactivated)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list principals: %w", err)
 	}
 	type base struct {
-		id, kind string
-		active   bool
+		id, kind      string
+		active        bool
+		deactivatedAt *time.Time
 	}
 	var bases []base
 	for rows.Next() {
 		var b base
-		if err := rows.Scan(&b.id, &b.kind, &b.active); err != nil {
+		if err := rows.Scan(&b.id, &b.kind, &b.active, &b.deactivatedAt); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("storage: scan principal: %w", err)
 		}
@@ -473,7 +476,7 @@ func (p *PG) ListPrincipals(ctx context.Context, read scope.Set) ([]Principal, e
 	// loadPrincipal runs its own queries, so the row cursor is drained first.
 	out := make([]Principal, 0, len(bases))
 	for _, b := range bases {
-		pr := Principal{ID: b.id, Kind: b.kind, Active: b.active}
+		pr := Principal{ID: b.id, Kind: b.kind, Active: b.active, DeactivatedAt: b.deactivatedAt}
 		if err := p.loadPrincipal(ctx, &pr); err != nil {
 			return nil, err
 		}

@@ -22,6 +22,7 @@ function mount() {
   qc.setQueryData([...GROUPS_KEY, "g-hd", "members"], members);
   qc.setQueryData([...GROUPS_KEY, "g-hd", "grants"], []);
   qc.setQueryData([...PRINCIPALS_KEY], [alice]);
+  qc.setQueryData([...PRINCIPALS_KEY, alice.id], alice); // the drilled user blade fetches getPrincipal by id
   qc.setQueryData([...ME_KEY], me);
   qc.setQueryData([...ROLES_KEY], []);
   qc.setQueryData(["locations"], []);

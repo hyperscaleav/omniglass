@@ -71,7 +71,7 @@ func TestUpdatePrincipalHuman(t *testing.T) {
 	if _, err := gw.CreateHumanPrincipal(ctx, owner.ID, storage.HumanSpec{Username: "bob"}, all); err != nil {
 		t.Fatalf("create bob: %v", err)
 	}
-	bob, _ := gw.ListPrincipals(ctx, all)
+	bob, _ := gw.ListPrincipals(ctx, all, false)
 	var bobID string
 	for _, p := range bob {
 		if p.Human != nil && p.Human.Username == "bob" {

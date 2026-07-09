@@ -64,8 +64,9 @@ type Gateway interface {
 	UpdateHumanProfile(ctx context.Context, principalID string, patch HumanProfilePatch) error
 	// ListPrincipals returns every principal with its profile and grants (the admin
 	// directory). Requires an all-scope read (a principal is not scope-tree scoped);
-	// a non-all scope is ErrPrincipalForbidden. No credential secret is loaded.
-	ListPrincipals(ctx context.Context, read scope.Set) ([]Principal, error)
+	// a non-all scope is ErrPrincipalForbidden. Deactivated principals are excluded
+	// unless includeDeactivated is set. No credential secret is loaded.
+	ListPrincipals(ctx context.Context, read scope.Set, includeDeactivated bool) ([]Principal, error)
 	// GetPrincipal resolves one principal by id with its profile and grants.
 	// Requires an all-scope read; an unknown id is ErrPrincipalNotFound.
 	GetPrincipal(ctx context.Context, id string, read scope.Set) (*Principal, error)

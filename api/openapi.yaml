@@ -1898,6 +1898,13 @@ paths:
               - human
               - service
             type: string
+        - description: Include deactivated (soft-deleted) principals, hidden by default
+          explode: false
+          in: query
+          name: include_deactivated
+          schema:
+            description: Include deactivated (soft-deleted) principals, hidden by default
+            type: boolean
       responses:
         "200":
           content:

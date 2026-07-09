@@ -72,8 +72,12 @@ export function useBlades(): BladeController {
 // destructive action (Delete for a group, Disable / Enable for a user), always
 // available, and a list of secondary actions (Impersonate, copy id) shown in a
 // kebab. Both are accessors so their label / tone stay reactive (Disable <-> Enable).
-export type BladeDestructive = { label: string; tone?: "danger" | "warn"; onClick: () => void };
-export type BladeSecondary = { label: string; icon?: JSX.Element; onClick: () => void };
+// tone: "danger" (red, a hard/irreversible action), "warn" (yellow, a reversible
+// pause), or "ok" (green, a restore). The left footer slot holds one at a time.
+export type BladeDestructive = { label: string; tone?: "danger" | "warn" | "ok"; onClick: () => void };
+// A kebab item; tone "danger" renders it red (a destructive escalation like
+// deactivate or purge sitting among neutral secondary actions).
+export type BladeSecondary = { label: string; icon?: JSX.Element; tone?: "danger"; onClick: () => void };
 
 export type BladeEdit = {
   editable: () => boolean;

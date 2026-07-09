@@ -58,7 +58,7 @@ func TestPrincipalLifecycle(t *testing.T) {
 	if _, err := gw.AuthenticatePassword(ctx, "alice", "alice-s3cret"); !errors.Is(err, storage.ErrAccountDisabled) {
 		t.Fatalf("deactivated auth: want ErrAccountDisabled, got %v", err)
 	}
-	list, err := gw.ListPrincipals(ctx, all)
+	list, err := gw.ListPrincipals(ctx, all, false)
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -66,6 +66,24 @@ func TestPrincipalLifecycle(t *testing.T) {
 		if p.ID == alice.ID {
 			t.Fatal("deactivated principal should be hidden from the default directory")
 		}
+	}
+	// The "show deactivated" directory (includeDeactivated) surfaces her, carrying
+	// deactivated_at, so an admin can re-find her to reactivate or purge.
+	shown, err := gw.ListPrincipals(ctx, all, true)
+	if err != nil {
+		t.Fatalf("list include-deactivated: %v", err)
+	}
+	var seen bool
+	for _, p := range shown {
+		if p.ID == alice.ID {
+			seen = true
+			if p.DeactivatedAt == nil {
+				t.Fatal("shown deactivated principal should carry deactivated_at")
+			}
+		}
+	}
+	if !seen {
+		t.Fatal("include-deactivated list should surface the deactivated principal")
 	}
 
 	// Purge is gated: a live (not deactivated) principal cannot be purged.

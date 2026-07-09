@@ -40,7 +40,7 @@ func (UnimplementedGateway) SetPassword(context.Context, string, string) (bool, 
 func (UnimplementedGateway) UpdateHumanProfile(context.Context, string, HumanProfilePatch) error {
 	return nil
 }
-func (UnimplementedGateway) ListPrincipals(context.Context, scope.Set) ([]Principal, error) {
+func (UnimplementedGateway) ListPrincipals(context.Context, scope.Set, bool) ([]Principal, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) GetPrincipal(context.Context, string, scope.Set) (*Principal, error) {

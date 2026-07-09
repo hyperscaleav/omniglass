@@ -14,6 +14,9 @@ export type Principal = {
   id: string;
   kind: string;
   active: boolean;
+  // Set when the principal is deactivated (soft-deleted): hidden from the default
+  // directory, cannot authenticate, reversible until purged. Absent means live.
+  deactivated_at?: string;
   human?: { username: string; email?: string; display_name?: string };
   service?: { label: string };
   grants: Grant[];
@@ -24,8 +27,13 @@ export type Principal = {
 
 export const PRINCIPALS_KEY = ["principals"] as const;
 
-export async function listPrincipals(kind?: "human" | "service"): Promise<Principal[]> {
-  const { data, error } = await api.GET("/principals", kind ? { params: { query: { kind } } } : {});
+// includeDeactivated surfaces soft-deleted principals (the "show deactivated"
+// directory view), so a hidden account can be reactivated or purged.
+export async function listPrincipals(kind?: "human" | "service", includeDeactivated?: boolean): Promise<Principal[]> {
+  const query: { kind?: "human" | "service"; include_deactivated?: boolean } = {};
+  if (kind) query.kind = kind;
+  if (includeDeactivated) query.include_deactivated = true;
+  const { data, error } = await api.GET("/principals", { params: { query } });
   if (error) throw error;
   return (data?.principals ?? []) as Principal[];
 }
@@ -76,6 +84,21 @@ export async function setPrincipalActive(id: string, active: boolean): Promise<v
   const { error } = active
     ? await api.POST("/principals/{id}:enable", { params: { path: { id } } })
     : await api.POST("/principals/{id}:disable", { params: { path: { id } } });
+  if (error) throw error;
+}
+
+// The soft/hard delete lifecycle: deactivate hides the account (reversible),
+// reactivate restores it, and purge hard-deletes a deactivated one (irreversible).
+export async function deactivatePrincipal(id: string): Promise<void> {
+  const { error } = await api.POST("/principals/{id}:deactivate", { params: { path: { id } } });
+  if (error) throw error;
+}
+export async function reactivatePrincipal(id: string): Promise<void> {
+  const { error } = await api.POST("/principals/{id}:reactivate", { params: { path: { id } } });
+  if (error) throw error;
+}
+export async function purgePrincipal(id: string): Promise<void> {
+  const { error } = await api.POST("/principals/{id}:purge", { params: { path: { id } } });
   if (error) throw error;
 }
 

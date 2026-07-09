@@ -43,11 +43,13 @@ const columns: FlatColumn<Principal>[] = [
     ),
   },
   {
-    key: "kind", label: "Kind", width: "160px", sortVal: (p) => p.kind,
+    key: "kind", label: "Kind", width: "180px", sortVal: (p) => p.kind,
     cell: (p) => (
       <>
         <span class={kindBadge(p.kind)}>{p.kind}</span>
-        <Show when={!p.active}><span class="badge badge-soft badge-warning badge-sm ml-1">inactive</span></Show>
+        <Show when={p.deactivated_at} fallback={<Show when={!p.active}><span class="badge badge-soft badge-warning badge-sm ml-1">inactive</span></Show>}>
+          <span class="badge badge-soft badge-error badge-sm ml-1">deactivated</span>
+        </Show>
       </>
     ),
   },
@@ -70,7 +72,10 @@ const columns: FlatColumn<Principal>[] = [
 export default function Users() {
   const me = useMe();
   const [params] = useSearchParams();
-  const principals = useQuery(() => ({ queryKey: PRINCIPALS_KEY, queryFn: () => listPrincipals() }));
+  // Deactivated (soft-deleted) principals are hidden by default; the toggle includes
+  // them (a distinct query key) so an admin can re-find one to reactivate or purge.
+  const [showDeactivated, setShowDeactivated] = createSignal(false);
+  const principals = useQuery(() => ({ queryKey: [...PRINCIPALS_KEY, showDeactivated()], queryFn: () => listPrincipals(undefined, showDeactivated()) }));
   // ?u=<id> deep-links to a user (e.g. the cross-over from a group's member).
   const openId = () => (Array.isArray(params.u) ? params.u[0] : params.u) || undefined;
 
@@ -88,6 +93,12 @@ export default function Users() {
         rowId: (p) => p.id,
         openId,
         blades: { registry: identityRegistry, rootKind: "user" },
+        railExtra: () => (
+          <label class="flex cursor-pointer items-center gap-2 text-xs text-base-content/60">
+            <input type="checkbox" class="toggle toggle-xs" checked={showDeactivated()} onChange={(e) => setShowDeactivated(e.currentTarget.checked)} />
+            Show deactivated
+          </label>
+        ),
         create: {
           label: "New user",
           can: () => can(me.data, "principal", "create"),

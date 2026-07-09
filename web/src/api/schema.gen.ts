@@ -2339,6 +2339,8 @@ export interface operations {
             query?: {
                 /** @description Optionally filter by principal kind */
                 kind?: "human" | "service";
+                /** @description Include deactivated (soft-deleted) principals, hidden by default */
+                include_deactivated?: boolean;
             };
             header?: never;
             path?: never;

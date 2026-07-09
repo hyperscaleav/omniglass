@@ -22,7 +22,11 @@ const me: Me = { principal: { id: "u-root", kind: "human" }, human: { username: 
 
 function mount() {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
-  qc.setQueryData([...PRINCIPALS_KEY], seed);
+  // The directory list (keyed on the show-deactivated flag, default false), and each
+  // principal by id (the detail blade fetches getPrincipal so it resolves even a
+  // deactivated user, hidden from the list).
+  qc.setQueryData([...PRINCIPALS_KEY, false], seed);
+  for (const pr of seed) qc.setQueryData([...PRINCIPALS_KEY, pr.id], pr);
   qc.setQueryData([...ME_KEY], me);
   // The grant builder's catalogs; empty is enough for the detail Drawer to render.
   qc.setQueryData([...ROLES_KEY], []);
@@ -92,7 +96,10 @@ describe("Users page", () => {
       const req = input as Request;
       const url = typeof input === "string" ? input : req.url;
       const method = typeof input === "string" ? "GET" : req.method;
-      const body = url.includes("/principals") && method === "POST" ? carol : { principals: [...seed, carol] };
+      // POST creates carol; the detail blade fetches GET /principals/{id}; the list
+      // is GET /principals. The detail resolves carol so her blade renders.
+      const isDetailGet = method === "GET" && /\/principals\/[^/?]+$/.test(url);
+      const body = url.includes("/principals") && method === "POST" ? carol : isDetailGet ? carol : { principals: [...seed, carol] };
       return new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
     });
 
@@ -120,6 +127,53 @@ describe("Users page", () => {
     // blade (the group) opens over the user.
     fireEvent.click(within(userBlade).getByText("Help Desk"));
     await waitFor(() => expect(document.querySelectorAll("aside[data-blade]").length).toBe(2));
+  });
+
+  it("presents the live lifecycle in the footer: Disable in the left slot, Deactivate in the kebab, no Purge", async () => {
+    mount();
+    fireEvent.click(screen.getByText("Alice Ng"));
+    const blade = await waitFor(() => {
+      const el = document.querySelector("aside[data-blade]");
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    // Left slot: the reversible toggle.
+    expect(within(blade).getByText("Disable")).toBeTruthy();
+    // Kebab: the escalating soft delete, but not the hard delete (she is live).
+    fireEvent.click(within(blade).getByLabelText("More actions"));
+    expect(within(blade).getByText("Deactivate")).toBeTruthy();
+    expect(within(blade).queryByText("Purge")).toBeNull();
+  });
+
+  it("a deactivated user (via Show deactivated) offers Reactivate in the slot and Purge in the kebab", async () => {
+    const dana: Principal = { id: "u-dana", kind: "human", active: false, deactivated_at: "2026-01-01T00:00:00Z", human: { username: "dana", display_name: "Dana Vale" }, grants: [] };
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    qc.setQueryData([...PRINCIPALS_KEY, false], []); // default directory hides her
+    qc.setQueryData([...PRINCIPALS_KEY, true], [dana]); // the "show deactivated" view
+    qc.setQueryData([...PRINCIPALS_KEY, dana.id], dana);
+    qc.setQueryData([...ME_KEY], me); // `>` grants purge (principal:purge:admin)
+    qc.setQueryData([...ROLES_KEY], []);
+    qc.setQueryData(["locations"], []);
+    qc.setQueryData(["systems"], []);
+    qc.setQueryData(["components"], []);
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <Router><Route path="*" component={() => <Users />} /></Router>
+      </QueryClientProvider>
+    ));
+    // She is hidden until "Show deactivated" is on.
+    expect(screen.queryByText("Dana Vale")).toBeNull();
+    fireEvent.click(screen.getByRole("checkbox"));
+    fireEvent.click(await screen.findByText("Dana Vale"));
+    const blade = await waitFor(() => {
+      const el = document.querySelector("aside[data-blade]");
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    // Left slot restores; the kebab offers the irreversible purge.
+    expect(within(blade).getByText("Reactivate")).toBeTruthy();
+    fireEvent.click(within(blade).getByLabelText("More actions"));
+    expect(within(blade).getByText("Purge")).toBeTruthy();
   });
 
   it("narrows the directory through the FilterBar (kind:service keeps only the bot)", async () => {

@@ -1,15 +1,16 @@
-import { For, Show, createEffect, createMemo, createSignal, on } from "solid-js";
+import { type JSX, For, Show, createEffect, createMemo, createSignal, on } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import GrantBuilder from "../components/GrantBuilder";
 import { Fact, RelatedList } from "../components/DetailShell";
-import { Eye, Mask } from "../components/icons";
+import { Ban, Eye, Mask, Trash } from "../components/icons";
 import { useBlades, useBladeEdit } from "../lib/blades";
 import type { BladeDef } from "../lib/blades";
 import type { TreeNode } from "../lib/treeselect";
 import type { ExistingGrant, GrantRef, ScopeOp } from "../lib/grantdraft";
 import {
   type Principal, type ScopeKind, type UpdatePrincipal,
-  PRINCIPALS_KEY, ROLES_KEY, listPrincipals, updatePrincipal, createGrant, revokeGrant, setPrincipalActive, listRoles,
+  PRINCIPALS_KEY, ROLES_KEY, getPrincipal, updatePrincipal, createGrant, revokeGrant, setPrincipalActive, listRoles,
+  deactivatePrincipal, reactivatePrincipal, purgePrincipal,
   principalName, kindBadge, principalInitials,
 } from "../lib/principals";
 import { useMe, can } from "../lib/auth";
@@ -33,8 +34,14 @@ export function UserDetail(props: { id: string }) {
   const blades = useBlades();
   const edit = useBladeEdit();
   const canUpdate = () => can(me.data, "principal", "update");
-  const principals = useQuery(() => ({ queryKey: PRINCIPALS_KEY, queryFn: () => listPrincipals() }));
-  const p = createMemo(() => principals.data?.find((x) => x.id === props.id) ?? null);
+  const canDeactivate = () => can(me.data, "principal", "deactivate");
+  const canPurge = () => can(me.data, "principal", "purge", "admin");
+  // Fetch by id, not from the directory list (which hides deactivated principals),
+  // so the blade still resolves a user it just soft-deleted and can offer Reactivate
+  // / Purge. Mutations invalidate the PRINCIPALS_KEY prefix, covering this and the list.
+  const principal = useQuery(() => ({ queryKey: [...PRINCIPALS_KEY, props.id], queryFn: () => getPrincipal(props.id) }));
+  const p = () => principal.data ?? null;
+  const refresh = () => qc.invalidateQueries({ queryKey: PRINCIPALS_KEY });
   const [actErr, setActErr] = createSignal<string | null>(null);
 
   const editing = () => edit.editing();
@@ -58,21 +65,35 @@ export function UserDetail(props: { id: string }) {
 
   edit.bind({
     editable: canUpdate,
-    // A user is disabled, never deleted (the accounts-never-deleted invariant), so
-    // the destructive action toggles active state.
+    // The left slot is the reversible state toggle for the lifecycle ladder: a
+    // deactivated account restores (Reactivate), a live one toggles Disable / Enable.
     destructive: () => {
       const pr = p();
-      if (!pr || !canUpdate()) return undefined;
-      return { label: pr.active ? "Disable" : "Enable", tone: "warn", onClick: () => toggleActive(pr) };
+      if (!pr) return undefined;
+      if (pr.deactivated_at) {
+        return canDeactivate() ? { label: "Reactivate", tone: "ok", onClick: doReactivate } : undefined;
+      }
+      if (!canUpdate()) return undefined;
+      return pr.active
+        ? { label: "Disable", tone: "warn", onClick: () => toggleActive(pr) }
+        : { label: "Enable", tone: "ok", onClick: () => toggleActive(pr) };
     },
-    // Impersonate is a secondary action (troubleshoot), in the kebab. Not on self.
+    // The kebab holds the escalating delete (Deactivate when live, Purge when
+    // deactivated, both red and confirmed) and impersonate (not on self).
     secondary: () => {
       const pr = p();
-      if (!pr || !can(me.data, "principal", "impersonate") || pr.id === me.data?.principal?.id) return [];
-      return [
-        { label: "View as", icon: <Eye size={15} />, onClick: () => doImpersonate(pr, "view_as") },
-        { label: "Act as", icon: <Mask size={15} />, onClick: () => doImpersonate(pr, "act_as") },
-      ];
+      if (!pr) return [];
+      const items: { label: string; icon?: JSX.Element; tone?: "danger"; onClick: () => void }[] = [];
+      if (pr.deactivated_at) {
+        if (canPurge()) items.push({ label: "Purge", icon: <Trash size={15} />, tone: "danger", onClick: doPurge });
+      } else if (canDeactivate()) {
+        items.push({ label: "Deactivate", icon: <Ban size={15} />, tone: "danger", onClick: doDeactivate });
+      }
+      if (can(me.data, "principal", "impersonate") && pr.id !== me.data?.principal?.id) {
+        items.push({ label: "View as", icon: <Eye size={15} />, onClick: () => doImpersonate(pr, "view_as") });
+        items.push({ label: "Act as", icon: <Mask size={15} />, onClick: () => doImpersonate(pr, "act_as") });
+      }
+      return items;
     },
     save: async () => {
       setActErr(null);
@@ -102,7 +123,44 @@ export function UserDetail(props: { id: string }) {
     setActErr(null);
     try {
       await setPrincipalActive(pr.id, !pr.active);
-      await qc.invalidateQueries({ queryKey: PRINCIPALS_KEY });
+      await refresh();
+    } catch (e) {
+      setActErr(describeError(e));
+    }
+  }
+
+  async function doDeactivate() {
+    const pr = p();
+    if (!pr || !confirm(`Deactivate "${principalName(pr)}"? They will be hidden and cannot sign in, reversibly. You can then purge them.`)) return;
+    setActErr(null);
+    try {
+      await deactivatePrincipal(pr.id);
+      await refresh();
+    } catch (e) {
+      setActErr(describeError(e));
+    }
+  }
+
+  async function doReactivate() {
+    const pr = p();
+    if (!pr) return;
+    setActErr(null);
+    try {
+      await reactivatePrincipal(pr.id);
+      await refresh();
+    } catch (e) {
+      setActErr(describeError(e));
+    }
+  }
+
+  async function doPurge() {
+    const pr = p();
+    if (!pr || !confirm(`Purge "${principalName(pr)}"? This permanently deletes the account and its grants and memberships. It cannot be undone. The audit trail is kept.`)) return;
+    setActErr(null);
+    try {
+      await purgePrincipal(pr.id);
+      await refresh();
+      blades.close();
     } catch (e) {
       setActErr(describeError(e));
     }
@@ -126,7 +184,9 @@ export function UserDetail(props: { id: string }) {
             </div>
             <span class="flex items-center gap-1.5">
               <span class={kindBadge(pr().kind)}>{pr().kind}</span>
-              <Show when={!pr().active}><span class="badge badge-soft badge-warning badge-sm">inactive</span></Show>
+              <Show when={pr().deactivated_at} fallback={<Show when={!pr().active}><span class="badge badge-soft badge-warning badge-sm">inactive</span></Show>}>
+                <span class="badge badge-soft badge-error badge-sm">deactivated</span>
+              </Show>
             </span>
           </div>
 
@@ -269,9 +329,8 @@ function GrantEditor(props: { principal: Principal; editing: boolean; canGrant: 
 }
 
 function UserTitle(props: { id: string }) {
-  const principals = useQuery(() => ({ queryKey: PRINCIPALS_KEY, queryFn: () => listPrincipals() }));
-  const p = () => principals.data?.find((x) => x.id === props.id);
-  return <>{p() ? principalName(p()!) : "User"}</>;
+  const principal = useQuery(() => ({ queryKey: [...PRINCIPALS_KEY, props.id], queryFn: () => getPrincipal(props.id) }));
+  return <>{principal.data ? principalName(principal.data) : "User"}</>;
 }
 
 export const userBlade: BladeDef = {
