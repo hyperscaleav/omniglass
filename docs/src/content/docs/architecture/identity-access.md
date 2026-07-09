@@ -44,6 +44,12 @@ Where the build currently differs from the present-tense design below (each logg
 - **Credentials are `bearer` or `password`.** `credential.kind` is `bearer` or `password` (argon2id,
   PHC-encoded, one password per principal); the `oidc` / `nats` methods and the full
   `(method, identifier)` lookup are still deferred. The minted bearer token prefix is `ogp_`.
+- **A bearer credential can expire.** `credential.expires_at` (nullable) bounds a bearer's lifetime, and
+  `AuthenticateBearer` treats a passed expiry as absent (the credential authenticates nothing). A **web
+  login** installs a session cookie with a fixed absolute lifetime (12h today), so a stolen cookie is not
+  valid forever, and the cookie's `Max-Age` matches. A CLI-minted **API token** (`omniglass token`) and the
+  bootstrap token leave `expires_at` null and do not expire. A sliding idle timeout and a background sweep
+  of expired rows are later refinements; today an expired row is simply refused at auth.
 - **A password policy gates the API password surfaces.** A single pure validator
   (`auth.ValidatePassword`) enforces the policy on the running-server paths that set a password:
   **create a user** (`POST /principals`) and **self-service change-password**

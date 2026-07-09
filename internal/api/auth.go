@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/hyperscaleav/omniglass/internal/auth"
@@ -224,6 +225,12 @@ func bearerToken(header string) (string, bool) {
 	return "", false
 }
 
+// sessionCookieLifetime is the absolute lifetime of a login session: the bearer
+// credential and the cookie both expire after it, so a stolen session cookie is not
+// valid forever. Fixed for this slice (a sliding idle timeout is a later refinement);
+// API tokens minted from the CLI do not expire.
+const sessionCookieLifetime = 12 * time.Hour
+
 // sessionCookieName is the httpOnly cookie carrying a human's session bearer
 // token; the SPA never reads it (it sends with credentials: 'include').
 const sessionCookieName = "og_session"
@@ -245,6 +252,9 @@ func (a *authenticator) sessionCookie(token string) http.Cookie {
 	return http.Cookie{
 		Name: sessionCookieName, Value: token, Path: "/",
 		HttpOnly: true, Secure: a.secureCookies, SameSite: http.SameSiteLaxMode,
+		// The browser drops the cookie at the same absolute lifetime the server
+		// bounds the credential to, so a closed session cannot linger client-side.
+		MaxAge: int(sessionCookieLifetime.Seconds()),
 	}
 }
 
@@ -318,7 +328,8 @@ func (a *authenticator) loginHandler(ctx context.Context, in *loginInput) (*sess
 	if err != nil {
 		return nil, huma.Error500InternalServerError("login failed")
 	}
-	if _, err := a.gw.IssueBearerCredential(ctx, pr.Human.Username, hash, prefix); err != nil {
+	expiresAt := time.Now().Add(sessionCookieLifetime)
+	if _, err := a.gw.IssueBearerCredential(ctx, pr.Human.Username, hash, prefix, &expiresAt); err != nil {
 		return nil, huma.Error500InternalServerError("login failed")
 	}
 	if err := a.gw.WriteAuthEvent(ctx, pr.ID, "login"); err != nil {

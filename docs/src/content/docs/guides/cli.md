@@ -61,7 +61,8 @@ no running server needed):
 # lane, so it is exempt from the password policy (unlike the console/API paths).
 omniglass bootstrap ops --password 'set-a-strong-one' --email ops@example.com --display-name "Ops Lead"
 
-# Reprint a fresh bearer token for an existing user (direct-DB, owner lane).
+# Reprint a fresh bearer token for an existing user (direct-DB, owner lane). A CLI
+# token does not expire (unlike a web-login session cookie, which has a fixed lifetime).
 omniglass token ops
 
 # Set or rotate a user's password (direct-DB, owner lane; also policy-exempt as the recovery path).
