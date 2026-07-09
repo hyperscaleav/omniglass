@@ -582,7 +582,15 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   menu of datapoints and functions (OIDs, commands, parse) is a separate, later concern, decided in
   [ADR-0019](/architecture/decisions/#adr-0019-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver);
   this slice ships only the transport / reach tier of it.
-- **Console: unified identity detail sidebars on a shared blade stack.** The Azure-style blade stack is lifted
+- **Collection slice (checkpoint 5f): reachability lands read-only; check authoring deferred.** Before the PR, the
+  component-scoped **Add check** affordance was **removed**: it was a stopgap that a proper **driver**-based
+  authoring flow (attach a driver to a component, fill its inputs) replaces, and the driver/collect layer is
+  under active design (template-centric vs driver-centric), decided deliberately rather than on momentum
+  ([ADR-0019](/architecture/decisions/) status note). So the reachability panel is now **read-only display**; a
+  reachability check is authored from the raw **Interfaces** and **Tasks** pages (create an interface, then a poll
+  task over it), which stay as low-level primitives. The slice lands as **remote node reachability**: enroll a
+  node, it probes, the operator sees per-interface reachability. The collect layer (drivers, the normalized menu,
+  SNMP) is its own slice after the driver design.
   out of `TreeList` into a standalone `BladeStack` primitive over a `createBladeController`, and both the
   inventory tree and the flat identity pages (`FlatList`) now consume it. A stack entry is a cross-entity
   `{ kind, id }` ref against a registry, so a user's group opens the group's blade over it and a group's member

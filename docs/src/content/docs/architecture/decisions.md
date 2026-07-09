@@ -486,3 +486,10 @@ below from the project's history. From here it grows one slice at a time.
   [collection epic](https://github.com/hyperscaleav/omniglass/issues/113) (slices 2 to 4 realize this model).
 - **Refines:** [ADR-0018](#adr-0018-the-reachability-verdict-is-a-built-in-state) (the reachability verdict is the
   first rung of the gate ladder this ADR names).
+- **Status note (2026-07-08):** the `interface = API` / `interface_type = transport` half is **built and stable**
+  (this slice). The **driver / collect layer** (the separate `driver` entity, the normalized menu, and the
+  driver-centric split itself) is **under active design**: it departs from the original template-centric
+  architecture (where protocol handling lived in the template), which is a serious enough change to redesign
+  deliberately rather than on momentum. Recorded here as the current-best direction, **not a locked gate**;
+  driver-centric vs template-centric is re-examined, and this ADR revised or superseded, in a later ADR before
+  the collect layer is built.

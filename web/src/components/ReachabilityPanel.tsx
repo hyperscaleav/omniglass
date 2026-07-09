@@ -1,7 +1,6 @@
 import { For, Show, createMemo, createSignal } from "solid-js";
 import { useQuery } from "@tanstack/solid-query";
 import { ChevronRight } from "./icons";
-import AddReachabilityCheck from "./AddReachabilityCheck";
 import { rel } from "../lib/format";
 import {
   REACHABILITY_KEY,
@@ -145,8 +144,6 @@ export default function ReachabilityPanel(p: { name: string }) {
             {ifaces().length} interface{ifaces().length === 1 ? "" : "s"}
           </span>
         </Show>
-        <span class="flex-1" />
-        <AddReachabilityCheck component={p.name} />
       </div>
       <Show
         when={ifaces().length}
