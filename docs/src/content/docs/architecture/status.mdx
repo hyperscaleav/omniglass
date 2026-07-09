@@ -574,3 +574,15 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   proven end to end by a storage integration test (5 misses lock, the correct password is refused while
   locked, an expired window lets it through and resets) and a real-endpoint test (the lockout as seen over
   `POST /auth/login`). Per-IP throttling and a configurable threshold are deferred.
+
+- **Identity: force a password change after an admin reset.** An admin reset now sets a new additive
+  `human.must_change_password` flag; the user's own change-password clears it. While set, the `authn`
+  choke point (the same place view-as read-only is enforced) refuses **every** route with a 403 except
+  reading their own principal and the change itself, so the admin-known secret cannot be used to act.
+  `GET /auth/me` carries `must_change_password`, and the console's `AuthGuard` swaps the whole app shell
+  for a forced change-password screen until it clears (a `useChangePassword` that invalidates `/auth/me`
+  releases the gate on success). Proven by a storage test (a reset sets the flag, a self-change clears
+  it), a real-endpoint test (a flagged user reads `/auth/me` but every other route is a distinct
+  "password change required" 403 until the change, then the gate releases), and a web test (the guard
+  renders the forced screen only when flagged). Enforcement is a hard block on all routes; the CLI
+  break-glass lanes do not set the flag.

@@ -1037,6 +1037,8 @@ export interface components {
             readonly $schema?: string;
             display_name?: string;
             email?: string;
+            /** @description True when an admin reset the password and the user must change it before doing anything else; the console gates every route to the change-password form until it clears. */
+            must_change_password?: boolean;
             username: string;
         };
         ImpersonateInputBody: {

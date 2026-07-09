@@ -41,6 +41,14 @@ only your own account, whatever your role.
 From the CLI the same two actions are `omniglass auth update-profile` and
 `omniglass auth change-password` (see [the CLI guide](/guides/cli/)).
 
+### After an administrator resets your password
+
+If an administrator resets your password, you sign in with the password they gave you and the
+console immediately gates you to a **Set a new password** screen: your account is on hold and every
+other page is refused (by the server, not just the console) until you choose a new password. Enter
+the temporary password as the current one and set a new policy-compliant password; once it is saved
+the hold clears and you land in the console. Signing out is the only other way off the screen.
+
 ## Users
 
 **Settings, Users** is the admin directory of every principal, humans and service accounts,
