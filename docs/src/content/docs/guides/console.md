@@ -32,7 +32,8 @@ only your own account, whatever your role.
 - **Change password.** Enter your current password and a new one. The new password must meet the
   **policy** (at least 12 characters, not a common password, and not containing your username); the
   field validates as you type, and **Generate** fills a strong random one you can **Copy**. A wrong
-  current password is refused. Your other active sessions stay signed in.
+  current password is refused. Changing it **signs out your other sessions and tokens** (the one you
+  are using stays), so the change takes effect everywhere at once.
 - **Access.** A read-only view of the identity model you operate under: your principal, the
   roles granted to you, and the flattened permissions those roles carry. The server enforces
   these on every request; the console only mirrors them.
@@ -92,9 +93,10 @@ location-scoped admin cannot list users.
   owner grant.
 - With `principal:reset-password`, the kebab on **another user's** blade holds **Reset password**: it
   opens an inline panel with a password field (the same **Generate** and inline policy check as the New
-  user form) and sets a new password for that user without their current one. The set password stays
-  copyable so you can hand it over; the user changes it after signing in. The reset is audited with
-  **you** as the actor. It is refused on your **own** account (change your own password from **Your
+  user form) and sets a new password for that user without their current one. The reset **immediately
+  signs the user out of every session and token**, so it doubles as a way to cut off a compromised or
+  departing account. The set password stays copyable so you can hand it over; the user changes it after
+  signing in. The reset is audited with **you** as the actor. It is refused on your **own** account (change your own password from **Your
   profile**, which verifies your current one) and on an **owner** (owners cannot be reset by anyone).
   This is a console path for what the CLI does with `omniglass set-password`; unlike that trusted
   direct-DB lane, the console reset enforces the password policy and the takeover guard.

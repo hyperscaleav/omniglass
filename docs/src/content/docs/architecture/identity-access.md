@@ -18,9 +18,11 @@ admin **principal directory** (`GET /principals`, `GET /principals/{id}`), human
 (`POST /principals`) and **update** (`PATCH /principals/{id}`: display name, email, username), an
 admin **password reset** (`POST /principals/{id}:resetPassword`, gated `principal:reset-password`,
 policy-enforced, no current password, audited as the admin, refused on self (change your own password
-from your profile, which verifies your current one), and behind the same **takeover guard** as
+from your profile, which verifies your current one), behind the same **takeover guard** as
 impersonation so an owner cannot be reset and a caller cannot reset a principal whose capabilities
-exceed their own), **role
+exceed their own, and **force-logout**: a reset revokes every one of the target's bearer credentials
+(all sessions and tokens) so it takes effect at once, and a self-service change revokes the caller's
+other sessions while keeping the current one), **role
 assignment** (`POST` / `DELETE /principals/{id}/grants`) with the **owner-invariant trigger** enforcing
 that the last `owner @ all` grant cannot be revoked, and the **principal lifecycle**: reversible
 **disable** (`POST /principals/{id}:disable` / `:enable`, which refuses authentication for a disabled

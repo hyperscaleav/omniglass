@@ -540,7 +540,10 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   impersonation (an owner cannot be reset by anyone, and a caller cannot reset a principal whose
   capabilities exceed their own, a shared `checkTakeoverGuard`), and audited with the admin as the actor (the
   storage method `SetPrincipalPassword` sets by id, distinct from the self-service `SetPassword` that keys
-  on username and audits the target). The console adds a **Reset password** kebab action on the user blade
+  on username and audits the target). It also **forces logout**: a reset revokes every one of the target's
+  bearer credentials (all sessions and tokens) in the same transaction, so a compromised or departing
+  account is cut off at once; the self-service change-password revokes the caller's OTHER sessions
+  (`RevokePrincipalBearers` keeping the current session's hash, stashed in the request context by authn). The console adds a **Reset password** kebab action on the user blade
   that opens an inline panel reusing the `PasswordField` (Generate, Copy, inline policy check); the set
   password stays copyable to hand over. This is the console counterpart to the CLI `set-password` (which,
   as a trusted direct-DB lane, stays policy-exempt). Proven by a storage test (the new secret
