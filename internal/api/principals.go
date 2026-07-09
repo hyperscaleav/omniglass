@@ -326,9 +326,15 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Path:          "/principals/{id}:resetPassword",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Reset a principal's password",
-		Description:   "Sets a new password for a human principal (an administrator action; the target's current password is not required). Gated by principal:reset-password (all-scope). The new password must meet the password policy; a violation is a 422. Refused on an owner (owners cannot be reset by anyone) or when it would exceed the caller's own capabilities (the takeover guard, shared with impersonation). The action is audited with the administrator as the actor.",
+		Description:   "Sets a new password for another human principal (an administrator action; the target's current password is not required). Gated by principal:reset-password (all-scope). The new password must meet the password policy; a violation is a 422. Refused on yourself (change your own password from your profile, which verifies your current one), on an owner (owners cannot be reset by anyone), or when it would exceed the caller's own capabilities (the takeover guard, shared with impersonation). The action is audited with the administrator as the actor.",
 		Middlewares:   huma.Middlewares{a.authn, a.require("principal", "reset-password")},
 	}, func(ctx context.Context, in *resetPasswordInput) (*struct{}, error) {
+		// Self is refused: you change your own password from your profile (which
+		// verifies your current one). The admin reset skips that confirmation, so it is
+		// for other accounts only.
+		if actorID(ctx) == in.ID {
+			return nil, huma.Error422UnprocessableEntity("reset your own password from your profile, which verifies your current password")
+		}
 		reset := a.scopeFor(ctx, "principal", "reset-password")
 		target, err := gw.GetPrincipal(ctx, in.ID, reset)
 		if err != nil {

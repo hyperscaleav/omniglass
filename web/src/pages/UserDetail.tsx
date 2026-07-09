@@ -103,7 +103,7 @@ export function UserDetail(props: { id: string }) {
       } else if (canArchive()) {
         items.push({ label: "Archive", icon: <Ban size={15} />, tone: "danger", onClick: doArchive });
       }
-      if (pr.human && canResetPassword()) {
+      if (pr.human && canResetPassword() && pr.id !== me.data?.principal?.id) {
         items.push({ label: "Reset password", icon: <Key size={15} />, onClick: startReset });
       }
       if (can(me.data, "principal", "impersonate") && pr.id !== me.data?.principal?.id) {

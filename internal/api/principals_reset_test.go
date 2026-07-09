@@ -53,6 +53,11 @@ func TestResetPasswordAPI(t *testing.T) {
 	c.do(adminTok, "POST", path, map[string]string{"password": "administrator"}, http.StatusUnprocessableEntity)
 	c.do(adminTok, "POST", path, map[string]string{"password": "alice-new-pass9"}, http.StatusUnprocessableEntity)
 
+	// Self is refused: you reset your own password from your profile (with your
+	// current password), not from the admin surface (which skips that confirmation).
+	adminID := meID(t, c, adminTok)
+	c.do(adminTok, "POST", "/principals/"+adminID+":resetPassword", map[string]string{"password": "purple-canyon-7"}, http.StatusUnprocessableEntity)
+
 	// Owner protection (the takeover guard, mirroring impersonation): an owner cannot
 	// have its password reset by a lesser admin, nor even by another owner.
 	c.do(adminTok, "POST", "/principals/"+ownerID+":resetPassword", map[string]string{"password": "purple-canyon-7"}, http.StatusForbidden)

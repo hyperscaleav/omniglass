@@ -326,6 +326,31 @@ describe("Users page", () => {
     expect(saveBtn().disabled).toBe(false);
   });
 
+  it("does not offer Reset password on your own blade (use your profile)", async () => {
+    const meAlice: Me = { principal: { id: "u-alice", kind: "human" }, human: { username: "alice" }, permissions: [">"], grants: [] };
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    qc.setQueryData([...PRINCIPALS_KEY, false], seed);
+    for (const pr of seed) qc.setQueryData([...PRINCIPALS_KEY, pr.id], pr);
+    qc.setQueryData([...ME_KEY], meAlice);
+    qc.setQueryData([...ROLES_KEY], []);
+    qc.setQueryData(["locations"], []);
+    qc.setQueryData(["systems"], []);
+    qc.setQueryData(["components"], []);
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <Router><Route path="*" component={() => <Users />} /></Router>
+      </QueryClientProvider>
+    ));
+    fireEvent.click(screen.getByText("Alice Ng")); // alice is the signed-in principal
+    const blade = await waitFor(() => {
+      const el = document.querySelector("aside[data-blade]");
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    fireEvent.click(within(blade).getByLabelText("More actions"));
+    expect(within(blade).queryByText("Reset password")).toBeNull();
+  });
+
   it("resets a user's password from the kebab and confirms", async () => {
     let resetCalled = false;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
