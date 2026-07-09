@@ -7,7 +7,7 @@ import type { BladeDef } from "../lib/blades";
 import type { TreeNode } from "../lib/treeselect";
 import type { ExistingGrant, GrantRef, ScopeOp } from "../lib/grantdraft";
 import {
-  GROUPS_KEY, groupName, memberName,
+  GROUPS_KEY, groupName, memberName, consumePendingGroupEdit,
   getGroup, updateGroup, deleteGroup,
   listGroupMembers, addGroupMember, removeGroupMember,
   listGroupGrants, createGroupGrant, revokeGroupGrant,
@@ -116,6 +116,15 @@ export function GroupDetail(props: { id: string }) {
       resetStaging();
       grantCancel();
     },
+  });
+
+  // A just-created group opens straight in edit mode (once its data has loaded and
+  // if the caller can manage it), so members and grants are added without a second
+  // step. consumePendingGroupEdit clears the flag so this fires exactly once.
+  createEffect(() => {
+    if (group.data && !edit.editing() && canManage() && consumePendingGroupEdit(props.id)) {
+      edit.begin();
+    }
   });
 
   async function removeGroup() {

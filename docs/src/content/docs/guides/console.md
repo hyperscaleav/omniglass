@@ -111,8 +111,10 @@ user. Pick a row to open the group's **blade**: its **members** (add any princip
 stack that user's blade over the group) and its **grants**, built with the same grant builder the user detail uses. A grant added to the group takes effect for every member
 immediately, and is bounded by the same rule as a direct grant (you cannot grant a role above your own tier).
 **New group** creates one (name, display name, description); the **name** is a lowercase handle (the same
-rule as a username, validated inline), while the display name is free text. Deleting a group drops the
-memberships and the inherited grants, but members keep their own direct grants.
+rule as a username, validated inline), while the display name is free text. The new group then opens
+**directly in edit mode**, so you add its members and grants right away and one **Save** commits them (they
+are attached to the group once it exists, so creating and populating stay one flow). Deleting a group drops
+the memberships and the inherited grants, but members keep their own direct grants.
 
 On a **user's** detail, grants split into two: the ones you granted the user **directly** (editable in the grant
 builder) and the ones **inherited from a group** (shown read-only, tagged `from <group>`), so it is always clear

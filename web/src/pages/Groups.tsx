@@ -3,7 +3,7 @@ import { useSearchParams } from "@solidjs/router";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import type { FilterKey } from "../lib/predicate";
-import { type Group, GROUPS_KEY, groupName, listGroups, createGroup } from "../lib/groups";
+import { type Group, GROUPS_KEY, groupName, listGroups, createGroup, openGroupInEdit } from "../lib/groups";
 import { identityRegistry } from "../lib/identityBlades";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
@@ -82,7 +82,14 @@ function CreateGroupForm(props: { onCreated: (g: Group) => void }) {
     setErr(null);
     try {
       const g = await createGroup({ name: name().trim(), display_name: displayName().trim() || undefined, description: description().trim() || undefined });
+      // Seed the new group's detail caches so its blade opens instantly (no loading
+      // flash), and flag it to open in edit mode so members and grants can be added
+      // right away, then hand it to the create Drawer's select to open it.
+      qc.setQueryData([...GROUPS_KEY, g.id], g);
+      qc.setQueryData([...GROUPS_KEY, g.id, "members"], []);
+      qc.setQueryData([...GROUPS_KEY, g.id, "grants"], []);
       await qc.invalidateQueries({ queryKey: GROUPS_KEY });
+      openGroupInEdit(g.id);
       props.onCreated(g);
     } catch (e2) {
       setErr(describeError(e2));

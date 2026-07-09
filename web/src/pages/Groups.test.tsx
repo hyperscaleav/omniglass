@@ -132,6 +132,34 @@ describe("Groups page", () => {
     expect(createBtn().disabled).toBe(false);
   });
 
+  it("opens a newly created group straight in edit mode to add members and grants", async () => {
+    const created: Group = { id: "g-new", name: "field-crew", display_name: "Field Crew", description: "" };
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      const url = typeof input === "string" ? input : req.url;
+      const method = typeof input === "string" ? "GET" : req.method;
+      if (method === "POST" && url.includes("/principal-groups")) {
+        return new Response(JSON.stringify(created), { status: 201, headers: { "Content-Type": "application/json" } });
+      }
+      return new Response(JSON.stringify({ groups: [created] }), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+    mount();
+    fireEvent.click(screen.getByText("New group"));
+    const name = (await screen.findByLabelText("Name")) as HTMLInputElement;
+    fireEvent.input(name, { target: { value: "field-crew" } });
+    fireEvent.click(screen.getByText("Create group"));
+    // The new group's blade opens already in edit mode: Save / Cancel and the
+    // edit-only member add control are present without clicking Edit.
+    const blade = await waitFor(() => {
+      const el = asides()[0];
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    expect(await within(blade).findByText("Save")).toBeTruthy();
+    expect(within(blade).getByText("Cancel")).toBeTruthy();
+    expect(within(blade).getByText("Add a member...")).toBeTruthy(); // the member add picker (edit-only)
+  });
+
   it("drills from a group member to a user blade nested over the group (group -> user)", async () => {
     mount();
     fireEvent.click(screen.getByText("Help Desk")); // open the group blade
