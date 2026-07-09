@@ -50,6 +50,15 @@ Where the build currently differs from the present-tense design below (each logg
   valid forever, and the cookie's `Max-Age` matches. A CLI-minted **API token** (`omniglass token`) and the
   bootstrap token leave `expires_at` null and do not expire. A sliding idle timeout and a background sweep
   of expired rows are later refinements; today an expired row is simply refused at auth.
+- **Failed logins lock the account.** A run of wrong passwords on a real account is throttled by a
+  per-username lockout: `human.failed_login_count` counts consecutive misses and, on the 5th, sets
+  `human.locked_until` to 15 minutes out. Inside that window `AuthenticatePassword` refuses every
+  attempt (even the correct password) with a distinct internal signal that the login handler maps to
+  the **same generic 401** as a bad credential, so the lock is not an enumeration oracle; only the
+  audit (`login_locked`, attributed to the principal) records it. The lock decision is made **after**
+  the argon2 verify, so a locked account is not a measurably faster probe, and a correct password
+  below the threshold clears the counter. The threshold and window are fixed for now; per-IP
+  throttling and a configurable policy are later refinements.
 - **A password policy gates the API password surfaces.** A single pure validator
   (`auth.ValidatePassword`) enforces the policy on the running-server paths that set a password:
   **create a user** (`POST /principals`) and **self-service change-password**
