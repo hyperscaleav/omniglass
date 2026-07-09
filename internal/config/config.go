@@ -17,6 +17,11 @@ const (
 	DefaultDSN = "postgres://omniglass:omniglass@localhost:5432/omniglass?sslmode=disable"
 	// DefaultAddr is the HTTP API listen address. Override with OMNIGLASS_ADDR.
 	DefaultAddr = ":8080"
+	// DefaultDataDir holds local server state that is not in Postgres, notably
+	// the fallback secret key when no KEK is provided. Override with
+	// OMNIGLASS_DATA_DIR; a real deployment sets OMNIGLASS_SECRET_KEY_FILE and
+	// never touches this.
+	DefaultDataDir = ".omniglass"
 )
 
 // Config is the resolved runtime configuration for one process.
@@ -28,6 +33,9 @@ type Config struct {
 	// SecureCookies marks the session cookie Secure (https only). Set
 	// OMNIGLASS_SECURE_COOKIES=true behind TLS; off by default for local http dev.
 	SecureCookies bool
+	// DataDir is the directory for local, non-Postgres server state (the fallback
+	// secret key). Override with OMNIGLASS_DATA_DIR.
+	DataDir string
 }
 
 // Load resolves the configuration from the environment, applying defaults for
@@ -43,6 +51,7 @@ func Load() Config {
 		DSN:           resolveDSN(),
 		Addr:          firstNonEmpty(os.Getenv("OMNIGLASS_ADDR"), DefaultAddr),
 		SecureCookies: os.Getenv("OMNIGLASS_SECURE_COOKIES") == "true",
+		DataDir:       firstNonEmpty(os.Getenv("OMNIGLASS_DATA_DIR"), DefaultDataDir),
 	}
 }
 
