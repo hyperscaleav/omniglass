@@ -453,7 +453,7 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   port, plus a fake-seam unit test and the full enroll -> pull -> heartbeat round trip. A node is a
   first-class `principal` of `kind='node'` with a 1:1 `node` detail table (name is the estate address the
   collection FKs reference) and a bearer `credential` row, reusing the human/service identity machinery.
-  Deliberate thin cuts ([ADR-0016](/architecture/decisions/)): the credential is an interim shared secret
+  Deliberate thin cuts ([ADR-0017](/architecture/decisions/)): the credential is an interim shared secret
   stored as a bearer credential (the enrollment token doubles as the NATS password; nkey/JWT and the
   single-use bootstrap deferred), and the control plane is JSON over core NATS. Deferred to later
   checkpoints of this slice: the probes (tcp, then icmp), the protobuf telemetry `Event` over JetStream, the
@@ -471,7 +471,7 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   written), applies **reject-not-project** (an unregistered datapoint name is dropped), and writes through the
   checkpoint-1 `InsertMetricDatapoints` path (`provenance=observed`). Both invariants are negatively tested
   against real Postgres + a real embedded bus, and the whole path is driven end to end through the real `server`
-  and `node` binaries. Deliberate thin cuts ([ADR-0017](/architecture/decisions/)): the hot-path/async split
+  and `node` binaries. Deliberate thin cuts ([ADR-0018](/architecture/decisions/)): the hot-path/async split
   collapses (the durable consumer is the at-least-once worklist, no raw-telemetry table or Postgres queue), and
   owner binding is the interface-prebind path only. Deferred: raw-`Event` persistence + replay/backfill,
   label-based multi-owner routing, the remaining probes (snmp, http), and the API/CLI/UI surfaces.
@@ -498,7 +498,7 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   re-guards by skipping a write whose value equals the latest stored value (the net for a node restart), proven
   by a negative test that repeated identical verdicts produce one row per transition, not per tick. Availability
   as `time_in_state` over this state, and the operator surfaces that render the transitions, are checkpoint 5b.
-  See [ADR-0018](/architecture/decisions/#adr-0018-the-reachability-verdict-is-a-built-in-state).
+  See [ADR-0019](/architecture/decisions/#adr-0019-the-reachability-verdict-is-a-built-in-state).
 - **Collection slice (checkpoint 5b): the reachability surface, seen.** The first datapoint read surface. A
   per-component read BFF `GET /components/{name}/reachability` (permission `component:read`, scope-injected, so a
   viewer gets a 404 on a component outside its scope) composes, per interface, the latest verdict (`LatestState`
@@ -580,13 +580,13 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   models a lab **polaris DSP** with two protocol-named APIs on one device (`web` over http, `qrc` over tcp) so
   `make dev` shows the "two APIs on one box" story. The driver layer that turns a device API into a normalized
   menu of datapoints and functions (OIDs, commands, parse) is a separate, later concern, decided in
-  [ADR-0019](/architecture/decisions/#adr-0019-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver);
+  [ADR-0020](/architecture/decisions/#adr-0020-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver);
   this slice ships only the transport / reach tier of it.
 - **Collection slice (checkpoint 5f): reachability lands read-only; check authoring deferred.** Before the PR, the
   component-scoped **Add check** affordance was **removed**: it was a stopgap that a proper **driver**-based
   authoring flow (attach a driver to a component, fill its inputs) replaces, and the driver/collect layer is
   under active design (template-centric vs driver-centric), decided deliberately rather than on momentum
-  ([ADR-0019](/architecture/decisions/) status note). So the reachability panel is now **read-only display**; a
+  ([ADR-0020](/architecture/decisions/) status note). So the reachability panel is now **read-only display**; a
   reachability check is authored from the raw **Interfaces** and **Tasks** pages (create an interface, then a poll
   task over it), which stay as low-level primitives. The slice lands as **remote node reachability**: enroll a
   node, it probes, the operator sees per-interface reachability. The collect layer (drivers, the normalized menu,
@@ -616,6 +616,19 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   (one backend action per Save) remain deferred to a batched endpoint; the user deactivate / purge lifecycle is
   its own slice. Proven by the web suite (the edit-slot, the `BladeStack` footer-bar chrome, and the Group / User
   read-vs-edit tests) and tsc.
+- **Identity: the principal lifecycle (deactivate + purge), backend.** Beyond the reversible disable, a principal
+  can be **deactivated** (a soft delete, `deactivated_at`: hidden from the directory, cannot authenticate,
+  reversible) and then **purged** (an irreversible hard delete, gated on prior deactivation and on the
+  admin-sensitive `principal:purge:admin`, so admin and owner can purge but a two-token `principal:*` cannot
+  reach it). The purge preserves the audit trail: every `audit_log` row now denormalizes the actor's label at
+  write time, the audit foreign keys are `ON DELETE SET NULL`, and the read coalesces the live join to the
+  snapshot, so a purged actor's history stays legible ([ADR-0016](/architecture/decisions/#adr-0016-a-principal-can-be-purged-and-the-audit-trail-is-denormalized-to-survive-it),
+  retiring the "never hard-deleted" rule). The last-active-owner guard extends to deactivate. Gateway
+  (`DeactivatePrincipal` / `ReactivatePrincipal` / `PurgePrincipal`), the `:deactivate` / `:reactivate` /
+  `:purge` API custom methods, and the generated CLI / client ship; proven against real Postgres by a storage
+  integration test (lifecycle + audit-actor survival + owner guard) and an HTTP end-to-end test (the capability
+  split, the deactivate-before-purge gate, soft-delete visibility). The console UI for the lifecycle is a
+  follow-up ([#143](https://github.com/hyperscaleav/omniglass/issues/143) backend).
 - **Identity: the Groups console + inherited-vs-direct grants, UI.** A **Groups** page (`Settings > Groups`,
   gated `principal_group:read`) as a config over the shared `FlatList`: list and create, and a row Drawer with
   member add/remove and the grant builder (reused, wired to the group grant endpoints, so a group's members

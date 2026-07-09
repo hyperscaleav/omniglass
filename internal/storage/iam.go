@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/hyperscaleav/omniglass/internal/auth"
@@ -159,10 +160,15 @@ type Principal struct {
 	ID      string
 	Kind    string
 	Active  bool
-	Human   *HumanProfile
-	Service *ServiceProfile
-	Node    *NodeProfile
-	Grants  []Grant
+	// DeactivatedAt marks a soft delete (the principal lifecycle, issue #143): a
+	// non-nil value means the account is deactivated (hidden, cannot authenticate,
+	// reversible until purged). Nil means live. Distinct from Active, which is the
+	// reversible disable toggle.
+	DeactivatedAt *time.Time
+	Human         *HumanProfile
+	Service       *ServiceProfile
+	Node          *NodeProfile
+	Grants        []Grant
 	// Groups are the principal groups this principal belongs to (id + label), so the
 	// admin directory can show membership without a per-row fetch. The grants those
 	// groups confer already ride Grants (tagged with GroupID); this names them.
@@ -417,6 +423,10 @@ func (p *PG) RevokeBearer(ctx context.Context, hash []byte) error {
 // all-scope grant does. The API maps it to 403.
 var ErrPrincipalForbidden = errors.New("storage: principal access requires an all-scope grant")
 
+// ErrNotDeactivated is returned by PurgePrincipal when the target has not been
+// deactivated first (the hard gate between the soft and hard delete).
+var ErrNotDeactivated = errors.New("storage: principal must be deactivated before purge")
+
 // ErrPrincipalNotFound is returned by GetPrincipal when no principal has the id.
 // The API maps it to 404.
 var ErrPrincipalNotFound = errors.New("storage: principal not found")
@@ -442,7 +452,7 @@ func (p *PG) ListPrincipals(ctx context.Context, read scope.Set) ([]Principal, e
 	if !read.All {
 		return nil, ErrPrincipalForbidden
 	}
-	rows, err := p.pool.Query(ctx, `select id, kind, active from principal order by created_at`)
+	rows, err := p.pool.Query(ctx, `select id, kind, active from principal where deactivated_at is null order by created_at`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list principals: %w", err)
 	}
@@ -482,7 +492,7 @@ func (p *PG) GetPrincipal(ctx context.Context, id string, read scope.Set) (*Prin
 		return nil, ErrPrincipalForbidden
 	}
 	pr := Principal{ID: id}
-	err := p.pool.QueryRow(ctx, `select id, kind, active from principal where id = $1`, id).Scan(&pr.ID, &pr.Kind, &pr.Active)
+	err := p.pool.QueryRow(ctx, `select id, kind, active, deactivated_at from principal where id = $1`, id).Scan(&pr.ID, &pr.Kind, &pr.Active, &pr.DeactivatedAt)
 	var pgErr *pgconn.PgError
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
@@ -805,16 +815,11 @@ func (p *PG) SetPrincipalActive(ctx context.Context, actorID, id string, active 
 	if !active {
 		// Refuse if disabling this principal leaves no active owner@all grant (the
 		// owner invariant for the active flag, mirroring the grant trigger).
-		var ownerRemains bool
-		if err := tx.QueryRow(ctx, `
-			select exists(
-				select 1 from principal_grant g
-				join principal pr on pr.id = g.principal_id
-				where g.role_id = 'owner' and g.scope_kind = 'all' and pr.active
-			)`).Scan(&ownerRemains); err != nil {
+		remains, err := activeOwnerRemains(ctx, tx)
+		if err != nil {
 			return fmt.Errorf("storage: owner check: %w", err)
 		}
-		if !ownerRemains {
+		if !remains {
 			return ErrLastOwner // rolls back the disable
 		}
 	}
@@ -828,6 +833,138 @@ func (p *PG) SetPrincipalActive(ctx context.Context, actorID, id string, active 
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("storage: commit set active: %w", err)
+	}
+	return nil
+}
+
+// activeOwnerRemains reports whether at least one active owner@all grant still
+// exists within the transaction: the invariant that guards disabling or
+// deactivating the last owner (mirroring the deferred grant trigger, but for the
+// principal's active flag rather than the grant's existence).
+func activeOwnerRemains(ctx context.Context, tx pgx.Tx) (bool, error) {
+	var ok bool
+	err := tx.QueryRow(ctx, `
+		select exists(
+			select 1 from principal_grant g
+			join principal pr on pr.id = g.principal_id
+			where g.role_id = 'owner' and g.scope_kind = 'all' and pr.active
+		)`).Scan(&ok)
+	return ok, err
+}
+
+// DeactivatePrincipal soft-deletes a principal (the lifecycle, issue #143): it sets
+// deactivated_at and forces the account inactive, so it is hidden from the
+// directory and cannot authenticate, reversibly (ReactivatePrincipal restores it)
+// until PurgePrincipal hard-deletes it. Requires an all-scope grant; deactivating
+// the last active owner is refused (ErrLastOwner).
+func (p *PG) DeactivatePrincipal(ctx context.Context, actorID, id string, action scope.Set) error {
+	return p.setDeactivated(ctx, actorID, id, true, action)
+}
+
+// ReactivatePrincipal reverses a deactivation: it clears deactivated_at and
+// restores the active flag, so the account is live and can authenticate again.
+// Requires an all-scope grant.
+func (p *PG) ReactivatePrincipal(ctx context.Context, actorID, id string, action scope.Set) error {
+	return p.setDeactivated(ctx, actorID, id, false, action)
+}
+
+func (p *PG) setDeactivated(ctx context.Context, actorID, id string, deactivate bool, action scope.Set) error {
+	if !action.All {
+		return ErrPrincipalForbidden
+	}
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("storage: begin deactivate: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var pgErr *pgconn.PgError
+	if err := tx.QueryRow(ctx, `select 1 from principal where id = $1`, id).Scan(new(int)); err != nil {
+		switch {
+		case errors.Is(err, pgx.ErrNoRows):
+			return ErrPrincipalNotFound
+		case errors.As(err, &pgErr) && pgErr.Code == "22P02":
+			return ErrPrincipalNotFound
+		default:
+			return fmt.Errorf("storage: deactivate lookup: %w", err)
+		}
+	}
+
+	if deactivate {
+		if _, err := tx.Exec(ctx, `update principal set deactivated_at = now(), active = false where id = $1`, id); err != nil {
+			return fmt.Errorf("storage: deactivate: %w", err)
+		}
+		remains, err := activeOwnerRemains(ctx, tx)
+		if err != nil {
+			return fmt.Errorf("storage: owner check: %w", err)
+		}
+		if !remains {
+			return ErrLastOwner // rolls back the deactivation
+		}
+	} else if _, err := tx.Exec(ctx, `update principal set deactivated_at = null, active = true where id = $1`, id); err != nil {
+		return fmt.Errorf("storage: reactivate: %w", err)
+	}
+
+	verb := "reactivate"
+	if deactivate {
+		verb = "deactivate"
+	}
+	if err := writeAuditRes(ctx, tx, actorID, verb, "principal", id, nil, map[string]any{"deactivated": deactivate}); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("storage: commit deactivate: %w", err)
+	}
+	return nil
+}
+
+// PurgePrincipal hard-deletes a principal (issue #143), gated on prior deactivation
+// (ErrNotDeactivated otherwise, the hard gate between the soft and hard delete).
+// The delete cascades the principal's owned rows (profile, credentials, grants,
+// group memberships, impersonation sessions); the audit trail survives, because the
+// audit foreign keys are ON DELETE SET NULL and every row keeps a denormalized
+// actor label. Requires an all-scope grant; refused (ErrLastOwner) if it would
+// remove the last owner grant.
+func (p *PG) PurgePrincipal(ctx context.Context, actorID, id string, action scope.Set) error {
+	if !action.All {
+		return ErrPrincipalForbidden
+	}
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("storage: begin purge: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var deactivatedAt *time.Time
+	var pgErr *pgconn.PgError
+	if err := tx.QueryRow(ctx, `select deactivated_at from principal where id = $1`, id).Scan(&deactivatedAt); err != nil {
+		switch {
+		case errors.Is(err, pgx.ErrNoRows):
+			return ErrPrincipalNotFound
+		case errors.As(err, &pgErr) && pgErr.Code == "22P02":
+			return ErrPrincipalNotFound
+		default:
+			return fmt.Errorf("storage: purge lookup: %w", err)
+		}
+	}
+	if deactivatedAt == nil {
+		return ErrNotDeactivated
+	}
+	// Audit the purge before the row is gone; the actor is the purger (unaffected by
+	// the delete), and the resource id is a plain text value, not a foreign key.
+	if err := writeAuditRes(ctx, tx, actorID, "purge", "principal", id, nil, nil); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `delete from principal where id = $1`, id); err != nil {
+		return fmt.Errorf("storage: purge principal: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		// The deferred owner trigger raises OG001 at COMMIT if the cascade removed
+		// the last owner grant.
+		if errors.As(err, &pgErr) && pgErr.Code == "OG001" {
+			return ErrLastOwner
+		}
+		return fmt.Errorf("storage: commit purge: %w", err)
 	}
 	return nil
 }

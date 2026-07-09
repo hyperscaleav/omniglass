@@ -279,7 +279,7 @@ The panel is **read-only**: it renders reachability, it does not author it. To a
 create the interface (a `<protocol>` named endpoint, `type` = its transport, on this component with
 a target) on the **Interfaces** page and a poll **task** over it on the **Tasks** page. A
 higher-level authoring flow (attach a **driver** to a component and fill its inputs) is the next
-design, per [ADR-0019](/architecture/decisions/#adr-0019-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver).
+design, per [ADR-0020](/architecture/decisions/#adr-0020-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver).
 
 ## What you see is your scope
 

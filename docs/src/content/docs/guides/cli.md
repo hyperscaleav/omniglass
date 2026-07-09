@@ -148,7 +148,8 @@ omniglass reachability list disp-1                              # needs componen
 - **Generated** (`internal/cli/api_gen.go`, do not edit): one command per API operation.
   The resource and verb come from the AIP-style path (`POST /locations` is `location
   create`, `GET /locations/{name}` is `location get <name>`, a `:verb` custom method is
-  `<resource> <verb> <id>`); path parameters are positional args, the request body is
+  `<resource> <verb> <id>`, so the principal lifecycle is `principal disable`, `principal
+  deactivate`, `principal reactivate`, and `principal purge <id>`); path parameters are positional args, the request body is
   `--flags`, and `--help` plus the example come from the operation's summary and
   description.
 - **Hand-written** (`internal/cli/api_hooks.go` and the run-mode files): the client

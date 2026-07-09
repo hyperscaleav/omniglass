@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/hyperscaleav/omniglass/internal/auth"
@@ -21,17 +22,18 @@ type principalGroupRef struct {
 }
 
 type principalBody struct {
-	ID      string              `json:"id"`
-	Kind    string              `json:"kind"`
-	Active  bool                `json:"active"`
-	Human   *humanBody          `json:"human,omitempty"`
-	Service *svcBody            `json:"service,omitempty"`
-	Grants  []grantBody         `json:"grants"`
-	Groups  []principalGroupRef `json:"groups"`
+	ID            string              `json:"id"`
+	Kind          string              `json:"kind"`
+	Active        bool                `json:"active"`
+	DeactivatedAt *time.Time          `json:"deactivated_at,omitempty" doc:"Set when the principal is deactivated (soft-deleted); absent means live"`
+	Human         *humanBody          `json:"human,omitempty"`
+	Service       *svcBody            `json:"service,omitempty"`
+	Grants        []grantBody         `json:"grants"`
+	Groups        []principalGroupRef `json:"groups"`
 }
 
 func toPrincipalBody(pr *storage.Principal) principalBody {
-	b := principalBody{ID: pr.ID, Kind: pr.Kind, Active: pr.Active, Grants: make([]grantBody, 0, len(pr.Grants)), Groups: make([]principalGroupRef, 0, len(pr.Groups))}
+	b := principalBody{ID: pr.ID, Kind: pr.Kind, Active: pr.Active, DeactivatedAt: pr.DeactivatedAt, Grants: make([]grantBody, 0, len(pr.Grants)), Groups: make([]principalGroupRef, 0, len(pr.Groups))}
 	if pr.Human != nil {
 		b.Human = &humanBody{Username: pr.Human.Username, Email: pr.Human.Email, DisplayName: pr.Human.DisplayName}
 	}
@@ -261,6 +263,51 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		}
 		return nil, nil
 	})
+
+	huma.Register(api, huma.Operation{
+		OperationID:   "deactivate-principal",
+		Method:        http.MethodPost,
+		Path:          "/principals/{id}:deactivate",
+		DefaultStatus: http.StatusNoContent,
+		Summary:       "Deactivate a principal",
+		Description:   "Soft-deletes a principal: it is hidden from the directory, can no longer authenticate, and its rows stay intact, reversibly (reactivate) until purged. Gated by principal:deactivate (all-scope). The last active owner cannot be deactivated.",
+		Middlewares:   huma.Middlewares{a.authn, a.require("principal", "deactivate")},
+	}, func(ctx context.Context, in *principalPathInput) (*struct{}, error) {
+		if err := gw.DeactivatePrincipal(ctx, actorID(ctx), in.ID, a.scopeFor(ctx, "principal", "deactivate")); err != nil {
+			return nil, mapPrincipalErr(err)
+		}
+		return nil, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID:   "reactivate-principal",
+		Method:        http.MethodPost,
+		Path:          "/principals/{id}:reactivate",
+		DefaultStatus: http.StatusNoContent,
+		Summary:       "Reactivate a principal",
+		Description:   "Reverses a deactivation: the account is restored to active and can authenticate again. Gated by principal:deactivate (all-scope).",
+		Middlewares:   huma.Middlewares{a.authn, a.require("principal", "deactivate")},
+	}, func(ctx context.Context, in *principalPathInput) (*struct{}, error) {
+		if err := gw.ReactivatePrincipal(ctx, actorID(ctx), in.ID, a.scopeFor(ctx, "principal", "deactivate")); err != nil {
+			return nil, mapPrincipalErr(err)
+		}
+		return nil, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID:   "purge-principal",
+		Method:        http.MethodPost,
+		Path:          "/principals/{id}:purge",
+		DefaultStatus: http.StatusNoContent,
+		Summary:       "Purge a principal",
+		Description:   "Hard-deletes a deactivated principal and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. Gated by principal:purge (admin-sensitive, all-scope), and the principal must be deactivated first.",
+		Middlewares:   huma.Middlewares{a.authn, a.require("principal", "purge", "admin")},
+	}, func(ctx context.Context, in *principalPathInput) (*struct{}, error) {
+		if err := gw.PurgePrincipal(ctx, actorID(ctx), in.ID, a.scopeFor(ctx, "principal", "purge")); err != nil {
+			return nil, mapPrincipalErr(err)
+		}
+		return nil, nil
+	})
 }
 
 // mapPrincipalErr translates the gateway's principal sentinels into HTTP status:
@@ -277,6 +324,8 @@ func mapPrincipalErr(err error) error {
 		return huma.Error422UnprocessableEntity("only human principals have these fields")
 	case errors.Is(err, storage.ErrLastOwner):
 		return huma.Error409Conflict("cannot revoke the last owner grant")
+	case errors.Is(err, storage.ErrNotDeactivated):
+		return huma.Error409Conflict("a principal must be deactivated before it can be purged")
 	case errors.Is(err, storage.ErrGrantNotFound):
 		return huma.Error404NotFound("grant not found")
 	case errors.Is(err, storage.ErrGrantExists):

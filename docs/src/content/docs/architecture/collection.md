@@ -31,9 +31,9 @@ scope kind). The full function/DAG authoring model below (multi-step, cross-inte
 what is built is the reach gate over four transports (`tcp`/`ssh`/`http` open the port, `icmp` pings). The
 protocol **drivers** that collect a normalized menu of datapoints and functions over a transport are the next
 slices. See
-[ADR-0017](/architecture/decisions/#adr-0017-telemetry-is-a-protobuf-event-over-jetstream-with-an-inline-owner-confining-consumer),
-[ADR-0018](/architecture/decisions/#adr-0018-the-reachability-verdict-is-a-built-in-state),
-and [ADR-0019](/architecture/decisions/#adr-0019-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver).
+[ADR-0018](/architecture/decisions/#adr-0018-telemetry-is-a-protobuf-event-over-jetstream-with-an-inline-owner-confining-consumer),
+[ADR-0019](/architecture/decisions/#adr-0019-the-reachability-verdict-is-a-built-in-state),
+and [ADR-0020](/architecture/decisions/#adr-0020-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver).
 :::
 
 Collection is built from **functions**. A versioned `ComponentTemplate` declares how to reach a
@@ -107,7 +107,7 @@ interfaces:
   default reachability probe. The protocol handler that turns a device's API into a normalized menu of
   datapoints and functions (the OIDs, the commands, the parse) is a separate **driver** layer, so the
   same protocol can run over several transports and a device's OIDs live in its driver, never on a
-  template. See [ADR-0019](/architecture/decisions/#adr-0019-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver).
+  template. See [ADR-0020](/architecture/decisions/#adr-0020-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver).
 - **`liveness`** is the per-interface reachability gate; it decides whether the interface's
   functions run. See [nodes](/architecture/nodes/).
 - **`persistent: true`** keeps a session open across function runs (interface lifecycle contains

@@ -50,10 +50,11 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0013](#adr-0013-a-grant-cannot-confer-capabilities-the-granter-lacks) | 2026-07-07 | Accepted | Grant creation is refused when the granted role's capabilities exceed the granter's all-scope capabilities (admin cannot self-promote to owner) |
 | [ADR-0014](#adr-0014-the-audit-trail-is-a-sensitive-read-not-reached-by-a-partial-global-wildcard) | 2026-07-07 | Superseded by [ADR-0015](#adr-0015-permissions-are-topic-patterns-single-token-and-tail-wildcards) | The audit trail is admin/owner-only: `audit` is a sensitive resource that `*:read` does not confer, only an explicit `audit:read` or `*:*` |
 | [ADR-0015](#adr-0015-permissions-are-topic-patterns-single-token-and-tail-wildcards) | 2026-07-07 | Accepted | Permissions match like NATS subjects (`*` one token, `>` tail); admin-sensitivity is a deeper `:admin` token no partial wildcard reaches; owner is `>` |
-| [ADR-0016](#adr-0016-a-node-is-a-kindnode-principal-with-an-interim-bearer-credential-and-static-per-connection-nats-subject-permissions) | 2026-07-07 | Accepted | A node is a `principal` of `kind=node` with a 1:1 detail table and a bearer `credential` row (interim shared secret), and per-node NATS isolation is static per-connection subject permissions via an in-process auth callback; nkey/JWT deferred |
-| [ADR-0017](#adr-0017-telemetry-is-a-protobuf-event-over-jetstream-with-an-inline-owner-confining-consumer) | 2026-07-07 | Accepted | Telemetry is a protobuf `Event` over a JetStream durable consumer; the consumer binds the owner from the task's interface and confines a node to its own tasks inline (no separate raw-telemetry table or Postgres queue); raw persistence + replay and label-based multi-owner routing deferred |
-| [ADR-0018](#adr-0018-the-reachability-verdict-is-a-built-in-state) | 2026-07-07 | Accepted | The per-interface reachability verdict `interface.reachable` is a built-in **state** (not a metric); availability is `time_in_state` over it; readiness is interface-type-defaulted and interface-overridable, node-executed, not a `calc_rule` |
-| [ADR-0019](#adr-0019-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver) | 2026-07-08 | Accepted | An interface is a device **API** named by its protocol (not a NIC); `interface_type` = its **transport** (the reach gate), a **driver** = the collect layer (protocol handler + transports + normalized menu, what a device CAN do), a template **curates** (SHOULD), the instance holds what **IS** there; OIDs/commands live in the driver, not the template |
+| [ADR-0016](#adr-0016-a-principal-can-be-purged-and-the-audit-trail-is-denormalized-to-survive-it) | 2026-07-09 | Accepted | A principal can be hard-deleted (purge, gated on deactivation); the audit trail survives via a denormalized actor label and `ON DELETE SET NULL`, retiring the "never hard-deleted" rule |
+| [ADR-0017](#adr-0017-a-node-is-a-kindnode-principal-with-an-interim-bearer-credential-and-static-per-connection-nats-subject-permissions) | 2026-07-07 | Accepted | A node is a `principal` of `kind=node` with a 1:1 detail table and a bearer `credential` row (interim shared secret), and per-node NATS isolation is static per-connection subject permissions via an in-process auth callback; nkey/JWT deferred |
+| [ADR-0018](#adr-0018-telemetry-is-a-protobuf-event-over-jetstream-with-an-inline-owner-confining-consumer) | 2026-07-07 | Accepted | Telemetry is a protobuf `Event` over a JetStream durable consumer; the consumer binds the owner from the task's interface and confines a node to its own tasks inline (no separate raw-telemetry table or Postgres queue); raw persistence + replay and label-based multi-owner routing deferred |
+| [ADR-0019](#adr-0019-the-reachability-verdict-is-a-built-in-state) | 2026-07-07 | Accepted | The per-interface reachability verdict `interface.reachable` is a built-in **state** (not a metric); availability is `time_in_state` over it; readiness is interface-type-defaulted and interface-overridable, node-executed, not a `calc_rule` |
+| [ADR-0020](#adr-0020-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver) | 2026-07-08 | Accepted | An interface is a device **API** named by its protocol (not a NIC); `interface_type` = its **transport** (the reach gate), a **driver** = the collect layer (protocol handler + transports + normalized menu, what a device CAN do), a template **curates** (SHOULD), the instance holds what **IS** there; OIDs/commands live in the driver, not the template |
 
 ## Entries
 
@@ -339,7 +340,29 @@ below from the project's history. From here it grows one slice at a time.
   set of all `resource:action[:admin]` the routes declare), the basis for a future custom-role preview.
 - **Supersedes:** [ADR-0014](#adr-0014-the-audit-trail-is-a-sensitive-read-not-reached-by-a-partial-global-wildcard).
 - **Closes the gap:** issue [#118](https://github.com/hyperscaleav/omniglass/issues/118).
-### ADR-0016: A node is a kind=node principal with an interim bearer credential and static per-connection NATS subject permissions
+
+### ADR-0016: A principal can be purged, and the audit trail is denormalized to survive it
+
+- **Date:** 2026-07-09 | **Status:** Accepted | **Pages:** [identity and access](/architecture/identity-access/)
+- **Decision:** A principal gains a full **lifecycle**: **disable** (reversible, the `active` flag),
+  **deactivate** (a soft delete, `deactivated_at`, hidden from the directory and unable to authenticate,
+  reversible), and **purge** (an irreversible hard delete of the row). Purge is **gated on prior deactivation**
+  (deactivate-before-delete) and on the admin-sensitive `principal:purge:admin`, so `admin` (which carries it
+  explicitly) and `owner` (`>`) can purge but a two-token `principal:*` cannot reach it
+  ([ADR-0015](#adr-0015-permissions-are-topic-patterns-single-token-and-tail-wildcards)). To keep the audit
+  trail through a hard delete, the actor's human-readable label is **denormalized** into every `audit_log` row
+  at write time, and the audit foreign keys become `ON DELETE SET NULL`: a purge nulls the id link but the text
+  survives, so "who did X" outlives the principal. The read side coalesces the live join to the snapshot.
+- **Context:** [ADR-0006](#adr-0006-a-single-owner-invariant-enforced-at-the-database)'s single-owner invariant
+  meant accounts were **disabled, never hard-deleted**, since audit rows referenced them (`RESTRICT`). But
+  operators need to remove accounts created by mistake, a common task, without erasing history or orphaning the
+  trail. Denormalizing the actor label decouples the audit record from the principal row, so the row can be
+  purged while the history stays legible; the deactivate gate prevents an accidental one-click hard delete, and
+  the last-active-owner guard (extended to deactivate) means a purgeable account is never the last owner. This
+  retires the "never hard-deleted" statement in the identity-access page.
+- **Closes:** issue [#143](https://github.com/hyperscaleav/omniglass/issues/143) (backend).
+
+### ADR-0017: A node is a kind=node principal with an interim bearer credential and static per-connection NATS subject permissions
 
 - **Date:** 2026-07-07 | **Status:** Accepted | **Pages:** [nodes](/architecture/nodes/), [identity and access](/architecture/identity-access/)
 - **Decision:** A node is a first-class `principal` of `kind='node'` with a 1:1 `node` detail table (keyed by
@@ -373,7 +396,7 @@ below from the project's history. From here it grows one slice at a time.
 - **Closes the gap:** the nkey/JWT node identity (the `nats` credential kind and the signed-nonce admission)
   and the single-use enrollment token are tracked with the node-identity hardening slice.
 
-### ADR-0017: Telemetry is a protobuf Event over JetStream with an inline owner-confining consumer
+### ADR-0018: Telemetry is a protobuf Event over JetStream with an inline owner-confining consumer
 
 - **Date:** 2026-07-07 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [datapoints](/architecture/datapoints/)
 - **Decision:** A node ships each collected batch as a protobuf `Event` (proto3, `proto/og/v1/event.proto`,
@@ -402,7 +425,7 @@ below from the project's history. From here it grows one slice at a time.
 - **Closes the gap:** raw-`Event` persistence (backfill/replay) and the raw -> admission -> trusted two-lane
   topology, plus label-based multi-owner resolution, are tracked with a later collection checkpoint.
 
-### ADR-0018: The reachability verdict is a built-in state
+### ADR-0019: The reachability verdict is a built-in state
 
 - **Date:** 2026-07-07 | **Status:** Accepted | **Pages:** [datapoints](/architecture/datapoints/), [collection](/architecture/collection/)
 - **Decision:** The per-interface reachability verdict `interface.reachable` (value domain `up` / `down`) is a
@@ -437,7 +460,7 @@ below from the project's history. From here it grows one slice at a time.
   that render the transitions are a later slice (5b); readiness config as an interface-type default is a later
   interface-type concern.
 
-### ADR-0019: An interface is a device API; the interface type is its transport, not its driver
+### ADR-0020: An interface is a device API; the interface type is its transport, not its driver
 
 - **Date:** 2026-07-08 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [nodes](/architecture/nodes/)
 - **Decision:** An `interface` is an **API endpoint we intend to call** on a component, identified by the
@@ -484,7 +507,7 @@ below from the project's history. From here it grows one slice at a time.
   with a `web` (http) and a `qrc` (tcp) interface, the "two APIs on one device" story. The driver catalog,
   normalization, discovery, templates, versioning, and the shadow-resolved device pack are later slices of the
   [collection epic](https://github.com/hyperscaleav/omniglass/issues/113) (slices 2 to 4 realize this model).
-- **Refines:** [ADR-0018](#adr-0018-the-reachability-verdict-is-a-built-in-state) (the reachability verdict is the
+- **Refines:** [ADR-0019](#adr-0019-the-reachability-verdict-is-a-built-in-state) (the reachability verdict is the
   first rung of the gate ladder this ADR names).
 - **Status note (2026-07-08):** the `interface = API` / `interface_type = transport` half is **built and stable**
   (this slice). The **driver / collect layer** (the separate `driver` entity, the normalized menu, and the
