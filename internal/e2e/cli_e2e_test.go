@@ -32,7 +32,9 @@ func TestCLIEndToEnd(t *testing.T) {
 	}
 
 	dsn := storagetest.NewDSN(t)
-	dbEnv := append(os.Environ(), "OMNIGLASS_DSN="+dsn)
+	// OMNIGLASS_DATA_DIR keeps the server's fallback secret key in a temp dir
+	// rather than this package's working directory under `go test`.
+	dbEnv := append(os.Environ(), "OMNIGLASS_DSN="+dsn, "OMNIGLASS_DATA_DIR="+t.TempDir())
 
 	// Hand-written command: bootstrap the owner (with a password, so the generated
 	// change-password command has a current secret to verify) and capture its token.
