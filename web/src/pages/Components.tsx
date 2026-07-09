@@ -1,7 +1,7 @@
 import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { useNavigate, useParams, useSearchParams } from "@solidjs/router";
-import TreeList, { type Blade, type ListConfig, type ListCtx, type ListNode, type PageDescriptor } from "../components/TreeList";
+import TreeList, { type ListConfig, type ListCtx, type ListNode, type PageDescriptor } from "../components/TreeList";
 import {
   type Component as Comp,
   COMPONENTS_KEY,
@@ -14,7 +14,7 @@ import { SYSTEMS_KEY, listSystems } from "../lib/systems";
 import { LOCATIONS_KEY, listLocations } from "../lib/locations";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
-import { ChevronRight, Maximize } from "../components/icons";
+import { ChevronRight } from "../components/icons";
 import ReachabilityPanel from "../components/ReachabilityPanel";
 
 // Components: the device inventory, the first page built on the generic TreeList.
@@ -295,11 +295,6 @@ export default function Components() {
     onBack: () => navigate("/components"),
     onDelete: (n) => del(n),
     renderDetail: (n, ctx) => detail(n, ctx),
-    renderBlade: (n, ctx): Blade => ({
-      title: n.display,
-      headerExtra: <button class="btn btn-quiet btn-sm btn-square" title="Open full page" onClick={() => { ctx.closeBlades(); ctx.openFull(n); }}><Maximize size={15} /></button>,
-      body: detail(n, ctx),
-    }),
     FormBody,
   };
 

@@ -1,7 +1,7 @@
 import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { useNavigate, useParams } from "@solidjs/router";
-import TreeList, { type Blade, type ListConfig, type ListCtx, type ListNode, type PageDescriptor, type Widget } from "../components/TreeList";
+import TreeList, { type ListConfig, type ListCtx, type ListNode, type PageDescriptor, type Widget } from "../components/TreeList";
 import Donut from "../components/Donut";
 import TreeSelect from "../components/TreeSelect";
 import {
@@ -16,7 +16,7 @@ import {
 } from "../lib/locations";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
-import { ChevronRight, Maximize, Plus, resolveIcon } from "../components/icons";
+import { ChevronRight, Plus, resolveIcon } from "../components/icons";
 
 // Locations: the place tree on the generic TreeList (campuses, buildings, floors,
 // rooms). Replaces the standalone Locations page/new/detail trio with the same
@@ -349,11 +349,6 @@ export default function Locations() {
     onBack: () => navigate("/locations"),
     onDelete: (n) => del(n),
     renderDetail: (n, ctx) => detail(n, ctx),
-    renderBlade: (n, ctx): Blade => ({
-      title: n.display,
-      headerExtra: <button class="btn btn-quiet btn-sm btn-square" title="Open full page" onClick={() => { ctx.closeBlades(); ctx.openFull(n); }}><Maximize size={15} /></button>,
-      body: detail(n, ctx),
-    }),
     FormBody,
   };
 

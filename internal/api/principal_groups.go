@@ -21,10 +21,12 @@ type groupBody struct {
 	Name        string `json:"name"`
 	DisplayName string `json:"display_name,omitempty"`
 	Description string `json:"description,omitempty"`
+	MemberCount int    `json:"member_count" doc:"How many principals belong to the group (populated on list and get; 0 from create/update)."`
+	GrantCount  int    `json:"grant_count" doc:"How many grants the group confers on its members."`
 }
 
 func toGroupBody(g *storage.Group) groupBody {
-	return groupBody{ID: g.ID, Name: g.Name, DisplayName: g.DisplayName, Description: g.Description}
+	return groupBody{ID: g.ID, Name: g.Name, DisplayName: g.DisplayName, Description: g.Description, MemberCount: g.MemberCount, GrantCount: g.GrantCount}
 }
 
 type memberBody struct {

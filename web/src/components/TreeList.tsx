@@ -1,4 +1,4 @@
-import { type Accessor, type Component, type JSX, For, Show, createEffect, createMemo, createSignal, createUniqueId, onCleanup, untrack } from "solid-js";
+import { type Accessor, type Component, type JSX, For, Show, createEffect, createMemo, createSignal, createUniqueId, untrack } from "solid-js";
 import { Dynamic } from "solid-js/web";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
@@ -12,8 +12,10 @@ import Drawer from "./Drawer";
 import ColumnMenu from "./ColumnMenu";
 import InfoTip from "./InfoTip";
 import {
-  ChevronDown, ChevronLeft, ChevronsDownUp, ChevronsUpDown, Columns, Check, ListTree, Rows, Maximize, Plus, Pencil, Trash, X,
+  ChevronDown, ChevronsDownUp, ChevronsUpDown, Columns, Check, ListTree, Rows, Maximize, Plus, Pencil, Trash,
 } from "./icons";
+import BladeStack from "./BladeStack";
+import { type BladeDef, createBladeController } from "../lib/blades";
 
 // TreeList: the one config-driven tree-list body (composing ListShell), the inventory shell. Every entity page (Components,
 // Systems, Locations) is a config over this, never a fork. It owns the filter
@@ -49,8 +51,6 @@ export interface ListNode {
 }
 
 export type FormState<N> = { mode: "create"; parent: N | null } | { mode: "edit"; node: N };
-
-export type Blade = { title: JSX.Element; headerExtra?: JSX.Element; body: JSX.Element };
 
 // A summary widget: a compact badge (collapsed rail) and a full tile (expanded
 // board). Both receive the context so a widget can drive the filter (facet
@@ -111,9 +111,6 @@ export interface ListConfig<N extends ListNode> {
   leadIcon?: (n: N) => JSX.Element;
   canAddChild?: (n: N) => boolean;
   renderDetail: (n: N, ctx: ListCtx<N>) => JSX.Element;
-  // when present, a row opens a blade instead of the full page; the body is the
-  // same detail content, with a Maximize affordance in headerExtra.
-  renderBlade?: (n: N, ctx: ListCtx<N>) => Blade;
   FormBody: Component<{ form: FormState<N>; close: () => void; ctx: ListCtx<N> }>;
   onOpenNode?: (n: N) => void;
   onBack?: () => void;
@@ -162,12 +159,11 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
   const [sort, setSort] = createSignal<SortState>(null);
   const [fullPage, setFullPage] = createSignal<N | null>(null);
   const [form, setForm] = createSignal<FormState<N> | null>(null);
-  // The blade stack holds node ids, not node objects: ids are stable string values
-  // so <For> keeps each blade's DOM across a refetch (which rebuilds node objects),
-  // while the blade body re-resolves its node from the fresh index and updates in
-  // place. Storing references here would tear down and remount every blade on any
-  // mutation refetch.
-  const [stack, setStack] = createSignal<string[]>([]);
+  // The cross-entity blade stack (shared primitive). Holds { kind, id } refs; this
+  // page only ever pushes its own entity kind, and the blade body re-resolves the
+  // node from the fresh index by id so a surviving blade stays live across a
+  // refetch. See lib/blades and components/BladeStack.
+  const blades = createBladeController();
 
   createEffect(() => localStorage.setItem(`${cfg.storageKey}-cols`, JSON.stringify(cols())));
   createEffect(() => localStorage.setItem(`${cfg.storageKey}-view`, viewMode()));
@@ -187,10 +183,7 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
   // put. fullPage is read untracked so this effect depends only on index().
   createEffect(() => {
     const idx = index();
-    setStack((s) => {
-      const next = s.filter((id) => idx.byId.has(id));
-      return next.length === s.length ? s : next;
-    });
+    blades.filter((r) => idx.byId.has(r.id));
     const fp = untrack(fullPage);
     if (fp) {
       const fresh = idx.byId.get(fp.id) ?? null;
@@ -208,7 +201,7 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
     }
     const n = index().byId.get(f) ?? null;
     showFull(n);
-    if (n) setStack([]);
+    if (n) blades.close();
   });
 
   const filtering = createMemo(() => chips().length > 0);
@@ -254,69 +247,16 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
     createEffect(() => localStorage.setItem(`${cfg.storageKey}-sumopen`, summaryOpen() ? "1" : "0"));
   }
 
-  // Blade ops. pushBlade truncates to an existing entry (so a breadcrumb ancestor
-  // collapses the stack back to it) or appends a new one.
-  const pushBlade = (n: N) =>
-    setStack((s) => {
-      const i = s.indexOf(n.id);
-      return i >= 0 ? s.slice(0, i + 1) : [...s, n.id];
-    });
-  const popBlade = () => setStack((s) => s.slice(0, -1));
-  const closeBlades = () => setStack([]);
+  // Blade ops delegate to the shared controller; a node maps to a { kind, id } ref
+  // under this page's entity kind. push truncates-to-existing (breadcrumb collapse).
+  const pushBlade = (n: N) => blades.push({ kind: cfg.entity.name, id: n.id });
+  const popBlade = () => blades.pop();
+  const closeBlades = () => blades.close();
 
   const openFull = (n: N) => (cfg.onOpenNode ? cfg.onOpenNode(n) : showFull(n));
-  // A row opens a blade when the config renders one, else the full page.
-  const openNode = (n: N) => (cfg.renderBlade ? setStack([n.id]) : openFull(n));
+  // A row opens a blade; Maximize promotes it to the addressable full page.
+  const openNode = (n: N) => pushBlade(n);
   const back = () => (cfg.onBack ? cfg.onBack() : showFull(null));
-
-  // Trap Tab within the top blade so focus cannot wander to the covered page.
-  const trapTab = (e: KeyboardEvent, el: HTMLElement) => {
-    if (e.key !== "Tab") return;
-    const items = [...el.querySelectorAll<HTMLElement>('a[href],button:not([disabled]),input,select,textarea,[tabindex]:not([tabindex="-1"])')].filter((x) => x.offsetParent !== null);
-    if (!items.length) return;
-    const first = items[0];
-    const last = items[items.length - 1];
-    const active = document.activeElement;
-    if (e.shiftKey && (active === first || active === el)) {
-      e.preventDefault();
-      last.focus();
-    } else if (!e.shiftKey && active === last) {
-      e.preventDefault();
-      first.focus();
-    }
-  };
-
-  // Escape pops the top blade, unless a form Drawer is open over it (that dialog
-  // owns Escape).
-  const onKey = (e: KeyboardEvent) => {
-    if (e.key === "Escape" && stack().length && !form()) {
-      e.stopPropagation();
-      popBlade();
-    }
-  };
-  window.addEventListener("keydown", onKey);
-  onCleanup(() => window.removeEventListener("keydown", onKey));
-
-  // Focus management: when the stack opens, remember the element that had focus and
-  // move focus into the top blade; when it closes, restore focus to that element.
-  let priorFocus: HTMLElement | null = null;
-  let wasOpen = false;
-  createEffect(() => {
-    const open = stack().length > 0;
-    if (open && !wasOpen) priorFocus = document.activeElement as HTMLElement | null;
-    else if (!open && wasOpen) {
-      const el = priorFocus;
-      priorFocus = null;
-      queueMicrotask(() => el?.focus?.());
-    }
-    wasOpen = open;
-    if (open) {
-      queueMicrotask(() => {
-        const asides = document.querySelectorAll<HTMLElement>("aside[data-blade]");
-        asides[asides.length - 1]?.focus();
-      });
-    }
-  });
 
   const baseCtx = {
     fact: (label: string, value: JSX.Element) => (
@@ -366,6 +306,30 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
   // drills by pushing another blade.
   const ctxFull: ListCtx<N> = { ...baseCtx, full: true, go: openFull };
   const ctxBlade: ListCtx<N> = { ...baseCtx, full: false, go: pushBlade };
+
+  // Single-kind registry for the shared BladeStack: this page's own entity. The
+  // title is the node display; the body is renderDetail in blade context (drills by
+  // pushing a child blade); Maximize promotes the blade to the addressable full page.
+  const bladeRegistry: Record<string, BladeDef> = {
+    [cfg.entity.name]: {
+      Title: (p) => <>{index().byId.get(p.id)?.display}</>,
+      Body: (p) => <Show when={index().byId.get(p.id)}>{(n) => cfg.renderDetail(n(), ctxBlade)}</Show>,
+      headerExtra: (p) => (
+        <Show when={index().byId.get(p.id)}>
+          {(n) => (
+            <button
+              class="btn btn-quiet btn-sm btn-square"
+              title="Open full page"
+              aria-label="Open full page"
+              onClick={() => { blades.close(); openFull(n()); }}
+            >
+              <Maximize size={15} />
+            </button>
+          )}
+        </Show>
+      ),
+    },
+  };
 
   const colBox = (on: boolean) =>
     "flex h-4 w-4 flex-none items-center justify-center rounded border " +
@@ -634,66 +598,6 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
     </section>
   );
 
-  const BladeStack = () => {
-    const top = () => stack().length - 1;
-    return (
-      <Show when={stack().length}>
-        <div class="fixed inset-0 z-60 bg-black/45" onClick={closeBlades} />
-        <For each={stack()}>
-          {(id, i) => {
-            const node = () => index().byId.get(id);
-            const isTop = () => i() === top();
-            const titleId = `blade-title-${id}`;
-            return (
-              <Show when={node()}>
-                {(n) => {
-                  // Recomputes only when this node's data changes (its id is stable,
-                  // so the aside DOM persists across a refetch).
-                  const blade = createMemo(() => cfg.renderBlade!(n(), ctxBlade));
-                  return (
-                    <aside
-                      data-blade
-                      tabindex={-1}
-                      role="dialog"
-                      aria-modal={isTop() ? "true" : undefined}
-                      aria-labelledby={titleId}
-                      class="fixed inset-y-0 flex w-full max-w-md flex-col border-l border-base-300 bg-base-100 shadow-2xl outline-none"
-                      style={{ right: `${(top() - i()) * 40}px`, "z-index": 61 + i() }}
-                      onKeyDown={(e) => isTop() && trapTab(e, e.currentTarget)}
-                    >
-                      <header class="flex items-center justify-between gap-3 border-b border-base-300 px-4 py-3">
-                        <div class="flex min-w-0 items-center gap-2">
-                          <Show when={i()}>
-                            <button class="btn btn-quiet btn-sm btn-square" title="Back" onClick={popBlade}>
-                              <ChevronLeft size={16} />
-                            </button>
-                          </Show>
-                          <div id={titleId} class="min-w-0 truncate text-sm font-semibold">{blade().title}</div>
-                        </div>
-                        <div class="flex flex-none items-center gap-1">
-                          {blade().headerExtra}
-                          <button class="btn btn-quiet btn-sm btn-square" title="Close" aria-label="Close" onClick={closeBlades}>
-                            <X size={16} />
-                          </button>
-                        </div>
-                      </header>
-                      <div class="flex-1 overflow-auto p-5" classList={{ "pointer-events-none opacity-55": !isTop() }}>
-                        {blade().body}
-                      </div>
-                      <Show when={!isTop()}>
-                        <div class="absolute inset-0 cursor-pointer" onClick={() => setStack((s) => s.slice(0, i() + 1))} />
-                      </Show>
-                    </aside>
-                  );
-                }}
-              </Show>
-            );
-          }}
-        </For>
-      </Show>
-    );
-  };
-
   return (
     <>
       <Show when={cfg.error?.()}>
@@ -704,7 +608,7 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
       <Show when={fullPage()} fallback={<ListBody />}>
         {(n) => <FullPage node={n()} />}
       </Show>
-      <BladeStack />
+      <BladeStack controller={blades} registry={bladeRegistry} />
       <Show when={form()}>
         {(f) => (
           <Drawer open={true} onClose={() => setForm(null)} title={f().mode === "edit" ? `Edit ${cfg.entity.name}` : `New ${cfg.entity.name}`}>

@@ -1,17 +1,19 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, fireEvent, screen, waitFor } from "@solidjs/testing-library";
+import { render, fireEvent, screen, waitFor, within } from "@solidjs/testing-library";
+import { Router, Route } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import Users from "./Users";
 import { PRINCIPALS_KEY, ROLES_KEY, type Principal } from "../lib/principals";
+import { GROUPS_KEY } from "../lib/groups";
 import { ME_KEY, type Me } from "../lib/auth";
 
 // The Users page is a config over the shared FlatList: a directory row per
-// principal, a row opening the side Drawer detail (facts, grants, disable / enable,
-// impersonate, and an inline edit), and a create Drawer. Data is seeded into the
-// query cache so no server is needed; `>` grants the caller every permission, so
-// every gated affordance is present.
+// principal, a row opening the detail blade (facts, the groups it belongs to, grants,
+// disable / enable, impersonate, and an inline edit), and a create Drawer. Data is
+// seeded into the query cache so no server is needed; `>` grants the caller every
+// permission, so every gated affordance is present.
 const seed: Principal[] = [
-  { id: "u-alice", kind: "human", active: true, human: { username: "alice", email: "alice@example.com", display_name: "Alice Ng" }, grants: [{ id: "g1", role: "admin", scope_kind: "all" }] },
+  { id: "u-alice", kind: "human", active: true, human: { username: "alice", email: "alice@example.com", display_name: "Alice Ng" }, grants: [{ id: "g1", role: "admin", scope_kind: "all" }], groups: [{ id: "g-hd", name: "Help Desk" }] },
   { id: "u-svc", kind: "service", active: true, service: { label: "ingest-bot" }, grants: [] },
   { id: "u-bob", kind: "human", active: false, human: { username: "bob" }, grants: [] },
 ];
@@ -27,9 +29,17 @@ function mount() {
   qc.setQueryData(["locations"], []);
   qc.setQueryData(["systems"], []);
   qc.setQueryData(["components"], []);
+  // The group a user drills into (its blade self-fetches these by id).
+  qc.setQueryData([...GROUPS_KEY, "g-hd"], { id: "g-hd", name: "help-desk", display_name: "Help Desk" });
+  qc.setQueryData([...GROUPS_KEY, "g-hd", "members"], []);
+  qc.setQueryData([...GROUPS_KEY, "g-hd", "grants"], []);
+  // A Router wraps the page so its router hooks (the ?u= deep-link uses
+  // useSearchParams) have a context; a catch-all route renders Users.
   return render(() => (
     <QueryClientProvider client={qc}>
-      <Users />
+      <Router>
+        <Route path="*" component={() => <Users />} />
+      </Router>
     </QueryClientProvider>
   ));
 }
@@ -48,24 +58,29 @@ describe("Users page", () => {
     expect(getByText("inactive")).toBeTruthy(); // bob is disabled
   });
 
-  it("opens the detail Drawer on a row and swaps to the inline edit form and back", async () => {
+  it("opens read-only, and the header pencil flips the profile to editable inputs and back", async () => {
     mount();
     fireEvent.click(screen.getByText("Alice Ng"));
-    // The Drawer detail shows the profile facts and the admin affordances.
-    expect(await screen.findByText("Username")).toBeTruthy();
-    expect(screen.getByText("alice@example.com")).toBeTruthy();
-    const edit = screen.getByText("Edit");
-    expect(edit).toBeTruthy();
-    // Edit swaps the read view to the inline edit form (no nested dialog): the
-    // username input is seeded with the current value.
-    fireEvent.click(edit);
-    const input = (await screen.findByLabelText("Username")) as HTMLInputElement;
+    const blade = await waitFor(() => {
+      const el = document.querySelector("aside[data-blade]");
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    // Read mode: the profile is facts, and there is no editable username input or Save.
+    expect(within(blade).getByText("Username")).toBeTruthy();
+    expect(within(blade).getByText("alice@example.com")).toBeTruthy();
+    expect(within(blade).queryByLabelText("Username")).toBeNull();
+    expect(within(blade).queryByText("Save")).toBeNull();
+    // The header pencil opens edit mode: the username input is seeded, Save appears.
+    fireEvent.click(within(blade).getByLabelText("Edit"));
+    const input = (await within(blade).findByLabelText("Username")) as HTMLInputElement;
     expect(input.value).toBe("alice");
-    expect(screen.getByText("Save changes")).toBeTruthy();
-    // Cancel returns to the read view (the Edit button is back, the form is gone).
-    fireEvent.click(screen.getByText("Cancel"));
-    expect(await screen.findByText("Edit")).toBeTruthy();
-    expect(screen.queryByText("Save changes")).toBeNull();
+    expect(within(blade).getByText("Save")).toBeTruthy();
+    expect(within(blade).getByText("Disable")).toBeTruthy(); // the destructive slot for a user
+    // Cancel returns to read mode (input gone, pencil back).
+    fireEvent.click(within(blade).getByText("Cancel"));
+    expect(await within(blade).findByLabelText("Edit")).toBeTruthy();
+    expect(within(blade).queryByLabelText("Username")).toBeNull();
   });
 
   it("lands on the new user's detail Drawer after a successful create", async () => {
@@ -90,6 +105,21 @@ describe("Users page", () => {
     // (only present in the detail view) shows, and the create submit is gone.
     expect(await screen.findByText("carol@example.com")).toBeTruthy();
     await waitFor(() => expect(screen.queryByText("Create user")).toBeNull());
+  });
+
+  it("drills from a user's group to a group blade nested over the user (user -> group)", async () => {
+    mount();
+    fireEvent.click(screen.getByText("Alice Ng"));
+    // The user blade lists the groups the user belongs to.
+    const userBlade = await waitFor(() => {
+      const el = document.querySelector("aside[data-blade]");
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    // Click the group inside the blade (not the list badge behind it): a second
+    // blade (the group) opens over the user.
+    fireEvent.click(within(userBlade).getByText("Help Desk"));
+    await waitFor(() => expect(document.querySelectorAll("aside[data-blade]").length).toBe(2));
   });
 
   it("narrows the directory through the FilterBar (kind:service keeps only the bot)", async () => {

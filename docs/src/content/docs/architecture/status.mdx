@@ -437,8 +437,7 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   granted to a group resolves into a member's read scope and permissions; removal and group-deletion drop it;
   dedup / duplicate-name / idempotent-add hold) and an HTTP end-to-end test (a no-access user gains read once
   added to a group holding viewer @ all and loses it on removal; management is `principal_group`-gated; an admin
-  cannot group-grant owner). The console Groups page and the inherited-vs-direct grant view on the user detail
-  are the next slice.
+  cannot group-grant owner).
 - **Collection slice (checkpoints 1-2): the storage tier and the node runtime.** The first cut of the
   [collection](/architecture/collection/) engine. Checkpoint 1 landed the storage tier: the `node`,
   `interface_type`, `interface`, `task`, `datapoint_type`, and `metric_datapoint` tables (an idempotent
@@ -583,3 +582,38 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   menu of datapoints and functions (OIDs, commands, parse) is a separate, later concern, decided in
   [ADR-0019](/architecture/decisions/#adr-0019-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver);
   this slice ships only the transport / reach tier of it.
+- **Console: unified identity detail sidebars on a shared blade stack.** The Azure-style blade stack is lifted
+  out of `TreeList` into a standalone `BladeStack` primitive over a `createBladeController`, and both the
+  inventory tree and the flat identity pages (`FlatList`) now consume it. A stack entry is a cross-entity
+  `{ kind, id }` ref against a registry, so a user's group opens the group's blade over it and a group's member
+  opens that user's blade, both stacking. Depth is bounded by construction: each page roots one kind and drills
+  one direction (Users: user to group; Groups: group to user; Roles: role), so the drill graph is acyclic and
+  the reverse relation on a terminal blade is read-only. A shared `DetailShell` (`Fact`, `RelatedList`,
+  `DetailActions`) standardizes the chrome, so a group's members and a user's groups render through one list
+  idiom and every footer places the destructive action left of the primary. Roles moves from the card catalog
+  onto the same `FlatList` + read-only blade. Behaviour-preserving for the inventory pages (the Locations blade
+  is identical); proven by the web suite (the `BladeStack`, `DetailShell`, and both-way identity drill tests)
+  and tsc.
+- **Console: the read -> Edit -> Save contract on a blade footer action bar.** Every detail blade opens
+  read-only; the header is chrome only (back, full-page, close), and a `createEditSlot` per blade drives a sticky
+  **footer action bar** that `BladeStack` renders: a destructive action on the left (always available), secondary
+  actions in a `⋯` kebab, and Edit on the right (which swaps to Save / Cancel in edit mode). The body reads
+  `useBladeEdit().editing()` to switch its sections read-only vs live and registers the whole footer through
+  `bind` (`editable`, `save`, `cancel`, `destructive`, `secondary`), so editability and the destructive label
+  follow the caller's permission and a read-only blade (a role) registers nothing and shows no bar. In edit mode
+  the profile becomes inputs, member add / remove stages locally, and the `GrantBuilder` gains a `bind` so its
+  diff commits as part of the one blade Save; the destructive action (Delete for a group, Disable / Enable for a
+  user, per the accounts-never-deleted invariant) confirms and is reachable straight from read mode. Save commits
+  the staged session together and Cancel reverts. A single consolidated audit event and a config restore point
+  (one backend action per Save) remain deferred to a batched endpoint; the user deactivate / purge lifecycle is
+  its own slice. Proven by the web suite (the edit-slot, the `BladeStack` footer-bar chrome, and the Group / User
+  read-vs-edit tests) and tsc.
+- **Identity: the Groups console + inherited-vs-direct grants, UI.** A **Groups** page (`Settings > Groups`,
+  gated `principal_group:read`) as a config over the shared `FlatList`: list and create, and a row Drawer with
+  member add/remove and the grant builder (reused, wired to the group grant endpoints, so a group's members
+  inherit what it grants). On the **user** detail, grants now split into **direct** (editable) and **inherited
+  from a group** (read-only, tagged `from <group>`), so it is clear where a user's access comes from; the
+  principal grant body gained `group_id` / `group_name` for the distinction. Proven by the web suite and tsc,
+  with the route guard and sidebar both gating `/groups` on `principal_group`. This completes grant-by-group
+  ([#90](https://github.com/hyperscaleav/omniglass/issues/90)); dynamic membership and SCIM group mapping remain
+  deferred.
