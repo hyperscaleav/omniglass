@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/auth"
@@ -96,6 +97,11 @@ func TestPasswordLoginCookieSession(t *testing.T) {
 	}
 	if !session.HttpOnly {
 		t.Fatal("the session cookie must be HttpOnly")
+	}
+	// The session cookie carries a bounded absolute lifetime (not a forever cookie):
+	// Max-Age is the fixed session lifetime in seconds, so a stolen cookie expires.
+	if want := int(12 * time.Hour / time.Second); session.MaxAge != want {
+		t.Fatalf("session cookie Max-Age = %d, want %d (the 12h session lifetime)", session.MaxAge, want)
 	}
 
 	// The cookie authenticates /auth/me; no cookie is 401.

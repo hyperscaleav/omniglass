@@ -30,13 +30,37 @@ export const api = createClient<paths>({
   fetch: (input) => globalThis.fetch(input),
 });
 
+// onUnauthorized fires when a request to a protected route is rejected with 401,
+// which means a session that WAS valid has ended (expired, revoked by a password
+// reset, or the account locked out). The app registers a handler (in index.tsx)
+// that drops the cached principal so the AuthGuard bounces to /login immediately,
+// rather than waiting for /auth/me to refetch on its own. Nil until registered.
+let onUnauthorized: (() => void) | null = null;
+export function setUnauthorizedHandler(fn: () => void): void {
+  onUnauthorized = fn;
+}
+
+// The auth endpoints handle their own 401s (an anonymous /auth/me, a bad-password
+// /auth/login, the public /auth/status), so a 401 from them is not a "bumped
+// session" and must not trigger the global bounce.
+function isAuthEndpoint(url: string): boolean {
+  return /\/auth\/(me|login|status)$/.test(url.split("?")[0]);
+}
+
 // Attach a stored bearer token (the optional token path) on top of the session
-// cookie; the server accepts either.
+// cookie; the server accepts either. On a 401 from any other route, signal that the
+// session has ended so the guard can redirect.
 const authMiddleware: Middleware = {
   async onRequest({ request }) {
     const token = getToken();
     if (token) request.headers.set("Authorization", `Bearer ${token}`);
     return request;
+  },
+  async onResponse({ request, response }) {
+    if (response.status === 401 && !isAuthEndpoint(request.url)) {
+      onUnauthorized?.();
+    }
+    return response;
   },
 };
 api.use(authMiddleware);
