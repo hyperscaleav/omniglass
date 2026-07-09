@@ -516,3 +516,21 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   with the route guard and sidebar both gating `/groups` on `principal_group`. This completes grant-by-group
   ([#90](https://github.com/hyperscaleav/omniglass/issues/90)); dynamic membership and SCIM group mapping remain
   deferred.
+- **Secret: the cascade-resolved encrypted value.** The first of the [config, credentials, and
+  variables](/architecture/variables/) trio lands, and the prerequisite for the [collection](/architecture/collection/)
+  driver's interface inputs ([#155](https://github.com/hyperscaleav/omniglass/issues/155)). A **secret** is a
+  typed, encrypted-at-rest value owned on the exclusive arc (`global | location | system | component`) and
+  resolved most-specific-wins down the [cascade](/architecture/cascade/). Its shape is a `secret_type` registry
+  (per-field secrecy and origin; `snmp-community` and `basic-auth` seeded); crypto is **envelope AES-256-GCM**
+  behind a pluggable KEK provider (env / file / fallback), with `(owner, name, field)` bound as AAD so a
+  ciphertext cannot be lifted between rows. The load-bearing new piece is the **cascade resolver**: it walks the
+  three owner trees up from a component, tags each owner with a band and depth, and ranks per name (highest tier,
+  then deepest), returning the winner and the shadowed candidates. `GET /secret-types`, `/secrets` (all-scope
+  list, create, delete), and `GET /components/{name}/effective-secrets` (the masked cascade view); read rides the
+  viewer floor, create and delete are gated by `secret:create` / `secret:delete` (admin `secret:*`, owner `>`).
+  The console adds a **Secrets** directory and the **effective-secrets** panel on a component's detail (the
+  pedagogical view of which value wins where). Renamed **credential to secret** (ADR-0017).
+  Proven by a real-crypto testcontainer test (seal, jsonb round-trip, unseal; encrypted-at-rest; full cascade
+  precedence), an HTTP e2e (the cascade and the authz split), and the web data-layer suite. Deferred: the
+  **variable** and **config** members of the page, the reveal endpoint and the interpolation consumer, secret
+  **lifecycle** (oauth2 refresh, rotation), and groups / weighted precedence in the cascade.

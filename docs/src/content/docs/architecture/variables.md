@@ -3,9 +3,20 @@ title: "Config, credentials, and variables"
 description: "Three kinds of operator-set value resolved by one cascade: config keyed to a signal, credentials with a lifecycle, and free variables."
 sidebar:
   badge:
-    text: Design
-    variant: caution
+    text: Partial
+    variant: note
 ---
+
+:::note[What shipped: credential is now `secret`, and its first slice is built]
+The **credential** member below is renamed **`secret`** and its first slice is built
+([ADR-0017](/architecture/decisions/#adr-0017-credential-is-renamed-secret-the-cascade-is-the-reuse-mechanism),
+[#155](https://github.com/hyperscaleav/omniglass/issues/155)): a typed, encrypted-at-rest value owned on the
+exclusive arc and resolved down the cascade, a `secret_type` shape registry, envelope AES-256-GCM crypto behind a
+pluggable KEK provider, the `$sec:` consumption-site token, and the operator surfaces (a Secrets directory and the
+per-component effective-secrets cascade panel). Read the [build progress](/architecture/status/#build-progress)
+note for the shipped shape. The **config** and **variable** members stay `Design`, so this page is `Partial`.
+Where the prose below says "credential," read "secret."
+:::
 
 Everything an operator **sets** resolves the same way: a typed value, owned at a scope, resolved
 most-specific-wins down the [cascade](/architecture/cascade/) on every poll and every tick. Three
