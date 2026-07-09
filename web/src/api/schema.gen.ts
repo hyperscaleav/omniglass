@@ -200,6 +200,26 @@ export interface paths {
         patch: operations["update-component"];
         trace?: never;
     };
+    "/components/{name}/effective-secrets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Effective secrets for a component
+         * @description Resolves the secrets that cascade onto a component (global -> location -> system -> component, most-specific winning), each masked, winner and shadowed candidates. Gated by secret:read; the component must be in the caller's component read scope.
+         */
+        get: operations["effective-secrets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/healthz": {
         parameters: {
             query?: never;
@@ -660,6 +680,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/secret-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List secret types
+         * @description Lists the secret_type shapes a secret can take, for the create form. Gated by secret:read.
+         */
+        get: operations["list-secret-types"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/secrets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List secrets (admin directory)
+         * @description Lists every secret with masked fields. Requires an all-scope read; the scoped, per-component view is the effective-secrets route. Gated by secret:read.
+         */
+        get: operations["list-secrets"];
+        put?: never;
+        /**
+         * Create a secret
+         * @description Seals a secret at an owner scope (a global secret needs an all-scoped grant). Fields are validated and encrypted against the type shape. Gated by secret:create.
+         */
+        post: operations["create-secret"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/secrets/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete a secret
+         * @description Removes a secret by id. Gated by secret:delete; read and delete scopes on the owner drive the 404 versus 403 split.
+         */
+        delete: operations["delete-secret"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/systems": {
         parameters: {
             query?: never;
@@ -889,6 +973,29 @@ export interface components {
             /** @description Unique sign-in name (lowercase letters, digits, and . _ -) */
             username: string;
         };
+        CreateSecretInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateSecretInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The operator field map, validated against the type shape */
+            fields: {
+                [key: string]: string;
+            };
+            /** @description The cascade key; unique per owner */
+            name: string;
+            /** @description The owning entity's name; omit for a global secret */
+            owner?: string;
+            /**
+             * @description Which tier owns this secret
+             * @enum {string}
+             */
+            owner_kind: "global" | "location" | "system" | "component";
+            /** @description A secret_type id */
+            secret_type: string;
+        };
         CreateSystemInputBody: {
             /**
              * Format: uri
@@ -905,6 +1012,15 @@ export interface components {
             parent?: string;
             /** @description A system_type id */
             system_type: string;
+        };
+        EffectiveSecretsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/EffectiveSecretsOutputBody.json
+             */
+            readonly $schema?: string;
+            secrets: components["schemas"]["ResolvedSecretBody"][] | null;
         };
         ErrorDetail: {
             /** @description Where the error occurred, e.g. 'body.items[3].tags' or 'path.thing-id' */
@@ -1113,6 +1229,24 @@ export interface components {
             readonly $schema?: string;
             principals: components["schemas"]["PrincipalBody"][] | null;
         };
+        ListSecretTypesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListSecretTypesOutputBody.json
+             */
+            readonly $schema?: string;
+            secret_types: components["schemas"]["SecretTypeBody"][] | null;
+        };
+        ListSecretsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListSecretsOutputBody.json
+             */
+            readonly $schema?: string;
+            secrets: components["schemas"]["SecretBody"][] | null;
+        };
         ListSystemsOutputBody: {
             /**
              * Format: uri
@@ -1202,6 +1336,26 @@ export interface components {
             id: string;
             kind: string;
         };
+        ResolvedSecretBody: {
+            /**
+             * Format: int64
+             * @description Cascade tier: 0 global, 1 location, 2 system, 3 component
+             */
+            band: number;
+            /**
+             * Format: int64
+             * @description Distance up the tier's tree from the component (0 nearest)
+             */
+            depth: number;
+            fields: components["schemas"]["SecretFieldBody"][] | null;
+            name: string;
+            owner_id?: string;
+            owner_kind: string;
+            owner_name?: string;
+            secret_type: string;
+            /** @description True for the resolved value; false for a shadowed candidate */
+            winner: boolean;
+        };
         RoleBody: {
             description?: string;
             display_name?: string;
@@ -1219,6 +1373,40 @@ export interface components {
              */
             readonly $schema?: string;
             roles: components["schemas"]["RoleBody"][] | null;
+        };
+        SecretBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/SecretBody.json
+             */
+            readonly $schema?: string;
+            fields: components["schemas"]["SecretFieldBody"][] | null;
+            id: string;
+            name: string;
+            owner_id?: string;
+            owner_kind: string;
+            owner_name?: string;
+            secret_type: string;
+        };
+        SecretFieldBody: {
+            name: string;
+            /** @description Whether the field is encrypted at rest and masked here */
+            secret: boolean;
+            value: string;
+        };
+        SecretTypeBody: {
+            display_name: string;
+            fields: components["schemas"]["SecretTypeFieldBody"][] | null;
+            id: string;
+            official: boolean;
+        };
+        SecretTypeFieldBody: {
+            name: string;
+            /** @description operator (set at creation) or lifecycle (filled by the secret's own machinery) */
+            origin: string;
+            secret: boolean;
+            type: string;
         };
         SvcBody: {
             label: string;
@@ -1747,6 +1935,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ComponentBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "effective-secrets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The component's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EffectiveSecretsOutputBody"];
                 };
             };
             /** @description Error */
@@ -2768,6 +2988,127 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["RolesOutputBody"];
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-secret-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListSecretTypesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-secrets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListSecretsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-secret": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSecretInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-secret": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The secret's id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {

@@ -240,6 +240,27 @@ func generatedCommands() []*cobra.Command {
 	}
 	{
 		parent := &cobra.Command{
+			Use:   "effective-secret",
+			Short: "Commands for the effective-secret resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "list <name>",
+				Short:   "Effective secrets for a component",
+				Long:    "Resolves the secrets that cascade onto a component (global -> location -> system -> component, most-specific winning), each masked, winner and shadowed candidates. Gated by secret:read; the component must be in the caller's component read scope.",
+				Example: "  omniglass effective-secret list <name>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/components/%s/effective-secrets", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		roots = append(roots, parent)
+	}
+	{
+		parent := &cobra.Command{
 			Use:   "grant",
 			Short: "Commands for the grant resource",
 		}
@@ -946,6 +967,106 @@ func generatedCommands() []*cobra.Command {
 				Args:    cobra.ExactArgs(0),
 				RunE: func(cmd *cobra.Command, args []string) error {
 					path := fmt.Sprintf("/api/v1/roles")
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		roots = append(roots, parent)
+	}
+	{
+		parent := &cobra.Command{
+			Use:   "secret",
+			Short: "Commands for the secret resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			var fFields string
+			var fName string
+			var fOwner string
+			var fOwnerKind string
+			var fSecretType string
+			cmd := &cobra.Command{
+				Use:     "create",
+				Short:   "Create a secret",
+				Long:    "Seals a secret at an owner scope (a global secret needs an all-scoped grant). Fields are validated and encrypted against the type shape. Gated by secret:create.",
+				Example: "  omniglass secret create --fields fields --name name --owner-kind owner_kind --secret-type secret_type",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/secrets")
+					body := map[string]any{}
+					if cmd.Flags().Changed("fields") {
+						body["fields"] = fFields
+					}
+					if cmd.Flags().Changed("name") {
+						body["name"] = fName
+					}
+					if cmd.Flags().Changed("owner") {
+						body["owner"] = fOwner
+					}
+					if cmd.Flags().Changed("owner-kind") {
+						body["owner_kind"] = fOwnerKind
+					}
+					if cmd.Flags().Changed("secret-type") {
+						body["secret_type"] = fSecretType
+					}
+					return runAPICommand(cmd, "POST", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fFields, "fields", "", "The operator field map, validated against the type shape")
+			_ = cmd.MarkFlagRequired("fields")
+			cmd.Flags().StringVar(&fName, "name", "", "The cascade key; unique per owner")
+			_ = cmd.MarkFlagRequired("name")
+			cmd.Flags().StringVar(&fOwner, "owner", "", "The owning entity's name; omit for a global secret")
+			cmd.Flags().StringVar(&fOwnerKind, "owner-kind", "", "Which tier owns this secret")
+			_ = cmd.MarkFlagRequired("owner-kind")
+			cmd.Flags().StringVar(&fSecretType, "secret-type", "", "A secret_type id")
+			_ = cmd.MarkFlagRequired("secret-type")
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "delete <id>",
+				Short:   "Delete a secret",
+				Long:    "Removes a secret by id. Gated by secret:delete; read and delete scopes on the owner drive the 404 versus 403 split.",
+				Example: "  omniglass secret delete <id>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/secrets/%s", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "DELETE", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "list",
+				Short:   "List secrets (admin directory)",
+				Long:    "Lists every secret with masked fields. Requires an all-scope read; the scoped, per-component view is the effective-secrets route. Gated by secret:read.",
+				Example: "  omniglass secret list",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/secrets")
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		roots = append(roots, parent)
+	}
+	{
+		parent := &cobra.Command{
+			Use:   "secret-type",
+			Short: "Commands for the secret-type resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "list",
+				Short:   "List secret types",
+				Long:    "Lists the secret_type shapes a secret can take, for the create form. Gated by secret:read.",
+				Example: "  omniglass secret-type list",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/secret-types")
 					return runAPICommand(cmd, "GET", path, nil)
 				},
 			}

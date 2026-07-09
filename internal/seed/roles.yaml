@@ -55,6 +55,7 @@ roles:
       # admin (via this explicit grant) and owner (via >) can purge.
       - "principal:purge:admin"
       - "credential:*"
+      - "secret:*"
       - "principal_grant:*"
       - "principal_group:*"
       - "role:*"

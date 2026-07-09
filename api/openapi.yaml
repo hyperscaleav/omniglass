@@ -326,6 +326,46 @@ components:
       required:
         - username
       type: object
+    CreateSecretInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateSecretInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        fields:
+          additionalProperties:
+            type: string
+          description: The operator field map, validated against the type shape
+          type: object
+        name:
+          description: The cascade key; unique per owner
+          minLength: 1
+          type: string
+        owner:
+          description: The owning entity's name; omit for a global secret
+          type: string
+        owner_kind:
+          description: Which tier owns this secret
+          enum:
+            - global
+            - location
+            - system
+            - component
+          type: string
+        secret_type:
+          description: A secret_type id
+          minLength: 1
+          type: string
+      required:
+        - name
+        - secret_type
+        - owner_kind
+        - fields
+      type: object
     CreateSystemInputBody:
       additionalProperties: false
       properties:
@@ -355,6 +395,25 @@ components:
       required:
         - name
         - system_type
+      type: object
+    EffectiveSecretsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/EffectiveSecretsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        secrets:
+          items:
+            $ref: "#/components/schemas/ResolvedSecretBody"
+          type:
+            - array
+            - "null"
+      required:
+        - secrets
       type: object
     ErrorDetail:
       additionalProperties: false
@@ -704,6 +763,44 @@ components:
       required:
         - principals
       type: object
+    ListSecretTypesOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListSecretTypesOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        secret_types:
+          items:
+            $ref: "#/components/schemas/SecretTypeBody"
+          type:
+            - array
+            - "null"
+      required:
+        - secret_types
+      type: object
+    ListSecretsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListSecretsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        secrets:
+          items:
+            $ref: "#/components/schemas/SecretBody"
+          type:
+            - array
+            - "null"
+      required:
+        - secrets
+      type: object
     ListSystemsOutputBody:
       additionalProperties: false
       properties:
@@ -907,6 +1004,45 @@ components:
         - id
         - kind
       type: object
+    ResolvedSecretBody:
+      additionalProperties: false
+      properties:
+        band:
+          description: "Cascade tier: 0 global, 1 location, 2 system, 3 component"
+          format: int64
+          type: integer
+        depth:
+          description: Distance up the tier's tree from the component (0 nearest)
+          format: int64
+          type: integer
+        fields:
+          items:
+            $ref: "#/components/schemas/SecretFieldBody"
+          type:
+            - array
+            - "null"
+        name:
+          type: string
+        owner_id:
+          type: string
+        owner_kind:
+          type: string
+        owner_name:
+          type: string
+        secret_type:
+          type: string
+        winner:
+          description: True for the resolved value; false for a shadowed candidate
+          type: boolean
+      required:
+        - name
+        - secret_type
+        - owner_kind
+        - band
+        - depth
+        - winner
+        - fields
+      type: object
     RoleBody:
       additionalProperties: false
       properties:
@@ -961,6 +1097,95 @@ components:
             - "null"
       required:
         - roles
+      type: object
+    SecretBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/SecretBody.json
+          format: uri
+          readOnly: true
+          type: string
+        fields:
+          items:
+            $ref: "#/components/schemas/SecretFieldBody"
+          type:
+            - array
+            - "null"
+        id:
+          type: string
+        name:
+          type: string
+        owner_id:
+          type: string
+        owner_kind:
+          type: string
+        owner_name:
+          type: string
+        secret_type:
+          type: string
+      required:
+        - id
+        - name
+        - secret_type
+        - owner_kind
+        - fields
+      type: object
+    SecretFieldBody:
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+        secret:
+          description: Whether the field is encrypted at rest and masked here
+          type: boolean
+        value:
+          type: string
+      required:
+        - name
+        - value
+        - secret
+      type: object
+    SecretTypeBody:
+      additionalProperties: false
+      properties:
+        display_name:
+          type: string
+        fields:
+          items:
+            $ref: "#/components/schemas/SecretTypeFieldBody"
+          type:
+            - array
+            - "null"
+        id:
+          type: string
+        official:
+          type: boolean
+      required:
+        - id
+        - display_name
+        - official
+        - fields
+      type: object
+    SecretTypeFieldBody:
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+        origin:
+          description: operator (set at creation) or lifecycle (filled by the secret's own machinery)
+          type: string
+        secret:
+          type: boolean
+        type:
+          type: string
+      required:
+        - name
+        - type
+        - secret
+        - origin
       type: object
     SvcBody:
       additionalProperties: false
@@ -1448,6 +1673,32 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Update a component
+  /components/{name}/effective-secrets:
+    get:
+      description: Resolves the secrets that cascade onto a component (global -> location -> system -> component, most-specific winning), each masked, winner and shadowed candidates. Gated by secret:read; the component must be in the caller's component read scope.
+      operationId: effective-secrets
+      parameters:
+        - description: The component's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The component's name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EffectiveSecretsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Effective secrets for a component
   /healthz:
     get:
       description: Reports process health and the database leg, pinged through the Storage Gateway.
@@ -2243,6 +2494,87 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List roles
+  /secret-types:
+    get:
+      description: Lists the secret_type shapes a secret can take, for the create form. Gated by secret:read.
+      operationId: list-secret-types
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListSecretTypesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List secret types
+  /secrets:
+    get:
+      description: Lists every secret with masked fields. Requires an all-scope read; the scoped, per-component view is the effective-secrets route. Gated by secret:read.
+      operationId: list-secrets
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListSecretsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List secrets (admin directory)
+    post:
+      description: Seals a secret at an owner scope (a global secret needs an all-scoped grant). Fields are validated and encrypted against the type shape. Gated by secret:create.
+      operationId: create-secret
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSecretInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SecretBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Create a secret
+  /secrets/{id}:
+    delete:
+      description: Removes a secret by id. Gated by secret:delete; read and delete scopes on the owner drive the 404 versus 403 split.
+      operationId: delete-secret
+      parameters:
+        - description: The secret's id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The secret's id
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Delete a secret
   /systems:
     get:
       description: Lists the systems the caller may read, each filtered to its scope subtree. Gated by system:read.
