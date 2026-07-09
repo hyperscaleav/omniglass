@@ -48,6 +48,47 @@ describe("Groups page", () => {
     expect(screen.getByText("Support crew")).toBeTruthy();
   });
 
+  it("opens read-only with a footer bar; Delete is always there, Edit reveals the member controls", async () => {
+    mount();
+    fireEvent.click(screen.getByText("Help Desk"));
+    const blade = await waitFor(() => {
+      const el = asides()[0];
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    // Read mode footer: Delete is always available (not gated by edit); Edit present;
+    // but the body has no member Remove and no Save yet.
+    expect(within(blade).getByText("Delete group")).toBeTruthy();
+    expect(within(blade).getByLabelText("Edit")).toBeTruthy();
+    expect(within(blade).queryByLabelText("Remove")).toBeNull();
+    expect(within(blade).queryByText("Save")).toBeNull();
+    // Edit reveals the member controls and swaps the right cluster to Cancel / Save.
+    fireEvent.click(within(blade).getByLabelText("Edit"));
+    expect(within(blade).getByText("Save")).toBeTruthy();
+    expect(within(blade).getByText("Cancel")).toBeTruthy();
+    expect(within(blade).getAllByLabelText("Remove").length).toBeGreaterThan(0);
+    expect(within(blade).getByText("Delete group")).toBeTruthy(); // still there in edit
+  });
+
+  it("stages a member removal in edit mode and Cancel reverts it", async () => {
+    mount();
+    fireEvent.click(screen.getByText("Help Desk"));
+    const blade = await waitFor(() => {
+      const el = asides()[0];
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    fireEvent.click(within(blade).getByLabelText("Edit"));
+    expect(within(blade).getByText("alice")).toBeTruthy();
+    // Staging a removal drops the member from the effective list (not yet committed).
+    fireEvent.click(within(blade).getAllByLabelText("Remove")[0]);
+    expect(within(blade).queryByText("alice")).toBeNull();
+    // Cancel reverts the staging and returns to read mode (Save gone, member back).
+    fireEvent.click(within(blade).getByText("Cancel"));
+    expect(within(blade).getByText("alice")).toBeTruthy();
+    expect(within(blade).queryByText("Save")).toBeNull();
+  });
+
   it("drills from a group member to a user blade nested over the group (group -> user)", async () => {
     mount();
     fireEvent.click(screen.getByText("Help Desk")); // open the group blade

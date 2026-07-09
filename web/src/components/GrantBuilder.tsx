@@ -1,4 +1,4 @@
-import { For, Show, createEffect, createMemo, createSignal, createUniqueId, on } from "solid-js";
+import { For, Show, createEffect, createMemo, createSignal, createUniqueId, on, onMount } from "solid-js";
 import { flattenTree, type TreeNode } from "../lib/treeselect";
 import {
   chipStates,
@@ -53,6 +53,10 @@ export default function GrantBuilder(props: {
   canGrant: boolean;
   canRevoke: boolean;
   onSave: (diff: { adds: GrantRef[]; removes: ExistingGrant[] }) => Promise<void>;
+  // When present, the builder hides its own preview / Save row and hands its commit
+  // (and revert, and dirty flag) up, so a parent (a detail blade's Save) drives the
+  // grant commit as part of one edit session. `commit` rethrows on failure.
+  bind?: (h: { commit: () => Promise<void>; cancel: () => void; dirty: () => boolean }) => void;
 }) {
   const [draft, setDraft] = createSignal<GrantRef[]>(draftFromGrants(props.current));
   const [stage, setStage] = createSignal<Stage>("role");
@@ -219,6 +223,10 @@ export default function GrantBuilder(props: {
   const diff = createMemo(() => pendingDiff(props.current, draft()));
   const dirty = createMemo(() => isDirty(props.current, draft()));
 
+  // Bound mode: a parent blade's Save drives the commit. `commit` rethrows so the
+  // blade can keep edit mode open and surface the error on failure.
+  onMount(() => props.bind?.({ commit: () => props.onSave(diff()), cancel: resetAll, dirty }));
+
   const save = async () => {
     setErr(null);
     setSaving(true);
@@ -347,8 +355,9 @@ export default function GrantBuilder(props: {
         <p class="mt-2 text-[11px] text-error">{err()}</p>
       </Show>
 
-      {/* Preview + save: nothing is sent until the operator commits the diff. */}
-      <Show when={dirty()}>
+      {/* Preview + save: nothing is sent until the operator commits the diff. When
+          bound to a blade's Save (props.bind), the blade owns this, so it hides. */}
+      <Show when={dirty() && !props.bind}>
         <div class="mt-3 flex flex-wrap items-center gap-2 rounded-box border border-base-300 bg-base-100 px-3 py-2">
           <span class="text-xs text-base-content/70">
             Pending:

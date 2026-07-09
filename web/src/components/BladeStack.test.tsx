@@ -1,6 +1,6 @@
-import { describe, it, expect } from "vitest";
-import { render, fireEvent } from "@solidjs/testing-library";
-import { createBladeController, type BladeDef } from "../lib/blades";
+import { describe, it, expect, vi } from "vitest";
+import { render, fireEvent, screen, waitFor } from "@solidjs/testing-library";
+import { createBladeController, useBladeEdit, type BladeDef } from "../lib/blades";
 import BladeStack from "./BladeStack";
 
 // A fake two-kind registry: enough to prove the stack renders, drills, offsets,
@@ -57,5 +57,42 @@ describe("BladeStack", () => {
     const { container } = render(() => <BladeStack controller={ctl} registry={registry} />);
     ctl.push({ kind: "nope", id: "z" });
     expect(asides(container).length).toBe(0);
+  });
+
+  it("offers Edit on an editable blade: pencil -> Save/Cancel, and Save runs the bound saver", async () => {
+    const save = vi.fn(async () => {});
+    const editRegistry: Record<string, BladeDef> = {
+      thing: {
+        Title: (p) => <>{`T:${p.id}`}</>,
+        Body: (p) => {
+          const e = useBladeEdit();
+          e.bind({ save }); // binding makes the blade editable (a body with permission)
+          return <div>{e.editing() ? `edit ${p.id}` : `read ${p.id}`}</div>;
+        },
+      },
+    };
+    const ctl = createBladeController();
+    render(() => <BladeStack controller={ctl} registry={editRegistry} />);
+    ctl.push({ kind: "thing", id: "a" });
+    // Read mode: pencil present, body read-only, no Save yet.
+    expect(screen.getByLabelText("Edit")).toBeTruthy();
+    expect(screen.getByText("read a")).toBeTruthy();
+    expect(screen.queryByText("Save")).toBeNull();
+    // Enter edit: Save + Cancel appear, body flips to edit.
+    fireEvent.click(screen.getByLabelText("Edit"));
+    expect(screen.getByText("Save")).toBeTruthy();
+    expect(screen.getByText("Cancel")).toBeTruthy();
+    expect(screen.getByText("edit a")).toBeTruthy();
+    // Save runs the bound saver and returns to read mode.
+    fireEvent.click(screen.getByText("Save"));
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByText("read a")).toBeTruthy());
+  });
+
+  it("does not offer Edit when the blade is not editable", () => {
+    const ctl = createBladeController();
+    render(() => <BladeStack controller={ctl} registry={registry} />);
+    ctl.push({ kind: "user", id: "a" });
+    expect(screen.queryByLabelText("Edit")).toBeNull();
   });
 });

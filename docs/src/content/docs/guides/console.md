@@ -50,7 +50,9 @@ location-scoped admin cannot list users.
 - With `principal:create`, **New user** creates a human with a username and an optional initial
   password. The new user can sign in right away and change that password themselves; a fresh
   account holds no grants (so it can sign in but do nothing) until you assign a role.
-- With `principal:update`, **Edit** changes a user's display name, email, and **username**.
+- With `principal:update`, the footer **Edit** opens edit mode, where you change a user's display name,
+  email, and **username**, or adjust its grants, and **Save** commits the lot; **Disable / Enable** sits in the
+  footer's left slot, available without entering edit.
   Renaming is safe: their credentials and grants follow the account (they key on an internal id,
   not the username), so a renamed user keeps their password and access. Only an administrator can
   change a username; the user cannot change their own.
@@ -186,6 +188,15 @@ user you open a group's blade over it, and from a group you open a member's user
 trace where access comes from without leaving the page. Each page roots one entity and drills one direction (a
 user's groups, a group's members), so the stack stays shallow and the reverse relation on the far blade is a
 read-only reference.
+
+A detail blade opens **read-only**, and every entity is edited the same way through the **footer action bar**.
+The blade header is chrome only (back, full-page, close); the actions live in the bar at the foot of the blade.
+**Edit** (right) opens edit mode: the profile becomes inputs, the members and grants go live, and the right
+cluster swaps to **Cancel** and **Save**. Changes stage locally so you can check your work first; **Save**
+commits them together, **Cancel** discards them. The **destructive** action sits on the **left** and is always
+available, with no need to enter edit mode: a red **Delete** for a group (a user is disabled, never deleted, so a
+user's is **Disable / Enable**), each behind a confirm. Secondary actions like **Impersonate** fold into a
+**⋯** menu. Edit appears only if your grants allow it, and a read-only blade (a role) shows no bar at all.
 
 ### Create, edit, delete
 

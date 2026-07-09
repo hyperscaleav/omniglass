@@ -57,3 +57,86 @@ export function useBlades(): BladeController {
   if (!c) throw new Error("useBlades called outside a BladesContext provider");
   return c;
 }
+
+// The per-blade edit slot: the uniform read -> Edit -> Save contract. A blade opens
+// read-only; `begin` enters edit mode; the body `bind`s how to commit and revert;
+// `save` runs the bound saver then leaves edit mode, `cancel` reverts and leaves.
+// BladeStack owns the header chrome (the pencil, and Save / Cancel while editing);
+// the detail body reads `editing` to switch its sections read-only vs live.
+//
+// Editability comes from the body, not the BladeDef: only the body knows the
+// caller's permission, so it decides whether to `bind` (and passes an optional
+// `editable` predicate). A body that never binds (a read-only blade like a role) is
+// not editable, so no pencil renders.
+// The footer action bar's non-edit slots, also registered by the body: a single
+// destructive action (Delete for a group, Disable / Enable for a user), always
+// available, and a list of secondary actions (Impersonate, copy id) shown in a
+// kebab. Both are accessors so their label / tone stay reactive (Disable <-> Enable).
+export type BladeDestructive = { label: string; tone?: "danger" | "warn"; onClick: () => void };
+export type BladeSecondary = { label: string; icon?: JSX.Element; onClick: () => void };
+
+export type BladeEdit = {
+  editable: () => boolean;
+  editing: () => boolean;
+  saving: () => boolean;
+  begin: () => void;
+  cancel: () => void;
+  save: () => Promise<void>;
+  destructive: () => BladeDestructive | undefined;
+  secondary: () => BladeSecondary[];
+  bind: (h: {
+    editable?: () => boolean;
+    save?: () => Promise<void>;
+    cancel?: () => void;
+    destructive?: () => BladeDestructive | undefined;
+    secondary?: () => BladeSecondary[];
+  }) => void;
+};
+
+export function createEditSlot(): BladeEdit {
+  const [editing, setEditing] = createSignal(false);
+  const [saving, setSaving] = createSignal(false);
+  const [bound, setBound] = createSignal(false);
+  let handler: { save: () => Promise<void>; cancel: () => void } = { save: async () => {}, cancel: () => {} };
+  let editablePred: () => boolean = () => false;
+  let destructivePred: () => BladeDestructive | undefined = () => undefined;
+  let secondaryPred: () => BladeSecondary[] = () => [];
+  return {
+    editable: () => bound() && editablePred(),
+    editing,
+    saving,
+    begin: () => setEditing(true),
+    cancel: () => {
+      handler.cancel();
+      setEditing(false);
+    },
+    save: async () => {
+      setSaving(true);
+      try {
+        await handler.save();
+        setEditing(false);
+      } finally {
+        setSaving(false);
+      }
+    },
+    destructive: () => (bound() ? destructivePred() : undefined),
+    secondary: () => (bound() ? secondaryPred() : []),
+    bind: (h) => {
+      // A body that supplies a saver is editable (unless it gates with `editable`);
+      // one that only registers a destructive / secondary action is not.
+      editablePred = h.editable ?? (() => !!h.save);
+      handler = { save: h.save ?? (async () => {}), cancel: h.cancel ?? (() => {}) };
+      destructivePred = h.destructive ?? (() => undefined);
+      secondaryPred = h.secondary ?? (() => []);
+      setBound(true);
+    },
+  };
+}
+
+export const BladeEditContext: Context<BladeEdit | undefined> = createContext<BladeEdit>();
+
+export function useBladeEdit(): BladeEdit {
+  const e = useContext(BladeEditContext);
+  if (!e) throw new Error("useBladeEdit called outside a BladeEditContext provider");
+  return e;
+}

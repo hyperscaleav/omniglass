@@ -58,24 +58,29 @@ describe("Users page", () => {
     expect(getByText("inactive")).toBeTruthy(); // bob is disabled
   });
 
-  it("opens the detail Drawer on a row and swaps to the inline edit form and back", async () => {
+  it("opens read-only, and the header pencil flips the profile to editable inputs and back", async () => {
     mount();
     fireEvent.click(screen.getByText("Alice Ng"));
-    // The Drawer detail shows the profile facts and the admin affordances.
-    expect(await screen.findByText("Username")).toBeTruthy();
-    expect(screen.getByText("alice@example.com")).toBeTruthy();
-    const edit = screen.getByText("Edit");
-    expect(edit).toBeTruthy();
-    // Edit swaps the read view to the inline edit form (no nested dialog): the
-    // username input is seeded with the current value.
-    fireEvent.click(edit);
-    const input = (await screen.findByLabelText("Username")) as HTMLInputElement;
+    const blade = await waitFor(() => {
+      const el = document.querySelector("aside[data-blade]");
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    // Read mode: the profile is facts, and there is no editable username input or Save.
+    expect(within(blade).getByText("Username")).toBeTruthy();
+    expect(within(blade).getByText("alice@example.com")).toBeTruthy();
+    expect(within(blade).queryByLabelText("Username")).toBeNull();
+    expect(within(blade).queryByText("Save")).toBeNull();
+    // The header pencil opens edit mode: the username input is seeded, Save appears.
+    fireEvent.click(within(blade).getByLabelText("Edit"));
+    const input = (await within(blade).findByLabelText("Username")) as HTMLInputElement;
     expect(input.value).toBe("alice");
-    expect(screen.getByText("Save changes")).toBeTruthy();
-    // Cancel returns to the read view (the Edit button is back, the form is gone).
-    fireEvent.click(screen.getByText("Cancel"));
-    expect(await screen.findByText("Edit")).toBeTruthy();
-    expect(screen.queryByText("Save changes")).toBeNull();
+    expect(within(blade).getByText("Save")).toBeTruthy();
+    expect(within(blade).getByText("Disable")).toBeTruthy(); // the destructive slot for a user
+    // Cancel returns to read mode (input gone, pencil back).
+    fireEvent.click(within(blade).getByText("Cancel"));
+    expect(await within(blade).findByLabelText("Edit")).toBeTruthy();
+    expect(within(blade).queryByLabelText("Username")).toBeNull();
   });
 
   it("lands on the new user's detail Drawer after a successful create", async () => {
