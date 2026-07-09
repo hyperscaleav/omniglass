@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { listSecrets, listSecretTypes, createSecret, deleteSecret, effectiveSecrets } from "./secrets";
+import { listSecrets, listSecretTypes, createSecret, deleteSecret, effectiveSecrets, revealSecret } from "./secrets";
 
 // The data layer is the unit under test; fetch is the seam we fake, so these
 // assert the request shape and the response handling without a server.
@@ -60,6 +60,17 @@ describe("secrets data layer", () => {
   it("throws on an error status", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ detail: "unknown secret_type" }, 422));
     await expect(createSecret({ name: "x", secret_type: "nope", owner_kind: "global", fields: {} })).rejects.toBeTruthy();
+  });
+
+  it("reveals a secret's plaintext by id", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonResponse({ fields: { community: "public" } }),
+    );
+    const fields = await revealSecret("sec_123");
+    expect(fields.community).toBe("public");
+    const req = fetchMock.mock.calls[0][0] as Request;
+    expect(req.method).toBe("POST");
+    expect(req.url).toContain("/api/v1/secrets/sec_123:reveal");
   });
 
   it("deletes by id", async () => {

@@ -116,21 +116,46 @@ func TestSecretAPI(t *testing.T) {
 
 	// Owner directory lists all three.
 	var listed struct {
-		Secrets []struct{ ID string } `json:"secrets"`
+		Secrets []struct {
+			ID        string `json:"id"`
+			Name      string `json:"name"`
+			OwnerKind string `json:"owner_kind"`
+		} `json:"secrets"`
 	}
 	json.Unmarshal(c.do(ownerTok, http.MethodGet, "/secrets", nil, http.StatusOK), &listed)
 	if len(listed.Secrets) != 3 {
 		t.Fatalf("owner list = %d, want 3", len(listed.Secrets))
 	}
+	// Find the component-owned poll so we know its plaintext.
+	var compPollID string
+	for _, s := range listed.Secrets {
+		if s.Name == "poll" && s.OwnerKind == "component" {
+			compPollID = s.ID
+		}
+	}
+	if compPollID == "" {
+		t.Fatal("component poll not in list")
+	}
 
-	// A component-scoped viewer: may read the cascade, forbidden to create or to
-	// list the all-scope directory.
+	// The owner (secret:* via >) reveals the plaintext; the decrypt round-trips.
+	var revealed struct {
+		Fields map[string]string `json:"fields"`
+	}
+	json.Unmarshal(c.do(ownerTok, http.MethodPost, "/secrets/"+compPollID+":reveal", nil, http.StatusOK), &revealed)
+	if revealed.Fields["community"] != "codec-community" {
+		t.Errorf("revealed community = %q, want codec-community", revealed.Fields["community"])
+	}
+
+	// A component-scoped viewer: may read the cascade, forbidden to create, to
+	// list the all-scope directory, or to reveal (secret:reveal is not on the
+	// *:read floor).
 	viewerTok := setupScopedViewer(t, ctx, dsn, "viewer-codec", "viewer", "component", comp.ID)
 	if got := effectiveSecrets(t, c, viewerTok, "codec-1"); len(got) != 3 {
 		t.Errorf("viewer cascade = %d, want 3", len(got))
 	}
 	c.do(viewerTok, http.MethodPost, "/secrets", secretReq("nope", "component", "codec-1", "x"), http.StatusForbidden)
 	c.do(viewerTok, http.MethodGet, "/secrets", nil, http.StatusForbidden)
+	c.do(viewerTok, http.MethodPost, "/secrets/"+compPollID+":reveal", nil, http.StatusForbidden)
 }
 
 func secretReq(name, ownerKind, owner, community string) map[string]any {

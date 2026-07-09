@@ -1,6 +1,9 @@
 import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
+import TreeSelect from "../components/TreeSelect";
+import SecretFields from "../components/SecretFields";
+import { type TreeNode } from "../lib/treeselect";
 import {
   type Secret,
   type OwnerKind,
@@ -100,7 +103,7 @@ export default function Secrets() {
           rowId: (s) => s.id,
           detail: (s) => ({
             title: <span class="font-data">{s.name}</span>,
-            body: <SecretDetail secret={s} onDelete={() => del(s)} canDelete={can(me.data, "secret", "delete")} />,
+            body: <SecretDetail secret={s} onDelete={() => del(s)} canDelete={can(me.data, "secret", "delete")} canReveal={can(me.data, "secret", "reveal")} />,
           }),
           create: can(me.data, "secret", "create")
             ? { label: "New secret", can: () => can(me.data, "secret", "create"), body: (ctx) => <CreateSecretForm onCreated={ctx.close} /> }
@@ -111,28 +114,16 @@ export default function Secrets() {
   );
 }
 
-function SecretDetail(p: { secret: Secret; onDelete: () => void; canDelete: boolean }): JSX.Element {
+function SecretDetail(p: { secret: Secret; onDelete: () => void; canDelete: boolean; canReveal: boolean }): JSX.Element {
   return (
     <div class="flex flex-col gap-4">
       <div class="grid grid-cols-2 gap-3 text-sm">
-        <Fact label="Type"><span class="badge badge-soft badge-neutral badge-sm">{p.secret.secret_type}</span></Fact>
+        <Fact label="Type"><span class="badge badge-ghost badge-sm">{p.secret.secret_type}</span></Fact>
         <Fact label="Owner"><span>{ownerLabel(p.secret)}</span></Fact>
       </div>
       <div class="flex flex-col gap-1.5">
         <span class="eyebrow">Fields</span>
-        <div class="overflow-hidden rounded-box border border-base-300">
-          <For each={p.secret.fields}>
-            {(f, i) => (
-              <div class="flex items-center gap-2 px-3 py-2 text-sm" classList={{ "border-t border-base-300": i() > 0 }}>
-                <span class="font-data text-base-content/60">{f.name}</span>
-                <span class="flex-1" />
-                <span class="font-data" classList={{ "text-base-content/40": f.secret }}>{f.value}</span>
-                <Show when={f.secret}><span class="badge badge-ghost badge-sm text-[10px]">secret</span></Show>
-              </div>
-            )}
-          </For>
-        </div>
-        <span class="text-[11px] text-base-content/40">Secret fields are encrypted at rest and shown masked.</span>
+        <SecretFields secretId={p.secret.id} fields={p.secret.fields} canReveal={p.canReveal} />
       </div>
       <Show when={p.canDelete}>
         <div class="border-t border-base-300 pt-3">
@@ -173,11 +164,14 @@ function CreateSecretForm(p: { onCreated: () => void }): JSX.Element {
   // The fields the operator fills (lifecycle-origin fields are set by the secret's
   // own machinery, never at creation).
   const operatorFields = createMemo(() => (shape()?.fields ?? []).filter((f) => f.origin !== "lifecycle"));
-  const ownerOptions = createMemo(() => {
+  // The owner picker is a tree: locations, systems, and components all nest by
+  // parent_id, so the dropdown indents each candidate to its tier (the shared
+  // TreeSelect, same as the location/parent pickers).
+  const ownerTree = createMemo<TreeNode[]>(() => {
     switch (ownerKind()) {
-      case "location": return (locations.data ?? []).map((l) => ({ value: l.name, label: l.display_name || l.name }));
-      case "system": return (systems.data ?? []).map((s) => ({ value: s.name, label: s.display_name || s.name }));
-      case "component": return (components.data ?? []).map((c) => ({ value: c.name, label: c.display_name || c.name }));
+      case "location": return (locations.data ?? []).map((l) => ({ id: l.id, value: l.name, label: l.display_name || l.name, parentId: l.parent_id }));
+      case "system": return (systems.data ?? []).map((s) => ({ id: s.id, value: s.name, label: s.display_name || s.name, parentId: s.parent_id }));
+      case "component": return (components.data ?? []).map((c) => ({ id: c.id, value: c.name, label: c.display_name || c.name, parentId: c.parent_id }));
       default: return [];
     }
   });
@@ -225,10 +219,7 @@ function CreateSecretForm(p: { onCreated: () => void }): JSX.Element {
         </Field>
         <Show when={ownerKind() !== "global"}>
           <Field label="Owner">
-            <select class="select select-bordered w-full" value={owner()} onChange={(e) => setOwner(e.currentTarget.value)}>
-              <option value="" disabled>Choose…</option>
-              <For each={ownerOptions()}>{(o) => <option value={o.value}>{o.label}</option>}</For>
-            </select>
+            <TreeSelect items={ownerTree()} value={owner()} onChange={setOwner} rootLabel="Choose…" />
           </Field>
         </Show>
       </div>
@@ -250,7 +241,7 @@ function CreateSecretForm(p: { onCreated: () => void }): JSX.Element {
         </div>
       </Show>
       <div class="mt-1 flex justify-end gap-2">
-        <button type="submit" class="btn btn-action btn-sm" disabled={busy() || !typeId() || !name().trim()}>Create secret</button>
+        <button type="submit" class="btn btn-action btn-sm" disabled={busy() || !typeId() || !name().trim() || (ownerKind() !== "global" && !owner())}>Create secret</button>
       </div>
     </form>
   );

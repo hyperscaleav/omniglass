@@ -150,7 +150,7 @@ export default function Components() {
           </div>
         </Show>
         <Show when={can(me.data, "secret", "read")}>
-          <EffectiveSecrets component={n.raw.name} />
+          <EffectiveSecrets component={n.raw.name} canReveal={can(me.data, "secret", "reveal")} />
         </Show>
         <div class="flex items-center gap-2 border-t border-base-300 pt-4">
           <Show when={can(me.data, "component", "delete")}>

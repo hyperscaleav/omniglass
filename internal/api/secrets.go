@@ -48,6 +48,7 @@ type secretBody struct {
 // the secret, where in the chain its owner sits, and whether it is the winner or
 // a shadowed candidate.
 type resolvedSecretBody struct {
+	ID         string            `json:"id"`
 	Name       string            `json:"name"`
 	SecretType string            `json:"secret_type"`
 	OwnerKind  string            `json:"owner_kind"`
@@ -103,6 +104,12 @@ type createSecretInput struct {
 
 type secretIDInput struct {
 	ID string `path:"id" doc:"The secret's id"`
+}
+
+type revealSecretOutput struct {
+	Body struct {
+		Fields map[string]string `json:"fields" doc:"The decrypted field values, keyed by field name"`
+	}
 }
 
 type effectiveSecretsInput struct {
@@ -203,6 +210,24 @@ func registerSecretRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	})
 
 	huma.Register(api, huma.Operation{
+		OperationID:   "reveal-secret",
+		Method:        http.MethodPost,
+		Path:          "/secrets/{id}:reveal",
+		Summary:       "Reveal a secret's plaintext",
+		Description:   "Decrypts and returns a secret's field values, auditing the decrypt. Sensitive: gated by secret:reveal, which the viewer read floor does not carry, so only admin (secret:*) and owner may reveal.",
+		Middlewares:   huma.Middlewares{a.authn, a.require("secret", "reveal")},
+	}, func(ctx context.Context, in *secretIDInput) (*revealSecretOutput, error) {
+		fields, err := gw.RevealSecret(ctx, actorID(ctx), in.ID,
+			a.scopeFor(ctx, "secret", "read"), a.scopeFor(ctx, "secret", "reveal"))
+		if err != nil {
+			return nil, mapSecretErr(err)
+		}
+		out := &revealSecretOutput{}
+		out.Body.Fields = fields
+		return out, nil
+	})
+
+	huma.Register(api, huma.Operation{
 		OperationID: "effective-secrets",
 		Method:      http.MethodGet,
 		Path:        "/components/{name}/effective-secrets",
@@ -222,6 +247,7 @@ func registerSecretRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		out.Body.Secrets = make([]resolvedSecretBody, 0, len(resolved))
 		for _, r := range resolved {
 			out.Body.Secrets = append(out.Body.Secrets, resolvedSecretBody{
+				ID:   r.ID,
 				Name: r.Name, SecretType: r.SecretType, OwnerKind: r.OwnerKind,
 				OwnerID: r.OwnerID, OwnerName: r.OwnerName,
 				Band: r.Band, Depth: r.Depth, Winner: r.Winner,

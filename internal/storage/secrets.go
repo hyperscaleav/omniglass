@@ -89,6 +89,7 @@ type ResolvedField struct {
 // value; the shadowed entries are returned too so the surface can teach the
 // override.
 type ResolvedSecret struct {
+	ID         string
 	Name       string
 	SecretType string
 	OwnerKind  string
@@ -374,7 +375,7 @@ func (p *PG) ResolveSecrets(ctx context.Context, componentID string, read scope.
 			rnk       int
 			value     []byte
 		)
-		if err := rows.Scan(&r.Name, &r.SecretType, &r.OwnerKind, &ownerID,
+		if err := rows.Scan(&r.ID, &r.Name, &r.SecretType, &r.OwnerKind, &ownerID,
 			&r.Band, &r.Depth, &rnk, &ownerName, &value); err != nil {
 			return nil, fmt.Errorf("storage: scan resolved secret: %w", err)
 		}
@@ -425,14 +426,14 @@ owners(owner_kind, owner_id, band, depth) as (
     union all   select 'component', id,         3, depth from comp_chain
 ),
 ranked as (
-    select s.name, s.secret_type, s.owner_kind, o.owner_id, o.band, o.depth, s.value,
+    select s.id, s.name, s.secret_type, s.owner_kind, o.owner_id, o.band, o.depth, s.value,
            row_number() over (partition by s.name order by o.band desc, o.depth asc) as rnk
     from secret s
     join owners o
       on o.owner_kind = s.owner_kind
      and o.owner_id is not distinct from coalesce(s.component_id, s.system_id, s.location_id)
 )
-select r.name, r.secret_type, r.owner_kind, r.owner_id, r.band, r.depth, r.rnk,
+select r.id, r.name, r.secret_type, r.owner_kind, r.owner_id, r.band, r.depth, r.rnk,
        coalesce(c.name, sy.name, l.name, '') as owner_name,
        r.value
 from ranked r

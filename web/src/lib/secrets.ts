@@ -40,6 +40,7 @@ export type Secret = {
 // the owner sits (band 0 global .. 3 component, depth up the tier's tree) and
 // whether it is the resolved winner or a shadowed candidate.
 export type ResolvedSecret = {
+  id: string;
   name: string;
   secret_type: string;
   owner_kind: string;
@@ -86,6 +87,14 @@ export async function createSecret(body: CreateSecret): Promise<Secret> {
 export async function deleteSecret(id: string): Promise<void> {
   const { error } = await api.DELETE("/secrets/{id}", { params: { path: { id } } });
   if (error) throw error;
+}
+
+// revealSecret decrypts a secret's fields (the audited, admin-gated reveal). The
+// returned map is field name -> plaintext.
+export async function revealSecret(id: string): Promise<Record<string, string>> {
+  const { data, error } = await api.POST("/secrets/{id}:reveal", { params: { path: { id } } });
+  if (error) throw error;
+  return (data?.fields ?? {}) as Record<string, string>;
 }
 
 export async function effectiveSecrets(component: string): Promise<ResolvedSecret[]> {

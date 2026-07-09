@@ -1051,6 +1051,20 @@ func generatedCommands() []*cobra.Command {
 			}
 			return cmd
 		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "reveal",
+				Short:   "Reveal a secret's plaintext",
+				Long:    "Decrypts and returns a secret's field values, auditing the decrypt. Sensitive: gated by secret:reveal, which the viewer read floor does not carry, so only admin (secret:*) and owner may reveal.",
+				Example: "  omniglass secret reveal",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/secrets/{id}:reveal")
+					return runAPICommand(cmd, "POST", path, nil)
+				},
+			}
+			return cmd
+		}())
 		roots = append(roots, parent)
 	}
 	{

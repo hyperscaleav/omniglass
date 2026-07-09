@@ -526,11 +526,14 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   ciphertext cannot be lifted between rows. The load-bearing new piece is the **cascade resolver**: it walks the
   three owner trees up from a component, tags each owner with a band and depth, and ranks per name (highest tier,
   then deepest), returning the winner and the shadowed candidates. `GET /secret-types`, `/secrets` (all-scope
-  list, create, delete), and `GET /components/{name}/effective-secrets` (the masked cascade view); read rides the
-  viewer floor, create and delete are gated by `secret:create` / `secret:delete` (admin `secret:*`, owner `>`).
-  The console adds a **Secrets** directory and the **effective-secrets** panel on a component's detail (the
-  pedagogical view of which value wins where). Renamed **credential to secret** (ADR-0017).
+  list, create, delete), `GET /components/{name}/effective-secrets` (the masked cascade view), and
+  `POST /secrets/{id}:reveal` (the audited decrypt). Masked reads ride the viewer floor; create and delete are
+  gated by `secret:create` / `secret:delete`, and **reveal** by the sensitive `secret:reveal`, which the
+  `*:read` floor does not carry, so only admin (`secret:*`) and owner may decrypt. The console adds a **Secrets**
+  directory (with an in-place reveal + copy) and, on a component's detail, the **effective-secrets** list: each
+  resolved secret opens a blade that reveals the value and shows the full cascade of how it won (the winning tier
+  and the candidates it shadowed). Renamed **credential to secret** (ADR-0017).
   Proven by a real-crypto testcontainer test (seal, jsonb round-trip, unseal; encrypted-at-rest; full cascade
-  precedence), an HTTP e2e (the cascade and the authz split), and the web data-layer suite. Deferred: the
-  **variable** and **config** members of the page, the reveal endpoint and the interpolation consumer, secret
-  **lifecycle** (oauth2 refresh, rotation), and groups / weighted precedence in the cascade.
+  precedence), an HTTP e2e (the cascade, the authz split, and the reveal round-trip plus its 403), and the web
+  data-layer suite. Deferred: the **variable** and **config** members of the page, the interpolation consumer,
+  secret **lifecycle** (oauth2 refresh, rotation), and groups / weighted precedence in the cascade.

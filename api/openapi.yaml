@@ -1021,6 +1021,8 @@ components:
           type:
             - array
             - "null"
+        id:
+          type: string
         name:
           type: string
         owner_id:
@@ -1035,12 +1037,31 @@ components:
           description: True for the resolved value; false for a shadowed candidate
           type: boolean
       required:
+        - id
         - name
         - secret_type
         - owner_kind
         - band
         - depth
         - winner
+        - fields
+      type: object
+    RevealSecretOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/RevealSecretOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        fields:
+          additionalProperties:
+            type: string
+          description: The decrypted field values, keyed by field name
+          type: object
+      required:
         - fields
       type: object
     RoleBody:
@@ -2575,6 +2596,32 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Delete a secret
+  /secrets/{id}:reveal:
+    post:
+      description: "Decrypts and returns a secret's field values, auditing the decrypt. Sensitive: gated by secret:reveal, which the viewer read floor does not carry, so only admin (secret:*) and owner may reveal."
+      operationId: reveal-secret
+      parameters:
+        - description: The secret's id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The secret's id
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RevealSecretOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Reveal a secret's plaintext
   /systems:
     get:
       description: Lists the systems the caller may read, each filtered to its scope subtree. Gated by system:read.

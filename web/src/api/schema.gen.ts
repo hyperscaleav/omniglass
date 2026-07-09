@@ -744,6 +744,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/secrets/{id}:reveal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reveal a secret's plaintext
+         * @description Decrypts and returns a secret's field values, auditing the decrypt. Sensitive: gated by secret:reveal, which the viewer read floor does not carry, so only admin (secret:*) and owner may reveal.
+         */
+        post: operations["reveal-secret"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/systems": {
         parameters: {
             query?: never;
@@ -1348,6 +1368,7 @@ export interface components {
              */
             depth: number;
             fields: components["schemas"]["SecretFieldBody"][] | null;
+            id: string;
             name: string;
             owner_id?: string;
             owner_kind: string;
@@ -1355,6 +1376,18 @@ export interface components {
             secret_type: string;
             /** @description True for the resolved value; false for a shadowed candidate */
             winner: boolean;
+        };
+        RevealSecretOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/RevealSecretOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The decrypted field values, keyed by field name */
+            fields: {
+                [key: string]: string;
+            };
         };
         RoleBody: {
             description?: string;
@@ -3109,6 +3142,38 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "reveal-secret": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The secret's id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevealSecretOutputBody"];
+                };
             };
             /** @description Error */
             default: {

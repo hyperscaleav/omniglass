@@ -387,8 +387,9 @@ below from the project's history. From here it grows one slice at a time.
   sensitive cascaded values); "secret" is the Cloudflare-style vars-and-secrets pair and reads correctly. Second,
   **shape**: Windmill's resource-references-variables split was considered and rejected, because our cascade is
   the sharing mechanism and an atomic one-form typed cell (doctrine 4) suits an operator better than composing
-  references. The reveal endpoint and the interpolation consumer are deferred to the collection-driver slice that
-  first needs a plaintext value, so the shipped surface is masked-only and cannot leak. This reverses the
-  `credential` naming and any "references inside the value" reading on the page; the `variable` and `config`
-  members stay `Design`.
+  references. Reveal (plaintext decrypt) ships as an audited, `secret:reveal`-gated endpoint that the `*:read`
+  floor does not reach, so only admin and owner may decrypt; the interpolation consumer (splicing a value into a
+  live request) is deferred to the collection-driver slice that first needs it. This reverses the `credential`
+  naming and any "references inside the value" reading on the page; the `variable` and `config` members stay
+  `Design`.
 - **Closes:** issue [#155](https://github.com/hyperscaleav/omniglass/issues/155) (secret slice 1).
