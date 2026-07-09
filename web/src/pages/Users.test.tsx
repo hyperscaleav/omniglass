@@ -326,6 +326,34 @@ describe("Users page", () => {
     expect(saveBtn().disabled).toBe(false);
   });
 
+  it("resets a user's password from the kebab and confirms", async () => {
+    let resetCalled = false;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      const url = typeof input === "string" ? input : req.url;
+      const method = typeof input === "string" ? "GET" : req.method;
+      if (method === "POST" && url.includes(":resetPassword")) {
+        resetCalled = true;
+        return new Response(null, { status: 204 });
+      }
+      return new Response(JSON.stringify({ principals: seed }), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+    mount();
+    fireEvent.click(screen.getByText("Alice Ng"));
+    const blade = await waitFor(() => {
+      const el = document.querySelector("aside[data-blade]");
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    // Reset password is in the kebab; it opens an inline panel with its own field.
+    fireEvent.click(within(blade).getByLabelText("More actions"));
+    fireEvent.click(within(blade).getByText("Reset password"));
+    fireEvent.click(within(blade).getByRole("button", { name: "Generate" }));
+    fireEvent.click(within(blade).getByText("Set password"));
+    await waitFor(() => expect(resetCalled).toBe(true));
+    expect(await within(blade).findByText(/password set/i)).toBeTruthy();
+  });
+
   it("narrows the directory through the FilterBar (kind:service keeps only the bot)", async () => {
     const { queryByText } = mount();
     const input = screen.getByRole("combobox") as HTMLInputElement;

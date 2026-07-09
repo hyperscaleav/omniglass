@@ -907,6 +907,24 @@ components:
         - id
         - kind
       type: object
+    ResetPasswordInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ResetPasswordInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        password:
+          description: The new password (at least 12 characters, not a common password, not containing the username)
+          maxLength: 256
+          minLength: 12
+          type: string
+      required:
+        - password
+      type: object
     RoleBody:
       additionalProperties: false
       properties:
@@ -2203,6 +2221,34 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Purge a principal
+  /principals/{id}:resetPassword:
+    post:
+      description: Sets a new password for a human principal (an administrator action; the target's current password is not required). Gated by principal:reset-password (all-scope). The new password must meet the password policy; a violation is a 422. The action is audited with the administrator as the actor.
+      operationId: reset-principal-password
+      parameters:
+        - description: The principal's id (uuid)
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The principal's id (uuid)
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResetPasswordInputBody"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Reset a principal's password
   /principals/{id}:restore:
     post:
       description: "Reverses an archive: the account is restored to active and can authenticate again. Gated by principal:archive (all-scope)."

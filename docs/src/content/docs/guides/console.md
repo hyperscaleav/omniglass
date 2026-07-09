@@ -90,6 +90,12 @@ location-scoped admin cannot list users.
   toggle above the directory surfaces hidden accounts so you can re-find one to restore or purge. The
   **last active owner** cannot be disabled or archived, the same invariant that protects the last
   owner grant.
+- With `principal:reset-password`, the kebab holds **Reset password**: it opens an inline panel with a
+  password field (the same **Generate** and inline policy check as the New user form) and sets a new
+  password for the user without their current one. The set password stays copyable so you can hand it
+  over; the user changes it after signing in. The reset is audited with **you** as the actor. This is a
+  console path for what the CLI does with `omniglass set-password`; unlike that trusted direct-DB lane,
+  the console reset enforces the password policy.
 
 From the CLI the same surface is `omniglass principal list` / `get` / `create` / `update` /
 `disable` / `enable` / `archive` / `restore` / `purge`, and `omniglass grant create <id>` /

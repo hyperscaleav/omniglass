@@ -532,3 +532,16 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   flow). Completes [#104](https://github.com/hyperscaleav/omniglass/issues/104) and
   [#151](https://github.com/hyperscaleav/omniglass/issues/151); an operator-configurable policy and a HIBP
   breached-password check remain deferred.
+- **Identity: admin password reset.** An administrator can reset another user's password without the
+  user's current one: `POST /principals/{id}:resetPassword` gated by a new `principal:reset-password`
+  capability (all-scope; admin holds it via `principal:*`, so a future help-desk role can be granted only
+  the reset), policy-enforced (a 422 on a weak password), and audited with the admin as the actor (the
+  storage method `SetPrincipalPassword` sets by id, distinct from the self-service `SetPassword` that keys
+  on username and audits the target). The console adds a **Reset password** kebab action on the user blade
+  that opens an inline panel reusing the `PasswordField` (Generate, Copy, inline policy check); the set
+  password stays copyable to hand over. This is the console counterpart to the CLI `set-password` (which,
+  as a trusted direct-DB lane, stays policy-exempt). Proven by a storage test (the new secret
+  authenticates and the old does not, the reset is audited as the admin, non-all scope and unknown id are
+  refused), an API test (an operator lacks the capability 403, a weak / common / username-containing
+  password is a 422, the admin reset lets the user sign in with the new password), and a web test (the
+  kebab opens the panel, Generate + Set password calls the endpoint and confirms).

@@ -620,6 +620,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/principals/{id}:resetPassword": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reset a principal's password
+         * @description Sets a new password for a human principal (an administrator action; the target's current password is not required). Gated by principal:reset-password (all-scope). The new password must meet the password policy; a violation is a 422. The action is audited with the administrator as the actor.
+         */
+        post: operations["reset-principal-password"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/principals/{id}:restore": {
         parameters: {
             query?: never;
@@ -1201,6 +1221,16 @@ export interface components {
         PrincipalStruct: {
             id: string;
             kind: string;
+        };
+        ResetPasswordInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ResetPasswordInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The new password (at least 12 characters, not a common password, not containing the username) */
+            password: string;
         };
         RoleBody: {
             description?: string;
@@ -2702,6 +2732,40 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "reset-principal-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The principal's id (uuid) */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResetPasswordInputBody"];
+            };
+        };
         responses: {
             /** @description No Content */
             204: {

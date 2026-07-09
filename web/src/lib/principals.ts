@@ -108,6 +108,14 @@ export async function setPrincipalActive(id: string, active: boolean): Promise<v
   if (error) throw error;
 }
 
+// resetPrincipalPassword sets a new password for a human principal (an admin action;
+// no current password required). Gated by principal:reset-password; the new password
+// must meet the policy (a 422 otherwise, surfaced inline on the field).
+export async function resetPrincipalPassword(id: string, password: string): Promise<void> {
+  const { error } = await api.POST("/principals/{id}:resetPassword", { params: { path: { id } }, body: { password } });
+  if (error) throw error;
+}
+
 // The soft/hard delete lifecycle: archive hides the account (reversible),
 // restore brings it back, and purge hard-deletes an archived one (irreversible).
 export async function archivePrincipal(id: string): Promise<void> {

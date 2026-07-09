@@ -342,6 +342,50 @@ func (p *PG) SetPassword(ctx context.Context, username, encoded string) (bool, e
 	return true, nil
 }
 
+// SetPrincipalPassword resets a human principal's password by id, on behalf of an
+// admin. Requires an all-scope grant (principals are not scope-tree scoped). Unlike
+// SetPassword (self-service, keyed on username, audited as the target), this audits
+// the acting admin as the actor and does not require the target's current password.
+// The target must be a human; an unknown id is ErrPrincipalNotFound.
+func (p *PG) SetPrincipalPassword(ctx context.Context, actorID, id, encoded string, action scope.Set) error {
+	if !action.All {
+		return ErrPrincipalForbidden
+	}
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("storage: begin reset password: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	// Only a human holds a password credential; an unknown id (or a service) is not found.
+	var pgErr *pgconn.PgError
+	if err := tx.QueryRow(ctx, `select 1 from human where principal_id = $1`, id).Scan(new(int)); err != nil {
+		switch {
+		case errors.Is(err, pgx.ErrNoRows):
+			return ErrPrincipalNotFound
+		case errors.As(err, &pgErr) && pgErr.Code == "22P02":
+			return ErrPrincipalNotFound
+		default:
+			return fmt.Errorf("storage: reset password lookup: %w", err)
+		}
+	}
+	if _, err := tx.Exec(ctx, `
+		insert into credential (principal_id, kind, secret_hash, prefix)
+		values ($1, 'password', $2, '')
+		on conflict (principal_id) where kind = 'password'
+			do update set secret_hash = excluded.secret_hash`,
+		id, []byte(encoded)); err != nil {
+		return fmt.Errorf("storage: reset password: %w", err)
+	}
+	if err := writeAuditRes(ctx, tx, actorID, "reset_password", "credential", id, nil, nil); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("storage: commit reset password: %w", err)
+	}
+	return nil
+}
+
 // HumanProfilePatch carries the editable self-profile fields. A nil pointer
 // leaves the column unchanged; a non-nil pointer sets it, with an empty string
 // clearing the nullable column to NULL.

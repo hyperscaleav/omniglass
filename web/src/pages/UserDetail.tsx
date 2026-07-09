@@ -2,7 +2,8 @@ import { type JSX, For, Show, createEffect, createMemo, createSignal, on } from 
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import GrantBuilder from "../components/GrantBuilder";
 import { Fact, RelatedList } from "../components/DetailShell";
-import { Ban, Eye, Mask, Trash } from "../components/icons";
+import { Ban, Eye, Key, Mask, Trash, X } from "../components/icons";
+import PasswordField from "../components/PasswordField";
 import { useBlades, useBladeEdit } from "../lib/blades";
 import type { BladeDef } from "../lib/blades";
 import type { TreeNode } from "../lib/treeselect";
@@ -10,13 +11,13 @@ import type { ExistingGrant, GrantRef, ScopeOp } from "../lib/grantdraft";
 import {
   type Principal, type ScopeKind, type UpdatePrincipal,
   PRINCIPALS_KEY, ROLES_KEY, getPrincipal, updatePrincipal, createGrant, revokeGrant, setPrincipalActive, listRoles,
-  archivePrincipal, restorePrincipal, purgePrincipal, consumePendingPrincipalEdit,
+  archivePrincipal, restorePrincipal, purgePrincipal, resetPrincipalPassword, consumePendingPrincipalEdit,
   principalName, kindBadge, principalInitials,
 } from "../lib/principals";
 import { useMe, can } from "../lib/auth";
 import { impersonate } from "../lib/impersonation";
 import { describeError } from "../lib/format";
-import { handleError, emailError } from "../lib/validate";
+import { handleError, emailError, passwordError, isPasswordPolicyMessage } from "../lib/validate";
 import { listLocations } from "../lib/locations";
 import { listSystems } from "../lib/systems";
 import { listComponents } from "../lib/components";
@@ -38,6 +39,14 @@ export function UserDetail(props: { id: string }) {
   const canUpdate = () => can(me.data, "principal", "update");
   const canArchive = () => can(me.data, "principal", "archive");
   const canPurge = () => can(me.data, "principal", "purge", "admin");
+  const canResetPassword = () => can(me.data, "principal", "reset-password");
+  // The admin reset-password panel (toggled from the kebab): its own new-password
+  // field, a server-policy error routed inline, and a "set" confirmation.
+  const [resetting, setResetting] = createSignal(false);
+  const [resetPw, setResetPw] = createSignal("");
+  const [resetBusy, setResetBusy] = createSignal(false);
+  const [resetPwErr, setResetPwErr] = createSignal<string | null>(null);
+  const [resetDone, setResetDone] = createSignal(false);
   // Fetch by id, not from the directory list (which hides archived principals),
   // so the blade still resolves a user it just soft-deleted and can offer Restore
   // / Purge. Mutations invalidate the PRINCIPALS_KEY prefix, covering this and the list.
@@ -93,6 +102,9 @@ export function UserDetail(props: { id: string }) {
         if (canPurge()) items.push({ label: "Purge", icon: <Trash size={15} />, tone: "danger", onClick: doPurge });
       } else if (canArchive()) {
         items.push({ label: "Archive", icon: <Ban size={15} />, tone: "danger", onClick: doArchive });
+      }
+      if (pr.human && canResetPassword()) {
+        items.push({ label: "Reset password", icon: <Key size={15} />, onClick: startReset });
       }
       if (can(me.data, "principal", "impersonate") && pr.id !== me.data?.principal?.id) {
         items.push({ label: "View as", icon: <Eye size={15} />, onClick: () => doImpersonate(pr, "view_as") });
@@ -194,6 +206,31 @@ export function UserDetail(props: { id: string }) {
     if (!r.ok) setActErr(r.message);
   }
 
+  function startReset() {
+    setResetPw("");
+    setResetPwErr(null);
+    setResetDone(false);
+    setResetting(true);
+  }
+
+  async function doReset() {
+    const pr = p();
+    if (!pr) return;
+    setResetBusy(true);
+    setResetPwErr(null);
+    setResetDone(false);
+    try {
+      await resetPrincipalPassword(pr.id, resetPw());
+      setResetDone(true);
+    } catch (e) {
+      const msg = describeError(e);
+      if (isPasswordPolicyMessage(msg)) setResetPwErr(msg);
+      else setActErr(msg);
+    } finally {
+      setResetBusy(false);
+    }
+  }
+
   return (
     <Show when={p()} fallback={<p class="py-8 text-center text-sm text-base-content/40">This user is no longer available.</p>}>
       {(pr) => (
@@ -214,6 +251,28 @@ export function UserDetail(props: { id: string }) {
 
           <Show when={actErr()}>
             <div role="alert" class="alert alert-error alert-soft text-sm"><span>{actErr()}</span></div>
+          </Show>
+
+          {/* Admin reset-password panel (toggled from the kebab). The set password
+              stays copyable so the admin can hand it over; the user changes it after. */}
+          <Show when={resetting()}>
+            <div class="flex flex-col gap-2 rounded-box border border-warning/40 bg-warning/10 p-3">
+              <div class="flex items-center justify-between">
+                <span class="eyebrow">Reset password{pr().human ? ` for ${pr().human!.username}` : ""}</span>
+                <button type="button" class="btn btn-quiet btn-xs btn-square" aria-label="Close" onClick={() => setResetting(false)}><X size={14} /></button>
+              </div>
+              <PasswordField id="reset-pw" value={resetPw()} onInput={(v) => { setResetPw(v); setResetPwErr(null); setResetDone(false); }} username={pr().human?.username} serverError={resetPwErr()} generate />
+              <Show when={resetDone()}>
+                <p class="text-xs text-success">Password set. Copy it above and share it with the user; they can change it after signing in.</p>
+              </Show>
+              <div class="flex justify-end gap-2">
+                <button type="button" class="btn btn-quiet btn-sm" onClick={() => setResetting(false)} disabled={resetBusy()}>Close</button>
+                <button type="button" class="btn btn-action btn-sm" onClick={doReset} disabled={resetBusy() || !resetPw() || !!passwordError(resetPw(), pr().human?.username)}>
+                  <Show when={resetBusy()}><span class="loading loading-spinner loading-xs" /></Show>
+                  Set password
+                </button>
+              </div>
+            </div>
           </Show>
 
           {/* Profile: facts in read mode, inputs in edit mode. */}

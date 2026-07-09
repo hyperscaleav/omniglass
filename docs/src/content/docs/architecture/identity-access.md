@@ -15,7 +15,9 @@ Built and tested today: the `principal` (+ per-kind `human` / `service`) and `cr
 (argon2id) behind an httpOnly session cookie** (`POST /auth/login` and `/auth/logout`, the public
 `GET /auth/status`), the self-service `GET` / `PATCH /auth/me` and `POST /auth/me:changePassword`, the
 admin **principal directory** (`GET /principals`, `GET /principals/{id}`), human **create**
-(`POST /principals`) and **update** (`PATCH /principals/{id}`: display name, email, username), **role
+(`POST /principals`) and **update** (`PATCH /principals/{id}`: display name, email, username), an
+admin **password reset** (`POST /principals/{id}:resetPassword`, gated `principal:reset-password`,
+policy-enforced, no current password, audited as the admin), **role
 assignment** (`POST` / `DELETE /principals/{id}/grants`) with the **owner-invariant trigger** enforcing
 that the last `owner @ all` grant cannot be revoked, and the **principal lifecycle**: reversible
 **disable** (`POST /principals/{id}:disable` / `:enable`, which refuses authentication for a disabled

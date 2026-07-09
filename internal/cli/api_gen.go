@@ -777,6 +777,27 @@ func generatedCommands() []*cobra.Command {
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
+			var fPassword string
+			cmd := &cobra.Command{
+				Use:     "resetPassword",
+				Short:   "Reset a principal's password",
+				Long:    "Sets a new password for a human principal (an administrator action; the target's current password is not required). Gated by principal:reset-password (all-scope). The new password must meet the password policy; a violation is a 422. The action is audited with the administrator as the actor.",
+				Example: "  omniglass principal resetPassword --password password",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/principals/{id}:resetPassword")
+					body := map[string]any{}
+					if cmd.Flags().Changed("password") {
+						body["password"] = fPassword
+					}
+					return runAPICommand(cmd, "POST", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fPassword, "password", "", "The new password (at least 12 characters, not a common password, not containing the username)")
+			_ = cmd.MarkFlagRequired("password")
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
 			cmd := &cobra.Command{
 				Use:     "restore",
 				Short:   "Restore a principal",

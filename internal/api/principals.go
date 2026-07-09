@@ -64,6 +64,13 @@ type principalPathInput struct {
 	ID string `path:"id" doc:"The principal's id (uuid)"`
 }
 
+type resetPasswordInput struct {
+	ID   string `path:"id" doc:"The principal's id (uuid)"`
+	Body struct {
+		Password string `json:"password" minLength:"12" maxLength:"256" doc:"The new password (at least 12 characters, not a common password, not containing the username)"`
+	}
+}
+
 type principalOutput struct {
 	Body principalBody
 }
@@ -308,6 +315,37 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Middlewares:   huma.Middlewares{a.authn, a.require("principal", "purge", "admin")},
 	}, func(ctx context.Context, in *principalPathInput) (*struct{}, error) {
 		if err := gw.PurgePrincipal(ctx, actorID(ctx), in.ID, a.scopeFor(ctx, "principal", "purge")); err != nil {
+			return nil, mapPrincipalErr(err)
+		}
+		return nil, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID:   "reset-principal-password",
+		Method:        http.MethodPost,
+		Path:          "/principals/{id}:resetPassword",
+		DefaultStatus: http.StatusNoContent,
+		Summary:       "Reset a principal's password",
+		Description:   "Sets a new password for a human principal (an administrator action; the target's current password is not required). Gated by principal:reset-password (all-scope). The new password must meet the password policy; a violation is a 422. The action is audited with the administrator as the actor.",
+		Middlewares:   huma.Middlewares{a.authn, a.require("principal", "reset-password")},
+	}, func(ctx context.Context, in *resetPasswordInput) (*struct{}, error) {
+		reset := a.scopeFor(ctx, "principal", "reset-password")
+		target, err := gw.GetPrincipal(ctx, in.ID, reset)
+		if err != nil {
+			return nil, mapPrincipalErr(err)
+		}
+		username := ""
+		if target.Human != nil {
+			username = target.Human.Username
+		}
+		if err := mapPasswordErr(auth.ValidatePassword(in.Body.Password, username)); err != nil {
+			return nil, err
+		}
+		hash, err := auth.HashPassword(in.Body.Password)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("reset password")
+		}
+		if err := gw.SetPrincipalPassword(ctx, actorID(ctx), in.ID, hash, reset); err != nil {
 			return nil, mapPrincipalErr(err)
 		}
 		return nil, nil
