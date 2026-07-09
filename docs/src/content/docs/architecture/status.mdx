@@ -464,6 +464,19 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   (one backend action per Save) remain deferred to a batched endpoint; the user deactivate / purge lifecycle is
   its own slice. Proven by the web suite (the edit-slot, the `BladeStack` footer-bar chrome, and the Group / User
   read-vs-edit tests) and tsc.
+- **Identity: the principal lifecycle (deactivate + purge), backend.** Beyond the reversible disable, a principal
+  can be **deactivated** (a soft delete, `deactivated_at`: hidden from the directory, cannot authenticate,
+  reversible) and then **purged** (an irreversible hard delete, gated on prior deactivation and on the
+  admin-sensitive `principal:purge:admin`, so admin and owner can purge but a two-token `principal:*` cannot
+  reach it). The purge preserves the audit trail: every `audit_log` row now denormalizes the actor's label at
+  write time, the audit foreign keys are `ON DELETE SET NULL`, and the read coalesces the live join to the
+  snapshot, so a purged actor's history stays legible ([ADR-0016](/architecture/decisions/#adr-0016-a-principal-can-be-purged-and-the-audit-trail-is-denormalized-to-survive-it),
+  retiring the "never hard-deleted" rule). The last-active-owner guard extends to deactivate. Gateway
+  (`DeactivatePrincipal` / `ReactivatePrincipal` / `PurgePrincipal`), the `:deactivate` / `:reactivate` /
+  `:purge` API custom methods, and the generated CLI / client ship; proven against real Postgres by a storage
+  integration test (lifecycle + audit-actor survival + owner guard) and an HTTP end-to-end test (the capability
+  split, the deactivate-before-purge gate, soft-delete visibility). The console UI for the lifecycle is a
+  follow-up ([#143](https://github.com/hyperscaleav/omniglass/issues/143) backend).
 - **Identity: the Groups console + inherited-vs-direct grants, UI.** A **Groups** page (`Settings > Groups`,
   gated `principal_group:read`) as a config over the shared `FlatList`: list and create, and a row Drawer with
   member add/remove and the grant builder (reused, wired to the group grant endpoints, so a group's members

@@ -17,16 +17,19 @@ Built and tested today: the `principal` (+ per-kind `human` / `service`) and `cr
 admin **principal directory** (`GET /principals`, `GET /principals/{id}`), human **create**
 (`POST /principals`) and **update** (`PATCH /principals/{id}`: display name, email, username), **role
 assignment** (`POST` / `DELETE /principals/{id}/grants`) with the **owner-invariant trigger** enforcing
-that the last `owner @ all` grant cannot be revoked, and **soft disable** (`POST /principals/{id}:disable`
-/ `:enable`, which refuses authentication for a disabled principal and cannot disable the last active
-owner; all-scope gated), and the per-action `visible_set` resolver enforced in the
+that the last `owner @ all` grant cannot be revoked, and the **principal lifecycle**: reversible
+**disable** (`POST /principals/{id}:disable` / `:enable`, which refuses authentication for a disabled
+principal), a stronger **deactivate** (`:deactivate` / `:reactivate`, a soft delete that hides the account
+from the directory and blocks authentication, reversibly until purged), and **purge** (`:purge`, an
+irreversible hard delete, gated on prior deactivation and on the admin-sensitive `principal:purge:admin`);
+disabling or deactivating the last active owner is refused, and a purge preserves the audit trail by
+denormalizing the actor's label into each row (the audit foreign keys go `ON DELETE SET NULL`), so the
+history survives even after its actor is gone. And the per-action `visible_set` resolver enforced in the
 Storage Gateway across locations, systems, and components, and **principal groups**
 (`GET` / `POST` / `PATCH` / `DELETE /principal-groups`, membership, and group grants) whose members
-**inherit** the group's grants through the grant-loader union, gated by `principal_group` (the console
-Groups surface is the next slice). Still `Design`: OIDC / SAML auth, the node / NATS path, the permission cache, service-account and custom-role
-management, and the tenant-policy lever (a principal is disabled, never hard-deleted, since the audit
-trail references it). The per-slice
-breakdown is on [implementation status](/architecture/status/).
+**inherit** the group's grants through the grant-loader union, gated by `principal_group`. Still `Design`:
+OIDC / SAML auth, the node / NATS path, the permission cache, custom-role management, and the tenant-policy
+lever. The per-slice breakdown is on [implementation status](/architecture/status/).
 
 Where the build currently differs from the present-tense design below (each logged in the
 [decision log](/architecture/decisions/)):

@@ -50,6 +50,10 @@ roles:
       - "system:create,update,delete"
       - "location:create,update,delete"
       - "principal:*"
+      # purge (the irreversible hard delete) is admin-sensitive: a three-token
+      # permission that principal:* (two tokens) structurally cannot reach, so only
+      # admin (via this explicit grant) and owner (via >) can purge.
+      - "principal:purge:admin"
       - "credential:*"
       - "principal_grant:*"
       - "principal_group:*"
