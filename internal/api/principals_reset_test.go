@@ -86,3 +86,42 @@ func TestResetPasswordAPI(t *testing.T) {
 	// An unknown id is 404.
 	c.do(adminTok, "POST", "/principals/00000000-0000-0000-0000-000000000000:resetPassword", map[string]string{"password": "purple-canyon-7"}, http.StatusNotFound)
 }
+
+// TestResetScopeEscalation proves a reset carries the same all-scope-only cover check
+// as act-as impersonation: a caller who can reach the reset endpoint (reset-password
+// at all-scope) but holds the target's real capability only at a narrow scope cannot
+// reset the target to escalate that capability estate-wide. Skipped under -short.
+func TestResetScopeEscalation(t *testing.T) {
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	// A custom role granting only the reset capability (an all-scope reset-password
+	// grant, without the target's other capabilities).
+	if err := gw.UpsertRole(ctx, storage.Role{ID: "resetter", Permissions: []string{"principal:reset-password"}}); err != nil {
+		t.Fatalf("seed resetter role: %v", err)
+	}
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+
+	// A split-grant caller: reset-password at all-scope (reaches the endpoint) plus the
+	// target's real capability (deploy) at only a narrow location scope.
+	splitTok := principalWithGrants(t, ctx, dsn, "split-resetter", []grant{
+		{role: "resetter", scopeKind: "all"},
+		{role: "deploy", scopeKind: "location", scopeID: "11111111-1111-1111-1111-111111111111"},
+	})
+	// The target holds deploy at all-scope: taking it over would grant estate-wide deploy.
+	targetTok := principalWithGrants(t, ctx, dsn, "all-scope-deployer", []grant{{role: "deploy", scopeKind: "all"}})
+	targetID := meID(t, c, targetTok)
+
+	// Refused: the caller's ALL-SCOPE grants (reset-password only) do not cover the
+	// target's deploy, so a reset cannot promote a narrow deploy to estate-wide.
+	c.do(splitTok, "POST", "/principals/"+targetID+":resetPassword", map[string]string{"password": "orange-boat-42x"}, http.StatusForbidden)
+}

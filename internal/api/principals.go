@@ -351,6 +351,15 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		case err != nil:
 			return nil, huma.Error500InternalServerError("reset password")
 		}
+		// Scope guard (like act-as): a reset yields the target's authority resolved from
+		// the target, so the caller's ALL-SCOPE grants alone must cover the target; a
+		// capability held only at a narrow scope must not become estate-wide via a reset.
+		actor, _ := principalFrom(ctx)
+		if ok, err := a.allScopeCovers(ctx, actor, target); err != nil {
+			return nil, huma.Error500InternalServerError("reset password")
+		} else if !ok {
+			return nil, huma.Error403Forbidden("resetting this principal requires all-scope authority over its capabilities")
+		}
 		username := ""
 		if target.Human != nil {
 			username = target.Human.Username

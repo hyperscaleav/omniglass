@@ -84,22 +84,11 @@ func registerImpersonationRoutes(api huma.API, a *authenticator, gw storage.Gate
 		// writes (principal_grant, role) whose scoped grants resolve to an empty
 		// effective scope. view-as stays cross-scope (read only, grants no authority).
 		if in.Body.Mode == "act_as" {
-			idx, err := a.roleIndex(ctx)
+			ok, err := a.allScopeCovers(ctx, actor, target)
 			if err != nil {
 				return nil, huma.Error500InternalServerError("impersonation failed")
 			}
-			targetRoleIDs := make([]string, 0, len(target.Grants))
-			for _, g := range target.Grants {
-				targetRoleIDs = append(targetRoleIDs, g.Role)
-			}
-			targetPerms := idx.Flatten(targetRoleIDs)
-			allScopeRoleIDs := make([]string, 0, len(actor.Grants))
-			for _, g := range actor.Grants {
-				if g.ScopeKind == "all" {
-					allScopeRoleIDs = append(allScopeRoleIDs, g.Role)
-				}
-			}
-			if !idx.Flatten(allScopeRoleIDs).Covers(targetPerms) {
+			if !ok {
 				return nil, huma.Error403Forbidden("act-as requires all-scope authority over the target's capabilities; use view-as instead")
 			}
 		}
@@ -155,6 +144,31 @@ var (
 // owner (owner@all, un-takeover-able by anyone including another owner) or when the
 // caller's flattened capabilities do not cover the target's (an escalation). Returns
 // errOwnerTarget / errCapabilityEscalation, a wrapped role-index error, or nil.
+// allScopeCovers reports whether the caller's ALL-SCOPE grants alone flatten to a
+// permission set covering the target's. The scope-blind cover in checkTakeoverGuard
+// is not enough for a FULL-authority takeover (act-as impersonation, password reset):
+// the acting principal resolves scope from the target, so a capability the caller
+// holds only at a narrow scope must not become estate-wide by taking the target over.
+// A capability held only through a scoped grant does not count. view-as does not need
+// this (read-only, grants no authority).
+func (a *authenticator) allScopeCovers(ctx context.Context, actor, target *storage.Principal) (bool, error) {
+	idx, err := a.roleIndex(ctx)
+	if err != nil {
+		return false, err
+	}
+	targetRoleIDs := make([]string, 0, len(target.Grants))
+	for _, g := range target.Grants {
+		targetRoleIDs = append(targetRoleIDs, g.Role)
+	}
+	allScopeRoleIDs := make([]string, 0, len(actor.Grants))
+	for _, g := range actor.Grants {
+		if g.ScopeKind == "all" {
+			allScopeRoleIDs = append(allScopeRoleIDs, g.Role)
+		}
+	}
+	return idx.Flatten(allScopeRoleIDs).Covers(idx.Flatten(targetRoleIDs)), nil
+}
+
 func (a *authenticator) checkTakeoverGuard(ctx context.Context, target *storage.Principal) error {
 	for _, g := range target.Grants {
 		if g.Role == "owner" && g.ScopeKind == "all" {
