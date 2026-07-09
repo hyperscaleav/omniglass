@@ -77,7 +77,7 @@ func generatedCommands() []*cobra.Command {
 			}
 			cmd.Flags().StringVar(&fCurrentPassword, "current-password", "", "Your current password")
 			_ = cmd.MarkFlagRequired("current-password")
-			cmd.Flags().StringVar(&fNewPassword, "new-password", "", "The new password (at least 8 characters)")
+			cmd.Flags().StringVar(&fNewPassword, "new-password", "", "The new password (at least 12 characters, not a common password, not containing the username)")
 			_ = cmd.MarkFlagRequired("new-password")
 			return cmd
 		}())
@@ -675,7 +675,7 @@ func generatedCommands() []*cobra.Command {
 			}
 			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
 			cmd.Flags().StringVar(&fEmail, "email", "", "")
-			cmd.Flags().StringVar(&fPassword, "password", "", "Optional initial password; the user changes it after signing in")
+			cmd.Flags().StringVar(&fPassword, "password", "", "Optional initial password (at least 12 characters, not a common password, not containing the username); the user changes it after signing in")
 			cmd.Flags().StringVar(&fUsername, "username", "", "Unique sign-in name (lowercase letters, digits, and . _ -)")
 			_ = cmd.MarkFlagRequired("username")
 			return cmd

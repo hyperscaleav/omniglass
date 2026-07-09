@@ -1,5 +1,7 @@
 import { Show, For, createSignal, createEffect } from "solid-js";
 import Page from "../components/Page";
+import PasswordField from "../components/PasswordField";
+import { passwordError } from "../lib/validate";
 import { useMe, useUpdateProfile, useChangePassword } from "../lib/auth";
 
 // Profile is the signed-in operator's own account surface: edit your display name
@@ -135,18 +137,8 @@ export default function Profile() {
             </div>
             <div>
               <label class="eyebrow mb-1.5 block" for="pw-new">New password</label>
-              <input
-                id="pw-new"
-                type="password"
-                autocomplete="new-password"
-                minLength={8}
-                class="input input-bordered w-full"
-                value={next()}
-                onInput={(e) => setNext(e.currentTarget.value)}
-                disabled={pwBusy()}
-                required
-              />
-              <p class="mt-1 text-[11px] text-base-content/40">At least 8 characters.</p>
+              <PasswordField id="pw-new" value={next()} onInput={setNext} username={human()?.username} disabled={pwBusy()} required generate />
+              <p class="mt-1 text-[11px] text-base-content/40">At least 12 characters, not a common password. <strong>Generate</strong> makes a strong one.</p>
             </div>
             <div>
               <label class="eyebrow mb-1.5 block" for="pw-confirm">Confirm new password</label>
@@ -163,7 +155,7 @@ export default function Profile() {
             </div>
             <Note note={pwMsg()} />
             <div class="card-actions">
-              <button type="submit" class="btn btn-action btn-sm" disabled={pwBusy() || !current() || !next()}>
+              <button type="submit" class="btn btn-action btn-sm" disabled={pwBusy() || !current() || !next() || !!passwordError(next(), human()?.username)}>
                 <Show when={pwBusy()}><span class="loading loading-spinner loading-xs" /></Show>
                 Change password
               </button>

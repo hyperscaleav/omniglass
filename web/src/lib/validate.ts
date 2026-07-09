@@ -29,3 +29,19 @@ export function emailError(value: string): string | null {
   if (!EMAIL_RE.test(value)) return "Enter a valid email address (name@example.com).";
   return null;
 }
+
+// The password policy floor, kept in sync with internal/auth (MinPasswordLength).
+export const MIN_PASSWORD_LENGTH = 12;
+
+// passwordError mirrors the cheap server rules for inline feedback: a length floor
+// and not containing the username. The common-password denylist stays server-side
+// (too large to ship to the browser) and returns a 422 on submit, which a generated
+// password never trips. Empty is not an error (a separate required/optional check
+// owns emptiness). Counts characters (code points), matching the server's rune count.
+export function passwordError(value: string, username?: string): string | null {
+  if (!value) return null;
+  if ([...value].length < MIN_PASSWORD_LENGTH) return `Use at least ${MIN_PASSWORD_LENGTH} characters.`;
+  const u = (username ?? "").trim().toLowerCase();
+  if (u.length >= 3 && value.toLowerCase().includes(u)) return "Must not contain the username.";
+  return null;
+}

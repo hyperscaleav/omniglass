@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"sync"
@@ -435,7 +436,7 @@ func (a *authenticator) updateMeHandler(ctx context.Context, in *updateMeInput) 
 type changePasswordInput struct {
 	Body struct {
 		CurrentPassword string `json:"current_password" doc:"Your current password"`
-		NewPassword     string `json:"new_password" minLength:"8" maxLength:"256" doc:"The new password (at least 8 characters)"`
+		NewPassword     string `json:"new_password" minLength:"12" maxLength:"256" doc:"The new password (at least 12 characters, not a common password, not containing the username)"`
 	}
 }
 
@@ -455,6 +456,9 @@ func (a *authenticator) changePasswordHandler(ctx context.Context, in *changePas
 		}
 		return nil, huma.Error500InternalServerError("change password")
 	}
+	if err := mapPasswordErr(auth.ValidatePassword(in.Body.NewPassword, pr.Human.Username)); err != nil {
+		return nil, err
+	}
 	encoded, err := auth.HashPassword(in.Body.NewPassword)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("change password")
@@ -463,6 +467,26 @@ func (a *authenticator) changePasswordHandler(ctx context.Context, in *changePas
 		return nil, huma.Error500InternalServerError("change password")
 	}
 	return nil, nil
+}
+
+// mapPasswordErr translates the auth password-policy sentinels into a 422 with a
+// specific message, or nil when the password is acceptable. Shared by the create and
+// change-password handlers so both enforce the same policy the same way.
+func mapPasswordErr(err error) error {
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, auth.ErrPasswordTooShort):
+		return huma.Error422UnprocessableEntity(fmt.Sprintf("password must be at least %d characters", auth.MinPasswordLength))
+	case errors.Is(err, auth.ErrPasswordTooLong):
+		return huma.Error422UnprocessableEntity(fmt.Sprintf("password must be at most %d characters", auth.MaxPasswordLength))
+	case errors.Is(err, auth.ErrPasswordCommon):
+		return huma.Error422UnprocessableEntity("password is too common; choose a less predictable one")
+	case errors.Is(err, auth.ErrPasswordContainsIdentifier):
+		return huma.Error422UnprocessableEntity("password must not contain the username")
+	default:
+		return huma.Error422UnprocessableEntity("password does not meet the policy")
+	}
 }
 
 // rolesOutput is the body of GET /api/v1/roles.

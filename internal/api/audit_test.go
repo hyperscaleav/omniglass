@@ -65,8 +65,8 @@ func TestAuditLogAPI(t *testing.T) {
 	var created struct {
 		ID string `json:"id"`
 	}
-	_ = json.Unmarshal(c.do(ownerTok, http.MethodPost, "/principals", map[string]any{"username": "alice", "password": "alice-s3cret"}, http.StatusCreated), &created)
-	loginBody, _ := json.Marshal(map[string]string{"username": "alice", "password": "alice-s3cret"})
+	_ = json.Unmarshal(c.do(ownerTok, http.MethodPost, "/principals", map[string]any{"username": "alice", "password": "orange-boat-42x"}, http.StatusCreated), &created)
+	loginBody, _ := json.Marshal(map[string]string{"username": "alice", "password": "orange-boat-42x"})
 	resp, err := http.Post(srv.URL+"/api/v1/auth/login", "application/json", bytes.NewReader(loginBody))
 	if err != nil || resp.StatusCode != http.StatusNoContent {
 		t.Fatalf("alice login: err %v, status %v", err, resp.StatusCode)

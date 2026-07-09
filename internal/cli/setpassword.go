@@ -37,6 +37,9 @@ func runSetPassword(ctx context.Context, username, password string) error {
 	}
 	defer gw.Close()
 
+	if err := auth.ValidatePassword(password, username); err != nil {
+		return fmt.Errorf("password rejected (%s): %w", auth.PasswordRequirements(), err)
+	}
 	hash, err := auth.HashPassword(password)
 	if err != nil {
 		return err

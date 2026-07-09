@@ -37,6 +37,13 @@ Where the build currently differs from the present-tense design below (each logg
 - **Credentials are `bearer` or `password`.** `credential.kind` is `bearer` or `password` (argon2id,
   PHC-encoded, one password per principal); the `oidc` / `nats` methods and the full
   `(method, identifier)` lookup are still deferred. The minted bearer token prefix is `ogp_`.
+- **A password policy gates every set-path.** A single pure validator (`auth.ValidatePassword`)
+  enforces the policy wherever a password is set (create a user, self-service change, CLI
+  `set-password`, and `bootstrap`): **at least 12 characters, not on a common-password denylist, and
+  not containing the username**. No character-class composition rules (NIST 800-63B favors length and
+  a blocklist). The API maps a violation to 422; the console mirrors the length and username rules
+  inline and offers a crypto-strong **Generate** action, while the denylist stays server-side. A
+  breached-password check (HIBP k-anonymity) is a planned enhancement over the embedded list.
 - **The `iam` command namespace is not built.** Owner creation is `omniglass bootstrap <username>
   [--password <pw>]` ([Bootstrap](#bootstrap)), not the `og iam create-owner` path; the broader `iam`
   admin CLI is deferred with the admin user surface.

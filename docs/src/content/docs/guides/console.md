@@ -29,8 +29,10 @@ only your own account, whatever your role.
 - **Profile.** Change your display name; it drives how you appear in the console (the sidebar
   label and the initials avatar). Your username and email are set by an administrator, not you,
   and are shown read-only.
-- **Change password.** Enter your current password and a new one (at least 8 characters). A
-  wrong current password is refused. Your other active sessions stay signed in.
+- **Change password.** Enter your current password and a new one. The new password must meet the
+  **policy** (at least 12 characters, not a common password, and not containing your username); the
+  field validates as you type, and **Generate** fills a strong random one you can **Copy**. A wrong
+  current password is refused. Your other active sessions stay signed in.
 - **Access.** A read-only view of the identity model you operate under: your principal, the
   roles granted to you, and the flattened permissions those roles carry. The server enforces
   these on every request; the console only mirrors them.
@@ -48,8 +50,11 @@ location-scoped admin cannot list users.
 - Pick a row to open its **blade**: a principal's profile, the **groups** it belongs to (open
   one to stack that group's blade over the user), and its **role grants** (each a role at a scope).
 - With `principal:create`, **New user** creates a human with a username and an optional initial
-  password. The new user can sign in right away and change that password themselves; a fresh
-  account holds no grants (so it can sign in but do nothing) until you assign a role. The form
+  password (which must meet the **password policy**: at least 12 characters, not a common password,
+  and not containing the username). **Generate** fills a strong random password, revealed so you can
+  read it, with a **Copy** button to hand it over. The new user can sign in right away and change that
+  password themselves; a fresh account holds no grants (so it can sign in but do nothing) until you
+  assign a role. The form
   validates as you type: a **username** is a lowercase handle (letters, digits, and `. _ -`, no
   capitals or spaces) and an **email** must be well formed, so an invalid field shows an inline
   error and blocks the submit before the round-trip (the same rules the server enforces). The

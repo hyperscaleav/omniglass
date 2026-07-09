@@ -73,7 +73,7 @@ type createPrincipalInput struct {
 		Username    string `json:"username" minLength:"1" maxLength:"200" pattern:"^[a-z0-9][a-z0-9._-]*$" doc:"Unique sign-in name (lowercase letters, digits, and . _ -)"`
 		DisplayName string `json:"display_name,omitempty" maxLength:"200"`
 		Email       string `json:"email,omitempty" maxLength:"320" format:"email"`
-		Password    string `json:"password,omitempty" minLength:"8" maxLength:"256" doc:"Optional initial password; the user changes it after signing in"`
+		Password    string `json:"password,omitempty" minLength:"12" maxLength:"256" doc:"Optional initial password (at least 12 characters, not a common password, not containing the username); the user changes it after signing in"`
 	}
 }
 
@@ -163,6 +163,9 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 			DisplayName: in.Body.DisplayName,
 		}
 		if in.Body.Password != "" {
+			if err := mapPasswordErr(auth.ValidatePassword(in.Body.Password, in.Body.Username)); err != nil {
+				return nil, err
+			}
 			hash, err := auth.HashPassword(in.Body.Password)
 			if err != nil {
 				return nil, huma.Error500InternalServerError("create principal")

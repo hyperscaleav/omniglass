@@ -2,11 +2,12 @@ import { For, Show, createSignal } from "solid-js";
 import { useSearchParams } from "@solidjs/router";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
+import PasswordField from "../components/PasswordField";
 import { type Principal, PRINCIPALS_KEY, listPrincipals, createPrincipal, openPrincipalInEdit, principalName, kindBadge, principalInitials } from "../lib/principals";
 import { identityRegistry } from "../lib/identityBlades";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
-import { handleError, emailError } from "../lib/validate";
+import { handleError, emailError, passwordError } from "../lib/validate";
 import type { FilterKey } from "../lib/predicate";
 
 // Users: the admin principal directory, a config over the shared FlatList. A row per
@@ -169,12 +170,12 @@ function CreateUserForm(props: { close: () => void; onCreated: (p: Principal) =>
       </div>
       <div>
         <label class="eyebrow mb-1.5 block" for="new-password">Initial password</label>
-        <input id="new-password" type="password" autocomplete="new-password" minLength={8} class="input input-bordered w-full" value={password()} onInput={(e) => setPassword(e.currentTarget.value)} disabled={busy()} />
-        <p class="mt-1 text-[11px] text-base-content/40">Optional, at least 8 characters. The user changes it after signing in.</p>
+        <PasswordField id="new-password" value={password()} onInput={setPassword} username={username()} disabled={busy()} generate />
+        <p class="mt-1 text-[11px] text-base-content/40">Optional. At least 12 characters; <strong>Generate</strong> makes a strong one. The user changes it after signing in.</p>
       </div>
       <div class="mt-1 flex justify-end gap-2">
         <button type="button" class="btn btn-quiet btn-sm" onClick={props.close} disabled={busy()}>Cancel</button>
-        <button type="submit" class="btn btn-action btn-sm" disabled={busy() || !username().trim() || !!handleError(username()) || !!emailError(email())}>
+        <button type="submit" class="btn btn-action btn-sm" disabled={busy() || !username().trim() || !!handleError(username()) || !!emailError(email()) || !!passwordError(password(), username())}>
           <Show when={busy()}><span class="loading loading-spinner loading-xs" /></Show>
           Create user
         </button>

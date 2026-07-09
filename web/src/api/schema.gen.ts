@@ -764,7 +764,7 @@ export interface components {
             readonly $schema?: string;
             /** @description Your current password */
             current_password: string;
-            /** @description The new password (at least 8 characters) */
+            /** @description The new password (at least 12 characters, not a common password, not containing the username) */
             new_password: string;
         };
         ComponentBody: {
@@ -884,7 +884,7 @@ export interface components {
             display_name?: string;
             /** Format: email */
             email?: string;
-            /** @description Optional initial password; the user changes it after signing in */
+            /** @description Optional initial password (at least 12 characters, not a common password, not containing the username); the user changes it after signing in */
             password?: string;
             /** @description Unique sign-in name (lowercase letters, digits, and . _ -) */
             username: string;

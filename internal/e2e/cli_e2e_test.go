@@ -108,7 +108,7 @@ func TestCLIEndToEnd(t *testing.T) {
 	if out, code := cli("principal", "list"); code != 0 || !strings.Contains(out, `"username": "root"`) {
 		t.Fatalf("principal list exit %d:\n%s", code, out)
 	}
-	if out, code := cli("principal", "create", "--username", "charlie", "--password", "charlie-secret"); code != 0 || !strings.Contains(out, `"username": "charlie"`) {
+	if out, code := cli("principal", "create", "--username", "charlie", "--password", "orange-boat-42x"); code != 0 || !strings.Contains(out, `"username": "charlie"`) {
 		t.Fatalf("principal create exit %d:\n%s", code, out)
 	}
 	if out, code := cli("principal", "list"); code != 0 || !strings.Contains(out, `"username": "charlie"`) {

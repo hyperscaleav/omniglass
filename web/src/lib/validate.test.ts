@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { handleError, emailError } from "./validate";
+import { handleError, emailError, passwordError, MIN_PASSWORD_LENGTH } from "./validate";
 
 // The inline rules mirror the server's Huma pattern/format (see the API validation
 // test in internal/api/principals_validation_test.go): a handle is a lowercase
@@ -37,5 +37,23 @@ describe("emailError", () => {
   });
   it("treats empty as not-an-error (email is optional)", () => {
     expect(emailError("")).toBeNull();
+  });
+});
+
+describe("passwordError", () => {
+  it("accepts a long password that does not contain the username", () => {
+    expect(passwordError("orange-boat-42x", "jordan")).toBeNull();
+  });
+  it("rejects a password shorter than the floor", () => {
+    expect(passwordError("a".repeat(MIN_PASSWORD_LENGTH - 1))).toMatch(/at least/i);
+  });
+  it("rejects a password that contains the username (case-insensitive)", () => {
+    expect(passwordError("my-Jordan-pass-9", "jordan")).toMatch(/username/i);
+  });
+  it("ignores a very short username for containment", () => {
+    expect(passwordError("aviation-safety-plan", "av")).toBeNull();
+  });
+  it("treats empty as not-an-error (a separate required check owns it)", () => {
+    expect(passwordError("", "jordan")).toBeNull();
   });
 });

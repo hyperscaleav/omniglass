@@ -266,6 +266,25 @@ describe("Users page", () => {
     expect(createBtn().disabled).toBe(false);
   });
 
+  it("generates a strong initial password and enables Create; a weak one blocks it", async () => {
+    mount();
+    fireEvent.click(screen.getByText("New user"));
+    const username = (await screen.findByLabelText("Username")) as HTMLInputElement;
+    fireEvent.input(username, { target: { value: "jordan" } });
+    const pw = screen.getByLabelText("Initial password") as HTMLInputElement;
+    const createBtn = () => screen.getByText("Create user").closest("button") as HTMLButtonElement;
+    // A weak manual password: inline error (distinct from the helper text) + disabled Create.
+    fireEvent.input(pw, { target: { value: "abc" } });
+    expect(screen.getByText(/use at least/i)).toBeTruthy();
+    expect(createBtn().disabled).toBe(true);
+    // Generate fills a strong password, reveals it, clears the error, enables Create.
+    fireEvent.click(screen.getByRole("button", { name: "Generate" }));
+    expect(pw.value.length).toBeGreaterThanOrEqual(12);
+    expect(pw.type).toBe("text");
+    expect(screen.queryByText(/use at least/i)).toBeNull();
+    expect(createBtn().disabled).toBe(false);
+  });
+
   it("disables the footer Save when an edited username is invalid", async () => {
     mount();
     fireEvent.click(screen.getByText("Alice Ng"));
