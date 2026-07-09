@@ -107,6 +107,14 @@ type Gateway interface {
 	// an all-scope grant. Disabling the last active owner is ErrLastOwner; a
 	// disabled principal cannot authenticate.
 	SetPrincipalActive(ctx context.Context, actorID, id string, active bool, action scope.Set) error
+	// DeactivatePrincipal soft-deletes a principal (hidden from the directory, cannot
+	// authenticate, reversible); ReactivatePrincipal reverses it; PurgePrincipal
+	// hard-deletes a deactivated one (ErrNotDeactivated if not deactivated first, the
+	// hard gate). All require an all-scope grant; deactivating the last active owner
+	// is ErrLastOwner. Purge preserves the audit trail (denormalized actor label).
+	DeactivatePrincipal(ctx context.Context, actorID, id string, action scope.Set) error
+	ReactivatePrincipal(ctx context.Context, actorID, id string, action scope.Set) error
+	PurgePrincipal(ctx context.Context, actorID, id string, action scope.Set) error
 	// RevokeBearer deletes the bearer credential with the given sha256 hash
 	// (session logout). A no-op if none matches.
 	RevokeBearer(ctx context.Context, hash []byte) error

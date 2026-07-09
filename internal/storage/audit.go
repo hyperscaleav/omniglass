@@ -47,8 +47,8 @@ func (p *PG) ListAuditLog(ctx context.Context, f AuditFilter) ([]AuditEntry, err
 	}
 	rows, err := p.pool.Query(ctx, `
 		select a.id, to_char(a.ts, 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
-		       coalesce(a.actor_principal_id::text, ''), coalesce(ah.username, ''),
-		       coalesce(a.real_actor_principal_id::text, ''), coalesce(rh.username, ''),
+		       coalesce(a.actor_principal_id::text, ''), coalesce(ah.username, a.actor_username, ''),
+		       coalesce(a.real_actor_principal_id::text, ''), coalesce(rh.username, a.real_actor_username, ''),
 		       a.verb, a.resource, coalesce(a.resource_id, '')
 		from audit_log a
 		left join human ah on ah.principal_id = a.actor_principal_id
@@ -81,8 +81,8 @@ func (p *PG) ListAuditLog(ctx context.Context, f AuditFilter) ([]AuditEntry, err
 // not impersonated.
 func (p *PG) WriteAuthEvent(ctx context.Context, actorID, verb string) error {
 	if _, err := p.pool.Exec(ctx, `
-		insert into audit_log (actor_principal_id, real_actor_principal_id, verb, resource)
-		values ($1, $2, $3, 'auth')`,
+		insert into audit_log (actor_principal_id, real_actor_principal_id, actor_username, real_actor_username, verb, resource)
+		values ($1, $2, principal_label($1), principal_label($2), $3, 'auth')`,
 		nullize(actorID), nullize(realActorFrom(ctx)), verb); err != nil {
 		return fmt.Errorf("storage: write auth event: %w", err)
 	}

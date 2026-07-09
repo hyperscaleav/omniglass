@@ -520,6 +520,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/principals/{id}:deactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Deactivate a principal
+         * @description Soft-deletes a principal: it is hidden from the directory, can no longer authenticate, and its rows stay intact, reversibly (reactivate) until purged. Gated by principal:deactivate (all-scope). The last active owner cannot be deactivated.
+         */
+        post: operations["deactivate-principal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/principals/{id}:disable": {
         parameters: {
             query?: never;
@@ -574,6 +594,46 @@ export interface paths {
          * @description Mints a bounded, revocable token to view as (read-only) or act as (full) the target. Gated by principal:impersonate (all-scope). Refused on self, on an owner target (owners are un-impersonatable by anyone), when it would grant a capability the caller lacks (the escalation guard), or from within an existing impersonation.
          */
         post: operations["impersonate-principal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/principals/{id}:purge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Purge a principal
+         * @description Hard-deletes a deactivated principal and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. Gated by principal:purge (admin-sensitive, all-scope), and the principal must be deactivated first.
+         */
+        post: operations["purge-principal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/principals/{id}:reactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reactivate a principal
+         * @description Reverses a deactivation: the account is restored to active and can authenticate again. Gated by principal:deactivate (all-scope).
+         */
+        post: operations["reactivate-principal"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1121,6 +1181,11 @@ export interface components {
              */
             readonly $schema?: string;
             active: boolean;
+            /**
+             * Format: date-time
+             * @description Set when the principal is deactivated (soft-deleted); absent means live
+             */
+            deactivated_at?: string;
             grants: components["schemas"]["GrantBody"][] | null;
             groups: components["schemas"]["PrincipalGroupRef"][] | null;
             human?: components["schemas"]["HumanBody"];
@@ -2470,6 +2535,36 @@ export interface operations {
             };
         };
     };
+    "deactivate-principal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The principal's id (uuid) */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "disable-principal": {
         parameters: {
             query?: never;
@@ -2584,6 +2679,66 @@ export interface operations {
             };
             /** @description Internal Server Error */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "purge-principal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The principal's id (uuid) */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "reactivate-principal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The principal's id (uuid) */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
                 headers: {
                     [name: string]: unknown;
                 };

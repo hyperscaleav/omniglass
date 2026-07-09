@@ -851,6 +851,10 @@ components:
           type: string
         active:
           type: boolean
+        deactivated_at:
+          description: Set when the principal is deactivated (soft-deleted); absent means live
+          format: date-time
+          type: string
         grants:
           items:
             $ref: "#/components/schemas/GrantBody"
@@ -2049,6 +2053,28 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Revoke a grant
+  /principals/{id}:deactivate:
+    post:
+      description: "Soft-deletes a principal: it is hidden from the directory, can no longer authenticate, and its rows stay intact, reversibly (reactivate) until purged. Gated by principal:deactivate (all-scope). The last active owner cannot be deactivated."
+      operationId: deactivate-principal
+      parameters:
+        - description: The principal's id (uuid)
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The principal's id (uuid)
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Deactivate a principal
   /principals/{id}:disable:
     post:
       description: Soft-disables a principal so it can no longer authenticate; its audit trail is kept. Gated by principal:update (all-scope). The last active owner cannot be disabled.
@@ -2143,6 +2169,50 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Internal Server Error
       summary: Impersonate a principal (view-as or act-as)
+  /principals/{id}:purge:
+    post:
+      description: Hard-deletes a deactivated principal and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. Gated by principal:purge (admin-sensitive, all-scope), and the principal must be deactivated first.
+      operationId: purge-principal
+      parameters:
+        - description: The principal's id (uuid)
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The principal's id (uuid)
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Purge a principal
+  /principals/{id}:reactivate:
+    post:
+      description: "Reverses a deactivation: the account is restored to active and can authenticate again. Gated by principal:deactivate (all-scope)."
+      operationId: reactivate-principal
+      parameters:
+        - description: The principal's id (uuid)
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The principal's id (uuid)
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Reactivate a principal
   /roles:
     get:
       description: Lists the roles with their metadata and effective (flattened) permissions. Gated by the role:read capability.
