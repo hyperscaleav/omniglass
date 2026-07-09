@@ -538,7 +538,9 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   the reset), policy-enforced (a 422 on a weak password), refused on self (change your own password from
   your profile, which verifies the current one), behind the same **takeover guard** as
   impersonation (an owner cannot be reset by anyone, and a caller cannot reset a principal whose
-  capabilities exceed their own, a shared `checkTakeoverGuard`), and audited with the admin as the actor (the
+  capabilities exceed their own, a shared `checkTakeoverGuard`, plus the shared `allScopeCovers`
+  all-scope-only cover that act-as uses so a reset cannot promote a narrow-scope capability estate-wide),
+  and audited with the admin as the actor (the
   storage method `SetPrincipalPassword` sets by id, distinct from the self-service `SetPassword` that keys
   on username and audits the target). It also **forces logout**: a reset revokes every one of the target's
   bearer credentials (all sessions and tokens) in the same transaction, so a compromised or departing
