@@ -87,6 +87,12 @@ export const MoreHorizontal: Component<P> = (p) => (
 export const Ban: Component<P> = (p) => (
   <Svg size={p.size}><circle cx="12" cy="12" r="9" /><path d="m5.6 5.6 12.8 12.8" /></Svg>
 );
+export const Eye: Component<P> = (p) => (
+  <Svg size={p.size}><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></Svg>
+);
+export const Mask: Component<P> = (p) => (
+  <Svg size={p.size}><path d="M4 6a2 2 0 0 0-2 2v4a5 5 0 0 0 5 5 8 8 0 0 0 5-2 8 8 0 0 0 5 2 5 5 0 0 0 5-5V8a2 2 0 0 0-2-2h-3a8 8 0 0 0-5 2 8 8 0 0 0-5-2z" /><path d="M6 11c1.5 0 2.5.5 3 2" /><path d="M18 11c-1.5 0-2.5.5-3 2" /></Svg>
+);
 export const ChevronRight: Component<P> = (p) => (
   <Svg size={p.size}><path d="m9 6 6 6-6 6" /></Svg>
 );

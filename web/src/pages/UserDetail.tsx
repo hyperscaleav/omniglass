@@ -2,6 +2,7 @@ import { For, Show, createEffect, createMemo, createSignal, on } from "solid-js"
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import GrantBuilder from "../components/GrantBuilder";
 import { Fact, RelatedList } from "../components/DetailShell";
+import { Eye, Mask } from "../components/icons";
 import { useBlades, useBladeEdit } from "../lib/blades";
 import type { BladeDef } from "../lib/blades";
 import type { TreeNode } from "../lib/treeselect";
@@ -69,8 +70,8 @@ export function UserDetail(props: { id: string }) {
       const pr = p();
       if (!pr || !can(me.data, "principal", "impersonate") || pr.id === me.data?.principal?.id) return [];
       return [
-        { label: "View as", onClick: () => doImpersonate(pr, "view_as") },
-        { label: "Act as", onClick: () => doImpersonate(pr, "act_as") },
+        { label: "View as", icon: <Eye size={15} />, onClick: () => doImpersonate(pr, "view_as") },
+        { label: "Act as", icon: <Mask size={15} />, onClick: () => doImpersonate(pr, "act_as") },
       ];
     },
     save: async () => {

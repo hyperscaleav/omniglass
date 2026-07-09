@@ -73,7 +73,7 @@ export function useBlades(): BladeController {
 // available, and a list of secondary actions (Impersonate, copy id) shown in a
 // kebab. Both are accessors so their label / tone stay reactive (Disable <-> Enable).
 export type BladeDestructive = { label: string; tone?: "danger" | "warn"; onClick: () => void };
-export type BladeSecondary = { label: string; onClick: () => void };
+export type BladeSecondary = { label: string; icon?: JSX.Element; onClick: () => void };
 
 export type BladeEdit = {
   editable: () => boolean;
