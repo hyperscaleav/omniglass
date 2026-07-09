@@ -51,8 +51,8 @@ location-scoped admin cannot list users.
   one to stack that group's blade over the user), and its **role grants** (each a role at a scope).
 - With `principal:create`, **New user** creates a human with a username and an optional initial
   password (which must meet the **password policy**: at least 12 characters, not a common password,
-  and not containing the username). **Generate** fills a strong random password, revealed so you can
-  read it, with a **Copy** button to hand it over. The new user can sign in right away and change that
+  and not containing the username). **Generate** fills a strong random password, kept masked, with a
+  **Copy** button to hand it over (or reveal it with the show/hide toggle). The new user can sign in right away and change that
   password themselves; a fresh account holds no grants (so it can sign in but do nothing) until you
   assign a role. The form
   validates as you type: a **username** is a lowercase handle (letters, digits, and `. _ -`, no

@@ -277,10 +277,10 @@ describe("Users page", () => {
     fireEvent.input(pw, { target: { value: "abc" } });
     expect(screen.getByText(/use at least/i)).toBeTruthy();
     expect(createBtn().disabled).toBe(true);
-    // Generate fills a strong password, reveals it, clears the error, enables Create.
+    // Generate fills a strong password, kept masked, clears the error, enables Create.
     fireEvent.click(screen.getByRole("button", { name: "Generate" }));
     expect(pw.value.length).toBeGreaterThanOrEqual(12);
-    expect(pw.type).toBe("text");
+    expect(pw.type).toBe("password");
     expect(screen.queryByText(/use at least/i)).toBeNull();
     expect(createBtn().disabled).toBe(false);
   });

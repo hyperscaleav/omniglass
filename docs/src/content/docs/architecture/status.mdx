@@ -525,8 +525,8 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   length and username rules inline (a new `passwordError`) and gates the submit, while the denylist stays
   server-side (a 422 on a manually typed common password). A shared **`PasswordField`** component adds a
   show/hide toggle and, on the New user and change-password forms, a crypto-strong **Generate** action
-  (`generatePassword`, a readable charset with no look-alike characters, revealed for the admin to read) plus a
-  **Copy** button. Proven by an `internal/auth` unit test (short / common / contains-username / valid), an API
+  (`generatePassword`, a readable charset with no look-alike characters, kept masked and copied or revealed on
+  demand) plus a **Copy** button. Proven by an `internal/auth` unit test (short / common / contains-username / valid), an API
   test (a weak, common, or username-containing password is a 422 on create, a strong one is accepted), and web
   tests (the generator's length / charset / policy-compliance, `passwordError`, and the Generate-fills-and-enables
   flow). Completes [#104](https://github.com/hyperscaleav/omniglass/issues/104) and

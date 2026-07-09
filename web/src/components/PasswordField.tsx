@@ -7,9 +7,9 @@ import { passwordError } from "../lib/validate";
 // and the change-password card): a masked input with a show/hide toggle, inline
 // policy validation (length and not-containing-username, mirroring the server), and,
 // when `generate` is set, a Generate action that fills a crypto-strong random
-// password (revealing it so the admin can read and copy it) plus a Copy button.
-// The common-password denylist stays server-side, so a generated password always
-// passes and a manually typed common one is caught on submit.
+// password (kept masked, copied with the Copy button or revealed on demand with the
+// toggle) plus a Copy button. The common-password denylist stays server-side, so a
+// generated password always passes and a manually typed common one is caught on submit.
 export default function PasswordField(props: {
   id: string;
   value: string;
@@ -31,7 +31,8 @@ export default function PasswordField(props: {
 
   const doGenerate = () => {
     props.onInput(generatePassword());
-    setReveal(true);
+    // Stay masked: the admin copies it with the Copy button, or reveals on demand
+    // with the show/hide toggle, rather than having it shown by default.
   };
   const doCopy = async () => {
     if (!props.value) return;
