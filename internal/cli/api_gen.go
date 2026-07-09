@@ -77,7 +77,7 @@ func generatedCommands() []*cobra.Command {
 			}
 			cmd.Flags().StringVar(&fCurrentPassword, "current-password", "", "Your current password")
 			_ = cmd.MarkFlagRequired("current-password")
-			cmd.Flags().StringVar(&fNewPassword, "new-password", "", "The new password (at least 8 characters)")
+			cmd.Flags().StringVar(&fNewPassword, "new-password", "", "The new password (at least 12 characters, not a common password, not containing the username)")
 			_ = cmd.MarkFlagRequired("new-password")
 			return cmd
 		}())
@@ -675,7 +675,7 @@ func generatedCommands() []*cobra.Command {
 			}
 			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
 			cmd.Flags().StringVar(&fEmail, "email", "", "")
-			cmd.Flags().StringVar(&fPassword, "password", "", "Optional initial password; the user changes it after signing in")
+			cmd.Flags().StringVar(&fPassword, "password", "", "Optional initial password (at least 12 characters, not a common password, not containing the username); the user changes it after signing in")
 			cmd.Flags().StringVar(&fUsername, "username", "", "Unique sign-in name (lowercase letters, digits, and . _ -)")
 			_ = cmd.MarkFlagRequired("username")
 			return cmd
@@ -774,6 +774,27 @@ func generatedCommands() []*cobra.Command {
 					return runAPICommand(cmd, "POST", path, nil)
 				},
 			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			var fPassword string
+			cmd := &cobra.Command{
+				Use:     "resetPassword",
+				Short:   "Reset a principal's password",
+				Long:    "Sets a new password for another human principal (an administrator action; the target's current password is not required). Gated by principal:reset-password (all-scope). The new password must meet the password policy; a violation is a 422. Refused on yourself (change your own password from your profile, which verifies your current one), on an owner (owners cannot be reset by anyone), or when it would exceed the caller's own capabilities (the takeover guard, shared with impersonation). The action is audited with the administrator as the actor.",
+				Example: "  omniglass principal resetPassword --password password",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/principals/{id}:resetPassword")
+					body := map[string]any{}
+					if cmd.Flags().Changed("password") {
+						body["password"] = fPassword
+					}
+					return runAPICommand(cmd, "POST", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fPassword, "password", "", "The new password (at least 12 characters, not a common password, not containing the username)")
+			_ = cmd.MarkFlagRequired("password")
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {

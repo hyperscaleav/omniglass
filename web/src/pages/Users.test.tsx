@@ -266,6 +266,47 @@ describe("Users page", () => {
     expect(createBtn().disabled).toBe(false);
   });
 
+  it("generates a strong initial password and enables Create; a weak one blocks it", async () => {
+    mount();
+    fireEvent.click(screen.getByText("New user"));
+    const username = (await screen.findByLabelText("Username")) as HTMLInputElement;
+    fireEvent.input(username, { target: { value: "jordan" } });
+    const pw = screen.getByLabelText("Initial password") as HTMLInputElement;
+    const createBtn = () => screen.getByText("Create user").closest("button") as HTMLButtonElement;
+    // A weak manual password: inline error (distinct from the helper text) + disabled Create.
+    fireEvent.input(pw, { target: { value: "abc" } });
+    expect(screen.getByText(/use at least/i)).toBeTruthy();
+    expect(createBtn().disabled).toBe(true);
+    // Generate fills a strong password, kept masked, clears the error, enables Create.
+    fireEvent.click(screen.getByRole("button", { name: "Generate" }));
+    expect(pw.value.length).toBeGreaterThanOrEqual(12);
+    expect(pw.type).toBe("password");
+    expect(screen.queryByText(/use at least/i)).toBeNull();
+    expect(createBtn().disabled).toBe(false);
+  });
+
+  it("renders a server password-policy rejection inline under the field, not as a form alert", async () => {
+    // A common password passes the inline length check but the server denylist refuses
+    // it (422). The message should read like the other inline errors, under the field.
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      const url = typeof input === "string" ? input : req.url;
+      const method = typeof input === "string" ? "GET" : req.method;
+      if (method === "POST" && url.includes("/principals")) {
+        return new Response(JSON.stringify({ detail: "password is too common; choose a less predictable one" }), { status: 422, headers: { "Content-Type": "application/json" } });
+      }
+      return new Response(JSON.stringify({ principals: seed }), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+    mount();
+    fireEvent.click(screen.getByText("New user"));
+    fireEvent.input(await screen.findByLabelText("Username"), { target: { value: "commonpw" } });
+    fireEvent.input(screen.getByLabelText("Initial password"), { target: { value: "administrator" } });
+    fireEvent.click(screen.getByText("Create user"));
+    // The policy message shows (inline), and there is no head-of-form alert carrying it.
+    expect(await screen.findByText(/too common/i)).toBeTruthy();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
   it("disables the footer Save when an edited username is invalid", async () => {
     mount();
     fireEvent.click(screen.getByText("Alice Ng"));
@@ -283,6 +324,59 @@ describe("Users page", () => {
     expect(saveBtn().disabled).toBe(true);
     fireEvent.input(username, { target: { value: "alice" } });
     expect(saveBtn().disabled).toBe(false);
+  });
+
+  it("does not offer Reset password on your own blade (use your profile)", async () => {
+    const meAlice: Me = { principal: { id: "u-alice", kind: "human" }, human: { username: "alice" }, permissions: [">"], grants: [] };
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    qc.setQueryData([...PRINCIPALS_KEY, false], seed);
+    for (const pr of seed) qc.setQueryData([...PRINCIPALS_KEY, pr.id], pr);
+    qc.setQueryData([...ME_KEY], meAlice);
+    qc.setQueryData([...ROLES_KEY], []);
+    qc.setQueryData(["locations"], []);
+    qc.setQueryData(["systems"], []);
+    qc.setQueryData(["components"], []);
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <Router><Route path="*" component={() => <Users />} /></Router>
+      </QueryClientProvider>
+    ));
+    fireEvent.click(screen.getByText("Alice Ng")); // alice is the signed-in principal
+    const blade = await waitFor(() => {
+      const el = document.querySelector("aside[data-blade]");
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    fireEvent.click(within(blade).getByLabelText("More actions"));
+    expect(within(blade).queryByText("Reset password")).toBeNull();
+  });
+
+  it("resets a user's password from the kebab and confirms", async () => {
+    let resetCalled = false;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      const url = typeof input === "string" ? input : req.url;
+      const method = typeof input === "string" ? "GET" : req.method;
+      if (method === "POST" && url.includes(":resetPassword")) {
+        resetCalled = true;
+        return new Response(null, { status: 204 });
+      }
+      return new Response(JSON.stringify({ principals: seed }), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+    mount();
+    fireEvent.click(screen.getByText("Alice Ng"));
+    const blade = await waitFor(() => {
+      const el = document.querySelector("aside[data-blade]");
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    // Reset password is in the kebab; it opens an inline panel with its own field.
+    fireEvent.click(within(blade).getByLabelText("More actions"));
+    fireEvent.click(within(blade).getByText("Reset password"));
+    fireEvent.click(within(blade).getByRole("button", { name: "Generate" }));
+    fireEvent.click(within(blade).getByText("Set password"));
+    await waitFor(() => expect(resetCalled).toBe(true));
+    expect(await within(blade).findByText(/password set/i)).toBeTruthy();
   });
 
   it("narrows the directory through the FilterBar (kind:service keeps only the bot)", async () => {

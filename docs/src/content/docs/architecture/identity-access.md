@@ -15,7 +15,14 @@ Built and tested today: the `principal` (+ per-kind `human` / `service`) and `cr
 (argon2id) behind an httpOnly session cookie** (`POST /auth/login` and `/auth/logout`, the public
 `GET /auth/status`), the self-service `GET` / `PATCH /auth/me` and `POST /auth/me:changePassword`, the
 admin **principal directory** (`GET /principals`, `GET /principals/{id}`), human **create**
-(`POST /principals`) and **update** (`PATCH /principals/{id}`: display name, email, username), **role
+(`POST /principals`) and **update** (`PATCH /principals/{id}`: display name, email, username), an
+admin **password reset** (`POST /principals/{id}:resetPassword`, gated `principal:reset-password`,
+policy-enforced, no current password, audited as the admin, refused on self (change your own password
+from your profile, which verifies your current one), behind the same **takeover guard** as
+impersonation so an owner cannot be reset and a caller cannot reset a principal whose capabilities
+exceed their own, and **force-logout**: a reset revokes every one of the target's bearer credentials
+(all sessions and tokens) so it takes effect at once, and a self-service change revokes the caller's
+other sessions while keeping the current one), **role
 assignment** (`POST` / `DELETE /principals/{id}/grants`) with the **owner-invariant trigger** enforcing
 that the last `owner @ all` grant cannot be revoked, and the **principal lifecycle**: reversible
 **disable** (`POST /principals/{id}:disable` / `:enable`, which refuses authentication for a disabled
@@ -37,6 +44,17 @@ Where the build currently differs from the present-tense design below (each logg
 - **Credentials are `bearer` or `password`.** `credential.kind` is `bearer` or `password` (argon2id,
   PHC-encoded, one password per principal); the `oidc` / `nats` methods and the full
   `(method, identifier)` lookup are still deferred. The minted bearer token prefix is `ogp_`.
+- **A password policy gates the API password surfaces.** A single pure validator
+  (`auth.ValidatePassword`) enforces the policy on the running-server paths that set a password:
+  **create a user** (`POST /principals`) and **self-service change-password**
+  (`POST /auth/me:changePassword`): **at least 12 characters, not on a common-password denylist, and
+  not containing the username**. No character-class composition rules (NIST 800-63B favors length and
+  a blocklist). The API maps a violation to 422; the console mirrors the length and username rules
+  inline and offers a crypto-strong **Generate** action, while the denylist stays server-side. The
+  **direct-DB break-glass lanes** (`bootstrap` and `set-password`) are deliberately **exempt**: they
+  already require database access (fully trusted) and are the recovery path, so the policy never
+  blocks initial setup or a lockout recovery. A breached-password check (HIBP k-anonymity) is a
+  planned enhancement over the embedded list.
 - **The `iam` command namespace is not built.** Owner creation is `omniglass bootstrap <username>
   [--password <pw>]` ([Bootstrap](#bootstrap)), not the `og iam create-owner` path; the broader `iam`
   admin CLI is deferred with the admin user surface.

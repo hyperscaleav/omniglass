@@ -1,5 +1,7 @@
 import { Show, For, createSignal, createEffect } from "solid-js";
 import Page from "../components/Page";
+import PasswordField from "../components/PasswordField";
+import { passwordError, isPasswordPolicyMessage } from "../lib/validate";
 import { useMe, useUpdateProfile, useChangePassword } from "../lib/auth";
 
 // Profile is the signed-in operator's own account surface: edit your display name
@@ -44,6 +46,9 @@ export default function Profile() {
   const [confirm, setConfirm] = createSignal("");
   const [pwMsg, setPwMsg] = createSignal<Note>(null);
   const [pwBusy, setPwBusy] = createSignal(false);
+  // A password-policy rejection (the server denylist) renders inline under the new
+  // password field, like the client checks; other messages stay in the card note.
+  const [pwFieldError, setPwFieldError] = createSignal<string | null>(null);
   async function savePassword(e: SubmitEvent) {
     e.preventDefault();
     if (next() !== confirm()) {
@@ -52,12 +57,15 @@ export default function Profile() {
     }
     setPwBusy(true);
     setPwMsg(null);
+    setPwFieldError(null);
     const r = await changePassword(current(), next());
     if (r.ok) {
       setPwMsg({ tone: "success", text: "Password changed." });
       setCurrent("");
       setNext("");
       setConfirm("");
+    } else if (isPasswordPolicyMessage(r.message)) {
+      setPwFieldError(r.message);
     } else {
       setPwMsg({ tone: "error", text: r.message });
     }
@@ -135,18 +143,8 @@ export default function Profile() {
             </div>
             <div>
               <label class="eyebrow mb-1.5 block" for="pw-new">New password</label>
-              <input
-                id="pw-new"
-                type="password"
-                autocomplete="new-password"
-                minLength={8}
-                class="input input-bordered w-full"
-                value={next()}
-                onInput={(e) => setNext(e.currentTarget.value)}
-                disabled={pwBusy()}
-                required
-              />
-              <p class="mt-1 text-[11px] text-base-content/40">At least 8 characters.</p>
+              <PasswordField id="pw-new" value={next()} onInput={(v) => { setNext(v); setPwFieldError(null); }} username={human()?.username} disabled={pwBusy()} serverError={pwFieldError()} required generate />
+              <p class="mt-1 text-[11px] text-base-content/40">At least 12 characters, not a common password. <strong>Generate</strong> makes a strong one.</p>
             </div>
             <div>
               <label class="eyebrow mb-1.5 block" for="pw-confirm">Confirm new password</label>
@@ -163,7 +161,7 @@ export default function Profile() {
             </div>
             <Note note={pwMsg()} />
             <div class="card-actions">
-              <button type="submit" class="btn btn-action btn-sm" disabled={pwBusy() || !current() || !next()}>
+              <button type="submit" class="btn btn-action btn-sm" disabled={pwBusy() || !current() || !next() || !!passwordError(next(), human()?.username)}>
                 <Show when={pwBusy()}><span class="loading loading-spinner loading-xs" /></Show>
                 Change password
               </button>

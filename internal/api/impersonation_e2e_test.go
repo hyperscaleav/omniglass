@@ -142,7 +142,7 @@ func TestImpersonationAPI(t *testing.T) {
 	if code, _ := c.send(viewTok, http.MethodPatch, "/auth/me", map[string]any{"display_name": "hijacked"}); code != http.StatusForbidden {
 		t.Fatalf("view-as self-profile update: want 403, got %d", code)
 	}
-	if code, _ := c.send(viewTok, http.MethodPost, "/auth/me:changePassword", map[string]any{"current_password": "x", "new_password": "yyyyyyyy"}); code != http.StatusForbidden {
+	if code, _ := c.send(viewTok, http.MethodPost, "/auth/me:changePassword", map[string]any{"current_password": "x", "new_password": "yyyyyyyyyyyy"}); code != http.StatusForbidden {
 		t.Fatalf("view-as change-password: want 403, got %d", code)
 	}
 	// But GET /auth/me still reads, and the session may end itself.

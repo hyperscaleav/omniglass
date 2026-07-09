@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"sync"
@@ -25,7 +26,17 @@ const (
 	// actor rides storage.RealActorContextKey so the audit writer records it.
 	impModeCtxKey
 	impSessionCtxKey
+	// sessionHashCtxKey carries the sha256 of the bearer token that authenticated the
+	// request, so the change-password handler can keep the caller's own session when it
+	// signs out their other sessions.
+	sessionHashCtxKey
 )
+
+// sessionHashFrom returns the sha256 of the request's bearer token, if one resolved.
+func sessionHashFrom(ctx context.Context) ([]byte, bool) {
+	h, ok := ctx.Value(sessionHashCtxKey).([]byte)
+	return h, ok && len(h) > 0
+}
 
 func principalFrom(ctx context.Context) (*storage.Principal, bool) {
 	pr, ok := ctx.Value(principalCtxKey).(*storage.Principal)
@@ -96,11 +107,13 @@ func (a *authenticator) authn(ctx huma.Context, next func(huma.Context)) {
 	}
 	var pr *storage.Principal
 	var realActorID, impMode, impSession string
+	var sessHash []byte
 	for _, tok := range candidates {
 		h := auth.HashToken(tok)
 		p, err := a.gw.AuthenticateBearer(ctx.Context(), h)
 		if err == nil {
 			pr = p
+			sessHash = h
 			break
 		}
 		if !errors.Is(err, storage.ErrCredentialNotFound) {
@@ -135,6 +148,7 @@ func (a *authenticator) authn(ctx huma.Context, next func(huma.Context)) {
 	}
 	c := huma.WithValue(ctx, principalCtxKey, pr)
 	c = huma.WithValue(c, permsCtxKey, idx.Flatten(roleIDs))
+	c = huma.WithValue(c, sessionHashCtxKey, sessHash)
 	if impMode != "" {
 		// Impersonated request: mark the mode and session, and set the real actor so
 		// every audited mutation records who is really acting, never just the
@@ -435,15 +449,15 @@ func (a *authenticator) updateMeHandler(ctx context.Context, in *updateMeInput) 
 type changePasswordInput struct {
 	Body struct {
 		CurrentPassword string `json:"current_password" doc:"Your current password"`
-		NewPassword     string `json:"new_password" minLength:"8" maxLength:"256" doc:"The new password (at least 8 characters)"`
+		NewPassword     string `json:"new_password" minLength:"12" maxLength:"256" doc:"The new password (at least 12 characters, not a common password, not containing the username)"`
 	}
 }
 
 // changePasswordHandler verifies the caller's current password and sets a new one.
 // Self-scoped and authn-only. A wrong current password is a 403 (the request is
-// authenticated, but not permitted to rotate without the current secret). Existing
-// sessions are intentionally left valid for this slice; revoke-on-change is a later
-// hardening.
+// authenticated, but not permitted to rotate without the current secret). Changing
+// the password signs out the caller's OTHER sessions and tokens (every bearer except
+// the one making this request), so a changed password takes effect everywhere at once.
 func (a *authenticator) changePasswordHandler(ctx context.Context, in *changePasswordInput) (*struct{}, error) {
 	pr, ok := principalFrom(ctx)
 	if !ok || pr.Human == nil {
@@ -455,6 +469,9 @@ func (a *authenticator) changePasswordHandler(ctx context.Context, in *changePas
 		}
 		return nil, huma.Error500InternalServerError("change password")
 	}
+	if err := mapPasswordErr(auth.ValidatePassword(in.Body.NewPassword, pr.Human.Username)); err != nil {
+		return nil, err
+	}
 	encoded, err := auth.HashPassword(in.Body.NewPassword)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("change password")
@@ -462,7 +479,36 @@ func (a *authenticator) changePasswordHandler(ctx context.Context, in *changePas
 	if _, err := a.gw.SetPassword(ctx, pr.Human.Username, encoded); err != nil {
 		return nil, huma.Error500InternalServerError("change password")
 	}
+	// Force logout of the caller's other sessions and tokens, keeping the current one
+	// so the change does not sign the caller out of the session they just used.
+	keep := [][]byte{}
+	if h, ok := sessionHashFrom(ctx); ok {
+		keep = append(keep, h)
+	}
+	if _, err := a.gw.RevokePrincipalBearers(ctx, pr.ID, keep); err != nil {
+		return nil, huma.Error500InternalServerError("change password")
+	}
 	return nil, nil
+}
+
+// mapPasswordErr translates the auth password-policy sentinels into a 422 with a
+// specific message, or nil when the password is acceptable. Shared by the create and
+// change-password handlers so both enforce the same policy the same way.
+func mapPasswordErr(err error) error {
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, auth.ErrPasswordTooShort):
+		return huma.Error422UnprocessableEntity(fmt.Sprintf("password must be at least %d characters", auth.MinPasswordLength))
+	case errors.Is(err, auth.ErrPasswordTooLong):
+		return huma.Error422UnprocessableEntity(fmt.Sprintf("password must be at most %d characters", auth.MaxPasswordLength))
+	case errors.Is(err, auth.ErrPasswordCommon):
+		return huma.Error422UnprocessableEntity("password is too common; choose a less predictable one")
+	case errors.Is(err, auth.ErrPasswordContainsIdentifier):
+		return huma.Error422UnprocessableEntity("password must not contain the username")
+	default:
+		return huma.Error422UnprocessableEntity("password does not meet the policy")
+	}
 }
 
 // rolesOutput is the body of GET /api/v1/roles.

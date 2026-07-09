@@ -342,6 +342,79 @@ func (p *PG) SetPassword(ctx context.Context, username, encoded string) (bool, e
 	return true, nil
 }
 
+// SetPrincipalPassword resets a human principal's password by id, on behalf of an
+// admin. Requires an all-scope grant (principals are not scope-tree scoped). Unlike
+// SetPassword (self-service, keyed on username, audited as the target), this audits
+// the acting admin as the actor and does not require the target's current password.
+// The target must be a human; an unknown id is ErrPrincipalNotFound. A reset also
+// revokes every one of the target's bearer credentials (all sessions and tokens) in
+// the same transaction, so the reset takes effect immediately: any live session is
+// signed out and must re-authenticate with the new password.
+func (p *PG) SetPrincipalPassword(ctx context.Context, actorID, id, encoded string, action scope.Set) error {
+	if !action.All {
+		return ErrPrincipalForbidden
+	}
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("storage: begin reset password: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	// Only a human holds a password credential; an unknown id (or a service) is not found.
+	var pgErr *pgconn.PgError
+	if err := tx.QueryRow(ctx, `select 1 from human where principal_id = $1`, id).Scan(new(int)); err != nil {
+		switch {
+		case errors.Is(err, pgx.ErrNoRows):
+			return ErrPrincipalNotFound
+		case errors.As(err, &pgErr) && pgErr.Code == "22P02":
+			return ErrPrincipalNotFound
+		default:
+			return fmt.Errorf("storage: reset password lookup: %w", err)
+		}
+	}
+	if _, err := tx.Exec(ctx, `
+		insert into credential (principal_id, kind, secret_hash, prefix)
+		values ($1, 'password', $2, '')
+		on conflict (principal_id) where kind = 'password'
+			do update set secret_hash = excluded.secret_hash`,
+		id, []byte(encoded)); err != nil {
+		return fmt.Errorf("storage: reset password: %w", err)
+	}
+	// Force logout: drop every bearer credential (sessions and tokens) for the target,
+	// so a reset immediately invalidates any live access.
+	if _, err := tx.Exec(ctx, `delete from credential where principal_id = $1 and kind = 'bearer'`, id); err != nil {
+		return fmt.Errorf("storage: revoke sessions on reset: %w", err)
+	}
+	if err := writeAuditRes(ctx, tx, actorID, "reset_password", "credential", id, nil, nil); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("storage: commit reset password: %w", err)
+	}
+	return nil
+}
+
+// RevokePrincipalBearers deletes every bearer credential (sessions and tokens) for a
+// principal, except any whose sha256 hash is in keep. It backs the force-logout on a
+// self-service password change: pass the caller's current session hash in keep so the
+// change signs out their OTHER sessions and tokens but not the one making the request.
+// An empty keep revokes them all. Returns the number revoked.
+func (p *PG) RevokePrincipalBearers(ctx context.Context, principalID string, keep [][]byte) (int, error) {
+	var tag pgconn.CommandTag
+	var err error
+	if len(keep) == 0 {
+		tag, err = p.pool.Exec(ctx, `delete from credential where principal_id = $1 and kind = 'bearer'`, principalID)
+	} else {
+		tag, err = p.pool.Exec(ctx,
+			`delete from credential where principal_id = $1 and kind = 'bearer' and secret_hash <> all($2::bytea[])`,
+			principalID, keep)
+	}
+	if err != nil {
+		return 0, fmt.Errorf("storage: revoke bearers: %w", err)
+	}
+	return int(tag.RowsAffected()), nil
+}
+
 // HumanProfilePatch carries the editable self-profile fields. A nil pointer
 // leaves the column unchanged; a non-nil pointer sets it, with an empty string
 // clearing the nullable column to NULL.

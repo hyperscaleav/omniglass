@@ -102,6 +102,12 @@ func (UnimplementedGateway) RestorePrincipal(context.Context, string, string, sc
 func (UnimplementedGateway) PurgePrincipal(context.Context, string, string, scope.Set) error {
 	return nil
 }
+func (UnimplementedGateway) SetPrincipalPassword(context.Context, string, string, string, scope.Set) error {
+	return nil
+}
+func (UnimplementedGateway) RevokePrincipalBearers(context.Context, string, [][]byte) (int, error) {
+	return 0, nil
+}
 func (UnimplementedGateway) RevokeBearer(context.Context, []byte) error { return nil }
 func (UnimplementedGateway) AnyHuman(context.Context) (bool, error)     { return false, nil }
 func (UnimplementedGateway) ListRoles(context.Context) ([]Role, error) { return nil, nil }

@@ -64,6 +64,13 @@ type principalPathInput struct {
 	ID string `path:"id" doc:"The principal's id (uuid)"`
 }
 
+type resetPasswordInput struct {
+	ID   string `path:"id" doc:"The principal's id (uuid)"`
+	Body struct {
+		Password string `json:"password" minLength:"12" maxLength:"256" doc:"The new password (at least 12 characters, not a common password, not containing the username)"`
+	}
+}
+
 type principalOutput struct {
 	Body principalBody
 }
@@ -73,7 +80,7 @@ type createPrincipalInput struct {
 		Username    string `json:"username" minLength:"1" maxLength:"200" pattern:"^[a-z0-9][a-z0-9._-]*$" doc:"Unique sign-in name (lowercase letters, digits, and . _ -)"`
 		DisplayName string `json:"display_name,omitempty" maxLength:"200"`
 		Email       string `json:"email,omitempty" maxLength:"320" format:"email"`
-		Password    string `json:"password,omitempty" minLength:"8" maxLength:"256" doc:"Optional initial password; the user changes it after signing in"`
+		Password    string `json:"password,omitempty" minLength:"12" maxLength:"256" doc:"Optional initial password (at least 12 characters, not a common password, not containing the username); the user changes it after signing in"`
 	}
 }
 
@@ -163,6 +170,9 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 			DisplayName: in.Body.DisplayName,
 		}
 		if in.Body.Password != "" {
+			if err := mapPasswordErr(auth.ValidatePassword(in.Body.Password, in.Body.Username)); err != nil {
+				return nil, err
+			}
 			hash, err := auth.HashPassword(in.Body.Password)
 			if err != nil {
 				return nil, huma.Error500InternalServerError("create principal")
@@ -305,6 +315,63 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Middlewares:   huma.Middlewares{a.authn, a.require("principal", "purge", "admin")},
 	}, func(ctx context.Context, in *principalPathInput) (*struct{}, error) {
 		if err := gw.PurgePrincipal(ctx, actorID(ctx), in.ID, a.scopeFor(ctx, "principal", "purge")); err != nil {
+			return nil, mapPrincipalErr(err)
+		}
+		return nil, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID:   "reset-principal-password",
+		Method:        http.MethodPost,
+		Path:          "/principals/{id}:resetPassword",
+		DefaultStatus: http.StatusNoContent,
+		Summary:       "Reset a principal's password",
+		Description:   "Sets a new password for another human principal (an administrator action; the target's current password is not required). Gated by principal:reset-password (all-scope). The new password must meet the password policy; a violation is a 422. Refused on yourself (change your own password from your profile, which verifies your current one), on an owner (owners cannot be reset by anyone), or when it would exceed the caller's own capabilities (the takeover guard, shared with impersonation). The action is audited with the administrator as the actor.",
+		Middlewares:   huma.Middlewares{a.authn, a.require("principal", "reset-password")},
+	}, func(ctx context.Context, in *resetPasswordInput) (*struct{}, error) {
+		// Self is refused: you change your own password from your profile (which
+		// verifies your current one). The admin reset skips that confirmation, so it is
+		// for other accounts only.
+		if actorID(ctx) == in.ID {
+			return nil, huma.Error422UnprocessableEntity("reset your own password from your profile, which verifies your current password")
+		}
+		reset := a.scopeFor(ctx, "principal", "reset-password")
+		target, err := gw.GetPrincipal(ctx, in.ID, reset)
+		if err != nil {
+			return nil, mapPrincipalErr(err)
+		}
+		// Takeover guard (shared with impersonation): a password reset lets the admin
+		// set a known secret and sign in as the target, so an owner cannot be reset by
+		// anyone, and the caller's capabilities must cover the target's.
+		switch err := a.checkTakeoverGuard(ctx, target); {
+		case errors.Is(err, errOwnerTarget):
+			return nil, huma.Error403Forbidden("an owner's password cannot be reset")
+		case errors.Is(err, errCapabilityEscalation):
+			return nil, huma.Error403Forbidden("cannot reset the password of a principal whose capabilities exceed yours")
+		case err != nil:
+			return nil, huma.Error500InternalServerError("reset password")
+		}
+		// Scope guard (like act-as): a reset yields the target's authority resolved from
+		// the target, so the caller's ALL-SCOPE grants alone must cover the target; a
+		// capability held only at a narrow scope must not become estate-wide via a reset.
+		actor, _ := principalFrom(ctx)
+		if ok, err := a.allScopeCovers(ctx, actor, target); err != nil {
+			return nil, huma.Error500InternalServerError("reset password")
+		} else if !ok {
+			return nil, huma.Error403Forbidden("resetting this principal requires all-scope authority over its capabilities")
+		}
+		username := ""
+		if target.Human != nil {
+			username = target.Human.Username
+		}
+		if err := mapPasswordErr(auth.ValidatePassword(in.Body.Password, username)); err != nil {
+			return nil, err
+		}
+		hash, err := auth.HashPassword(in.Body.Password)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("reset password")
+		}
+		if err := gw.SetPrincipalPassword(ctx, actorID(ctx), in.ID, hash, reset); err != nil {
 			return nil, mapPrincipalErr(err)
 		}
 		return nil, nil

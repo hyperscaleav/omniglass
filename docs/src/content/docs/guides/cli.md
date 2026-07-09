@@ -57,14 +57,15 @@ no running server needed):
 
 ```sh
 # Mints a bearer credential (the token is printed once) and, with --password, a password
-# credential (argon2id) so the owner can sign in to the console.
-omniglass bootstrap ops --password 's3cret-pw' --email ops@example.com --display-name "Ops Lead"
+# credential (argon2id) so the owner can sign in to the console. This is a trusted direct-DB
+# lane, so it is exempt from the password policy (unlike the console/API paths).
+omniglass bootstrap ops --password 'set-a-strong-one' --email ops@example.com --display-name "Ops Lead"
 
 # Reprint a fresh bearer token for an existing user (direct-DB, owner lane).
 omniglass token ops
 
-# Set or rotate a user's password (direct-DB, owner lane).
-omniglass set-password ops 'new-s3cret-pw'
+# Set or rotate a user's password (direct-DB, owner lane; also policy-exempt as the recovery path).
+omniglass set-password ops 'set-a-strong-one'
 
 # Seed a dev database with an example estate (locations, users, grants). Idempotent and
 # dev-only; `make dev` runs it for you, so a fresh console is populated instead of empty.
@@ -78,7 +79,7 @@ generated `auth` commands (self-scoped: each edits only the caller's own profile
 ```sh
 omniglass auth me                                    # your principal, permissions, and grants
 omniglass auth update-profile --display-name "Ops Lead"
-omniglass auth change-password --current-password 's3cret-pw' --new-password 'brand-new-pw'
+omniglass auth change-password --current-password 'orange-boat-42x' --new-password 'purple-canyon-7'
 ```
 
 ## Generated versus hand-written

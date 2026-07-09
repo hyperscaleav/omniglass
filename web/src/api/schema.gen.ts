@@ -620,6 +620,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/principals/{id}:resetPassword": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reset a principal's password
+         * @description Sets a new password for another human principal (an administrator action; the target's current password is not required). Gated by principal:reset-password (all-scope). The new password must meet the password policy; a violation is a 422. Refused on yourself (change your own password from your profile, which verifies your current one), on an owner (owners cannot be reset by anyone), or when it would exceed the caller's own capabilities (the takeover guard, shared with impersonation). The action is audited with the administrator as the actor.
+         */
+        post: operations["reset-principal-password"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/principals/{id}:restore": {
         parameters: {
             query?: never;
@@ -764,7 +784,7 @@ export interface components {
             readonly $schema?: string;
             /** @description Your current password */
             current_password: string;
-            /** @description The new password (at least 8 characters) */
+            /** @description The new password (at least 12 characters, not a common password, not containing the username) */
             new_password: string;
         };
         ComponentBody: {
@@ -884,7 +904,7 @@ export interface components {
             display_name?: string;
             /** Format: email */
             email?: string;
-            /** @description Optional initial password; the user changes it after signing in */
+            /** @description Optional initial password (at least 12 characters, not a common password, not containing the username); the user changes it after signing in */
             password?: string;
             /** @description Unique sign-in name (lowercase letters, digits, and . _ -) */
             username: string;
@@ -1201,6 +1221,16 @@ export interface components {
         PrincipalStruct: {
             id: string;
             kind: string;
+        };
+        ResetPasswordInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ResetPasswordInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The new password (at least 12 characters, not a common password, not containing the username) */
+            password: string;
         };
         RoleBody: {
             description?: string;
@@ -2702,6 +2732,40 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "reset-principal-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The principal's id (uuid) */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResetPasswordInputBody"];
+            };
+        };
         responses: {
             /** @description No Content */
             204: {

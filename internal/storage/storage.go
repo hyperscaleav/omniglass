@@ -116,6 +116,14 @@ type Gateway interface {
 	ArchivePrincipal(ctx context.Context, actorID, id string, action scope.Set) error
 	RestorePrincipal(ctx context.Context, actorID, id string, action scope.Set) error
 	PurgePrincipal(ctx context.Context, actorID, id string, action scope.Set) error
+	// SetPrincipalPassword resets a human principal's password by id (an admin action,
+	// audited as the admin), requiring an all-scope grant. Unknown id is ErrPrincipalNotFound.
+	// It also revokes every one of the target's bearer credentials (force logout).
+	SetPrincipalPassword(ctx context.Context, actorID, id, encoded string, action scope.Set) error
+	// RevokePrincipalBearers deletes a principal's bearer credentials (sessions and
+	// tokens) except any sha256 hash in keep (empty revokes all); the force-logout on a
+	// self-service password change keeps the caller's own session. Returns the count.
+	RevokePrincipalBearers(ctx context.Context, principalID string, keep [][]byte) (int, error)
 	// RevokeBearer deletes the bearer credential with the given sha256 hash
 	// (session logout). A no-op if none matches.
 	RevokeBearer(ctx context.Context, hash []byte) error

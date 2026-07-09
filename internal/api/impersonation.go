@@ -60,32 +60,18 @@ func registerImpersonationRoutes(api huma.API, a *authenticator, gw storage.Gate
 		if err != nil {
 			return nil, mapPrincipalErr(err)
 		}
-		// Owner protection: an owner (a principal holding owner@all) is
-		// un-impersonatable by anyone, including another owner, in either mode. An
-		// owner is the highest-trust account, so impersonating one is a full-takeover
-		// vector; this removes it entirely rather than relying on the capability-cover
-		// arithmetic below (which already blocks a lesser caller but not owner->owner).
-		// The owner@all check is the same hardcoded-owner lane as the owner invariant.
-		for _, g := range target.Grants {
-			if g.Role == "owner" && g.ScopeKind == "all" {
-				return nil, huma.Error403Forbidden("an owner cannot be impersonated")
-			}
-		}
-		// Escalation guard: the caller's capabilities must cover the target's, so
-		// impersonation can never confer a capability the caller lacks (a lesser
-		// admin cannot impersonate an owner). Audit records the real actor regardless.
-		actorPerms, _ := permsFrom(ctx)
-		idx, err := a.roleIndex(ctx)
-		if err != nil {
-			return nil, huma.Error500InternalServerError("impersonation failed")
-		}
-		targetRoleIDs := make([]string, 0, len(target.Grants))
-		for _, g := range target.Grants {
-			targetRoleIDs = append(targetRoleIDs, g.Role)
-		}
-		targetPerms := idx.Flatten(targetRoleIDs)
-		if !actorPerms.Covers(targetPerms) {
+		// Takeover guard: an owner is un-impersonatable by anyone (including another
+		// owner), and the caller's capabilities must cover the target's, so
+		// impersonation can never confer a capability the caller lacks (a lesser admin
+		// cannot impersonate an owner). Shared with the password reset, another
+		// takeover-class action. Audit records the real actor regardless.
+		switch err := a.checkTakeoverGuard(ctx, target); {
+		case errors.Is(err, errOwnerTarget):
+			return nil, huma.Error403Forbidden("an owner cannot be impersonated")
+		case errors.Is(err, errCapabilityEscalation):
 			return nil, huma.Error403Forbidden("cannot impersonate a principal whose capabilities exceed yours")
+		case err != nil:
+			return nil, huma.Error500InternalServerError("impersonation failed")
 		}
 		// Scope guard for act-as: a request made while acting-as resolves its scope
 		// from the TARGET, so a caller whose hold on a capability is narrower than
@@ -98,13 +84,11 @@ func registerImpersonationRoutes(api huma.API, a *authenticator, gw storage.Gate
 		// writes (principal_grant, role) whose scoped grants resolve to an empty
 		// effective scope. view-as stays cross-scope (read only, grants no authority).
 		if in.Body.Mode == "act_as" {
-			allScopeRoleIDs := make([]string, 0, len(actor.Grants))
-			for _, g := range actor.Grants {
-				if g.ScopeKind == "all" {
-					allScopeRoleIDs = append(allScopeRoleIDs, g.Role)
-				}
+			ok, err := a.allScopeCovers(ctx, actor, target)
+			if err != nil {
+				return nil, huma.Error500InternalServerError("impersonation failed")
 			}
-			if !idx.Flatten(allScopeRoleIDs).Covers(targetPerms) {
+			if !ok {
 				return nil, huma.Error403Forbidden("act-as requires all-scope authority over the target's capabilities; use view-as instead")
 			}
 		}
@@ -146,4 +130,62 @@ func registerImpersonationRoutes(api huma.API, a *authenticator, gw storage.Gate
 		}
 		return &struct{}{}, nil
 	})
+}
+
+// Takeover-class actions (impersonate, reset a password) grant full access to a
+// target account, so both share these guards, reported as sentinels the caller maps
+// to its own 403 message.
+var (
+	errOwnerTarget          = errors.New("api: target is an owner and cannot be taken over")
+	errCapabilityEscalation = errors.New("api: target capabilities exceed the caller's")
+)
+
+// checkTakeoverGuard refuses a takeover-class action against target when target is an
+// owner (owner@all, un-takeover-able by anyone including another owner) or when the
+// caller's flattened capabilities do not cover the target's (an escalation). Returns
+// errOwnerTarget / errCapabilityEscalation, a wrapped role-index error, or nil.
+// allScopeCovers reports whether the caller's ALL-SCOPE grants alone flatten to a
+// permission set covering the target's. The scope-blind cover in checkTakeoverGuard
+// is not enough for a FULL-authority takeover (act-as impersonation, password reset):
+// the acting principal resolves scope from the target, so a capability the caller
+// holds only at a narrow scope must not become estate-wide by taking the target over.
+// A capability held only through a scoped grant does not count. view-as does not need
+// this (read-only, grants no authority).
+func (a *authenticator) allScopeCovers(ctx context.Context, actor, target *storage.Principal) (bool, error) {
+	idx, err := a.roleIndex(ctx)
+	if err != nil {
+		return false, err
+	}
+	targetRoleIDs := make([]string, 0, len(target.Grants))
+	for _, g := range target.Grants {
+		targetRoleIDs = append(targetRoleIDs, g.Role)
+	}
+	allScopeRoleIDs := make([]string, 0, len(actor.Grants))
+	for _, g := range actor.Grants {
+		if g.ScopeKind == "all" {
+			allScopeRoleIDs = append(allScopeRoleIDs, g.Role)
+		}
+	}
+	return idx.Flatten(allScopeRoleIDs).Covers(idx.Flatten(targetRoleIDs)), nil
+}
+
+func (a *authenticator) checkTakeoverGuard(ctx context.Context, target *storage.Principal) error {
+	for _, g := range target.Grants {
+		if g.Role == "owner" && g.ScopeKind == "all" {
+			return errOwnerTarget
+		}
+	}
+	actorPerms, _ := permsFrom(ctx)
+	idx, err := a.roleIndex(ctx)
+	if err != nil {
+		return err
+	}
+	targetRoleIDs := make([]string, 0, len(target.Grants))
+	for _, g := range target.Grants {
+		targetRoleIDs = append(targetRoleIDs, g.Role)
+	}
+	if !actorPerms.Covers(idx.Flatten(targetRoleIDs)) {
+		return errCapabilityEscalation
+	}
+	return nil
 }
