@@ -140,6 +140,9 @@ export function UserDetail(props: { id: string }) {
     setActErr(null);
     try {
       await archivePrincipal(pr.id);
+      // Archiving hides the user from the directory, so close its blade (like purge
+      // and group delete). It stays restorable via the Show archived toggle.
+      blades.close();
       await refresh();
     } catch (e) {
       setActErr(describeError(e));

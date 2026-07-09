@@ -176,6 +176,29 @@ describe("Users page", () => {
     expect(within(blade).getByText("Purge")).toBeTruthy();
   });
 
+  it("archiving a user closes the blade", async () => {
+    // Archive hides the user from the directory, so its blade closes (the account
+    // still exists and is restorable, unlike a purge). The POST 204s and the refetch
+    // returns the directory without her.
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      const url = typeof input === "string" ? input : req.url;
+      if (url.includes(":archive")) return new Response(null, { status: 204 });
+      return new Response(JSON.stringify({ principals: [] }), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+    mount();
+    fireEvent.click(screen.getByText("Alice Ng"));
+    const blade = await waitFor(() => {
+      const el = document.querySelector("aside[data-blade]");
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    fireEvent.click(within(blade).getByLabelText("More actions"));
+    fireEvent.click(within(blade).getByText("Archive"));
+    await waitFor(() => expect(document.querySelector("aside[data-blade]")).toBeNull());
+  });
+
   it("purging an archived user closes the blade and does not refetch the dead detail", async () => {
     const dana: Principal = { id: "u-dana", kind: "human", active: false, archived_at: "2026-01-01T00:00:00Z", human: { username: "dana", display_name: "Dana Vale" }, grants: [] };
     // Confirm the purge; the POST 204s, the directory refetch returns an empty list,

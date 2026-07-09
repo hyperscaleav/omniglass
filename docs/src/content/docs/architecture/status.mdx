@@ -491,8 +491,9 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   for the include-archived list; completes
   [#143](https://github.com/hyperscaleav/omniglass/issues/143) / [#146](https://github.com/hyperscaleav/omniglass/issues/146).
 - **Identity: IAM console form + blade hardening, UI.** A polish pass over the identity surfaces. Removing a
-  principal now closes its blade cleanly: a **purge** (and a group **delete**) closes the blade first, drops the
-  dead detail query, then refreshes the list, so the blade never lingers on a 404 of the entity it just removed.
+  principal now closes its blade cleanly: **archiving**, **purging** (and a group **delete**) closes the blade
+  first, drops the dead detail query, then refreshes the list, so the blade never lingers on a stale or 404 view
+  of the entity it just removed from the working set.
   **Impersonation** (start and stop) now reboots the console to Home (`window.location`), so the
   permission-driven sidebar and route guard rebuild from the new identity rather than showing the previous
   principal's navigation. The forms gain **inline validation** that mirrors the server's Huma constraints: a
