@@ -132,6 +132,14 @@
   color: var(--color-primary-content);
 }
 
+/* A quiet button gets a faint resting border so it still reads as a button on a
+   surface whose color its ghost fill matches (e.g. a secondary action sitting on a
+   card). It stays low-emphasis (transparent fill) and daisyUI's ghost hover still
+   fills it. Unlayered to beat daisyUI's transparent ghost border in its later layer. */
+.btn-quiet {
+  border-color: color-mix(in oklch, var(--color-base-content) 18%, transparent);
+}
+
 /* Teal TEXT on the light ground uses a darker teal than the bright brand fill: the
    bright teal is unreadable as small text on the near-white base (1.9:1), so link,
    glyph, arrow, and stat accents that use text-primary get a readable teal (4.7:1).

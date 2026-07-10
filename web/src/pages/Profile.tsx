@@ -197,11 +197,14 @@ export default function Profile() {
               disabled={pwBusy()}
               required
             />
+            <Show when={confirm() && next() !== confirm()}>
+              <p class="mt-1 text-[11px] text-error">Passwords do not match.</p>
+            </Show>
           </div>
           <Note note={pwMsg()} />
           <DrawerFooter>
             <Button icon={X} onClick={() => setPwOpen(false)} disabled={pwBusy()}>Cancel</Button>
-            <Button type="submit" intent="action" icon={Save} loading={pwBusy()} disabled={!current() || !next() || !!passwordError(next(), human()?.username)}>Change password</Button>
+            <Button type="submit" intent="action" icon={Save} loading={pwBusy()} disabled={!current() || !next() || next() !== confirm() || !!passwordError(next(), human()?.username)}>Change password</Button>
           </DrawerFooter>
         </form>
       </Drawer>
