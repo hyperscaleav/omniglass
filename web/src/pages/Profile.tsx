@@ -77,7 +77,7 @@ export default function Profile() {
 
   return (
     <Page title="Your profile">
-      <div class="grid max-w-4xl gap-4 lg:grid-cols-2">
+      <div class="grid max-w-2xl gap-4">
         {/* Profile card */}
         <form onSubmit={saveProfile} class="card border border-base-300 bg-base-200">
           <div class="card-body gap-3">
@@ -135,7 +135,7 @@ export default function Profile() {
                 id="pw-current"
                 type="password"
                 autocomplete="current-password"
-                class="input input-bordered w-full"
+                class="input input-bordered w-full font-data"
                 value={current()}
                 onInput={(e) => setCurrent(e.currentTarget.value)}
                 disabled={pwBusy()}
@@ -153,7 +153,7 @@ export default function Profile() {
                 id="pw-confirm"
                 type="password"
                 autocomplete="new-password"
-                class="input input-bordered w-full"
+                class="input input-bordered w-full font-data"
                 value={confirm()}
                 onInput={(e) => setConfirm(e.currentTarget.value)}
                 disabled={pwBusy()}
@@ -171,7 +171,7 @@ export default function Profile() {
         </form>
 
         {/* Access: read-only, teaches the identity model this page operates under. */}
-        <div class="card border border-base-300 bg-base-200 lg:col-span-2">
+        <div class="card border border-base-300 bg-base-200">
           <div class="card-body gap-3">
             <h2 class="card-title text-base">Access</h2>
             <p class="text-xs text-base-content/50">

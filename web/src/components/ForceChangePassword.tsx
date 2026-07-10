@@ -60,7 +60,7 @@ export default function ForceChangePassword() {
               id="fc-current"
               type="password"
               autocomplete="current-password"
-              class="input input-bordered w-full"
+              class="input input-bordered w-full font-data"
               value={current()}
               onInput={(e) => setCurrent(e.currentTarget.value)}
               disabled={busy()}
@@ -87,7 +87,7 @@ export default function ForceChangePassword() {
               id="fc-confirm"
               type="password"
               autocomplete="new-password"
-              class="input input-bordered w-full"
+              class="input input-bordered w-full font-data"
               value={confirm()}
               onInput={(e) => setConfirm(e.currentTarget.value)}
               disabled={busy()}
