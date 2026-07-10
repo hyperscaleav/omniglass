@@ -180,7 +180,12 @@ type Principal struct {
 type PrincipalGroupRef struct{ ID, Name string }
 
 // HumanProfile and ServiceProfile carry the kind-specific attributes.
-type HumanProfile struct{ Username, Email, DisplayName string }
+type HumanProfile struct {
+	Username, Email, DisplayName string
+	// MustChangePassword is set by an admin reset and cleared by the user's own
+	// change-password; while true the account is gated to the change-password lane.
+	MustChangePassword bool
+}
 type ServiceProfile struct{ Label string }
 
 // Grant is one (role x scope) pairing on a principal, addressable by its id (so
@@ -365,6 +370,11 @@ func (p *PG) SetPassword(ctx context.Context, username, encoded string) (bool, e
 		pid, []byte(encoded)); err != nil {
 		return false, fmt.Errorf("storage: set password: %w", err)
 	}
+	// A user setting their own password clears any force-change flag: this is the
+	// lane an admin reset gates the account into, and completing it releases the gate.
+	if _, err := tx.Exec(ctx, `update human set must_change_password = false where principal_id = $1`, pid); err != nil {
+		return false, fmt.Errorf("storage: clear must-change: %w", err)
+	}
 	// Audit the credential change (never the secret) so a password change leaves a
 	// trail and an impersonated change records the real actor.
 	if err := writeAuditRes(ctx, tx, pid, "change_password", "credential", pid, nil, nil); err != nil {
@@ -418,6 +428,11 @@ func (p *PG) SetPrincipalPassword(ctx context.Context, actorID, id, encoded stri
 	// so a reset immediately invalidates any live access.
 	if _, err := tx.Exec(ctx, `delete from credential where principal_id = $1 and kind = 'bearer'`, id); err != nil {
 		return fmt.Errorf("storage: revoke sessions on reset: %w", err)
+	}
+	// Force a change on next login: the admin knows the value they just set, so the
+	// target must replace it before doing anything else (cleared by their own change).
+	if _, err := tx.Exec(ctx, `update human set must_change_password = true where principal_id = $1`, id); err != nil {
+		return fmt.Errorf("storage: flag must-change on reset: %w", err)
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "reset_password", "credential", id, nil, nil); err != nil {
 		return err
@@ -1115,8 +1130,8 @@ func (p *PG) loadPrincipal(ctx context.Context, pr *Principal) error {
 	case "human":
 		var h HumanProfile
 		if err := p.pool.QueryRow(ctx,
-			`select username, coalesce(email, ''), coalesce(display_name, '') from human where principal_id = $1`,
-			pr.ID).Scan(&h.Username, &h.Email, &h.DisplayName); err != nil {
+			`select username, coalesce(email, ''), coalesce(display_name, ''), must_change_password from human where principal_id = $1`,
+			pr.ID).Scan(&h.Username, &h.Email, &h.DisplayName, &h.MustChangePassword); err != nil {
 			return fmt.Errorf("storage: load human: %w", err)
 		}
 		pr.Human = &h

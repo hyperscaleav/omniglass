@@ -8,7 +8,7 @@ import { api, setToken, clearToken } from "../api/client";
 
 export type Me = {
   principal: { id: string; kind: string };
-  human?: { username: string; email?: string; display_name?: string };
+  human?: { username: string; email?: string; display_name?: string; must_change_password?: boolean };
   service?: { label: string };
   permissions: string[];
   grants: { role: string; scope_kind: string; scope_id?: string }[];
@@ -117,6 +117,7 @@ export function useUpdateProfile() {
 // current password is a 403, a too-short new one a 422; both map to a clear
 // message.
 export function useChangePassword() {
+  const qc = useQueryClient();
   return async (current: string, next: string): Promise<{ ok: true } | { ok: false; message: string }> => {
     const { error, response } = await api.POST("/auth/me:changePassword", {
       body: { current_password: current, new_password: next },
@@ -130,6 +131,9 @@ export function useChangePassword() {
     if (error) {
       return { ok: false, message: "Could not change your password." };
     }
+    // Refresh /auth/me so a cleared must_change_password flag releases the
+    // force-change gate (and any other principal state stays fresh).
+    await qc.invalidateQueries({ queryKey: ME_KEY });
     return { ok: true };
   };
 }

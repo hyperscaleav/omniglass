@@ -167,6 +167,17 @@ func (a *authenticator) authn(ctx huma.Context, next func(huma.Context)) {
 		_ = huma.WriteErr(a.api, ctx, http.StatusForbidden, "read-only while viewing as another principal")
 		return
 	}
+	// A principal an admin has flagged for a forced password change is gated to the
+	// change-password lane on EVERY route until they change it: only reading their own
+	// principal (so the console can see the flag and render the forced form) and the
+	// change itself are allowed. Enforced here in authn (the single choke point) so no
+	// route, read or write, can forget it. Not applied while impersonating (the real
+	// actor, not the flagged target, is driving). Logout is public and never reaches here.
+	if impMode == "" && pr.Human != nil && pr.Human.MustChangePassword &&
+		ctx.Operation().OperationID != "get-auth-me" && ctx.Operation().OperationID != "change-auth-me-password" {
+		_ = huma.WriteErr(a.api, ctx, http.StatusForbidden, "password change required")
+		return
+	}
 	next(c)
 }
 
@@ -383,9 +394,10 @@ type meOutput struct {
 }
 
 type humanBody struct {
-	Username    string `json:"username"`
-	Email       string `json:"email,omitempty"`
-	DisplayName string `json:"display_name,omitempty"`
+	Username           string `json:"username"`
+	Email              string `json:"email,omitempty"`
+	DisplayName        string `json:"display_name,omitempty"`
+	MustChangePassword bool   `json:"must_change_password,omitempty" doc:"True when an admin reset the password and the user must change it before doing anything else; the console gates every route to the change-password form until it clears."`
 }
 
 type svcBody struct {
@@ -413,7 +425,12 @@ func meHandler(ctx context.Context, _ *struct{}) (*meOutput, error) {
 	out.Body.Principal.ID = pr.ID
 	out.Body.Principal.Kind = pr.Kind
 	if pr.Human != nil {
-		out.Body.Human = &humanBody{Username: pr.Human.Username, Email: pr.Human.Email, DisplayName: pr.Human.DisplayName}
+		out.Body.Human = &humanBody{
+			Username:           pr.Human.Username,
+			Email:              pr.Human.Email,
+			DisplayName:        pr.Human.DisplayName,
+			MustChangePassword: pr.Human.MustChangePassword,
+		}
 	}
 	if pr.Service != nil {
 		out.Body.Service = &svcBody{Label: pr.Service.Label}

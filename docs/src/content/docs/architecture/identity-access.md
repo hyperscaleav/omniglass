@@ -22,7 +22,10 @@ from your profile, which verifies your current one), behind the same **takeover 
 impersonation so an owner cannot be reset and a caller cannot reset a principal whose capabilities
 exceed their own, and **force-logout**: a reset revokes every one of the target's bearer credentials
 (all sessions and tokens) so it takes effect at once, and a self-service change revokes the caller's
-other sessions while keeping the current one), **role
+other sessions while keeping the current one, and **force-change-on-next-login**: a reset sets
+`human.must_change_password`, and until the user changes it (which clears the flag) the `authn` choke
+point refuses **every** route except reading their own principal and the change itself with a 403, so
+the admin-known secret is short-lived and cannot be used to act), **role
 assignment** (`POST` / `DELETE /principals/{id}/grants`) with the **owner-invariant trigger** enforcing
 that the last `owner @ all` grant cannot be revoked, and the **principal lifecycle**: reversible
 **disable** (`POST /principals/{id}:disable` / `:enable`, which refuses authentication for a disabled
