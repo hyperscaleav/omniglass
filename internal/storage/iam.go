@@ -213,6 +213,13 @@ var ErrBadCredentials = errors.New("storage: bad credentials")
 // endpoint cannot be used to enumerate accounts or their state.
 var ErrAccountDisabled = errors.New("storage: account disabled")
 
+// ErrAccountLocked is returned by AuthenticatePassword when the account is inside
+// its brute-force lockout window, whatever the password. It is decided after the
+// argon2 verify (like ErrAccountDisabled) so a locked account is not measurably
+// faster to probe, and the handler maps it to the same generic 401 as a bad
+// credential so the lock is not an enumeration oracle (only the audit records it).
+var ErrAccountLocked = errors.New("storage: account locked")
+
 // dummyPasswordHash is a throwaway argon2id hash the unknown-user / no-password
 // path verifies against, so AuthenticatePassword runs one argon2 derivation
 // whether or not the user exists (no early return before the compare). It is
@@ -262,15 +269,17 @@ func (p *PG) AuthenticatePassword(ctx context.Context, username, password string
 	pr := Principal{Kind: "human"}
 	var encoded []byte
 	var active bool
+	var failedCount int
+	var lockedUntil *time.Time
 	// Do NOT filter on pr.active here: the row must be fetched for a disabled user
 	// so their real hash is compared, and the active flag must not steer control
 	// flow before the password compare (that would leak account state by timing).
 	err := p.pool.QueryRow(ctx, `
-		select h.principal_id, c.secret_hash, pr.active
+		select h.principal_id, c.secret_hash, pr.active, h.failed_login_count, h.locked_until
 		from human h
 		join principal pr on pr.id = h.principal_id
 		join credential c on c.principal_id = h.principal_id and c.kind = 'password'
-		where h.username = $1`, username).Scan(&pr.ID, &encoded, &active)
+		where h.username = $1`, username).Scan(&pr.ID, &encoded, &active, &failedCount, &lockedUntil)
 	found := true
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
@@ -294,11 +303,31 @@ func (p *PG) AuthenticatePassword(ctx context.Context, username, password string
 		// generic error, so this discloses nothing.
 		return nil, ErrBadCredentials
 	}
+	now := time.Now()
+	if isLocked(lockedUntil, now) {
+		// Inside the lockout window: refuse whatever the password is (a correct one
+		// is still refused until the window passes), decided after the verify so it is
+		// not a faster path. Do not extend the lock or bump the counter here; just
+		// deny. The handler audits it and returns the same generic 401 as a miss.
+		return &Principal{ID: pr.ID, Kind: pr.Kind}, ErrAccountLocked
+	}
 	if !ok {
-		// A real account, wrong password: return the principal id (server-side only,
-		// the client error is unchanged) so the handler can audit a failed attempt on
-		// a real account, a security signal worth recording.
+		// A real account, wrong password: bump the consecutive-failure counter and,
+		// on the threshold-th miss, lock the account. Best effort (the attempt has
+		// already failed; a counter write error must not change the response). Return
+		// the principal id (server-side only, the client error is unchanged) so the
+		// handler can audit the failed attempt, a security signal worth recording.
+		d := nextLockout(failedCount, now)
+		_, _ = p.pool.Exec(ctx,
+			`update human set failed_login_count = $2, locked_until = $3 where principal_id = $1`,
+			pr.ID, d.count, d.lockedUntil)
 		return &Principal{ID: pr.ID, Kind: pr.Kind}, ErrBadCredentials
+	}
+	// Correct password: clear any accumulated failures (best effort) so a run of
+	// wrong guesses that ended in the right password does not carry toward a lock.
+	if failedCount != 0 || lockedUntil != nil {
+		_, _ = p.pool.Exec(ctx,
+			`update human set failed_login_count = 0, locked_until = null where principal_id = $1`, pr.ID)
 	}
 	if !active {
 		// Correct password against a disabled account: a distinct, disclosable

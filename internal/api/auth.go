@@ -312,6 +312,14 @@ func (a *authenticator) loginHandler(ctx context.Context, in *loginInput) (*sess
 			_ = a.gw.WriteAuthEvent(ctx, pr.ID, "login_failed")
 		}
 		return nil, huma.Error401Unauthorized("invalid username or password")
+	case errors.Is(err, storage.ErrAccountLocked):
+		// Too many failed attempts: the account is in its lockout window. Return the
+		// SAME generic 401 as a bad credential so the lock is not an enumeration
+		// oracle; only the audit (attributed to the locked principal) records it.
+		if pr != nil {
+			_ = a.gw.WriteAuthEvent(ctx, pr.ID, "login_locked")
+		}
+		return nil, huma.Error401Unauthorized("invalid username or password")
 	case errors.Is(err, storage.ErrAccountDisabled):
 		// The password was correct but the account is disabled. A distinct 403 (not
 		// the generic 401) so the sign-in screen can explain it; only reachable with
