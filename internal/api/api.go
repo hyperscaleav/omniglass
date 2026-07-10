@@ -148,6 +148,26 @@ func registerRoutes(api huma.API, gw storage.Gateway, o options) {
 	}, a.changePasswordHandler)
 
 	huma.Register(api, huma.Operation{
+		OperationID:   "set-auth-me-avatar",
+		Method:        http.MethodPost,
+		Path:          "/auth/me:setAvatar",
+		DefaultStatus: http.StatusNoContent,
+		Summary:       "Set your own profile picture",
+		Description:   "Sets the caller's profile picture (JPEG, PNG, or WebP, base64-encoded), normalized server-side to a 256x256 JPEG. Requires authentication; self-scoped. A bad or oversize image is a 422.",
+		Middlewares:   huma.Middlewares{a.authn},
+	}, a.setMeAvatarHandler)
+
+	huma.Register(api, huma.Operation{
+		OperationID:   "remove-auth-me-avatar",
+		Method:        http.MethodPost,
+		Path:          "/auth/me:removeAvatar",
+		DefaultStatus: http.StatusNoContent,
+		Summary:       "Remove your own profile picture",
+		Description:   "Clears the caller's profile picture. Requires authentication; self-scoped.",
+		Middlewares:   huma.Middlewares{a.authn},
+	}, a.removeMeAvatarHandler)
+
+	huma.Register(api, huma.Operation{
 		OperationID: "list-roles",
 		Method:      http.MethodGet,
 		Path:        "/roles",

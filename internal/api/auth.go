@@ -398,6 +398,7 @@ type humanBody struct {
 	Email              string `json:"email,omitempty"`
 	DisplayName        string `json:"display_name,omitempty"`
 	MustChangePassword bool   `json:"must_change_password,omitempty" doc:"True when an admin reset the password and the user must change it before doing anything else; the console gates every route to the change-password form until it clears."`
+	HasAvatar          bool   `json:"has_avatar,omitempty" doc:"True when the principal has a profile picture; fetch it from the avatar endpoint."`
 }
 
 type svcBody struct {
@@ -430,6 +431,7 @@ func meHandler(ctx context.Context, _ *struct{}) (*meOutput, error) {
 			Email:              pr.Human.Email,
 			DisplayName:        pr.Human.DisplayName,
 			MustChangePassword: pr.Human.MustChangePassword,
+			HasAvatar:          pr.Human.HasAvatar,
 		}
 	}
 	if pr.Service != nil {
@@ -523,6 +525,45 @@ func (a *authenticator) changePasswordHandler(ctx context.Context, in *changePas
 	}
 	if _, err := a.gw.RevokePrincipalBearers(ctx, pr.ID, keep); err != nil {
 		return nil, huma.Error500InternalServerError("change password")
+	}
+	return nil, nil
+}
+
+// setAvatarMeInput is the body of POST /api/v1/auth/me:setAvatar: the image to
+// use as the caller's own profile picture, base64-encoded.
+type setAvatarMeInput struct {
+	Body struct {
+		ImageBase64 string `json:"image_base64" doc:"The image (JPEG, PNG, or WebP), base64-encoded; normalized server-side to a 256x256 JPEG"`
+	}
+}
+
+// setMeAvatarHandler sets the caller's own profile picture. Self-scoped and
+// authn-only: it writes the principal resolved from the session, never another. A
+// bad or oversize image is a 422 (from normalizeAvatar).
+func (a *authenticator) setMeAvatarHandler(ctx context.Context, in *setAvatarMeInput) (*struct{}, error) {
+	pr, ok := principalFrom(ctx)
+	if !ok {
+		return nil, huma.Error401Unauthorized("unauthenticated")
+	}
+	b64, err := normalizeAvatar(in.Body.ImageBase64)
+	if err != nil {
+		return nil, err
+	}
+	if err := a.gw.SetOwnAvatar(ctx, pr.ID, b64); err != nil {
+		return nil, huma.Error500InternalServerError("set avatar")
+	}
+	return nil, nil
+}
+
+// removeMeAvatarHandler clears the caller's own profile picture. Self-scoped and
+// authn-only; clearing an absent picture is a no-op.
+func (a *authenticator) removeMeAvatarHandler(ctx context.Context, _ *struct{}) (*struct{}, error) {
+	pr, ok := principalFrom(ctx)
+	if !ok {
+		return nil, huma.Error401Unauthorized("unauthenticated")
+	}
+	if err := a.gw.ClearOwnAvatar(ctx, pr.ID); err != nil {
+		return nil, huma.Error500InternalServerError("remove avatar")
 	}
 	return nil, nil
 }
