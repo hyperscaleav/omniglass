@@ -78,6 +78,22 @@ components:
       required:
         - bootstrapped
       type: object
+    AvatarOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/AvatarOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        image_base64:
+          description: The profile picture as a base64-encoded 256x256 JPEG
+          type: string
+      required:
+        - image_base64
+      type: object
     ChangePasswordInputBody:
       additionalProperties: false
       properties:
@@ -516,6 +532,9 @@ components:
           type: string
         email:
           type: string
+        has_avatar:
+          description: True when the principal has a profile picture; fetch it from the avatar endpoint.
+          type: boolean
         must_change_password:
           description: True when an admin reset the password and the user must change it before doing anything else; the console gates every route to the change-password form until it clears.
           type: boolean
@@ -983,6 +1002,38 @@ components:
       required:
         - roles
       type: object
+    SetAvatarInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/SetAvatarInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        image_base64:
+          description: The image (JPEG, PNG, or WebP), base64-encoded; normalized server-side to a 256x256 JPEG
+          type: string
+      required:
+        - image_base64
+      type: object
+    SetAvatarMeInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/SetAvatarMeInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        image_base64:
+          description: The image (JPEG, PNG, or WebP), base64-encoded; normalized server-side to a 256x256 JPEG
+          type: string
+      required:
+        - image_base64
+      type: object
     SvcBody:
       additionalProperties: false
       properties:
@@ -1294,6 +1345,24 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Update your own profile
+  /auth/me/avatar:
+    get:
+      description: Returns the caller's profile picture as a base64-encoded JPEG. Requires authentication; self-scoped. No picture is a 404.
+      operationId: get-auth-me-avatar
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AvatarOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get your own profile picture
   /auth/me:changePassword:
     post:
       description: Verifies the current password and sets a new one. Requires authentication; self-scoped.
@@ -1314,6 +1383,40 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Change your own password
+  /auth/me:removeAvatar:
+    post:
+      description: Clears the caller's profile picture. Requires authentication; self-scoped.
+      operationId: remove-auth-me-avatar
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Remove your own profile picture
+  /auth/me:setAvatar:
+    post:
+      description: Sets the caller's profile picture (JPEG, PNG, or WebP, base64-encoded), normalized server-side to a 256x256 JPEG. Requires authentication; self-scoped. A bad or oversize image is a 422.
+      operationId: set-auth-me-avatar
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetAvatarMeInputBody"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Set your own profile picture
   /auth/me:stopImpersonation:
     post:
       description: Revokes the impersonation session presented by the request token, ending the view-as / act-as. Requires an impersonation token.
@@ -2025,6 +2128,32 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Update a principal
+  /principals/{id}/avatar:
+    get:
+      description: Returns the principal's profile picture as a base64-encoded JPEG. Gated by principal:read (all-scope). A principal without a picture is a 404.
+      operationId: get-principal-avatar
+      parameters:
+        - description: The principal, addressed by its uuid or a human username
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The principal, addressed by its uuid or a human username
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AvatarOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get a principal's profile picture
   /principals/{id}/grants:
     post:
       description: Assigns a role at a scope to a principal. Gated by principal_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own (no promoting anyone, including yourself, to a higher tier such as owner). A duplicate is 409, an unknown role or bad scope 422.
@@ -2224,6 +2353,28 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Purge a principal
+  /principals/{id}:removeAvatar:
+    post:
+      description: Clears another human principal's profile picture. Gated by principal:set-avatar (all-scope). Removing an absent picture is a no-op. Audited with the administrator as the actor.
+      operationId: remove-principal-avatar
+      parameters:
+        - description: The principal, addressed by its uuid or a human username
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The principal, addressed by its uuid or a human username
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Remove a principal's profile picture
   /principals/{id}:resetPassword:
     post:
       description: Sets a new password for another human principal (an administrator action; the target's current password is not required). Gated by principal:reset-password (all-scope). The new password must meet the password policy; a violation is a 422. Refused on yourself (change your own password from your profile, which verifies your current one), on an owner (owners cannot be reset by anyone), or when it would exceed the caller's own capabilities (the takeover guard, shared with impersonation). The action is audited with the administrator as the actor.
@@ -2274,6 +2425,34 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Restore a principal
+  /principals/{id}:setAvatar:
+    post:
+      description: Sets another human principal's profile picture (an administrator action). Gated by principal:set-avatar (all-scope). The image (JPEG, PNG, or WebP, base64-encoded) is normalized server-side to a 256x256 JPEG; a bad or oversize image is a 422. Audited with the administrator as the actor.
+      operationId: set-principal-avatar
+      parameters:
+        - description: The principal, addressed by its uuid or a human username
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The principal, addressed by its uuid or a human username
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetAvatarInputBody"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Set a principal's profile picture
   /roles:
     get:
       description: Lists the roles with their metadata and effective (flattened) permissions. Gated by the role:read capability.

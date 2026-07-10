@@ -143,6 +143,41 @@ func generatedCommands() []*cobra.Command {
 	}
 	{
 		parent := &cobra.Command{
+			Use:   "avatar",
+			Short: "Commands for the avatar resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "list",
+				Short:   "Get your own profile picture",
+				Long:    "Returns the caller's profile picture as a base64-encoded JPEG. Requires authentication; self-scoped. No picture is a 404.",
+				Example: "  omniglass avatar list",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/auth/me/avatar")
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "list <id>",
+				Short:   "Get a principal's profile picture",
+				Long:    "Returns the principal's profile picture as a base64-encoded JPEG. Gated by principal:read (all-scope). A principal without a picture is a 404.",
+				Example: "  omniglass avatar list <id>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/principals/%s/avatar", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		roots = append(roots, parent)
+	}
+	{
+		parent := &cobra.Command{
 			Use:   "component",
 			Short: "Commands for the component resource",
 		}
@@ -579,6 +614,41 @@ func generatedCommands() []*cobra.Command {
 		}
 		parent.AddCommand(func() *cobra.Command {
 			cmd := &cobra.Command{
+				Use:     "removeAvatar",
+				Short:   "Remove your own profile picture",
+				Long:    "Clears the caller's profile picture. Requires authentication; self-scoped.",
+				Example: "  omniglass me removeAvatar",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/auth/me:removeAvatar")
+					return runAPICommand(cmd, "POST", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			var fImageBase64 string
+			cmd := &cobra.Command{
+				Use:     "setAvatar",
+				Short:   "Set your own profile picture",
+				Long:    "Sets the caller's profile picture (JPEG, PNG, or WebP, base64-encoded), normalized server-side to a 256x256 JPEG. Requires authentication; self-scoped. A bad or oversize image is a 422.",
+				Example: "  omniglass me setAvatar --image-base64 image_base64",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/auth/me:setAvatar")
+					body := map[string]any{}
+					if cmd.Flags().Changed("image-base64") {
+						body["image_base64"] = fImageBase64
+					}
+					return runAPICommand(cmd, "POST", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fImageBase64, "image-base64", "", "The image (JPEG, PNG, or WebP), base64-encoded; normalized server-side to a 256x256 JPEG")
+			_ = cmd.MarkFlagRequired("image-base64")
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
 				Use:     "stopImpersonation",
 				Short:   "Stop the current impersonation session",
 				Long:    "Revokes the impersonation session presented by the request token, ending the view-as / act-as. Requires an impersonation token.",
@@ -815,6 +885,20 @@ func generatedCommands() []*cobra.Command {
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "removeAvatar <id>",
+				Short:   "Remove a principal's profile picture",
+				Long:    "Clears another human principal's profile picture. Gated by principal:set-avatar (all-scope). Removing an absent picture is a no-op. Audited with the administrator as the actor.",
+				Example: "  omniglass principal removeAvatar <id>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/principals/%s:removeAvatar", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "POST", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
 			var fPassword string
 			cmd := &cobra.Command{
 				Use:     "resetPassword <id>",
@@ -847,6 +931,27 @@ func generatedCommands() []*cobra.Command {
 					return runAPICommand(cmd, "POST", path, nil)
 				},
 			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			var fImageBase64 string
+			cmd := &cobra.Command{
+				Use:     "setAvatar <id>",
+				Short:   "Set a principal's profile picture",
+				Long:    "Sets another human principal's profile picture (an administrator action). Gated by principal:set-avatar (all-scope). The image (JPEG, PNG, or WebP, base64-encoded) is normalized server-side to a 256x256 JPEG; a bad or oversize image is a 422. Audited with the administrator as the actor.",
+				Example: "  omniglass principal setAvatar <id> --image-base64 image_base64",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/principals/%s:setAvatar", url.PathEscape(args[0]))
+					body := map[string]any{}
+					if cmd.Flags().Changed("image-base64") {
+						body["image_base64"] = fImageBase64
+					}
+					return runAPICommand(cmd, "POST", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fImageBase64, "image-base64", "", "The image (JPEG, PNG, or WebP), base64-encoded; normalized server-side to a 256x256 JPEG")
+			_ = cmd.MarkFlagRequired("image-base64")
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
