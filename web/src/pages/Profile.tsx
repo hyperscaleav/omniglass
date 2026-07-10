@@ -1,5 +1,6 @@
 import { Show, For, createSignal, createEffect } from "solid-js";
 import PasswordField from "../components/PasswordField";
+import Button from "../components/Button";
 import Drawer, { DrawerFooter } from "../components/Drawer";
 import { passwordError, isPasswordPolicyMessage } from "../lib/validate";
 import { useMe, useUpdateProfile, useChangePassword } from "../lib/auth";
@@ -123,13 +124,8 @@ export default function Profile() {
             </div>
             <Note note={profileMsg()} />
             <div class="card-actions mt-1 justify-between border-t border-base-300 pt-3">
-              <button type="button" class="btn btn-quiet btn-sm gap-1.5" onClick={() => setPwOpen(true)}>
-                <Key size={15} /> Change password
-              </button>
-              <button type="submit" class="btn btn-action btn-sm gap-1.5" disabled={profileBusy()}>
-                <Show when={profileBusy()}><span class="loading loading-spinner loading-xs" /></Show>
-                <Save size={15} /> Save profile
-              </button>
+              <Button icon={Key} onClick={() => setPwOpen(true)}>Change password</Button>
+              <Button type="submit" intent="action" icon={Save} loading={profileBusy()}>Save profile</Button>
             </div>
           </div>
         </form>
@@ -204,11 +200,8 @@ export default function Profile() {
           </div>
           <Note note={pwMsg()} />
           <DrawerFooter>
-            <button type="button" class="btn btn-quiet btn-sm gap-1.5" onClick={() => setPwOpen(false)} disabled={pwBusy()}><X size={15} /> Cancel</button>
-            <button type="submit" class="btn btn-action btn-sm gap-1.5" disabled={pwBusy() || !current() || !next() || !!passwordError(next(), human()?.username)}>
-              <Show when={pwBusy()}><span class="loading loading-spinner loading-xs" /></Show>
-              <Save size={15} /> Change password
-            </button>
+            <Button icon={X} onClick={() => setPwOpen(false)} disabled={pwBusy()}>Cancel</Button>
+            <Button type="submit" intent="action" icon={Save} loading={pwBusy()} disabled={!current() || !next() || !!passwordError(next(), human()?.username)}>Change password</Button>
           </DrawerFooter>
         </form>
       </Drawer>

@@ -1,5 +1,6 @@
 import { type JSX, For, Show, createSignal } from "solid-js";
 import { ChevronRight, Plus, Trash } from "./icons";
+import Button from "./Button";
 
 // DetailShell: the shared body chrome every entity detail wears, so a user, a
 // group, a role, and a location all read the same. Two pieces:
@@ -46,14 +47,15 @@ export function RelatedList(props: {
       </span>
       <span class="flex flex-none items-center gap-1">
         <Show when={props.onRemove}>
-          <button
-            class="btn btn-quiet btn-xs btn-square text-base-content/50"
+          <Button
+            square
+            size="xs"
+            icon={Trash}
             title="Remove"
-            aria-label="Remove"
+            label="Remove"
+            class="text-base-content/50"
             onClick={(e) => { e.stopPropagation(); props.onRemove!(p.item); }}
-          >
-            <Trash size={14} />
-          </button>
+          />
         </Show>
         <Show when={props.onOpen}><ChevronRight size={14} /></Show>
       </span>
@@ -83,9 +85,7 @@ export function RelatedList(props: {
             <option value="">{props.add!.placeholder}</option>
             <For each={props.add!.options}>{(o) => <option value={o.id}>{o.label}</option>}</For>
           </select>
-          <button class="btn btn-action btn-sm gap-1.5" disabled={!toAdd()} onClick={() => { props.add!.onAdd(toAdd()); setToAdd(""); }}>
-            <Plus size={14} /> Add
-          </button>
+          <Button intent="action" icon={Plus} disabled={!toAdd()} onClick={() => { props.add!.onAdd(toAdd()); setToAdd(""); }}>Add</Button>
         </div>
       </Show>
     </div>

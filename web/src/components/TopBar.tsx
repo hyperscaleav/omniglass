@@ -1,5 +1,6 @@
 import { hostPlatform, shortcutModifier, shortcutHint } from "../lib/platform";
 import { Search } from "./icons";
+import Button from "./Button";
 
 // The sticky top bar (daisyUI navbar): the current section label and the
 // command-palette trigger (a global jump, distinct from a page's own filter).
@@ -23,9 +24,7 @@ export default function TopBar(props: { section: string; onOpenPalette: () => vo
           <kbd class="kbd kbd-sm leading-none">K</kbd>
         </span>
       </button>
-      <button class="btn btn-quiet btn-sm btn-square sm:hidden" onClick={props.onOpenPalette} title="Search and jump">
-        <Search size={17} />
-      </button>
+      <Button square icon={Search} onClick={props.onOpenPalette} title="Search and jump" label="Search and jump" class="sm:hidden" />
     </header>
   );
 }

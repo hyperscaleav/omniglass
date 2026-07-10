@@ -18,6 +18,7 @@ import {
 import type { ScopeKind } from "../lib/principals";
 import { describeError } from "../lib/format";
 import { Save, X } from "./icons";
+import Button from "./Button";
 
 // GrantBuilder is the filter-bar-style scope editor: a keyboard-staged combobox
 // (role -> scope kind -> entity) builds a chip, and the whole set of changes is
@@ -366,11 +367,8 @@ export default function GrantBuilder(props: {
             <Show when={diff().removes.length}> <span class="font-medium text-error">-{diff().removes.length} to revoke</span></Show>
           </span>
           <span class="flex-1" />
-          <button type="button" class="btn btn-quiet btn-xs gap-1.5" onClick={resetAll} disabled={saving()}><X size={14} /> Cancel</button>
-          <button type="button" class="btn btn-action btn-xs gap-1.5" onClick={save} disabled={saving()}>
-            <Show when={saving()}><span class="loading loading-spinner loading-xs" /></Show>
-            <Save size={14} /> Save grants
-          </button>
+          <Button size="xs" icon={X} onClick={resetAll} disabled={saving()}>Cancel</Button>
+          <Button size="xs" intent="action" icon={Save} onClick={save} loading={saving()}>Save grants</Button>
         </div>
       </Show>
     </div>

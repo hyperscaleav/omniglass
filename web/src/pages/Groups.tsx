@@ -10,6 +10,7 @@ import { describeError } from "../lib/format";
 import { handleError } from "../lib/validate";
 import { Plus, X } from "../components/icons";
 import { DrawerFooter } from "../components/Drawer";
+import Button from "../components/Button";
 
 // Groups: the principal-group admin surface, a config over the shared FlatList. A
 // group holds role x scope grants that its members inherit, so an admin assigns
@@ -119,8 +120,8 @@ function CreateGroupForm(props: { onCreated: (g: Group) => void; onClose: () => 
         <input class="input input-bordered w-full" value={description()} onInput={(e) => setDescription(e.currentTarget.value)} disabled={busy()} />
       </label>
       <DrawerFooter>
-        <button type="button" class="btn btn-quiet btn-sm gap-1.5" onClick={props.onClose} disabled={busy()}><X size={15} /> Cancel</button>
-        <button type="submit" class="btn btn-action btn-sm gap-1.5" disabled={busy() || !name().trim() || !!handleError(name())}><Plus size={15} /> {busy() ? "Creating..." : "Create group"}</button>
+        <Button icon={X} onClick={props.onClose} disabled={busy()}>Cancel</Button>
+        <Button type="submit" intent="action" icon={Plus} disabled={busy() || !name().trim() || !!handleError(name())}>{busy() ? "Creating..." : "Create group"}</Button>
       </DrawerFooter>
     </form>
   );
