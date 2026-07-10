@@ -19,6 +19,7 @@ import { LOCATIONS_KEY, listLocations } from "../lib/locations";
 import { COMPONENTS_KEY, listComponents } from "../lib/components";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
+import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
 // Secrets: the shared-credential directory on the FlatList surface. A secret is a
 // typed, encrypted-at-rest value owned at one scope (global, or a location /
@@ -63,74 +64,100 @@ const columns: FlatColumn<Secret>[] = [
 ];
 
 export default function Secrets() {
-  const qc = useQueryClient();
   const me = useMe();
   const secrets = useQuery(() => ({ queryKey: SECRETS_KEY, queryFn: listSecrets }));
 
   const rows = createMemo(() => [...(secrets.data ?? [])].sort((a, b) => a.name.localeCompare(b.name)));
 
+  return (
+    <FlatList<Secret>
+      config={{
+        entity: { name: "secret", plural: "secrets" },
+        rows,
+        loading: () => secrets.isPending,
+        error: () => secrets.error,
+        filterKeys: [
+          { key: "name", type: "string", hint: "substring", get: (s) => `${s.name} ${s.secret_type}`, values: () => [] },
+          { key: "owner", type: "string", hint: "exact", get: (s) => s.owner_kind, values: (rs) => [...new Set(rs.map((r) => r.owner_kind))].sort() },
+          { key: "type", type: "string", hint: "exact", get: (s) => s.secret_type, values: (rs) => [...new Set(rs.map((r) => r.secret_type))].sort() },
+        ],
+        filterPlaceholder: "filter secrets by name, type, owner…",
+        columns,
+        empty: "No secrets yet.",
+        rowId: (s) => s.id,
+        blades: { registry: { secret: secretBlade }, rootKind: "secret" },
+        create: can(me.data, "secret", "create")
+          ? { label: "New secret", can: () => can(me.data, "secret", "create"), body: (ctx) => <CreateSecretForm onCreated={ctx.close} /> }
+          : undefined,
+      }}
+    />
+  );
+}
+
+// secretBlade renders a secret on the shared blade stack (same chrome and footer
+// action rail as the identity blades). The body is read-only in slice 1 (no field
+// edit yet), so no pencil; the footer carries the one destructive action, Delete.
+export const secretBlade: BladeDef = {
+  Title: (p) => <SecretBladeTitle id={p.id} />,
+  Body: (p) => <SecretBladeBody id={p.id} />,
+};
+
+function useSecretById(id: string): () => Secret | undefined {
+  const secrets = useQuery(() => ({ queryKey: SECRETS_KEY, queryFn: listSecrets }));
+  return () => (secrets.data ?? []).find((s) => s.id === id);
+}
+
+function SecretBladeTitle(p: { id: string }): JSX.Element {
+  const secret = useSecretById(p.id);
+  return <span class="font-data">{secret()?.name ?? "secret"}</span>;
+}
+
+function SecretBladeBody(p: { id: string }): JSX.Element {
+  const qc = useQueryClient();
+  const me = useMe();
+  const blades = useBlades();
+  const edit = useBladeEdit();
+  const secret = useSecretById(p.id);
   const [err, setErr] = createSignal<string | null>(null);
-  async function del(s: Secret) {
+
+  async function removeSecret() {
+    const s = secret();
+    if (!s) return;
     if (!confirm(`Delete secret "${s.name}" (${ownerLabel(s)})?`)) return;
     setErr(null);
     try {
       await deleteSecret(s.id);
+      blades.close();
       await qc.invalidateQueries({ queryKey: SECRETS_KEY });
     } catch (e) {
       setErr(describeError(e));
     }
   }
 
-  return (
-    <>
-      <Show when={err()}>
-        <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
-      </Show>
-      <FlatList<Secret>
-        config={{
-          entity: { name: "secret", plural: "secrets" },
-          rows,
-          loading: () => secrets.isPending,
-          error: () => secrets.error,
-          filterKeys: [
-            { key: "name", type: "string", hint: "substring", get: (s) => `${s.name} ${s.secret_type}`, values: () => [] },
-            { key: "owner", type: "string", hint: "exact", get: (s) => s.owner_kind, values: (rs) => [...new Set(rs.map((r) => r.owner_kind))].sort() },
-            { key: "type", type: "string", hint: "exact", get: (s) => s.secret_type, values: (rs) => [...new Set(rs.map((r) => r.secret_type))].sort() },
-          ],
-          filterPlaceholder: "filter secrets by name, type, owner…",
-          columns,
-          empty: "No secrets yet.",
-          rowId: (s) => s.id,
-          detail: (s) => ({
-            title: <span class="font-data">{s.name}</span>,
-            body: <SecretDetail secret={s} onDelete={() => del(s)} canDelete={can(me.data, "secret", "delete")} canReveal={can(me.data, "secret", "reveal")} />,
-          }),
-          create: can(me.data, "secret", "create")
-            ? { label: "New secret", can: () => can(me.data, "secret", "create"), body: (ctx) => <CreateSecretForm onCreated={ctx.close} /> }
-            : undefined,
-        }}
-      />
-    </>
-  );
-}
+  // Register the footer action rail: Delete is the one destructive action (no
+  // edit save, so the blade stays read-only with no pencil).
+  edit.bind({
+    destructive: () => (secret() && can(me.data, "secret", "delete") ? { label: "Delete secret", tone: "danger", onClick: removeSecret } : undefined),
+  });
 
-function SecretDetail(p: { secret: Secret; onDelete: () => void; canDelete: boolean; canReveal: boolean }): JSX.Element {
   return (
-    <div class="flex flex-col gap-4">
-      <div class="grid grid-cols-2 gap-3 text-sm">
-        <Fact label="Type"><span class="badge badge-ghost badge-sm">{p.secret.secret_type}</span></Fact>
-        <Fact label="Owner"><span>{ownerLabel(p.secret)}</span></Fact>
-      </div>
-      <div class="flex flex-col gap-1.5">
-        <span class="eyebrow">Fields</span>
-        <SecretFields secretId={p.secret.id} fields={p.secret.fields} canReveal={p.canReveal} />
-      </div>
-      <Show when={p.canDelete}>
-        <div class="border-t border-base-300 pt-3">
-          <button class="btn btn-danger btn-sm" onClick={() => p.onDelete()}>Delete secret</button>
+    <Show when={secret()} fallback={<p class="text-sm text-base-content/50">Secret not found.</p>}>
+      {(s) => (
+        <div class="flex flex-col gap-4">
+          <Show when={err()}>
+            <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
+          </Show>
+          <div class="grid grid-cols-2 gap-3 text-sm">
+            <Fact label="Type"><span class="badge badge-ghost badge-sm">{s().secret_type}</span></Fact>
+            <Fact label="Owner"><span>{ownerLabel(s())}</span></Fact>
+          </div>
+          <div class="flex flex-col gap-1.5">
+            <span class="eyebrow">Fields</span>
+            <SecretFields secretId={s().id} fields={s().fields} canReveal={can(me.data, "secret", "reveal")} />
+          </div>
         </div>
-      </Show>
-    </div>
+      )}
+    </Show>
   );
 }
 
