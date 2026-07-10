@@ -1,5 +1,4 @@
 import { Show, For, createSignal, createEffect } from "solid-js";
-import Page from "../components/Page";
 import PasswordField from "../components/PasswordField";
 import { passwordError, isPasswordPolicyMessage } from "../lib/validate";
 import { useMe, useUpdateProfile, useChangePassword } from "../lib/auth";
@@ -76,8 +75,8 @@ export default function Profile() {
   const human = () => me.data?.human;
 
   return (
-    <Page title="Your profile">
-      <div class="grid max-w-2xl gap-4">
+    <section class="og-stack flex flex-col">
+      <div class="grid gap-4">
         {/* Profile card */}
         <form onSubmit={saveProfile} class="card border border-base-300 bg-base-200">
           <div class="card-body gap-3">
@@ -145,7 +144,7 @@ export default function Profile() {
             <div>
               <label class="eyebrow mb-1.5 block" for="pw-new">New password</label>
               <PasswordField id="pw-new" value={next()} onInput={(v) => { setNext(v); setPwFieldError(null); }} username={human()?.username} disabled={pwBusy()} serverError={pwFieldError()} required generate />
-              <p class="mt-1 text-[11px] text-base-content/40">At least 12 characters, not a common password. <strong>Generate</strong> makes a strong one.</p>
+              <p class="mt-1 text-[11px] text-base-content/40">At least 12 characters, not a common password.</p>
             </div>
             <div>
               <label class="eyebrow mb-1.5 block" for="pw-confirm">Confirm new password</label>
@@ -204,7 +203,7 @@ export default function Profile() {
           </div>
         </div>
       </div>
-    </Page>
+    </section>
   );
 }
 

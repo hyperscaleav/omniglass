@@ -123,6 +123,9 @@ export function lookupNav(pathname: string): NavMeta {
 // a detail route (/locations/hq) still resolves to "Locations".
 export function sectionLabel(pathname: string): string {
   const path = relative(pathname);
+  // Profile is reached from the sidebar footer, not a nav item, so it has no
+  // navByPath entry; label it explicitly so the top bar reads "Profile".
+  if (path === "/profile") return "Profile";
   let label = "";
   let best = -1;
   for (const [p, meta] of Object.entries(navByPath)) {

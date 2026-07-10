@@ -179,7 +179,7 @@ function CreateUserForm(props: { close: () => void; onCreated: (p: Principal) =>
       <div>
         <label class="eyebrow mb-1.5 block" for="new-password">Initial password</label>
         <PasswordField id="new-password" value={password()} onInput={(v) => { setPassword(v); setPwServerError(null); }} username={username()} disabled={busy()} serverError={pwServerError()} generate />
-        <p class="mt-1 text-[11px] text-base-content/40">Optional. At least 12 characters; <strong>Generate</strong> makes a strong one. The user changes it after signing in.</p>
+        <p class="mt-1 text-[11px] text-base-content/40">Optional. At least 12 characters. The user changes it after signing in.</p>
       </div>
       <DrawerFooter>
         <button type="button" class="btn btn-quiet btn-sm gap-1.5" onClick={props.close} disabled={busy()}><X size={15} /> Cancel</button>
