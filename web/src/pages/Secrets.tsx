@@ -171,7 +171,7 @@ function SecretBladeBody(p: { id: string }): JSX.Element {
   edit.bind({
     editable: () => !!secret() && can(me.data, "secret", "update"),
     save,
-    destructive: () => (secret() && can(me.data, "secret", "delete") ? { label: "Delete secret", tone: "danger", onClick: removeSecret } : undefined),
+    destructive: () => (secret() && can(me.data, "secret", "delete") ? { label: "Delete", tone: "danger", onClick: removeSecret } : undefined),
   });
 
   return (
@@ -278,7 +278,7 @@ function CreateSecretForm(p: { onCreated: () => void }): JSX.Element {
   }
 
   return (
-    <form class="flex flex-col gap-4" onSubmit={submit}>
+    <form class="flex flex-1 flex-col gap-4" onSubmit={submit}>
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
@@ -320,7 +320,7 @@ function CreateSecretForm(p: { onCreated: () => void }): JSX.Element {
           </For>
         </div>
       </Show>
-      <div class="mt-1 flex justify-end gap-2">
+      <div class="mt-auto -mx-5 -mb-5 flex justify-end gap-2 border-t border-base-300 bg-base-100 px-5 py-3">
         <button type="submit" class="btn btn-action btn-sm" disabled={busy() || !typeId() || !name().trim() || (ownerKind() !== "global" && !owner())}>Create secret</button>
       </div>
     </form>

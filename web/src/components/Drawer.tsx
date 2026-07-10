@@ -27,7 +27,7 @@ export default function Drawer(props: {
               </Dialog.CloseButton>
             </div>
           </header>
-          <div class="flex-1 overflow-auto p-5">{props.children}</div>
+          <div class="flex min-h-0 flex-1 flex-col overflow-auto p-5">{props.children}</div>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog>

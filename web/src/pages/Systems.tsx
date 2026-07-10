@@ -208,7 +208,7 @@ export default function Systems() {
     }
 
     return (
-      <form class="flex flex-col gap-4" onSubmit={submit}>
+      <form class="flex flex-1 flex-col gap-4" onSubmit={submit}>
         <Show when={formErr()}>
           <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
         </Show>
@@ -244,7 +244,7 @@ export default function Systems() {
             )}
           </div>
         </Show>
-        <div class="mt-1 flex justify-end gap-2">
+        <div class="mt-auto -mx-5 -mb-5 flex justify-end gap-2 border-t border-base-300 bg-base-100 px-5 py-3">
           <button type="button" class="btn btn-quiet btn-sm" onClick={p.close}>Cancel</button>
           <button type="submit" class="btn btn-action btn-sm" disabled={busy()}>{editing ? "Save changes" : "Create system"}</button>
         </div>
