@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"image"
 	"image/color"
+	_ "image/jpeg" // registers the JPEG decoder so image.DecodeConfig recognizes the stored avatar
 	"image/png"
 	"net/http"
 	"net/http/httptest"
@@ -35,10 +36,10 @@ var onePxPNGB64 = func() string {
 	return base64.StdEncoding.EncodeToString(buf.Bytes())
 }()
 
-// TestSelfSetAndReadAvatar drives the self avatar write path: a signed-in human
-// uploads a picture (204), GET /auth/me then reports has_avatar true, and a remove
-// (204) flips it back to false. The read endpoint (GET /auth/me/avatar) lands in a
-// later slice. Skipped under -short.
+// TestSelfSetAndReadAvatar drives the self avatar round-trip: a signed-in human
+// uploads a picture (204), GET /auth/me reports has_avatar true, GET /auth/me/avatar
+// returns the normalized JPEG as base64, and a remove (204) flips the flag back to
+// false and turns the read endpoint into a 404. Skipped under -short.
 func TestSelfSetAndReadAvatar(t *testing.T) {
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
@@ -65,11 +66,50 @@ func TestSelfSetAndReadAvatar(t *testing.T) {
 	if _, body := c.send(ownerTok, "GET", "/auth/me", nil); !bytes.Contains(body, []byte(`"has_avatar":true`)) {
 		t.Fatalf("has_avatar not set after upload: %s", body)
 	}
-	// Self-remove; the flag clears.
+	// Read the picture back: a 200 with a non-empty image_base64 that decodes to a
+	// JPEG (the server normalized the PNG upload to a 256x256 JPEG).
+	read := c.do(ownerTok, "GET", "/auth/me/avatar", nil, http.StatusOK)
+	var got struct {
+		ImageBase64 string `json:"image_base64"`
+	}
+	if err := json.Unmarshal(read, &got); err != nil || got.ImageBase64 == "" {
+		t.Fatalf("read avatar: err=%v body=%s", err, read)
+	}
+	jpegBytes, err := base64.StdEncoding.DecodeString(got.ImageBase64)
+	if err != nil {
+		t.Fatalf("image_base64 is not valid base64: %v", err)
+	}
+	if _, format, err := image.DecodeConfig(bytes.NewReader(jpegBytes)); err != nil || format != "jpeg" {
+		t.Fatalf("stored image format = %q (err %v), want jpeg", format, err)
+	}
+	// Self-remove; the flag clears and the read endpoint becomes a 404.
 	c.do(ownerTok, "POST", "/auth/me:removeAvatar", nil, http.StatusNoContent)
 	if _, body := c.send(ownerTok, "GET", "/auth/me", nil); bytes.Contains(body, []byte(`"has_avatar":true`)) {
 		t.Fatalf("has_avatar still set after remove: %s", body)
 	}
+	c.do(ownerTok, "GET", "/auth/me/avatar", nil, http.StatusNotFound)
+}
+
+// TestGetAvatar_404WhenAbsent proves the read endpoint is a 404 for a principal
+// that has never set a picture (not an empty 200). Skipped under -short.
+func TestGetAvatar_404WhenAbsent(t *testing.T) {
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+
+	ownerTok := bootstrapOwnerTok(t, ctx, gw)
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+
+	c.do(ownerTok, "GET", "/auth/me/avatar", nil, http.StatusNotFound)
 }
 
 // TestSelfSetAvatar_RejectsGarbage proves the normalize guard rejects a non-image
@@ -134,10 +174,19 @@ func TestAdminSetAvatar_GatedByPermission(t *testing.T) {
 	if _, body := c.send(ownerTok, "GET", "/principals/"+bob.ID, nil); !bytes.Contains(body, []byte(`"has_avatar":true`)) {
 		t.Fatalf("bob has_avatar not set after admin upload: %s", body)
 	}
+	// The owner reads it back through the admin route: a 200 with a non-empty picture.
+	read := c.do(ownerTok, "GET", "/principals/"+bob.ID+"/avatar", nil, http.StatusOK)
+	var got struct {
+		ImageBase64 string `json:"image_base64"`
+	}
+	if err := json.Unmarshal(read, &got); err != nil || got.ImageBase64 == "" {
+		t.Fatalf("admin read bob avatar: err=%v body=%s", err, read)
+	}
 
-	// The owner removes it; the flag clears.
+	// The owner removes it; the flag clears and the read route becomes a 404.
 	c.do(ownerTok, "POST", "/principals/"+bob.ID+":removeAvatar", nil, http.StatusNoContent)
 	if _, body := c.send(ownerTok, "GET", "/principals/"+bob.ID, nil); bytes.Contains(body, []byte(`"has_avatar":true`)) {
 		t.Fatalf("bob has_avatar still set after admin remove: %s", body)
 	}
+	c.do(ownerTok, "GET", "/principals/"+bob.ID+"/avatar", nil, http.StatusNotFound)
 }

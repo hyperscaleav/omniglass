@@ -84,6 +84,16 @@ type avatarPathInput struct {
 	ID string `path:"id" doc:"The principal, addressed by its uuid or a human username"`
 }
 
+// avatarOutput carries a principal's profile picture as base64. The read side is a
+// JSON route (not a raw image/jpeg handler) so it stays under the Huma authz
+// middleware; the console renders it as a data URL. Shared by the admin and self
+// read handlers.
+type avatarOutput struct {
+	Body struct {
+		ImageBase64 string `json:"image_base64" doc:"The profile picture as a base64-encoded 256x256 JPEG"`
+	}
+}
+
 type principalOutput struct {
 	Body principalBody
 }
@@ -482,6 +492,30 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 			return nil, mapPrincipalErr(err)
 		}
 		return nil, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "get-principal-avatar",
+		Method:      http.MethodGet,
+		Path:        "/principals/{id}/avatar",
+		Summary:     "Get a principal's profile picture",
+		Description: "Returns the principal's profile picture as a base64-encoded JPEG. Gated by principal:read (all-scope). A principal without a picture is a 404.",
+		Middlewares: huma.Middlewares{a.authn, a.require("principal", "read")},
+	}, func(ctx context.Context, in *avatarPathInput) (*avatarOutput, error) {
+		id, rerr := a.resolvePrincipalRef(ctx, in.ID)
+		if rerr != nil {
+			return nil, rerr
+		}
+		b64, ok, err := gw.GetHumanAvatar(ctx, id)
+		if err != nil {
+			return nil, mapPrincipalErr(err)
+		}
+		if !ok {
+			return nil, huma.Error404NotFound("no profile picture")
+		}
+		out := &avatarOutput{}
+		out.Body.ImageBase64 = b64
+		return out, nil
 	})
 }
 

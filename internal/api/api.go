@@ -168,6 +168,15 @@ func registerRoutes(api huma.API, gw storage.Gateway, o options) {
 	}, a.removeMeAvatarHandler)
 
 	huma.Register(api, huma.Operation{
+		OperationID: "get-auth-me-avatar",
+		Method:      http.MethodGet,
+		Path:        "/auth/me/avatar",
+		Summary:     "Get your own profile picture",
+		Description: "Returns the caller's profile picture as a base64-encoded JPEG. Requires authentication; self-scoped. No picture is a 404.",
+		Middlewares: huma.Middlewares{a.authn},
+	}, a.meAvatarHandler)
+
+	huma.Register(api, huma.Operation{
 		OperationID: "list-roles",
 		Method:      http.MethodGet,
 		Path:        "/roles",

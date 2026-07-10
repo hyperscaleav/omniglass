@@ -568,6 +568,26 @@ func (a *authenticator) removeMeAvatarHandler(ctx context.Context, _ *struct{}) 
 	return nil, nil
 }
 
+// meAvatarHandler returns the caller's own profile picture as base64. Self-scoped
+// and authn-only: it reads the principal resolved from the session, never another.
+// No picture is a 404 (not an empty 200).
+func (a *authenticator) meAvatarHandler(ctx context.Context, _ *struct{}) (*avatarOutput, error) {
+	pr, ok := principalFrom(ctx)
+	if !ok {
+		return nil, huma.Error401Unauthorized("unauthenticated")
+	}
+	b64, has, err := a.gw.GetHumanAvatar(ctx, pr.ID)
+	if err != nil {
+		return nil, huma.Error500InternalServerError("get avatar")
+	}
+	if !has {
+		return nil, huma.Error404NotFound("no profile picture")
+	}
+	out := &avatarOutput{}
+	out.Body.ImageBase64 = b64
+	return out, nil
+}
+
 // mapPasswordErr translates the auth password-policy sentinels into a 422 with a
 // specific message, or nil when the password is acceptable. Shared by the create and
 // change-password handlers so both enforce the same policy the same way.
