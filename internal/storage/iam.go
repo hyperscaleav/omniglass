@@ -185,6 +185,11 @@ type HumanProfile struct {
 	// MustChangePassword is set by an admin reset and cleared by the user's own
 	// change-password; while true the account is gated to the change-password lane.
 	MustChangePassword bool
+	// HasAvatar is true when the avatar column is non-null. The avatar bytes are
+	// NOT loaded here (this struct is filled on every authenticated request);
+	// fetch them with GetHumanAvatar.
+	HasAvatar       bool
+	AvatarUpdatedAt *time.Time
 }
 type ServiceProfile struct{ Label string }
 
@@ -1162,8 +1167,11 @@ func (p *PG) loadPrincipal(ctx context.Context, pr *Principal) error {
 	case "human":
 		var h HumanProfile
 		if err := p.pool.QueryRow(ctx,
-			`select username, coalesce(email, ''), coalesce(display_name, ''), must_change_password from human where principal_id = $1`,
-			pr.ID).Scan(&h.Username, &h.Email, &h.DisplayName, &h.MustChangePassword); err != nil {
+			`select username, coalesce(email, ''), coalesce(display_name, ''), must_change_password,
+			        avatar is not null, avatar_updated_at
+			 from human where principal_id = $1`,
+			pr.ID).Scan(&h.Username, &h.Email, &h.DisplayName, &h.MustChangePassword,
+			&h.HasAvatar, &h.AvatarUpdatedAt); err != nil {
 			return fmt.Errorf("storage: load human: %w", err)
 		}
 		pr.Human = &h
