@@ -52,9 +52,79 @@ jobs:
         # and exits 0 only if the cross-compiled arm64 binary actually runs.
         run: docker run --rm --platform linux/arm64 omniglass:arm64-smoke --help
 
+  # End-to-end boot smoke: build the native amd64 image, run it in `server` mode
+  # against a real Postgres, and prove the deploy unit actually comes up: the
+  # migrations apply, the boot seed runs, the health endpoint is green, and the
+  # operator console (the login page) is served. `--help` alone (above) proves the
+  # binary runs, not that a fresh instance boots and serves; this closes that gap.
+  smoke-boot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build the amd64 image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          tags: omniglass:boot-smoke
+          build-args: |
+            VERSION=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Boot a fresh instance and probe the login page
+        run: |
+          set -euo pipefail
+          docker network create og-smoke
+          docker run -d --name pg --network og-smoke \
+            -e POSTGRES_USER=omniglass -e POSTGRES_PASSWORD=omniglass -e POSTGRES_DB=omniglass \
+            postgres:18
+          echo "waiting for postgres..."
+          for i in $(seq 1 30); do
+            if docker exec pg pg_isready -U omniglass -d omniglass >/dev/null 2>&1; then break; fi
+            sleep 2
+          done
+          docker exec pg pg_isready -U omniglass -d omniglass
+
+          # The container in `server` mode auto-migrates, runs the boot seed, and serves.
+          docker run -d --name app --network og-smoke \
+            -e OMNIGLASS_DSN="postgres://omniglass:omniglass@pg:5432/omniglass?sslmode=disable" \
+            -e OMNIGLASS_ADDR=":8080" \
+            -p 127.0.0.1:8080:8080 \
+            omniglass:boot-smoke
+
+          echo "waiting for the health endpoint..."
+          ok=""
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/v1/healthz || true)
+            if [ "$code" = "200" ]; then ok=1; break; fi
+            sleep 2
+          done
+          if [ -z "$ok" ]; then echo "healthz never returned 200"; exit 1; fi
+
+          # The operator console (login page) must be served, following the trailing
+          # slash redirect. A fresh instance not serving /web is a broken deploy.
+          web=$(curl -sL -o /dev/null -w '%{http_code}' http://localhost:8080/web)
+          echo "healthz=200 web=$web"
+          if [ "$web" != "200" ]; then echo "login page did not come up (/web=$web)"; exit 1; fi
+
+          # The public bootstrap-status endpoint the login screen reads must answer.
+          curl -sf http://localhost:8080/api/v1/auth/status >/dev/null
+
+      - name: Dump container logs on failure
+        if: failure()
+        run: |
+          echo "=== app ==="; docker logs app 2>&1 | tail -50 || true
+          echo "=== pg ===";  docker logs pg  2>&1 | tail -30 || true
+
   build-push:
-    # Only publish the multi-arch manifest once arm64 is proven to boot.
-    needs: smoke-arm64
+    # Only publish the multi-arch manifest once arm64 cross-build boots and a
+    # fresh amd64 instance actually comes up end to end.
+    needs: [smoke-arm64, smoke-boot]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
