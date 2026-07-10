@@ -60,8 +60,12 @@ Where the build currently differs from the present-tense design below (each logg
   the **same generic 401** as a bad credential, so the lock is not an enumeration oracle; only the
   audit (`login_locked`, attributed to the principal) records it. The lock decision is made **after**
   the argon2 verify, so a locked account is not a measurably faster probe, and a correct password
-  below the threshold clears the counter. The threshold and window are fixed for now; per-IP
-  throttling and a configurable policy are later refinements.
+  below the threshold clears the counter. **Rotating the password clears the lock**: an admin reset
+  (`SetPrincipalPassword`) or a self-service change (`SetPassword`) sets `failed_login_count = 0` and
+  `locked_until = null` in the same transaction as the new secret, so the account is usable at once
+  rather than waiting out the window (the lock otherwise clears only lazily at the next login). The
+  threshold and window are fixed for now; per-IP throttling and a configurable policy are later
+  refinements.
 - **A password policy gates the API password surfaces.** A single pure validator
   (`auth.ValidatePassword`) enforces the policy on the running-server paths that set a password:
   **create a user** (`POST /principals`) and **self-service change-password**
