@@ -141,9 +141,9 @@ export default function BladeStack(props: {
                           </Show>
                           <Show when={!edit.editing() && edit.primary()}>
                             {(pr) => (
-                              <button class="btn btn-action btn-sm gap-1.5" onClick={() => pr().onClick()}>
+                              <Button intent="action" onClick={() => pr().onClick()}>
                                 {pr().icon}{pr().label}
-                              </button>
+                              </Button>
                             )}
                           </Show>
                           <Show when={edit.editable()}>

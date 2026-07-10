@@ -2,6 +2,7 @@ import { For, Show, createSignal, type JSX } from "solid-js";
 import { revealSecret, type SecretField } from "../lib/secrets";
 import { describeError } from "../lib/format";
 import { Eye, Check } from "./icons";
+import Button from "./Button";
 
 // SecretFields renders a secret's field list masked, with an audited reveal: a
 // caller holding secret:reveal can decrypt the values in place (the server
@@ -54,28 +55,20 @@ export default function SecretFields(props: { secretId: string; fields: SecretFi
               <span class="shrink-0 font-data text-base-content/60">{f.name}</span>
               <span class="min-w-0 flex-1 truncate text-right font-data" classList={{ "text-base-content/40": f.secret && !plain() }} title={plain() ? shown(f) : undefined}>{shown(f)}</span>
               <Show when={copyable(f)}>
-                <button
-                  class="btn btn-quiet btn-xs shrink-0 gap-1"
-                  onClick={() => copy(f.name, shown(f))}
-                  title={`Copy ${f.name}`}
-                >
+                <Button size="xs" class="shrink-0" onClick={() => copy(f.name, shown(f))} title={`Copy ${f.name}`}>
                   <Show when={copied() === f.name} fallback={<span>Copy</span>}>
                     <Check size={12} /> Copied
                   </Show>
-                </button>
+                </Button>
               </Show>
             </div>
           )}
         </For>
       </div>
       <Show when={props.canReveal && props.fields.some((f) => f.secret)}>
-        <button
-          class="btn btn-quiet btn-sm w-fit gap-1.5"
-          onClick={() => (plain() ? setPlain(null) : reveal())}
-          disabled={busy()}
-        >
-          <Eye size={14} /> {busy() ? "Revealing…" : plain() ? "Hide secret values" : "Reveal secret values"}
-        </button>
+        <Button icon={Eye} class="w-fit" onClick={() => (plain() ? setPlain(null) : reveal())} disabled={busy()}>
+          {busy() ? "Revealing…" : plain() ? "Hide secret values" : "Reveal secret values"}
+        </Button>
       </Show>
       <span class="text-[11px] text-base-content/40">Secret fields are encrypted at rest; every reveal is audited.</span>
     </div>
