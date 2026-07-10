@@ -1,8 +1,9 @@
 import { Show, For, createSignal, createEffect } from "solid-js";
 import PasswordField from "../components/PasswordField";
+import Drawer, { DrawerFooter } from "../components/Drawer";
 import { passwordError, isPasswordPolicyMessage } from "../lib/validate";
 import { useMe, useUpdateProfile, useChangePassword } from "../lib/auth";
-import { Save } from "../components/icons";
+import { Key, Save, X } from "../components/icons";
 
 // Profile is the signed-in operator's own account surface: edit your display name
 // and email, change your password, and (pedagogically) see the identity model you
@@ -49,6 +50,9 @@ export default function Profile() {
   // A password-policy rejection (the server denylist) renders inline under the new
   // password field, like the client checks; other messages stay in the card note.
   const [pwFieldError, setPwFieldError] = createSignal<string | null>(null);
+  // The change-password form lives in a slide-over so the page stays a compact
+  // Profile + Access, rather than a third stacked form.
+  const [pwOpen, setPwOpen] = createSignal(false);
   async function savePassword(e: SubmitEvent) {
     e.preventDefault();
     if (next() !== confirm()) {
@@ -60,10 +64,13 @@ export default function Profile() {
     setPwFieldError(null);
     const r = await changePassword(current(), next());
     if (r.ok) {
-      setPwMsg({ tone: "success", text: "Password changed." });
       setCurrent("");
       setNext("");
       setConfirm("");
+      setPwMsg(null);
+      setPwOpen(false);
+      // Feedback lands on the page (the drawer just closed).
+      setProfileMsg({ tone: "success", text: "Password changed." });
     } else if (isPasswordPolicyMessage(r.message)) {
       setPwFieldError(r.message);
     } else {
@@ -115,55 +122,13 @@ export default function Profile() {
               <p class="mt-1 text-[11px] text-base-content/40">An administrator sets your email.</p>
             </div>
             <Note note={profileMsg()} />
-            <div class="card-actions mt-1 justify-end border-t border-base-300 pt-3">
+            <div class="card-actions mt-1 justify-between border-t border-base-300 pt-3">
+              <button type="button" class="btn btn-quiet btn-sm gap-1.5" onClick={() => setPwOpen(true)}>
+                <Key size={15} /> Change password
+              </button>
               <button type="submit" class="btn btn-action btn-sm gap-1.5" disabled={profileBusy()}>
                 <Show when={profileBusy()}><span class="loading loading-spinner loading-xs" /></Show>
                 <Save size={15} /> Save profile
-              </button>
-            </div>
-          </div>
-        </form>
-
-        {/* Change-password card */}
-        <form onSubmit={savePassword} class="card border border-base-300 bg-base-200">
-          <div class="card-body gap-3">
-            <h2 class="card-title text-base">Change password</h2>
-            <div>
-              <label class="eyebrow mb-1.5 block" for="pw-current">Current password</label>
-              <input
-                id="pw-current"
-                type="password"
-                autocomplete="current-password"
-                class="input input-bordered w-full font-data"
-                value={current()}
-                onInput={(e) => setCurrent(e.currentTarget.value)}
-                disabled={pwBusy()}
-                required
-              />
-            </div>
-            <div>
-              <label class="eyebrow mb-1.5 block" for="pw-new">New password</label>
-              <PasswordField id="pw-new" value={next()} onInput={(v) => { setNext(v); setPwFieldError(null); }} username={human()?.username} disabled={pwBusy()} serverError={pwFieldError()} required generate />
-              <p class="mt-1 text-[11px] text-base-content/40">At least 12 characters, not a common password.</p>
-            </div>
-            <div>
-              <label class="eyebrow mb-1.5 block" for="pw-confirm">Confirm new password</label>
-              <input
-                id="pw-confirm"
-                type="password"
-                autocomplete="new-password"
-                class="input input-bordered w-full font-data"
-                value={confirm()}
-                onInput={(e) => setConfirm(e.currentTarget.value)}
-                disabled={pwBusy()}
-                required
-              />
-            </div>
-            <Note note={pwMsg()} />
-            <div class="card-actions mt-1 justify-end border-t border-base-300 pt-3">
-              <button type="submit" class="btn btn-action btn-sm gap-1.5" disabled={pwBusy() || !current() || !next() || !!passwordError(next(), human()?.username)}>
-                <Show when={pwBusy()}><span class="loading loading-spinner loading-xs" /></Show>
-                <Save size={15} /> Change password
               </button>
             </div>
           </div>
@@ -203,6 +168,50 @@ export default function Profile() {
           </div>
         </div>
       </div>
+
+      <Drawer open={pwOpen()} onClose={() => setPwOpen(false)} title="Change password">
+        <form onSubmit={savePassword} class="flex min-h-full flex-col gap-3">
+          <div>
+            <label class="eyebrow mb-1.5 block" for="pw-current">Current password</label>
+            <input
+              id="pw-current"
+              type="password"
+              autocomplete="current-password"
+              class="input input-bordered w-full font-data"
+              value={current()}
+              onInput={(e) => setCurrent(e.currentTarget.value)}
+              disabled={pwBusy()}
+              required
+            />
+          </div>
+          <div>
+            <label class="eyebrow mb-1.5 block" for="pw-new">New password</label>
+            <PasswordField id="pw-new" value={next()} onInput={(v) => { setNext(v); setPwFieldError(null); }} username={human()?.username} disabled={pwBusy()} serverError={pwFieldError()} required generate />
+            <p class="mt-1 text-[11px] text-base-content/40">At least 12 characters, not a common password.</p>
+          </div>
+          <div>
+            <label class="eyebrow mb-1.5 block" for="pw-confirm">Confirm new password</label>
+            <input
+              id="pw-confirm"
+              type="password"
+              autocomplete="new-password"
+              class="input input-bordered w-full font-data"
+              value={confirm()}
+              onInput={(e) => setConfirm(e.currentTarget.value)}
+              disabled={pwBusy()}
+              required
+            />
+          </div>
+          <Note note={pwMsg()} />
+          <DrawerFooter>
+            <button type="button" class="btn btn-quiet btn-sm gap-1.5" onClick={() => setPwOpen(false)} disabled={pwBusy()}><X size={15} /> Cancel</button>
+            <button type="submit" class="btn btn-action btn-sm gap-1.5" disabled={pwBusy() || !current() || !next() || !!passwordError(next(), human()?.username)}>
+              <Show when={pwBusy()}><span class="loading loading-spinner loading-xs" /></Show>
+              <Save size={15} /> Change password
+            </button>
+          </DrawerFooter>
+        </form>
+      </Drawer>
     </section>
   );
 }
