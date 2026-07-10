@@ -11,28 +11,17 @@ import { ChevronRight, Check } from "./icons";
 // reveals the resolved value (audited decrypt + copy) and shows the full
 // hierarchy of how it won: the winning tier and the candidates it shadowed.
 
-// bandLabel names the owner tier a candidate comes from: the bare tier for a
-// global secret, "Tier: owner" for a scoped one.
-function bandLabel(r: ResolvedSecret): string {
-  if (r.owner_kind === "global") return "Global";
-  const tier = r.owner_kind.charAt(0).toUpperCase() + r.owner_kind.slice(1);
-  return r.owner_name ? `${tier}: ${r.owner_name}` : tier;
+// tierLabel is the short, fixed-width badge text for a candidate's tier. The
+// owner name is deliberately NOT in the badge (it is unbounded and would
+// overflow the row); it renders as separate, truncatable text.
+function tierLabel(r: ResolvedSecret): string {
+  return r.owner_kind === "global" ? "Global" : r.owner_kind.charAt(0).toUpperCase() + r.owner_kind.slice(1);
 }
 
-function fieldsInline(r: ResolvedSecret): JSX.Element {
-  return (
-    <span class="font-data text-xs">
-      <For each={r.fields}>
-        {(f, i) => (
-          <>
-            <Show when={i()}><span class="text-base-content/30">, </span></Show>
-            <span class="text-base-content/45">{f.name}</span>=<span>{f.value}</span>
-          </>
-        )}
-      </For>
-      <Show when={!r.fields.length}><span class="text-base-content/40">no fields</span></Show>
-    </span>
-  );
+// ownerText is the owning entity's name, or a word standing in for the global
+// singleton (which has no owner row).
+function ownerText(r: ResolvedSecret): string {
+  return r.owner_kind === "global" ? "estate-wide" : r.owner_name || r.owner_kind;
 }
 
 type Group = { name: string; winner: ResolvedSecret; shadowed: ResolvedSecret[] };
@@ -65,7 +54,7 @@ export default function EffectiveSecrets(props: { component: string; canReveal: 
     <div class="flex flex-col gap-2">
       <div class="flex items-baseline justify-between gap-2">
         <span class="eyebrow">Effective secrets</span>
-        <span class="text-[10.5px] text-base-content/40">resolved down the scope cascade</span>
+        <span class="shrink-0 text-[10.5px] text-base-content/40">resolved down the scope cascade</span>
       </div>
       <Show when={q.error}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{describeError(q.error)}</span></div>
@@ -78,15 +67,16 @@ export default function EffectiveSecrets(props: { component: string; canReveal: 
           <For each={groups()}>
             {(g, i) => (
               <button
-                class="flex w-full items-center gap-2.5 px-3 py-2 text-left hover:bg-base-content/5"
+                class="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-base-content/5"
                 classList={{ "border-t border-base-300": i() > 0 }}
                 onClick={() => setOpen(g)}
               >
-                <span class="font-data text-sm">{g.name}</span>
-                <span class="badge badge-ghost badge-sm">{g.winner.secret_type}</span>
+                <span class="min-w-0 truncate font-data text-sm">{g.name}</span>
+                <span class="badge badge-ghost badge-sm shrink-0">{g.winner.secret_type}</span>
                 <span class="flex-1" />
-                <span class="badge badge-primary badge-sm">{bandLabel(g.winner)}</span>
-                <ChevronRight size={14} />
+                <span class="hidden max-w-[10rem] truncate text-xs text-base-content/50 sm:inline">{ownerText(g.winner)}</span>
+                <span class="badge badge-primary badge-sm shrink-0">{tierLabel(g.winner)}</span>
+                <span class="shrink-0 text-base-content/40"><ChevronRight size={14} /></span>
               </button>
             )}
           </For>
@@ -105,29 +95,31 @@ export default function EffectiveSecrets(props: { component: string; canReveal: 
 // CascadeDetail is the blade body: the resolved (revealable) value on top, then
 // the hierarchy of how it won.
 function CascadeDetail(props: { group: Group; canReveal: boolean }): JSX.Element {
+  const w = () => props.group.winner;
   return (
     <div class="flex flex-col gap-5">
       <div class="flex flex-col gap-2">
         <div class="flex items-center gap-2">
           <span class="eyebrow">Resolved value</span>
-          <span class="badge badge-ghost badge-sm">{props.group.winner.secret_type}</span>
-          <span class="flex-1" />
-          <span class="badge badge-primary badge-sm">{bandLabel(props.group.winner)}</span>
+          <span class="badge badge-ghost badge-sm shrink-0">{w().secret_type}</span>
         </div>
-        <SecretFields secretId={props.group.winner.id} fields={props.group.winner.fields} canReveal={props.canReveal} />
+        <div class="flex items-center gap-2 text-sm">
+          <span class="badge badge-primary badge-sm shrink-0">{tierLabel(w())}</span>
+          <span class="min-w-0 truncate text-base-content/70">{ownerText(w())}</span>
+        </div>
+        <SecretFields secretId={w().id} fields={w().fields} canReveal={props.canReveal} />
       </div>
 
       <div class="flex flex-col gap-1.5">
         <span class="eyebrow">Cascade</span>
-        <p class="text-[11px] text-base-content/40">most-specific wins: component › system › location › global</p>
+        <p class="text-[11px] text-base-content/40">most-specific wins: component &rsaquo; system &rsaquo; location &rsaquo; global</p>
         <div class="overflow-hidden rounded-box border border-base-300">
-          <For each={[props.group.winner, ...props.group.shadowed]}>
+          <For each={[w(), ...props.group.shadowed]}>
             {(r, i) => (
               <div class="flex items-center gap-2 px-3 py-2" classList={{ "border-t border-base-300": i() > 0 }}>
-                <span class="badge badge-sm" classList={{ "badge-primary": r.winner, "badge-ghost": !r.winner }}>{bandLabel(r)}</span>
-                <span class="flex-1" />
-                <span classList={{ "line-through decoration-base-content/20 text-base-content/40": !r.winner, "text-base-content/70": r.winner }}>{fieldsInline(r)}</span>
-                <Show when={r.winner}><Check size={13} /></Show>
+                <span class="badge badge-sm shrink-0" classList={{ "badge-primary": r.winner, "badge-ghost": !r.winner }}>{tierLabel(r)}</span>
+                <span class="min-w-0 flex-1 truncate text-sm" classList={{ "text-base-content/40": !r.winner }}>{ownerText(r)}</span>
+                <Show when={r.winner}><span class="shrink-0 text-primary"><Check size={14} /></span></Show>
               </div>
             )}
           </For>

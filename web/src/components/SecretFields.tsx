@@ -51,12 +51,11 @@ export default function SecretFields(props: { secretId: string; fields: SecretFi
         <For each={props.fields}>
           {(f, i) => (
             <div class="flex items-center gap-2 px-3 py-2 text-sm" classList={{ "border-t border-base-300": i() > 0 }}>
-              <span class="font-data text-base-content/60">{f.name}</span>
-              <span class="flex-1" />
-              <span class="font-data" classList={{ "text-base-content/40": f.secret && !plain() }}>{shown(f)}</span>
+              <span class="shrink-0 font-data text-base-content/60">{f.name}</span>
+              <span class="min-w-0 flex-1 truncate text-right font-data" classList={{ "text-base-content/40": f.secret && !plain() }} title={plain() ? shown(f) : undefined}>{shown(f)}</span>
               <Show when={copyable(f)}>
                 <button
-                  class="btn btn-quiet btn-xs gap-1"
+                  class="btn btn-quiet btn-xs shrink-0 gap-1"
                   onClick={() => copy(f.name, shown(f))}
                   title={`Copy ${f.name}`}
                 >
