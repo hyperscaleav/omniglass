@@ -8,6 +8,7 @@ import { identityRegistry } from "../lib/identityBlades";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { handleError } from "../lib/validate";
+import { Plus } from "../components/icons";
 
 // Groups: the principal-group admin surface, a config over the shared FlatList. A
 // group holds role x scope grants that its members inherit, so an admin assigns
@@ -117,7 +118,7 @@ function CreateGroupForm(props: { onCreated: (g: Group) => void }) {
         <input class="input input-bordered w-full" value={description()} onInput={(e) => setDescription(e.currentTarget.value)} disabled={busy()} />
       </label>
       <div class="mt-1 flex justify-end">
-        <button type="submit" class="btn btn-action btn-sm" disabled={busy() || !name().trim() || !!handleError(name())}>{busy() ? "Creating..." : "Create group"}</button>
+        <button type="submit" class="btn btn-action btn-sm gap-1.5" disabled={busy() || !name().trim() || !!handleError(name())}><Plus size={15} /> {busy() ? "Creating..." : "Create group"}</button>
       </div>
     </form>
   );

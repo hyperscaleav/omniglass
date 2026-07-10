@@ -15,7 +15,7 @@ import { LOCATIONS_KEY, listLocations } from "../lib/locations";
 import { type Component as Comp, COMPONENTS_KEY, listComponents } from "../lib/components";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
-import { ArrowRight, ChevronRight } from "../components/icons";
+import { ArrowRight, ChevronRight, Pencil, Plus, Save, X } from "../components/icons";
 
 // Systems: the system inventory on the generic TreeList, the same shell as
 // Locations and Components. Systems form a tree (parent_id) and are placed at a
@@ -167,7 +167,7 @@ export default function Systems() {
           <span class="flex-1" />
           <button class="btn btn-sm gap-1.5" onClick={() => navigate(`/components?system=${encodeURIComponent(n.raw.name)}`)}>Components <ArrowRight size={14} /></button>
           <Show when={can(me.data, "system", "update")}>
-            <button class="btn btn-action btn-sm" onClick={() => ctx.openEdit(n)}>Edit</button>
+            <button class="btn btn-action btn-sm gap-1.5" onClick={() => ctx.openEdit(n)}><Pencil size={14} /> Edit</button>
           </Show>
         </div>
       </div>
@@ -245,8 +245,8 @@ export default function Systems() {
           </div>
         </Show>
         <div class="mt-1 flex justify-end gap-2">
-          <button type="button" class="btn btn-quiet btn-sm" onClick={p.close}>Cancel</button>
-          <button type="submit" class="btn btn-action btn-sm" disabled={busy()}>{editing ? "Save changes" : "Create system"}</button>
+          <button type="button" class="btn btn-quiet btn-sm gap-1.5" onClick={p.close}><X size={15} /> Cancel</button>
+          <button type="submit" class="btn btn-action btn-sm gap-1.5" disabled={busy()}>{editing ? <Save size={15} /> : <Plus size={15} />} {editing ? "Save changes" : "Create system"}</button>
         </div>
       </form>
     );

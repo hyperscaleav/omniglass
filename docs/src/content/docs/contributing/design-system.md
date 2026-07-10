@@ -70,14 +70,22 @@ shape (`btn-square`) still come from daisyUI.
 
 | Intent | Class | Use |
 |---|---|---|
-| Primary action | `btn-action` | the main action (Save, Create, Edit, New) |
+| Primary action | `btn-action` | the main action (Save, Create, Edit, New): filled |
 | Secondary / quiet | `btn-quiet` | Cancel, icon buttons, low-emphasis actions |
 | Destructive | `btn-danger` | revoke, delete |
 | State toggle | `btn-warn` / `btn-ok` | a reversible toggle that reads its state (Disable is a warning, Enable a success) |
 
+The **edit flow reads the same everywhere**: Edit is a filled `btn-action` with a pencil, Save is a
+filled `btn-action` with a disk icon, Cancel is a `btn-quiet` with an X. Create submits are
+`btn-action` with a plus. The icons come from the local `icons` set, so a control looks identical on
+every page.
+
 The intents are `@apply`-composed from daisyUI in `app.css`, so they inherit the active theme's
-tokens. A `style-guard` test scans the source and fails the build on a raw `btn-primary` /
-`btn-ghost`, so the vocabulary cannot drift back to one-off button styling.
+tokens. This is what makes **both themes** (`omniglass-dark` / `omniglass-light`) stay consistent
+without per-theme button rules: color lives in the tokens, not the markup. A `style-guard` test scans
+the source and fails the build on **any** raw daisyUI color/emphasis button class (`btn-primary`,
+`btn-ghost`, `btn-outline`, `btn-soft`, `btn-error`, `btn-success`, `btn-warning`, and the rest), so
+the vocabulary cannot drift back to one-off, theme-fragile button styling.
 
 ## Primitives (the reuse target)
 

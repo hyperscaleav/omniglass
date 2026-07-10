@@ -14,7 +14,7 @@ import { SYSTEMS_KEY, listSystems } from "../lib/systems";
 import { LOCATIONS_KEY, listLocations } from "../lib/locations";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
-import { ChevronRight } from "../components/icons";
+import { ChevronRight, Pencil, Plus, Save, X } from "../components/icons";
 
 // Components: the device inventory, the first page built on the generic TreeList.
 // Components form a tree (parent_id) and each is bound to a primary system and a
@@ -154,7 +154,7 @@ export default function Components() {
           </Show>
           <span class="flex-1" />
           <Show when={can(me.data, "component", "update")}>
-            <button class="btn btn-action btn-sm" onClick={() => ctx.openEdit(n)}>Edit</button>
+            <button class="btn btn-action btn-sm gap-1.5" onClick={() => ctx.openEdit(n)}><Pencil size={14} /> Edit</button>
           </Show>
         </div>
       </div>
@@ -250,8 +250,8 @@ export default function Components() {
           )}
         </Show>
         <div class="mt-1 flex justify-end gap-2">
-          <button type="button" class="btn btn-quiet btn-sm" onClick={p.close}>Cancel</button>
-          <button type="submit" class="btn btn-action btn-sm" disabled={busy()}>{editing ? "Save changes" : "Create component"}</button>
+          <button type="button" class="btn btn-quiet btn-sm gap-1.5" onClick={p.close}><X size={15} /> Cancel</button>
+          <button type="submit" class="btn btn-action btn-sm gap-1.5" disabled={busy()}>{editing ? <Save size={15} /> : <Plus size={15} />} {editing ? "Save changes" : "Create component"}</button>
         </div>
       </form>
     );

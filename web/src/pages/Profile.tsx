@@ -3,6 +3,7 @@ import Page from "../components/Page";
 import PasswordField from "../components/PasswordField";
 import { passwordError, isPasswordPolicyMessage } from "../lib/validate";
 import { useMe, useUpdateProfile, useChangePassword } from "../lib/auth";
+import { Save } from "../components/icons";
 
 // Profile is the signed-in operator's own account surface: edit your display name
 // and email, change your password, and (pedagogically) see the identity model you
@@ -116,9 +117,9 @@ export default function Profile() {
             </div>
             <Note note={profileMsg()} />
             <div class="card-actions">
-              <button type="submit" class="btn btn-action btn-sm" disabled={profileBusy()}>
+              <button type="submit" class="btn btn-action btn-sm gap-1.5" disabled={profileBusy()}>
                 <Show when={profileBusy()}><span class="loading loading-spinner loading-xs" /></Show>
-                Save profile
+                <Save size={15} /> Save profile
               </button>
             </div>
           </div>
@@ -161,9 +162,9 @@ export default function Profile() {
             </div>
             <Note note={pwMsg()} />
             <div class="card-actions">
-              <button type="submit" class="btn btn-action btn-sm" disabled={pwBusy() || !current() || !next() || !!passwordError(next(), human()?.username)}>
+              <button type="submit" class="btn btn-action btn-sm gap-1.5" disabled={pwBusy() || !current() || !next() || !!passwordError(next(), human()?.username)}>
                 <Show when={pwBusy()}><span class="loading loading-spinner loading-xs" /></Show>
-                Change password
+                <Save size={15} /> Change password
               </button>
             </div>
           </div>

@@ -16,7 +16,7 @@ import {
 } from "../lib/locations";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
-import { ChevronRight, Plus, resolveIcon } from "../components/icons";
+import { ChevronRight, Pencil, Plus, Save, X, resolveIcon } from "../components/icons";
 
 // Locations: the place tree on the generic TreeList (campuses, buildings, floors,
 // rooms). Replaces the standalone Locations page/new/detail trio with the same
@@ -237,7 +237,7 @@ export default function Locations() {
             <button class="btn btn-sm gap-1.5" onClick={() => ctx.openCreate(n)}><Plus size={14} /> Add child</button>
           </Show>
           <Show when={can(me.data, "location", "update")}>
-            <button class="btn btn-action btn-sm" onClick={() => ctx.openEdit(n)}>Edit</button>
+            <button class="btn btn-action btn-sm gap-1.5" onClick={() => ctx.openEdit(n)}><Pencil size={14} /> Edit</button>
           </Show>
         </div>
       </div>
@@ -304,8 +304,8 @@ export default function Locations() {
           </Show>
         </div>
         <div class="mt-1 flex justify-end gap-2">
-          <button type="button" class="btn btn-quiet btn-sm" onClick={p.close}>Cancel</button>
-          <button type="submit" class="btn btn-action btn-sm" disabled={busy() || locationTypes.isLoading}>{editing ? "Save changes" : "Create location"}</button>
+          <button type="button" class="btn btn-quiet btn-sm gap-1.5" onClick={p.close}><X size={15} /> Cancel</button>
+          <button type="submit" class="btn btn-action btn-sm gap-1.5" disabled={busy() || locationTypes.isLoading}>{editing ? <Save size={15} /> : <Plus size={15} />} {editing ? "Save changes" : "Create location"}</button>
         </div>
       </form>
     );

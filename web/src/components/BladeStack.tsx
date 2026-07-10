@@ -1,6 +1,6 @@
 import { type JSX, For, Show, createEffect, onCleanup } from "solid-js";
 import { Dynamic } from "solid-js/web";
-import { Ban, Check, ChevronLeft, MoreHorizontal, Pencil, RotateCcw, Trash, X } from "./icons";
+import { Ban, ChevronLeft, MoreHorizontal, Pencil, RotateCcw, Save, Trash, X } from "./icons";
 import { type BladeController, type BladeDef, BladeEditContext, createEditSlot } from "../lib/blades";
 
 // BladeStack: the Azure-style right-hand blade stack, lifted out of TreeList so
@@ -125,8 +125,8 @@ export default function BladeStack(props: {
                         <Show when={edit.destructive()}>
                           {(dst) => (
                             <button
-                              class="btn btn-sm btn-soft gap-1.5"
-                              classList={{ "btn-error": dst().tone !== "warn" && dst().tone !== "ok", "btn-warning": dst().tone === "warn", "btn-success": dst().tone === "ok" }}
+                              class="btn btn-sm gap-1.5"
+                              classList={{ "btn-danger": dst().tone !== "warn" && dst().tone !== "ok", "btn-warn": dst().tone === "warn", "btn-ok": dst().tone === "ok" }}
                               onClick={() => dst().onClick()}
                             >
                               {dst().tone === "warn" ? <Ban size={14} /> : dst().tone === "ok" ? <RotateCcw size={14} /> : <Trash size={14} />}
@@ -149,7 +149,7 @@ export default function BladeStack(props: {
                             <Show
                               when={edit.editing()}
                               fallback={
-                                <button class="btn btn-quiet btn-sm gap-1.5 text-primary" aria-label="Edit" onClick={() => edit.begin()}>
+                                <button class="btn btn-action btn-sm gap-1.5" aria-label="Edit" onClick={() => edit.begin()}>
                                   <Pencil size={15} /> Edit
                                 </button>
                               }
@@ -158,7 +158,7 @@ export default function BladeStack(props: {
                                 <X size={15} /> Cancel
                               </button>
                               <button class="btn btn-action btn-sm gap-1.5" onClick={() => { edit.save().catch(() => {}); }} disabled={edit.saving() || !edit.valid()}>
-                                <Show when={edit.saving()} fallback={<Check size={15} />}><span class="loading loading-spinner loading-xs" /></Show>
+                                <Show when={edit.saving()} fallback={<Save size={15} />}><span class="loading loading-spinner loading-xs" /></Show>
                                 Save
                               </button>
                             </Show>

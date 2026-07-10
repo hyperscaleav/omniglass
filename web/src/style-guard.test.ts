@@ -7,7 +7,14 @@ import { describe, it, expect } from "vitest";
 // btn-square) are fine; only the raw intent classes are banned.
 const files = import.meta.glob("./**/*.tsx", { query: "?raw", import: "default", eager: true }) as Record<string, string>;
 
-const BANNED = ["btn-primary", "btn-ghost"];
+// Every raw daisyUI color/emphasis button class is banned: a button carries an
+// intent class (btn-action / btn-quiet / btn-danger / btn-warn / btn-ok) so the
+// vocabulary is unified and both themes restyle from one place. A raw color class
+// (btn-error, btn-soft, ...) is exactly what renders inconsistently across themes.
+const BANNED = [
+  "btn-primary", "btn-secondary", "btn-accent", "btn-info", "btn-success",
+  "btn-warning", "btn-error", "btn-neutral", "btn-ghost", "btn-outline", "btn-soft",
+];
 
 describe("button vocabulary", () => {
   it("uses semantic intent classes, not raw daisyUI button colors", () => {

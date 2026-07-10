@@ -107,6 +107,7 @@
      .btn-warn / .btn-ok  ghost + state color  a reversible state toggle
        (Disable is a warning, Enable a success), so the toggle reads its state.
    Add `btn-square` for an icon-only button; compose a size modifier as needed. */
+:root { --og-on-primary: #04201d; }
 @layer components {
   .btn-action { @apply btn-primary; }
   .btn-quiet  { @apply btn-ghost; }
@@ -114,6 +115,14 @@
   .btn-warn   { @apply btn-ghost text-warning; }
   .btn-ok     { @apply btn-ghost text-success; }
 }
+
+/* On the teal-filled primary button the readable foreground is a DARK teal in both
+   themes: white fails WCAG on the bright teal (1.8:1 dark, 3.2:1 light) while this
+   dark ink reads 8.3:1 (dark) and 5.4:1 (light). daisyUI 5 otherwise lets the filled
+   button inherit the near-white base-content. Kept UNLAYERED on purpose: daisyUI's
+   own `.btn` color sits in the `daisyui` layer, which sorts after `components`, so a
+   layered override would lose; unlayered beats every layered rule. */
+.btn-action { --btn-fg: var(--og-on-primary); color: var(--og-on-primary); }
 
 /* type system: IBM Plex Sans for UI, JetBrains Mono for data/IDs/counts. */
 :root {
