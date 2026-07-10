@@ -146,6 +146,13 @@ func TestSecretAPI(t *testing.T) {
 		t.Errorf("revealed community = %q, want codec-community", revealed.Fields["community"])
 	}
 
+	// Update the value; the re-sealed field reveals the new plaintext.
+	c.do(ownerTok, http.MethodPatch, "/secrets/"+compPollID, map[string]any{"fields": map[string]string{"community": "rotated-ro"}}, http.StatusOK)
+	json.Unmarshal(c.do(ownerTok, http.MethodPost, "/secrets/"+compPollID+":reveal", nil, http.StatusOK), &revealed)
+	if revealed.Fields["community"] != "rotated-ro" {
+		t.Errorf("revealed community after update = %q, want rotated-ro", revealed.Fields["community"])
+	}
+
 	// A component-scoped viewer: may read the cascade, forbidden to create, to
 	// list the all-scope directory, or to reveal (secret:reveal is not on the
 	// *:read floor).
@@ -156,6 +163,7 @@ func TestSecretAPI(t *testing.T) {
 	c.do(viewerTok, http.MethodPost, "/secrets", secretReq("nope", "component", "codec-1", "x"), http.StatusForbidden)
 	c.do(viewerTok, http.MethodGet, "/secrets", nil, http.StatusForbidden)
 	c.do(viewerTok, http.MethodPost, "/secrets/"+compPollID+":reveal", nil, http.StatusForbidden)
+	c.do(viewerTok, http.MethodPatch, "/secrets/"+compPollID, map[string]any{"fields": map[string]string{"community": "x"}}, http.StatusForbidden)
 }
 
 func secretReq(name, ownerKind, owner, community string) map[string]any {

@@ -1065,6 +1065,27 @@ func generatedCommands() []*cobra.Command {
 			}
 			return cmd
 		}())
+		parent.AddCommand(func() *cobra.Command {
+			var fFields string
+			cmd := &cobra.Command{
+				Use:     "update <id>",
+				Short:   "Update a secret's field values",
+				Long:    "Replaces the given field values on a secret, re-sealing secret fields. Only values change; name, type, and owner are fixed at creation. An omitted field keeps its value. Gated by secret:update.",
+				Example: "  omniglass secret update <id> --fields fields",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/secrets/%s", url.PathEscape(args[0]))
+					body := map[string]any{}
+					if cmd.Flags().Changed("fields") {
+						body["fields"] = fFields
+					}
+					return runAPICommand(cmd, "PATCH", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fFields, "fields", "", "The field values to replace; an omitted field keeps its value")
+			_ = cmd.MarkFlagRequired("fields")
+			return cmd
+		}())
 		roots = append(roots, parent)
 	}
 	{

@@ -106,6 +106,13 @@ type secretIDInput struct {
 	ID string `path:"id" doc:"The secret's id"`
 }
 
+type updateSecretInput struct {
+	ID   string `path:"id" doc:"The secret's id"`
+	Body struct {
+		Fields map[string]string `json:"fields" doc:"The field values to replace; an omitted field keeps its value"`
+	}
+}
+
 type revealSecretOutput struct {
 	Body struct {
 		Fields map[string]string `json:"fields" doc:"The decrypted field values, keyed by field name"`
@@ -187,6 +194,22 @@ func registerSecretRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 			OwnerName:  in.Body.Owner,
 			Fields:     in.Body.Fields,
 		}, a.scopeFor(ctx, "secret", "create"))
+		if err != nil {
+			return nil, mapSecretErr(err)
+		}
+		return &secretOutput{Body: toSecretBody(s)}, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "update-secret",
+		Method:      http.MethodPatch,
+		Path:        "/secrets/{id}",
+		Summary:     "Update a secret's field values",
+		Description: "Replaces the given field values on a secret, re-sealing secret fields. Only values change; name, type, and owner are fixed at creation. An omitted field keeps its value. Gated by secret:update.",
+		Middlewares: huma.Middlewares{a.authn, a.require("secret", "update")},
+	}, func(ctx context.Context, in *updateSecretInput) (*secretOutput, error) {
+		s, err := gw.UpdateSecret(ctx, actorID(ctx), in.ID, in.Body.Fields,
+			a.scopeFor(ctx, "secret", "read"), a.scopeFor(ctx, "secret", "update"))
 		if err != nil {
 			return nil, mapSecretErr(err)
 		}

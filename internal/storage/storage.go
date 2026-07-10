@@ -180,6 +180,7 @@ type Gateway interface {
 	GetSecretType(ctx context.Context, id string) (*SecretType, error)
 	ListSecrets(ctx context.Context, read scope.Set) ([]Secret, error)
 	CreateSecret(ctx context.Context, actorID string, spec SecretSpec, create scope.Set) (*Secret, error)
+	UpdateSecret(ctx context.Context, actorID, id string, fields map[string]string, read, action scope.Set) (*Secret, error)
 	DeleteSecret(ctx context.Context, actorID, id string, read, action scope.Set) error
 	RevealSecret(ctx context.Context, actorID, id string, read, action scope.Set) (map[string]string, error)
 	ResolveSecrets(ctx context.Context, componentID string, read scope.Set) ([]ResolvedSecret, error)

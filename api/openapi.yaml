@@ -1345,6 +1345,24 @@ components:
           pattern: ^[a-z0-9][a-z0-9._-]*$
           type: string
       type: object
+    UpdateSecretInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/UpdateSecretInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        fields:
+          additionalProperties:
+            type: string
+          description: The field values to replace; an omitted field keeps its value
+          type: object
+      required:
+        - fields
+      type: object
     UpdateSystemInputBody:
       additionalProperties: false
       properties:
@@ -2596,6 +2614,37 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Delete a secret
+    patch:
+      description: Replaces the given field values on a secret, re-sealing secret fields. Only values change; name, type, and owner are fixed at creation. An omitted field keeps its value. Gated by secret:update.
+      operationId: update-secret
+      parameters:
+        - description: The secret's id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The secret's id
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSecretInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SecretBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Update a secret's field values
   /secrets/{id}:reveal:
     post:
       description: "Decrypts and returns a secret's field values, auditing the decrypt. Sensitive: gated by secret:reveal, which the viewer read floor does not carry, so only admin (secret:*) and owner may reveal."

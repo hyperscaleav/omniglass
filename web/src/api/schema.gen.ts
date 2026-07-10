@@ -741,7 +741,11 @@ export interface paths {
         delete: operations["delete-secret"];
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Update a secret's field values
+         * @description Replaces the given field values on a secret, re-sealing secret fields. Only values change; name, type, and owner are fixed at creation. An omitted field keeps its value. Gated by secret:update.
+         */
+        patch: operations["update-secret"];
         trace?: never;
     };
     "/secrets/{id}:reveal": {
@@ -1517,6 +1521,18 @@ export interface components {
             email?: string;
             /** @description Sign-in name (lowercase letters, digits, and . _ -); renaming is safe */
             username?: string;
+        };
+        UpdateSecretInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/UpdateSecretInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The field values to replace; an omitted field keeps its value */
+            fields: {
+                [key: string]: string;
+            };
         };
         UpdateSystemInputBody: {
             /**
@@ -3142,6 +3158,42 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "update-secret": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The secret's id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSecretInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretBody"];
+                };
             };
             /** @description Error */
             default: {

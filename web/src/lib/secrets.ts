@@ -84,6 +84,14 @@ export async function createSecret(body: CreateSecret): Promise<Secret> {
   return data as Secret;
 }
 
+// updateSecret replaces the given field values (an omitted field keeps its
+// value); name, type, and owner are fixed at creation.
+export async function updateSecret(id: string, fields: Record<string, string>): Promise<Secret> {
+  const { data, error } = await api.PATCH("/secrets/{id}", { params: { path: { id } }, body: { fields } });
+  if (error) throw error;
+  return data as Secret;
+}
+
 export async function deleteSecret(id: string): Promise<void> {
   const { error } = await api.DELETE("/secrets/{id}", { params: { path: { id } } });
   if (error) throw error;

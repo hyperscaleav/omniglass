@@ -287,6 +287,58 @@ func (p *PG) DeleteSecret(ctx context.Context, actorID, id string, read, action 
 	return nil
 }
 
+// UpdateSecret replaces the given field values on a secret, re-sealing any
+// secret fields, audited. Only field values change; name, type, and owner are
+// fixed at creation. A partial map merges over the stored value, so an omitted
+// field keeps its value (a secret field left blank stays as it was). Requires the
+// owner within the action scope; an unknown or out-of-scope id is
+// ErrSecretNotFound.
+func (p *PG) UpdateSecret(ctx context.Context, actorID, id string, fields map[string]string, read, action scope.Set) (*Secret, error) {
+	if p.secret == nil {
+		return nil, ErrNoSecretProvider
+	}
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("storage: begin update secret: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	row, shape, err := p.secretRowForAction(ctx, tx, id, read, action)
+	if err != nil {
+		return nil, err
+	}
+	if err := shape.ValidateInput(fields); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrSecretFieldInvalid, err)
+	}
+	// Seal the provided fields (same owner|name|field AAD) and merge over the
+	// stored value, so the untouched fields are preserved.
+	sealed, err := p.sealFields(ctx, shape, row.ownerKind, row.ownerID, row.name, fields)
+	if err != nil {
+		return nil, err
+	}
+	for k, v := range sealed {
+		row.value[k] = v
+	}
+	valueJSON, err := json.Marshal(row.value)
+	if err != nil {
+		return nil, fmt.Errorf("storage: marshal secret value: %w", err)
+	}
+	s, err := scanSecretRow(tx.QueryRow(ctx, `
+		update secret set value = $2, updated_at = now()
+		where id = $1
+		returning `+secretCols, id, valueJSON), shape)
+	if err != nil {
+		return nil, mapSecretWriteErr(err)
+	}
+	if err := writeAuditRes(ctx, tx, actorID, "update", "secret", s.ID, nil, auditSecret(s)); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("storage: commit update secret: %w", err)
+	}
+	return s, nil
+}
+
 // RevealSecret decrypts a secret's fields and returns their plaintext, auditing
 // the decrypt. This is the real-crypto read path: secret fields are unsealed
 // through the provider (the (owner, name, field) AAD must match), non-secret

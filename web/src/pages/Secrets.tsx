@@ -1,4 +1,4 @@
-import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
+import { For, Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import TreeSelect from "../components/TreeSelect";
@@ -12,6 +12,7 @@ import {
   listSecrets,
   listSecretTypes,
   createSecret,
+  updateSecret,
   deleteSecret,
 } from "../lib/secrets";
 import { SYSTEMS_KEY, listSystems } from "../lib/systems";
@@ -119,6 +120,17 @@ function SecretBladeBody(p: { id: string }): JSX.Element {
   const edit = useBladeEdit();
   const secret = useSecretById(p.id);
   const [err, setErr] = createSignal<string | null>(null);
+  // The edit inputs, one per field. Non-secret fields seed with their current
+  // value; secret fields start blank (masked), so a blank one is left unchanged.
+  const [inputs, setInputs] = createSignal<Record<string, string>>({});
+
+  createEffect(on(edit.editing, (editing) => {
+    if (!editing) return;
+    const seed: Record<string, string> = {};
+    for (const f of secret()?.fields ?? []) seed[f.name] = f.secret ? "" : f.value;
+    setInputs(seed);
+    setErr(null);
+  }));
 
   async function removeSecret() {
     const s = secret();
@@ -134,9 +146,31 @@ function SecretBladeBody(p: { id: string }): JSX.Element {
     }
   }
 
-  // Register the footer action rail: Delete is the one destructive action (no
-  // edit save, so the blade stays read-only with no pencil).
+  async function save() {
+    const s = secret();
+    if (!s) return;
+    // Send only the fields the operator filled; a blank secret field is left
+    // unchanged (the server merges over the stored value).
+    const fields: Record<string, string> = {};
+    for (const [k, v] of Object.entries(inputs())) if (v !== "") fields[k] = v;
+    setErr(null);
+    try {
+      await updateSecret(s.id, fields);
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: SECRETS_KEY }),
+        qc.invalidateQueries({ queryKey: ["effective-secrets"] }),
+      ]);
+    } catch (e) {
+      setErr(describeError(e));
+      throw e; // keep the blade in edit mode on failure
+    }
+  }
+
+  // The footer action rail: Edit (pencil -> inline field edit -> Save/Cancel) for
+  // secret:update, and Delete as the destructive action.
   edit.bind({
+    editable: () => !!secret() && can(me.data, "secret", "update"),
+    save,
     destructive: () => (secret() && can(me.data, "secret", "delete") ? { label: "Delete secret", tone: "danger", onClick: removeSecret } : undefined),
   });
 
@@ -153,7 +187,26 @@ function SecretBladeBody(p: { id: string }): JSX.Element {
           </div>
           <div class="flex flex-col gap-1.5">
             <span class="eyebrow">Fields</span>
-            <SecretFields secretId={s().id} fields={s().fields} canReveal={can(me.data, "secret", "reveal")} />
+            <Show
+              when={edit.editing()}
+              fallback={<SecretFields secretId={s().id} fields={s().fields} canReveal={can(me.data, "secret", "reveal")} />}
+            >
+              <div class="flex flex-col gap-3">
+                <For each={s().fields}>
+                  {(f) => (
+                    <Field label={f.name} hint={f.secret ? "Leave blank to keep the current value." : undefined}>
+                      <input
+                        class="input input-bordered w-full font-data"
+                        type={f.secret ? "password" : "text"}
+                        placeholder={f.secret ? "••••••" : undefined}
+                        value={inputs()[f.name] ?? ""}
+                        onInput={(e) => setInputs({ ...inputs(), [f.name]: e.currentTarget.value })}
+                      />
+                    </Field>
+                  )}
+                </For>
+              </div>
+            </Show>
           </div>
         </div>
       )}
