@@ -68,9 +68,13 @@ export default function SecretFields(props: { secretId: string; fields: SecretFi
           )}
         </For>
       </div>
-      <Show when={props.canReveal && !plain() && props.fields.some((f) => f.secret)}>
-        <button class="btn btn-quiet btn-sm w-fit gap-1.5" onClick={reveal} disabled={busy()}>
-          <Eye size={14} /> {busy() ? "Revealing…" : "Reveal secret values"}
+      <Show when={props.canReveal && props.fields.some((f) => f.secret)}>
+        <button
+          class="btn btn-quiet btn-sm w-fit gap-1.5"
+          onClick={() => (plain() ? setPlain(null) : reveal())}
+          disabled={busy()}
+        >
+          <Eye size={14} /> {busy() ? "Revealing…" : plain() ? "Hide secret values" : "Reveal secret values"}
         </button>
       </Show>
       <span class="text-[11px] text-base-content/40">
