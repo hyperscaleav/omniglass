@@ -15,7 +15,7 @@ import {
   ChevronDown, ChevronsDownUp, ChevronsUpDown, Columns, Check, ListTree, Rows, Maximize, Plus, Pencil, Trash,
 } from "./icons";
 import BladeStack from "./BladeStack";
-import { type BladeDef, createBladeController } from "../lib/blades";
+import { type BladeDef, type BladeRef, createBladeController } from "../lib/blades";
 
 // TreeList: the one config-driven tree-list body (composing ListShell), the inventory shell. Every entity page (Components,
 // Systems, Locations) is a config over this, never a fork. It owns the filter
@@ -80,6 +80,10 @@ export type ListCtx<N extends ListNode> = {
   parentOf: (n: N) => N | undefined;
   byId: (id: string) => N | undefined;
   pushBlade: (n: N) => void;
+  // Push an arbitrary blade (a kind registered via ListConfig.extraBlades) onto
+  // the shared stack, so a detail body can open a non-node blade that nests in
+  // the same stack rather than a separate overlay (which a higher-z blade hides).
+  openBlade: (ref: BladeRef) => void;
   popBlade: () => void;
   closeBlades: () => void;
   setFullPage: (n: N | null) => void;
@@ -111,6 +115,10 @@ export interface ListConfig<N extends ListNode> {
   leadIcon?: (n: N) => JSX.Element;
   canAddChild?: (n: N) => boolean;
   renderDetail: (n: N, ctx: ListCtx<N>) => JSX.Element;
+  // Extra blade kinds this page's detail body can open on the shared stack (via
+  // ctx.openBlade), keyed by kind, alongside the page's own entity blade. Used by
+  // Components to open a secret's cascade as a nested blade.
+  extraBlades?: Record<string, BladeDef>;
   FormBody: Component<{ form: FormState<N>; close: () => void; ctx: ListCtx<N> }>;
   onOpenNode?: (n: N) => void;
   onBack?: () => void;
@@ -296,6 +304,7 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
     parentOf: (n: N) => index().parentOf.get(n.id),
     byId: (id: string) => index().byId.get(id),
     pushBlade,
+    openBlade: (ref: BladeRef) => blades.push(ref),
     popBlade,
     closeBlades,
     setFullPage: (n: N | null) => showFull(n),
@@ -311,6 +320,7 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
   // title is the node display; the body is renderDetail in blade context (drills by
   // pushing a child blade); Maximize promotes the blade to the addressable full page.
   const bladeRegistry: Record<string, BladeDef> = {
+    ...(cfg.extraBlades ?? {}),
     [cfg.entity.name]: {
       Title: (p) => <>{index().byId.get(p.id)?.display}</>,
       Body: (p) => <Show when={index().byId.get(p.id)}>{(n) => cfg.renderDetail(n(), ctxBlade)}</Show>,
