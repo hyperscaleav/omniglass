@@ -120,7 +120,7 @@ export default function BladeStack(props: {
                         secondary actions fold into a kebab; Edit / Save / Cancel is the
                         right cluster. Rendered only when the body registers an action, so
                         a read-only blade (a role) has no bar. */}
-                    <Show when={edit.editable() || !!edit.destructive() || edit.secondary().length > 0}>
+                    <Show when={edit.editable() || !!edit.destructive() || edit.secondary().length > 0 || !!edit.primary()}>
                       <footer class="flex flex-none items-center gap-2 border-t border-base-300 bg-base-100 px-4 py-3" classList={{ "pointer-events-none opacity-55": !isTop() }}>
                         <Show when={edit.destructive()}>
                           {(dst) => (
@@ -144,6 +144,13 @@ export default function BladeStack(props: {
                                 <For each={edit.secondary()}>{(s) => <li><button class="flex items-center gap-2.5" classList={{ "text-error": s.tone === "danger" }} onClick={() => s.onClick()}>{s.icon}{s.label}</button></li>}</For>
                               </ul>
                             </div>
+                          </Show>
+                          <Show when={!edit.editing() && edit.primary()}>
+                            {(pr) => (
+                              <button class="btn btn-action btn-sm gap-1.5" onClick={() => pr().onClick()}>
+                                {pr().icon}{pr().label}
+                              </button>
+                            )}
                           </Show>
                           <Show when={edit.editable()}>
                             <Show

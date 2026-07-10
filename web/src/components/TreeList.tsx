@@ -15,7 +15,7 @@ import {
   ChevronDown, ChevronsDownUp, ChevronsUpDown, Columns, Check, ListTree, Rows, Maximize, Plus, Pencil, Trash,
 } from "./icons";
 import BladeStack from "./BladeStack";
-import { type BladeDef, type BladeRef, createBladeController } from "../lib/blades";
+import { type BladeDef, type BladeRef, createBladeController, useBladeEdit } from "../lib/blades";
 
 // TreeList: the one config-driven tree-list body (composing ListShell), the inventory shell. Every entity page (Components,
 // Systems, Locations) is a config over this, never a fork. It owns the filter
@@ -316,6 +316,32 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
   const ctxFull: ListCtx<N> = { ...baseCtx, full: true, go: openFull };
   const ctxBlade: ListCtx<N> = { ...baseCtx, full: false, go: pushBlade };
 
+  // The entity blade body: renderDetail in blade context, plus the footer action
+  // rail. Delete and Edit register on the shared BladeStack footer (pinned to the
+  // blade bottom, like the identity blades) rather than an inline bar that scrolls
+  // with the body; the page's detail() renders its inline bar only on the full
+  // page (ctx.full). Gated per row by the server's scope-aware actions, and Edit
+  // opens the form Drawer (the inventory edit flow, not the inline-pencil model).
+  const EntityBladeBody = (p: { id: string }) => {
+    const edit = useBladeEdit();
+    const node = () => index().byId.get(p.id);
+    edit.bind({
+      destructive: () => {
+        const n = node();
+        return n && cfg.onDelete && rowAllow(n, "delete")
+          ? { label: "Delete", tone: "danger" as const, onClick: () => cfg.onDelete!(n, ctxBlade) }
+          : undefined;
+      },
+      primary: () => {
+        const n = node();
+        return n && rowAllow(n, "update")
+          ? { label: "Edit", icon: <Pencil size={15} />, onClick: () => ctxBlade.openEdit(n) }
+          : undefined;
+      },
+    });
+    return <Show when={node()}>{(n) => cfg.renderDetail(n(), ctxBlade)}</Show>;
+  };
+
   // Single-kind registry for the shared BladeStack: this page's own entity. The
   // title is the node display; the body is renderDetail in blade context (drills by
   // pushing a child blade); Maximize promotes the blade to the addressable full page.
@@ -323,7 +349,7 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
     ...(cfg.extraBlades ?? {}),
     [cfg.entity.name]: {
       Title: (p) => <>{index().byId.get(p.id)?.display}</>,
-      Body: (p) => <Show when={index().byId.get(p.id)}>{(n) => cfg.renderDetail(n(), ctxBlade)}</Show>,
+      Body: (p) => <EntityBladeBody id={p.id} />,
       headerExtra: (p) => (
         <Show when={index().byId.get(p.id)}>
           {(n) => (

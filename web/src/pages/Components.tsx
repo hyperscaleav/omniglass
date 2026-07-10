@@ -155,15 +155,17 @@ export default function Components() {
             onOpen={(secretName) => ctx.openBlade({ kind: "secret-cascade", id: cascadeBladeId(n.raw.name, secretName) })}
           />
         </Show>
-        <div class="flex items-center gap-2 border-t border-base-300 pt-4">
-          <Show when={can(me.data, "component", "delete")}>
-            <button class="btn btn-danger btn-sm gap-1.5" onClick={() => { ctx.closeBlades(); del(n); }}>Delete</button>
-          </Show>
-          <span class="flex-1" />
-          <Show when={can(me.data, "component", "update")}>
-            <button class="btn btn-action btn-sm" onClick={() => ctx.openEdit(n)}>Edit</button>
-          </Show>
-        </div>
+        <Show when={ctx.full}>
+          <div class="flex items-center gap-2 border-t border-base-300 pt-4">
+            <Show when={can(me.data, "component", "delete")}>
+              <button class="btn btn-danger btn-sm gap-1.5" onClick={() => { ctx.closeBlades(); del(n); }}>Delete</button>
+            </Show>
+            <span class="flex-1" />
+            <Show when={can(me.data, "component", "update")}>
+              <button class="btn btn-action btn-sm" onClick={() => ctx.openEdit(n)}>Edit</button>
+            </Show>
+          </div>
+        </Show>
       </div>
     );
   }

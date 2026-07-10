@@ -161,12 +161,12 @@ export default function Systems() {
           </Show>
         </div>
         <div class="flex flex-wrap items-center gap-2 border-t border-base-300 pt-4">
-          <Show when={can(me.data, "system", "delete")}>
+          <Show when={ctx.full && can(me.data, "system", "delete")}>
             <button class="btn btn-danger btn-sm" onClick={() => { ctx.closeBlades(); del(n); }}>Delete</button>
           </Show>
           <span class="flex-1" />
           <button class="btn btn-sm gap-1.5" onClick={() => navigate(`/components?system=${encodeURIComponent(n.raw.name)}`)}>Components <ArrowRight size={14} /></button>
-          <Show when={can(me.data, "system", "update")}>
+          <Show when={ctx.full && can(me.data, "system", "update")}>
             <button class="btn btn-action btn-sm" onClick={() => ctx.openEdit(n)}>Edit</button>
           </Show>
         </div>
