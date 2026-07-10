@@ -125,14 +125,11 @@
    light); the dark ink reads 8.3:1. Kept UNLAYERED on purpose: daisyUI's own `.btn`
    color sits in the `daisyui` layer, which sorts after `components`, so a layered
    override would lose; unlayered beats every layered rule. */
-.btn-action {
+.btn-action:not(:disabled) {
   --btn-color: var(--og-primary-brand);
   --btn-fg: var(--og-on-primary);
   color: var(--og-on-primary);
 }
-/* On the light ground the bright fill needs a defined edge, so add a darker teal
-   rim (the light theme's own primary). Dark mode's dark ground already frames it. */
-[data-theme="omniglass-light"] .btn-action { border-color: var(--color-primary); }
 
 /* type system: IBM Plex Sans for UI, JetBrains Mono for data/IDs/counts. */
 :root {
