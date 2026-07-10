@@ -1973,12 +1973,12 @@ paths:
       description: Fetches one principal by id with its profile and grants. Gated by principal:read (all-scope).
       operationId: get-principal
       parameters:
-        - description: The principal's id (uuid)
+        - description: The principal, addressed by its uuid or a human username
           in: path
           name: id
           required: true
           schema:
-            description: The principal's id (uuid)
+            description: The principal, addressed by its uuid or a human username
             type: string
       responses:
         "200":
@@ -1998,12 +1998,12 @@ paths:
       description: "Updates a human principal's display name, email, and username. Gated by principal:update (all-scope). Renaming is safe: nothing keys on the username."
       operationId: update-principal
       parameters:
-        - description: The principal's id (uuid)
+        - description: The principal, addressed by its uuid or a human username
           in: path
           name: id
           required: true
           schema:
-            description: The principal's id (uuid)
+            description: The principal, addressed by its uuid or a human username
             type: string
       requestBody:
         content:
@@ -2030,12 +2030,12 @@ paths:
       description: Assigns a role at a scope to a principal. Gated by principal_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own (no promoting anyone, including yourself, to a higher tier such as owner). A duplicate is 409, an unknown role or bad scope 422.
       operationId: create-grant
       parameters:
-        - description: The principal's id (uuid)
+        - description: The principal, addressed by its uuid or a human username
           in: path
           name: id
           required: true
           schema:
-            description: The principal's id (uuid)
+            description: The principal, addressed by its uuid or a human username
             type: string
       requestBody:
         content:
@@ -2062,12 +2062,12 @@ paths:
       description: Removes one grant from a principal. Gated by principal_grant:delete (all-scope). The last owner grant cannot be revoked.
       operationId: revoke-grant
       parameters:
-        - description: The principal's id (uuid)
+        - description: The principal, addressed by its uuid or a human username
           in: path
           name: id
           required: true
           schema:
-            description: The principal's id (uuid)
+            description: The principal, addressed by its uuid or a human username
             type: string
         - description: The grant's id (uuid)
           in: path
@@ -2091,12 +2091,12 @@ paths:
       description: "Soft-deletes a principal: it is hidden from the directory, can no longer authenticate, and its rows stay intact, reversibly (restore) until purged. Gated by principal:archive (all-scope). The last active owner cannot be archived."
       operationId: archive-principal
       parameters:
-        - description: The principal's id (uuid)
+        - description: The principal, addressed by its uuid or a human username
           in: path
           name: id
           required: true
           schema:
-            description: The principal's id (uuid)
+            description: The principal, addressed by its uuid or a human username
             type: string
       responses:
         "204":
@@ -2113,12 +2113,12 @@ paths:
       description: Soft-disables a principal so it can no longer authenticate; its audit trail is kept. Gated by principal:update (all-scope). The last active owner cannot be disabled.
       operationId: disable-principal
       parameters:
-        - description: The principal's id (uuid)
+        - description: The principal, addressed by its uuid or a human username
           in: path
           name: id
           required: true
           schema:
-            description: The principal's id (uuid)
+            description: The principal, addressed by its uuid or a human username
             type: string
       responses:
         "204":
@@ -2135,12 +2135,12 @@ paths:
       description: Re-enables a disabled principal, restoring its ability to authenticate. Gated by principal:update (all-scope).
       operationId: enable-principal
       parameters:
-        - description: The principal's id (uuid)
+        - description: The principal, addressed by its uuid or a human username
           in: path
           name: id
           required: true
           schema:
-            description: The principal's id (uuid)
+            description: The principal, addressed by its uuid or a human username
             type: string
       responses:
         "204":
@@ -2157,12 +2157,12 @@ paths:
       description: Mints a bounded, revocable token to view as (read-only) or act as (full) the target. Gated by principal:impersonate (all-scope). Refused on self, on an owner target (owners are un-impersonatable by anyone), when it would grant a capability the caller lacks (the escalation guard), or from within an existing impersonation.
       operationId: impersonate-principal
       parameters:
-        - description: The principal to impersonate (uuid)
+        - description: The principal to impersonate, addressed by its uuid or a human username
           in: path
           name: id
           required: true
           schema:
-            description: The principal to impersonate (uuid)
+            description: The principal to impersonate, addressed by its uuid or a human username
             type: string
       requestBody:
         content:
@@ -2207,12 +2207,12 @@ paths:
       description: Hard-deletes an archived principal and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. Gated by principal:purge (admin-sensitive, all-scope), and the principal must be archived first.
       operationId: purge-principal
       parameters:
-        - description: The principal's id (uuid)
+        - description: The principal, addressed by its uuid or a human username
           in: path
           name: id
           required: true
           schema:
-            description: The principal's id (uuid)
+            description: The principal, addressed by its uuid or a human username
             type: string
       responses:
         "204":
@@ -2229,12 +2229,12 @@ paths:
       description: Sets a new password for another human principal (an administrator action; the target's current password is not required). Gated by principal:reset-password (all-scope). The new password must meet the password policy; a violation is a 422. Refused on yourself (change your own password from your profile, which verifies your current one), on an owner (owners cannot be reset by anyone), or when it would exceed the caller's own capabilities (the takeover guard, shared with impersonation). The action is audited with the administrator as the actor.
       operationId: reset-principal-password
       parameters:
-        - description: The principal's id (uuid)
+        - description: The principal, addressed by its uuid or a human username
           in: path
           name: id
           required: true
           schema:
-            description: The principal's id (uuid)
+            description: The principal, addressed by its uuid or a human username
             type: string
       requestBody:
         content:
@@ -2257,12 +2257,12 @@ paths:
       description: "Reverses an archive: the account is restored to active and can authenticate again. Gated by principal:archive (all-scope)."
       operationId: restore-principal
       parameters:
-        - description: The principal's id (uuid)
+        - description: The principal, addressed by its uuid or a human username
           in: path
           name: id
           required: true
           schema:
-            description: The principal's id (uuid)
+            description: The principal, addressed by its uuid or a human username
             type: string
       responses:
         "204":

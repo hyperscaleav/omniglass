@@ -24,6 +24,9 @@ func (UnimplementedGateway) IssueBearerCredential(context.Context, string, []byt
 func (UnimplementedGateway) AuthenticateBearer(context.Context, []byte) (*Principal, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) ResolvePrincipalRef(context.Context, string) (string, error) {
+	return "", nil
+}
 func (UnimplementedGateway) BeginImpersonation(context.Context, string, string, string, time.Duration) (string, *ImpersonationSession, error) {
 	return "", nil, nil
 }

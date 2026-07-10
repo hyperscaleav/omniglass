@@ -61,11 +61,11 @@ type listPrincipalsOutput struct {
 }
 
 type principalPathInput struct {
-	ID string `path:"id" doc:"The principal's id (uuid)"`
+	ID string `path:"id" doc:"The principal, addressed by its uuid or a human username"`
 }
 
 type resetPasswordInput struct {
-	ID   string `path:"id" doc:"The principal's id (uuid)"`
+	ID   string `path:"id" doc:"The principal, addressed by its uuid or a human username"`
 	Body struct {
 		Password string `json:"password" minLength:"12" maxLength:"256" doc:"The new password (at least 12 characters, not a common password, not containing the username)"`
 	}
@@ -85,7 +85,7 @@ type createPrincipalInput struct {
 }
 
 type updatePrincipalInput struct {
-	ID   string `path:"id" doc:"The principal's id (uuid)"`
+	ID   string `path:"id" doc:"The principal, addressed by its uuid or a human username"`
 	Body struct {
 		DisplayName *string `json:"display_name,omitempty" maxLength:"200" doc:"Display name; empty clears it"`
 		Email       *string `json:"email,omitempty" maxLength:"320" doc:"Email; empty clears it"`
@@ -94,7 +94,7 @@ type updatePrincipalInput struct {
 }
 
 type createGrantInput struct {
-	ID   string `path:"id" doc:"The principal's id (uuid)"`
+	ID   string `path:"id" doc:"The principal, addressed by its uuid or a human username"`
 	Body struct {
 		Role      string `json:"role" minLength:"1" doc:"A role id (viewer, operator, admin, owner, or a custom role)"`
 		ScopeKind string `json:"scope_kind" enum:"all,location,system,component,group" doc:"The scope kind; 'all' confers the whole estate"`
@@ -108,7 +108,7 @@ type grantOutput struct {
 }
 
 type revokeGrantInput struct {
-	ID      string `path:"id" doc:"The principal's id (uuid)"`
+	ID      string `path:"id" doc:"The principal, addressed by its uuid or a human username"`
 	GrantID string `path:"grantId" doc:"The grant's id (uuid)"`
 }
 
@@ -148,6 +148,11 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Description: "Fetches one principal by id with its profile and grants. Gated by principal:read (all-scope).",
 		Middlewares: huma.Middlewares{a.authn, a.require("principal", "read")},
 	}, func(ctx context.Context, in *principalPathInput) (*principalOutput, error) {
+		id, rerr := a.resolvePrincipalRef(ctx, in.ID)
+		if rerr != nil {
+			return nil, rerr
+		}
+		in.ID = id
 		pr, err := gw.GetPrincipal(ctx, in.ID, a.scopeFor(ctx, "principal", "read"))
 		if err != nil {
 			return nil, mapPrincipalErr(err)
@@ -194,6 +199,11 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Description: "Updates a human principal's display name, email, and username. Gated by principal:update (all-scope). Renaming is safe: nothing keys on the username.",
 		Middlewares: huma.Middlewares{a.authn, a.require("principal", "update")},
 	}, func(ctx context.Context, in *updatePrincipalInput) (*principalOutput, error) {
+		id, rerr := a.resolvePrincipalRef(ctx, in.ID)
+		if rerr != nil {
+			return nil, rerr
+		}
+		in.ID = id
 		pr, err := gw.UpdatePrincipalHuman(ctx, actorID(ctx), in.ID, storage.AdminHumanPatch{
 			DisplayName: in.Body.DisplayName,
 			Email:       in.Body.Email,
@@ -214,6 +224,11 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Description:   "Assigns a role at a scope to a principal. Gated by principal_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own (no promoting anyone, including yourself, to a higher tier such as owner). A duplicate is 409, an unknown role or bad scope 422.",
 		Middlewares:   huma.Middlewares{a.authn, a.require("principal_grant", "create")},
 	}, func(ctx context.Context, in *createGrantInput) (*grantOutput, error) {
+		id, rerr := a.resolvePrincipalRef(ctx, in.ID)
+		if rerr != nil {
+			return nil, rerr
+		}
+		in.ID = id
 		ok, err := a.grantCoverOK(ctx, in.Body.Role)
 		if err != nil {
 			return nil, err
@@ -239,6 +254,11 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Description:   "Removes one grant from a principal. Gated by principal_grant:delete (all-scope). The last owner grant cannot be revoked.",
 		Middlewares:   huma.Middlewares{a.authn, a.require("principal_grant", "delete")},
 	}, func(ctx context.Context, in *revokeGrantInput) (*struct{}, error) {
+		id, rerr := a.resolvePrincipalRef(ctx, in.ID)
+		if rerr != nil {
+			return nil, rerr
+		}
+		in.ID = id
 		if err := gw.RevokeGrant(ctx, actorID(ctx), in.ID, in.GrantID, a.scopeFor(ctx, "principal_grant", "delete")); err != nil {
 			return nil, mapPrincipalErr(err)
 		}
@@ -254,6 +274,11 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Description:   "Soft-disables a principal so it can no longer authenticate; its audit trail is kept. Gated by principal:update (all-scope). The last active owner cannot be disabled.",
 		Middlewares:   huma.Middlewares{a.authn, a.require("principal", "update")},
 	}, func(ctx context.Context, in *principalPathInput) (*struct{}, error) {
+		id, rerr := a.resolvePrincipalRef(ctx, in.ID)
+		if rerr != nil {
+			return nil, rerr
+		}
+		in.ID = id
 		if err := gw.SetPrincipalActive(ctx, actorID(ctx), in.ID, false, a.scopeFor(ctx, "principal", "update")); err != nil {
 			return nil, mapPrincipalErr(err)
 		}
@@ -269,6 +294,11 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Description:   "Re-enables a disabled principal, restoring its ability to authenticate. Gated by principal:update (all-scope).",
 		Middlewares:   huma.Middlewares{a.authn, a.require("principal", "update")},
 	}, func(ctx context.Context, in *principalPathInput) (*struct{}, error) {
+		id, rerr := a.resolvePrincipalRef(ctx, in.ID)
+		if rerr != nil {
+			return nil, rerr
+		}
+		in.ID = id
 		if err := gw.SetPrincipalActive(ctx, actorID(ctx), in.ID, true, a.scopeFor(ctx, "principal", "update")); err != nil {
 			return nil, mapPrincipalErr(err)
 		}
@@ -284,6 +314,11 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Description:   "Soft-deletes a principal: it is hidden from the directory, can no longer authenticate, and its rows stay intact, reversibly (restore) until purged. Gated by principal:archive (all-scope). The last active owner cannot be archived.",
 		Middlewares:   huma.Middlewares{a.authn, a.require("principal", "archive")},
 	}, func(ctx context.Context, in *principalPathInput) (*struct{}, error) {
+		id, rerr := a.resolvePrincipalRef(ctx, in.ID)
+		if rerr != nil {
+			return nil, rerr
+		}
+		in.ID = id
 		if err := gw.ArchivePrincipal(ctx, actorID(ctx), in.ID, a.scopeFor(ctx, "principal", "archive")); err != nil {
 			return nil, mapPrincipalErr(err)
 		}
@@ -299,6 +334,11 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Description:   "Reverses an archive: the account is restored to active and can authenticate again. Gated by principal:archive (all-scope).",
 		Middlewares:   huma.Middlewares{a.authn, a.require("principal", "archive")},
 	}, func(ctx context.Context, in *principalPathInput) (*struct{}, error) {
+		id, rerr := a.resolvePrincipalRef(ctx, in.ID)
+		if rerr != nil {
+			return nil, rerr
+		}
+		in.ID = id
 		if err := gw.RestorePrincipal(ctx, actorID(ctx), in.ID, a.scopeFor(ctx, "principal", "archive")); err != nil {
 			return nil, mapPrincipalErr(err)
 		}
@@ -314,6 +354,11 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Description:   "Hard-deletes an archived principal and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. Gated by principal:purge (admin-sensitive, all-scope), and the principal must be archived first.",
 		Middlewares:   huma.Middlewares{a.authn, a.require("principal", "purge", "admin")},
 	}, func(ctx context.Context, in *principalPathInput) (*struct{}, error) {
+		id, rerr := a.resolvePrincipalRef(ctx, in.ID)
+		if rerr != nil {
+			return nil, rerr
+		}
+		in.ID = id
 		if err := gw.PurgePrincipal(ctx, actorID(ctx), in.ID, a.scopeFor(ctx, "principal", "purge")); err != nil {
 			return nil, mapPrincipalErr(err)
 		}
@@ -329,6 +374,13 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Description:   "Sets a new password for another human principal (an administrator action; the target's current password is not required). Gated by principal:reset-password (all-scope). The new password must meet the password policy; a violation is a 422. Refused on yourself (change your own password from your profile, which verifies your current one), on an owner (owners cannot be reset by anyone), or when it would exceed the caller's own capabilities (the takeover guard, shared with impersonation). The action is audited with the administrator as the actor.",
 		Middlewares:   huma.Middlewares{a.authn, a.require("principal", "reset-password")},
 	}, func(ctx context.Context, in *resetPasswordInput) (*struct{}, error) {
+		// Resolve the target first so the self-check below catches addressing yourself
+		// by username as well as by uuid.
+		id, rerr := a.resolvePrincipalRef(ctx, in.ID)
+		if rerr != nil {
+			return nil, rerr
+		}
+		in.ID = id
 		// Self is refused: you change your own password from your profile (which
 		// verifies your current one). The admin reset skips that confirmation, so it is
 		// for other accounts only.
@@ -380,6 +432,22 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 
 // mapPrincipalErr translates the gateway's principal sentinels into HTTP status:
 // an unknown id 404, a non-all scope 403, a duplicate username 409.
+// resolvePrincipalRef maps a {id} path value (a uuid or a human username) to the
+// principal id, so every principal route accepts either. A uuid passes through; an
+// unknown username is a 404, the same as an unknown id. Handlers call it at the top
+// and use the returned id (including before any self-check, so addressing yourself by
+// username is caught).
+func (a *authenticator) resolvePrincipalRef(ctx context.Context, ref string) (string, error) {
+	id, err := a.gw.ResolvePrincipalRef(ctx, ref)
+	switch {
+	case errors.Is(err, storage.ErrPrincipalNotFound):
+		return "", huma.Error404NotFound("principal not found")
+	case err != nil:
+		return "", huma.Error500InternalServerError("resolve principal")
+	}
+	return id, nil
+}
+
 func mapPrincipalErr(err error) error {
 	switch {
 	case errors.Is(err, storage.ErrPrincipalNotFound):

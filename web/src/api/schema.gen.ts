@@ -2439,7 +2439,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The principal's id (uuid) */
+                /** @description The principal, addressed by its uuid or a human username */
                 id: string;
             };
             cookie?: never;
@@ -2471,7 +2471,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The principal's id (uuid) */
+                /** @description The principal, addressed by its uuid or a human username */
                 id: string;
             };
             cookie?: never;
@@ -2507,7 +2507,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The principal's id (uuid) */
+                /** @description The principal, addressed by its uuid or a human username */
                 id: string;
             };
             cookie?: never;
@@ -2543,7 +2543,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The principal's id (uuid) */
+                /** @description The principal, addressed by its uuid or a human username */
                 id: string;
                 /** @description The grant's id (uuid) */
                 grantId: string;
@@ -2575,7 +2575,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The principal's id (uuid) */
+                /** @description The principal, addressed by its uuid or a human username */
                 id: string;
             };
             cookie?: never;
@@ -2605,7 +2605,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The principal's id (uuid) */
+                /** @description The principal, addressed by its uuid or a human username */
                 id: string;
             };
             cookie?: never;
@@ -2635,7 +2635,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The principal's id (uuid) */
+                /** @description The principal, addressed by its uuid or a human username */
                 id: string;
             };
             cookie?: never;
@@ -2665,7 +2665,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The principal to impersonate (uuid) */
+                /** @description The principal to impersonate, addressed by its uuid or a human username */
                 id: string;
             };
             cookie?: never;
@@ -2728,7 +2728,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The principal's id (uuid) */
+                /** @description The principal, addressed by its uuid or a human username */
                 id: string;
             };
             cookie?: never;
@@ -2758,7 +2758,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The principal's id (uuid) */
+                /** @description The principal, addressed by its uuid or a human username */
                 id: string;
             };
             cookie?: never;
@@ -2792,7 +2792,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The principal's id (uuid) */
+                /** @description The principal, addressed by its uuid or a human username */
                 id: string;
             };
             cookie?: never;
