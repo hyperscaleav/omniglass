@@ -516,6 +516,88 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   with the route guard and sidebar both gating `/groups` on `principal_group`. This completes grant-by-group
   ([#90](https://github.com/hyperscaleav/omniglass/issues/90)); dynamic membership and SCIM group mapping remain
   deferred.
+- **Identity: password policy + generator.** A single pure validator (`auth.ValidatePassword`) enforces a
+  password policy on the API password surfaces: **create a user** and **self-service change-password**. The
+  direct-DB break-glass lanes (`bootstrap`, `set-password`) are exempt (fully trusted, DB-access-gated, the
+  recovery path). The policy is **at least 12 characters, not on an embedded common-password denylist, and not
+  containing the username** (NIST 800-63B style: length and a blocklist over composition rules). The API bodies
+  raise their `minLength` to 12 and map a violation to 422 with a specific message; the console mirrors the
+  length and username rules inline (a new `passwordError`) and gates the submit, while the denylist stays
+  server-side (a 422 on a manually typed common password). A shared **`PasswordField`** component adds a
+  show/hide toggle and, on the New user and change-password forms, a crypto-strong **Generate** action
+  (`generatePassword`, a readable charset with no look-alike characters, kept masked and copied or revealed on
+  demand) plus a **Copy** button. Proven by an `internal/auth` unit test (short / common / contains-username / valid), an API
+  test (a weak, common, or username-containing password is a 422 on create, a strong one is accepted), and web
+  tests (the generator's length / charset / policy-compliance, `passwordError`, and the Generate-fills-and-enables
+  flow). Completes [#104](https://github.com/hyperscaleav/omniglass/issues/104) and
+  [#151](https://github.com/hyperscaleav/omniglass/issues/151); an operator-configurable policy and a HIBP
+  breached-password check remain deferred.
+- **Identity: admin password reset.** An administrator can reset another user's password without the
+  user's current one: `POST /principals/{id}:resetPassword` gated by a new `principal:reset-password`
+  capability (all-scope; admin holds it via `principal:*`, so a future help-desk role can be granted only
+  the reset), policy-enforced (a 422 on a weak password), refused on self (change your own password from
+  your profile, which verifies the current one), behind the same **takeover guard** as
+  impersonation (an owner cannot be reset by anyone, and a caller cannot reset a principal whose
+  capabilities exceed their own, a shared `checkTakeoverGuard`, plus the shared `allScopeCovers`
+  all-scope-only cover that act-as uses so a reset cannot promote a narrow-scope capability estate-wide),
+  and audited with the admin as the actor (the
+  storage method `SetPrincipalPassword` sets by id, distinct from the self-service `SetPassword` that keys
+  on username and audits the target). It also **forces logout**: a reset revokes every one of the target's
+  bearer credentials (all sessions and tokens) in the same transaction, so a compromised or departing
+  account is cut off at once; the self-service change-password revokes the caller's OTHER sessions
+  (`RevokePrincipalBearers` keeping the current session's hash, stashed in the request context by authn). The console adds a **Reset password** kebab action on the user blade
+  that opens an inline panel reusing the `PasswordField` (Generate, Copy, inline policy check); the set
+  password stays copyable to hand over. This is the console counterpart to the CLI `set-password` (which,
+  as a trusted direct-DB lane, stays policy-exempt). Proven by a storage test (the new secret
+  authenticates and the old does not, the reset is audited as the admin, non-all scope and unknown id are
+  refused), an API test (an operator lacks the capability 403, a weak / common / username-containing
+  password is a 422, resetting yourself is a 422 and an owner is a 403, the admin reset lets the user
+  sign in with the new password), and web tests (the kebab opens the panel and Generate + Set password
+  calls the endpoint and confirms; the action is hidden on your own blade).
+- **Identity: bearer session expiry.** Bearer credentials gain a nullable `credential.expires_at` (a new
+  additive migration), and `AuthenticateBearer` refuses a credential whose expiry has passed (an expired
+  session authenticates nothing). A web login installs its session cookie with a fixed absolute lifetime
+  (12h), setting both the credential's `expires_at` and the cookie `Max-Age`, so a stolen session cookie is
+  no longer valid forever; the `IssueBearerCredential` gateway method gained an `expiresAt` argument. CLI
+  API tokens (`omniglass token`) and the bootstrap token pass a null expiry and do not expire, so
+  automation keeps working. Proven by a storage test (a past-expiry bearer is `ErrCredentialNotFound`, a
+  future or null one authenticates). A sliding idle timeout and a background sweep of expired rows are
+  deferred refinements; the security floor (expired is refused at auth) lands here.
+
+- **Identity: login brute-force lockout.** Failed password logins are now throttled. Two additive columns
+  on `human` (`failed_login_count`, `locked_until`) count consecutive misses on a real account and, on the
+  5th, lock it for 15 minutes. Inside the window `AuthenticatePassword` refuses every attempt (even the
+  correct password) via a new `ErrAccountLocked`, which the login handler maps to the **same generic 401**
+  as a bad credential so the lock is not an enumeration oracle (only the `login_locked` audit records it).
+  The lock is decided after the argon2 verify (a locked account is not a faster probe), and a correct
+  password below the threshold clears the counter. The decision itself is a pure, unit-tested function;
+  proven end to end by a storage integration test (5 misses lock, the correct password is refused while
+  locked, an expired window lets it through and resets) and a real-endpoint test (the lockout as seen over
+  `POST /auth/login`). Per-IP throttling and a configurable threshold are deferred.
+
+- **Identity: force a password change after an admin reset.** An admin reset now sets a new additive
+  `human.must_change_password` flag; the user's own change-password clears it. While set, the `authn`
+  choke point (the same place view-as read-only is enforced) refuses **every** route with a 403 except
+  reading their own principal and the change itself, so the admin-known secret cannot be used to act.
+  `GET /auth/me` carries `must_change_password`, and the console's `AuthGuard` swaps the whole app shell
+  for a forced change-password screen until it clears (a `useChangePassword` that invalidates `/auth/me`
+  releases the gate on success). Proven by a storage test (a reset sets the flag, a self-change clears
+  it), a real-endpoint test (a flagged user reads `/auth/me` but every other route is a distinct
+  "password change required" 403 until the change, then the gate releases), and a web test (the guard
+  renders the forced screen only when flagged). Enforcement is a hard block on all routes; the CLI
+  break-glass lanes do not set the flag.
+
+- **Identity: address a principal by username or uuid.** Every `/principals/{id}` route (read, update,
+  grants, the lifecycle verbs, reset, impersonate) now accepts either the principal's uuid or a human's
+  current username. A new gateway primitive `ResolvePrincipalRef` resolves it (a uuid passes through
+  unchanged, so an unknown uuid keeps its existing not-found handling; otherwise a username lookup, and an
+  unknown username is a 404), and each handler resolves at the top, before any self-check (so addressing
+  yourself by username is caught for a reset or impersonation). The uuid stays the stable identity; a
+  username is a convenience address resolved at call time. Service principals have no username and stay
+  uuid-addressed. This makes the CLI usable without a uuid lookup first (`omniglass principal archive
+  alice`). Proven by a storage test (username resolves, a uuid passes through, an unknown username is not
+  found) and an API test (get by username matches get by uuid, a `:verb` method archives by username, an
+  unknown username is a 404).
 - **Secret: the cascade-resolved encrypted value.** The first of the [config, credentials, and
   variables](/architecture/variables/) trio lands, and the prerequisite for the [collection](/architecture/collection/)
   driver's interface inputs ([#155](https://github.com/hyperscaleav/omniglass/issues/155)). A **secret** is a

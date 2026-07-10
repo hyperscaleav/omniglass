@@ -57,14 +57,16 @@ no running server needed):
 
 ```sh
 # Mints a bearer credential (the token is printed once) and, with --password, a password
-# credential (argon2id) so the owner can sign in to the console.
-omniglass bootstrap ops --password 's3cret-pw' --email ops@example.com --display-name "Ops Lead"
+# credential (argon2id) so the owner can sign in to the console. This is a trusted direct-DB
+# lane, so it is exempt from the password policy (unlike the console/API paths).
+omniglass bootstrap ops --password 'set-a-strong-one' --email ops@example.com --display-name "Ops Lead"
 
-# Reprint a fresh bearer token for an existing user (direct-DB, owner lane).
+# Reprint a fresh bearer token for an existing user (direct-DB, owner lane). A CLI
+# token does not expire (unlike a web-login session cookie, which has a fixed lifetime).
 omniglass token ops
 
-# Set or rotate a user's password (direct-DB, owner lane).
-omniglass set-password ops 'new-s3cret-pw'
+# Set or rotate a user's password (direct-DB, owner lane; also policy-exempt as the recovery path).
+omniglass set-password ops 'set-a-strong-one'
 
 # Seed a dev database with an example estate (locations, users, grants). Idempotent and
 # dev-only; `make dev` runs it for you, so a fresh console is populated instead of empty.
@@ -78,7 +80,7 @@ generated `auth` commands (self-scoped: each edits only the caller's own profile
 ```sh
 omniglass auth me                                    # your principal, permissions, and grants
 omniglass auth update-profile --display-name "Ops Lead"
-omniglass auth change-password --current-password 's3cret-pw' --new-password 'brand-new-pw'
+omniglass auth change-password --current-password 'orange-boat-42x' --new-password 'purple-canyon-7'
 ```
 
 ## Secrets
@@ -109,10 +111,15 @@ to `--fields`, validated against the type's shape.
 - **Generated** (`internal/cli/api_gen.go`, do not edit): one command per API operation.
   The resource and verb come from the AIP-style path (`POST /locations` is `location
   create`, `GET /locations/{name}` is `location get <name>`, a `:verb` custom method is
-  `<resource> <verb> <id>`, so the principal lifecycle is `principal disable`, `principal
-  archive`, `principal restore`, and `principal purge <id>`); path parameters are positional args, the request body is
-  `--flags`, and `--help` plus the example come from the operation's summary and
-  description.
+  `<resource> <verb> <id>`, so the principal lifecycle is `principal disable <id>`,
+  `principal archive <id>`, `principal restore <id>`, and `principal purge <id>`); path
+  parameters are positional args, the request body is
+  `--flags`, and OpenAPI query parameters become optional `--flags` (a set flag is
+  appended to the request query string, an unset one keeps the server default), so
+  `principal list --include-archived --kind service` filters the listing. A principal
+  `<id>` argument accepts either the uuid or a human's username (`omniglass principal
+  archive alice`), resolved by the server, so you rarely need to look a uuid up first.
+  `--help` plus the example come from the operation's summary and description.
 - **Hand-written** (`internal/cli/api_hooks.go` and the run-mode files): the client
   runtime the generated tree calls, plus commands that are not API operations, the
   `server` and `migrate` run modes and the trusted direct-DB owner lane (`bootstrap`,

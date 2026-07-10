@@ -48,7 +48,7 @@ func TestPrincipalDirectoryAPI(t *testing.T) {
 
 	// Owner creates a human with an initial password. The response carries no secret.
 	created := c.do(ownerTok, "POST", "/principals", map[string]string{
-		"username": "alice", "password": "alice-s3cret", "email": "alice@example.test", "display_name": "Alice",
+		"username": "alice", "password": "orange-boat-42x", "email": "alice@example.test", "display_name": "Alice",
 	}, http.StatusCreated)
 	if !bytes.Contains(created, []byte(`"username":"alice"`)) {
 		t.Fatalf("create body missing username: %s", created)
@@ -80,7 +80,7 @@ func TestPrincipalDirectoryAPI(t *testing.T) {
 	}
 
 	// A duplicate username is a 409; a too-short password is a 422.
-	if code, _ := c.send(ownerTok, "POST", "/principals", map[string]string{"username": "alice", "password": "another-pw"}); code != http.StatusConflict {
+	if code, _ := c.send(ownerTok, "POST", "/principals", map[string]string{"username": "alice", "password": "orange-boat-99z"}); code != http.StatusConflict {
 		t.Fatalf("duplicate username: want 409, got %d", code)
 	}
 	if code, _ := c.send(ownerTok, "POST", "/principals", map[string]string{"username": "bob", "password": "short"}); code != http.StatusUnprocessableEntity {
@@ -94,12 +94,12 @@ func TestPrincipalDirectoryAPI(t *testing.T) {
 	if code, _ := c.send(scopedTok, "GET", "/principals/"+made.ID, nil); code != http.StatusForbidden {
 		t.Fatalf("scoped get: want 403, got %d", code)
 	}
-	if code, _ := c.send(scopedTok, "POST", "/principals", map[string]string{"username": "eve", "password": "eve-s3cret"}); code != http.StatusForbidden {
+	if code, _ := c.send(scopedTok, "POST", "/principals", map[string]string{"username": "eve", "password": "purple-canyon-7"}); code != http.StatusForbidden {
 		t.Fatalf("scoped create: want 403, got %d", code)
 	}
 
 	// The created human can sign in with the initial password.
-	loginBody, _ := json.Marshal(map[string]string{"username": "alice", "password": "alice-s3cret"})
+	loginBody, _ := json.Marshal(map[string]string{"username": "alice", "password": "orange-boat-42x"})
 	resp, err := http.Post(srv.URL+"/api/v1/auth/login", "application/json", bytes.NewReader(loginBody))
 	if err != nil {
 		t.Fatalf("login: %v", err)
@@ -134,7 +134,7 @@ func TestUpdatePrincipalAPI(t *testing.T) {
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
 	// Create a human with a password, capture its id.
-	created := c.do(ownerTok, "POST", "/principals", map[string]string{"username": "alice", "password": "alice-s3cret", "display_name": "Alice"}, http.StatusCreated)
+	created := c.do(ownerTok, "POST", "/principals", map[string]string{"username": "alice", "password": "orange-boat-42x", "display_name": "Alice"}, http.StatusCreated)
 	var made struct {
 		ID string `json:"id"`
 	}
@@ -150,7 +150,7 @@ func TestUpdatePrincipalAPI(t *testing.T) {
 
 	// The rename re-homes the login: the new username works, the old does not.
 	login := func(u string) int {
-		body, _ := json.Marshal(map[string]string{"username": u, "password": "alice-s3cret"})
+		body, _ := json.Marshal(map[string]string{"username": u, "password": "orange-boat-42x"})
 		resp, err := http.Post(srv.URL+"/api/v1/auth/login", "application/json", bytes.NewReader(body))
 		if err != nil {
 			t.Fatalf("login: %v", err)
@@ -310,14 +310,14 @@ func TestDisableAPI(t *testing.T) {
 	scopedTok := principalWithGrants(t, ctx, dsn, "hq-admin", []grant{{role: "admin", scopeKind: "location", scopeID: "HQ"}})
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
-	created := c.do(ownerTok, "POST", "/principals", map[string]string{"username": "alice", "password": "alice-s3cret"}, http.StatusCreated)
+	created := c.do(ownerTok, "POST", "/principals", map[string]string{"username": "alice", "password": "orange-boat-42x"}, http.StatusCreated)
 	var alice struct {
 		ID string `json:"id"`
 	}
 	_ = json.Unmarshal(created, &alice)
 
 	login := func() int {
-		body, _ := json.Marshal(map[string]string{"username": "alice", "password": "alice-s3cret"})
+		body, _ := json.Marshal(map[string]string{"username": "alice", "password": "orange-boat-42x"})
 		resp, err := http.Post(srv.URL+"/api/v1/auth/login", "application/json", bytes.NewReader(body))
 		if err != nil {
 			t.Fatalf("login: %v", err)
@@ -413,7 +413,7 @@ func listIDs(t *testing.T, c *apiClient, tok string) []dirRow {
 // credential secret: the hash column, or the cleartext password we sent.
 func assertNoSecret(t *testing.T, body []byte) {
 	t.Helper()
-	for _, banned := range []string{"secret_hash", "secret", "alice-s3cret", "$argon2"} {
+	for _, banned := range []string{"secret_hash", "secret", "orange-boat-42x", "$argon2"} {
 		if bytes.Contains(body, []byte(banned)) {
 			t.Fatalf("response leaked %q: %s", banned, body)
 		}

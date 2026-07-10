@@ -18,11 +18,14 @@ func (UnimplementedGateway) UpsertRole(context.Context, Role) error { return nil
 func (UnimplementedGateway) BootstrapOwner(context.Context, OwnerSpec) (bool, error) {
 	return false, nil
 }
-func (UnimplementedGateway) IssueBearerCredential(context.Context, string, []byte, string) (bool, error) {
+func (UnimplementedGateway) IssueBearerCredential(context.Context, string, []byte, string, *time.Time) (bool, error) {
 	return false, nil
 }
 func (UnimplementedGateway) AuthenticateBearer(context.Context, []byte) (*Principal, error) {
 	return nil, nil
+}
+func (UnimplementedGateway) ResolvePrincipalRef(context.Context, string) (string, error) {
+	return "", nil
 }
 func (UnimplementedGateway) BeginImpersonation(context.Context, string, string, string, time.Duration) (string, *ImpersonationSession, error) {
 	return "", nil, nil
@@ -101,6 +104,12 @@ func (UnimplementedGateway) RestorePrincipal(context.Context, string, string, sc
 }
 func (UnimplementedGateway) PurgePrincipal(context.Context, string, string, scope.Set) error {
 	return nil
+}
+func (UnimplementedGateway) SetPrincipalPassword(context.Context, string, string, string, scope.Set) error {
+	return nil
+}
+func (UnimplementedGateway) RevokePrincipalBearers(context.Context, string, [][]byte) (int, error) {
+	return 0, nil
 }
 func (UnimplementedGateway) RevokeBearer(context.Context, []byte) error { return nil }
 func (UnimplementedGateway) AnyHuman(context.Context) (bool, error)     { return false, nil }

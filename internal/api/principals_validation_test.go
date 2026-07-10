@@ -44,4 +44,12 @@ func TestPrincipalCreateValidation(t *testing.T) {
 	// The same handle rule guards a group name.
 	c.do(ownerTok, "POST", "/principal-groups", map[string]string{"name": "Field Crew"}, http.StatusUnprocessableEntity)
 	c.do(ownerTok, "POST", "/principal-groups", map[string]string{"name": "field-crew"}, http.StatusCreated)
+
+	// The password policy (issue #151) guards an initial password: too short, a
+	// common/denylisted password, and a password that contains the username are all
+	// refused (422); a strong one is accepted.
+	c.do(ownerTok, "POST", "/principals", map[string]string{"username": "shorty", "password": "abc123"}, http.StatusUnprocessableEntity)
+	c.do(ownerTok, "POST", "/principals", map[string]string{"username": "commonpw", "password": "administrator"}, http.StatusUnprocessableEntity)
+	c.do(ownerTok, "POST", "/principals", map[string]string{"username": "jordan2", "password": "my-jordan2-pass"}, http.StatusUnprocessableEntity)
+	c.do(ownerTok, "POST", "/principals", map[string]string{"username": "strongone", "password": "orange-boat-42x"}, http.StatusCreated)
 }

@@ -29,14 +29,25 @@ only your own account, whatever your role.
 - **Profile.** Change your display name; it drives how you appear in the console (the sidebar
   label and the initials avatar). Your username and email are set by an administrator, not you,
   and are shown read-only.
-- **Change password.** Enter your current password and a new one (at least 8 characters). A
-  wrong current password is refused. Your other active sessions stay signed in.
+- **Change password.** Enter your current password and a new one. The new password must meet the
+  **policy** (at least 12 characters, not a common password, and not containing your username); the
+  field validates as you type, and **Generate** fills a strong random one you can **Copy**. A wrong
+  current password is refused. Changing it **signs out your other sessions and tokens** (the one you
+  are using stays), so the change takes effect everywhere at once.
 - **Access.** A read-only view of the identity model you operate under: your principal, the
   roles granted to you, and the flattened permissions those roles carry. The server enforces
   these on every request; the console only mirrors them.
 
 From the CLI the same two actions are `omniglass auth update-profile` and
 `omniglass auth change-password` (see [the CLI guide](/guides/cli/)).
+
+### After an administrator resets your password
+
+If an administrator resets your password, you sign in with the password they gave you and the
+console immediately gates you to a **Set a new password** screen: your account is on hold and every
+other page is refused (by the server, not just the console) until you choose a new password. Enter
+the temporary password as the current one and set a new policy-compliant password; once it is saved
+the hold clears and you land in the console. Signing out is the only other way off the screen.
 
 ## Users
 
@@ -48,8 +59,11 @@ location-scoped admin cannot list users.
 - Pick a row to open its **blade**: a principal's profile, the **groups** it belongs to (open
   one to stack that group's blade over the user), and its **role grants** (each a role at a scope).
 - With `principal:create`, **New user** creates a human with a username and an optional initial
-  password. The new user can sign in right away and change that password themselves; a fresh
-  account holds no grants (so it can sign in but do nothing) until you assign a role. The form
+  password (which must meet the **password policy**: at least 12 characters, not a common password,
+  and not containing the username). **Generate** fills a strong random password, kept masked, with a
+  **Copy** button to hand it over (or reveal it with the show/hide toggle). The new user can sign in right away and change that
+  password themselves; a fresh account holds no grants (so it can sign in but do nothing) until you
+  assign a role. The form
   validates as you type: a **username** is a lowercase handle (letters, digits, and `. _ -`, no
   capitals or spaces) and an **email** must be well formed, so an invalid field shows an inline
   error and blocks the submit before the round-trip (the same rules the server enforces). The
@@ -85,6 +99,15 @@ location-scoped admin cannot list users.
   toggle above the directory surfaces hidden accounts so you can re-find one to restore or purge. The
   **last active owner** cannot be disabled or archived, the same invariant that protects the last
   owner grant.
+- With `principal:reset-password`, the kebab on **another user's** blade holds **Reset password**: it
+  opens an inline panel with a password field (the same **Generate** and inline policy check as the New
+  user form) and sets a new password for that user without their current one. The reset **immediately
+  signs the user out of every session and token**, so it doubles as a way to cut off a compromised or
+  departing account. The set password stays copyable so you can hand it over; the user changes it after
+  signing in. The reset is audited with **you** as the actor. It is refused on your **own** account (change your own password from **Your
+  profile**, which verifies your current one) and on an **owner** (owners cannot be reset by anyone).
+  This is a console path for what the CLI does with `omniglass set-password`; unlike that trusted
+  direct-DB lane, the console reset enforces the password policy and the takeover guard.
 
 From the CLI the same surface is `omniglass principal list` / `get` / `create` / `update` /
 `disable` / `enable` / `archive` / `restore` / `purge`, and `omniglass grant create <id>` /

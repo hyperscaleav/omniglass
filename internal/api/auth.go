@@ -3,9 +3,11 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/hyperscaleav/omniglass/internal/auth"
@@ -25,7 +27,17 @@ const (
 	// actor rides storage.RealActorContextKey so the audit writer records it.
 	impModeCtxKey
 	impSessionCtxKey
+	// sessionHashCtxKey carries the sha256 of the bearer token that authenticated the
+	// request, so the change-password handler can keep the caller's own session when it
+	// signs out their other sessions.
+	sessionHashCtxKey
 )
+
+// sessionHashFrom returns the sha256 of the request's bearer token, if one resolved.
+func sessionHashFrom(ctx context.Context) ([]byte, bool) {
+	h, ok := ctx.Value(sessionHashCtxKey).([]byte)
+	return h, ok && len(h) > 0
+}
 
 func principalFrom(ctx context.Context) (*storage.Principal, bool) {
 	pr, ok := ctx.Value(principalCtxKey).(*storage.Principal)
@@ -96,11 +108,13 @@ func (a *authenticator) authn(ctx huma.Context, next func(huma.Context)) {
 	}
 	var pr *storage.Principal
 	var realActorID, impMode, impSession string
+	var sessHash []byte
 	for _, tok := range candidates {
 		h := auth.HashToken(tok)
 		p, err := a.gw.AuthenticateBearer(ctx.Context(), h)
 		if err == nil {
 			pr = p
+			sessHash = h
 			break
 		}
 		if !errors.Is(err, storage.ErrCredentialNotFound) {
@@ -135,6 +149,7 @@ func (a *authenticator) authn(ctx huma.Context, next func(huma.Context)) {
 	}
 	c := huma.WithValue(ctx, principalCtxKey, pr)
 	c = huma.WithValue(c, permsCtxKey, idx.Flatten(roleIDs))
+	c = huma.WithValue(c, sessionHashCtxKey, sessHash)
 	if impMode != "" {
 		// Impersonated request: mark the mode and session, and set the real actor so
 		// every audited mutation records who is really acting, never just the
@@ -150,6 +165,17 @@ func (a *authenticator) authn(ctx huma.Context, next func(huma.Context)) {
 	// exempt. This is the single choke point a new mutating route cannot forget.
 	if impMode == "view_as" && ctx.Method() != http.MethodGet && ctx.Method() != http.MethodHead && ctx.Operation().OperationID != "stop-impersonation" {
 		_ = huma.WriteErr(a.api, ctx, http.StatusForbidden, "read-only while viewing as another principal")
+		return
+	}
+	// A principal an admin has flagged for a forced password change is gated to the
+	// change-password lane on EVERY route until they change it: only reading their own
+	// principal (so the console can see the flag and render the forced form) and the
+	// change itself are allowed. Enforced here in authn (the single choke point) so no
+	// route, read or write, can forget it. Not applied while impersonating (the real
+	// actor, not the flagged target, is driving). Logout is public and never reaches here.
+	if impMode == "" && pr.Human != nil && pr.Human.MustChangePassword &&
+		ctx.Operation().OperationID != "get-auth-me" && ctx.Operation().OperationID != "change-auth-me-password" {
+		_ = huma.WriteErr(a.api, ctx, http.StatusForbidden, "password change required")
 		return
 	}
 	next(c)
@@ -210,6 +236,12 @@ func bearerToken(header string) (string, bool) {
 	return "", false
 }
 
+// sessionCookieLifetime is the absolute lifetime of a login session: the bearer
+// credential and the cookie both expire after it, so a stolen session cookie is not
+// valid forever. Fixed for this slice (a sliding idle timeout is a later refinement);
+// API tokens minted from the CLI do not expire.
+const sessionCookieLifetime = 12 * time.Hour
+
 // sessionCookieName is the httpOnly cookie carrying a human's session bearer
 // token; the SPA never reads it (it sends with credentials: 'include').
 const sessionCookieName = "og_session"
@@ -231,6 +263,9 @@ func (a *authenticator) sessionCookie(token string) http.Cookie {
 	return http.Cookie{
 		Name: sessionCookieName, Value: token, Path: "/",
 		HttpOnly: true, Secure: a.secureCookies, SameSite: http.SameSiteLaxMode,
+		// The browser drops the cookie at the same absolute lifetime the server
+		// bounds the credential to, so a closed session cannot linger client-side.
+		MaxAge: int(sessionCookieLifetime.Seconds()),
 	}
 }
 
@@ -288,6 +323,14 @@ func (a *authenticator) loginHandler(ctx context.Context, in *loginInput) (*sess
 			_ = a.gw.WriteAuthEvent(ctx, pr.ID, "login_failed")
 		}
 		return nil, huma.Error401Unauthorized("invalid username or password")
+	case errors.Is(err, storage.ErrAccountLocked):
+		// Too many failed attempts: the account is in its lockout window. Return the
+		// SAME generic 401 as a bad credential so the lock is not an enumeration
+		// oracle; only the audit (attributed to the locked principal) records it.
+		if pr != nil {
+			_ = a.gw.WriteAuthEvent(ctx, pr.ID, "login_locked")
+		}
+		return nil, huma.Error401Unauthorized("invalid username or password")
 	case errors.Is(err, storage.ErrAccountDisabled):
 		// The password was correct but the account is disabled. A distinct 403 (not
 		// the generic 401) so the sign-in screen can explain it; only reachable with
@@ -304,7 +347,8 @@ func (a *authenticator) loginHandler(ctx context.Context, in *loginInput) (*sess
 	if err != nil {
 		return nil, huma.Error500InternalServerError("login failed")
 	}
-	if _, err := a.gw.IssueBearerCredential(ctx, pr.Human.Username, hash, prefix); err != nil {
+	expiresAt := time.Now().Add(sessionCookieLifetime)
+	if _, err := a.gw.IssueBearerCredential(ctx, pr.Human.Username, hash, prefix, &expiresAt); err != nil {
 		return nil, huma.Error500InternalServerError("login failed")
 	}
 	if err := a.gw.WriteAuthEvent(ctx, pr.ID, "login"); err != nil {
@@ -350,9 +394,10 @@ type meOutput struct {
 }
 
 type humanBody struct {
-	Username    string `json:"username"`
-	Email       string `json:"email,omitempty"`
-	DisplayName string `json:"display_name,omitempty"`
+	Username           string `json:"username"`
+	Email              string `json:"email,omitempty"`
+	DisplayName        string `json:"display_name,omitempty"`
+	MustChangePassword bool   `json:"must_change_password,omitempty" doc:"True when an admin reset the password and the user must change it before doing anything else; the console gates every route to the change-password form until it clears."`
 }
 
 type svcBody struct {
@@ -380,7 +425,12 @@ func meHandler(ctx context.Context, _ *struct{}) (*meOutput, error) {
 	out.Body.Principal.ID = pr.ID
 	out.Body.Principal.Kind = pr.Kind
 	if pr.Human != nil {
-		out.Body.Human = &humanBody{Username: pr.Human.Username, Email: pr.Human.Email, DisplayName: pr.Human.DisplayName}
+		out.Body.Human = &humanBody{
+			Username:           pr.Human.Username,
+			Email:              pr.Human.Email,
+			DisplayName:        pr.Human.DisplayName,
+			MustChangePassword: pr.Human.MustChangePassword,
+		}
 	}
 	if pr.Service != nil {
 		out.Body.Service = &svcBody{Label: pr.Service.Label}
@@ -435,15 +485,15 @@ func (a *authenticator) updateMeHandler(ctx context.Context, in *updateMeInput) 
 type changePasswordInput struct {
 	Body struct {
 		CurrentPassword string `json:"current_password" doc:"Your current password"`
-		NewPassword     string `json:"new_password" minLength:"8" maxLength:"256" doc:"The new password (at least 8 characters)"`
+		NewPassword     string `json:"new_password" minLength:"12" maxLength:"256" doc:"The new password (at least 12 characters, not a common password, not containing the username)"`
 	}
 }
 
 // changePasswordHandler verifies the caller's current password and sets a new one.
 // Self-scoped and authn-only. A wrong current password is a 403 (the request is
-// authenticated, but not permitted to rotate without the current secret). Existing
-// sessions are intentionally left valid for this slice; revoke-on-change is a later
-// hardening.
+// authenticated, but not permitted to rotate without the current secret). Changing
+// the password signs out the caller's OTHER sessions and tokens (every bearer except
+// the one making this request), so a changed password takes effect everywhere at once.
 func (a *authenticator) changePasswordHandler(ctx context.Context, in *changePasswordInput) (*struct{}, error) {
 	pr, ok := principalFrom(ctx)
 	if !ok || pr.Human == nil {
@@ -455,6 +505,9 @@ func (a *authenticator) changePasswordHandler(ctx context.Context, in *changePas
 		}
 		return nil, huma.Error500InternalServerError("change password")
 	}
+	if err := mapPasswordErr(auth.ValidatePassword(in.Body.NewPassword, pr.Human.Username)); err != nil {
+		return nil, err
+	}
 	encoded, err := auth.HashPassword(in.Body.NewPassword)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("change password")
@@ -462,7 +515,36 @@ func (a *authenticator) changePasswordHandler(ctx context.Context, in *changePas
 	if _, err := a.gw.SetPassword(ctx, pr.Human.Username, encoded); err != nil {
 		return nil, huma.Error500InternalServerError("change password")
 	}
+	// Force logout of the caller's other sessions and tokens, keeping the current one
+	// so the change does not sign the caller out of the session they just used.
+	keep := [][]byte{}
+	if h, ok := sessionHashFrom(ctx); ok {
+		keep = append(keep, h)
+	}
+	if _, err := a.gw.RevokePrincipalBearers(ctx, pr.ID, keep); err != nil {
+		return nil, huma.Error500InternalServerError("change password")
+	}
 	return nil, nil
+}
+
+// mapPasswordErr translates the auth password-policy sentinels into a 422 with a
+// specific message, or nil when the password is acceptable. Shared by the create and
+// change-password handlers so both enforce the same policy the same way.
+func mapPasswordErr(err error) error {
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, auth.ErrPasswordTooShort):
+		return huma.Error422UnprocessableEntity(fmt.Sprintf("password must be at least %d characters", auth.MinPasswordLength))
+	case errors.Is(err, auth.ErrPasswordTooLong):
+		return huma.Error422UnprocessableEntity(fmt.Sprintf("password must be at most %d characters", auth.MaxPasswordLength))
+	case errors.Is(err, auth.ErrPasswordCommon):
+		return huma.Error422UnprocessableEntity("password is too common; choose a less predictable one")
+	case errors.Is(err, auth.ErrPasswordContainsIdentifier):
+		return huma.Error422UnprocessableEntity("password must not contain the username")
+	default:
+		return huma.Error422UnprocessableEntity("password does not meet the policy")
+	}
 }
 
 // rolesOutput is the body of GET /api/v1/roles.

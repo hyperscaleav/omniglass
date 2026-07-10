@@ -39,11 +39,15 @@ type Gateway interface {
 	// IssueBearerCredential mints an additional bearer credential for an existing
 	// principal by human username (token reissue / break-glass / dev login).
 	// Returns false if no such username.
-	IssueBearerCredential(ctx context.Context, username string, hash []byte, prefix string) (bool, error)
+	IssueBearerCredential(ctx context.Context, username string, hash []byte, prefix string, expiresAt *time.Time) (bool, error)
 	// AuthenticateBearer resolves a bearer credential by its sha256 hash to the
 	// principal, its kind profile, and its grants. Returns ErrCredentialNotFound
 	// if no credential matches.
 	AuthenticateBearer(ctx context.Context, hash []byte) (*Principal, error)
+	// ResolvePrincipalRef maps a principal reference (a uuid or a human username) to
+	// the principal id: a uuid passes through, a username is looked up, and an unknown
+	// username is ErrPrincipalNotFound. Backs addressing a principal by username.
+	ResolvePrincipalRef(ctx context.Context, ref string) (string, error)
 	// The impersonation surface: an admin views/acts as another principal, audited
 	// with the real actor. BeginImpersonation persists a session (the API enforces
 	// the escalation guard first); AuthenticateImpersonation is the authn fallback
@@ -117,6 +121,14 @@ type Gateway interface {
 	ArchivePrincipal(ctx context.Context, actorID, id string, action scope.Set) error
 	RestorePrincipal(ctx context.Context, actorID, id string, action scope.Set) error
 	PurgePrincipal(ctx context.Context, actorID, id string, action scope.Set) error
+	// SetPrincipalPassword resets a human principal's password by id (an admin action,
+	// audited as the admin), requiring an all-scope grant. Unknown id is ErrPrincipalNotFound.
+	// It also revokes every one of the target's bearer credentials (force logout).
+	SetPrincipalPassword(ctx context.Context, actorID, id, encoded string, action scope.Set) error
+	// RevokePrincipalBearers deletes a principal's bearer credentials (sessions and
+	// tokens) except any sha256 hash in keep (empty revokes all); the force-logout on a
+	// self-service password change keeps the caller's own session. Returns the count.
+	RevokePrincipalBearers(ctx context.Context, principalID string, keep [][]byte) (int, error)
 	// RevokeBearer deletes the bearer credential with the given sha256 hash
 	// (session logout). A no-op if none matches.
 	RevokeBearer(ctx context.Context, hash []byte) error

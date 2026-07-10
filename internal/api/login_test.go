@@ -8,6 +8,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/auth"
@@ -97,6 +100,11 @@ func TestPasswordLoginCookieSession(t *testing.T) {
 	if !session.HttpOnly {
 		t.Fatal("the session cookie must be HttpOnly")
 	}
+	// The session cookie carries a bounded absolute lifetime (not a forever cookie):
+	// Max-Age is the fixed session lifetime in seconds, so a stolen cookie expires.
+	if want := int(12 * time.Hour / time.Second); session.MaxAge != want {
+		t.Fatalf("session cookie Max-Age = %d, want %d (the 12h session lifetime)", session.MaxAge, want)
+	}
 
 	// The cookie authenticates /auth/me; no cookie is 401.
 	if code, body := me(session); code != http.StatusOK || !bytes.Contains(body, []byte(`"username":"ops"`)) {
@@ -130,6 +138,74 @@ func TestPasswordLoginCookieSession(t *testing.T) {
 	lresp.Body.Close()
 	if code, _ := me(session); code != http.StatusUnauthorized {
 		t.Fatalf("me after logout: want 401, got %d", code)
+	}
+}
+
+// TestLoginLockoutEndpoint drives the brute-force lockout through the real login
+// endpoint (issue #158): a run of wrong passwords locks the account so that even
+// the correct password returns the same generic 401, and once the lock window
+// passes the correct password logs in again. Skipped under -short.
+func TestLoginLockoutEndpoint(t *testing.T) {
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	pwHash, err := auth.HashPassword("orange-boat-42x")
+	if err != nil {
+		t.Fatalf("hash: %v", err)
+	}
+	_, bh, bp, _ := auth.NewBearerToken()
+	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{
+		Username: "ops", SecretHash: bh, Prefix: bp, PasswordHash: pwHash,
+	}); err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+
+	login := func(pw string) int {
+		t.Helper()
+		body, _ := json.Marshal(map[string]string{"username": "ops", "password": pw})
+		req, _ := http.NewRequestWithContext(ctx, http.MethodPost, srv.URL+"/api/v1/auth/login", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("login request: %v", err)
+		}
+		resp.Body.Close()
+		return resp.StatusCode
+	}
+
+	// Five wrong passwords lock the account.
+	for i := 0; i < 5; i++ {
+		if code := login("nope"); code != http.StatusUnauthorized {
+			t.Fatalf("wrong attempt %d: want 401, got %d", i+1, code)
+		}
+	}
+	// The correct password is now refused with the SAME generic 401 (the lock is not
+	// distinguishable from a bad credential to the client).
+	if code := login("orange-boat-42x"); code != http.StatusUnauthorized {
+		t.Fatalf("correct password while locked: want a generic 401, got %d", code)
+	}
+
+	// Force the lock window to expire, then the correct password logs in (204).
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatalf("raw conn: %v", err)
+	}
+	defer conn.Close(ctx)
+	if _, err := conn.Exec(ctx, `update human set locked_until = now() - interval '1 hour' where username = 'ops'`); err != nil {
+		t.Fatalf("expire lock: %v", err)
+	}
+	if code := login("orange-boat-42x"); code != http.StatusNoContent {
+		t.Fatalf("correct password after cooldown: want 204, got %d", code)
 	}
 }
 

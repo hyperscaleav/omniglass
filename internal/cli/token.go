@@ -41,7 +41,9 @@ func runToken(ctx context.Context, username string) error {
 	if err != nil {
 		return err
 	}
-	ok, err := gw.IssueBearerCredential(ctx, username, hash, prefix)
+	// A CLI-minted API token does not expire (nil expiry); session cookies from the
+	// web login are the ones with a bounded lifetime.
+	ok, err := gw.IssueBearerCredential(ctx, username, hash, prefix, nil)
 	if err != nil {
 		return err
 	}

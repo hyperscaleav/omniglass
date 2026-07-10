@@ -124,8 +124,10 @@ func (p *PG) BootstrapOwner(ctx context.Context, spec OwnerSpec) (created bool, 
 // principal addressed by its human username, returning false if no such
 // username exists. The caller generates and hashes the token and shows the
 // cleartext once; this is the same trusted direct-DB lane as BootstrapOwner
-// (token reissue, break-glass, and the `make dev` login).
-func (p *PG) IssueBearerCredential(ctx context.Context, username string, hash []byte, prefix string) (bool, error) {
+// (token reissue, break-glass, and the `make dev` login). expiresAt, when non-nil,
+// bounds the credential's lifetime (a session cookie set at login); a nil expiry
+// never expires (an API token minted from the CLI).
+func (p *PG) IssueBearerCredential(ctx context.Context, username string, hash []byte, prefix string, expiresAt *time.Time) (bool, error) {
 	var pid string
 	err := p.pool.QueryRow(ctx, `select principal_id from human where username = $1`, username).Scan(&pid)
 	switch {
@@ -135,8 +137,8 @@ func (p *PG) IssueBearerCredential(ctx context.Context, username string, hash []
 		return false, fmt.Errorf("storage: lookup human %q: %w", username, err)
 	}
 	if _, err := p.pool.Exec(ctx,
-		`insert into credential (principal_id, kind, secret_hash, prefix) values ($1, 'bearer', $2, $3)`,
-		pid, hash, prefix); err != nil {
+		`insert into credential (principal_id, kind, secret_hash, prefix, expires_at) values ($1, 'bearer', $2, $3, $4)`,
+		pid, hash, prefix, expiresAt); err != nil {
 		return false, fmt.Errorf("storage: issue credential: %w", err)
 	}
 	return true, nil
@@ -178,7 +180,12 @@ type Principal struct {
 type PrincipalGroupRef struct{ ID, Name string }
 
 // HumanProfile and ServiceProfile carry the kind-specific attributes.
-type HumanProfile struct{ Username, Email, DisplayName string }
+type HumanProfile struct {
+	Username, Email, DisplayName string
+	// MustChangePassword is set by an admin reset and cleared by the user's own
+	// change-password; while true the account is gated to the change-password lane.
+	MustChangePassword bool
+}
 type ServiceProfile struct{ Label string }
 
 // Grant is one (role x scope) pairing on a principal, addressable by its id (so
@@ -211,6 +218,13 @@ var ErrBadCredentials = errors.New("storage: bad credentials")
 // endpoint cannot be used to enumerate accounts or their state.
 var ErrAccountDisabled = errors.New("storage: account disabled")
 
+// ErrAccountLocked is returned by AuthenticatePassword when the account is inside
+// its brute-force lockout window, whatever the password. It is decided after the
+// argon2 verify (like ErrAccountDisabled) so a locked account is not measurably
+// faster to probe, and the handler maps it to the same generic 401 as a bad
+// credential so the lock is not an enumeration oracle (only the audit records it).
+var ErrAccountLocked = errors.New("storage: account locked")
+
 // dummyPasswordHash is a throwaway argon2id hash the unknown-user / no-password
 // path verifies against, so AuthenticatePassword runs one argon2 derivation
 // whether or not the user exists (no early return before the compare). It is
@@ -229,15 +243,39 @@ func mustDummyHash() string {
 	return h
 }
 
+// ResolvePrincipalRef maps a principal reference to the principal id. A value that
+// parses as a uuid is returned as-is (any principal kind, and an unknown uuid still
+// resolves here so the caller's own not-found handling applies unchanged). Otherwise
+// it is treated as a human's username and looked up; an unknown username is
+// ErrPrincipalNotFound. Service principals have no username, so they stay addressable
+// only by uuid. This backs addressing a principal by username on the API and CLI.
+func (p *PG) ResolvePrincipalRef(ctx context.Context, ref string) (string, error) {
+	if _, err := uuid.Parse(ref); err == nil {
+		return ref, nil
+	}
+	var id string
+	err := p.pool.QueryRow(ctx, `select principal_id from human where username = $1`, ref).Scan(&id)
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		return "", ErrPrincipalNotFound
+	case err != nil:
+		return "", fmt.Errorf("storage: resolve principal ref %q: %w", ref, err)
+	}
+	return id, nil
+}
+
 // AuthenticateBearer resolves a bearer credential by its sha256 hash to the
-// principal, its kind profile, and its grants. ErrCredentialNotFound if none.
+// principal, its kind profile, and its grants. ErrCredentialNotFound if none, which
+// includes a credential whose expiry has passed (an expired session is treated as
+// absent, so it authenticates nothing).
 func (p *PG) AuthenticateBearer(ctx context.Context, hash []byte) (*Principal, error) {
 	var pr Principal
 	err := p.pool.QueryRow(ctx, `
 		select pr.id, pr.kind
 		from credential c
 		join principal pr on pr.id = c.principal_id
-		where c.kind = 'bearer' and c.secret_hash = $1 and pr.active`, hash).Scan(&pr.ID, &pr.Kind)
+		where c.kind = 'bearer' and c.secret_hash = $1 and pr.active
+			and (c.expires_at is null or c.expires_at > now())`, hash).Scan(&pr.ID, &pr.Kind)
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
 		return nil, ErrCredentialNotFound
@@ -257,15 +295,17 @@ func (p *PG) AuthenticatePassword(ctx context.Context, username, password string
 	pr := Principal{Kind: "human"}
 	var encoded []byte
 	var active bool
+	var failedCount int
+	var lockedUntil *time.Time
 	// Do NOT filter on pr.active here: the row must be fetched for a disabled user
 	// so their real hash is compared, and the active flag must not steer control
 	// flow before the password compare (that would leak account state by timing).
 	err := p.pool.QueryRow(ctx, `
-		select h.principal_id, c.secret_hash, pr.active
+		select h.principal_id, c.secret_hash, pr.active, h.failed_login_count, h.locked_until
 		from human h
 		join principal pr on pr.id = h.principal_id
 		join credential c on c.principal_id = h.principal_id and c.kind = 'password'
-		where h.username = $1`, username).Scan(&pr.ID, &encoded, &active)
+		where h.username = $1`, username).Scan(&pr.ID, &encoded, &active, &failedCount, &lockedUntil)
 	found := true
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
@@ -289,11 +329,31 @@ func (p *PG) AuthenticatePassword(ctx context.Context, username, password string
 		// generic error, so this discloses nothing.
 		return nil, ErrBadCredentials
 	}
+	now := time.Now()
+	if isLocked(lockedUntil, now) {
+		// Inside the lockout window: refuse whatever the password is (a correct one
+		// is still refused until the window passes), decided after the verify so it is
+		// not a faster path. Do not extend the lock or bump the counter here; just
+		// deny. The handler audits it and returns the same generic 401 as a miss.
+		return &Principal{ID: pr.ID, Kind: pr.Kind}, ErrAccountLocked
+	}
 	if !ok {
-		// A real account, wrong password: return the principal id (server-side only,
-		// the client error is unchanged) so the handler can audit a failed attempt on
-		// a real account, a security signal worth recording.
+		// A real account, wrong password: bump the consecutive-failure counter and,
+		// on the threshold-th miss, lock the account. Best effort (the attempt has
+		// already failed; a counter write error must not change the response). Return
+		// the principal id (server-side only, the client error is unchanged) so the
+		// handler can audit the failed attempt, a security signal worth recording.
+		d := nextLockout(failedCount, now)
+		_, _ = p.pool.Exec(ctx,
+			`update human set failed_login_count = $2, locked_until = $3 where principal_id = $1`,
+			pr.ID, d.count, d.lockedUntil)
 		return &Principal{ID: pr.ID, Kind: pr.Kind}, ErrBadCredentials
+	}
+	// Correct password: clear any accumulated failures (best effort) so a run of
+	// wrong guesses that ended in the right password does not carry toward a lock.
+	if failedCount != 0 || lockedUntil != nil {
+		_, _ = p.pool.Exec(ctx,
+			`update human set failed_login_count = 0, locked_until = null where principal_id = $1`, pr.ID)
 	}
 	if !active {
 		// Correct password against a disabled account: a distinct, disclosable
@@ -331,6 +391,11 @@ func (p *PG) SetPassword(ctx context.Context, username, encoded string) (bool, e
 		pid, []byte(encoded)); err != nil {
 		return false, fmt.Errorf("storage: set password: %w", err)
 	}
+	// A user setting their own password clears any force-change flag: this is the
+	// lane an admin reset gates the account into, and completing it releases the gate.
+	if _, err := tx.Exec(ctx, `update human set must_change_password = false where principal_id = $1`, pid); err != nil {
+		return false, fmt.Errorf("storage: clear must-change: %w", err)
+	}
 	// Audit the credential change (never the secret) so a password change leaves a
 	// trail and an impersonated change records the real actor.
 	if err := writeAuditRes(ctx, tx, pid, "change_password", "credential", pid, nil, nil); err != nil {
@@ -340,6 +405,84 @@ func (p *PG) SetPassword(ctx context.Context, username, encoded string) (bool, e
 		return false, fmt.Errorf("storage: commit set password: %w", err)
 	}
 	return true, nil
+}
+
+// SetPrincipalPassword resets a human principal's password by id, on behalf of an
+// admin. Requires an all-scope grant (principals are not scope-tree scoped). Unlike
+// SetPassword (self-service, keyed on username, audited as the target), this audits
+// the acting admin as the actor and does not require the target's current password.
+// The target must be a human; an unknown id is ErrPrincipalNotFound. A reset also
+// revokes every one of the target's bearer credentials (all sessions and tokens) in
+// the same transaction, so the reset takes effect immediately: any live session is
+// signed out and must re-authenticate with the new password.
+func (p *PG) SetPrincipalPassword(ctx context.Context, actorID, id, encoded string, action scope.Set) error {
+	if !action.All {
+		return ErrPrincipalForbidden
+	}
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("storage: begin reset password: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	// Only a human holds a password credential; an unknown id (or a service) is not found.
+	var pgErr *pgconn.PgError
+	if err := tx.QueryRow(ctx, `select 1 from human where principal_id = $1`, id).Scan(new(int)); err != nil {
+		switch {
+		case errors.Is(err, pgx.ErrNoRows):
+			return ErrPrincipalNotFound
+		case errors.As(err, &pgErr) && pgErr.Code == "22P02":
+			return ErrPrincipalNotFound
+		default:
+			return fmt.Errorf("storage: reset password lookup: %w", err)
+		}
+	}
+	if _, err := tx.Exec(ctx, `
+		insert into credential (principal_id, kind, secret_hash, prefix)
+		values ($1, 'password', $2, '')
+		on conflict (principal_id) where kind = 'password'
+			do update set secret_hash = excluded.secret_hash`,
+		id, []byte(encoded)); err != nil {
+		return fmt.Errorf("storage: reset password: %w", err)
+	}
+	// Force logout: drop every bearer credential (sessions and tokens) for the target,
+	// so a reset immediately invalidates any live access.
+	if _, err := tx.Exec(ctx, `delete from credential where principal_id = $1 and kind = 'bearer'`, id); err != nil {
+		return fmt.Errorf("storage: revoke sessions on reset: %w", err)
+	}
+	// Force a change on next login: the admin knows the value they just set, so the
+	// target must replace it before doing anything else (cleared by their own change).
+	if _, err := tx.Exec(ctx, `update human set must_change_password = true where principal_id = $1`, id); err != nil {
+		return fmt.Errorf("storage: flag must-change on reset: %w", err)
+	}
+	if err := writeAuditRes(ctx, tx, actorID, "reset_password", "credential", id, nil, nil); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("storage: commit reset password: %w", err)
+	}
+	return nil
+}
+
+// RevokePrincipalBearers deletes every bearer credential (sessions and tokens) for a
+// principal, except any whose sha256 hash is in keep. It backs the force-logout on a
+// self-service password change: pass the caller's current session hash in keep so the
+// change signs out their OTHER sessions and tokens but not the one making the request.
+// An empty keep revokes them all. Returns the number revoked.
+func (p *PG) RevokePrincipalBearers(ctx context.Context, principalID string, keep [][]byte) (int, error) {
+	var tag pgconn.CommandTag
+	var err error
+	if len(keep) == 0 {
+		tag, err = p.pool.Exec(ctx, `delete from credential where principal_id = $1 and kind = 'bearer'`, principalID)
+	} else {
+		tag, err = p.pool.Exec(ctx,
+			`delete from credential where principal_id = $1 and kind = 'bearer' and secret_hash <> all($2::bytea[])`,
+			principalID, keep)
+	}
+	if err != nil {
+		return 0, fmt.Errorf("storage: revoke bearers: %w", err)
+	}
+	return int(tag.RowsAffected()), nil
 }
 
 // HumanProfilePatch carries the editable self-profile fields. A nil pointer
@@ -1008,8 +1151,8 @@ func (p *PG) loadPrincipal(ctx context.Context, pr *Principal) error {
 	case "human":
 		var h HumanProfile
 		if err := p.pool.QueryRow(ctx,
-			`select username, coalesce(email, ''), coalesce(display_name, '') from human where principal_id = $1`,
-			pr.ID).Scan(&h.Username, &h.Email, &h.DisplayName); err != nil {
+			`select username, coalesce(email, ''), coalesce(display_name, ''), must_change_password from human where principal_id = $1`,
+			pr.ID).Scan(&h.Username, &h.Email, &h.DisplayName, &h.MustChangePassword); err != nil {
 			return fmt.Errorf("storage: load human: %w", err)
 		}
 		pr.Human = &h
