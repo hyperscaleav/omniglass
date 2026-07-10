@@ -289,10 +289,13 @@ func (p *PG) DeleteSecret(ctx context.Context, actorID, id string, read, action 
 
 // UpdateSecret replaces the given field values on a secret, re-sealing any
 // secret fields, audited. Only field values change; name, type, and owner are
-// fixed at creation. A partial map merges over the stored value, so an omitted
-// field keeps its value (a secret field left blank stays as it was). Requires the
-// owner within the action scope; an unknown or out-of-scope id is
-// ErrSecretNotFound.
+// fixed at creation. The map merges over the stored value: a field present in
+// the map is set (a present-but-empty value seals an empty string), and an
+// OMITTED field keeps its value. The console strips blank inputs before the
+// call, so leaving a secret field blank there omits it (keeps the current
+// value); a direct API client that means "keep" must omit the field, not send
+// it empty. Requires the owner within the action scope; an unknown or
+// out-of-scope id is ErrSecretNotFound.
 func (p *PG) UpdateSecret(ctx context.Context, actorID, id string, fields map[string]string, read, action scope.Set) (*Secret, error) {
 	if p.secret == nil {
 		return nil, ErrNoSecretProvider
