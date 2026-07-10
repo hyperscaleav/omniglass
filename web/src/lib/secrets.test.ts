@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { listSecrets, listSecretTypes, createSecret, updateSecret, deleteSecret, effectiveSecrets, revealSecret } from "./secrets";
+import { listSecrets, listSecretTypes, createSecret, updateSecret, deleteSecret, effectiveSecrets, revealSecret, copySecret } from "./secrets";
 
 // The data layer is the unit under test; fetch is the seam we fake, so these
 // assert the request shape and the response handling without a server.
@@ -83,6 +83,17 @@ describe("secrets data layer", () => {
     const req = fetchMock.mock.calls[0][0] as Request;
     expect(req.method).toBe("POST");
     expect(req.url).toContain("/api/v1/secrets/sec_123:reveal");
+  });
+
+  it("copies a secret's plaintext by id (distinct verb endpoint)", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonResponse({ fields: { community: "public" } }),
+    );
+    const fields = await copySecret("sec_123");
+    expect(fields.community).toBe("public");
+    const req = fetchMock.mock.calls[0][0] as Request;
+    expect(req.method).toBe("POST");
+    expect(req.url).toContain("/api/v1/secrets/sec_123:copy");
   });
 
   it("deletes by id", async () => {

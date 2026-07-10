@@ -342,19 +342,33 @@ func (p *PG) UpdateSecret(ctx context.Context, actorID, id string, fields map[st
 	return s, nil
 }
 
-// RevealSecret decrypts a secret's fields and returns their plaintext, auditing
-// the decrypt. This is the real-crypto read path: secret fields are unsealed
-// through the provider (the (owner, name, field) AAD must match), non-secret
-// fields are returned as-is. Requires the owner within the action scope; an
-// unknown or out-of-scope id is ErrSecretNotFound. Every reveal is audited (no
-// token cache in slice 1).
+// RevealSecret decrypts a secret's fields for on-screen display, audited as a
+// `reveal`. See decryptSecret for the mechanics.
 func (p *PG) RevealSecret(ctx context.Context, actorID, id string, read, action scope.Set) (map[string]string, error) {
+	return p.decryptSecret(ctx, actorID, id, "reveal", read, action)
+}
+
+// CopySecret decrypts a secret's fields for clipboard copy, audited as a `copy`.
+// It is the same exposure as a reveal (the plaintext leaves the server), gated
+// by the same secret:reveal capability, but recorded under a distinct verb so the
+// audit trail tells a copy from an on-screen view.
+func (p *PG) CopySecret(ctx context.Context, actorID, id string, read, action scope.Set) (map[string]string, error) {
+	return p.decryptSecret(ctx, actorID, id, "copy", read, action)
+}
+
+// decryptSecret unseals a secret's fields and returns their plaintext, auditing
+// the decrypt under verb. This is the real-crypto read path: secret fields are
+// unsealed through the provider (the (owner, name, field) AAD must match),
+// non-secret fields are returned as-is. Requires the owner within the action
+// scope; an unknown or out-of-scope id is ErrSecretNotFound. Every decrypt is
+// audited (no token cache in slice 1).
+func (p *PG) decryptSecret(ctx context.Context, actorID, id, verb string, read, action scope.Set) (map[string]string, error) {
 	if p.secret == nil {
 		return nil, ErrNoSecretProvider
 	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("storage: begin reveal secret: %w", err)
+		return nil, fmt.Errorf("storage: begin %s secret: %w", verb, err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
@@ -386,11 +400,11 @@ func (p *PG) RevealSecret(ctx context.Context, actorID, id string, read, action 
 		}
 		out[f.Name] = string(pt)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "reveal", "secret", row.id, nil, nil); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, verb, "secret", row.id, nil, nil); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("storage: commit reveal secret: %w", err)
+		return nil, fmt.Errorf("storage: commit %s secret: %w", verb, err)
 	}
 	return out, nil
 }

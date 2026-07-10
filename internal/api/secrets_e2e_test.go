@@ -145,6 +145,14 @@ func TestSecretAPI(t *testing.T) {
 	if revealed.Fields["community"] != "codec-community" {
 		t.Errorf("revealed community = %q, want codec-community", revealed.Fields["community"])
 	}
+	// Copy decrypts the same plaintext, gated identically (audited under the copy verb).
+	var copied struct {
+		Fields map[string]string `json:"fields"`
+	}
+	json.Unmarshal(c.do(ownerTok, http.MethodPost, "/secrets/"+compPollID+":copy", nil, http.StatusOK), &copied)
+	if copied.Fields["community"] != "codec-community" {
+		t.Errorf("copied community = %q, want codec-community", copied.Fields["community"])
+	}
 
 	// Update the value; the re-sealed field reveals the new plaintext.
 	c.do(ownerTok, http.MethodPatch, "/secrets/"+compPollID, map[string]any{"fields": map[string]string{"community": "rotated-ro"}}, http.StatusOK)
@@ -163,6 +171,7 @@ func TestSecretAPI(t *testing.T) {
 	c.do(viewerTok, http.MethodPost, "/secrets", secretReq("nope", "component", "codec-1", "x"), http.StatusForbidden)
 	c.do(viewerTok, http.MethodGet, "/secrets", nil, http.StatusForbidden)
 	c.do(viewerTok, http.MethodPost, "/secrets/"+compPollID+":reveal", nil, http.StatusForbidden)
+	c.do(viewerTok, http.MethodPost, "/secrets/"+compPollID+":copy", nil, http.StatusForbidden)
 	c.do(viewerTok, http.MethodPatch, "/secrets/"+compPollID, map[string]any{"fields": map[string]string{"community": "x"}}, http.StatusForbidden)
 }
 

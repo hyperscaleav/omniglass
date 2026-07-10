@@ -202,6 +202,9 @@ func (UnimplementedGateway) DeleteSecret(context.Context, string, string, scope.
 func (UnimplementedGateway) RevealSecret(context.Context, string, string, scope.Set, scope.Set) (map[string]string, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) CopySecret(context.Context, string, string, scope.Set, scope.Set) (map[string]string, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) ResolveSecrets(context.Context, string, scope.Set) ([]ResolvedSecret, error) {
 	return nil, nil
 }

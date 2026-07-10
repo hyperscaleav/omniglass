@@ -1039,6 +1039,20 @@ func generatedCommands() []*cobra.Command {
 			Short: "Commands for the secret resource",
 		}
 		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "copy <id>",
+				Short:   "Decrypt a secret for clipboard copy",
+				Long:    "Decrypts and returns a secret's field values for a clipboard copy, audited under the copy verb (distinct from an on-screen reveal). Same exposure and the same secret:reveal gate as reveal.",
+				Example: "  omniglass secret copy <id>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/secrets/%s:copy", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "POST", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
 			var fFields string
 			var fName string
 			var fOwner string

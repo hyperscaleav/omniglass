@@ -195,6 +195,7 @@ type Gateway interface {
 	UpdateSecret(ctx context.Context, actorID, id string, fields map[string]string, read, action scope.Set) (*Secret, error)
 	DeleteSecret(ctx context.Context, actorID, id string, read, action scope.Set) error
 	RevealSecret(ctx context.Context, actorID, id string, read, action scope.Set) (map[string]string, error)
+	CopySecret(ctx context.Context, actorID, id string, read, action scope.Set) (map[string]string, error)
 	ResolveSecrets(ctx context.Context, componentID string, read scope.Set) ([]ResolvedSecret, error)
 
 	// Close releases the underlying connection pool. Idempotent at the pool

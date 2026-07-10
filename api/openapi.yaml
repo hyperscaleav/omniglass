@@ -2694,6 +2694,32 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Update a secret's field values
+  /secrets/{id}:copy:
+    post:
+      description: Decrypts and returns a secret's field values for a clipboard copy, audited under the copy verb (distinct from an on-screen reveal). Same exposure and the same secret:reveal gate as reveal.
+      operationId: copy-secret
+      parameters:
+        - description: The secret's id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The secret's id
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RevealSecretOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Decrypt a secret for clipboard copy
   /secrets/{id}:reveal:
     post:
       description: "Decrypts and returns a secret's field values, auditing the decrypt. Sensitive: gated by secret:reveal, which the viewer read floor does not carry, so only admin (secret:*) and owner may reveal."

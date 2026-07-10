@@ -768,6 +768,26 @@ export interface paths {
         patch: operations["update-secret"];
         trace?: never;
     };
+    "/secrets/{id}:copy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decrypt a secret for clipboard copy
+         * @description Decrypts and returns a secret's field values for a clipboard copy, audited under the copy verb (distinct from an on-screen reveal). Same exposure and the same secret:reveal gate as reveal.
+         */
+        post: operations["copy-secret"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/secrets/{id}:reveal": {
         parameters: {
             query?: never;
@@ -3259,6 +3279,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SecretBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "copy-secret": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The secret's id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevealSecretOutputBody"];
                 };
             };
             /** @description Error */

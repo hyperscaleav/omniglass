@@ -16,7 +16,7 @@ const verbClass = (verb: string): string => {
   if (verb === "delete" || verb === "login_failed") return "badge-soft badge-error";
   if (verb === "create") return "badge-soft badge-success";
   if (verb === "update" || verb === "change_password" || verb === "login_denied") return "badge-soft badge-warning";
-  if (verb === "reveal") return "badge-soft badge-warning";
+  if (verb === "reveal" || verb === "copy") return "badge-soft badge-warning";
   if (verb === "login" || verb === "logout") return "badge-soft badge-info";
   if (verb === "impersonate") return "badge-soft badge-primary";
   return "badge-ghost";

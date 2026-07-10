@@ -251,6 +251,24 @@ func registerSecretRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	})
 
 	huma.Register(api, huma.Operation{
+		OperationID: "copy-secret",
+		Method:      http.MethodPost,
+		Path:        "/secrets/{id}:copy",
+		Summary:     "Decrypt a secret for clipboard copy",
+		Description: "Decrypts and returns a secret's field values for a clipboard copy, audited under the copy verb (distinct from an on-screen reveal). Same exposure and the same secret:reveal gate as reveal.",
+		Middlewares: huma.Middlewares{a.authn, a.require("secret", "reveal")},
+	}, func(ctx context.Context, in *secretIDInput) (*revealSecretOutput, error) {
+		fields, err := gw.CopySecret(ctx, actorID(ctx), in.ID,
+			a.scopeFor(ctx, "secret", "read"), a.scopeFor(ctx, "secret", "reveal"))
+		if err != nil {
+			return nil, mapSecretErr(err)
+		}
+		out := &revealSecretOutput{}
+		out.Body.Fields = fields
+		return out, nil
+	})
+
+	huma.Register(api, huma.Operation{
 		OperationID: "effective-secrets",
 		Method:      http.MethodGet,
 		Path:        "/components/{name}/effective-secrets",

@@ -1,5 +1,5 @@
 import { For, Show, createSignal, type JSX } from "solid-js";
-import { revealSecret, type SecretField } from "../lib/secrets";
+import { revealSecret, copySecret, type SecretField } from "../lib/secrets";
 import { describeError } from "../lib/format";
 import { Eye, EyeOff, Copy, Check } from "./icons";
 
@@ -16,8 +16,10 @@ export default function SecretFields(props: { secretId: string; fields: SecretFi
   const [copied, setCopied] = createSignal<string | null>(null);
   const [err, setErr] = createSignal<string | null>(null);
 
-  // Decrypt through the reveal endpoint (audited) and return the field map.
-  const decrypt = () => revealSecret(props.secretId);
+  // Decrypt through the audited endpoints: the eye reveals (verb `reveal`), the
+  // copy decrypts for the clipboard (verb `copy`), so the audit tells them apart.
+  const revealPlain = () => revealSecret(props.secretId);
+  const copyPlain = () => copySecret(props.secretId);
 
   async function toggleReveal(name: string) {
     if (shown()[name] !== undefined) {
@@ -27,7 +29,7 @@ export default function SecretFields(props: { secretId: string; fields: SecretFi
     setBusy(name);
     setErr(null);
     try {
-      const plain = await decrypt();
+      const plain = await revealPlain();
       setShown((s) => ({ ...s, [name]: plain[name] ?? "" }));
     } catch (e) {
       setErr(describeError(e));
@@ -39,9 +41,9 @@ export default function SecretFields(props: { secretId: string; fields: SecretFi
   async function copyField(f: SecretField) {
     setErr(null);
     try {
-      // A secret field decrypts through the audited endpoint on every copy; a
-      // non-secret field is already plaintext.
-      const value = f.secret ? (await decrypt())[f.name] ?? "" : f.value;
+      // A secret field decrypts through the audited copy endpoint on every copy;
+      // a non-secret field is already plaintext.
+      const value = f.secret ? (await copyPlain())[f.name] ?? "" : f.value;
       await navigator.clipboard.writeText(value);
       setCopied(f.name);
       setTimeout(() => copied() === f.name && setCopied(null), 1500);
