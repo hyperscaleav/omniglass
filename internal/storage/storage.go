@@ -38,7 +38,7 @@ type Gateway interface {
 	// IssueBearerCredential mints an additional bearer credential for an existing
 	// principal by human username (token reissue / break-glass / dev login).
 	// Returns false if no such username.
-	IssueBearerCredential(ctx context.Context, username string, hash []byte, prefix string) (bool, error)
+	IssueBearerCredential(ctx context.Context, username string, hash []byte, prefix string, expiresAt *time.Time) (bool, error)
 	// AuthenticateBearer resolves a bearer credential by its sha256 hash to the
 	// principal, its kind profile, and its grants. Returns ErrCredentialNotFound
 	// if no credential matches.

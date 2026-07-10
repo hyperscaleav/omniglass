@@ -124,8 +124,10 @@ func (p *PG) BootstrapOwner(ctx context.Context, spec OwnerSpec) (created bool, 
 // principal addressed by its human username, returning false if no such
 // username exists. The caller generates and hashes the token and shows the
 // cleartext once; this is the same trusted direct-DB lane as BootstrapOwner
-// (token reissue, break-glass, and the `make dev` login).
-func (p *PG) IssueBearerCredential(ctx context.Context, username string, hash []byte, prefix string) (bool, error) {
+// (token reissue, break-glass, and the `make dev` login). expiresAt, when non-nil,
+// bounds the credential's lifetime (a session cookie set at login); a nil expiry
+// never expires (an API token minted from the CLI).
+func (p *PG) IssueBearerCredential(ctx context.Context, username string, hash []byte, prefix string, expiresAt *time.Time) (bool, error) {
 	var pid string
 	err := p.pool.QueryRow(ctx, `select principal_id from human where username = $1`, username).Scan(&pid)
 	switch {
@@ -135,8 +137,8 @@ func (p *PG) IssueBearerCredential(ctx context.Context, username string, hash []
 		return false, fmt.Errorf("storage: lookup human %q: %w", username, err)
 	}
 	if _, err := p.pool.Exec(ctx,
-		`insert into credential (principal_id, kind, secret_hash, prefix) values ($1, 'bearer', $2, $3)`,
-		pid, hash, prefix); err != nil {
+		`insert into credential (principal_id, kind, secret_hash, prefix, expires_at) values ($1, 'bearer', $2, $3, $4)`,
+		pid, hash, prefix, expiresAt); err != nil {
 		return false, fmt.Errorf("storage: issue credential: %w", err)
 	}
 	return true, nil
@@ -230,14 +232,17 @@ func mustDummyHash() string {
 }
 
 // AuthenticateBearer resolves a bearer credential by its sha256 hash to the
-// principal, its kind profile, and its grants. ErrCredentialNotFound if none.
+// principal, its kind profile, and its grants. ErrCredentialNotFound if none, which
+// includes a credential whose expiry has passed (an expired session is treated as
+// absent, so it authenticates nothing).
 func (p *PG) AuthenticateBearer(ctx context.Context, hash []byte) (*Principal, error) {
 	var pr Principal
 	err := p.pool.QueryRow(ctx, `
 		select pr.id, pr.kind
 		from credential c
 		join principal pr on pr.id = c.principal_id
-		where c.kind = 'bearer' and c.secret_hash = $1 and pr.active`, hash).Scan(&pr.ID, &pr.Kind)
+		where c.kind = 'bearer' and c.secret_hash = $1 and pr.active
+			and (c.expires_at is null or c.expires_at > now())`, hash).Scan(&pr.ID, &pr.Kind)
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
 		return nil, ErrCredentialNotFound

@@ -554,3 +554,12 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   password is a 422, resetting yourself is a 422 and an owner is a 403, the admin reset lets the user
   sign in with the new password), and web tests (the kebab opens the panel and Generate + Set password
   calls the endpoint and confirms; the action is hidden on your own blade).
+- **Identity: bearer session expiry.** Bearer credentials gain a nullable `credential.expires_at` (a new
+  additive migration), and `AuthenticateBearer` refuses a credential whose expiry has passed (an expired
+  session authenticates nothing). A web login installs its session cookie with a fixed absolute lifetime
+  (12h), setting both the credential's `expires_at` and the cookie `Max-Age`, so a stolen session cookie is
+  no longer valid forever; the `IssueBearerCredential` gateway method gained an `expiresAt` argument. CLI
+  API tokens (`omniglass token`) and the bootstrap token pass a null expiry and do not expire, so
+  automation keeps working. Proven by a storage test (a past-expiry bearer is `ErrCredentialNotFound`, a
+  future or null one authenticates). A sliding idle timeout and a background sweep of expired rows are
+  deferred refinements; the security floor (expired is refused at auth) lands here.
