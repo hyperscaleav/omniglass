@@ -9,9 +9,12 @@ same surfaces are also the **learning surfaces** (see
 [the learning-tool restriction](/contributing/learning-tool/)).
 
 :::note[What shipped]
-Styling is **daisyUI 5 component classes + Tailwind utilities**, with two brand themes defined
-through the daisyUI plugin (`omniglass-dark` default, `omniglass-light`) from the design-system
-tokens. Bespoke CSS is kept to what daisyUI has no slot for: the domain severity/health colors,
+Styling is **daisyUI 5 component classes + Tailwind utilities** on the `omniglass-dark` brand
+theme defined through the daisyUI plugin from the design-system tokens. The console ships
+**dark-only for now**: an `omniglass-light` theme is still defined but not reachable (the toggle
+was removed while the tokens settle, since a brand teal that reads well as a fill does not as text
+on white, making a second theme ongoing churn without enough payoff). It is revivable by restoring
+a persisted `setTheme` and the toggle. Bespoke CSS is kept to what daisyUI has no slot for: the domain severity/health colors,
 the density lever, the column-resize handle, and the live pulse. Accessible interactive widgets
 (dialog, combobox, select, popover) are built on **Kobalte**, styled by daisyUI, pulled in
 primitive-first. The first consumers are the ⌘K command palette and the form/detail `Drawer`
@@ -80,20 +83,20 @@ filled `btn-action` with a disk icon, Cancel is a `btn-quiet` with an X. Create 
 `btn-action` with a plus. The icons come from the local `icons` set, so a control looks identical on
 every page.
 
-The intents are `@apply`-composed from daisyUI in `app.css`, so they inherit the active theme's
-tokens. This is what makes **both themes** (`omniglass-dark` / `omniglass-light`) stay consistent
-without per-theme button rules: color lives in the tokens, not the markup. A `style-guard` test scans
-the source and fails the build on **any** raw daisyUI color/emphasis button class (`btn-primary`,
-`btn-ghost`, `btn-outline`, `btn-soft`, `btn-error`, `btn-success`, `btn-warning`, and the rest), so
-the vocabulary cannot drift back to one-off, theme-fragile button styling.
+The intents are `@apply`-composed from daisyUI in `app.css`, so they inherit the theme's tokens:
+color lives in the tokens, not the markup. A `style-guard` test scans the source and fails the
+build on **any** raw daisyUI color/emphasis button class (`btn-primary`, `btn-ghost`, `btn-outline`,
+`btn-soft`, `btn-error`, `btn-success`, `btn-warning`, and the rest), so the vocabulary cannot drift
+back to one-off styling.
 
-The primary button (and every other primary-filled surface: solid badges, selected chips,
-avatars) is the **bright brand teal in both themes** with a dark ink foreground, driven by the
-theme's own `--color-primary` / `--color-primary-content`. Light mode carries **two teals on
-purpose**: the bright brand teal for **fills**, and a darker teal (a small `[data-theme=light]
-.text-primary` rule in `app.css`) for teal **text** on the near-white ground, since the bright
-teal is unreadable as small text on white (1.9:1) while it reads 8.3:1 as a fill with dark ink.
-Fills stay on-brand; only the text color shifts.
+The primary button (and every other primary-filled surface: solid badges, selected chips, avatars)
+is the **bright brand teal** with a dark ink foreground, driven by the theme's own `--color-primary`
+/ `--color-primary-content`. daisyUI 5's `@apply btn-primary` drops the primary foreground and lets
+the filled button inherit the near-white base-content (1.8:1 on the teal, failing WCAG), so a single
+unlayered `.btn-action:not(:disabled)` rule restores the theme foreground. The dormant light theme
+also needs a darker teal for teal **text** on white (a `[data-theme=light] .text-primary` rule),
+since the bright teal is unreadable as small text on white (1.9:1) while it reads 8.3:1 as a fill
+with dark ink; that rule is inert while the console is dark-only.
 
 ## Primitives (the reuse target)
 

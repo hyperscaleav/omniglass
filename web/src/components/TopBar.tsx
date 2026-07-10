@@ -1,13 +1,9 @@
-import { Show } from "solid-js";
-import { useTheme, toggleTheme } from "../lib/theme";
 import { hostPlatform, shortcutModifier, shortcutHint } from "../lib/platform";
-import { Sun, Moon, Search } from "./icons";
+import { Search } from "./icons";
 
-// The sticky top bar (daisyUI navbar): the current section label, the
-// command-palette trigger (a global jump, distinct from a page's own filter),
-// and the dark/light theme toggle.
+// The sticky top bar (daisyUI navbar): the current section label and the
+// command-palette trigger (a global jump, distinct from a page's own filter).
 export default function TopBar(props: { section: string; onOpenPalette: () => void }) {
-  const theme = useTheme();
   // Label the palette shortcut with the host-native modifier (⌘ on mac, Ctrl else).
   const mod = shortcutModifier(hostPlatform());
   const hint = shortcutHint(hostPlatform(), "K");
@@ -29,9 +25,6 @@ export default function TopBar(props: { section: string; onOpenPalette: () => vo
       </button>
       <button class="btn btn-quiet btn-sm btn-square sm:hidden" onClick={props.onOpenPalette} title="Search and jump">
         <Search size={17} />
-      </button>
-      <button class="btn btn-quiet btn-sm btn-square" title={theme() === "dark" ? "Light mode" : "Dark mode"} onClick={toggleTheme}>
-        <Show when={theme() === "dark"} fallback={<Moon size={16} />}><Sun size={16} /></Show>
       </button>
     </header>
   );

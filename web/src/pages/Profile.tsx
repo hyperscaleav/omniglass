@@ -116,7 +116,7 @@ export default function Profile() {
               <p class="mt-1 text-[11px] text-base-content/40">An administrator sets your email.</p>
             </div>
             <Note note={profileMsg()} />
-            <div class="card-actions">
+            <div class="card-actions mt-1 justify-end border-t border-base-300 pt-3">
               <button type="submit" class="btn btn-action btn-sm gap-1.5" disabled={profileBusy()}>
                 <Show when={profileBusy()}><span class="loading loading-spinner loading-xs" /></Show>
                 <Save size={15} /> Save profile
@@ -161,7 +161,7 @@ export default function Profile() {
               />
             </div>
             <Note note={pwMsg()} />
-            <div class="card-actions">
+            <div class="card-actions mt-1 justify-end border-t border-base-300 pt-3">
               <button type="submit" class="btn btn-action btn-sm gap-1.5" disabled={pwBusy() || !current() || !next() || !!passwordError(next(), human()?.username)}>
                 <Show when={pwBusy()}><span class="loading loading-spinner loading-xs" /></Show>
                 <Save size={15} /> Change password
