@@ -52,14 +52,8 @@ function fieldsPreview(s: Secret): JSX.Element {
 }
 
 const columns: FlatColumn<Secret>[] = [
-  {
-    key: "name", label: "Name", sortVal: (s) => s.name, cell: (s) => (
-      <span class="inline-flex items-center gap-2">
-        <span class="font-data font-semibold">{s.name}</span>
-        <span class="badge badge-ghost badge-sm">{s.secret_type}</span>
-      </span>
-    ),
-  },
+  { key: "name", label: "Name", sortVal: (s) => s.name, cell: (s) => <span class="font-data font-semibold">{s.name}</span> },
+  { key: "type", label: "Type", width: "170px", sortVal: (s) => s.secret_type, cell: (s) => <span class="badge badge-ghost badge-sm">{s.secret_type}</span> },
   { key: "owner", label: "Owner", width: "220px", sortVal: (s) => s.owner_kind, cell: (s) => <span class="text-base-content/70">{ownerLabel(s)}</span> },
   { key: "fields", label: "Fields", cell: (s) => fieldsPreview(s) },
 ];
