@@ -551,22 +551,13 @@ type listMeSessionsOutput struct {
 	}
 }
 
-// listMeSessionsHandler returns the caller's own active bearer credentials (login
-// sessions and API tokens) with their non-secret metadata, newest first. Self-scoped
-// and authn-only: it lists only the principal resolved from the request, never
-// another. The current credential is flagged so the console can mark it.
-func (a *authenticator) listMeSessionsHandler(ctx context.Context, _ *struct{}) (*listMeSessionsOutput, error) {
-	pr, ok := principalFrom(ctx)
-	if !ok {
-		return nil, huma.Error401Unauthorized("unauthenticated")
-	}
-	currentHash, _ := sessionHashFrom(ctx)
-	creds, err := a.gw.ListBearerCredentials(ctx, pr.ID, currentHash)
-	if err != nil {
-		return nil, huma.Error500InternalServerError("list sessions")
-	}
-	out := &listMeSessionsOutput{}
-	out.Body.Sessions = make([]sessionBody, 0, len(creds))
+// toSessionBodies renders stored bearer credentials as the session wire shape,
+// newest first, never leaking the secret. The kind is the stored purpose (a web-login
+// "session" or a CLI/API "token"); both now carry an expiry, so a legacy row with no
+// purpose falls back to its expiry shape. Shared by the self-service list and the admin
+// per-principal list, so both expose the same shape.
+func toSessionBodies(creds []storage.BearerCredential) []sessionBody {
+	out := make([]sessionBody, 0, len(creds))
 	for _, c := range creds {
 		// The kind is the stored purpose (session vs token); a legacy row with no
 		// purpose falls back to its expiry shape (a session had one, a token did not).
@@ -588,8 +579,27 @@ func (a *authenticator) listMeSessionsHandler(ctx context.Context, _ *struct{}) 
 			exp := c.ExpiresAt.Format(time.RFC3339)
 			s.ExpiresAt = &exp
 		}
-		out.Body.Sessions = append(out.Body.Sessions, s)
+		out = append(out, s)
 	}
+	return out
+}
+
+// listMeSessionsHandler returns the caller's own active bearer credentials (login
+// sessions and API tokens) with their non-secret metadata, newest first. Self-scoped
+// and authn-only: it lists only the principal resolved from the request, never
+// another. The current credential is flagged so the console can mark it.
+func (a *authenticator) listMeSessionsHandler(ctx context.Context, _ *struct{}) (*listMeSessionsOutput, error) {
+	pr, ok := principalFrom(ctx)
+	if !ok {
+		return nil, huma.Error401Unauthorized("unauthenticated")
+	}
+	currentHash, _ := sessionHashFrom(ctx)
+	creds, err := a.gw.ListBearerCredentials(ctx, pr.ID, currentHash)
+	if err != nil {
+		return nil, huma.Error500InternalServerError("list sessions")
+	}
+	out := &listMeSessionsOutput{}
+	out.Body.Sessions = toSessionBodies(creds)
 	return out, nil
 }
 

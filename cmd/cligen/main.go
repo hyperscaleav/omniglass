@@ -156,6 +156,14 @@ var nameOverride = map[string]([]string){
 	"get-auth-me":             {"auth", "me"},
 	"update-auth-me":          {"auth", "update-profile"},
 	"change-auth-me-password": {"auth", "change-password"},
+	// The admin per-principal session routes share the leaf collection noun
+	// ("sessions") with the self-service `/auth/me/sessions` ones, so the leaf-noun
+	// heuristic would collapse both into one `session` group with two colliding
+	// `list` / `revoke` commands. Group the admin pair under the `principal`
+	// resource instead (alongside reset-password and impersonate), keeping the
+	// self-service pair as the plain `session list` / `session revoke`.
+	"list-principal-sessions":  {"principal", "sessions"},
+	"revoke-principal-session": {"principal", "revoke-session"},
 }
 
 func buildCommands(doc spec, base string) []command {

@@ -955,6 +955,34 @@ func generatedCommands() []*cobra.Command {
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "revoke-session <id> <sid>",
+				Short:   "Revoke a principal's session",
+				Long:    "Revokes one of another principal's sessions or tokens by id (an administrator action; the target is immediately signed out of that credential). Gated by principal:revoke-session (all-scope). Bounded to the target, so a credential id that is not theirs is a non-disclosing 404, never a cross-principal revoke. Refused (403) on an owner (an owner's sessions cannot be revoked by anyone, the takeover guard shared with impersonation and password reset) or when it would exceed the caller's own capabilities. Audited with the administrator as the actor.",
+				Example: "  omniglass principal revoke-session <id> <sid>",
+				Args:    cobra.ExactArgs(2),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/principals/%s/sessions/%s:revoke", url.PathEscape(args[0]), url.PathEscape(args[1]))
+					return runAPICommand(cmd, "POST", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "sessions <id>",
+				Short:   "List a principal's sessions",
+				Long:    "Lists another principal's active bearer credentials (login sessions and API tokens) with their non-secret metadata, newest first, so an administrator can see where an account is signed in and revoke a session that should not be. Gated by principal:revoke-session (all-scope). The token secret is never returned, and current is always false (there is no \"this request's own session\" when viewing another principal).",
+				Example: "  omniglass principal sessions <id>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/principals/%s/sessions", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
 			var fImageBase64 string
 			cmd := &cobra.Command{
 				Use:     "setAvatar <id>",

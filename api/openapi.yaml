@@ -785,6 +785,25 @@ components:
       required:
         - members
       type: object
+    ListPrincipalSessionsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListPrincipalSessionsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        sessions:
+          items:
+            $ref: "#/components/schemas/SessionBody"
+          type:
+            - array
+            - "null"
+      required:
+        - sessions
+      type: object
     ListPrincipalsOutputBody:
       additionalProperties: false
       properties:
@@ -2606,6 +2625,97 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Revoke a grant
+  /principals/{id}/sessions:
+    get:
+      description: Lists another principal's active bearer credentials (login sessions and API tokens) with their non-secret metadata, newest first, so an administrator can see where an account is signed in and revoke a session that should not be. Gated by principal:revoke-session (all-scope). The token secret is never returned, and current is always false (there is no "this request's own session" when viewing another principal).
+      operationId: list-principal-sessions
+      parameters:
+        - description: The principal, addressed by its uuid or a human username
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The principal, addressed by its uuid or a human username
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListPrincipalSessionsOutputBody"
+          description: OK
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Not Found
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Internal Server Error
+      summary: List a principal's sessions
+  /principals/{id}/sessions/{sid}:revoke:
+    post:
+      description: Revokes one of another principal's sessions or tokens by id (an administrator action; the target is immediately signed out of that credential). Gated by principal:revoke-session (all-scope). Bounded to the target, so a credential id that is not theirs is a non-disclosing 404, never a cross-principal revoke. Refused (403) on an owner (an owner's sessions cannot be revoked by anyone, the takeover guard shared with impersonation and password reset) or when it would exceed the caller's own capabilities. Audited with the administrator as the actor.
+      operationId: revoke-principal-session
+      parameters:
+        - description: The principal, addressed by its uuid or a human username
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The principal, addressed by its uuid or a human username
+            type: string
+        - description: The credential id to revoke (from the principal's session list)
+          in: path
+          name: sid
+          required: true
+          schema:
+            description: The credential id to revoke (from the principal's session list)
+            type: string
+      responses:
+        "204":
+          description: No Content
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Not Found
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Internal Server Error
+      summary: Revoke a principal's session
   /principals/{id}:archive:
     post:
       description: "Soft-deletes a principal: it is hidden from the directory, can no longer authenticate, and its rows stay intact, reversibly (restore) until purged. Gated by principal:archive (all-scope). The last active owner cannot be archived."

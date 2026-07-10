@@ -38,10 +38,14 @@ Everything lives under `/api/v1`. The path shape is derivable, not special-cased
   `/auth/me` family is the exception: `/auth/me:changePassword` and `/auth/me/sessions/{id}:revoke`
   are **authn-only** (they resolve the target from the session, never a path id, so they carry no
   capability and a credential id that is not the caller's own is a 404, not a cross-principal action).
+  The **admin** counterparts on `/principals/{id}` do carry a capability and a scoped path id:
+  `GET /principals/{id}/sessions` and `POST /principals/{id}/sessions/{sid}:revoke` (both gated by
+  `principal:revoke-session`) let an administrator list and end **another** principal's sessions, the revoke
+  bounded to that target and behind the owner takeover guard.
 - **Singular kind sub-segments** for the typed families: `/rules/calc`, `/datapoints/metric`,
   `/types/component`.
 - **A principal is addressable by uuid or username.** Every `/principals/{id}` route (read, update,
-  grants, the lifecycle verbs, reset, impersonate) accepts either the principal's uuid or a human's
+  grants, the lifecycle verbs, reset, sessions, impersonate) accepts either the principal's uuid or a human's
   current username, resolved server-side (a value that parses as a uuid is used directly; otherwise it
   is a username lookup, and an unknown one is a 404). The uuid is still the stable identity (a username
   is mutable and nothing keys on it), so a username is a convenience address resolved at call time.

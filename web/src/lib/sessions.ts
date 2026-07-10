@@ -47,3 +47,41 @@ export function useRevokeSession() {
     return { ok: true };
   };
 }
+
+// The admin session surface (issue #172, slice 2): view and revoke ANOTHER
+// principal's sessions from the Users blade. Gated by principal:revoke-session; the
+// server bounds every read and revoke to the target principal and never leaks the
+// secret. current is always false in this view (there is no "this request's own
+// session" when looking at someone else), so every row reads as "Revoke".
+
+export const principalSessionsKey = (id: string) => ["principals", id, "sessions"] as const;
+
+// usePrincipalSessions lists a target principal's active sessions and tokens, newest
+// first. The `enabled` guard lets the caller withhold the fetch until it holds the
+// capability, so a viewer never fires a request the server would 403.
+export function usePrincipalSessions(id: string, enabled: () => boolean = () => true) {
+  return useQuery(() => ({
+    queryKey: principalSessionsKey(id),
+    enabled: enabled(),
+    queryFn: async (): Promise<Session[]> => {
+      const { data, error } = await api.GET("/principals/{id}/sessions", { params: { path: { id } } });
+      if (error) throw error;
+      return (data?.sessions ?? []) as Session[];
+    },
+  }));
+}
+
+// useRevokePrincipalSession revokes one of a target principal's sessions by id, then
+// invalidates that principal's session list. A 404 means the row was already gone
+// (revoked elsewhere), which is not an error to the operator.
+export function useRevokePrincipalSession(id: string) {
+  const qc = useQueryClient();
+  return async (sid: string): Promise<{ ok: true } | { ok: false; message: string }> => {
+    const { error, response } = await api.POST("/principals/{id}/sessions/{sid}:revoke", { params: { path: { id, sid } } });
+    if (error && response.status !== 404) {
+      return { ok: false, message: "Could not revoke that session." };
+    }
+    await qc.invalidateQueries({ queryKey: principalSessionsKey(id) });
+    return { ok: true };
+  };
+}

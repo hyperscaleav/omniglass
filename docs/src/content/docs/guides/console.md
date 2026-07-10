@@ -127,10 +127,18 @@ location-scoped admin cannot list users.
   **you** as the actor. Without the capability the panel does not render, though the user's picture still
   shows in the blade header and the directory. This is a console path for `omniglass principal setAvatar
   <id>` / `removeAvatar <id>` on the CLI.
+- With `principal:revoke-session`, another user's blade gains **Sessions** and **API tokens** sections:
+  every credential the account holds, each a **session** (a device sign-in) or a **token** (a CLI/API
+  credential), both time-bounded, listed with its `ogp_` locator and when it was issued. The token secret
+  is never shown. **Revoke** any of them to sign that credential out at once, so a lost laptop or a leaked
+  token can be cut off without resetting the whole account. The revoke is audited with **you** as the actor.
+  As with the password reset, an **owner's** sessions cannot be revoked by a lesser admin (you can see them,
+  not end them), and the affordance is hidden entirely unless you hold the capability.
 
 From the CLI the same surface is `omniglass principal list` / `get` / `create` / `update` /
-`disable` / `enable` / `archive` / `restore` / `purge`, and `omniglass grant create <id>` /
-`grant delete <id> <grantId>`.
+`disable` / `enable` / `archive` / `restore` / `purge`, `omniglass grant create <id>` /
+`grant delete <id> <grantId>`, and `omniglass principal sessions <id>` /
+`principal revoke-session <id> <sid>`.
 
 In the grant builder itself, hovering a role in the picker shows its description and the permissions it
 grants, so you can see what you are assigning before you stage it.
