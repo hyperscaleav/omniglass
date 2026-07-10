@@ -235,7 +235,7 @@ export default function Locations() {
           </Show>
           <span class="flex-1" />
           <Show when={n.type !== "room" && can(me.data, "location", "create")}>
-            <button class="btn btn-sm gap-1.5" onClick={() => ctx.openCreate(n)}><Plus size={14} /> Add child</button>
+            <button class="btn btn-quiet btn-sm gap-1.5" onClick={() => ctx.openCreate(n)}><Plus size={14} /> Add child</button>
           </Show>
           <Show when={can(me.data, "location", "update")}>
             <button class="btn btn-action btn-sm gap-1.5" onClick={() => ctx.openEdit(n)}><Pencil size={14} /> Edit</button>

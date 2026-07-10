@@ -166,7 +166,7 @@ export default function Systems() {
             <button class="btn btn-danger btn-sm" onClick={() => { ctx.closeBlades(); del(n); }}>Delete</button>
           </Show>
           <span class="flex-1" />
-          <button class="btn btn-sm gap-1.5" onClick={() => navigate(`/components?system=${encodeURIComponent(n.raw.name)}`)}>Components <ArrowRight size={14} /></button>
+          <button class="btn btn-quiet btn-sm gap-1.5" onClick={() => navigate(`/components?system=${encodeURIComponent(n.raw.name)}`)}>Components <ArrowRight size={14} /></button>
           <Show when={can(me.data, "system", "update")}>
             <button class="btn btn-action btn-sm gap-1.5" onClick={() => ctx.openEdit(n)}><Pencil size={14} /> Edit</button>
           </Show>
