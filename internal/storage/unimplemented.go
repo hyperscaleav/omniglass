@@ -108,6 +108,17 @@ func (UnimplementedGateway) PurgePrincipal(context.Context, string, string, scop
 func (UnimplementedGateway) SetPrincipalPassword(context.Context, string, string, string, scope.Set) error {
 	return nil
 }
+func (UnimplementedGateway) SetOwnAvatar(context.Context, string, string) error { return nil }
+func (UnimplementedGateway) ClearOwnAvatar(context.Context, string) error       { return nil }
+func (UnimplementedGateway) SetPrincipalAvatar(context.Context, string, string, string, scope.Set) error {
+	return nil
+}
+func (UnimplementedGateway) ClearPrincipalAvatar(context.Context, string, string, scope.Set) error {
+	return nil
+}
+func (UnimplementedGateway) GetHumanAvatar(context.Context, string) (string, bool, error) {
+	return "", false, nil
+}
 func (UnimplementedGateway) RevokePrincipalBearers(context.Context, string, [][]byte) (int, error) {
 	return 0, nil
 }
