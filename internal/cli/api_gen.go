@@ -34,6 +34,10 @@ func generatedCommands() []*cobra.Command {
 			Short: "Commands for the audit-log resource",
 		}
 		parent.AddCommand(func() *cobra.Command {
+			var qLimit int
+			var qResource string
+			var qVerb string
+			var qBefore string
 			cmd := &cobra.Command{
 				Use:     "list",
 				Short:   "List audit-trail events",
@@ -42,9 +46,29 @@ func generatedCommands() []*cobra.Command {
 				Args:    cobra.ExactArgs(0),
 				RunE: func(cmd *cobra.Command, args []string) error {
 					path := fmt.Sprintf("/api/v1/audit-log")
+					q := url.Values{}
+					if cmd.Flags().Changed("limit") {
+						q.Set("limit", fmt.Sprintf("%v", qLimit))
+					}
+					if cmd.Flags().Changed("resource") {
+						q.Set("resource", fmt.Sprintf("%v", qResource))
+					}
+					if cmd.Flags().Changed("verb") {
+						q.Set("verb", fmt.Sprintf("%v", qVerb))
+					}
+					if cmd.Flags().Changed("before") {
+						q.Set("before", fmt.Sprintf("%v", qBefore))
+					}
+					if enc := q.Encode(); enc != "" {
+						path += "?" + enc
+					}
 					return runAPICommand(cmd, "GET", path, nil)
 				},
 			}
+			cmd.Flags().IntVar(&qLimit, "limit", 0, "Max rows to return, newest first (default 100, capped at 500)")
+			cmd.Flags().StringVar(&qResource, "resource", "", "Filter to one resource kind (e.g. auth, principal_grant)")
+			cmd.Flags().StringVar(&qVerb, "verb", "", "Filter to one verb (e.g. login, create)")
+			cmd.Flags().StringVar(&qBefore, "before", "", "Only events strictly older than this RFC3339 timestamp (paging backward)")
 			return cmd
 		}())
 		roots = append(roots, parent)
@@ -632,13 +656,13 @@ func generatedCommands() []*cobra.Command {
 		}
 		parent.AddCommand(func() *cobra.Command {
 			cmd := &cobra.Command{
-				Use:     "archive",
+				Use:     "archive <id>",
 				Short:   "Archive a principal",
 				Long:    "Soft-deletes a principal: it is hidden from the directory, can no longer authenticate, and its rows stay intact, reversibly (restore) until purged. Gated by principal:archive (all-scope). The last active owner cannot be archived.",
-				Example: "  omniglass principal archive",
-				Args:    cobra.ExactArgs(0),
+				Example: "  omniglass principal archive <id>",
+				Args:    cobra.ExactArgs(1),
 				RunE: func(cmd *cobra.Command, args []string) error {
-					path := fmt.Sprintf("/api/v1/principals/{id}:archive")
+					path := fmt.Sprintf("/api/v1/principals/%s:archive", url.PathEscape(args[0]))
 					return runAPICommand(cmd, "POST", path, nil)
 				},
 			}
@@ -682,13 +706,13 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := &cobra.Command{
-				Use:     "disable",
+				Use:     "disable <id>",
 				Short:   "Disable a principal",
 				Long:    "Soft-disables a principal so it can no longer authenticate; its audit trail is kept. Gated by principal:update (all-scope). The last active owner cannot be disabled.",
-				Example: "  omniglass principal disable",
-				Args:    cobra.ExactArgs(0),
+				Example: "  omniglass principal disable <id>",
+				Args:    cobra.ExactArgs(1),
 				RunE: func(cmd *cobra.Command, args []string) error {
-					path := fmt.Sprintf("/api/v1/principals/{id}:disable")
+					path := fmt.Sprintf("/api/v1/principals/%s:disable", url.PathEscape(args[0]))
 					return runAPICommand(cmd, "POST", path, nil)
 				},
 			}
@@ -696,13 +720,13 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := &cobra.Command{
-				Use:     "enable",
+				Use:     "enable <id>",
 				Short:   "Enable a principal",
 				Long:    "Re-enables a disabled principal, restoring its ability to authenticate. Gated by principal:update (all-scope).",
-				Example: "  omniglass principal enable",
-				Args:    cobra.ExactArgs(0),
+				Example: "  omniglass principal enable <id>",
+				Args:    cobra.ExactArgs(1),
 				RunE: func(cmd *cobra.Command, args []string) error {
-					path := fmt.Sprintf("/api/v1/principals/{id}:enable")
+					path := fmt.Sprintf("/api/v1/principals/%s:enable", url.PathEscape(args[0]))
 					return runAPICommand(cmd, "POST", path, nil)
 				},
 			}
@@ -726,13 +750,13 @@ func generatedCommands() []*cobra.Command {
 			var fDurationMinutes string
 			var fMode string
 			cmd := &cobra.Command{
-				Use:     "impersonate",
+				Use:     "impersonate <id>",
 				Short:   "Impersonate a principal (view-as or act-as)",
 				Long:    "Mints a bounded, revocable token to view as (read-only) or act as (full) the target. Gated by principal:impersonate (all-scope). Refused on self, on an owner target (owners are un-impersonatable by anyone), when it would grant a capability the caller lacks (the escalation guard), or from within an existing impersonation.",
-				Example: "  omniglass principal impersonate --mode mode",
-				Args:    cobra.ExactArgs(0),
+				Example: "  omniglass principal impersonate <id> --mode mode",
+				Args:    cobra.ExactArgs(1),
 				RunE: func(cmd *cobra.Command, args []string) error {
-					path := fmt.Sprintf("/api/v1/principals/{id}:impersonate")
+					path := fmt.Sprintf("/api/v1/principals/%s:impersonate", url.PathEscape(args[0]))
 					body := map[string]any{}
 					if cmd.Flags().Changed("duration-minutes") {
 						body["duration_minutes"] = fDurationMinutes
@@ -749,6 +773,8 @@ func generatedCommands() []*cobra.Command {
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
+			var qKind string
+			var qIncludeArchived bool
 			cmd := &cobra.Command{
 				Use:     "list",
 				Short:   "List principals",
@@ -757,20 +783,32 @@ func generatedCommands() []*cobra.Command {
 				Args:    cobra.ExactArgs(0),
 				RunE: func(cmd *cobra.Command, args []string) error {
 					path := fmt.Sprintf("/api/v1/principals")
+					q := url.Values{}
+					if cmd.Flags().Changed("kind") {
+						q.Set("kind", fmt.Sprintf("%v", qKind))
+					}
+					if cmd.Flags().Changed("include-archived") {
+						q.Set("include_archived", fmt.Sprintf("%v", qIncludeArchived))
+					}
+					if enc := q.Encode(); enc != "" {
+						path += "?" + enc
+					}
 					return runAPICommand(cmd, "GET", path, nil)
 				},
 			}
+			cmd.Flags().StringVar(&qKind, "kind", "", "Optionally filter by principal kind")
+			cmd.Flags().BoolVar(&qIncludeArchived, "include-archived", false, "Include archived (soft-deleted) principals, hidden by default")
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := &cobra.Command{
-				Use:     "purge",
+				Use:     "purge <id>",
 				Short:   "Purge a principal",
 				Long:    "Hard-deletes an archived principal and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. Gated by principal:purge (admin-sensitive, all-scope), and the principal must be archived first.",
-				Example: "  omniglass principal purge",
-				Args:    cobra.ExactArgs(0),
+				Example: "  omniglass principal purge <id>",
+				Args:    cobra.ExactArgs(1),
 				RunE: func(cmd *cobra.Command, args []string) error {
-					path := fmt.Sprintf("/api/v1/principals/{id}:purge")
+					path := fmt.Sprintf("/api/v1/principals/%s:purge", url.PathEscape(args[0]))
 					return runAPICommand(cmd, "POST", path, nil)
 				},
 			}
@@ -779,13 +817,13 @@ func generatedCommands() []*cobra.Command {
 		parent.AddCommand(func() *cobra.Command {
 			var fPassword string
 			cmd := &cobra.Command{
-				Use:     "resetPassword",
+				Use:     "resetPassword <id>",
 				Short:   "Reset a principal's password",
 				Long:    "Sets a new password for another human principal (an administrator action; the target's current password is not required). Gated by principal:reset-password (all-scope). The new password must meet the password policy; a violation is a 422. Refused on yourself (change your own password from your profile, which verifies your current one), on an owner (owners cannot be reset by anyone), or when it would exceed the caller's own capabilities (the takeover guard, shared with impersonation). The action is audited with the administrator as the actor.",
-				Example: "  omniglass principal resetPassword --password password",
-				Args:    cobra.ExactArgs(0),
+				Example: "  omniglass principal resetPassword <id> --password password",
+				Args:    cobra.ExactArgs(1),
 				RunE: func(cmd *cobra.Command, args []string) error {
-					path := fmt.Sprintf("/api/v1/principals/{id}:resetPassword")
+					path := fmt.Sprintf("/api/v1/principals/%s:resetPassword", url.PathEscape(args[0]))
 					body := map[string]any{}
 					if cmd.Flags().Changed("password") {
 						body["password"] = fPassword
@@ -799,13 +837,13 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := &cobra.Command{
-				Use:     "restore",
+				Use:     "restore <id>",
 				Short:   "Restore a principal",
 				Long:    "Reverses an archive: the account is restored to active and can authenticate again. Gated by principal:archive (all-scope).",
-				Example: "  omniglass principal restore",
-				Args:    cobra.ExactArgs(0),
+				Example: "  omniglass principal restore <id>",
+				Args:    cobra.ExactArgs(1),
 				RunE: func(cmd *cobra.Command, args []string) error {
-					path := fmt.Sprintf("/api/v1/principals/{id}:restore")
+					path := fmt.Sprintf("/api/v1/principals/%s:restore", url.PathEscape(args[0]))
 					return runAPICommand(cmd, "POST", path, nil)
 				},
 			}
