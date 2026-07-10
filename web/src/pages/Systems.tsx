@@ -16,6 +16,7 @@ import { type Component as Comp, COMPONENTS_KEY, listComponents } from "../lib/c
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { ArrowRight, ChevronRight, Pencil, Plus, Save, X } from "../components/icons";
+import { DrawerFooter } from "../components/Drawer";
 
 // Systems: the system inventory on the generic TreeList, the same shell as
 // Locations and Components. Systems form a tree (parent_id) and are placed at a
@@ -208,7 +209,7 @@ export default function Systems() {
     }
 
     return (
-      <form class="flex flex-col gap-4" onSubmit={submit}>
+      <form class="flex min-h-full flex-col gap-4" onSubmit={submit}>
         <Show when={formErr()}>
           <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
         </Show>
@@ -244,10 +245,10 @@ export default function Systems() {
             )}
           </div>
         </Show>
-        <div class="mt-1 flex justify-end gap-2">
+        <DrawerFooter>
           <button type="button" class="btn btn-quiet btn-sm gap-1.5" onClick={p.close}><X size={15} /> Cancel</button>
           <button type="submit" class="btn btn-action btn-sm gap-1.5" disabled={busy()}>{editing ? <Save size={15} /> : <Plus size={15} />} {editing ? "Save changes" : "Create system"}</button>
-        </div>
+        </DrawerFooter>
       </form>
     );
   }

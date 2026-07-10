@@ -15,6 +15,7 @@ import { LOCATIONS_KEY, listLocations } from "../lib/locations";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { ChevronRight, Pencil, Plus, Save, X } from "../components/icons";
+import { DrawerFooter } from "../components/Drawer";
 
 // Components: the device inventory, the first page built on the generic TreeList.
 // Components form a tree (parent_id) and each is bound to a primary system and a
@@ -205,7 +206,7 @@ export default function Components() {
     }
 
     return (
-      <form class="flex flex-col gap-4" onSubmit={submit}>
+      <form class="flex min-h-full flex-col gap-4" onSubmit={submit}>
         <Show when={formErr()}>
           <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
         </Show>
@@ -249,10 +250,10 @@ export default function Components() {
             "Omit for a root component.",
           )}
         </Show>
-        <div class="mt-1 flex justify-end gap-2">
+        <DrawerFooter>
           <button type="button" class="btn btn-quiet btn-sm gap-1.5" onClick={p.close}><X size={15} /> Cancel</button>
           <button type="submit" class="btn btn-action btn-sm gap-1.5" disabled={busy()}>{editing ? <Save size={15} /> : <Plus size={15} />} {editing ? "Save changes" : "Create component"}</button>
-        </div>
+        </DrawerFooter>
       </form>
     );
   }

@@ -17,6 +17,7 @@ import {
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { ChevronRight, Pencil, Plus, Save, X, resolveIcon } from "../components/icons";
+import { DrawerFooter } from "../components/Drawer";
 
 // Locations: the place tree on the generic TreeList (campuses, buildings, floors,
 // rooms). Replaces the standalone Locations page/new/detail trio with the same
@@ -277,7 +278,7 @@ export default function Locations() {
     }
 
     return (
-      <form class="flex flex-col gap-4" onSubmit={submit}>
+      <form class="flex min-h-full flex-col gap-4" onSubmit={submit}>
         <Show when={formErr()}>
           <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
         </Show>
@@ -303,10 +304,10 @@ export default function Locations() {
             )}
           </Show>
         </div>
-        <div class="mt-1 flex justify-end gap-2">
+        <DrawerFooter>
           <button type="button" class="btn btn-quiet btn-sm gap-1.5" onClick={p.close}><X size={15} /> Cancel</button>
           <button type="submit" class="btn btn-action btn-sm gap-1.5" disabled={busy() || locationTypes.isLoading}>{editing ? <Save size={15} /> : <Plus size={15} />} {editing ? "Save changes" : "Create location"}</button>
-        </div>
+        </DrawerFooter>
       </form>
     );
   }

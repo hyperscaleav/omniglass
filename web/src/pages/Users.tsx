@@ -2,6 +2,7 @@ import { For, Show, createSignal } from "solid-js";
 import { useSearchParams } from "@solidjs/router";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
+import { DrawerFooter } from "../components/Drawer";
 import PasswordField from "../components/PasswordField";
 import { type Principal, PRINCIPALS_KEY, listPrincipals, createPrincipal, openPrincipalInEdit, principalName, kindBadge, principalInitials } from "../lib/principals";
 import { identityRegistry } from "../lib/identityBlades";
@@ -156,7 +157,7 @@ function CreateUserForm(props: { close: () => void; onCreated: (p: Principal) =>
   }
 
   return (
-    <form class="flex flex-col gap-3" onSubmit={submit}>
+    <form class="flex min-h-full flex-col gap-3" onSubmit={submit}>
       <p class="text-xs text-base-content/50">Creates a human principal. Assign roles afterwards; a user with no grants can sign in but has no permissions.</p>
       <Show when={err()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
@@ -180,13 +181,13 @@ function CreateUserForm(props: { close: () => void; onCreated: (p: Principal) =>
         <PasswordField id="new-password" value={password()} onInput={(v) => { setPassword(v); setPwServerError(null); }} username={username()} disabled={busy()} serverError={pwServerError()} generate />
         <p class="mt-1 text-[11px] text-base-content/40">Optional. At least 12 characters; <strong>Generate</strong> makes a strong one. The user changes it after signing in.</p>
       </div>
-      <div class="mt-1 flex justify-end gap-2">
+      <DrawerFooter>
         <button type="button" class="btn btn-quiet btn-sm gap-1.5" onClick={props.close} disabled={busy()}><X size={15} /> Cancel</button>
         <button type="submit" class="btn btn-action btn-sm gap-1.5" disabled={busy() || !username().trim() || !!handleError(username()) || !!emailError(email()) || !!passwordError(password(), username())}>
           <Show when={busy()}><span class="loading loading-spinner loading-xs" /></Show>
           <Plus size={15} /> Create user
         </button>
-      </div>
+      </DrawerFooter>
     </form>
   );
 }
