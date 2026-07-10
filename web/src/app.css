@@ -138,6 +138,11 @@
    Fills keep the bright --color-primary; only the text color shifts. */
 [data-theme="omniglass-light"] .text-primary { color: #0a7d70; }
 
+/* The GLASS wordmark is a brand mark on the always-dark sidebar, so it stays the
+   bright brand teal in both themes. It uses --color-primary directly, NOT the
+   text-primary utility, so the light-mode text-teal darkening above never dims it. */
+.og-glass { color: var(--color-primary); }
+
 /* type system: IBM Plex Sans for UI, JetBrains Mono for data/IDs/counts. */
 :root {
   --og-font-ui: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
