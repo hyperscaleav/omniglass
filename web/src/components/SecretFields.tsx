@@ -50,7 +50,7 @@ export default function SecretFields(props: { secretId: string; fields: SecretFi
       <div class="overflow-hidden rounded-box border border-base-300">
         <For each={props.fields}>
           {(f, i) => (
-            <div class="flex items-center gap-2 px-3 py-2 text-sm" classList={{ "border-t border-base-300": i() > 0 }}>
+            <div class="flex min-h-10 items-center gap-2 px-3 text-sm" classList={{ "border-t border-base-300": i() > 0 }}>
               <span class="shrink-0 font-data text-base-content/60">{f.name}</span>
               <span class="min-w-0 flex-1 truncate text-right font-data" classList={{ "text-base-content/40": f.secret && !plain() }} title={plain() ? shown(f) : undefined}>{shown(f)}</span>
               <Show when={copyable(f)}>
@@ -77,11 +77,7 @@ export default function SecretFields(props: { secretId: string; fields: SecretFi
           <Eye size={14} /> {busy() ? "Revealing…" : plain() ? "Hide secret values" : "Reveal secret values"}
         </button>
       </Show>
-      <span class="text-[11px] text-base-content/40">
-        <Show when={plain()} fallback="Secret fields are encrypted at rest and shown masked.">
-          Revealed. Every decrypt is audited.
-        </Show>
-      </span>
+      <span class="text-[11px] text-base-content/40">Secret fields are encrypted at rest; every reveal is audited.</span>
     </div>
   );
 }
