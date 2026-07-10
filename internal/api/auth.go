@@ -527,6 +527,88 @@ func (a *authenticator) changePasswordHandler(ctx context.Context, in *changePas
 	return nil, nil
 }
 
+// sessionBody is one of the caller's own bearer credentials in the self-service
+// session list. It carries only non-secret metadata: the secret hash is never
+// returned. Kind labels a bounded web-login "session" (expires_at set) apart from a
+// non-expiring CLI/API "token" (expires_at null). Current marks the credential that
+// authenticated this very request, so the console can mark it and read its revoke as
+// a sign-out.
+type sessionBody struct {
+	ID        string  `json:"id"`
+	Kind      string  `json:"kind" enum:"session,token" doc:"session for a bounded web login (has an expiry), token for a non-expiring CLI/API credential"`
+	Prefix    string  `json:"prefix" doc:"The non-secret ogp locator, so a credential is recognizable without exposing the token"`
+	CreatedAt string  `json:"created_at" doc:"When the credential was issued (RFC 3339)"`
+	ExpiresAt *string `json:"expires_at,omitempty" doc:"When the session expires (RFC 3339); absent for a non-expiring token"`
+	Current   bool    `json:"current" doc:"True for the credential that authenticated this request; revoking it signs out the current session"`
+}
+
+// listMeSessionsOutput is the body of GET /api/v1/auth/me/sessions.
+type listMeSessionsOutput struct {
+	Body struct {
+		Sessions []sessionBody `json:"sessions"`
+	}
+}
+
+// listMeSessionsHandler returns the caller's own active bearer credentials (login
+// sessions and API tokens) with their non-secret metadata, newest first. Self-scoped
+// and authn-only: it lists only the principal resolved from the request, never
+// another. The current credential is flagged so the console can mark it.
+func (a *authenticator) listMeSessionsHandler(ctx context.Context, _ *struct{}) (*listMeSessionsOutput, error) {
+	pr, ok := principalFrom(ctx)
+	if !ok {
+		return nil, huma.Error401Unauthorized("unauthenticated")
+	}
+	currentHash, _ := sessionHashFrom(ctx)
+	creds, err := a.gw.ListBearerCredentials(ctx, pr.ID, currentHash)
+	if err != nil {
+		return nil, huma.Error500InternalServerError("list sessions")
+	}
+	out := &listMeSessionsOutput{}
+	out.Body.Sessions = make([]sessionBody, 0, len(creds))
+	for _, c := range creds {
+		s := sessionBody{
+			ID:        c.ID,
+			Kind:      "token",
+			Prefix:    c.Prefix,
+			CreatedAt: c.CreatedAt.Format(time.RFC3339),
+			Current:   c.Current,
+		}
+		if c.ExpiresAt != nil {
+			// A bounded expiry is a web-login session; a null expiry is a CLI/API token.
+			s.Kind = "session"
+			exp := c.ExpiresAt.Format(time.RFC3339)
+			s.ExpiresAt = &exp
+		}
+		out.Body.Sessions = append(out.Body.Sessions, s)
+	}
+	return out, nil
+}
+
+// revokeMeSessionInput is the path input of POST /auth/me/sessions/{id}:revoke.
+type revokeMeSessionInput struct {
+	ID string `path:"id" doc:"The credential id to revoke (from the session list)"`
+}
+
+// revokeMeSessionHandler revokes one of the caller's own bearer credentials by id.
+// Self-scoped and authn-only: the revoke is bounded to the caller's principal, so a
+// credential id that is not theirs (or does not exist) is a non-disclosing 404, never
+// a cross-principal revoke. Revoking the current credential is permitted (it is a
+// logout of this session).
+func (a *authenticator) revokeMeSessionHandler(ctx context.Context, in *revokeMeSessionInput) (*struct{}, error) {
+	pr, ok := principalFrom(ctx)
+	if !ok {
+		return nil, huma.Error401Unauthorized("unauthenticated")
+	}
+	revoked, err := a.gw.RevokeBearerByID(ctx, pr.ID, in.ID)
+	if err != nil {
+		return nil, huma.Error500InternalServerError("revoke session")
+	}
+	if !revoked {
+		return nil, huma.Error404NotFound("no such session")
+	}
+	return nil, nil
+}
+
 // mapPasswordErr translates the auth password-policy sentinels into a 422 with a
 // specific message, or nil when the password is acceptable. Shared by the create and
 // change-password handlers so both enforce the same policy the same way.

@@ -4,7 +4,9 @@ import Button from "../components/Button";
 import Drawer, { DrawerFooter } from "../components/Drawer";
 import { passwordError, isPasswordPolicyMessage } from "../lib/validate";
 import { useMe, useUpdateProfile, useChangePassword } from "../lib/auth";
-import { Key, Save, X } from "../components/icons";
+import { useSessions, useRevokeSession, type Session } from "../lib/sessions";
+import { rel, fmtTime } from "../lib/format";
+import { Key, Save, X, Trash, LogOut } from "../components/icons";
 
 // Profile is the signed-in operator's own account surface: edit your display name
 // and email, change your password, and (pedagogically) see the identity model you
@@ -14,6 +16,19 @@ export default function Profile() {
   const me = useMe();
   const updateProfile = useUpdateProfile();
   const changePassword = useChangePassword();
+  const sessions = useSessions();
+  const revokeSession = useRevokeSession();
+
+  // The id currently being revoked, so only that row's button spins.
+  const [revoking, setRevoking] = createSignal<string | null>(null);
+  async function revoke(s: Session) {
+    setRevoking(s.id);
+    const r = await revokeSession(s.id);
+    // Revoking the current session signs it out: the auth guard redirects on the
+    // /auth/me invalidation, so no page-level note is needed. Only a failure surfaces.
+    if (!r.ok) setProfileMsg({ tone: "error", text: r.message });
+    setRevoking(null);
+  }
 
   // Seed the editable field once, when /auth/me first resolves, so later keystrokes
   // are not clobbered by the query settling.
@@ -161,6 +176,46 @@ export default function Profile() {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Sessions: the caller's own active sign-ins and API tokens, each revocable. */}
+        <div class="card border border-base-300 bg-base-200">
+          <div class="card-body gap-3">
+            <h2 class="card-title text-base">Sessions</h2>
+            <p class="text-xs text-base-content/50">
+              Each device you sign in from is a <span class="font-data text-base-content/70">session</span> that expires on
+              its own; a credential you mint for the CLI or API is a <span class="font-data text-base-content/70">token</span>
+              {" "}that does not. Revoke anything you do not recognize; revoking the one you are using signs you out. The
+              token secret is never shown here, only its <span class="font-data text-base-content/70">ogp_</span> locator.
+            </p>
+            <Show when={sessions.error}>
+              <div role="alert" class="alert alert-error alert-soft text-sm"><span>Could not load your sessions.</span></div>
+            </Show>
+            <ul class="flex flex-col divide-y divide-base-300">
+              <For each={sessions.data ?? []} fallback={<li class="py-2 text-xs text-base-content/40">No active sessions.</li>}>
+                {(s) => (
+                  <li class="flex items-center gap-3 py-2.5">
+                    <span class="badge badge-soft badge-sm" classList={{ "badge-primary": s.kind === "session", "badge-ghost": s.kind === "token" }}>{s.kind}</span>
+                    <div class="min-w-0 flex-1 leading-tight">
+                      <div class="flex items-center gap-2">
+                        <span class="truncate font-data text-xs text-base-content/70">ogp_{s.prefix}</span>
+                        <Show when={s.current}><span class="badge badge-soft badge-success badge-xs flex-none">This session</span></Show>
+                      </div>
+                      <div class="text-[11px] text-base-content/40">
+                        Started {rel(s.created_at)} · {s.expires_at ? `expires ${fmtTime(s.expires_at)}` : "never expires"}
+                      </div>
+                    </div>
+                    <Show
+                      when={s.current}
+                      fallback={<Button intent="danger" size="xs" icon={Trash} loading={revoking() === s.id} onClick={() => revoke(s)}>Revoke</Button>}
+                    >
+                      <Button intent="danger" size="xs" icon={LogOut} loading={revoking() === s.id} onClick={() => revoke(s)}>Sign out</Button>
+                    </Show>
+                  </li>
+                )}
+              </For>
+            </ul>
           </div>
         </div>
       </div>

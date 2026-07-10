@@ -669,6 +669,25 @@ components:
       required:
         - locations
       type: object
+    ListMeSessionsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListMeSessionsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        sessions:
+          items:
+            $ref: "#/components/schemas/SessionBody"
+          type:
+            - array
+            - "null"
+      required:
+        - sessions
+      type: object
     ListMembersOutputBody:
       additionalProperties: false
       properties:
@@ -983,6 +1002,36 @@ components:
       required:
         - roles
       type: object
+    SessionBody:
+      additionalProperties: false
+      properties:
+        created_at:
+          description: When the credential was issued (RFC 3339)
+          type: string
+        current:
+          description: True for the credential that authenticated this request; revoking it signs out the current session
+          type: boolean
+        expires_at:
+          description: When the session expires (RFC 3339); absent for a non-expiring token
+          type: string
+        id:
+          type: string
+        kind:
+          description: session for a bounded web login (has an expiry), token for a non-expiring CLI/API credential
+          enum:
+            - session
+            - token
+          type: string
+        prefix:
+          description: The non-secret ogp locator, so a credential is recognizable without exposing the token
+          type: string
+      required:
+        - id
+        - kind
+        - prefix
+        - created_at
+        - current
+      type: object
     SvcBody:
       additionalProperties: false
       properties:
@@ -1294,6 +1343,58 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Update your own profile
+  /auth/me/sessions:
+    get:
+      description: Lists the caller's own active bearer credentials (bounded web-login sessions and non-expiring CLI/API tokens) with their non-secret metadata; the current one is flagged. Requires authentication; self-scoped (never another principal's). The token secret is never returned.
+      operationId: list-auth-me-sessions
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListMeSessionsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List your own sessions and tokens
+  /auth/me/sessions/{id}:revoke:
+    post:
+      description: Revokes one of the caller's own sessions or tokens by id (from the session list); revoking the current one signs it out. Requires authentication; self-scoped, so a credential id that is not yours is a 404.
+      operationId: revoke-auth-me-session
+      parameters:
+        - description: The credential id to revoke (from the session list)
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The credential id to revoke (from the session list)
+            type: string
+      responses:
+        "204":
+          description: No Content
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Not Found
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Internal Server Error
+      summary: Revoke one of your own sessions
   /auth/me:changePassword:
     post:
       description: Verifies the current password and sets a new one. Requires authentication; self-scoped.

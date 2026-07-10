@@ -112,7 +112,13 @@ func (UnimplementedGateway) RevokePrincipalBearers(context.Context, string, [][]
 	return 0, nil
 }
 func (UnimplementedGateway) RevokeBearer(context.Context, []byte) error { return nil }
-func (UnimplementedGateway) AnyHuman(context.Context) (bool, error)     { return false, nil }
+func (UnimplementedGateway) ListBearerCredentials(context.Context, string, []byte) ([]BearerCredential, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) RevokeBearerByID(context.Context, string, string) (bool, error) {
+	return false, nil
+}
+func (UnimplementedGateway) AnyHuman(context.Context) (bool, error)    { return false, nil }
 func (UnimplementedGateway) ListRoles(context.Context) ([]Role, error) { return nil, nil }
 func (UnimplementedGateway) ListAuditLog(context.Context, AuditFilter) ([]AuditEntry, error) {
 	return nil, nil

@@ -131,6 +131,17 @@ type Gateway interface {
 	// RevokeBearer deletes the bearer credential with the given sha256 hash
 	// (session logout). A no-op if none matches.
 	RevokeBearer(ctx context.Context, hash []byte) error
+	// ListBearerCredentials returns a principal's own bearer credentials (login
+	// sessions and API tokens) with their non-secret metadata (id, prefix,
+	// created_at, expires_at), newest first; the secret hash is never returned.
+	// currentHash (the sha256 of the request's own token) is compared only in SQL to
+	// flag the current credential. It backs a signed-in user viewing their sessions.
+	ListBearerCredentials(ctx context.Context, principalID string, currentHash []byte) ([]BearerCredential, error)
+	// RevokeBearerByID deletes one bearer credential by id, scoped to the owning
+	// principal (so a caller revokes only their own). Returns false when nothing
+	// matched (wrong/already-revoked id, another principal's credential, or a
+	// malformed id).
+	RevokeBearerByID(ctx context.Context, principalID, credentialID string) (bool, error)
 	// AnyHuman reports whether any human principal exists (drives the login
 	// screen's bootstrap hint).
 	AnyHuman(ctx context.Context) (bool, error)

@@ -1014,6 +1014,41 @@ func generatedCommands() []*cobra.Command {
 	}
 	{
 		parent := &cobra.Command{
+			Use:   "session",
+			Short: "Commands for the session resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "list",
+				Short:   "List your own sessions and tokens",
+				Long:    "Lists the caller's own active bearer credentials (bounded web-login sessions and non-expiring CLI/API tokens) with their non-secret metadata; the current one is flagged. Requires authentication; self-scoped (never another principal's). The token secret is never returned.",
+				Example: "  omniglass session list",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/auth/me/sessions")
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "revoke <id>",
+				Short:   "Revoke one of your own sessions",
+				Long:    "Revokes one of the caller's own sessions or tokens by id (from the session list); revoking the current one signs it out. Requires authentication; self-scoped, so a credential id that is not yours is a 404.",
+				Example: "  omniglass session revoke <id>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/auth/me/sessions/%s:revoke", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "POST", path, nil)
+				},
+			}
+			return cmd
+		}())
+		roots = append(roots, parent)
+	}
+	{
+		parent := &cobra.Command{
 			Use:   "statu",
 			Short: "Commands for the statu resource",
 		}

@@ -148,6 +148,26 @@ func registerRoutes(api huma.API, gw storage.Gateway, o options) {
 	}, a.changePasswordHandler)
 
 	huma.Register(api, huma.Operation{
+		OperationID: "list-auth-me-sessions",
+		Method:      http.MethodGet,
+		Path:        "/auth/me/sessions",
+		Summary:     "List your own sessions and tokens",
+		Description: "Lists the caller's own active bearer credentials (bounded web-login sessions and non-expiring CLI/API tokens) with their non-secret metadata; the current one is flagged. Requires authentication; self-scoped (never another principal's). The token secret is never returned.",
+		Middlewares: huma.Middlewares{a.authn},
+	}, a.listMeSessionsHandler)
+
+	huma.Register(api, huma.Operation{
+		OperationID:   "revoke-auth-me-session",
+		Method:        http.MethodPost,
+		Path:          "/auth/me/sessions/{id}:revoke",
+		Summary:       "Revoke one of your own sessions",
+		Description:   "Revokes one of the caller's own sessions or tokens by id (from the session list); revoking the current one signs it out. Requires authentication; self-scoped, so a credential id that is not yours is a 404.",
+		DefaultStatus: http.StatusNoContent,
+		Errors:        []int{http.StatusNotFound},
+		Middlewares:   huma.Middlewares{a.authn},
+	}, a.revokeMeSessionHandler)
+
+	huma.Register(api, huma.Operation{
 		OperationID: "list-roles",
 		Method:      http.MethodGet,
 		Path:        "/roles",

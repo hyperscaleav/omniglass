@@ -159,17 +159,17 @@ var ErrCredentialNotFound = errors.New("storage: credential not found")
 
 // Principal is an authenticated identity with its kind profile and grants.
 type Principal struct {
-	ID      string
-	Kind    string
-	Active  bool
+	ID     string
+	Kind   string
+	Active bool
 	// ArchivedAt marks a soft delete (the principal lifecycle, issue #143): a
 	// non-nil value means the account is archived (hidden, cannot authenticate,
 	// reversible until purged). Nil means live. Distinct from Active, which is the
 	// reversible disable (suspend) toggle.
 	ArchivedAt *time.Time
-	Human         *HumanProfile
-	Service       *ServiceProfile
-	Grants        []Grant
+	Human      *HumanProfile
+	Service    *ServiceProfile
+	Grants     []Grant
 	// Groups are the principal groups this principal belongs to (id + label), so the
 	// admin directory can show membership without a per-row fetch. The grants those
 	// groups confer already ride Grants (tagged with GroupID); this names them.
@@ -555,6 +555,68 @@ func (p *PG) RevokeBearer(ctx context.Context, hash []byte) error {
 		return fmt.Errorf("storage: revoke bearer: %w", err)
 	}
 	return nil
+}
+
+// BearerCredential is one of a principal's active bearer credentials (a login
+// session or an API token), carrying only its non-secret metadata. The secret hash
+// is never returned: this is the shape the self-service session list exposes. A
+// bounded ExpiresAt marks a web-login session (12h); a nil ExpiresAt is a
+// non-expiring CLI/API token. Current is true for the one credential that
+// authenticated the request doing the listing (so the console can label it and
+// treat its revoke as a self sign-out).
+type BearerCredential struct {
+	ID        string
+	Prefix    string
+	CreatedAt time.Time
+	ExpiresAt *time.Time
+	Current   bool
+}
+
+// ListBearerCredentials returns the principal's own bearer credentials, newest
+// first, with their id, prefix, created_at, and (nullable) expires_at. The raw
+// secret_hash is never returned: currentHash (the sha256 of the token that
+// authenticated this request) is only compared in SQL to compute the Current flag,
+// so the hash bytes never leave the database. This backs a signed-in user viewing
+// their own active sessions and tokens (issue #172).
+func (p *PG) ListBearerCredentials(ctx context.Context, principalID string, currentHash []byte) ([]BearerCredential, error) {
+	rows, err := p.pool.Query(ctx, `
+		select id, prefix, created_at, expires_at, coalesce(secret_hash = $2, false) as current
+		from credential
+		where principal_id = $1 and kind = 'bearer'
+		order by created_at desc`, principalID, currentHash)
+	if err != nil {
+		return nil, fmt.Errorf("storage: list bearer credentials: %w", err)
+	}
+	defer rows.Close()
+	var out []BearerCredential
+	for rows.Next() {
+		var c BearerCredential
+		if err := rows.Scan(&c.ID, &c.Prefix, &c.CreatedAt, &c.ExpiresAt, &c.Current); err != nil {
+			return nil, fmt.Errorf("storage: scan bearer credential: %w", err)
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
+// RevokeBearerByID deletes one bearer credential by id, scoped to the owning
+// principal so a caller can only revoke their own (a session or token belonging to
+// another principal is untouched). Returns false when nothing matched: a wrong or
+// already-revoked id, a credential owned by a different principal, or a malformed id
+// (which the API maps to a 404, never a 500). This backs self-service revoke (#172).
+func (p *PG) RevokeBearerByID(ctx context.Context, principalID, credentialID string) (bool, error) {
+	tag, err := p.pool.Exec(ctx,
+		`delete from credential where id = $1 and principal_id = $2 and kind = 'bearer'`,
+		credentialID, principalID)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "22P02" {
+			// A malformed uuid (id or principal id) matches no row: not found, not a 500.
+			return false, nil
+		}
+		return false, fmt.Errorf("storage: revoke bearer by id: %w", err)
+	}
+	return tag.RowsAffected() > 0, nil
 }
 
 // ErrPrincipalForbidden is returned by the principal directory methods when the

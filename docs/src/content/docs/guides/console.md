@@ -37,9 +37,14 @@ only your own account, whatever your role.
 - **Access.** A read-only view of the identity model you operate under: your principal, the
   roles granted to you, and the flattened permissions those roles carry. The server enforces
   these on every request; the console only mirrors them.
+- **Sessions.** Every credential you hold, listed with its `ogp_` locator and when it was issued.
+  A device you signed in from is a **session** (it carries an expiry); a credential you minted for the
+  CLI or API is a **token** (it does not expire). The one you are using is marked **This session**. The
+  token secret is never shown, only its non-secret locator. **Revoke** any you do not recognize; revoking
+  the one you are using is **Sign out** and ends it immediately.
 
-From the CLI the same two actions are `omniglass auth update-profile` and
-`omniglass auth change-password` (see [the CLI guide](/guides/cli/)).
+From the CLI the same actions are `omniglass auth update-profile`, `omniglass auth change-password`,
+and `omniglass session list` / `omniglass session revoke <id>` (see [the CLI guide](/guides/cli/)).
 
 ### After an administrator resets your password
 

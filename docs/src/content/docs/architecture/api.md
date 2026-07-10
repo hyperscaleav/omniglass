@@ -34,7 +34,10 @@ Everything lives under `/api/v1`. The path shape is derivable, not special-cased
 - **Custom methods carry a colon**, `:verb` not `/verb`, for anything that is not CRUD:
   `/alarms/{id}:ack`, `/components/{name}:apply`, `/views/{id}:run`. The verb
   is also the **permission**: `:ack` is gated by `alarm:ack`, so the route and the
-  [authorization](/architecture/identity-access/) check share one vocabulary.
+  [authorization](/architecture/identity-access/) check share one vocabulary. The **self-scoped**
+  `/auth/me` family is the exception: `/auth/me:changePassword` and `/auth/me/sessions/{id}:revoke`
+  are **authn-only** (they resolve the target from the session, never a path id, so they carry no
+  capability and a credential id that is not the caller's own is a 404, not a cross-principal action).
 - **Singular kind sub-segments** for the typed families: `/rules/calc`, `/datapoints/metric`,
   `/types/component`.
 - **A principal is addressable by uuid or username.** Every `/principals/{id}` route (read, update,
