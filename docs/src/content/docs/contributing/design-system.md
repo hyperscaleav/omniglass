@@ -87,6 +87,14 @@ the source and fails the build on **any** raw daisyUI color/emphasis button clas
 `btn-ghost`, `btn-outline`, `btn-soft`, `btn-error`, `btn-success`, `btn-warning`, and the rest), so
 the vocabulary cannot drift back to one-off, theme-fragile button styling.
 
+The primary button (and every other primary-filled surface: solid badges, selected chips,
+avatars) is the **bright brand teal in both themes** with a dark ink foreground, driven by the
+theme's own `--color-primary` / `--color-primary-content`. Light mode carries **two teals on
+purpose**: the bright brand teal for **fills**, and a darker teal (a small `[data-theme=light]
+.text-primary` rule in `app.css`) for teal **text** on the near-white ground, since the bright
+teal is unreadable as small text on white (1.9:1) while it reads 8.3:1 as a fill with dark ink.
+Fills stay on-brand; only the text color shifts.
+
 ## Primitives (the reuse target)
 
 `ListView`, `FilterBar`, `Drawer`, `Donut`, `Badge`, `Fact`, `Page`, `DataTable`,
