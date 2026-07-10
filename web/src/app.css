@@ -96,6 +96,15 @@
 .badge-unknown  { color: var(--og-unknown);  background: color-mix(in oklch, var(--og-unknown) 15%, transparent);  border-color: color-mix(in oklch, var(--og-unknown) 45%, transparent); }
 .badge-snoozed  { color: var(--og-snoozed);  background: color-mix(in oklch, var(--og-snoozed) 15%, transparent);  border-color: color-mix(in oklch, var(--og-snoozed) 45%, transparent); }
 
+/* neutral chip, fixed once for the whole app. daisyUI 5's badge-ghost resolves
+   to bg-base-200, which on our card surfaces is nearly the surrounding color, so
+   a ghost badge reads as background-less. badge-ghost is the app's neutral and
+   fallback chip (type chips, ids, group names, the audit verb fallback), so give
+   it a distinct, theme-aware fill here, once, in the same color-mix shape as the
+   variants above. This rule is unlayered, so it wins over daisyUI's layered one
+   and every ghost badge becomes a visible pill in both themes. */
+.badge-ghost    { color: var(--color-base-content); background: color-mix(in oklch, var(--color-base-content) 12%, transparent); border-color: color-mix(in oklch, var(--color-base-content) 22%, transparent); }
+
 /* ===== button intents: the app's semantic button vocabulary =====
    One intent class per button, composed from daisyUI theme tokens so a future
    theme restyles every button centrally (the tokens live in the theme blocks
