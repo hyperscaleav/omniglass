@@ -4,6 +4,7 @@ import { navItems, filterNav, type NavItem } from "../lib/nav";
 import { useMe, useLogout, can } from "../lib/auth";
 import { PanelLeft, LogOut } from "./icons";
 import { BrandMark, Wordmark } from "./Brand";
+import Button from "./Button";
 
 // The navigation rail: a daisyUI `menu` with collapsible clusters, the brand
 // lockup, a collapse toggle, and an identity footer. Routing and active state go
@@ -44,16 +45,12 @@ export default function Sidebar(props: { collapsed: boolean; onToggle: () => voi
       <div class="flex h-14 items-center gap-2" classList={{ "justify-center": props.collapsed, "justify-between px-4 pr-2": !props.collapsed }}>
         <Show when={!props.collapsed} fallback={<BrandMark />}><Lockup /></Show>
         <Show when={!props.collapsed}>
-          <button class="btn btn-quiet btn-sm btn-square text-base-content/50" onClick={props.onToggle} title="Collapse" aria-label="Toggle sidebar">
-            <PanelLeft size={16} />
-          </button>
+          <Button square icon={PanelLeft} onClick={props.onToggle} title="Collapse" label="Toggle sidebar" class="text-base-content/50" />
         </Show>
       </div>
       <Show when={props.collapsed}>
         <div class="flex justify-center pb-1">
-          <button class="btn btn-quiet btn-sm btn-square text-base-content/50" onClick={props.onToggle} title="Expand" aria-label="Toggle sidebar">
-            <PanelLeft size={16} />
-          </button>
+          <Button square icon={PanelLeft} onClick={props.onToggle} title="Expand" label="Toggle sidebar" class="text-base-content/50" />
         </div>
       </Show>
 
@@ -89,17 +86,17 @@ export default function Sidebar(props: { collapsed: boolean; onToggle: () => voi
             </Show>
           </A>
           <Show when={!props.collapsed}>
-            <button
-              class="btn btn-quiet btn-sm btn-square flex-none text-base-content/50"
+            <Button
+              square
+              icon={LogOut}
               title="Sign out"
-              aria-label="Sign out"
+              label="Sign out"
+              class="flex-none text-base-content/50"
               onClick={async () => {
                 await logout();
                 navigate("/login");
               }}
-            >
-              <LogOut size={16} />
-            </button>
+            />
           </Show>
         </div>
       </div>

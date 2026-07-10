@@ -27,9 +27,23 @@ export default function Drawer(props: {
               </Dialog.CloseButton>
             </div>
           </header>
-          <div class="flex min-h-0 flex-1 flex-col overflow-auto p-5">{props.children}</div>
+          <div class="flex-1 overflow-auto p-5">{props.children}</div>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog>
+  );
+}
+
+// DrawerFooter pins a create/edit form's action buttons to the bottom of the
+// Drawer as a footer rail, matching the detail blade's footer bar, instead of
+// letting them float at the end of a short form. It stays INSIDE the form (so a
+// submit button still submits): the form is a flex column with `min-h-full`, and
+// `mt-auto` pushes this to the bottom; `sticky bottom-0` keeps it in view when the
+// fields scroll, and the negative margins bleed it to the Drawer's padded edges.
+export function DrawerFooter(props: { children: JSX.Element }) {
+  return (
+    <div class="sticky bottom-0 -mx-5 -mb-5 mt-auto flex items-center justify-end gap-2 border-t border-base-300 bg-base-100 px-5 py-3">
+      {props.children}
+    </div>
   );
 }

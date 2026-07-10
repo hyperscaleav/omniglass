@@ -81,8 +81,15 @@ export default function PasswordField(props: {
           >
             <Show when={copied()} fallback={<Copy size={15} />}><Check size={15} /></Show>
           </button>
-          <button type="button" class="btn btn-bordered join-item gap-1.5" onClick={doGenerate} disabled={props.disabled}>
-            <RefreshCw size={15} /> Generate
+          <button
+            type="button"
+            class="btn btn-bordered join-item btn-square"
+            aria-label="Generate a strong password"
+            title="Generate a strong password"
+            onClick={doGenerate}
+            disabled={props.disabled}
+          >
+            <RefreshCw size={15} />
           </button>
         </Show>
       </div>

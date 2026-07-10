@@ -15,7 +15,9 @@ import { LOCATIONS_KEY, listLocations } from "../lib/locations";
 import { type Component as Comp, COMPONENTS_KEY, listComponents } from "../lib/components";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
-import { ArrowRight, ChevronRight } from "../components/icons";
+import { ArrowRight, ChevronRight, Pencil, Plus, Save, X } from "../components/icons";
+import Button from "../components/Button";
+import { DrawerFooter } from "../components/Drawer";
 
 // Systems: the system inventory on the generic TreeList, the same shell as
 // Locations and Components. Systems form a tree (parent_id) and are placed at a
@@ -162,12 +164,12 @@ export default function Systems() {
         </div>
         <div class="flex flex-wrap items-center gap-2 border-t border-base-300 pt-4">
           <Show when={ctx.full && can(me.data, "system", "delete")}>
-            <button class="btn btn-danger btn-sm" onClick={() => { ctx.closeBlades(); del(n); }}>Delete</button>
+            <Button intent="danger" onClick={() => { ctx.closeBlades(); del(n); }}>Delete</Button>
           </Show>
           <span class="flex-1" />
-          <button class="btn btn-sm gap-1.5" onClick={() => navigate(`/components?system=${encodeURIComponent(n.raw.name)}`)}>Components <ArrowRight size={14} /></button>
+          <Button icon={ArrowRight} iconTrailing onClick={() => navigate(`/components?system=${encodeURIComponent(n.raw.name)}`)}>Components</Button>
           <Show when={ctx.full && can(me.data, "system", "update")}>
-            <button class="btn btn-action btn-sm" onClick={() => ctx.openEdit(n)}>Edit</button>
+            <Button intent="action" icon={Pencil} onClick={() => ctx.openEdit(n)}>Edit</Button>
           </Show>
         </div>
       </div>
@@ -208,7 +210,7 @@ export default function Systems() {
     }
 
     return (
-      <form class="flex flex-1 flex-col gap-4" onSubmit={submit}>
+      <form class="flex min-h-full flex-col gap-4" onSubmit={submit}>
         <Show when={formErr()}>
           <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
         </Show>
@@ -244,10 +246,10 @@ export default function Systems() {
             )}
           </div>
         </Show>
-        <div class="mt-auto -mx-5 -mb-5 flex justify-end gap-2 border-t border-base-300 bg-base-100 px-5 py-3">
-          <button type="button" class="btn btn-quiet btn-sm" onClick={p.close}>Cancel</button>
-          <button type="submit" class="btn btn-action btn-sm" disabled={busy()}>{editing ? "Save changes" : "Create system"}</button>
-        </div>
+        <DrawerFooter>
+          <Button icon={X} onClick={p.close}>Cancel</Button>
+          <Button type="submit" intent="action" icon={editing ? Save : Plus} disabled={busy()}>{editing ? "Save changes" : "Create system"}</Button>
+        </DrawerFooter>
       </form>
     );
   }

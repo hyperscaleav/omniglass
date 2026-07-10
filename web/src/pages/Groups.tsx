@@ -8,6 +8,9 @@ import { identityRegistry } from "../lib/identityBlades";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { handleError } from "../lib/validate";
+import { Plus, X } from "../components/icons";
+import { DrawerFooter } from "../components/Drawer";
+import Button from "../components/Button";
 
 // Groups: the principal-group admin surface, a config over the shared FlatList. A
 // group holds role x scope grants that its members inherit, so an admin assigns
@@ -58,7 +61,7 @@ export default function Groups() {
         openId,
         blades: { registry: identityRegistry, rootKind: "group" },
         create: can(me.data, "principal_group", "create")
-          ? { label: "New group", can: () => can(me.data, "principal_group", "create"), body: (ctx) => <CreateGroupForm onCreated={(g) => ctx.select(g)} /> }
+          ? { label: "New group", can: () => can(me.data, "principal_group", "create"), body: (ctx) => <CreateGroupForm onCreated={(g) => ctx.select(g)} onClose={ctx.close} /> }
           : undefined,
       }}
     />
@@ -68,7 +71,7 @@ export default function Groups() {
 // CreateGroupForm is the new-group form the create Drawer hosts. On success it
 // invalidates the list and hands the created group to onCreated, which opens its
 // detail blade, so an admin lands on it to add members and grants.
-function CreateGroupForm(props: { onCreated: (g: Group) => void }) {
+function CreateGroupForm(props: { onCreated: (g: Group) => void; onClose: () => void }) {
   const qc = useQueryClient();
   const [name, setName] = createSignal("");
   const [displayName, setDisplayName] = createSignal("");
@@ -98,7 +101,7 @@ function CreateGroupForm(props: { onCreated: (g: Group) => void }) {
   }
 
   return (
-    <form class="flex flex-col gap-3" onSubmit={submit}>
+    <form class="flex min-h-full flex-col gap-3" onSubmit={submit}>
       <p class="text-xs text-base-content/50">Creates a group. Members inherit the group's role grants; add members and grants afterwards.</p>
       <Show when={err()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
@@ -116,9 +119,10 @@ function CreateGroupForm(props: { onCreated: (g: Group) => void }) {
         <span class="eyebrow">Description</span>
         <input class="input input-bordered w-full" value={description()} onInput={(e) => setDescription(e.currentTarget.value)} disabled={busy()} />
       </label>
-      <div class="mt-1 flex justify-end">
-        <button type="submit" class="btn btn-action btn-sm" disabled={busy() || !name().trim() || !!handleError(name())}>{busy() ? "Creating..." : "Create group"}</button>
-      </div>
+      <DrawerFooter>
+        <Button icon={X} onClick={props.onClose} disabled={busy()}>Cancel</Button>
+        <Button type="submit" intent="action" icon={Plus} disabled={busy() || !name().trim() || !!handleError(name())}>{busy() ? "Creating..." : "Create group"}</Button>
+      </DrawerFooter>
     </form>
   );
 }

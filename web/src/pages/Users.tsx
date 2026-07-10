@@ -2,6 +2,7 @@ import { For, Show, createSignal } from "solid-js";
 import { useSearchParams } from "@solidjs/router";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
+import { DrawerFooter } from "../components/Drawer";
 import PasswordField from "../components/PasswordField";
 import { type Principal, PRINCIPALS_KEY, listPrincipals, createPrincipal, openPrincipalInEdit, principalName, kindBadge, principalInitials } from "../lib/principals";
 import { identityRegistry } from "../lib/identityBlades";
@@ -9,6 +10,8 @@ import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { handleError, emailError, passwordError, isPasswordPolicyMessage } from "../lib/validate";
 import type { FilterKey } from "../lib/predicate";
+import { Plus, X } from "../components/icons";
+import Button from "../components/Button";
 
 // Users: the admin principal directory, a config over the shared FlatList. A row per
 // principal (human or service account) opens its detail as a blade (rooted here on
@@ -155,7 +158,7 @@ function CreateUserForm(props: { close: () => void; onCreated: (p: Principal) =>
   }
 
   return (
-    <form class="flex flex-col gap-3" onSubmit={submit}>
+    <form class="flex min-h-full flex-col gap-3" onSubmit={submit}>
       <p class="text-xs text-base-content/50">Creates a human principal. Assign roles afterwards; a user with no grants can sign in but has no permissions.</p>
       <Show when={err()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
@@ -177,15 +180,12 @@ function CreateUserForm(props: { close: () => void; onCreated: (p: Principal) =>
       <div>
         <label class="eyebrow mb-1.5 block" for="new-password">Initial password</label>
         <PasswordField id="new-password" value={password()} onInput={(v) => { setPassword(v); setPwServerError(null); }} username={username()} disabled={busy()} serverError={pwServerError()} generate />
-        <p class="mt-1 text-[11px] text-base-content/40">Optional. At least 12 characters; <strong>Generate</strong> makes a strong one. The user changes it after signing in.</p>
+        <p class="mt-1 text-[11px] text-base-content/40">Optional. At least 12 characters. The user changes it after signing in.</p>
       </div>
-      <div class="mt-1 flex justify-end gap-2">
-        <button type="button" class="btn btn-quiet btn-sm" onClick={props.close} disabled={busy()}>Cancel</button>
-        <button type="submit" class="btn btn-action btn-sm" disabled={busy() || !username().trim() || !!handleError(username()) || !!emailError(email()) || !!passwordError(password(), username())}>
-          <Show when={busy()}><span class="loading loading-spinner loading-xs" /></Show>
-          Create user
-        </button>
-      </div>
+      <DrawerFooter>
+        <Button icon={X} onClick={props.close} disabled={busy()}>Cancel</Button>
+        <Button type="submit" intent="action" icon={Plus} loading={busy()} disabled={!username().trim() || !!handleError(username()) || !!emailError(email()) || !!passwordError(password(), username())}>Create user</Button>
+      </DrawerFooter>
     </form>
   );
 }

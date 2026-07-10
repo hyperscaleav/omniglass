@@ -4,6 +4,7 @@ import GrantBuilder from "../components/GrantBuilder";
 import { Fact, RelatedList } from "../components/DetailShell";
 import { Ban, Eye, Key, Mask, Trash, X } from "../components/icons";
 import PasswordField from "../components/PasswordField";
+import Button from "../components/Button";
 import { useBlades, useBladeEdit } from "../lib/blades";
 import type { BladeDef } from "../lib/blades";
 import type { TreeNode } from "../lib/treeselect";
@@ -259,18 +260,15 @@ export function UserDetail(props: { id: string }) {
             <div class="flex flex-col gap-2 rounded-box border border-warning/40 bg-warning/10 p-3">
               <div class="flex items-center justify-between">
                 <span class="eyebrow">Reset password{pr().human ? ` for ${pr().human!.username}` : ""}</span>
-                <button type="button" class="btn btn-quiet btn-xs btn-square" aria-label="Close" onClick={() => setResetting(false)}><X size={14} /></button>
+                <Button square size="xs" icon={X} label="Close" onClick={() => setResetting(false)} />
               </div>
               <PasswordField id="reset-pw" value={resetPw()} onInput={(v) => { setResetPw(v); setResetPwErr(null); setResetDone(false); }} username={pr().human?.username} serverError={resetPwErr()} generate />
               <Show when={resetDone()}>
                 <p class="text-xs text-success">Password set. Copy it above and share it with the user; they can change it after signing in.</p>
               </Show>
               <div class="flex justify-end gap-2">
-                <button type="button" class="btn btn-quiet btn-sm" onClick={() => setResetting(false)} disabled={resetBusy()}>Close</button>
-                <button type="button" class="btn btn-action btn-sm" onClick={doReset} disabled={resetBusy() || !resetPw() || !!passwordError(resetPw(), pr().human?.username)}>
-                  <Show when={resetBusy()}><span class="loading loading-spinner loading-xs" /></Show>
-                  Set password
-                </button>
+                <Button onClick={() => setResetting(false)} disabled={resetBusy()}>Close</Button>
+                <Button intent="action" onClick={doReset} loading={resetBusy()} disabled={!resetPw() || !!passwordError(resetPw(), pr().human?.username)}>Set password</Button>
               </div>
             </div>
           </Show>

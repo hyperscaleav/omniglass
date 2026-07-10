@@ -50,8 +50,13 @@
   --color-base-200: #ffffff;
   --color-base-300: #f0f4f9;
   --color-base-content: #0e1726;
-  --color-primary: #11a294;
-  --color-primary-content: #ffffff;
+  /* The brand teal is the same bright teal as dark, so fills (buttons, badges,
+     chips, avatars) read on-brand in both themes; dark ink is the readable
+     foreground on it. Teal TEXT on the light ground uses a darker teal instead
+     (see the .text-primary override below), since the bright teal fails contrast
+     as small text on white. */
+  --color-primary: #21cab9;
+  --color-primary-content: #04201d;
   --color-secondary: #c81fb6;
   --color-secondary-content: #ffffff;
   --color-accent: #0d8d80;
@@ -123,6 +128,37 @@
   .btn-warn   { @apply btn-ghost text-warning; }
   .btn-ok     { @apply btn-ghost text-success; }
 }
+
+/* The primary button takes the theme's own primary + primary-content (the brand
+   teal fill with dark ink, both themes). daisyUI 5's `@apply btn-primary` drops the
+   primary foreground and lets the filled button inherit the near-white base-content
+   (measured 1.8:1 on the teal, failing WCAG), so restore the theme's foreground
+   here. UNLAYERED on purpose: daisyUI's own `.btn` color sits in the `daisyui`
+   layer, which sorts after `components`, so a layered override would lose. Scoped to
+   :not(:disabled) so a disabled button keeps its plain muted state. */
+.btn-action:not(:disabled) {
+  --btn-fg: var(--color-primary-content);
+  color: var(--color-primary-content);
+}
+
+/* A quiet button gets a faint resting border so it still reads as a button on a
+   surface whose color its ghost fill matches (e.g. a secondary action sitting on a
+   card). It stays low-emphasis (transparent fill) and daisyUI's ghost hover still
+   fills it. Unlayered to beat daisyUI's transparent ghost border in its later layer. */
+.btn-quiet {
+  border-color: color-mix(in oklch, var(--color-base-content) 18%, transparent);
+}
+
+/* Teal TEXT on the light ground uses a darker teal than the bright brand fill: the
+   bright teal is unreadable as small text on the near-white base (1.9:1), so link,
+   glyph, arrow, and stat accents that use text-primary get a readable teal (4.7:1).
+   Fills keep the bright --color-primary; only the text color shifts. */
+[data-theme="omniglass-light"] .text-primary { color: #0a7d70; }
+
+/* The GLASS wordmark is a brand mark on the always-dark sidebar, so it stays the
+   bright brand teal in both themes. It uses --color-primary directly, NOT the
+   text-primary utility, so the light-mode text-teal darkening above never dims it. */
+.og-glass { color: var(--color-primary); }
 
 /* type system: IBM Plex Sans for UI, JetBrains Mono for data/IDs/counts. */
 :root {

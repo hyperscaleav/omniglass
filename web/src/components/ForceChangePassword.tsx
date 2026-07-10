@@ -2,6 +2,7 @@ import { createSignal, Show } from "solid-js";
 import PasswordField from "./PasswordField";
 import { passwordError, isPasswordPolicyMessage } from "../lib/validate";
 import { useMe, useChangePassword, useLogout } from "../lib/auth";
+import Button from "./Button";
 
 // ForceChangePassword is the full-screen gate shown when an administrator has reset
 // the caller's password (me.human.must_change_password). The server refuses every
@@ -60,7 +61,7 @@ export default function ForceChangePassword() {
               id="fc-current"
               type="password"
               autocomplete="current-password"
-              class="input input-bordered w-full"
+              class="input input-bordered w-full font-data"
               value={current()}
               onInput={(e) => setCurrent(e.currentTarget.value)}
               disabled={busy()}
@@ -87,7 +88,7 @@ export default function ForceChangePassword() {
               id="fc-confirm"
               type="password"
               autocomplete="new-password"
-              class="input input-bordered w-full"
+              class="input input-bordered w-full font-data"
               value={confirm()}
               onInput={(e) => setConfirm(e.currentTarget.value)}
               disabled={busy()}
@@ -97,12 +98,8 @@ export default function ForceChangePassword() {
             <div class="alert alert-error alert-soft py-2 text-sm">{error()}</div>
           </Show>
           <div class="card-actions items-center justify-between">
-            <button type="button" class="btn btn-quiet btn-sm" onClick={() => logout()}>
-              Sign out
-            </button>
-            <button type="submit" class="btn btn-action btn-sm" disabled={!canSubmit()}>
-              {busy() ? "Saving…" : "Set password"}
-            </button>
+            <Button onClick={() => logout()}>Sign out</Button>
+            <Button type="submit" intent="action" disabled={!canSubmit()}>{busy() ? "Saving…" : "Set password"}</Button>
           </div>
         </div>
       </form>

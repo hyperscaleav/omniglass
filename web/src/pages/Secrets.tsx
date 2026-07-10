@@ -3,6 +3,9 @@ import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import TreeSelect from "../components/TreeSelect";
 import SecretFields from "../components/SecretFields";
+import Button from "../components/Button";
+import { DrawerFooter } from "../components/Drawer";
+import { Plus } from "../components/icons";
 import { type TreeNode } from "../lib/treeselect";
 import {
   type Secret,
@@ -272,7 +275,7 @@ function CreateSecretForm(p: { onCreated: () => void }): JSX.Element {
   }
 
   return (
-    <form class="flex flex-1 flex-col gap-4" onSubmit={submit}>
+    <form class="flex min-h-full flex-col gap-4" onSubmit={submit}>
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
@@ -314,9 +317,9 @@ function CreateSecretForm(p: { onCreated: () => void }): JSX.Element {
           </For>
         </div>
       </Show>
-      <div class="mt-auto -mx-5 -mb-5 flex justify-end gap-2 border-t border-base-300 bg-base-100 px-5 py-3">
-        <button type="submit" class="btn btn-action btn-sm" disabled={busy() || !typeId() || !name().trim() || (ownerKind() !== "global" && !owner())}>Create secret</button>
-      </div>
+      <DrawerFooter>
+        <Button type="submit" intent="action" icon={Plus} disabled={busy() || !typeId() || !name().trim() || (ownerKind() !== "global" && !owner())}>Create secret</Button>
+      </DrawerFooter>
     </form>
   );
 }

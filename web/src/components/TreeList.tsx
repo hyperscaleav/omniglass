@@ -12,9 +12,10 @@ import Drawer from "./Drawer";
 import ColumnMenu from "./ColumnMenu";
 import InfoTip from "./InfoTip";
 import {
-  ChevronDown, ChevronsDownUp, ChevronsUpDown, Columns, Check, ListTree, Rows, Maximize, Plus, Pencil, Trash,
+  ChevronDown, ChevronLeft, ChevronsDownUp, ChevronsUpDown, Columns, Check, ListTree, Rows, Maximize, Plus, Pencil, Trash,
 } from "./icons";
 import BladeStack from "./BladeStack";
+import Button from "./Button";
 import { type BladeDef, type BladeRef, createBladeController, useBladeEdit } from "../lib/blades";
 
 // TreeList: the one config-driven tree-list body (composing ListShell), the inventory shell. Every entity page (Components,
@@ -353,14 +354,7 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
       headerExtra: (p) => (
         <Show when={index().byId.get(p.id)}>
           {(n) => (
-            <button
-              class="btn btn-quiet btn-sm btn-square"
-              title="Open full page"
-              aria-label="Open full page"
-              onClick={() => { blades.close(); openFull(n()); }}
-            >
-              <Maximize size={15} />
-            </button>
+            <Button square icon={Maximize} title="Open full page" label="Open full page" onClick={() => { blades.close(); openFull(n()); }} />
           )}
         </Show>
       ),
@@ -374,25 +368,20 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
   const actions = (
     <>
       <Show when={!cfg.flat}>
-        <button
-          class="btn btn-quiet btn-sm btn-square"
+        <Button
+          square
+          icon={viewMode() === "list" ? ListTree : Rows}
           title={viewMode() === "list" ? "Switch to tree view" : "Switch to list view"}
           onClick={() => setViewMode(viewMode() === "list" ? "tree" : "list")}
-        >
-          {viewMode() === "list" ? <ListTree size={15} /> : <Rows size={15} />}
-        </button>
+        />
       </Show>
       <Show when={!flatten()}>
-        <button class="btn btn-quiet btn-sm btn-square" title={allExpanded() ? "Collapse all" : "Expand all"} onClick={toggleAll}>
-          {allExpanded() ? <ChevronsDownUp size={15} /> : <ChevronsUpDown size={15} />}
-        </button>
+        <Button square icon={allExpanded() ? ChevronsDownUp : ChevronsUpDown} title={allExpanded() ? "Collapse all" : "Expand all"} onClick={toggleAll} />
       </Show>
       <ColumnMenu columns={cfg.columns} columnKeys={cfg.columnKeys} cols={cols} onToggle={toggleCol} onMove={moveCol} />
       <span class="mx-1 h-5 w-px flex-none bg-base-300" />
       <Show when={allow("create")}>
-        <button class="btn btn-action btn-sm" onClick={() => ctxFull.openCreate(null)}>
-          <Plus size={15} /> New {cfg.entity.name}
-        </button>
+        <Button intent="action" icon={Plus} onClick={() => ctxFull.openCreate(null)}>New {cfg.entity.name}</Button>
       </Show>
     </>
   );
@@ -472,23 +461,15 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
         </For>
         <td>
           <div class="flex justify-end gap-0.5 opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100">
-            <button class="btn btn-quiet btn-xs btn-square" title="Open full page" onClick={(e) => { e.stopPropagation(); openFull(n); }}>
-              <Maximize size={15} />
-            </button>
+            <Button square size="xs" icon={Maximize} title="Open full page" onClick={(e) => { e.stopPropagation(); openFull(n); }} />
             <Show when={cfg.canAddChild?.(n) && rowAllow(n, "create")}>
-              <button class="btn btn-quiet btn-xs btn-square" title="Add child" onClick={(e) => { e.stopPropagation(); ctxFull.openCreate(n); }}>
-                <Plus size={15} />
-              </button>
+              <Button square size="xs" icon={Plus} title="Add child" onClick={(e) => { e.stopPropagation(); ctxFull.openCreate(n); }} />
             </Show>
             <Show when={rowAllow(n, "update")}>
-              <button class="btn btn-quiet btn-xs btn-square" title="Edit" onClick={(e) => { e.stopPropagation(); ctxFull.openEdit(n); }}>
-                <Pencil size={15} />
-              </button>
+              <Button square size="xs" icon={Pencil} title="Edit" onClick={(e) => { e.stopPropagation(); ctxFull.openEdit(n); }} />
             </Show>
             <Show when={rowAllow(n, "delete") && cfg.onDelete}>
-              <button class="btn btn-danger btn-xs btn-square" title="Delete" onClick={(e) => { e.stopPropagation(); cfg.onDelete!(n, ctxFull); }}>
-                <Trash size={15} />
-              </button>
+              <Button square size="xs" intent="danger" icon={Trash} title="Delete" onClick={(e) => { e.stopPropagation(); cfg.onDelete!(n, ctxFull); }} />
             </Show>
           </div>
         </td>
@@ -511,9 +492,7 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
               <div class="flex min-w-0 flex-1 flex-wrap gap-2">
                 <For each={board().filter((id) => W[id])}>{(id) => W[id].badge(ctxFull)}</For>
               </div>
-              <button class="btn btn-quiet btn-sm btn-square flex-none" title="Expand summary" onClick={() => setSummaryOpen(true)}>
-                <span class="inline-flex" style={{ transform: "rotate(-90deg)" }}><ChevronDown size={16} /></span>
-              </button>
+              <Button square icon={ChevronLeft} title="Expand summary" label="Expand summary" class="flex-none" onClick={() => setSummaryOpen(true)} />
             </div>
           }
         >
@@ -536,7 +515,7 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
                 </For>
               </ul>
             </details>
-            <button class="btn btn-quiet btn-sm gap-1.5" onClick={() => setSummaryOpen(false)}>Collapse <ChevronDown size={14} /></button>
+            <Button icon={ChevronDown} iconTrailing onClick={() => setSummaryOpen(false)}>Collapse</Button>
           </div>
           <div class="flex flex-wrap items-stretch gap-3">
             <For each={board().filter((id) => W[id])}>
@@ -602,9 +581,7 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
 
   const FullPage = (props2: { node: N }) => (
     <section class="fade-in flex max-w-3xl flex-col gap-4">
-      <button class="btn btn-quiet btn-sm flex-none gap-1.5 self-start" onClick={back}>
-        {"←"} {cfg.entity.plural}
-      </button>
+      <Button class="flex-none self-start" onClick={back}>{"←"} {cfg.entity.plural}</Button>
       <div class="flex flex-col gap-2">
         <Show when={pathOf(props2.node).length}>
           <div class="flex flex-wrap items-center gap-1 text-[11.5px]">
