@@ -4,6 +4,7 @@ import Drawer from "./Drawer";
 import BladeStack from "./BladeStack";
 import { type BladeController, type BladeDef, BladesContext, createBladeController } from "../lib/blades";
 import { ChevronDown, ChevronRight, Plus } from "./icons";
+import Button from "./Button";
 import type { Chip, FilterKey } from "../lib/predicate";
 
 // FlatList is the body for a flat (non-tree) list surface: a sortable table over
@@ -113,9 +114,7 @@ export default function FlatList<T>(props: { config: FlatConfig<T> }) {
     <>
       {cfg.railExtra?.()}
       <Show when={cfg.create?.can()}>
-        <button class="btn btn-action btn-sm gap-1.5" onClick={() => setCreateOpen(true)}>
-          <Plus size={14} /> {cfg.create!.label}
-        </button>
+        <Button intent="action" icon={Plus} onClick={() => setCreateOpen(true)}>{cfg.create!.label}</Button>
       </Show>
     </>
   );

@@ -278,7 +278,7 @@ describe("Users page", () => {
     expect(screen.getByText(/use at least/i)).toBeTruthy();
     expect(createBtn().disabled).toBe(true);
     // Generate fills a strong password, kept masked, clears the error, enables Create.
-    fireEvent.click(screen.getByRole("button", { name: "Generate" }));
+    fireEvent.click(screen.getByRole("button", { name: /generate/i }));
     expect(pw.value.length).toBeGreaterThanOrEqual(12);
     expect(pw.type).toBe("password");
     expect(screen.queryByText(/use at least/i)).toBeNull();
@@ -373,7 +373,7 @@ describe("Users page", () => {
     // Reset password is in the kebab; it opens an inline panel with its own field.
     fireEvent.click(within(blade).getByLabelText("More actions"));
     fireEvent.click(within(blade).getByText("Reset password"));
-    fireEvent.click(within(blade).getByRole("button", { name: "Generate" }));
+    fireEvent.click(within(blade).getByRole("button", { name: /generate/i }));
     fireEvent.click(within(blade).getByText("Set password"));
     await waitFor(() => expect(resetCalled).toBe(true));
     expect(await within(blade).findByText(/password set/i)).toBeTruthy();

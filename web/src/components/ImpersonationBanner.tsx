@@ -1,6 +1,7 @@
 import { Show } from "solid-js";
 import { useQueryClient } from "@tanstack/solid-query";
 import { actingAs, stopImpersonating } from "../lib/impersonation";
+import Button from "./Button";
 
 // A persistent banner shown while impersonating another principal, so the operator
 // always knows whose eyes they are seeing through and can stop. The server
@@ -19,7 +20,7 @@ export default function ImpersonationBanner() {
             {a().mode === "view_as" ? "read-only" : "changes are attributed to both you and them"}
           </span>
           <span class="flex-1" />
-          <button class="btn btn-warn btn-xs" onClick={() => stopImpersonating(qc)}>Stop</button>
+          <Button intent="warn" size="xs" onClick={() => stopImpersonating(qc)}>Stop</Button>
         </div>
       )}
     </Show>

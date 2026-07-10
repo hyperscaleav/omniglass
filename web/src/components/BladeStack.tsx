@@ -1,6 +1,7 @@
 import { type JSX, For, Show, createEffect, onCleanup } from "solid-js";
 import { Dynamic } from "solid-js/web";
-import { Ban, Check, ChevronLeft, MoreHorizontal, Pencil, RotateCcw, Trash, X } from "./icons";
+import { Ban, ChevronLeft, MoreHorizontal, Pencil, RotateCcw, Save, Trash, X } from "./icons";
+import Button from "./Button";
 import { type BladeController, type BladeDef, BladeEditContext, createEditSlot } from "../lib/blades";
 
 // BladeStack: the Azure-style right-hand blade stack, lifted out of TreeList so
@@ -95,9 +96,7 @@ export default function BladeStack(props: {
                     <header class="flex items-center justify-between gap-3 border-b border-base-300 px-4 py-3">
                       <div class="flex min-w-0 items-center gap-2">
                         <Show when={i()}>
-                          <button class="btn btn-quiet btn-sm btn-square" title="Back" aria-label="Back" onClick={() => props.controller.pop()}>
-                            <ChevronLeft size={16} />
-                          </button>
+                          <Button square icon={ChevronLeft} title="Back" label="Back" onClick={() => props.controller.pop()} />
                         </Show>
                         <div id={titleId} class="min-w-0 truncate text-sm font-semibold">
                           <Dynamic component={d().Title} id={ref.id} />
@@ -107,9 +106,7 @@ export default function BladeStack(props: {
                         <Show when={d().headerExtra}>
                           <Dynamic component={d().headerExtra!} id={ref.id} />
                         </Show>
-                        <button class="btn btn-quiet btn-sm btn-square" title="Close" aria-label="Close" onClick={() => props.controller.close()}>
-                          <X size={16} />
-                        </button>
+                        <Button square icon={X} title="Close" label="Close" onClick={() => props.controller.close()} />
                       </div>
                     </header>
                     <div class="flex-1 overflow-auto p-5" classList={{ "pointer-events-none opacity-55": !isTop() }}>
@@ -124,22 +121,19 @@ export default function BladeStack(props: {
                       <footer class="flex flex-none items-center gap-2 border-t border-base-300 bg-base-100 px-4 py-3" classList={{ "pointer-events-none opacity-55": !isTop() }}>
                         <Show when={edit.destructive()}>
                           {(dst) => (
-                            <button
-                              class="btn btn-sm btn-soft gap-1.5"
-                              classList={{ "btn-error": dst().tone !== "warn" && dst().tone !== "ok", "btn-warning": dst().tone === "warn", "btn-success": dst().tone === "ok" }}
+                            <Button
+                              intent={dst().tone === "warn" ? "warn" : dst().tone === "ok" ? "ok" : "danger"}
+                              icon={dst().tone === "warn" ? Ban : dst().tone === "ok" ? RotateCcw : Trash}
                               onClick={() => dst().onClick()}
                             >
-                              {dst().tone === "warn" ? <Ban size={14} /> : dst().tone === "ok" ? <RotateCcw size={14} /> : <Trash size={14} />}
                               {dst().label}
-                            </button>
+                            </Button>
                           )}
                         </Show>
                         <div class="ml-auto flex items-center gap-2">
                           <Show when={!edit.editing() && edit.secondary().length > 0}>
                             <div class="dropdown dropdown-top dropdown-end">
-                              <button type="button" tabindex={0} class="btn btn-quiet btn-sm btn-square" aria-label="More actions">
-                                <MoreHorizontal size={16} />
-                              </button>
+                              <Button square icon={MoreHorizontal} label="More actions" tabindex={0} />
                               <ul tabindex={0} class="dropdown-content menu z-50 mb-1.5 w-48 rounded-box border border-base-300 bg-base-100 p-1.5 shadow-2xl">
                                 <For each={edit.secondary()}>{(s) => <li><button class="flex items-center gap-2.5" classList={{ "text-error": s.tone === "danger" }} onClick={() => s.onClick()}>{s.icon}{s.label}</button></li>}</For>
                               </ul>
@@ -148,19 +142,10 @@ export default function BladeStack(props: {
                           <Show when={edit.editable()}>
                             <Show
                               when={edit.editing()}
-                              fallback={
-                                <button class="btn btn-quiet btn-sm gap-1.5 text-primary" aria-label="Edit" onClick={() => edit.begin()}>
-                                  <Pencil size={15} /> Edit
-                                </button>
-                              }
+                              fallback={<Button intent="action" icon={Pencil} label="Edit" onClick={() => edit.begin()}>Edit</Button>}
                             >
-                              <button class="btn btn-quiet btn-sm gap-1.5" onClick={() => edit.cancel()} disabled={edit.saving()}>
-                                <X size={15} /> Cancel
-                              </button>
-                              <button class="btn btn-action btn-sm gap-1.5" onClick={() => { edit.save().catch(() => {}); }} disabled={edit.saving() || !edit.valid()}>
-                                <Show when={edit.saving()} fallback={<Check size={15} />}><span class="loading loading-spinner loading-xs" /></Show>
-                                Save
-                              </button>
+                              <Button icon={X} onClick={() => edit.cancel()} disabled={edit.saving()}>Cancel</Button>
+                              <Button intent="action" icon={Save} onClick={() => { edit.save().catch(() => {}); }} loading={edit.saving()} disabled={!edit.valid()}>Save</Button>
                             </Show>
                           </Show>
                         </div>
