@@ -50,6 +50,9 @@ func TestServerHealthzEndToEnd(t *testing.T) {
 	cmd.Env = append(os.Environ(),
 		"OMNIGLASS_DSN="+dsn,
 		"OMNIGLASS_ADDR="+addr,
+		// Keep the fallback secret key out of the source tree (the server's cwd is
+		// this package dir under `go test`).
+		"OMNIGLASS_DATA_DIR="+t.TempDir(),
 	)
 	cmd.Stdout = os.Stderr
 	cmd.Stderr = os.Stderr

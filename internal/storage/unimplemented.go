@@ -180,4 +180,32 @@ func (UnimplementedGateway) UpdateComponent(context.Context, string, string, Com
 func (UnimplementedGateway) DeleteComponent(context.Context, string, string, scope.Set, scope.Set) error {
 	return nil
 }
+func (UnimplementedGateway) UpsertSecretType(context.Context, SecretType) error { return nil }
+func (UnimplementedGateway) ListSecretTypes(context.Context) ([]SecretType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) GetSecretType(context.Context, string) (*SecretType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) ListSecrets(context.Context, scope.Set) ([]Secret, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) CreateSecret(context.Context, string, SecretSpec, scope.Set) (*Secret, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) UpdateSecret(context.Context, string, string, map[string]string, scope.Set, scope.Set) (*Secret, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteSecret(context.Context, string, string, scope.Set, scope.Set) error {
+	return nil
+}
+func (UnimplementedGateway) RevealSecret(context.Context, string, string, scope.Set, scope.Set) (map[string]string, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) CopySecret(context.Context, string, string, scope.Set, scope.Set) (map[string]string, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) ResolveSecrets(context.Context, string, scope.Set) ([]ResolvedSecret, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) Close() {}
