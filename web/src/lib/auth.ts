@@ -8,7 +8,7 @@ import { api, setToken, clearToken } from "../api/client";
 
 export type Me = {
   principal: { id: string; kind: string };
-  human?: { username: string; email?: string; display_name?: string; must_change_password?: boolean };
+  human?: { username: string; email?: string; display_name?: string; must_change_password?: boolean; has_avatar?: boolean };
   service?: { label: string };
   permissions: string[];
   grants: { role: string; scope_kind: string; scope_id?: string }[];
@@ -136,6 +136,42 @@ export function useChangePassword() {
     await qc.invalidateQueries({ queryKey: ME_KEY });
     return { ok: true };
   };
+}
+
+// Read a File as a base64 string (no data: prefix).
+export function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const s = String(reader.result);
+      resolve(s.slice(s.indexOf(",") + 1));
+    };
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+// setMyAvatar uploads a chosen image file as the caller's profile picture. The
+// server normalizes it to a 256x256 JPEG; a bad or oversize image is a 422 whose
+// detail surfaces to the operator.
+export async function setMyAvatar(file: File): Promise<{ ok: boolean; message: string }> {
+  const image_base64 = await fileToBase64(file);
+  const { error } = await api.POST("/auth/me:setAvatar", { body: { image_base64 } });
+  return error ? { ok: false, message: (error as { detail?: string }).detail ?? "Upload failed." } : { ok: true, message: "" };
+}
+
+// removeMyAvatar clears the caller's profile picture (a no-op if none is set).
+export async function removeMyAvatar(): Promise<{ ok: boolean; message: string }> {
+  const { error } = await api.POST("/auth/me:removeAvatar", {});
+  return error ? { ok: false, message: "Remove failed." } : { ok: true, message: "" };
+}
+
+// fetchMyAvatar reads the caller's profile picture and returns it as a data URL,
+// or null when there is no picture (a 404).
+export async function fetchMyAvatar(): Promise<string | null> {
+  const { data, error } = await api.GET("/auth/me/avatar", {});
+  if (error || !data) return null;
+  return `data:image/jpeg;base64,${data.image_base64}`;
 }
 
 // A permission is a colon-delimited topic pattern, matched exactly like the server

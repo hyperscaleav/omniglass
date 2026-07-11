@@ -1,9 +1,9 @@
-import { Show, For, createSignal, createEffect } from "solid-js";
+import { Show, For, createSignal, createEffect, createResource } from "solid-js";
 import PasswordField from "../components/PasswordField";
 import Button from "../components/Button";
 import Drawer, { DrawerFooter } from "../components/Drawer";
 import { passwordError, isPasswordPolicyMessage } from "../lib/validate";
-import { useMe, useUpdateProfile, useChangePassword } from "../lib/auth";
+import { useMe, useUpdateProfile, useChangePassword, setMyAvatar, removeMyAvatar, fetchMyAvatar } from "../lib/auth";
 import { Key, Save, X } from "../components/icons";
 
 // Profile is the signed-in operator's own account surface: edit your display name
@@ -82,6 +82,39 @@ export default function Profile() {
 
   const human = () => me.data?.human;
 
+  // The avatar image, fetched as base64 and wrapped in a data URL, only when the
+  // principal actually has one (has_avatar rides on /auth/me, so no fetch fires
+  // for a user without a picture). A change refetches both the flag and the image.
+  const [avatarUrl, { refetch: refetchAvatar }] = createResource(
+    () => human()?.has_avatar ?? false,
+    (has) => (has ? fetchMyAvatar() : Promise.resolve(null)),
+  );
+  const [avatarMsg, setAvatarMsg] = createSignal<Note>(null);
+
+  async function onPickAvatar(e: Event) {
+    const file = (e.currentTarget as HTMLInputElement).files?.[0];
+    if (!file) return;
+    const r = await setMyAvatar(file);
+    if (r.ok) {
+      await me.refetch?.(); // refresh has_avatar so the flag and image agree
+      await refetchAvatar();
+      setAvatarMsg({ tone: "success", text: "Profile picture updated." });
+    } else {
+      setAvatarMsg({ tone: "error", text: r.message });
+    }
+  }
+
+  async function onRemoveAvatar() {
+    const r = await removeMyAvatar();
+    if (r.ok) {
+      await me.refetch?.();
+      await refetchAvatar();
+      setAvatarMsg(null);
+    } else {
+      setAvatarMsg({ tone: "error", text: r.message });
+    }
+  }
+
   return (
     <section class="og-stack flex flex-col">
       <div class="grid gap-4">
@@ -89,18 +122,35 @@ export default function Profile() {
         <form onSubmit={saveProfile} class="card border border-base-300 bg-base-200">
           <div class="card-body gap-3">
             <h2 class="card-title text-base">Profile</h2>
-            {/* Avatar preview: initials from the display name being typed. */}
+            {/* Avatar: the profile picture when set, else initials from the display name. */}
             <div class="flex items-center gap-3">
-              <div class="avatar avatar-placeholder">
-                <div class="w-12 rounded-full bg-linear-to-br from-primary to-info text-primary-content">
-                  <span class="font-data text-sm font-bold uppercase">{initials()}</span>
+              <Show
+                when={avatarUrl()}
+                fallback={
+                  <div class="avatar avatar-placeholder">
+                    <div class="w-16 rounded-full bg-linear-to-br from-primary to-info text-primary-content">
+                      <span class="font-data text-lg font-bold uppercase">{initials()}</span>
+                    </div>
+                  </div>
+                }
+              >
+                <div class="avatar">
+                  <div class="w-16 rounded-full">
+                    <img src={avatarUrl()!} alt="Your profile picture" />
+                  </div>
                 </div>
-              </div>
-              <div class="min-w-0 leading-tight">
-                <div class="truncate font-data text-sm font-semibold">{displayName().trim() || human()?.username}</div>
-                <div class="text-[11px] text-base-content/40">This is how you appear in the console.</div>
+              </Show>
+              <div class="flex flex-col gap-1">
+                <label class="btn btn-sm btn-outline">
+                  Upload
+                  <input type="file" accept="image/jpeg,image/png,image/webp" class="hidden" onChange={onPickAvatar} />
+                </label>
+                <Show when={human()?.has_avatar}>
+                  <button type="button" class="btn btn-sm btn-ghost" onClick={onRemoveAvatar}>Remove</button>
+                </Show>
               </div>
             </div>
+            <Note note={avatarMsg()} />
             <div>
               <label class="eyebrow mb-1.5 block">Username</label>
               <input type="text" class="input input-bordered w-full" value={human()?.username ?? ""} disabled readonly />
