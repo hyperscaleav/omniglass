@@ -1,4 +1,4 @@
-import { type JSX, For, Show, createEffect, createMemo, createSignal, on } from "solid-js";
+import { type JSX, For, Show, createEffect, createMemo, createResource, createSignal, on } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import GrantBuilder from "../components/GrantBuilder";
 import { Fact, RelatedList } from "../components/DetailShell";
@@ -13,6 +13,7 @@ import {
   type Principal, type ScopeKind, type UpdatePrincipal,
   PRINCIPALS_KEY, ROLES_KEY, getPrincipal, updatePrincipal, createGrant, revokeGrant, setPrincipalActive, listRoles,
   archivePrincipal, restorePrincipal, purgePrincipal, resetPrincipalPassword, consumePendingPrincipalEdit,
+  setPrincipalAvatar, removePrincipalAvatar, principalAvatarUrl,
   principalName, kindBadge, principalInitials,
 } from "../lib/principals";
 import { useMe, can } from "../lib/auth";
@@ -41,6 +42,7 @@ export function UserDetail(props: { id: string }) {
   const canArchive = () => can(me.data, "principal", "archive");
   const canPurge = () => can(me.data, "principal", "purge", "admin");
   const canResetPassword = () => can(me.data, "principal", "reset-password");
+  const canSetAvatar = () => can(me.data, "principal", "set-avatar");
   // The admin reset-password panel (toggled from the kebab): its own new-password
   // field, a server-policy error routed inline, and a "set" confirmation.
   const [resetting, setResetting] = createSignal(false);
@@ -55,6 +57,42 @@ export function UserDetail(props: { id: string }) {
   const p = () => principal.data ?? null;
   const refresh = () => qc.invalidateQueries({ queryKey: PRINCIPALS_KEY });
   const [actErr, setActErr] = createSignal<string | null>(null);
+
+  // The profile picture, fetched as a data URL only when the principal has one
+  // (has_avatar rides on the detail read, so a pictureless user fires no request).
+  // Shown in the header, and (for an admin who can set it) managed in the edit blade.
+  const [avatarUrl, { refetch: refetchAvatar }] = createResource(
+    () => p()?.human?.has_avatar ?? false,
+    (has) => (has ? principalAvatarUrl(props.id) : Promise.resolve(null)),
+  );
+  let avatarFileInput: HTMLInputElement | undefined;
+
+  async function onPickAvatar(e: Event) {
+    const pr = p();
+    const file = (e.currentTarget as HTMLInputElement).files?.[0];
+    if (!pr || !file) return;
+    setActErr(null);
+    try {
+      await setPrincipalAvatar(pr.id, file);
+      await refresh(); // refresh has_avatar so the flag and image agree
+      await refetchAvatar();
+    } catch (er) {
+      setActErr(describeError(er));
+    }
+  }
+
+  async function onRemoveAvatar() {
+    const pr = p();
+    if (!pr) return;
+    setActErr(null);
+    try {
+      await removePrincipalAvatar(pr.id);
+      await refresh();
+      await refetchAvatar();
+    } catch (er) {
+      setActErr(describeError(er));
+    }
+  }
 
   const editing = () => edit.editing();
   const canDrillGroups = () => blades.stack()[0]?.kind === "user";
@@ -237,11 +275,22 @@ export function UserDetail(props: { id: string }) {
       {(pr) => (
         <div class="flex flex-col gap-4">
           <div class="flex items-center gap-3">
-            <div class="avatar avatar-placeholder">
-              <div class="w-12 rounded-full bg-linear-to-br from-primary to-info text-primary-content">
-                <span class="font-data text-sm font-bold uppercase">{principalInitials(pr())}</span>
+            <Show
+              when={avatarUrl()}
+              fallback={
+                <div class="avatar avatar-placeholder">
+                  <div class="w-12 rounded-full bg-linear-to-br from-primary to-info text-primary-content">
+                    <span class="font-data text-sm font-bold uppercase">{principalInitials(pr())}</span>
+                  </div>
+                </div>
+              }
+            >
+              <div class="avatar">
+                <div class="w-12 rounded-full">
+                  <img src={avatarUrl()!} alt={principalName(pr())} />
+                </div>
               </div>
-            </div>
+            </Show>
             <span class="flex items-center gap-1.5">
               <span class={kindBadge(pr().kind)}>{pr().kind}</span>
               <Show when={pr().archived_at} fallback={<Show when={!pr().active}><span class="badge badge-soft badge-warning badge-sm">inactive</span></Show>}>
@@ -289,6 +338,42 @@ export function UserDetail(props: { id: string }) {
             }
           >
             <div class="flex flex-col gap-3">
+              <Show when={canSetAvatar()}>
+                <div>
+                  <label class="eyebrow mb-1.5 block">Profile picture</label>
+                  <div class="flex items-center gap-3">
+                    <Show
+                      when={avatarUrl()}
+                      fallback={
+                        <div class="avatar avatar-placeholder">
+                          <div class="w-16 rounded-full bg-linear-to-br from-primary to-info text-primary-content">
+                            <span class="font-data text-lg font-bold uppercase">{principalInitials(pr())}</span>
+                          </div>
+                        </div>
+                      }
+                    >
+                      <div class="avatar">
+                        <div class="w-16 rounded-full">
+                          <img src={avatarUrl()!} alt={principalName(pr())} />
+                        </div>
+                      </div>
+                    </Show>
+                    <div class="flex flex-col gap-1">
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        class="hidden"
+                        ref={avatarFileInput}
+                        onChange={onPickAvatar}
+                      />
+                      <Button size="sm" onClick={() => avatarFileInput?.click()}>Upload</Button>
+                      <Show when={pr().human?.has_avatar}>
+                        <Button size="sm" intent="danger" onClick={onRemoveAvatar}>Remove</Button>
+                      </Show>
+                    </div>
+                  </div>
+                </div>
+              </Show>
               <div>
                 <label class="eyebrow mb-1.5 block" for="edit-username">Username</label>
                 <input id="edit-username" autocomplete="off" class="input input-bordered w-full font-data" classList={{ "input-error": !!handleError(username()) }} value={username()} placeholder="jordan" onInput={(e) => setUsername(e.currentTarget.value)} />

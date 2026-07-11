@@ -84,6 +84,7 @@ describe("routeTokens", () => {
     expect(routeTokens("/web/users")).toEqual(["principal", "read"]);
     expect(routeTokens("/web/roles")).toEqual(["role", "read"]);
     expect(routeTokens("/web/groups")).toEqual(["principal_group", "read"]);
+    expect(routeTokens("/web/secrets")).toEqual(["secret", "read"]);
     expect(routeTokens("/web/audit")).toEqual(["audit", "read", "admin"]); // the admin tier
   });
   it("inherits a section's gate on its detail route (longest prefix)", () => {
@@ -94,7 +95,6 @@ describe("routeTokens", () => {
     expect(routeTokens("/web/")).toBeNull();
     expect(routeTokens("/web/profile")).toBeNull();
     expect(routeTokens("/web/dashboards")).toBeNull(); // a not-yet-built stub
-    expect(routeTokens("/web/secrets")).toBeNull();
   });
   it("gates exactly what the sidebar hides: routeTokens is set iff the nav entry has a resource/perm", () => {
     // Every gated nav child's route resolves to a permission; a resource-less stub does not.

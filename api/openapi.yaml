@@ -78,6 +78,22 @@ components:
       required:
         - bootstrapped
       type: object
+    AvatarOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/AvatarOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        image_base64:
+          description: The profile picture as a base64-encoded 256x256 JPEG
+          type: string
+      required:
+        - image_base64
+      type: object
     ChangePasswordInputBody:
       additionalProperties: false
       properties:
@@ -326,6 +342,46 @@ components:
       required:
         - username
       type: object
+    CreateSecretInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateSecretInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        fields:
+          additionalProperties:
+            type: string
+          description: The operator field map, validated against the type shape
+          type: object
+        name:
+          description: The cascade key; unique per owner
+          minLength: 1
+          type: string
+        owner:
+          description: The owning entity's name; omit for a global secret
+          type: string
+        owner_kind:
+          description: Which tier owns this secret
+          enum:
+            - global
+            - location
+            - system
+            - component
+          type: string
+        secret_type:
+          description: A secret_type id
+          minLength: 1
+          type: string
+      required:
+        - name
+        - secret_type
+        - owner_kind
+        - fields
+      type: object
     CreateSystemInputBody:
       additionalProperties: false
       properties:
@@ -355,6 +411,25 @@ components:
       required:
         - name
         - system_type
+      type: object
+    EffectiveSecretsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/EffectiveSecretsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        secrets:
+          items:
+            $ref: "#/components/schemas/ResolvedSecretBody"
+          type:
+            - array
+            - "null"
+      required:
+        - secrets
       type: object
     ErrorDetail:
       additionalProperties: false
@@ -516,6 +591,9 @@ components:
           type: string
         email:
           type: string
+        has_avatar:
+          description: True when the principal has a profile picture; fetch it from the avatar endpoint.
+          type: boolean
         must_change_password:
           description: True when an admin reset the password and the user must change it before doing anything else; the console gates every route to the change-password form until it clears.
           type: boolean
@@ -725,6 +803,44 @@ components:
             - "null"
       required:
         - principals
+      type: object
+    ListSecretTypesOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListSecretTypesOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        secret_types:
+          items:
+            $ref: "#/components/schemas/SecretTypeBody"
+          type:
+            - array
+            - "null"
+      required:
+        - secret_types
+      type: object
+    ListSecretsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListSecretsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        secrets:
+          items:
+            $ref: "#/components/schemas/SecretBody"
+          type:
+            - array
+            - "null"
+      required:
+        - secrets
       type: object
     ListSystemsOutputBody:
       additionalProperties: false
@@ -947,6 +1063,66 @@ components:
       required:
         - password
       type: object
+    ResolvedSecretBody:
+      additionalProperties: false
+      properties:
+        band:
+          description: "Cascade tier: 0 global, 1 location, 2 system, 3 component"
+          format: int64
+          type: integer
+        depth:
+          description: Distance up the tier's tree from the component (0 nearest)
+          format: int64
+          type: integer
+        fields:
+          items:
+            $ref: "#/components/schemas/SecretFieldBody"
+          type:
+            - array
+            - "null"
+        id:
+          type: string
+        name:
+          type: string
+        owner_id:
+          type: string
+        owner_kind:
+          type: string
+        owner_name:
+          type: string
+        secret_type:
+          type: string
+        winner:
+          description: True for the resolved value; false for a shadowed candidate
+          type: boolean
+      required:
+        - id
+        - name
+        - secret_type
+        - owner_kind
+        - band
+        - depth
+        - winner
+        - fields
+      type: object
+    RevealSecretOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/RevealSecretOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        fields:
+          additionalProperties:
+            type: string
+          description: The decrypted field values, keyed by field name
+          type: object
+      required:
+        - fields
+      type: object
     RoleBody:
       additionalProperties: false
       properties:
@@ -1002,6 +1178,95 @@ components:
       required:
         - roles
       type: object
+    SecretBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/SecretBody.json
+          format: uri
+          readOnly: true
+          type: string
+        fields:
+          items:
+            $ref: "#/components/schemas/SecretFieldBody"
+          type:
+            - array
+            - "null"
+        id:
+          type: string
+        name:
+          type: string
+        owner_id:
+          type: string
+        owner_kind:
+          type: string
+        owner_name:
+          type: string
+        secret_type:
+          type: string
+      required:
+        - id
+        - name
+        - secret_type
+        - owner_kind
+        - fields
+      type: object
+    SecretFieldBody:
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+        secret:
+          description: Whether the field is encrypted at rest and masked here
+          type: boolean
+        value:
+          type: string
+      required:
+        - name
+        - value
+        - secret
+      type: object
+    SecretTypeBody:
+      additionalProperties: false
+      properties:
+        display_name:
+          type: string
+        fields:
+          items:
+            $ref: "#/components/schemas/SecretTypeFieldBody"
+          type:
+            - array
+            - "null"
+        id:
+          type: string
+        official:
+          type: boolean
+      required:
+        - id
+        - display_name
+        - official
+        - fields
+      type: object
+    SecretTypeFieldBody:
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+        origin:
+          description: operator (set at creation) or lifecycle (filled by the secret's own machinery)
+          type: string
+        secret:
+          type: boolean
+        type:
+          type: string
+      required:
+        - name
+        - type
+        - secret
+        - origin
+      type: object
     SessionBody:
       additionalProperties: false
       properties:
@@ -1031,6 +1296,38 @@ components:
         - prefix
         - created_at
         - current
+      type: object
+    SetAvatarInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/SetAvatarInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        image_base64:
+          description: The image (JPEG, PNG, or WebP), base64-encoded; normalized server-side to a 256x256 JPEG
+          type: string
+      required:
+        - image_base64
+      type: object
+    SetAvatarMeInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/SetAvatarMeInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        image_base64:
+          description: The image (JPEG, PNG, or WebP), base64-encoded; normalized server-side to a 256x256 JPEG
+          type: string
+      required:
+        - image_base64
       type: object
     SvcBody:
       additionalProperties: false
@@ -1168,6 +1465,24 @@ components:
           minLength: 1
           pattern: ^[a-z0-9][a-z0-9._-]*$
           type: string
+      type: object
+    UpdateSecretInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/UpdateSecretInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        fields:
+          additionalProperties:
+            type: string
+          description: The field values to replace; an omitted field keeps its value
+          type: object
+      required:
+        - fields
       type: object
     UpdateSystemInputBody:
       additionalProperties: false
@@ -1343,9 +1658,27 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Update your own profile
+  /auth/me/avatar:
+    get:
+      description: Returns the caller's profile picture as a base64-encoded JPEG. Requires authentication; self-scoped. No picture is a 404.
+      operationId: get-auth-me-avatar
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AvatarOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get your own profile picture
   /auth/me/sessions:
     get:
-      description: Lists the caller's own active bearer credentials (bounded web-login sessions and non-expiring CLI/API tokens) with their non-secret metadata; the current one is flagged. Requires authentication; self-scoped (never another principal's). The token secret is never returned.
+      description: Lists the caller's own active bearer credentials (time-bounded web-login sessions and CLI/API tokens) with their non-secret metadata; the current one is flagged. Requires authentication; self-scoped (never another principal's). The token secret is never returned.
       operationId: list-auth-me-sessions
       responses:
         "200":
@@ -1415,6 +1748,40 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Change your own password
+  /auth/me:removeAvatar:
+    post:
+      description: Clears the caller's profile picture. Requires authentication; self-scoped.
+      operationId: remove-auth-me-avatar
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Remove your own profile picture
+  /auth/me:setAvatar:
+    post:
+      description: Sets the caller's profile picture (JPEG, PNG, or WebP, base64-encoded), normalized server-side to a 256x256 JPEG. Requires authentication; self-scoped. A bad or oversize image is a 422.
+      operationId: set-auth-me-avatar
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetAvatarMeInputBody"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Set your own profile picture
   /auth/me:stopImpersonation:
     post:
       description: Revokes the impersonation session presented by the request token, ending the view-as / act-as. Requires an impersonation token.
@@ -1570,6 +1937,32 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Update a component
+  /components/{name}/effective-secrets:
+    get:
+      description: Resolves the secrets that cascade onto a component (global -> location -> system -> component, most-specific winning), each masked, winner and shadowed candidates. Gated by secret:read; the component must be in the caller's component read scope.
+      operationId: effective-secrets
+      parameters:
+        - description: The component's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The component's name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EffectiveSecretsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Effective secrets for a component
   /healthz:
     get:
       description: Reports process health and the database leg, pinged through the Storage Gateway.
@@ -2126,6 +2519,32 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Update a principal
+  /principals/{id}/avatar:
+    get:
+      description: Returns the principal's profile picture as a base64-encoded JPEG. Gated by principal:read (all-scope). A principal without a picture is a 404.
+      operationId: get-principal-avatar
+      parameters:
+        - description: The principal, addressed by its uuid or a human username
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The principal, addressed by its uuid or a human username
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AvatarOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get a principal's profile picture
   /principals/{id}/grants:
     post:
       description: Assigns a role at a scope to a principal. Gated by principal_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own (no promoting anyone, including yourself, to a higher tier such as owner). A duplicate is 409, an unknown role or bad scope 422.
@@ -2325,6 +2744,28 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Purge a principal
+  /principals/{id}:removeAvatar:
+    post:
+      description: Clears another human principal's profile picture. Gated by principal:set-avatar (all-scope). Removing an absent picture is a no-op. Audited with the administrator as the actor.
+      operationId: remove-principal-avatar
+      parameters:
+        - description: The principal, addressed by its uuid or a human username
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The principal, addressed by its uuid or a human username
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Remove a principal's profile picture
   /principals/{id}:resetPassword:
     post:
       description: Sets a new password for another human principal (an administrator action; the target's current password is not required). Gated by principal:reset-password (all-scope). The new password must meet the password policy; a violation is a 422. Refused on yourself (change your own password from your profile, which verifies your current one), on an owner (owners cannot be reset by anyone), or when it would exceed the caller's own capabilities (the takeover guard, shared with impersonation). The action is audited with the administrator as the actor.
@@ -2375,6 +2816,34 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Restore a principal
+  /principals/{id}:setAvatar:
+    post:
+      description: Sets another human principal's profile picture (an administrator action). Gated by principal:set-avatar (all-scope). The image (JPEG, PNG, or WebP, base64-encoded) is normalized server-side to a 256x256 JPEG; a bad or oversize image is a 422. Audited with the administrator as the actor.
+      operationId: set-principal-avatar
+      parameters:
+        - description: The principal, addressed by its uuid or a human username
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The principal, addressed by its uuid or a human username
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetAvatarInputBody"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Set a principal's profile picture
   /roles:
     get:
       description: Lists the roles with their metadata and effective (flattened) permissions. Gated by the role:read capability.
@@ -2393,6 +2862,170 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List roles
+  /secret-types:
+    get:
+      description: Lists the secret_type shapes a secret can take, for the create form. Gated by secret:read.
+      operationId: list-secret-types
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListSecretTypesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List secret types
+  /secrets:
+    get:
+      description: Lists every secret with masked fields. Requires an all-scope read; the scoped, per-component view is the effective-secrets route. Gated by secret:read.
+      operationId: list-secrets
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListSecretsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List secrets (admin directory)
+    post:
+      description: Seals a secret at an owner scope (a global secret needs an all-scoped grant). Fields are validated and encrypted against the type shape. Gated by secret:create.
+      operationId: create-secret
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSecretInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SecretBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Create a secret
+  /secrets/{id}:
+    delete:
+      description: Removes a secret by id. Gated by secret:delete; read and delete scopes on the owner drive the 404 versus 403 split.
+      operationId: delete-secret
+      parameters:
+        - description: The secret's id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The secret's id
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Delete a secret
+    patch:
+      description: Replaces the given field values on a secret, re-sealing secret fields. Only values change; name, type, and owner are fixed at creation. An omitted field keeps its value. Gated by secret:update.
+      operationId: update-secret
+      parameters:
+        - description: The secret's id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The secret's id
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSecretInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SecretBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Update a secret's field values
+  /secrets/{id}:copy:
+    post:
+      description: Decrypts and returns a secret's field values for a clipboard copy, audited under the copy verb (distinct from an on-screen reveal). Same exposure and the same secret:reveal gate as reveal.
+      operationId: copy-secret
+      parameters:
+        - description: The secret's id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The secret's id
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RevealSecretOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Decrypt a secret for clipboard copy
+  /secrets/{id}:reveal:
+    post:
+      description: "Decrypts and returns a secret's field values, auditing the decrypt. Sensitive: gated by secret:reveal, which the viewer read floor does not carry, so only admin (secret:*) and owner may reveal."
+      operationId: reveal-secret
+      parameters:
+        - description: The secret's id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The secret's id
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RevealSecretOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Reveal a secret's plaintext
   /systems:
     get:
       description: Lists the systems the caller may read, each filtered to its scope subtree. Gated by system:read.

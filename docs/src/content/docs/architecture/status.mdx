@@ -599,6 +599,70 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   found) and an API test (get by username matches get by uuid, a `:verb` method archives by username, an
   unknown username is a 404).
 
+- **Secret: the cascade-resolved encrypted value.** The first of the [config, credentials, and
+  variables](/architecture/variables/) trio lands, and the prerequisite for the [collection](/architecture/collection/)
+  driver's interface inputs ([#155](https://github.com/hyperscaleav/omniglass/issues/155)). A **secret** is a
+  typed, encrypted-at-rest value owned on the exclusive arc (`global | location | system | component`) and
+  resolved most-specific-wins down the [cascade](/architecture/cascade/). Its shape is a `secret_type` registry
+  (per-field secrecy and origin; `snmp-community` and `basic-auth` seeded); crypto is **envelope AES-256-GCM**
+  behind a pluggable KEK provider (env / file / fallback), with `(owner, name, field)` bound as AAD so a
+  ciphertext cannot be lifted between rows. The load-bearing new piece is the **cascade resolver**: it walks the
+  three owner trees up from a component, tags each owner with a band and depth, and ranks per name (highest tier,
+  then deepest), returning the winner and the shadowed candidates. `GET /secret-types`, `/secrets` (all-scope
+  list, create, update, delete), `GET /components/{name}/effective-secrets` (the masked cascade view), and the
+  audited decrypts `POST /secrets/{id}:reveal` and `:copy` (a clipboard copy, recorded under a distinct `copy`
+  verb). Masked reads ride the viewer floor; **create and update** are gated by `secret:create` / `secret:update`
+  and granted to **operators** in their scope; **delete** stays `secret:delete` (admin, owner); **reveal** and
+  **copy** by the sensitive `secret:reveal`, which the `*:read` floor does not carry, so only admin (`secret:*`)
+  and owner may decrypt. Scoping a secret required wiring `secret` into the ABAC resolver's owner-arc tiers
+  (location / system / component), so a scoped grant now confers secret scope over its subtree (before, only an
+  all-scope owner could). The console adds a **Secrets** directory (type in its own column) with per-field
+  in-place reveal + copy adornments, and, on a component's detail, the **effective-secrets** list: each resolved
+  secret opens a blade that decrypts the value and shows the full cascade top-to-bottom (global to component,
+  the deepest winning). Renamed **credential to secret** (ADR-0017).
+  Proven by a real-crypto testcontainer test (seal, jsonb round-trip, unseal; encrypted-at-rest; full cascade
+  precedence), an HTTP e2e (the cascade, the authz split incl. the scoped-operator create / update, and the
+  reveal / copy round-trips plus their 403s), a scope-resolver unit test for the owner-arc kinds, and the web
+  data-layer suite. Deferred: the **variable** and **config** members of the page, the interpolation consumer,
+  secret **lifecycle** (oauth2 refresh, rotation), and groups / weighted precedence in the cascade.
+
+- **Identity: clear the login lockout on a password rotation.** Rotating a password now clears the
+  brute-force lockout (`failed_login_count = 0`, `locked_until = null`) in the same transaction as the new
+  secret. Before this the lock (from the login-throttle slice) only cleared lazily at the next login, so an
+  admin reset left the account locked for the rest of the 15-minute window even with the new password. Both
+  rotation lanes clear it: the admin reset (`SetPrincipalPassword`, the reachable intervention while an
+  account is locked) and the self-service change / CLI set-password (`SetPassword`). No new endpoint or
+  capability: rotating the secret is the intervention (auto-unlock over a dedicated `:unlock` action).
+  Proven by a storage test that locks the account with five misses, confirms it is locked, rotates via each
+  lane, and asserts the new secret authenticates immediately with no wait. No migration (the columns exist);
+  no operator-facing surface change.
+
+- **Identity: profile pictures for human principals.** A human principal can carry a **profile picture**,
+  managed on two lanes: **self** (any signed-in user sets or removes their own via `POST /auth/me:setAvatar`
+  / `:removeAvatar`, authn-only and self-scoped, no capability, on the ungated self-service lane) and
+  **admin** (a new `principal:set-avatar` all-scope capability sets or removes any principal's via
+  `POST /principals/{id}:setAvatar` / `:removeAvatar`, audited with the admin as actor; `admin` holds it
+  through `principal:*` and `owner` through `>`, so no `roles.yaml` change). A pure `internal/avatar.Normalize`
+  primitive is the server-authoritative pipeline: accept JPEG/PNG/WebP (GIF and all else rejected), reject a
+  payload over 8 MiB or any dimension over 8000px (decompression-bomb guards), center-crop to a square, resize
+  256x256, re-encode JPEG q82; a bad or oversize image is a 422. Two additive columns on `human` (`avatar`
+  base64, `avatar_updated_at`) store the one normalized size; the bytes never load on the `loadPrincipal` hot
+  path (which selects only `avatar is not null`), so a cheap `has_avatar` bool rides the read models
+  (`GET /principals/{id}`, the Users list, `GET /auth/me`). The **read endpoint is JSON**
+  (`GET /principals/{id}/avatar` gated `principal:read`, `GET /auth/me/avatar` self), returning
+  `{ image_base64 }` the console renders as a `data:` URL, deliberately not a raw `image/jpeg` handler so every
+  route stays under the Huma authz middleware
+  ([ADR-0018](/architecture/decisions/#adr-0018-the-avatar-read-endpoint-is-json-not-raw-image-bytes)); a
+  principal without a picture is a 404. The console **Profile** page gains an image-backed avatar with
+  upload/remove (initials fallback), and the **Users** directory renders per-row thumbnails plus an admin
+  upload/remove panel gated on `principal:set-avatar`. The CLI and typed client fall out of the generator
+  (`omniglass principal setAvatar` / `removeAvatar`). Proven by the `internal/avatar` golden-fixture unit
+  suite (a square JPEG out, non-image / GIF / oversize rejected), a storage round-trip (set / get / clear,
+  `has_avatar` and `avatar_updated_at`, the all-scope gate on the admin write), and a real-binary API test
+  (self set + read + remove, garbage 422, the admin permission 403 without `principal:set-avatar` and success
+  with), plus web tests for both surfaces. Deferred: the top-nav avatar, non-human avatars, multiple sizes /
+  srcset, and external (Gravatar) sources.
+
 - **Identity: view and revoke your own sessions (slice 1 of 2).** A signed-in user can now see and end
   their own sign-ins and API tokens. Two gateway primitives land on the existing `credential` table (no
   migration; `created_at` and `expires_at` already exist): `ListBearerCredentials` returns each of a
@@ -619,7 +683,7 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   principal's sessions) is slice 2.
 
 - **Identity: every credential is time-bounded, and sessions split from API tokens.** Building on the slice
-  above, the tokens-never-expire behavior is reversed ([ADR-0017](/architecture/decisions/#adr-0017-every-credential-is-time-bounded-token-purpose-not-expiry-shape)):
+  above, the tokens-never-expire behavior is reversed ([ADR-0019](/architecture/decisions/#adr-0019-every-credential-is-time-bounded-token-purpose-not-expiry-shape)):
   a web-login **session** keeps its 12h absolute lifetime, while a CLI/API **token** (`omniglass token`) and
   the **bootstrap token** (`omniglass bootstrap`) now get a **90-day default** expiry with a `--ttl` override
   hard-capped at **365 days** (a `--ttl` above the cap is a clean error, before any DB work), so no eternal

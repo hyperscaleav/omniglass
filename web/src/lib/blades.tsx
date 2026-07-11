@@ -78,6 +78,10 @@ export type BladeDestructive = { label: string; tone?: "danger" | "warn" | "ok";
 // A kebab item; tone "danger" renders it red (a destructive escalation like
 // archive or purge sitting among neutral secondary actions).
 export type BladeSecondary = { label: string; icon?: JSX.Element; tone?: "danger"; onClick: () => void };
+// The one prominent right-side footer action for a blade whose edit is NOT the
+// inline pencil model but a separate flow (an inventory row edits in a Drawer):
+// a filled button (e.g. Edit) that opens it. Shown only when not in inline edit.
+export type BladePrimary = { label: string; icon?: JSX.Element; onClick: () => void };
 
 export type BladeEdit = {
   editable: () => boolean;
@@ -91,6 +95,7 @@ export type BladeEdit = {
   save: () => Promise<void>;
   destructive: () => BladeDestructive | undefined;
   secondary: () => BladeSecondary[];
+  primary: () => BladePrimary | undefined;
   bind: (h: {
     editable?: () => boolean;
     valid?: () => boolean;
@@ -98,6 +103,7 @@ export type BladeEdit = {
     cancel?: () => void;
     destructive?: () => BladeDestructive | undefined;
     secondary?: () => BladeSecondary[];
+    primary?: () => BladePrimary | undefined;
   }) => void;
 };
 
@@ -110,6 +116,7 @@ export function createEditSlot(): BladeEdit {
   let validPred: () => boolean = () => true;
   let destructivePred: () => BladeDestructive | undefined = () => undefined;
   let secondaryPred: () => BladeSecondary[] = () => [];
+  let primaryPred: () => BladePrimary | undefined = () => undefined;
   return {
     editable: () => bound() && editablePred(),
     editing,
@@ -131,6 +138,7 @@ export function createEditSlot(): BladeEdit {
     },
     destructive: () => (bound() ? destructivePred() : undefined),
     secondary: () => (bound() ? secondaryPred() : []),
+    primary: () => (bound() ? primaryPred() : undefined),
     bind: (h) => {
       // A body that supplies a saver is editable (unless it gates with `editable`);
       // one that only registers a destructive / secondary action is not.
@@ -139,6 +147,7 @@ export function createEditSlot(): BladeEdit {
       handler = { save: h.save ?? (async () => {}), cancel: h.cancel ?? (() => {}) };
       destructivePred = h.destructive ?? (() => undefined);
       secondaryPred = h.secondary ?? (() => []);
+      primaryPred = h.primary ?? (() => undefined);
       setBound(true);
     },
   };

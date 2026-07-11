@@ -230,18 +230,20 @@ export default function Locations() {
             </div>
           </div>
         </Show>
-        <div class="flex flex-wrap items-center gap-2 border-t border-base-300 pt-4">
-          <Show when={can(me.data, "location", "delete")}>
-            <Button intent="danger" onClick={() => { ctx.closeBlades(); del(n); }}>Delete</Button>
-          </Show>
-          <span class="flex-1" />
-          <Show when={n.type !== "room" && can(me.data, "location", "create")}>
-            <Button icon={Plus} onClick={() => ctx.openCreate(n)}>Add child</Button>
-          </Show>
-          <Show when={can(me.data, "location", "update")}>
-            <Button intent="action" icon={Pencil} onClick={() => ctx.openEdit(n)}>Edit</Button>
-          </Show>
-        </div>
+        <Show when={ctx.full || (n.type !== "room" && can(me.data, "location", "create"))}>
+          <div class="flex flex-wrap items-center gap-2 border-t border-base-300 pt-4">
+            <Show when={ctx.full && can(me.data, "location", "delete")}>
+              <Button intent="danger" onClick={() => { ctx.closeBlades(); del(n); }}>Delete</Button>
+            </Show>
+            <span class="flex-1" />
+            <Show when={n.type !== "room" && can(me.data, "location", "create")}>
+              <Button icon={Plus} onClick={() => ctx.openCreate(n)}>Add child</Button>
+            </Show>
+            <Show when={ctx.full && can(me.data, "location", "update")}>
+              <Button intent="action" icon={Pencil} onClick={() => ctx.openEdit(n)}>Edit</Button>
+            </Show>
+          </div>
+        </Show>
       </div>
     );
   }

@@ -4,7 +4,8 @@ import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import { DrawerFooter } from "../components/Drawer";
 import PasswordField from "../components/PasswordField";
-import { type Principal, PRINCIPALS_KEY, listPrincipals, createPrincipal, openPrincipalInEdit, principalName, kindBadge, principalInitials } from "../lib/principals";
+import { type Principal, PRINCIPALS_KEY, listPrincipals, createPrincipal, openPrincipalInEdit, principalName, kindBadge } from "../lib/principals";
+import UserAvatar from "../components/UserAvatar";
 import { identityRegistry } from "../lib/identityBlades";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
@@ -35,11 +36,7 @@ const columns: FlatColumn<Principal>[] = [
     key: "name", label: "Name", sortVal: (p) => principalName(p).toLowerCase(),
     cell: (p) => (
       <div class="flex items-center gap-2.5">
-        <div class="avatar avatar-placeholder">
-          <div class="w-7 rounded-full bg-linear-to-br from-primary to-info text-primary-content">
-            <span class="font-data text-[10px] font-bold uppercase">{principalInitials(p)}</span>
-          </div>
-        </div>
+        <UserAvatar principal={p} size="w-7" textClass="text-[10px]" />
         <div class="min-w-0 leading-tight">
           <div class="truncate text-sm font-medium">{principalName(p)}</div>
           <Show when={p.human}><div class="truncate font-data text-[11px] text-base-content/40">{p.human!.username}</div></Show>

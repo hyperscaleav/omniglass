@@ -29,6 +29,11 @@ only your own account, whatever your role.
 - **Profile.** Change your display name; it drives how you appear in the console (the sidebar
   label and the initials avatar). Your username and email are set by an administrator, not you,
   and are shown read-only.
+- **Profile picture.** The avatar at the top of the panel shows your picture when you have one and
+  your initials when you do not. **Upload** picks an image file (JPEG, PNG, or WebP); the server crops
+  and re-encodes it to a small square, so it reads the same everywhere you appear (the sidebar and the
+  Users directory). **Remove** clears it and falls back to initials. Like the rest of the page it is
+  self-service: you manage only your own picture.
 - **Change password.** Enter your current password and a new one. The new password must meet the
   **policy** (at least 12 characters, not a common password, and not containing your username); the
   field validates as you type, and **Generate** fills a strong random one you can **Copy**. A wrong
@@ -44,7 +49,9 @@ only your own account, whatever your role.
   the one you are using is **Sign out** and ends it immediately.
 
 From the CLI the same actions are `omniglass auth update-profile`, `omniglass auth change-password`,
-and `omniglass session list` / `omniglass session revoke <id>` (see [the CLI guide](/guides/cli/)).
+and `omniglass session list` / `omniglass session revoke <id>` for sessions, and
+`omniglass me setAvatar` / `omniglass me removeAvatar` for the picture (see
+[the CLI guide](/guides/cli/)).
 
 ### After an administrator resets your password
 
@@ -57,7 +64,8 @@ the hold clears and you land in the console. Signing out is the only other way o
 ## Users
 
 **Settings, Users** is the admin directory of every principal, humans and service accounts,
-each with the roles granted to it. You see it only if you hold `principal:read`, and because a
+each with the roles granted to it. Every row leads with the principal's avatar, its uploaded
+picture when it has one and its initials otherwise. You see it only if you hold `principal:read`, and because a
 principal is not part of any location or system tree, that grant must be **all-scope**: a
 location-scoped admin cannot list users.
 
@@ -113,6 +121,12 @@ location-scoped admin cannot list users.
   profile**, which verifies your current one) and on an **owner** (owners cannot be reset by anyone).
   This is a console path for what the CLI does with `omniglass set-password`; unlike that trusted
   direct-DB lane, the console reset enforces the password policy and the takeover guard.
+- With `principal:set-avatar` (an all-scope capability), a user's **Edit** blade gains an **Upload /
+  Remove** picture panel: **Upload** sets that user's profile picture from an image file (JPEG, PNG, or
+  WebP, normalized server-side to a small square), **Remove** clears it, and the change is audited with
+  **you** as the actor. Without the capability the panel does not render, though the user's picture still
+  shows in the blade header and the directory. This is a console path for `omniglass principal setAvatar
+  <id>` / `removeAvatar <id>` on the CLI.
 
 From the CLI the same surface is `omniglass principal list` / `get` / `create` / `update` /
 `disable` / `enable` / `archive` / `restore` / `purge`, and `omniglass grant create <id>` /
@@ -167,6 +181,36 @@ The page uses the same faceted search as the inventory lists: filter by **who**,
 **id** (type a term for a quick actor search, or `action:login` to pin a facet), and combine chips to narrow.
 Filtering runs over the rows already loaded; **Load older** pages further back in time, so a search that comes
 up short is a cue to load older and look deeper.
+
+## Secrets
+
+**Settings > Secrets** (with `secret:read`) is the directory of every [secret](/architecture/variables/):
+a typed, encrypted-at-rest value owned at one scope and resolved down the cascade. Each row shows its
+name, a **type badge**, an owner label, and a **masked** field preview (`••••••`, never a value). The
+same chip filter as the inventory narrows the list.
+
+- **New secret** (with `secret:create`) opens a create **drawer**: pick a **type** (the shape,
+  `snmp-community` or `basic-auth`), an **owner scope** (global, location, system, or component), then
+  the owner itself from the shared indented **tree picker**, and finally the type's operator fields (a
+  password input for a secret field). A global secret needs an all-scope grant.
+- Pick a row to open its **detail blade** on the shared action rail. Fields render masked; **Reveal
+  secret values** (with `secret:reveal`) runs the audited decrypt and shows the plaintext with a
+  per-field **Copy**. Because reveal is not part of the read floor, a plain read-everything operator
+  sees only masks: only an admin or owner reveals, and every reveal is written to the [audit
+  trail](#audit).
+- The footer **Edit** pencil (with `secret:update`) opens inline field edit; a **blank** secret field
+  keeps its stored value, so you rotate one field without re-entering the rest. **Delete** (with
+  `secret:delete`) sits in the footer behind a confirm.
+
+**Effective secrets on a component.** A component's detail carries an **Effective secrets** list: the
+secrets that resolve onto it through the cascade. Click one to open a nested blade showing the resolved
+(revealable) value and the **full cascade**, the winning tier and the candidates it shadowed, read as
+**most-specific wins: component > system > location > global**. It is the teaching view for why a given
+secret is the one in effect.
+
+From the CLI the same surface is `omniglass secret list` / `create` / `update` / `reveal` / `delete`,
+`omniglass secret-type list`, and `omniglass effective-secret list <component>` (see [the CLI
+guide](/guides/cli/)).
 
 ## The layout
 

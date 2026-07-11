@@ -78,13 +78,46 @@ omniglass seed-dev
 ```
 
 Once a server is running, a signed-in principal manages **its own** account through the
-generated `auth` commands (self-scoped: each edits only the caller's own profile):
+generated self-scoped commands (each edits only the caller's own profile):
 
 ```sh
 omniglass auth me                                    # your principal, permissions, and grants
 omniglass auth update-profile --display-name "Ops Lead"
 omniglass auth change-password --current-password 'orange-boat-42x' --new-password 'purple-canyon-7'
+omniglass me setAvatar --image-base64 "$(base64 -w0 me.jpg)"   # set your profile picture
+omniglass me removeAvatar                            # clear it, falling back to initials
+omniglass avatar list                                # read your picture back as { image_base64 }
 ```
+
+`--image-base64` takes a plain base64 string, not a file path (base64-encode the image
+yourself, as the `$(base64 …)` above does); the server accepts JPEG, PNG, or WebP and
+normalizes it to a 256x256 JPEG. An administrator manages **any** principal's picture with
+`omniglass principal setAvatar <id> --image-base64 …` and `omniglass principal removeAvatar <id>`
+(gated by `principal:set-avatar`), reading one back with `omniglass avatar list <id>` (gated by
+`principal:read`). A principal with no picture is a 404.
+
+## Secrets
+
+The [secret](/architecture/variables/) commands are generated like every other resource. `secret`
+covers the encrypted values, `secret-type` lists the shape registry, and `effective-secret` reads the
+masked cascade onto one component. Output is masked JSON, the same as the console; plaintext lives
+behind `reveal`, which the server audits and which only admin and owner may call.
+
+```sh
+omniglass secret-type list                          # the shape registry (snmp-community, basic-auth)
+omniglass secret list                               # the all-scope admin directory (masked fields)
+omniglass secret create --name core-snmp --secret-type snmp-community \
+  --owner-kind location --owner hq --fields '{"community":"public"}'
+omniglass secret update <id> --fields '{"community":"s3cret"}'   # an omitted field keeps its value
+omniglass secret reveal <id>                        # audited plaintext decrypt (secret:reveal)
+omniglass secret delete <id>
+
+omniglass effective-secret list <component>         # the masked cascade resolved onto a component
+```
+
+`--owner-kind` is one of `global | location | system | component`; `--owner` names the owning entity
+and is omitted for a `global` secret (which needs an all-scope grant). Field maps pass as a JSON object
+to `--fields`, validated against the type's shape.
 
 ## Generated versus hand-written
 
