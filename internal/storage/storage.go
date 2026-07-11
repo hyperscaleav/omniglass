@@ -37,8 +37,9 @@ type Gateway interface {
 	BootstrapOwner(ctx context.Context, spec OwnerSpec) (created bool, err error)
 	// IssueBearerCredential mints an additional bearer credential for an existing
 	// principal by human username (token reissue / break-glass / dev login).
-	// Returns false if no such username.
-	IssueBearerCredential(ctx context.Context, username string, hash []byte, prefix string, expiresAt *time.Time) (bool, error)
+	// purpose is 'session' (a web login) or 'token' (a CLI/API credential); expiresAt
+	// bounds the credential's lifetime. Returns false if no such username.
+	IssueBearerCredential(ctx context.Context, username string, hash []byte, prefix, purpose string, expiresAt *time.Time) (bool, error)
 	// AuthenticateBearer resolves a bearer credential by its sha256 hash to the
 	// principal, its kind profile, and its grants. Returns ErrCredentialNotFound
 	// if no credential matches.

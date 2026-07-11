@@ -15,8 +15,8 @@ Built and tested today: the `principal` (+ per-kind `human` / `service`) and `cr
 (argon2id) behind an httpOnly session cookie** (`POST /auth/login` and `/auth/logout`, the public
 `GET /auth/status`), the self-service `GET` / `PATCH /auth/me` and `POST /auth/me:changePassword`, the
 self-service **session list and revoke** (`GET /auth/me/sessions`, `POST /auth/me/sessions/{id}:revoke`:
-a signed-in user sees their own bearer credentials, labelled `session` when bounded by an expiry and
-`token` when not, with the current one flagged, and revokes any of them scoped to their own principal so
+a signed-in user sees their own live bearer credentials, labelled `session` or `token` by their stored
+`purpose`, with the current one flagged, and revokes any of them scoped to their own principal so
 another principal's credential id is a non-disclosing 404; revoking the current one signs it out), the
 admin **principal directory** (`GET /principals`, `GET /principals/{id}`), human **create**
 (`POST /principals`) and **update** (`PATCH /principals/{id}`: display name, email, username), an
@@ -51,12 +51,24 @@ Where the build currently differs from the present-tense design below (each logg
 - **Credentials are `bearer` or `password`.** `credential.kind` is `bearer` or `password` (argon2id,
   PHC-encoded, one password per principal); the `oidc` / `nats` methods and the full
   `(method, identifier)` lookup are still deferred. The minted bearer token prefix is `ogp_`.
-- **A bearer credential can expire.** `credential.expires_at` (nullable) bounds a bearer's lifetime, and
+- **Every credential is time-bounded.** `credential.expires_at` bounds a bearer's lifetime, and
   `AuthenticateBearer` treats a passed expiry as absent (the credential authenticates nothing). A **web
-  login** installs a session cookie with a fixed absolute lifetime (12h today), so a stolen cookie is not
-  valid forever, and the cookie's `Max-Age` matches. A CLI-minted **API token** (`omniglass token`) and the
-  bootstrap token leave `expires_at` null and do not expire. A sliding idle timeout and a background sweep
-  of expired rows are later refinements; today an expired row is simply refused at auth.
+  login** installs a session cookie with a fixed absolute lifetime (12h), so a stolen cookie is not valid
+  forever, and the cookie's `Max-Age` matches. A CLI-minted **API token** (`omniglass token`) and the
+  **bootstrap token** now expire too: a **90-day default** with a `--ttl` override, hard-capped at **365 days**
+  (a `--ttl` above the cap errors), so no eternal secret sits in the field ([ADR-0017](/architecture/decisions/#adr-0017-every-credential-is-time-bounded-token-purpose-not-expiry-shape),
+  reversing the earlier tokens-never-expire choice). Because both kinds now carry an expiry, they are told
+  apart by a **`credential.purpose`** column (`session` vs `token`), not by whether `expires_at` is set.
+  Enforcement is **lazy**: an expired row is simply refused at auth, there is no background sweep, and the
+  self-service list shows only **live** credentials (`expires_at is null or expires_at > now()`, the same
+  filter). A sliding idle timeout, a housekeeping sweep of long-expired rows, and nearing-expiry
+  notifications are later refinements.
+
+  | credential | `purpose` | lifetime |
+  | --- | --- | --- |
+  | web-login session | `session` | 12h absolute (fixed) |
+  | CLI/API token (`omniglass token`) | `token` | 90d default, `--ttl` up to 365d max |
+  | bootstrap token (`omniglass bootstrap`) | `token` | 90d default, `--ttl` up to 365d max |
 - **Failed logins lock the account.** A run of wrong passwords on a real account is throttled by a
   per-username lockout: `human.failed_login_count` counts consecutive misses and, on the 5th, sets
   `human.locked_until` to 15 minutes out. Inside that window `AuthenticatePassword` refuses every
@@ -430,7 +442,7 @@ GET /api/v1/auth/me
 }
 ```
 
-The `/auth/me` family is also where a principal manages **its own** identity: `PATCH /api/v1/auth/me` edits the caller's own `display_name` (email is an administrator-set field, not self-editable), and `POST /api/v1/auth/me:changePassword` (an AIP `:verb` custom method) verifies the current password and installs a new one. Both are **authn-only and self-scoped**: they resolve the target from the session, never a path id, so they need no capability and join the route-gating allow-list next to the `GET`. Acting on **another** principal (create, disable, reset, regrant) is the admin surface and does carry capabilities. The same self-scoped family is where a principal manages **its own sessions**: `GET /api/v1/auth/me/sessions` lists the caller's active bearer credentials (a bounded web login is a `session`, a non-expiring CLI/API credential a `token`, the request's own credential flagged `current`) returning only non-secret metadata (the `sha256(token)` is compared in-query to mark `current` and never leaves the database), and `POST /api/v1/auth/me/sessions/{id}:revoke` deletes one of them, **bounded to the caller's own principal** so a credential id belonging to another principal is a non-disclosing 404 rather than a cross-principal revoke; revoking the current credential is permitted and signs that session out. Both are authn-only and self-scoped. Changing a password does not, today, revoke the principal's other live sessions.
+The `/auth/me` family is also where a principal manages **its own** identity: `PATCH /api/v1/auth/me` edits the caller's own `display_name` (email is an administrator-set field, not self-editable), and `POST /api/v1/auth/me:changePassword` (an AIP `:verb` custom method) verifies the current password and installs a new one. Both are **authn-only and self-scoped**: they resolve the target from the session, never a path id, so they need no capability and join the route-gating allow-list next to the `GET`. Acting on **another** principal (create, disable, reset, regrant) is the admin surface and does carry capabilities. The same self-scoped family is where a principal manages **its own sessions**: `GET /api/v1/auth/me/sessions` lists the caller's **live** bearer credentials (a web login is a `session`, a CLI/API credential a `token`, told apart by the stored `credential.purpose` since both now carry an expiry; the request's own credential is flagged `current`, and an expired row is omitted the same way `AuthenticateBearer` refuses it) returning only non-secret metadata (the `sha256(token)` is compared in-query to mark `current` and never leaves the database), and `POST /api/v1/auth/me/sessions/{id}:revoke` deletes one of them, **bounded to the caller's own principal** so a credential id belonging to another principal is a non-disclosing 404 rather than a cross-principal revoke; revoking the current credential is permitted and signs that session out. Both are authn-only and self-scoped. The console splits the list into a **Sessions** section (web logins) and an **API tokens** section (CLI/API credentials), each rendering the same list primitive.
 
 `permissions` is flat and wildcard-expanded, ready for O(1) `useCan(...)` checks in the web app. It is a **fast-reject / UI hint only**, the union over all grants: it answers "could this principal ever do X anywhere", never "can it do X to **this** entity". List visibility likewise (a row in `GET /alarms` is read-scoped) does **not** imply per-action authority on that row. Per-row action affordances (the ack/snooze button on a specific alarm) must be computed against `visible_set(P, action)` for that target, which the `grants` array drives: `grants` is the source for advanced UI logic (scope chips, deciding per-row actionability, explaining why a button is or is not shown). The server is the only authority regardless; the flat list and the list view are hints, the scoped gateway decides.
 

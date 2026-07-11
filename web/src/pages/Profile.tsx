@@ -2,11 +2,11 @@ import { Show, For, createSignal, createEffect } from "solid-js";
 import PasswordField from "../components/PasswordField";
 import Button from "../components/Button";
 import Drawer, { DrawerFooter } from "../components/Drawer";
+import SessionsList from "../components/SessionsList";
 import { passwordError, isPasswordPolicyMessage } from "../lib/validate";
 import { useMe, useUpdateProfile, useChangePassword } from "../lib/auth";
 import { useSessions, useRevokeSession, type Session } from "../lib/sessions";
-import { rel, fmtTime } from "../lib/format";
-import { Key, Save, X, Trash, LogOut } from "../components/icons";
+import { Key, Save, X } from "../components/icons";
 
 // Profile is the signed-in operator's own account surface: edit your display name
 // and email, change your password, and (pedagogically) see the identity model you
@@ -18,6 +18,12 @@ export default function Profile() {
   const changePassword = useChangePassword();
   const sessions = useSessions();
   const revokeSession = useRevokeSession();
+
+  // Sessions and API tokens are both bearer credentials, split by their kind so each
+  // renders in its own section: a session is a web login, a token one you minted for
+  // the CLI or API.
+  const sessionRows = () => (sessions.data ?? []).filter((s) => s.kind === "session");
+  const tokenRows = () => (sessions.data ?? []).filter((s) => s.kind === "token");
 
   // The id currently being revoked, so only that row's button spins.
   const [revoking, setRevoking] = createSignal<string | null>(null);
@@ -179,43 +185,35 @@ export default function Profile() {
           </div>
         </div>
 
-        {/* Sessions: the caller's own active sign-ins and API tokens, each revocable. */}
+        {/* Sessions: the browsers and devices the caller is signed in from, each revocable. */}
         <div class="card border border-base-300 bg-base-200">
           <div class="card-body gap-3">
             <h2 class="card-title text-base">Sessions</h2>
             <p class="text-xs text-base-content/50">
-              Each device you sign in from is a <span class="font-data text-base-content/70">session</span> that expires on
-              its own; a credential you mint for the CLI or API is a <span class="font-data text-base-content/70">token</span>
-              {" "}that does not. Revoke anything you do not recognize; revoking the one you are using signs you out. The
-              token secret is never shown here, only its <span class="font-data text-base-content/70">ogp_</span> locator.
+              Devices and browsers you are signed in from. Each <span class="font-data text-base-content/70">session</span>
+              {" "}expires on its own; revoke anything you do not recognize, and revoking the one you are using signs you out.
+              The credential secret is never shown here, only its <span class="font-data text-base-content/70">ogp_</span> locator.
             </p>
             <Show when={sessions.error}>
               <div role="alert" class="alert alert-error alert-soft text-sm"><span>Could not load your sessions.</span></div>
             </Show>
-            <ul class="flex flex-col divide-y divide-base-300">
-              <For each={sessions.data ?? []} fallback={<li class="py-2 text-xs text-base-content/40">No active sessions.</li>}>
-                {(s) => (
-                  <li class="flex items-center gap-3 py-2.5">
-                    <span class="badge badge-soft badge-sm" classList={{ "badge-primary": s.kind === "session", "badge-ghost": s.kind === "token" }}>{s.kind}</span>
-                    <div class="min-w-0 flex-1 leading-tight">
-                      <div class="flex items-center gap-2">
-                        <span class="truncate font-data text-xs text-base-content/70">ogp_{s.prefix}</span>
-                        <Show when={s.current}><span class="badge badge-soft badge-success badge-xs flex-none">This session</span></Show>
-                      </div>
-                      <div class="text-[11px] text-base-content/40">
-                        Started {rel(s.created_at)} · {s.expires_at ? `expires ${fmtTime(s.expires_at)}` : "never expires"}
-                      </div>
-                    </div>
-                    <Show
-                      when={s.current}
-                      fallback={<Button intent="danger" size="xs" icon={Trash} loading={revoking() === s.id} onClick={() => revoke(s)}>Revoke</Button>}
-                    >
-                      <Button intent="danger" size="xs" icon={LogOut} loading={revoking() === s.id} onClick={() => revoke(s)}>Sign out</Button>
-                    </Show>
-                  </li>
-                )}
-              </For>
-            </ul>
+            <SessionsList sessions={sessionRows()} revoking={revoking()} onRevoke={revoke} emptyLabel="No active sessions." />
+          </div>
+        </div>
+
+        {/* API tokens: credentials the caller minted for the CLI or API, each revocable. */}
+        <div class="card border border-base-300 bg-base-200">
+          <div class="card-body gap-3">
+            <h2 class="card-title text-base">API tokens</h2>
+            <p class="text-xs text-base-content/50">
+              Tokens you minted for the CLI or API. Each <span class="font-data text-base-content/70">token</span> is
+              time-bounded and expires on its own; revoke any you no longer use. The token secret is never shown here, only
+              its <span class="font-data text-base-content/70">ogp_</span> locator.
+            </p>
+            <Show when={sessions.error}>
+              <div role="alert" class="alert alert-error alert-soft text-sm"><span>Could not load your tokens.</span></div>
+            </Show>
+            <SessionsList sessions={tokenRows()} revoking={revoking()} onRevoke={revoke} emptyLabel="No API tokens." />
           </div>
         </div>
       </div>

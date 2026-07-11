@@ -35,10 +35,10 @@ func TestListAndRevokeBearerCredentials(t *testing.T) {
 		t.Fatalf("resolve root: %v", err)
 	}
 
-	// Issue a second bearer for the same principal, a bounded session (expires_at set).
+	// Issue a second bearer for the same principal, a web-login session (expires_at set).
 	_, hash2, prefix2, _ := auth.NewBearerToken()
 	future := time.Now().Add(12 * time.Hour)
-	if ok, err := gw.IssueBearerCredential(ctx, "root", hash2, prefix2, &future); err != nil || !ok {
+	if ok, err := gw.IssueBearerCredential(ctx, "root", hash2, prefix2, "session", &future); err != nil || !ok {
 		t.Fatalf("issue second: ok=%v err=%v", ok, err)
 	}
 
@@ -61,9 +61,13 @@ func TestListAndRevokeBearerCredentials(t *testing.T) {
 		}
 		byPrefix[c.Prefix] = c
 	}
-	// The bootstrap token never expires; the issued one is a bounded session.
-	if got := byPrefix[prefix1]; got.ExpiresAt != nil {
-		t.Errorf("bootstrap credential expiry = %v, want nil (a token)", got.ExpiresAt)
+	// The two are distinguished by purpose (both are bearers): the bootstrap credential
+	// is a 'token', the issued one a 'session' with a bounded expiry.
+	if got := byPrefix[prefix1]; got.Purpose != "token" {
+		t.Errorf("bootstrap credential purpose = %q, want token", got.Purpose)
+	}
+	if got := byPrefix[prefix2]; got.Purpose != "session" {
+		t.Errorf("issued credential purpose = %q, want session", got.Purpose)
 	}
 	if got := byPrefix[prefix2]; got.ExpiresAt == nil {
 		t.Errorf("session credential expiry = nil, want a bounded time")
@@ -114,5 +118,62 @@ func TestListAndRevokeBearerCredentials(t *testing.T) {
 	}
 	if ok, err := gw.RevokeBearerByID(ctx, pid, "not-a-uuid"); err != nil || ok {
 		t.Fatalf("malformed id revoke = (%v, %v), want (false, nil)", ok, err)
+	}
+}
+
+// TestListBearerCredentialsPurposeAndLiveFilter proves the list carries each
+// credential's purpose (session vs token, the discriminator now that both kinds
+// carry an expiry) and returns only LIVE rows: a credential whose expires_at has
+// passed is excluded, mirroring AuthenticateBearer's own filter (issue #172).
+func TestListBearerCredentialsPurposeAndLiveFilter(t *testing.T) {
+	gw := storagetest.NewDB(t)
+	ctx := context.Background()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	// Bootstrap an owner: its bootstrap bearer is a 'token' credential.
+	_, bh, bp, _ := auth.NewBearerToken()
+	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: bh, Prefix: bp}); err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+	pid, err := gw.ResolvePrincipalRef(ctx, "root")
+	if err != nil {
+		t.Fatalf("resolve root: %v", err)
+	}
+
+	// A live web-login session (future expiry, purpose session).
+	_, sh, sp, _ := auth.NewBearerToken()
+	future := time.Now().Add(12 * time.Hour)
+	if ok, err := gw.IssueBearerCredential(ctx, "root", sh, sp, "session", &future); err != nil || !ok {
+		t.Fatalf("issue session: ok=%v err=%v", ok, err)
+	}
+
+	// An expired token (past expiry): still a stored row, but dead, so the list omits it.
+	_, xh, xp, _ := auth.NewBearerToken()
+	past := time.Now().Add(-time.Minute)
+	if ok, err := gw.IssueBearerCredential(ctx, "root", xh, xp, "token", &past); err != nil || !ok {
+		t.Fatalf("issue expired: ok=%v err=%v", ok, err)
+	}
+
+	creds, err := gw.ListBearerCredentials(ctx, pid, bh)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	byPrefix := map[string]storage.BearerCredential{}
+	for _, c := range creds {
+		byPrefix[c.Prefix] = c
+	}
+	if _, listed := byPrefix[xp]; listed {
+		t.Errorf("an expired credential must not be listed: %+v", creds)
+	}
+	if len(creds) != 2 {
+		t.Fatalf("list = %d live creds, want 2 (bootstrap token + session)", len(creds))
+	}
+	if got := byPrefix[bp]; got.Purpose != "token" {
+		t.Errorf("bootstrap credential purpose = %q, want token", got.Purpose)
+	}
+	if got := byPrefix[sp]; got.Purpose != "session" {
+		t.Errorf("session credential purpose = %q, want session", got.Purpose)
 	}
 }

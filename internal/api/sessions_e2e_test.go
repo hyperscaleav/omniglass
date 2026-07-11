@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/auth"
@@ -43,14 +44,16 @@ func TestSelfServiceSessions(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	// The owner (a password login) plus its bootstrap bearer, which is a non-expiring
-	// token (no expiry), distinct from a login session.
+	// The owner (a password login) plus its bootstrap bearer, an API "token" with a
+	// bounded (90-day) expiry, distinct from a web-login "session". Both are bearers;
+	// their purpose is the discriminator, not whether an expiry is set.
 	pwHash, err := auth.HashPassword("orange-boat-42x")
 	if err != nil {
 		t.Fatalf("hash: %v", err)
 	}
 	_, bh, bp, _ := auth.NewBearerToken()
-	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "ops", SecretHash: bh, Prefix: bp, PasswordHash: pwHash}); err != nil {
+	tokenExpiry := time.Now().Add(auth.DefaultTokenLifetime)
+	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "ops", SecretHash: bh, Prefix: bp, PasswordHash: pwHash, ExpiresAt: &tokenExpiry}); err != nil {
 		t.Fatalf("bootstrap: %v", err)
 	}
 
@@ -147,11 +150,21 @@ func TestSelfServiceSessions(t *testing.T) {
 		t.Fatalf("current credential should be a bounded session, got %+v", cur)
 	}
 	var kinds = map[string]int{}
+	var token sessionRow
 	for _, r := range rows {
 		kinds[r.Kind]++
+		if r.Kind == "token" {
+			token = r
+		}
 	}
 	if kinds["token"] != 1 || kinds["session"] != 1 {
 		t.Fatalf("want one token and one session, got %+v", kinds)
+	}
+	// The minted API token is now itself time-bounded (no eternal secret): it carries a
+	// future expiry, and it is distinguished from the session by its purpose, not by the
+	// presence of an expiry (both have one).
+	if token.ExpiresAt == nil {
+		t.Fatalf("the API token should carry a future expiry, got %+v", token)
 	}
 
 	// The list never leaks a secret.

@@ -238,8 +238,8 @@ func bearerToken(header string) (string, bool) {
 
 // sessionCookieLifetime is the absolute lifetime of a login session: the bearer
 // credential and the cookie both expire after it, so a stolen session cookie is not
-// valid forever. Fixed for this slice (a sliding idle timeout is a later refinement);
-// API tokens minted from the CLI do not expire.
+// valid forever. Fixed for this slice (a sliding idle timeout is a later refinement).
+// A CLI/API token (omniglass token) has its own, much longer default (auth.DefaultTokenLifetime).
 const sessionCookieLifetime = 12 * time.Hour
 
 // sessionCookieName is the httpOnly cookie carrying a human's session bearer
@@ -348,7 +348,7 @@ func (a *authenticator) loginHandler(ctx context.Context, in *loginInput) (*sess
 		return nil, huma.Error500InternalServerError("login failed")
 	}
 	expiresAt := time.Now().Add(sessionCookieLifetime)
-	if _, err := a.gw.IssueBearerCredential(ctx, pr.Human.Username, hash, prefix, &expiresAt); err != nil {
+	if _, err := a.gw.IssueBearerCredential(ctx, pr.Human.Username, hash, prefix, "session", &expiresAt); err != nil {
 		return nil, huma.Error500InternalServerError("login failed")
 	}
 	if err := a.gw.WriteAuthEvent(ctx, pr.ID, "login"); err != nil {
@@ -529,16 +529,16 @@ func (a *authenticator) changePasswordHandler(ctx context.Context, in *changePas
 
 // sessionBody is one of the caller's own bearer credentials in the self-service
 // session list. It carries only non-secret metadata: the secret hash is never
-// returned. Kind labels a bounded web-login "session" (expires_at set) apart from a
-// non-expiring CLI/API "token" (expires_at null). Current marks the credential that
-// authenticated this very request, so the console can mark it and read its revoke as
-// a sign-out.
+// returned. Kind is the credential's purpose: a web-login "session" or a CLI/API
+// "token"; both now carry an expiry, so the discriminator is the stored purpose, not
+// whether expires_at is set. Current marks the credential that authenticated this very
+// request, so the console can mark it and read its revoke as a sign-out.
 type sessionBody struct {
 	ID        string  `json:"id"`
-	Kind      string  `json:"kind" enum:"session,token" doc:"session for a bounded web login (has an expiry), token for a non-expiring CLI/API credential"`
+	Kind      string  `json:"kind" enum:"session,token" doc:"session for a web login, token for a CLI/API credential (omniglass token)"`
 	Prefix    string  `json:"prefix" doc:"The non-secret ogp locator, so a credential is recognizable without exposing the token"`
 	CreatedAt string  `json:"created_at" doc:"When the credential was issued (RFC 3339)"`
-	ExpiresAt *string `json:"expires_at,omitempty" doc:"When the session expires (RFC 3339); absent for a non-expiring token"`
+	ExpiresAt *string `json:"expires_at,omitempty" doc:"When the credential expires (RFC 3339); every credential is now time-bounded"`
 	Current   bool    `json:"current" doc:"True for the credential that authenticated this request; revoking it signs out the current session"`
 }
 
@@ -566,16 +566,23 @@ func (a *authenticator) listMeSessionsHandler(ctx context.Context, _ *struct{}) 
 	out := &listMeSessionsOutput{}
 	out.Body.Sessions = make([]sessionBody, 0, len(creds))
 	for _, c := range creds {
+		// The kind is the stored purpose (session vs token); a legacy row with no
+		// purpose falls back to its expiry shape (a session had one, a token did not).
+		kind := c.Purpose
+		if kind == "" {
+			kind = "token"
+			if c.ExpiresAt != nil {
+				kind = "session"
+			}
+		}
 		s := sessionBody{
 			ID:        c.ID,
-			Kind:      "token",
+			Kind:      kind,
 			Prefix:    c.Prefix,
 			CreatedAt: c.CreatedAt.Format(time.RFC3339),
 			Current:   c.Current,
 		}
 		if c.ExpiresAt != nil {
-			// A bounded expiry is a web-login session; a null expiry is a CLI/API token.
-			s.Kind = "session"
 			exp := c.ExpiresAt.Format(time.RFC3339)
 			s.ExpiresAt = &exp
 		}

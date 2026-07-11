@@ -65,6 +65,10 @@ type OwnerSpec struct {
 	// PasswordHash, when set, installs an argon2id password credential (PHC
 	// encoded) so the owner can log in with a username and password. Optional.
 	PasswordHash string
+	// ExpiresAt bounds the bootstrap bearer token's lifetime (a CLI/API token, so it
+	// gets the token default of 90 days). Nil leaves it unbounded, so a call site that
+	// has not opted into an expiry still compiles; the bootstrap CLI always sets it.
+	ExpiresAt *time.Time
 }
 
 // BootstrapOwner creates the first owner in one transaction, idempotent per
@@ -98,8 +102,8 @@ func (p *PG) BootstrapOwner(ctx context.Context, spec OwnerSpec) (created bool, 
 		return false, fmt.Errorf("storage: bootstrap human: %w", err)
 	}
 	if _, err := tx.Exec(ctx,
-		`insert into credential (principal_id, kind, secret_hash, prefix) values ($1, 'bearer', $2, $3)`,
-		pid, spec.SecretHash, spec.Prefix); err != nil {
+		`insert into credential (principal_id, kind, secret_hash, prefix, purpose, expires_at) values ($1, 'bearer', $2, $3, 'token', $4)`,
+		pid, spec.SecretHash, spec.Prefix, spec.ExpiresAt); err != nil {
 		return false, fmt.Errorf("storage: bootstrap credential: %w", err)
 	}
 	if spec.PasswordHash != "" {
@@ -124,10 +128,12 @@ func (p *PG) BootstrapOwner(ctx context.Context, spec OwnerSpec) (created bool, 
 // principal addressed by its human username, returning false if no such
 // username exists. The caller generates and hashes the token and shows the
 // cleartext once; this is the same trusted direct-DB lane as BootstrapOwner
-// (token reissue, break-glass, and the `make dev` login). expiresAt, when non-nil,
-// bounds the credential's lifetime (a session cookie set at login); a nil expiry
-// never expires (an API token minted from the CLI).
-func (p *PG) IssueBearerCredential(ctx context.Context, username string, hash []byte, prefix string, expiresAt *time.Time) (bool, error) {
+// (token reissue, break-glass, and the `make dev` login). purpose is 'session' (a
+// web login) or 'token' (a CLI/API credential), the discriminator between the two
+// kinds of bearer, and expiresAt bounds the credential's lifetime: every credential
+// is time-bounded now (a session for 12h, a token for 90 days by default), so a
+// leaked bearer is never valid forever.
+func (p *PG) IssueBearerCredential(ctx context.Context, username string, hash []byte, prefix, purpose string, expiresAt *time.Time) (bool, error) {
 	var pid string
 	err := p.pool.QueryRow(ctx, `select principal_id from human where username = $1`, username).Scan(&pid)
 	switch {
@@ -137,8 +143,8 @@ func (p *PG) IssueBearerCredential(ctx context.Context, username string, hash []
 		return false, fmt.Errorf("storage: lookup human %q: %w", username, err)
 	}
 	if _, err := p.pool.Exec(ctx,
-		`insert into credential (principal_id, kind, secret_hash, prefix, expires_at) values ($1, 'bearer', $2, $3, $4)`,
-		pid, hash, prefix, expiresAt); err != nil {
+		`insert into credential (principal_id, kind, secret_hash, prefix, purpose, expires_at) values ($1, 'bearer', $2, $3, $4, $5)`,
+		pid, hash, prefix, purpose, expiresAt); err != nil {
 		return false, fmt.Errorf("storage: issue credential: %w", err)
 	}
 	return true, nil
@@ -557,32 +563,35 @@ func (p *PG) RevokeBearer(ctx context.Context, hash []byte) error {
 	return nil
 }
 
-// BearerCredential is one of a principal's active bearer credentials (a login
+// BearerCredential is one of a principal's live bearer credentials (a login
 // session or an API token), carrying only its non-secret metadata. The secret hash
-// is never returned: this is the shape the self-service session list exposes. A
-// bounded ExpiresAt marks a web-login session (12h); a nil ExpiresAt is a
-// non-expiring CLI/API token. Current is true for the one credential that
-// authenticated the request doing the listing (so the console can label it and
-// treat its revoke as a self sign-out).
+// is never returned: this is the shape the self-service session list exposes.
+// Purpose is 'session' (a web login) or 'token' (a CLI/API credential), the
+// discriminator between the two, since both now carry an ExpiresAt. Current is true
+// for the one credential that authenticated the request doing the listing (so the
+// console can label it and treat its revoke as a self sign-out).
 type BearerCredential struct {
 	ID        string
 	Prefix    string
+	Purpose   string
 	CreatedAt time.Time
 	ExpiresAt *time.Time
 	Current   bool
 }
 
-// ListBearerCredentials returns the principal's own bearer credentials, newest
-// first, with their id, prefix, created_at, and (nullable) expires_at. The raw
+// ListBearerCredentials returns the principal's own LIVE bearer credentials, newest
+// first, with their id, prefix, purpose, created_at, and expires_at. The raw
 // secret_hash is never returned: currentHash (the sha256 of the token that
 // authenticated this request) is only compared in SQL to compute the Current flag,
-// so the hash bytes never leave the database. This backs a signed-in user viewing
-// their own active sessions and tokens (issue #172).
+// so the hash bytes never leave the database. Only live credentials are returned (an
+// unexpired or legacy-null expires_at), mirroring AuthenticateBearer's own filter, so
+// a signed-in user never sees a dead row that would authenticate nothing. Backs the
+// self-service session list (issue #172).
 func (p *PG) ListBearerCredentials(ctx context.Context, principalID string, currentHash []byte) ([]BearerCredential, error) {
 	rows, err := p.pool.Query(ctx, `
-		select id, prefix, created_at, expires_at, coalesce(secret_hash = $2, false) as current
+		select id, prefix, coalesce(purpose, ''), created_at, expires_at, coalesce(secret_hash = $2, false) as current
 		from credential
-		where principal_id = $1 and kind = 'bearer'
+		where principal_id = $1 and kind = 'bearer' and (expires_at is null or expires_at > now())
 		order by created_at desc`, principalID, currentHash)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list bearer credentials: %w", err)
@@ -591,7 +600,7 @@ func (p *PG) ListBearerCredentials(ctx context.Context, principalID string, curr
 	var out []BearerCredential
 	for rows.Next() {
 		var c BearerCredential
-		if err := rows.Scan(&c.ID, &c.Prefix, &c.CreatedAt, &c.ExpiresAt, &c.Current); err != nil {
+		if err := rows.Scan(&c.ID, &c.Prefix, &c.Purpose, &c.CreatedAt, &c.ExpiresAt, &c.Current); err != nil {
 			return nil, fmt.Errorf("storage: scan bearer credential: %w", err)
 		}
 		out = append(out, c)

@@ -36,7 +36,7 @@ func TestIssueBearerCredential(t *testing.T) {
 	if err != nil {
 		t.Fatalf("mint second: %v", err)
 	}
-	ok, err := gw.IssueBearerCredential(ctx, "root", hash2, prefix2, nil)
+	ok, err := gw.IssueBearerCredential(ctx, "root", hash2, prefix2, "token", nil)
 	if err != nil || !ok {
 		t.Fatalf("issue for root = (%v, %v), want (true, nil)", ok, err)
 	}
@@ -53,7 +53,7 @@ func TestIssueBearerCredential(t *testing.T) {
 	}
 
 	// An unknown username is reported as not-found, not an error.
-	ok, err = gw.IssueBearerCredential(ctx, "nobody", hash2, prefix2, nil)
+	ok, err = gw.IssueBearerCredential(ctx, "nobody", hash2, prefix2, "token", nil)
 	if err != nil || ok {
 		t.Errorf("issue for unknown = (%v, %v), want (false, nil)", ok, err)
 	}
@@ -75,7 +75,7 @@ func TestBearerExpiry(t *testing.T) {
 	// An expired session credential authenticates nothing.
 	expTok, expHash, expPrefix, _ := auth.NewBearerToken()
 	past := time.Now().Add(-time.Minute)
-	if ok, err := gw.IssueBearerCredential(ctx, "root", expHash, expPrefix, &past); err != nil || !ok {
+	if ok, err := gw.IssueBearerCredential(ctx, "root", expHash, expPrefix, "token", &past); err != nil || !ok {
 		t.Fatalf("issue expired: ok=%v err=%v", ok, err)
 	}
 	if _, err := gw.AuthenticateBearer(ctx, auth.HashToken(expTok)); !errors.Is(err, storage.ErrCredentialNotFound) {
@@ -85,7 +85,7 @@ func TestBearerExpiry(t *testing.T) {
 	// A credential with a future expiry still authenticates.
 	okTok, okHash, okPrefix, _ := auth.NewBearerToken()
 	future := time.Now().Add(time.Hour)
-	if ok, err := gw.IssueBearerCredential(ctx, "root", okHash, okPrefix, &future); err != nil || !ok {
+	if ok, err := gw.IssueBearerCredential(ctx, "root", okHash, okPrefix, "token", &future); err != nil || !ok {
 		t.Fatalf("issue future: ok=%v err=%v", ok, err)
 	}
 	if pr, err := gw.AuthenticateBearer(ctx, auth.HashToken(okTok)); err != nil || pr.Human == nil || pr.Human.Username != "root" {

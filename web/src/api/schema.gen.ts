@@ -1306,11 +1306,11 @@ export interface components {
             created_at: string;
             /** @description True for the credential that authenticated this request; revoking it signs out the current session */
             current: boolean;
-            /** @description When the session expires (RFC 3339); absent for a non-expiring token */
+            /** @description When the credential expires (RFC 3339); every credential is now time-bounded */
             expires_at?: string;
             id: string;
             /**
-             * @description session for a bounded web login (has an expiry), token for a non-expiring CLI/API credential
+             * @description session for a web login, token for a CLI/API credential (omniglass token)
              * @enum {string}
              */
             kind: "session" | "token";

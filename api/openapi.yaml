@@ -1012,12 +1012,12 @@ components:
           description: True for the credential that authenticated this request; revoking it signs out the current session
           type: boolean
         expires_at:
-          description: When the session expires (RFC 3339); absent for a non-expiring token
+          description: When the credential expires (RFC 3339); every credential is now time-bounded
           type: string
         id:
           type: string
         kind:
-          description: session for a bounded web login (has an expiry), token for a non-expiring CLI/API credential
+          description: session for a web login, token for a CLI/API credential (omniglass token)
           enum:
             - session
             - token

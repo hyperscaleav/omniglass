@@ -606,7 +606,7 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   never selects the raw `secret_hash` into a returned field (the request's own `sha256(token)` is compared
   in SQL to flag the `current` one, so the hash never leaves the database), and `RevokeBearerByID` deletes
   one **scoped to the owning principal** so a caller can only revoke their own. Over the API, `GET
-  /auth/me/sessions` lists them (labelled `session` when bounded by an expiry, `token` when not, the
+  /auth/me/sessions` lists them (labelled `session` or `token` by the credential's `purpose`, the
   current one flagged) and `POST /auth/me/sessions/{id}:revoke` ends one (204); both are authn-only and
   self-scoped, so a credential id belonging to another principal is a non-disclosing 404, and revoking the
   current credential signs it out. The console's **Your profile** gains a **Sessions** card listing each
@@ -617,3 +617,21 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   session is flagged, a second session is revoked and stops authenticating, another principal's id is a
   404, and revoking the current one signs out). The **admin** surface (an operator revoking another
   principal's sessions) is slice 2.
+
+- **Identity: every credential is time-bounded, and sessions split from API tokens.** Building on the slice
+  above, the tokens-never-expire behavior is reversed ([ADR-0017](/architecture/decisions/#adr-0017-every-credential-is-time-bounded-token-purpose-not-expiry-shape)):
+  a web-login **session** keeps its 12h absolute lifetime, while a CLI/API **token** (`omniglass token`) and
+  the **bootstrap token** (`omniglass bootstrap`) now get a **90-day default** expiry with a `--ttl` override
+  hard-capped at **365 days** (a `--ttl` above the cap is a clean error, before any DB work), so no eternal
+  secret sits in the field. Because both kinds now carry an expiry, a new **`credential.purpose`** column
+  (`session` / `token`), not the nullable `expires_at`, is the discriminator; a migration adds it and
+  backfills existing bearers (expiry set to `session`, else `token`). `IssueBearerCredential` and
+  `BootstrapOwner` take the purpose and expiry; `ListBearerCredentials` returns the purpose and now filters
+  to **live** rows only (`expires_at is null or expires_at > now()`, mirroring `AuthenticateBearer`), so a
+  dead credential is never listed. The console's **Your profile** splits the one list into a **Sessions**
+  section and an **API tokens** section, both rendering a shared `SessionsList` primitive, and a token now
+  shows its expiry. Enforcement stays **lazy** (an expired row is refused at auth, no background sweep).
+  Proven by a storage test (the list carries the right purpose and excludes an expired row), an updated
+  real-binary API test (session vs token asserted via purpose, the minted token carries a future expiry), and
+  a CLI unit test (a `--ttl` above the 365-day cap errors for both `token` and `bootstrap`). Deferred: a
+  sliding idle timeout, a housekeeping sweep of long-expired rows, and nearing-expiry notifications.
