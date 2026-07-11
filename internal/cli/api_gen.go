@@ -1089,7 +1089,7 @@ func generatedCommands() []*cobra.Command {
 					path := fmt.Sprintf("/api/v1/secrets")
 					body := map[string]any{}
 					if cmd.Flags().Changed("fields") {
-						body["fields"] = fFields
+						body["fields"] = jsonOrString(fFields)
 					}
 					if cmd.Flags().Changed("name") {
 						body["name"] = fName
@@ -1171,7 +1171,7 @@ func generatedCommands() []*cobra.Command {
 					path := fmt.Sprintf("/api/v1/secrets/%s", url.PathEscape(args[0]))
 					body := map[string]any{}
 					if cmd.Flags().Changed("fields") {
-						body["fields"] = fFields
+						body["fields"] = jsonOrString(fFields)
 					}
 					return runAPICommand(cmd, "PATCH", path, body)
 				},
@@ -1370,7 +1370,7 @@ func generatedCommands() []*cobra.Command {
 						body["owner_kind"] = fOwnerKind
 					}
 					if cmd.Flags().Changed("value") {
-						body["value"] = fValue
+						body["value"] = jsonOrString(fValue)
 					}
 					if cmd.Flags().Changed("value-type") {
 						body["value_type"] = fValueType
@@ -1429,7 +1429,7 @@ func generatedCommands() []*cobra.Command {
 					path := fmt.Sprintf("/api/v1/variables/%s", url.PathEscape(args[0]))
 					body := map[string]any{}
 					if cmd.Flags().Changed("value") {
-						body["value"] = fValue
+						body["value"] = jsonOrString(fValue)
 					}
 					return runAPICommand(cmd, "PATCH", path, body)
 				},

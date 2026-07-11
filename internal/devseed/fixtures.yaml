@@ -97,3 +97,22 @@ users:
         scope_kind: location
         scope_ref: east
         scope_op: subtree_excl_root
+
+# Global example variables (macros), so the Variables directory comes up
+# populated. Scoped variables are added once the dev estate seeds systems and
+# components; these globals need no owner.
+variables:
+  - name: poll_interval
+    value_type: int
+    value: 60
+  - name: base_url
+    value_type: string
+    value: https://api.hyperscaleav.com
+  - name: tls_verify
+    value_type: bool
+    value: true
+  - name: retry_policy
+    value_type: json
+    value:
+      retries: 3
+      backoff: 1s

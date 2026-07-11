@@ -106,6 +106,30 @@ omniglass effective-secret list <component>         # the masked cascade resolve
 and is omitted for a `global` secret (which needs an all-scope grant). Field maps pass as a JSON object
 to `--fields`, validated against the type's shape.
 
+## Variables
+
+The [variable](/architecture/variables/) commands are generated the same way. `variable` covers the
+plaintext values and `effective-variable` reads the cascade onto one component. There is no reveal:
+the value is shown in the clear.
+
+```sh
+omniglass variable list                             # the all-scope admin directory
+omniglass variable create --name poll_interval --value-type int \
+  --owner-kind system --owner east-auditorium-av --value 30
+omniglass variable create --name retry --value-type json --owner-kind global \
+  --value '{"retries":3,"backoff":"1s"}'
+omniglass variable update <id> --value 60           # validated against the fixed value_type
+omniglass variable delete <id>
+
+omniglass effective-variable list <component>       # the cascade resolved onto a component
+```
+
+`--value-type` is one of `string | int | float | bool | json`. `--value` is **parsed as JSON**, so a
+bare `30`, `true`, or `{"k":"v"}` sends the number, the boolean, or the object; a bare word like `HDMI1`
+falls back to a string, so the common case needs no quoting. A string value that would otherwise parse
+as JSON (`30`, `true`) is quoted to force a string: `--value '"30"'`. (`secret create --fields` parses
+the same way.)
+
 ## Generated versus hand-written
 
 - **Generated** (`internal/cli/api_gen.go`, do not edit): one command per API operation.
