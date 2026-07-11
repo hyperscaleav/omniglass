@@ -285,6 +285,27 @@ func generatedCommands() []*cobra.Command {
 	}
 	{
 		parent := &cobra.Command{
+			Use:   "effective-variable",
+			Short: "Commands for the effective-variable resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "list <name>",
+				Short:   "Effective variables for a component",
+				Long:    "Resolves the variables that cascade onto a component (global -> location -> system -> component, most-specific winning), winner and shadowed candidates. Gated by variable:read; the component must be in the caller's component read scope.",
+				Example: "  omniglass effective-variable list <name>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/components/%s/effective-variables", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		roots = append(roots, parent)
+	}
+	{
+		parent := &cobra.Command{
 			Use:   "grant",
 			Short: "Commands for the grant resource",
 		}
@@ -1315,6 +1336,106 @@ func generatedCommands() []*cobra.Command {
 			}
 			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
 			cmd.Flags().StringVar(&fSystemType, "system-type", "", "")
+			return cmd
+		}())
+		roots = append(roots, parent)
+	}
+	{
+		parent := &cobra.Command{
+			Use:   "variable",
+			Short: "Commands for the variable resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			var fName string
+			var fOwner string
+			var fOwnerKind string
+			var fValue string
+			var fValueType string
+			cmd := &cobra.Command{
+				Use:     "create",
+				Short:   "Create a variable",
+				Long:    "Sets a variable at an owner scope (a global variable needs an all-scoped grant). The value is validated against value_type. Gated by variable:create.",
+				Example: "  omniglass variable create --name name --owner-kind owner_kind --value value --value-type value_type",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/variables")
+					body := map[string]any{}
+					if cmd.Flags().Changed("name") {
+						body["name"] = fName
+					}
+					if cmd.Flags().Changed("owner") {
+						body["owner"] = fOwner
+					}
+					if cmd.Flags().Changed("owner-kind") {
+						body["owner_kind"] = fOwnerKind
+					}
+					if cmd.Flags().Changed("value") {
+						body["value"] = fValue
+					}
+					if cmd.Flags().Changed("value-type") {
+						body["value_type"] = fValueType
+					}
+					return runAPICommand(cmd, "POST", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fName, "name", "", "The cascade key; unique per owner")
+			_ = cmd.MarkFlagRequired("name")
+			cmd.Flags().StringVar(&fOwner, "owner", "", "The owning entity's name; omit for a global variable")
+			cmd.Flags().StringVar(&fOwnerKind, "owner-kind", "", "Which tier owns this variable")
+			_ = cmd.MarkFlagRequired("owner-kind")
+			cmd.Flags().StringVar(&fValue, "value", "", "The value, validated against value_type")
+			_ = cmd.MarkFlagRequired("value")
+			cmd.Flags().StringVar(&fValueType, "value-type", "", "The declared value type")
+			_ = cmd.MarkFlagRequired("value-type")
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "delete <id>",
+				Short:   "Delete a variable",
+				Long:    "Removes a variable by id. Gated by variable:delete; read and delete scopes on the owner drive the 404 versus 403 split.",
+				Example: "  omniglass variable delete <id>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/variables/%s", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "DELETE", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "list",
+				Short:   "List variables (admin directory)",
+				Long:    "Lists every variable. Requires an all-scope read; the scoped, per-component view is the effective-variables route. Gated by variable:read.",
+				Example: "  omniglass variable list",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/variables")
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			var fValue string
+			cmd := &cobra.Command{
+				Use:     "update <id>",
+				Short:   "Update a variable's value",
+				Long:    "Replaces a variable's value, validated against its fixed value_type. Only the value changes; name, type, and owner are fixed at creation. Gated by variable:update.",
+				Example: "  omniglass variable update <id> --value value",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/variables/%s", url.PathEscape(args[0]))
+					body := map[string]any{}
+					if cmd.Flags().Changed("value") {
+						body["value"] = fValue
+					}
+					return runAPICommand(cmd, "PATCH", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fValue, "value", "", "The new value, validated against the fixed value_type")
+			_ = cmd.MarkFlagRequired("value")
 			return cmd
 		}())
 		roots = append(roots, parent)

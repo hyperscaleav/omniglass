@@ -598,6 +598,25 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   alice`). Proven by a storage test (username resolves, a uuid passes through, an unknown username is not
   found) and an API test (get by username matches get by uuid, a `:verb` method archives by username, an
   unknown username is a 404).
+- **Variable: the cascade-resolved free value.** The second member of the [config, secrets, and
+  variables](/architecture/variables/) trio lands, after the secret. A **variable** is a typed **plaintext**
+  value (a macro) owned on the same exclusive arc as a secret (`global | location | system | component`) and
+  resolved most-specific-wins down the [cascade](/architecture/cascade/), but shown in the clear (no crypto, no
+  masking, no reveal). Typing is **inline**: a `value_type` of `string` / `int` / `float` / `bool` / `json` plus a
+  jsonb `value`, validated against the type in a pure `internal/variable` package (no shape registry, unlike the
+  secret). `GET|POST /variables`, `PATCH|DELETE /variables/{id}`, and `GET /components/{name}/effective-variables`
+  (the per-component cascade view). Reads ride the viewer floor; **create and update are granted to operators**
+  (`variable:create,update`), delete stays `variable:delete` (admin, owner), the same split the secret got.
+  Scoping a variable required wiring `variable` into the ABAC resolver's owner-arc tiers, exactly as the secret
+  did. The console adds a **Variables** directory (type in its own column) with a type-aware value editor and, on a
+  component's detail, the **effective-variables** cascade panel (top-to-bottom, the deepest winning). Deferred
+  (ADR-0018): the **`template`** owner scope and cascade groups ([#184](https://github.com/hyperscaleav/omniglass/issues/184)),
+  a `variable_type` registry (types are inline), the **`$var:`** interpolation consumer, and the secret-flagged
+  variable.
+  Proven by a `value_type` validation unit test (each scalar's valid and invalid forms), a storage integration test
+  (jsonb round-trip per type, full cascade precedence, the owner-scope split), an HTTP e2e (the cascade, the authz
+  split incl. the scoped-operator create / update and the viewer 403s), a scope-resolver unit test for the
+  owner-arc kinds, and the web data-layer suite.
 - **Secret: the cascade-resolved encrypted value.** The first of the [config, credentials, and
   variables](/architecture/variables/) trio lands, and the prerequisite for the [collection](/architecture/collection/)
   driver's interface inputs ([#155](https://github.com/hyperscaleav/omniglass/issues/155)). A **secret** is a

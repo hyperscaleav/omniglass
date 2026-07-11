@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/scope"
@@ -206,6 +207,21 @@ func (UnimplementedGateway) CopySecret(context.Context, string, string, scope.Se
 	return nil, nil
 }
 func (UnimplementedGateway) ResolveSecrets(context.Context, string, scope.Set) ([]ResolvedSecret, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) ListVariables(context.Context, scope.Set) ([]Variable, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) CreateVariable(context.Context, string, VariableSpec, scope.Set) (*Variable, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) UpdateVariable(context.Context, string, string, json.RawMessage, scope.Set, scope.Set) (*Variable, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteVariable(context.Context, string, string, scope.Set, scope.Set) error {
+	return nil
+}
+func (UnimplementedGateway) ResolveVariables(context.Context, string, scope.Set) ([]ResolvedVariable, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) Close() {}

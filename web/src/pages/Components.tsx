@@ -18,6 +18,7 @@ import { ChevronRight, Pencil, Plus, Save, X } from "../components/icons";
 import Button from "../components/Button";
 import { DrawerFooter } from "../components/Drawer";
 import EffectiveSecrets, { secretCascadeBlade, cascadeBladeId } from "../components/EffectiveSecrets";
+import EffectiveVariables, { variableCascadeBlade, varCascadeBladeId } from "../components/EffectiveVariables";
 
 // Components: the device inventory, the first page built on the generic TreeList.
 // Components form a tree (parent_id) and each is bound to a primary system and a
@@ -155,6 +156,12 @@ export default function Components() {
           <EffectiveSecrets
             component={n.raw.name}
             onOpen={(secretName) => ctx.openBlade({ kind: "secret-cascade", id: cascadeBladeId(n.raw.name, secretName) })}
+          />
+        </Show>
+        <Show when={can(me.data, "variable", "read")}>
+          <EffectiveVariables
+            component={n.raw.name}
+            onOpen={(variableName) => ctx.openBlade({ kind: "variable-cascade", id: varCascadeBladeId(n.raw.name, variableName) })}
           />
         </Show>
         <Show when={ctx.full}>
@@ -304,7 +311,7 @@ export default function Components() {
     onBack: () => navigate("/components"),
     onDelete: (n) => del(n),
     renderDetail: (n, ctx) => detail(n, ctx),
-    extraBlades: { "secret-cascade": secretCascadeBlade },
+    extraBlades: { "secret-cascade": secretCascadeBlade, "variable-cascade": variableCascadeBlade },
     FormBody,
   };
 

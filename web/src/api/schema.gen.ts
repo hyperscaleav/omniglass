@@ -220,6 +220,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/components/{name}/effective-variables": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Effective variables for a component
+         * @description Resolves the variables that cascade onto a component (global -> location -> system -> component, most-specific winning), winner and shadowed candidates. Gated by variable:read; the component must be in the caller's component read scope.
+         */
+        get: operations["effective-variables"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/healthz": {
         parameters: {
             query?: never;
@@ -860,6 +880,54 @@ export interface paths {
         patch: operations["update-system"];
         trace?: never;
     };
+    "/variables": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List variables (admin directory)
+         * @description Lists every variable. Requires an all-scope read; the scoped, per-component view is the effective-variables route. Gated by variable:read.
+         */
+        get: operations["list-variables"];
+        put?: never;
+        /**
+         * Create a variable
+         * @description Sets a variable at an owner scope (a global variable needs an all-scoped grant). The value is validated against value_type. Gated by variable:create.
+         */
+        post: operations["create-variable"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/variables/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete a variable
+         * @description Removes a variable by id. Gated by variable:delete; read and delete scopes on the owner drive the 404 versus 403 split.
+         */
+        delete: operations["delete-variable"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a variable's value
+         * @description Replaces a variable's value, validated against its fixed value_type. Only the value changes; name, type, and owner are fixed at creation. Gated by variable:update.
+         */
+        patch: operations["update-variable"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1077,6 +1145,30 @@ export interface components {
             /** @description A system_type id */
             system_type: string;
         };
+        CreateVariableInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateVariableInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The cascade key; unique per owner */
+            name: string;
+            /** @description The owning entity's name; omit for a global variable */
+            owner?: string;
+            /**
+             * @description Which tier owns this variable
+             * @enum {string}
+             */
+            owner_kind: "global" | "location" | "system" | "component";
+            /** @description The value, validated against value_type */
+            value: unknown;
+            /**
+             * @description The declared value type
+             * @enum {string}
+             */
+            value_type: "string" | "int" | "float" | "bool" | "json";
+        };
         EffectiveSecretsOutputBody: {
             /**
              * Format: uri
@@ -1085,6 +1177,15 @@ export interface components {
              */
             readonly $schema?: string;
             secrets: components["schemas"]["ResolvedSecretBody"][] | null;
+        };
+        EffectiveVariablesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/EffectiveVariablesOutputBody.json
+             */
+            readonly $schema?: string;
+            variables: components["schemas"]["ResolvedVariableBody"][] | null;
         };
         ErrorDetail: {
             /** @description Where the error occurred, e.g. 'body.items[3].tags' or 'path.thing-id' */
@@ -1322,6 +1423,15 @@ export interface components {
             readonly $schema?: string;
             systems: components["schemas"]["SystemBody"][] | null;
         };
+        ListVariablesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListVariablesOutputBody.json
+             */
+            readonly $schema?: string;
+            variables: components["schemas"]["VariableBody"][] | null;
+        };
         LocationBody: {
             /**
              * Format: uri
@@ -1430,6 +1540,28 @@ export interface components {
             owner_kind: string;
             owner_name?: string;
             secret_type: string;
+            /** @description True for the resolved value; false for a shadowed candidate */
+            winner: boolean;
+        };
+        ResolvedVariableBody: {
+            /**
+             * Format: int64
+             * @description Cascade tier: 0 global, 1 location, 2 system, 3 component
+             */
+            band: number;
+            /**
+             * Format: int64
+             * @description Distance up the tier's tree from the component (0 nearest)
+             */
+            depth: number;
+            id: string;
+            name: string;
+            owner_id?: string;
+            owner_kind: string;
+            owner_name?: string;
+            /** @description The value, shape given by value_type */
+            value: unknown;
+            value_type: string;
             /** @description True for the resolved value; false for a shadowed candidate */
             winner: boolean;
         };
@@ -1595,6 +1727,32 @@ export interface components {
             readonly $schema?: string;
             display_name?: string;
             system_type?: string;
+        };
+        UpdateVariableInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/UpdateVariableInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The new value, validated against the fixed value_type */
+            value: unknown;
+        };
+        VariableBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/VariableBody.json
+             */
+            readonly $schema?: string;
+            id: string;
+            name: string;
+            owner_id?: string;
+            owner_kind: string;
+            owner_name?: string;
+            /** @description The value, shape given by value_type */
+            value: unknown;
+            value_type: string;
         };
     };
     responses: never;
@@ -2068,6 +2226,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EffectiveSecretsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "effective-variables": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The component's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EffectiveVariablesOutputBody"];
                 };
             };
             /** @description Error */
@@ -3502,6 +3692,134 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SystemBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-variables": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListVariablesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-variable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateVariableInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VariableBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-variable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The variable's id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "update-variable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The variable's id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateVariableInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VariableBody"];
                 };
             };
             /** @description Error */
