@@ -545,6 +545,9 @@ func (a *authenticator) setMeAvatarHandler(ctx context.Context, in *setAvatarMeI
 	if !ok {
 		return nil, huma.Error401Unauthorized("unauthenticated")
 	}
+	if pr.Human == nil {
+		return nil, huma.Error422UnprocessableEntity("only human principals have a profile picture")
+	}
 	b64, err := normalizeAvatar(in.Body.ImageBase64)
 	if err != nil {
 		return nil, err
@@ -562,6 +565,9 @@ func (a *authenticator) removeMeAvatarHandler(ctx context.Context, _ *struct{}) 
 	if !ok {
 		return nil, huma.Error401Unauthorized("unauthenticated")
 	}
+	if pr.Human == nil {
+		return nil, huma.Error422UnprocessableEntity("only human principals have a profile picture")
+	}
 	if err := a.gw.ClearOwnAvatar(ctx, pr.ID); err != nil {
 		return nil, huma.Error500InternalServerError("remove avatar")
 	}
@@ -575,6 +581,9 @@ func (a *authenticator) meAvatarHandler(ctx context.Context, _ *struct{}) (*avat
 	pr, ok := principalFrom(ctx)
 	if !ok {
 		return nil, huma.Error401Unauthorized("unauthenticated")
+	}
+	if pr.Human == nil {
+		return nil, huma.Error422UnprocessableEntity("only human principals have a profile picture")
 	}
 	b64, has, err := a.gw.GetHumanAvatar(ctx, pr.ID)
 	if err != nil {

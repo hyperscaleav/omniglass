@@ -136,8 +136,12 @@ type Gateway interface {
 	ClearPrincipalAvatar(ctx context.Context, actorID, id string, action scope.Set) error
 	// GetHumanAvatar returns a human's profile picture as a base64 JPEG. The bool is
 	// false (with no error) when the human has no picture; an unknown id is
-	// ErrPrincipalNotFound.
+	// ErrPrincipalNotFound. Unscoped: it backs the self read (the caller's own row).
 	GetHumanAvatar(ctx context.Context, id string) (string, bool, error)
+	// GetPrincipalAvatar is the admin read of another principal's profile picture: it
+	// applies the same all-scope invariant as the rest of the directory (a non-all
+	// scope is ErrPrincipalForbidden), then delegates to GetHumanAvatar.
+	GetPrincipalAvatar(ctx context.Context, id string, action scope.Set) (string, bool, error)
 	// RevokePrincipalBearers deletes a principal's bearer credentials (sessions and
 	// tokens) except any sha256 hash in keep (empty revokes all); the force-logout on a
 	// self-service password change keeps the caller's own session. Returns the count.

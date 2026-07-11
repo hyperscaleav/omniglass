@@ -190,3 +190,54 @@ func TestAdminSetAvatar_GatedByPermission(t *testing.T) {
 	}
 	c.do(ownerTok, "GET", "/principals/"+bob.ID+"/avatar", nil, http.StatusNotFound)
 }
+
+// TestGetPrincipalAvatar_ScopedReaderForbidden proves the admin avatar read route
+// enforces ABAC scope, not just the principal:read capability. A location-scoped
+// admin HOLDS principal:read (via the admin role) so it clears the capability gate,
+// but the gateway's all-scope invariant must still refuse it (403) on another
+// principal's avatar, exactly as GET /principals/{id} does. An all-scope owner reads
+// the same picture (200). Skipped under -short.
+func TestGetPrincipalAvatar_ScopedReaderForbidden(t *testing.T) {
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+
+	ownerTok := bootstrapOwnerTok(t, ctx, gw)
+	// A location-scoped admin holds principal:read (via the admin role) but only at a
+	// narrow scope, so it passes the capability gate yet must be refused by the
+	// gateway's all-scope invariant, exactly as on GET /principals/{id}.
+	scopedTok := principalWithGrants(t, ctx, dsn, "hq-admin", []grant{{role: "admin", scopeKind: "location", scopeID: "HQ"}})
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+
+	// Owner creates a human target and sets its picture.
+	created := c.do(ownerTok, "POST", "/principals", map[string]string{"username": "carol"}, http.StatusCreated)
+	var carol struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(created, &carol); err != nil || carol.ID == "" {
+		t.Fatalf("create carol: %v (%s)", err, created)
+	}
+	c.do(ownerTok, "POST", "/principals/"+carol.ID+":setAvatar", map[string]string{"image_base64": onePxPNGB64}, http.StatusNoContent)
+
+	// The all-scope owner reads it back: a 200 with a non-empty picture.
+	read := c.do(ownerTok, "GET", "/principals/"+carol.ID+"/avatar", nil, http.StatusOK)
+	var got struct {
+		ImageBase64 string `json:"image_base64"`
+	}
+	if err := json.Unmarshal(read, &got); err != nil || got.ImageBase64 == "" {
+		t.Fatalf("owner read carol avatar: err=%v body=%s", err, read)
+	}
+
+	// The scoped admin passes the principal:read capability but is refused by the
+	// gateway's all-scope invariant: a 403, never a 200 leaking the picture.
+	c.do(scopedTok, "GET", "/principals/"+carol.ID+"/avatar", nil, http.StatusForbidden)
+}

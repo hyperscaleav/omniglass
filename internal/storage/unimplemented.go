@@ -119,6 +119,9 @@ func (UnimplementedGateway) ClearPrincipalAvatar(context.Context, string, string
 func (UnimplementedGateway) GetHumanAvatar(context.Context, string) (string, bool, error) {
 	return "", false, nil
 }
+func (UnimplementedGateway) GetPrincipalAvatar(context.Context, string, scope.Set) (string, bool, error) {
+	return "", false, nil
+}
 func (UnimplementedGateway) RevokePrincipalBearers(context.Context, string, [][]byte) (int, error) {
 	return 0, nil
 }

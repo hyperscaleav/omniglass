@@ -578,6 +578,17 @@ func (p *PG) GetHumanAvatar(ctx context.Context, id string) (string, bool, error
 	return *b64, true, nil
 }
 
+// GetPrincipalAvatar is the admin read of another principal's profile picture. It
+// applies the directory's all-scope invariant (a non-all scope is
+// ErrPrincipalForbidden, mirroring the admin write methods), then delegates to
+// GetHumanAvatar.
+func (p *PG) GetPrincipalAvatar(ctx context.Context, id string, action scope.Set) (string, bool, error) {
+	if !action.All {
+		return "", false, ErrPrincipalForbidden
+	}
+	return p.GetHumanAvatar(ctx, id)
+}
+
 // RevokePrincipalBearers deletes every bearer credential (sessions and tokens) for a
 // principal, except any whose sha256 hash is in keep. It backs the force-logout on a
 // self-service password change: pass the caller's current session hash in keep so the

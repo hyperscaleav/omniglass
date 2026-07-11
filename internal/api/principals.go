@@ -506,7 +506,7 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		if rerr != nil {
 			return nil, rerr
 		}
-		b64, ok, err := gw.GetHumanAvatar(ctx, id)
+		b64, ok, err := gw.GetPrincipalAvatar(ctx, id, a.scopeFor(ctx, "principal", "read"))
 		if err != nil {
 			return nil, mapPrincipalErr(err)
 		}
