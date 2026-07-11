@@ -173,6 +173,22 @@ func TestSecretAPI(t *testing.T) {
 	c.do(viewerTok, http.MethodPost, "/secrets/"+compPollID+":reveal", nil, http.StatusForbidden)
 	c.do(viewerTok, http.MethodPost, "/secrets/"+compPollID+":copy", nil, http.StatusForbidden)
 	c.do(viewerTok, http.MethodPatch, "/secrets/"+compPollID, map[string]any{"fields": map[string]string{"community": "x"}}, http.StatusForbidden)
+
+	// A component-scoped operator: may seal and edit secrets in its subtree
+	// (secret:create,update), but decrypt (reveal/copy) and delete stay off its
+	// role, so those are 403.
+	opTok := setupScopedViewer(t, ctx, dsn, "operator-codec", "operator", "component", comp.ID)
+	var opCreated struct {
+		ID string `json:"id"`
+	}
+	json.Unmarshal(c.do(opTok, http.MethodPost, "/secrets", secretReq("op-poll", "component", "codec-1", "op-community"), http.StatusCreated), &opCreated)
+	if opCreated.ID == "" {
+		t.Fatal("operator create returned no id")
+	}
+	c.do(opTok, http.MethodPatch, "/secrets/"+opCreated.ID, map[string]any{"fields": map[string]string{"community": "op-rotated"}}, http.StatusOK)
+	c.do(opTok, http.MethodPost, "/secrets/"+opCreated.ID+":reveal", nil, http.StatusForbidden)
+	c.do(opTok, http.MethodPost, "/secrets/"+opCreated.ID+":copy", nil, http.StatusForbidden)
+	c.do(opTok, http.MethodDelete, "/secrets/"+opCreated.ID, nil, http.StatusForbidden)
 }
 
 func secretReq(name, ownerKind, owner, community string) map[string]any {

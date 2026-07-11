@@ -152,11 +152,13 @@ mechanism (define once high, inherit below). Interpolation lives at the **consum
 (The interpolation consumer that splices a live value into a request is the deferred collection-driver
 slice.)
 
-**Masked everywhere except an audited reveal.** A secret's value is masked (`••••••`) in every read:
+**Masked everywhere except an audited decrypt.** A secret's value is masked (`••••••`) in every read:
 the directory, the per-component effective-secrets view, the type list. Reading the plaintext is a
-separate, privileged action: `secret:reveal` gates the decrypt, it is **not** covered by the `*:read`
-floor (so only admin, `secret:*`, and owner may reveal), and **every reveal writes an
-[audit](/architecture/audit/) row**.
+separate, privileged action: `secret:reveal` gates the decrypt (both an on-screen **reveal** and a
+clipboard **copy**, recorded under distinct `reveal` and `copy` verbs), it is **not** covered by the
+`*:read` floor (so only admin, `secret:*`, and owner may decrypt), and **every decrypt writes an
+[audit](/architecture/audit/) row**. Sealing and editing a secret (`secret:create,update`) is open to
+**operators**; delete stays admin-and-owner.
 
 **Lifecycle is a later slice.** The first slice is the typed encrypted cell and its cascade; the
 lifecycle a plain config never carries (refresh, rotation, expiry) is **deferred**, each behavior a

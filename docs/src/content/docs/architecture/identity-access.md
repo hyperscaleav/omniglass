@@ -158,7 +158,7 @@ viewer  <-  operator  <-  admin  <-  owner
 | role | what it can do |
 |---|---|
 | `viewer` | Read every operator-facing resource within scope. |
-| `operator` | viewer + create/update on components, interfaces, tasks, rules, config; ack/snooze/resolve alarms. |
+| `operator` | viewer + create/update on components, interfaces, tasks, rules, config, secrets; ack/snooze/resolve alarms. Secret **delete** and the **reveal/copy** decrypt stay off the role (admin `secret:*` and owner only). |
 | `deploy` | viewer + create/update on locations, systems, and components (the integrator / field-tech role, typically granted with the `subtree_excl_root` operator to build out a subtree without editing its root). No delete. |
 | `admin` | operator + delete on managed resources + manage IAM (principals, credentials, grants, custom roles) + curate registries (`<registry>:create`). IAM management is meaningful only from an `@ all` grant (a scoped `admin @ subtree` keeps the operator powers within its subtree but gets no IAM); registry curation is a plain capability, so a custom role can carry `<registry>:create` alone for a non-admin curator. Deliberately **not** the superuser: it cannot grant a role above its own tier ([ADR-0013](/architecture/decisions/#adr-0013-a-grant-cannot-confer-capabilities-the-granter-lacks)), so it cannot make itself owner, and it cannot delete `official` roles. |
 | `owner` | The break-glass superuser (`>`, the tail wildcard, covering every capability at every tier, including admin-sensitive ones and future resources). The unkillable role: at least one active `owner@all` grant must exist at all times (enforced by DB trigger), and an owner account cannot be impersonated. The bootstrap creates the first owner. |
