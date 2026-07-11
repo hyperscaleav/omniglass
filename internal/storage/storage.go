@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/scope"
+	"github.com/hyperscaleav/omniglass/internal/secret"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -200,6 +201,21 @@ type Gateway interface {
 	UpdateComponent(ctx context.Context, actorID, name string, patch ComponentPatch, read, action scope.Set) (*Component, error)
 	DeleteComponent(ctx context.Context, actorID, name string, read, action scope.Set) error
 
+	// The secret tier: a shape registry, scoped CRUD, an audited reveal, and the
+	// cascade resolver. A secret is owned on the exclusive arc (global or one of
+	// the three trees) and encrypted at rest; ResolveSecrets is the per-component
+	// effective-value view down the structural cascade.
+	UpsertSecretType(ctx context.Context, st SecretType) error
+	ListSecretTypes(ctx context.Context) ([]SecretType, error)
+	GetSecretType(ctx context.Context, id string) (*SecretType, error)
+	ListSecrets(ctx context.Context, read scope.Set) ([]Secret, error)
+	CreateSecret(ctx context.Context, actorID string, spec SecretSpec, create scope.Set) (*Secret, error)
+	UpdateSecret(ctx context.Context, actorID, id string, fields map[string]string, read, action scope.Set) (*Secret, error)
+	DeleteSecret(ctx context.Context, actorID, id string, read, action scope.Set) error
+	RevealSecret(ctx context.Context, actorID, id string, read, action scope.Set) (map[string]string, error)
+	CopySecret(ctx context.Context, actorID, id string, read, action scope.Set) (map[string]string, error)
+	ResolveSecrets(ctx context.Context, componentID string, read scope.Set) ([]ResolvedSecret, error)
+
 	// Close releases the underlying connection pool. Idempotent at the pool
 	// level; call once on shutdown.
 	Close()
@@ -207,13 +223,27 @@ type Gateway interface {
 
 // PG is the Postgres-backed Gateway implementation over a pgx connection pool.
 type PG struct {
-	pool *pgxpool.Pool
+	pool   *pgxpool.Pool
+	secret secret.Provider
+}
+
+// Option configures a PG at construction. The secret provider is optional so
+// the CLI lanes that never touch secrets (token, migrate) need not build a KEK;
+// a secret write without a provider fails with ErrNoSecretProvider rather than a
+// nil panic.
+type Option func(*PG)
+
+// WithSecretProvider installs the envelope-encryption provider the secret writes
+// seal with. The server and the dev-seed lanes pass one; a nil provider leaves
+// secret writes disabled.
+func WithSecretProvider(prov secret.Provider) Option {
+	return func(p *PG) { p.secret = prov }
 }
 
 // NewPG opens a pgx pool against dsn and verifies connectivity once before
 // returning, so a bad DSN or an unreachable database fails fast at boot rather
 // than on the first query.
-func NewPG(ctx context.Context, dsn string) (*PG, error) {
+func NewPG(ctx context.Context, dsn string, opts ...Option) (*PG, error) {
 	pool, err := pgxpool.New(ctx, dsn)
 	if err != nil {
 		return nil, fmt.Errorf("storage: open pool: %w", err)
@@ -222,7 +252,11 @@ func NewPG(ctx context.Context, dsn string) (*PG, error) {
 		pool.Close()
 		return nil, fmt.Errorf("storage: ping: %w", err)
 	}
-	return &PG{pool: pool}, nil
+	p := &PG{pool: pool}
+	for _, opt := range opts {
+		opt(p)
+	}
+	return p, nil
 }
 
 // Ping checks backend reachability through the pool.

@@ -1,30 +1,42 @@
 ---
-title: "Config, credentials, and variables"
-description: "Three kinds of operator-set value resolved by one cascade: config keyed to a signal, credentials with a lifecycle, and free variables."
+title: "Config, secrets, and variables"
+description: "Three kinds of operator-set value resolved by one cascade: config keyed to a signal, secrets encrypted at rest, and free variables."
 sidebar:
   badge:
-    text: Design
-    variant: caution
+    text: Partial
+    variant: note
 ---
+
+:::note[Partial: the secret member is built; config and variable are Design]
+The **`secret`** member is built ([ADR-0017](/architecture/decisions/#adr-0017-credential-is-renamed-secret-the-cascade-is-the-reuse-mechanism),
+[#155](https://github.com/hyperscaleav/omniglass/issues/155)): the typed encrypted-at-rest cell owned on the
+exclusive arc and resolved down the cascade, the `secret_type` shape registry, envelope AES-256-GCM crypto behind a
+pluggable KEK provider, the masked-with-audited-decrypt read path, and the operator surfaces (a Secrets directory
+and the per-component effective-secrets cascade panel). Its own section below marks what is built versus deferred;
+the [build progress](/architecture/status/#build-progress) note carries the shipped shape. The **config** and
+**variable** members stay `Design`, so this page is `Partial`. (`secret` was renamed from `credential`; the ADR
+anchor keeps the old term.)
+:::
 
 Everything an operator **sets** resolves the same way: a typed value, owned at a scope, resolved
 most-specific-wins down the [cascade](/architecture/cascade/) on every poll and every tick. Three
 kinds share that resolution but differ in what they are keyed to and what lifecycle they carry:
 
-- **config**: a device setting you declare. Keyed by a **canonical signal** (a `datapoint_type`),
-  so it has an observed side and can be reconciled.
-- **credential**: an access secret. Its own keyspace, a pluggable storage provider, and a
-  lifecycle (refresh, rotation, expiry).
-- **variable**: a free interpolated value (a macro). Not bound to a signal, just resolved and
-  spliced into functions and interfaces.
+- **config** (`Design`): a device setting you declare. Keyed by a **canonical signal** (a
+  `datapoint_type`), so it has an observed side and can be reconciled.
+- **secret** (**built**): an access secret, encrypted at rest. Its own `secret_type` shape registry,
+  envelope crypto behind a pluggable KEK provider, resolved down the cascade and consumed by a `$sec:`
+  token.
+- **variable** (`Design`): a free interpolated value (a macro). Not bound to a signal, just resolved
+  and spliced into functions and interfaces.
 
-| | **config** | **credential** | **variable** (macro) |
+| | **config** | **secret** | **variable** (macro) |
 |---|---|---|---|
-| what it is | a declared device setting | an access secret | a free interpolated value |
-| keyed by | a canonical signal (`datapoint_type`) | its own template/interface-local name | an org config key (cascade namespace) |
+| what it is | a declared device setting | an access secret, encrypted at rest | a free interpolated value |
+| keyed by | a canonical signal (`datapoint_type`) | its own `secret_type` shape name | an org config key (cascade namespace) |
 | has an observed side? | yes, a datapoint via a get function | its **validity**, not the secret value | no |
-| lifecycle | drift → reconcile (a set function) | provider + refresh + rotation + expiry | none; resolved and interpolated |
-| example | `video.input = HDMI1` | an `ssh_credential`, an `oauth2` token | `poll_interval = 30s`, a base URL, a label |
+| lifecycle | drift → reconcile (a set function) | refresh + rotation + expiry (deferred) | none; resolved and interpolated |
+| example | `video.input = HDMI1` | an `snmp-community`, a `basic-auth` | `poll_interval = 30s`, a base URL, a label |
 
 The common thread is the cascade and an exclusive-arc scope (exactly one of
 `global | template | location | system | component`): the same exclusive-arc ownership as
@@ -111,50 +123,63 @@ lives) may need a new cascade level between system and component, alongside the 
 binding shape on the template.
 :::
 
-## credential: a secret with a lifecycle
+## secret: a typed, encrypted cascaded value
 
-A **credential** is an access secret. Sensitivity alone (mask + encrypt) is just a flag any value can
-carry; a credential is its own primitive because it has a **lifecycle** a plain config never does:
-a storage provider, refresh, rotation, and expiry. That lifecycle is surfaced on the **component
-template**, because that is where the interface and its auth logic live.
+A **secret** is an access secret: a typed value, encrypted at rest, owned on the exclusive arc
+(`global | location | system | component`) and resolved most-specific-wins down the cascade like config
+and variables, but sealed so its value never sits in the clear. Its first slice is **built**
+([ADR-0017](/architecture/decisions/#adr-0017-credential-is-renamed-secret-the-cascade-is-the-reuse-mechanism)):
+the typed cell, the crypto, the cascade resolver, and the operator surfaces. Sensitivity is not a flag
+any value carries; a secret is its own primitive because it is stored encrypted and read back only
+through a masked, audited path.
 
-**Shape.** A credential has a structured `variable_type` **shape**: `bearer_token`, `basic_auth`,
-`ssh_credential {username, password | private_key}`, `snmp_community`, `oauth2 {client_id,
-client_secret, access_token?, refresh_token?, expires_at?}`, `tls_cert`, with **secrecy per field**
-(`oauth2.client_secret` is secret, `client_id` is not). An interface consumes a shape directly:
-`credentialRef: ${input.ssh}` binds an `ssh_credential`, and the SSH adapter uses `{username,
-private_key}`.
+**Shape is a `secret_type` registry.** A secret has a structured **`secret_type`** shape: a per-field
+list of `{name, type, secret, origin}`, so one field is secret (an `snmp-community` string, a password)
+while another is plaintext (a username), and `origin` marks whether the operator sets a field or the
+lifecycle fills it. The ship-with types are `snmp-community` and `basic-auth`; an `official` boolean
+marks shipped-canonical versus org-local, exactly as the datapoint and role registries do.
 
-**Pluggable storage provider.** Secret fields are encrypt-at-write, decrypt-on-use, with the key
-supplied by a pluggable **`SecretProvider`**: an env-var key by default, with **KMS, Vault, or an
-external secrets manager** behind the same seam and no model change (the off-platform-storage case is
-just an external provider). It is the same seam pattern as the
-[storage backend](/architecture/files/#backends-swappable-behind-the-gateway): one interface, a
-swappable implementation, no caller changes when the provider does.
+**Envelope-encrypted at rest.** Crypto is **envelope AES-256-GCM** behind a pluggable **KEK provider**:
+the key comes from the env (`OMNIGLASS_SECRET_KEY`), a file (`OMNIGLASS_SECRET_KEY_FILE`), or a warned
+fallback under `OMNIGLASS_DATA_DIR`, with a KMS or Vault able to drop in behind the same seam and no
+model change. Each secret field is sealed under a **per-value DEK wrapped by the KEK**, with `(owner,
+name, field)` bound as **AAD**, so a ciphertext cannot be lifted from one row into another. A secret
+field is stored as its `{ciphertext, nonce, wrapped_dek, key_id}` envelope; a non-secret field is
+stored plaintext.
 
-**Read is permissioned and audited.** Sometimes a secret must be read in plaintext; that is a
-privileged, audited action. `secret:read` is an [IAM](/architecture/identity-access/) permission you
-grant to roles, and **every decrypt writes an [audit](/architecture/audit/) row**. The
-machine-acquired token cache (below) is exempt to avoid audit-on-read noise on every request.
+**Consumed at the site, by token.** A secret is not composed from references; the cascade is the reuse
+mechanism (define once high, inherit below). Interpolation lives at the **consumption site**, a
+**`$sec:name.path`** token in an interface input or a function arg, never inside a secret's own fields.
+(The interpolation consumer that splices a live value into a request is the deferred collection-driver
+slice.)
 
-**Lifecycle, built from the primitives we already have.** None of this is a new subsystem; each
-behavior is a template-declared use of functions, time, and flows:
+**Masked everywhere except an audited decrypt.** A secret's value is masked (`••••••`) in every read:
+the directory, the per-component effective-secrets view, the type list. Reading the plaintext is a
+separate, privileged action: `secret:reveal` gates the decrypt (both an on-screen **reveal** and a
+clipboard **copy**, recorded under distinct `reveal` and `copy` verbs), it is **not** covered by the
+`*:read` floor (so only admin, `secret:*`, and owner may decrypt), and **every decrypt writes an
+[audit](/architecture/audit/) row**. Sealing and editing a secret (`secret:create,update`) is open to
+**operators**; delete stays admin-and-owner.
+
+**Lifecycle is a later slice.** The first slice is the typed encrypted cell and its cascade; the
+lifecycle a plain config never carries (refresh, rotation, expiry) is **deferred**, each behavior a
+template-declared use of functions, time, and flows rather than a new subsystem:
 
 - **refresh** (an `oauth2` access token) is **lazy**: refreshed on use when within a skew window of
-  expiry, coordinated across replicas by a NATS KV lock (CAS on the credential key). Idle credentials never
+  expiry, coordinated across replicas by a NATS KV lock (CAS on the secret key). Idle secrets never
   refresh; the refreshed token is a separate encrypted cache, not an operator secret.
 - **rotation** (a password on a schedule) is a **flow**: generate → set on the device (a set function)
   → update the store → verify → invalidate the old, driven by the [time](/architecture/time/) primitive.
 - **expiry and reminders** are an expiry timestamp plus a **watchdog** that fires an event and an
-  **alarm** before the credential lapses.
+  **alarm** before the secret lapses.
 
-**Credential health is its validity, not its value.** A credential's observable is whether it still
+**Secret health is its validity, not its value.** A secret's observable is whether it still
 works: **intrinsic expiry** (an `oauth2` token, a `tls_cert` `notAfter`) warns proactively, and
 **observed-use failure** flips it unhealthy after N consecutive auth failures consumers report. Both
-surface through the ordinary datapoint-to-alarm pipeline, so a credential gets a health story without
+surface through the ordinary datapoint-to-alarm pipeline, so a secret gets a health story without
 being a device signal.
 
-**Shared versus per-device is just scope.** A fleet-wide SNMPv3 user is a credential set high in the
+**Shared versus per-device is just scope.** A fleet-wide SNMP community is a secret set high in the
 cascade; a unique-per-device secret is the same shape set at component scope. No shared-versus-unique
 split to model; it is the cascade, like everything else.
 
@@ -177,7 +202,7 @@ scopes.
   That absence is exactly what separates it from config.
 
 Scalar shapes (`string`, `int`, `float`, `bool`, `json`) cover the common case; a variable may be
-flagged secret (a free secret like a webhook signing token) without being a full credential, since it
+flagged secret (a free secret like a webhook signing token) without being a full secret cell, since it
 has no lifecycle.
 
 ## tag: a normalized label vocabulary
@@ -217,18 +242,19 @@ Free-text values ship either way; the question is how much governance a key plac
 
 ## What's shared
 
-- **The cascade.** Config, credentials, and variables resolve most-specific-wins down
+- **The cascade.** Config, secrets, and variables resolve most-specific-wins down
   `global → … → component`, with a template-scoped value as a shipped default; **tags** resolve down
   the same cascade with a union-on-key, override-on-value combinator. One resolver
   ([cascade](/architecture/cascade/)).
 - **The exclusive-arc scope.** Each value is owned at exactly one scope: the same exclusive-arc
   ownership as datapoints, plus a `template`-scoped default the datapoint arc lacks (and config is
   not `node`-owned).
-- **`variable_type` shapes** back credentials (structured secrets) and variables (scalars); config
-  instead borrows the `datapoint_type`'s domain, because its key *is* a signal.
-- **`$var:` interpolation** renders variables and credential fields into requests; config is read by
-  key like a datapoint. Secrets are **masked at interpolation time** and never surface in a log line,
-  error string, or datapoint label.
+- **Shape registries** back secrets (`secret_type`, structured with per-field secrecy and origin) and
+  variables (`variable_type`, scalar); config instead borrows the `datapoint_type`'s domain, because
+  its key *is* a signal.
+- **Interpolation** renders variables (`$var:`) and secret fields (`$sec:`) into requests; config is
+  read by key like a datapoint. Secrets are **masked** in every read and surface in the clear only
+  through the audited reveal, never in a log line, error string, or datapoint label.
 
 The observed side of config is maintained by one **event-driven worker** (the one-worker-plus-stages
 model): when a `state_datapoint` lands whose `(owner, key)` a config item is keyed to, it refreshes
@@ -255,29 +281,34 @@ command -> device
 
 ## How this changes provenance
 
-Modeling declared state as **config** (and secrets as **credentials**) keeps **declared** out of the
+Modeling declared state as **config** (and access secrets as **secrets**) keeps **declared** out of the
 datapoint provenances. Datapoints carry three ([observed, calculated,
 intended](/architecture/datapoints/#provenance-how-we-know-a-value)); declared intent lives in config,
 keyed to the same signal but stored down the cascade rather than as a row. The `state` **kind** is
 unchanged: an observed `power.state = on` is still a `state_datapoint`, and a config item is keyed to
 it. What moved is the *declared* value, out of the datapoint tables and into config resolved by the
-cascade. There is no separate property or vault store; config, credentials, and variables are one
+cascade. There is no separate property or vault store; config, secrets, and variables are one
 resolution model, and the spec-and-status loop gets a real home instead of overloading datapoint
 provenance with operator intent.
 
 ## Storage
 
-The shape registry, the config / variable cell, and the operator-label tables; the physical layout (the owner arc, the cascade key) lives on [storage](/architecture/storage/).
+The shape registries, the value cells, and the operator-label tables; the physical layout (the owner
+arc, the cascade key) lives on [storage](/architecture/storage/). The **secret** tables below are
+**built**; the **config** and **variable** cells are `Design`.
 
-:::caution[Open question]
-Whether config, credentials, and variables are one table with a discriminator or three; they share
-the cascade and scope either way.
-:::
+The shipped secret answered the "one table or three" question for its own member: **`secret` is its
+own pair of tables** (`secret_type` + `secret`), not a discriminated row in a shared cell, because it
+carries encryption and a masked read path a plain value does not. Whether the remaining `config` and
+`variable` cells share one table with a discriminator or stay separate is still open; they share the
+cascade and the exclusive-arc scope either way.
 
 | Table | Key columns | Notes |
 |---|---|---|
-| `variable_type` | name, schema (fields + **per-field secret**), refresh, validation, **official** | the **shape** registry (a scalar, or structured like `oauth2` / `ssh_credential` / `snmp_community`); the `official` boolean marks shipped-canonical versus org-local |
-| `variable` | (name, **owner arc**), type, **declared_value** (secret fields encrypted), **linked_state** (-> state_datapoint, nullable), **observed_value**, reconcile | the config cell and the `$var:` cascade key; scope is the exclusive arc (template/component/system/location/global). Holds declared intent, optionally mirrors an observed datapoint for drift |
+| `secret_type` | id, **official**, schema (per-field `{name, type, secret, origin}`) | **Built.** The secret **shape** registry (`snmp-community`, `basic-auth` seeded); `official` marks shipped-canonical versus org-local, like the datapoint and role registries |
+| `secret` | (name, **owner arc**), secret_type, **value** (secret fields as `{ciphertext, nonce, wrapped_dek, key_id}` envelopes, non-secret fields plaintext) | **Built.** The encrypted cell and the `$sec:` cascade key; scope is the exclusive arc (global/location/system/component). Read masked; decrypted only through the audited `:reveal` / `:copy` path |
+| `variable_type` | name, schema (scalar or fields + **per-field secret**), validation, **official** | `Design`. The variable **shape** registry (a scalar `string`/`int`/`float`/`bool`/`json`); `official` marks shipped-canonical versus org-local |
+| `variable` | (name, **owner arc**), type, **declared_value**, **linked_state** (-> state_datapoint, nullable), **observed_value**, reconcile | `Design`. The config/variable cell and the `$var:` cascade key; scope is the exclusive arc. Holds declared intent, optionally mirrors an observed datapoint for drift |
 | `tag` | name, applies_to, propagates | the **tenant-wide governed key vocabulary**; minting a key needs `tag:create` ([identity and access](/architecture/identity-access/)). No `_type`, no namespace; values bind via `tag_binding` |
 | `tag_binding` | (scope_kind, scope_id, tag), value | the `key: value` binding: **union on key, override on value** down the [cascade](/architecture/cascade/), bindable at any scope and via groups |
 

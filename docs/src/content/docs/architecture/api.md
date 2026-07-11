@@ -139,6 +139,38 @@ flows back the same way to advance the row. The caller sees one model, the trans
   caller's scope** (injected by the gateway). Both are [identity and access](/architecture/identity-access/)
   invariants, and the API is the gateway's only caller, so there is no unscoped path.
 
+## Secrets: masked reads, an audited reveal
+
+A **secret** is a typed, encrypted-at-rest operator value ([config, credentials, and
+variables](/architecture/variables/)), and its routes are a worked instance of the conventions above:
+the AIP resource plus a `:verb` custom method, the verb-is-the-permission rule, the implicit `PATCH`
+write mask, same-transaction audit, and a scoped read. The registry, the directory, and the
+per-component cascade read all ride the **viewer read floor** (`secret:read`, which `*:read` satisfies);
+the three writes gate on `secret:create` / `secret:update` / `secret:delete`; the plaintext decrypt
+gates on **`secret:reveal`**, a permission the `*:read` floor does **not** carry, so a plain "read
+everything" grant sees only masks and **only admin (`secret:*`) and owner (`>`) reveal**. Every
+`:reveal` writes an [audit](/architecture/audit/) row (verb `reveal`) in the same call.
+
+- `GET /secret-types` lists the shape registry, each `{id, display_name, official, fields:[{name, type,
+  secret, origin}]}` (`secret:read`).
+- `GET /secrets` is the **all-scope admin directory** (`{secrets: [secret]}`); like the principal
+  directory it needs an all-scope grant, and a non-all scope is a 403 (`secret:read`).
+- `POST /secrets` creates one from `{name, secret_type, owner_kind: global|location|system|component,
+  owner?, fields}` (201, `secret:create`); a `global` secret needs an all-scope grant.
+- `PATCH /secrets/{id}` re-seals the given `fields`, merged over the stored value so an omitted field
+  keeps its value (`secret:update`).
+- `DELETE /secrets/{id}` removes it (204, `secret:delete`).
+- `POST /secrets/{id}:reveal` returns the decrypted `{fields: {name: plaintext}}` (`secret:reveal`,
+  audited).
+- `GET /components/{name}/effective-secrets` is the **masked cascade** for one component: the secrets
+  that resolve onto it, each a `resolvedSecret` (`{id, name, secret_type, owner_kind, owner_id?,
+  owner_name?, band, depth, winner, fields}`) marking the winner and the shadowed candidates
+  (`secret:read`; the component must be in the caller's component read-scope).
+
+A secret's fields are masked in every read: the `secret` body (`{id, name, secret_type, owner_kind,
+owner_id?, owner_name?, fields:[{name, value, secret}]}`) returns `••••••` for a secret field, and only
+`:reveal` returns plaintext.
+
 ## Reads beyond one resource are views
 
 A single resource reads through its typed `GET`. Anything richer, a dashboard, an explorer, the cascade

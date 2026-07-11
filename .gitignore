@@ -46,3 +46,7 @@ coverage.txt
 
 # stale embedded-postgres dev dir (no longer produced)
 /.dev/
+
+# Local server state: the fallback secret key when no KEK is provided
+# (OMNIGLASS_DATA_DIR). A real deploy sets OMNIGLASS_SECRET_KEY_FILE.
+.omniglass/

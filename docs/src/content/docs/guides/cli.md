@@ -93,6 +93,29 @@ normalizes it to a 256x256 JPEG. An administrator manages **any** principal's pi
 (gated by `principal:set-avatar`), reading one back with `omniglass avatar list <id>` (gated by
 `principal:read`). A principal with no picture is a 404.
 
+## Secrets
+
+The [secret](/architecture/variables/) commands are generated like every other resource. `secret`
+covers the encrypted values, `secret-type` lists the shape registry, and `effective-secret` reads the
+masked cascade onto one component. Output is masked JSON, the same as the console; plaintext lives
+behind `reveal`, which the server audits and which only admin and owner may call.
+
+```sh
+omniglass secret-type list                          # the shape registry (snmp-community, basic-auth)
+omniglass secret list                               # the all-scope admin directory (masked fields)
+omniglass secret create --name core-snmp --secret-type snmp-community \
+  --owner-kind location --owner hq --fields '{"community":"public"}'
+omniglass secret update <id> --fields '{"community":"s3cret"}'   # an omitted field keeps its value
+omniglass secret reveal <id>                        # audited plaintext decrypt (secret:reveal)
+omniglass secret delete <id>
+
+omniglass effective-secret list <component>         # the masked cascade resolved onto a component
+```
+
+`--owner-kind` is one of `global | location | system | component`; `--owner` names the owning entity
+and is omitted for a `global` secret (which needs an all-scope grant). Field maps pass as a JSON object
+to `--fields`, validated against the type's shape.
+
 ## Generated versus hand-written
 
 - **Generated** (`internal/cli/api_gen.go`, do not edit): one command per API operation.

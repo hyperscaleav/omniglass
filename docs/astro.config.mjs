@@ -26,7 +26,7 @@ export default defineConfig({
     starlight({
       title: 'Omniglass',
       description:
-        'Open observability and control plane for AV and IT estates, and a place to learn how one is built.',
+        'Open observability and control plane for AV and IT estates, and a place to learn monitoring by operating the real thing.',
       logo: {
         light: './public/logo-light.svg',
         dark: './public/logo-dark.svg',

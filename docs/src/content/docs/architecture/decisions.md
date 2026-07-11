@@ -51,7 +51,8 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0014](#adr-0014-the-audit-trail-is-a-sensitive-read-not-reached-by-a-partial-global-wildcard) | 2026-07-07 | Superseded by [ADR-0015](#adr-0015-permissions-are-topic-patterns-single-token-and-tail-wildcards) | The audit trail is admin/owner-only: `audit` is a sensitive resource that `*:read` does not confer, only an explicit `audit:read` or `*:*` |
 | [ADR-0015](#adr-0015-permissions-are-topic-patterns-single-token-and-tail-wildcards) | 2026-07-07 | Accepted | Permissions match like NATS subjects (`*` one token, `>` tail); admin-sensitivity is a deeper `:admin` token no partial wildcard reaches; owner is `>` |
 | [ADR-0016](#adr-0016-a-principal-can-be-purged-and-the-audit-trail-is-denormalized-to-survive-it) | 2026-07-09 | Accepted | A principal can be hard-deleted (purge, gated on archival); the audit trail survives via a denormalized actor label and `ON DELETE SET NULL`, retiring the "never hard-deleted" rule (soft-delete verb: archive) |
-| [ADR-0017](#adr-0017-the-avatar-read-endpoint-is-json-not-raw-image-bytes) | 2026-07-10 | Accepted | A profile picture is read through a JSON `image_base64` endpoint the console renders as a data URL, not a raw `image/jpeg` handler, so every route stays under the Huma authz middleware |
+| [ADR-0017](#adr-0017-credential-is-renamed-secret-the-cascade-is-the-reuse-mechanism) | 2026-07-09 | Accepted | The access-secret member of the config / credential / variable trio is renamed credential to secret: an encrypted-at-rest typed value resolved most-specific-wins down the cascade |
+| [ADR-0018](#adr-0018-the-avatar-read-endpoint-is-json-not-raw-image-bytes) | 2026-07-10 | Accepted | A profile picture is read through a JSON `image_base64` endpoint the console renders as a data URL, not a raw `image/jpeg` handler, so every route stays under the Huma authz middleware |
 
 ## Entries
 
@@ -367,7 +368,7 @@ below from the project's history. From here it grows one slice at a time.
 - **Closes:** issue [#143](https://github.com/hyperscaleav/omniglass/issues/143) (backend),
   [#146](https://github.com/hyperscaleav/omniglass/issues/146) (console + rename).
 
-### ADR-0017: The avatar read endpoint is JSON, not raw image bytes
+### ADR-0018: The avatar read endpoint is JSON, not raw image bytes
 
 - **Date:** 2026-07-10 | **Status:** Accepted | **Pages:** [identity and access](/architecture/identity-access/)
 - **Decision:** A human principal's profile picture is read through a **JSON** endpoint
@@ -386,3 +387,30 @@ below from the project's history. From here it grows one slice at a time.
   the data URL. The one normalized size is small (roughly 30 to 50 KB base64), so per-request payload is not a
   concern, and HTTP caching over `avatar_updated_at` is a later refinement if it is ever needed. This
   supersedes the spec's raw-bytes read decision; the write transport (base64 JSON) is unchanged.
+### ADR-0017: `credential` is renamed `secret`; the cascade is the reuse mechanism
+
+- **Date:** 2026-07-09 | **Status:** Accepted | **Pages:** [config, credentials, and variables](/architecture/variables/)
+- **Decision:** The access-secret member of the [config / credential / variable](/architecture/variables/) trio
+  is renamed **credential to secret**, and its first slice is built: a typed, encrypted-at-rest value owned on the
+  exclusive arc (`global | location | system | component`) and resolved most-specific-wins down the
+  [cascade](/architecture/cascade/). A secret is an **encapsulated typed cell** (a `secret_type` shape with
+  per-field secrecy and origin), not a bag of references: the reuse a tool like Windmill gets from variable
+  references, **the cascade already provides here** (define once at a broad scope, inherit it below), so
+  composition solves a non-problem. Interpolation references live at the **consumption site** (`$sec:name.path`
+  in an interface input or a function arg), never inside a secret's own fields. Crypto is **envelope AES-256-GCM**
+  behind a pluggable KEK provider (env / file / fallback), the value sealed under a per-value DEK wrapped by the
+  KEK, with `(owner, name, field)` bound as AAD; the provider seam lets a KMS or Vault drop in without a model
+  change. "credential" is retained for the **authentication** credential (a principal's bearer or password), a
+  distinct resource; only the collection-side access secret is renamed.
+- **Context:** The written [variables](/architecture/variables/) page named this member `credential` and left it
+  `Design`. Building it surfaced two calls. First, **naming**: "credential" collided with the identity
+  credential and undersold the general case (an `snmp_community`, an API key, an `oauth2` blob are all just
+  sensitive cascaded values); "secret" is the Cloudflare-style vars-and-secrets pair and reads correctly. Second,
+  **shape**: Windmill's resource-references-variables split was considered and rejected, because our cascade is
+  the sharing mechanism and an atomic one-form typed cell (doctrine 4) suits an operator better than composing
+  references. Reveal (plaintext decrypt) ships as an audited, `secret:reveal`-gated endpoint that the `*:read`
+  floor does not reach, so only admin and owner may decrypt; the interpolation consumer (splicing a value into a
+  live request) is deferred to the collection-driver slice that first needs it. This reverses the `credential`
+  naming and any "references inside the value" reading on the page; the `variable` and `config` members stay
+  `Design`.
+- **Closes:** issue [#155](https://github.com/hyperscaleav/omniglass/issues/155) (secret slice 1).

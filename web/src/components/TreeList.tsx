@@ -16,7 +16,7 @@ import {
 } from "./icons";
 import BladeStack from "./BladeStack";
 import Button from "./Button";
-import { type BladeDef, createBladeController } from "../lib/blades";
+import { type BladeDef, type BladeRef, createBladeController, useBladeEdit } from "../lib/blades";
 
 // TreeList: the one config-driven tree-list body (composing ListShell), the inventory shell. Every entity page (Components,
 // Systems, Locations) is a config over this, never a fork. It owns the filter
@@ -81,6 +81,10 @@ export type ListCtx<N extends ListNode> = {
   parentOf: (n: N) => N | undefined;
   byId: (id: string) => N | undefined;
   pushBlade: (n: N) => void;
+  // Push an arbitrary blade (a kind registered via ListConfig.extraBlades) onto
+  // the shared stack, so a detail body can open a non-node blade that nests in
+  // the same stack rather than a separate overlay (which a higher-z blade hides).
+  openBlade: (ref: BladeRef) => void;
   popBlade: () => void;
   closeBlades: () => void;
   setFullPage: (n: N | null) => void;
@@ -112,6 +116,10 @@ export interface ListConfig<N extends ListNode> {
   leadIcon?: (n: N) => JSX.Element;
   canAddChild?: (n: N) => boolean;
   renderDetail: (n: N, ctx: ListCtx<N>) => JSX.Element;
+  // Extra blade kinds this page's detail body can open on the shared stack (via
+  // ctx.openBlade), keyed by kind, alongside the page's own entity blade. Used by
+  // Components to open a secret's cascade as a nested blade.
+  extraBlades?: Record<string, BladeDef>;
   FormBody: Component<{ form: FormState<N>; close: () => void; ctx: ListCtx<N> }>;
   onOpenNode?: (n: N) => void;
   onBack?: () => void;
@@ -297,6 +305,7 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
     parentOf: (n: N) => index().parentOf.get(n.id),
     byId: (id: string) => index().byId.get(id),
     pushBlade,
+    openBlade: (ref: BladeRef) => blades.push(ref),
     popBlade,
     closeBlades,
     setFullPage: (n: N | null) => showFull(n),
@@ -308,13 +317,40 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
   const ctxFull: ListCtx<N> = { ...baseCtx, full: true, go: openFull };
   const ctxBlade: ListCtx<N> = { ...baseCtx, full: false, go: pushBlade };
 
+  // The entity blade body: renderDetail in blade context, plus the footer action
+  // rail. Delete and Edit register on the shared BladeStack footer (pinned to the
+  // blade bottom, like the identity blades) rather than an inline bar that scrolls
+  // with the body; the page's detail() renders its inline bar only on the full
+  // page (ctx.full). Gated per row by the server's scope-aware actions, and Edit
+  // opens the form Drawer (the inventory edit flow, not the inline-pencil model).
+  const EntityBladeBody = (p: { id: string }) => {
+    const edit = useBladeEdit();
+    const node = () => index().byId.get(p.id);
+    edit.bind({
+      destructive: () => {
+        const n = node();
+        return n && cfg.onDelete && rowAllow(n, "delete")
+          ? { label: "Delete", tone: "danger" as const, onClick: () => cfg.onDelete!(n, ctxBlade) }
+          : undefined;
+      },
+      primary: () => {
+        const n = node();
+        return n && rowAllow(n, "update")
+          ? { label: "Edit", icon: <Pencil size={15} />, onClick: () => ctxBlade.openEdit(n) }
+          : undefined;
+      },
+    });
+    return <Show when={node()}>{(n) => cfg.renderDetail(n(), ctxBlade)}</Show>;
+  };
+
   // Single-kind registry for the shared BladeStack: this page's own entity. The
   // title is the node display; the body is renderDetail in blade context (drills by
   // pushing a child blade); Maximize promotes the blade to the addressable full page.
   const bladeRegistry: Record<string, BladeDef> = {
+    ...(cfg.extraBlades ?? {}),
     [cfg.entity.name]: {
       Title: (p) => <>{index().byId.get(p.id)?.display}</>,
-      Body: (p) => <Show when={index().byId.get(p.id)}>{(n) => cfg.renderDetail(n(), ctxBlade)}</Show>,
+      Body: (p) => <EntityBladeBody id={p.id} />,
       headerExtra: (p) => (
         <Show when={index().byId.get(p.id)}>
           {(n) => (

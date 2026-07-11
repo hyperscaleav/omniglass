@@ -15,7 +15,8 @@ roles:
     display_name: Operator
     description: >-
       Day-to-day operations: acknowledge, snooze, and resolve alarms, and create
-      or edit components, interfaces, tasks, rules, and config. Inherits Viewer.
+      or edit components, interfaces, tasks, rules, config, and secrets. Inherits
+      Viewer.
     inherits: ["viewer"]
     permissions:
       - "component:create,update"
@@ -23,6 +24,7 @@ roles:
       - "task:create,update"
       - "rule:create,update"
       - "config:create,update"
+      - "secret:create,update"
       - "alarm:ack,snooze,resolve"
   - id: deploy
     display_name: Deploy
@@ -55,6 +57,7 @@ roles:
       # admin (via this explicit grant) and owner (via >) can purge.
       - "principal:purge:admin"
       - "credential:*"
+      - "secret:*"
       - "principal_grant:*"
       - "principal_group:*"
       - "role:*"
