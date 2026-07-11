@@ -65,6 +65,7 @@ export function UserDetail(props: { id: string }) {
     () => p()?.human?.has_avatar ?? false,
     (has) => (has ? principalAvatarUrl(props.id) : Promise.resolve(null)),
   );
+  let avatarFileInput: HTMLInputElement | undefined;
 
   async function onPickAvatar(e: Event) {
     const pr = p();
@@ -358,12 +359,16 @@ export function UserDetail(props: { id: string }) {
                       </div>
                     </Show>
                     <div class="flex flex-col gap-1">
-                      <label class="btn btn-sm btn-outline">
-                        Upload
-                        <input type="file" accept="image/jpeg,image/png,image/webp" class="hidden" onChange={onPickAvatar} />
-                      </label>
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        class="hidden"
+                        ref={avatarFileInput}
+                        onChange={onPickAvatar}
+                      />
+                      <Button size="sm" onClick={() => avatarFileInput?.click()}>Upload</Button>
                       <Show when={pr().human?.has_avatar}>
-                        <button type="button" class="btn btn-sm btn-ghost" onClick={onRemoveAvatar}>Remove</button>
+                        <Button size="sm" intent="danger" onClick={onRemoveAvatar}>Remove</Button>
                       </Show>
                     </div>
                   </div>
