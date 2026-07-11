@@ -23,6 +23,7 @@ var ungated = map[string]bool{
 	"GET /healthz":                 true, // public, no auth
 	"GET /auth/status":             true, // public: drives the login screen's bootstrap hint
 	"GET /auth/me":                 true, // authn-only: returns the caller's own principal
+	"GET /auth/me/avatar":          true, // authn-only, self-scoped: reads only the caller's own profile picture
 	"PATCH /auth/me":               true, // authn-only, self-scoped: edits only the caller's own profile
 	"POST /auth/login":             true, // public by necessity: it establishes a session
 	"POST /auth/logout":            true, // public: clearing a session must always succeed
