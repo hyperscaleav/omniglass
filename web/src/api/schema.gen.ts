@@ -88,6 +88,26 @@ export interface paths {
         patch: operations["update-auth-me"];
         trace?: never;
     };
+    "/auth/me/avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get your own profile picture
+         * @description Returns the caller's profile picture as a base64-encoded JPEG. Requires authentication; self-scoped. No picture is a 404.
+         */
+        get: operations["get-auth-me-avatar"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/me:changePassword": {
         parameters: {
             query?: never;
@@ -102,6 +122,46 @@ export interface paths {
          * @description Verifies the current password and sets a new one. Requires authentication; self-scoped.
          */
         post: operations["change-auth-me-password"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/me:removeAvatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Remove your own profile picture
+         * @description Clears the caller's profile picture. Requires authentication; self-scoped.
+         */
+        post: operations["remove-auth-me-avatar"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/me:setAvatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set your own profile picture
+         * @description Sets the caller's profile picture (JPEG, PNG, or WebP, base64-encoded), normalized server-side to a 256x256 JPEG. Requires authentication; self-scoped. A bad or oversize image is a 422.
+         */
+        post: operations["set-auth-me-avatar"];
         delete?: never;
         options?: never;
         head?: never;
@@ -500,6 +560,26 @@ export interface paths {
         patch: operations["update-principal"];
         trace?: never;
     };
+    "/principals/{id}/avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a principal's profile picture
+         * @description Returns the principal's profile picture as a base64-encoded JPEG. Gated by principal:read (all-scope). A principal without a picture is a 404.
+         */
+        get: operations["get-principal-avatar"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/principals/{id}/grants": {
         parameters: {
             query?: never;
@@ -640,6 +720,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/principals/{id}:removeAvatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Remove a principal's profile picture
+         * @description Clears another human principal's profile picture. Gated by principal:set-avatar (all-scope). Removing an absent picture is a no-op. Audited with the administrator as the actor.
+         */
+        post: operations["remove-principal-avatar"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/principals/{id}:resetPassword": {
         parameters: {
             query?: never;
@@ -674,6 +774,26 @@ export interface paths {
          * @description Reverses an archive: the account is restored to active and can authenticate again. Gated by principal:archive (all-scope).
          */
         post: operations["restore-principal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/principals/{id}:setAvatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set a principal's profile picture
+         * @description Sets another human principal's profile picture (an administrator action). Gated by principal:set-avatar (all-scope). The image (JPEG, PNG, or WebP, base64-encoded) is normalized server-side to a 256x256 JPEG; a bad or oversize image is a 422. Audited with the administrator as the actor.
+         */
+        post: operations["set-principal-avatar"];
         delete?: never;
         options?: never;
         head?: never;
@@ -902,6 +1022,16 @@ export interface components {
              */
             readonly $schema?: string;
             bootstrapped: boolean;
+        };
+        AvatarOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/AvatarOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The profile picture as a base64-encoded 256x256 JPEG */
+            image_base64: string;
         };
         ChangePasswordInputBody: {
             /**
@@ -1197,6 +1327,8 @@ export interface components {
             readonly $schema?: string;
             display_name?: string;
             email?: string;
+            /** @description True when the principal has a profile picture; fetch it from the avatar endpoint. */
+            has_avatar?: boolean;
             /** @description True when an admin reset the password and the user must change it before doing anything else; the console gates every route to the change-password form until it clears. */
             must_change_password?: boolean;
             username: string;
@@ -1497,6 +1629,26 @@ export interface components {
             secret: boolean;
             type: string;
         };
+        SetAvatarInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/SetAvatarInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The image (JPEG, PNG, or WebP), base64-encoded; normalized server-side to a 256x256 JPEG */
+            image_base64: string;
+        };
+        SetAvatarMeInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/SetAvatarMeInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The image (JPEG, PNG, or WebP), base64-encoded; normalized server-side to a 256x256 JPEG */
+            image_base64: string;
+        };
         SvcBody: {
             label: string;
         };
@@ -1794,6 +1946,35 @@ export interface operations {
             };
         };
     };
+    "get-auth-me-avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AvatarOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "change-auth-me-password": {
         parameters: {
             query?: never;
@@ -1804,6 +1985,64 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ChangePasswordInputBody"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "remove-auth-me-avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "set-auth-me-avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetAvatarMeInputBody"];
             };
         };
         responses: {
@@ -2791,6 +3030,38 @@ export interface operations {
             };
         };
     };
+    "get-principal-avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The principal, addressed by its uuid or a human username */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AvatarOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "create-grant": {
         parameters: {
             query?: never;
@@ -3042,6 +3313,36 @@ export interface operations {
             };
         };
     };
+    "remove-principal-avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The principal, addressed by its uuid or a human username */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "reset-principal-password": {
         parameters: {
             query?: never;
@@ -3087,6 +3388,40 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "set-principal-avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The principal, addressed by its uuid or a human username */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetAvatarInputBody"];
+            };
+        };
         responses: {
             /** @description No Content */
             204: {

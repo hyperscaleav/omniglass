@@ -62,6 +62,44 @@ describe("Users page", () => {
     expect(getByText("inactive")).toBeTruthy(); // bob is disabled
   });
 
+  it("renders an image thumbnail in the name cell for a principal that has an avatar", async () => {
+    // A principal with human.has_avatar renders the image (lazily fetched as a data
+    // URL) rather than the initials placeholder.
+    const withPic: Principal = { id: "u-eve", kind: "human", active: true, human: { username: "eve", display_name: "Eve Stone", has_avatar: true }, grants: [] };
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      const url = typeof input === "string" ? input : req.url;
+      if (url.includes("/avatar")) {
+        return new Response(JSON.stringify({ image_base64: "SGVsbG8=" }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      return new Response(JSON.stringify({ principals: [withPic] }), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    qc.setQueryData([...PRINCIPALS_KEY, false], [withPic]);
+    qc.setQueryData([...ME_KEY], me);
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <Router><Route path="*" component={() => <Users />} /></Router>
+      </QueryClientProvider>
+    ));
+    const img = (await screen.findByAltText("Eve Stone")) as HTMLImageElement;
+    expect(img.src).toContain("data:image/jpeg;base64,SGVsbG8=");
+  });
+
+  it("renders initials (no image) in the name cell for a principal without an avatar", () => {
+    const noPic: Principal = { id: "u-frank", kind: "human", active: true, human: { username: "frank", display_name: "Frank Lin" }, grants: [] };
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    qc.setQueryData([...PRINCIPALS_KEY, false], [noPic]);
+    qc.setQueryData([...ME_KEY], me);
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <Router><Route path="*" component={() => <Users />} /></Router>
+      </QueryClientProvider>
+    ));
+    expect(screen.getByText("FR")).toBeTruthy(); // initials fallback
+    expect(screen.queryByAltText("Frank Lin")).toBeNull(); // no image
+  });
+
   it("opens read-only, and the header pencil flips the profile to editable inputs and back", async () => {
     mount();
     fireEvent.click(screen.getByText("Alice Ng"));

@@ -29,6 +29,11 @@ only your own account, whatever your role.
 - **Profile.** Change your display name; it drives how you appear in the console (the sidebar
   label and the initials avatar). Your username and email are set by an administrator, not you,
   and are shown read-only.
+- **Profile picture.** The avatar at the top of the panel shows your picture when you have one and
+  your initials when you do not. **Upload** picks an image file (JPEG, PNG, or WebP); the server crops
+  and re-encodes it to a small square, so it reads the same everywhere you appear (the sidebar and the
+  Users directory). **Remove** clears it and falls back to initials. Like the rest of the page it is
+  self-service: you manage only your own picture.
 - **Change password.** Enter your current password and a new one. The new password must meet the
   **policy** (at least 12 characters, not a common password, and not containing your username); the
   field validates as you type, and **Generate** fills a strong random one you can **Copy**. A wrong
@@ -38,8 +43,9 @@ only your own account, whatever your role.
   roles granted to you, and the flattened permissions those roles carry. The server enforces
   these on every request; the console only mirrors them.
 
-From the CLI the same two actions are `omniglass auth update-profile` and
-`omniglass auth change-password` (see [the CLI guide](/guides/cli/)).
+From the CLI the same actions are `omniglass auth update-profile`, `omniglass auth change-password`,
+and `omniglass me setAvatar` / `omniglass me removeAvatar` for the picture (see
+[the CLI guide](/guides/cli/)).
 
 ### After an administrator resets your password
 
@@ -52,7 +58,8 @@ the hold clears and you land in the console. Signing out is the only other way o
 ## Users
 
 **Settings, Users** is the admin directory of every principal, humans and service accounts,
-each with the roles granted to it. You see it only if you hold `principal:read`, and because a
+each with the roles granted to it. Every row leads with the principal's avatar, its uploaded
+picture when it has one and its initials otherwise. You see it only if you hold `principal:read`, and because a
 principal is not part of any location or system tree, that grant must be **all-scope**: a
 location-scoped admin cannot list users.
 
@@ -108,6 +115,12 @@ location-scoped admin cannot list users.
   profile**, which verifies your current one) and on an **owner** (owners cannot be reset by anyone).
   This is a console path for what the CLI does with `omniglass set-password`; unlike that trusted
   direct-DB lane, the console reset enforces the password policy and the takeover guard.
+- With `principal:set-avatar` (an all-scope capability), a user's **Edit** blade gains an **Upload /
+  Remove** picture panel: **Upload** sets that user's profile picture from an image file (JPEG, PNG, or
+  WebP, normalized server-side to a small square), **Remove** clears it, and the change is audited with
+  **you** as the actor. Without the capability the panel does not render, though the user's picture still
+  shows in the blade header and the directory. This is a console path for `omniglass principal setAvatar
+  <id>` / `removeAvatar <id>` on the CLI.
 
 From the CLI the same surface is `omniglass principal list` / `get` / `create` / `update` /
 `disable` / `enable` / `archive` / `restore` / `purge`, and `omniglass grant create <id>` /

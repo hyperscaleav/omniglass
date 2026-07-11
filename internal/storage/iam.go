@@ -185,6 +185,11 @@ type HumanProfile struct {
 	// MustChangePassword is set by an admin reset and cleared by the user's own
 	// change-password; while true the account is gated to the change-password lane.
 	MustChangePassword bool
+	// HasAvatar is true when the avatar column is non-null. The avatar bytes are
+	// NOT loaded here (this struct is filled on every authenticated request);
+	// fetch them with GetHumanAvatar.
+	HasAvatar       bool
+	AvatarUpdatedAt *time.Time
 }
 type ServiceProfile struct{ Label string }
 
@@ -473,6 +478,115 @@ func (p *PG) SetPrincipalPassword(ctx context.Context, actorID, id, encoded stri
 		return fmt.Errorf("storage: commit reset password: %w", err)
 	}
 	return nil
+}
+
+// setAvatarTx writes (or clears, when b64 == "") a human's avatar within tx and
+// audits the change against actorID. It does not commit. avatar_updated_at is
+// server-clocked to now() on write and null on clear.
+func setAvatarTx(ctx context.Context, tx pgx.Tx, actorID, id, b64 string) error {
+	verb := "clear_avatar"
+	var val any
+	if b64 != "" {
+		val, verb = b64, "set_avatar"
+	}
+	if _, err := tx.Exec(ctx,
+		`update human set avatar = $2, avatar_updated_at = case when $3 then now() else null end
+		 where principal_id = $1`,
+		id, val, b64 != ""); err != nil {
+		return fmt.Errorf("storage: write avatar: %w", err)
+	}
+	return writeAuditRes(ctx, tx, actorID, verb, "principal", id, nil, nil)
+}
+
+// SetOwnAvatar sets the caller's own profile picture (a normalized base64 JPEG),
+// audited as the caller. No capability is required.
+func (p *PG) SetOwnAvatar(ctx context.Context, principalID, jpegB64 string) error {
+	return p.avatarTxn(ctx, principalID, principalID, jpegB64)
+}
+
+// ClearOwnAvatar removes the caller's own profile picture, audited as the caller.
+func (p *PG) ClearOwnAvatar(ctx context.Context, principalID string) error {
+	return p.avatarTxn(ctx, principalID, principalID, "")
+}
+
+// SetPrincipalAvatar sets another principal's profile picture on behalf of an
+// admin, audited as the actor. Requires an all-scope grant; an unknown id is
+// ErrPrincipalNotFound.
+func (p *PG) SetPrincipalAvatar(ctx context.Context, actorID, id, jpegB64 string, action scope.Set) error {
+	if !action.All {
+		return ErrPrincipalForbidden
+	}
+	return p.avatarTxn(ctx, actorID, id, jpegB64)
+}
+
+// ClearPrincipalAvatar removes another principal's profile picture on behalf of
+// an admin, audited as the actor. Requires an all-scope grant; an unknown id is
+// ErrPrincipalNotFound.
+func (p *PG) ClearPrincipalAvatar(ctx context.Context, actorID, id string, action scope.Set) error {
+	if !action.All {
+		return ErrPrincipalForbidden
+	}
+	return p.avatarTxn(ctx, actorID, id, "")
+}
+
+// avatarTxn confirms the target human exists, then writes (or clears) its avatar
+// and commits. An unknown id (or a service principal) is ErrPrincipalNotFound.
+func (p *PG) avatarTxn(ctx context.Context, actorID, id, b64 string) error {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("storage: begin avatar: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	var exists int
+	if err := tx.QueryRow(ctx, `select 1 from human where principal_id = $1`, id).Scan(&exists); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrPrincipalNotFound
+		}
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "22P02" {
+			return ErrPrincipalNotFound
+		}
+		return fmt.Errorf("storage: avatar lookup: %w", err)
+	}
+	if err := setAvatarTx(ctx, tx, actorID, id, b64); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("storage: commit avatar: %w", err)
+	}
+	return nil
+}
+
+// GetHumanAvatar returns a human's profile picture as a base64 JPEG. The bool is
+// false (with no error) when the human has no picture; an unknown id is
+// ErrPrincipalNotFound.
+func (p *PG) GetHumanAvatar(ctx context.Context, id string) (string, bool, error) {
+	var b64 *string
+	if err := p.pool.QueryRow(ctx, `select avatar from human where principal_id = $1`, id).Scan(&b64); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", false, ErrPrincipalNotFound
+		}
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "22P02" {
+			return "", false, ErrPrincipalNotFound
+		}
+		return "", false, fmt.Errorf("storage: get avatar: %w", err)
+	}
+	if b64 == nil {
+		return "", false, nil
+	}
+	return *b64, true, nil
+}
+
+// GetPrincipalAvatar is the admin read of another principal's profile picture. It
+// applies the directory's all-scope invariant (a non-all scope is
+// ErrPrincipalForbidden, mirroring the admin write methods), then delegates to
+// GetHumanAvatar.
+func (p *PG) GetPrincipalAvatar(ctx context.Context, id string, action scope.Set) (string, bool, error) {
+	if !action.All {
+		return "", false, ErrPrincipalForbidden
+	}
+	return p.GetHumanAvatar(ctx, id)
 }
 
 // RevokePrincipalBearers deletes every bearer credential (sessions and tokens) for a
@@ -1162,8 +1276,11 @@ func (p *PG) loadPrincipal(ctx context.Context, pr *Principal) error {
 	case "human":
 		var h HumanProfile
 		if err := p.pool.QueryRow(ctx,
-			`select username, coalesce(email, ''), coalesce(display_name, ''), must_change_password from human where principal_id = $1`,
-			pr.ID).Scan(&h.Username, &h.Email, &h.DisplayName, &h.MustChangePassword); err != nil {
+			`select username, coalesce(email, ''), coalesce(display_name, ''), must_change_password,
+			        avatar is not null, avatar_updated_at
+			 from human where principal_id = $1`,
+			pr.ID).Scan(&h.Username, &h.Email, &h.DisplayName, &h.MustChangePassword,
+			&h.HasAvatar, &h.AvatarUpdatedAt); err != nil {
 			return fmt.Errorf("storage: load human: %w", err)
 		}
 		pr.Human = &h

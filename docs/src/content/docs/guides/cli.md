@@ -75,13 +75,23 @@ omniglass seed-dev
 ```
 
 Once a server is running, a signed-in principal manages **its own** account through the
-generated `auth` commands (self-scoped: each edits only the caller's own profile):
+generated self-scoped commands (each edits only the caller's own profile):
 
 ```sh
 omniglass auth me                                    # your principal, permissions, and grants
 omniglass auth update-profile --display-name "Ops Lead"
 omniglass auth change-password --current-password 'orange-boat-42x' --new-password 'purple-canyon-7'
+omniglass me setAvatar --image-base64 "$(base64 -w0 me.jpg)"   # set your profile picture
+omniglass me removeAvatar                            # clear it, falling back to initials
+omniglass avatar list                                # read your picture back as { image_base64 }
 ```
+
+`--image-base64` takes a plain base64 string, not a file path (base64-encode the image
+yourself, as the `$(base64 …)` above does); the server accepts JPEG, PNG, or WebP and
+normalizes it to a 256x256 JPEG. An administrator manages **any** principal's picture with
+`omniglass principal setAvatar <id> --image-base64 …` and `omniglass principal removeAvatar <id>`
+(gated by `principal:set-avatar`), reading one back with `omniglass avatar list <id>` (gated by
+`principal:read`). A principal with no picture is a 404.
 
 ## Secrets
 
