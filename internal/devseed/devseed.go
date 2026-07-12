@@ -13,6 +13,7 @@ package devseed
 import (
 	"context"
 	_ "embed"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -29,6 +30,16 @@ var fixturesYAML []byte
 type Doc struct {
 	Locations []Location `yaml:"locations"`
 	Users     []User     `yaml:"users"`
+	Variables []Variable `yaml:"variables"`
+}
+
+// Variable is one example global variable (a macro). Value is decoded from YAML
+// and re-encoded to jsonb, so `value: 30` seeds the number and `value: {a: 1}` the
+// object. Global scope keeps the fixture free of an owner dependency.
+type Variable struct {
+	Name      string `yaml:"name"`
+	ValueType string `yaml:"value_type"`
+	Value     any    `yaml:"value"`
 }
 
 // Location is one node of the example tree. Parent names a location declared
@@ -134,6 +145,25 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 			if _, err := gw.CreateGrant(ctx, actorID, pr.ID, spec, all); err != nil {
 				return fmt.Errorf("devseed: grant %s to %q: %w", g.Role, u.Username, err)
 			}
+		}
+	}
+
+	// Global variables: a couple of example macros so the Variables directory comes
+	// up populated. A variable that already exists (ErrVariableExists) is left as
+	// is, so a re-run adds nothing.
+	for _, v := range doc.Variables {
+		raw, err := json.Marshal(v.Value)
+		if err != nil {
+			return fmt.Errorf("devseed: encode variable %q: %w", v.Name, err)
+		}
+		_, err = gw.CreateVariable(ctx, actorID, storage.VariableSpec{
+			Name: v.Name, ValueType: v.ValueType, OwnerKind: "global", Value: raw,
+		}, all)
+		if errors.Is(err, storage.ErrVariableExists) {
+			continue
+		}
+		if err != nil {
+			return fmt.Errorf("devseed: create variable %q: %w", v.Name, err)
 		}
 	}
 	return nil

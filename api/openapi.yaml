@@ -412,6 +412,48 @@ components:
         - name
         - system_type
       type: object
+    CreateVariableInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateVariableInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        name:
+          description: The cascade key; unique per owner
+          minLength: 1
+          type: string
+        owner:
+          description: The owning entity's name; omit for a global variable
+          type: string
+        owner_kind:
+          description: Which tier owns this variable
+          enum:
+            - global
+            - location
+            - system
+            - component
+          type: string
+        value:
+          description: The value, validated against value_type
+        value_type:
+          description: The declared value type
+          enum:
+            - string
+            - int
+            - float
+            - bool
+            - json
+          type: string
+      required:
+        - name
+        - value_type
+        - owner_kind
+        - value
+      type: object
     EffectiveSecretsOutputBody:
       additionalProperties: false
       properties:
@@ -430,6 +472,25 @@ components:
             - "null"
       required:
         - secrets
+      type: object
+    EffectiveVariablesOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/EffectiveVariablesOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        variables:
+          items:
+            $ref: "#/components/schemas/ResolvedVariableBody"
+          type:
+            - array
+            - "null"
+      required:
+        - variables
       type: object
     ErrorDetail:
       additionalProperties: false
@@ -842,6 +903,25 @@ components:
       required:
         - systems
       type: object
+    ListVariablesOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListVariablesOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        variables:
+          items:
+            $ref: "#/components/schemas/VariableBody"
+          type:
+            - array
+            - "null"
+      required:
+        - variables
+      type: object
     LocationBody:
       additionalProperties: false
       properties:
@@ -1085,6 +1165,44 @@ components:
         - depth
         - winner
         - fields
+      type: object
+    ResolvedVariableBody:
+      additionalProperties: false
+      properties:
+        band:
+          description: "Cascade tier: 0 global, 1 location, 2 system, 3 component"
+          format: int64
+          type: integer
+        depth:
+          description: Distance up the tier's tree from the component (0 nearest)
+          format: int64
+          type: integer
+        id:
+          type: string
+        name:
+          type: string
+        owner_id:
+          type: string
+        owner_kind:
+          type: string
+        owner_name:
+          type: string
+        value:
+          description: The value, shape given by value_type
+        value_type:
+          type: string
+        winner:
+          description: True for the resolved value; false for a shadowed candidate
+          type: boolean
+      required:
+        - id
+        - name
+        - value_type
+        - owner_kind
+        - band
+        - depth
+        - winner
+        - value
       type: object
     RevealSecretOutputBody:
       additionalProperties: false
@@ -1449,6 +1567,52 @@ components:
           type: string
         system_type:
           type: string
+      type: object
+    UpdateVariableInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/UpdateVariableInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        value:
+          description: The new value, validated against the fixed value_type
+      required:
+        - value
+      type: object
+    VariableBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/VariableBody.json
+          format: uri
+          readOnly: true
+          type: string
+        id:
+          type: string
+        name:
+          type: string
+        owner_id:
+          type: string
+        owner_kind:
+          type: string
+        owner_name:
+          type: string
+        value:
+          description: The value, shape given by value_type
+        value_type:
+          type: string
+      required:
+        - id
+        - name
+        - value_type
+        - owner_kind
+        - value
       type: object
 info:
   title: Omniglass
@@ -1862,6 +2026,32 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Effective secrets for a component
+  /components/{name}/effective-variables:
+    get:
+      description: Resolves the variables that cascade onto a component (global -> location -> system -> component, most-specific winning), winner and shadowed candidates. Gated by variable:read; the component must be in the caller's component read scope.
+      operationId: effective-variables
+      parameters:
+        - description: The component's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The component's name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EffectiveVariablesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Effective variables for a component
   /healthz:
     get:
       description: Reports process health and the database leg, pinged through the Storage Gateway.
@@ -3042,6 +3232,100 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Update a system
+  /variables:
+    get:
+      description: Lists every variable. Requires an all-scope read; the scoped, per-component view is the effective-variables route. Gated by variable:read.
+      operationId: list-variables
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListVariablesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List variables (admin directory)
+    post:
+      description: Sets a variable at an owner scope (a global variable needs an all-scoped grant). The value is validated against value_type. Gated by variable:create.
+      operationId: create-variable
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateVariableInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VariableBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Create a variable
+  /variables/{id}:
+    delete:
+      description: Removes a variable by id. Gated by variable:delete; read and delete scopes on the owner drive the 404 versus 403 split.
+      operationId: delete-variable
+      parameters:
+        - description: The variable's id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The variable's id
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Delete a variable
+    patch:
+      description: Replaces a variable's value, validated against its fixed value_type. Only the value changes; name, type, and owner are fixed at creation. Gated by variable:update.
+      operationId: update-variable
+      parameters:
+        - description: The variable's id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The variable's id
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateVariableInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VariableBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Update a variable's value
 servers:
   - url: /api/v1
 

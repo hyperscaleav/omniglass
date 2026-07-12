@@ -14,7 +14,7 @@ func index() rbac.RoleIndex {
 	return rbac.NewRoleIndex([]rbac.Role{
 		{ID: "viewer", Permissions: []string{"*:read"}},
 		{ID: "loc-editor", Permissions: []string{"location:create,update,delete"}},
-		{ID: "operator", Inherits: []string{"viewer"}, Permissions: []string{"secret:create,update"}},
+		{ID: "operator", Inherits: []string{"viewer"}, Permissions: []string{"secret:create,update", "variable:create,update"}},
 		{ID: "owner", Permissions: []string{"*:*"}},
 	})
 }
@@ -36,6 +36,23 @@ func TestResolveSecretArcKinds(t *testing.T) {
 	vr := scope.Resolve([]scope.Grant{{Role: "viewer", ScopeKind: "component", ScopeID: "C"}}, idx, "secret", "create")
 	if !vr.Empty() {
 		t.Fatalf("viewer secret:create scope = %+v, want empty", vr)
+	}
+}
+
+// A variable is owned on the same exclusive arc as a secret, so it resolves
+// scope against the three owner tiers identically.
+func TestResolveVariableArcKinds(t *testing.T) {
+	idx := index()
+	for _, kind := range []string{"location", "system", "component"} {
+		g := []scope.Grant{{Role: "operator", ScopeKind: kind, ScopeID: "ROOT"}}
+		set := scope.Resolve(g, idx, "variable", "create")
+		if len(set.IDs) != 1 || set.IDs[0] != "ROOT" {
+			t.Fatalf("operator@%s variable:create scope = %+v, want ROOT", kind, set)
+		}
+	}
+	vr := scope.Resolve([]scope.Grant{{Role: "viewer", ScopeKind: "component", ScopeID: "C"}}, idx, "variable", "create")
+	if !vr.Empty() {
+		t.Fatalf("viewer variable:create scope = %+v, want empty", vr)
 	}
 }
 

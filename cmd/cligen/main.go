@@ -107,7 +107,31 @@ type schema struct {
 }
 
 type property struct {
-	Description string `json:"description"`
+	Description string   `json:"description"`
+	Type       jsonType `json:"type"`
+}
+
+// jsonType is an OpenAPI `type` that may be a single string ("string") or, for a
+// nullable schema, an array (`["array", "null"]`). It resolves to the first
+// non-null member, or "" for an absent/untyped `any`.
+type jsonType string
+
+func (t *jsonType) UnmarshalJSON(b []byte) error {
+	var s string
+	if json.Unmarshal(b, &s) == nil {
+		*t = jsonType(s)
+		return nil
+	}
+	var arr []string
+	if json.Unmarshal(b, &arr) == nil {
+		for _, x := range arr {
+			if x != "null" {
+				*t = jsonType(x)
+				return nil
+			}
+		}
+	}
+	return nil // an absent or unexpected shape resolves to the untyped ""
 }
 
 var httpMethods = []string{"get", "post", "put", "patch", "delete"}
@@ -132,6 +156,12 @@ type bodyField struct {
 	Var      string // generated Go variable name
 	Desc     string
 	Required bool
+	// JSON marks a field whose value is not a plain scalar (an object, an array,
+	// or an untyped `any`): its flag still takes a string, but the string is
+	// parsed as JSON (with a bare-string fallback) before it enters the request
+	// body, so `--value 30` sends the number 30 and `--fields '{"k":"v"}'` sends
+	// the object, not their quoted-string forms.
+	JSON bool
 }
 
 // queryField is one OpenAPI query parameter surfaced as a cobra flag. The flag
@@ -315,12 +345,18 @@ func bodyFields(doc spec, op operation) []bodyField {
 
 	var fields []bodyField
 	for _, k := range props {
+		// A scalar property (string / integer / number / boolean) passes through as
+		// its flag string; anything else (object, array, or an untyped `any` value)
+		// is JSON-parsed so a typed or structured value survives the wire.
+		t := string(sc.Properties[k].Type)
+		scalar := t == "string" || t == "integer" || t == "number" || t == "boolean"
 		fields = append(fields, bodyField{
 			Name:     k,
 			Flag:     strings.ReplaceAll(k, "_", "-"),
 			Var:      "f" + goIdent(k),
 			Desc:     sc.Properties[k].Description,
 			Required: required[k],
+			JSON:     !scalar,
 		})
 	}
 	return fields
@@ -519,7 +555,7 @@ func generatedCommands() []*cobra.Command {
 				body := map[string]any{}
 				{{- range $f := .Body}}
 				if cmd.Flags().Changed({{quote $f.Flag}}) {
-					body[{{quote $f.Name}}] = {{$f.Var}}
+					body[{{quote $f.Name}}] = {{if $f.JSON}}jsonOrString({{$f.Var}}){{else}}{{$f.Var}}{{end}}
 				}
 				{{- end}}
 				return runAPICommand(cmd, {{quote .Method}}, path, body)

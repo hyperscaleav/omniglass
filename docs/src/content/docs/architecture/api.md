@@ -171,6 +171,29 @@ A secret's fields are masked in every read: the `secret` body (`{id, name, secre
 owner_id?, owner_name?, fields:[{name, value, secret}]}`) returns `••••••` for a secret field, and only
 `:reveal` returns plaintext.
 
+A **variable** is the plaintext sibling of a secret ([config, secrets, and
+variables](/architecture/variables/)): the same owner arc and cascade, but shown in the clear (no
+registry, no mask, no reveal). The directory and the per-component cascade read ride the viewer floor
+(`variable:read`); `POST` / `PATCH` gate on `variable:create` / `variable:update` (granted to
+operators); `DELETE` gates on `variable:delete` (admin, owner). The value is polymorphic JSON typed by
+`value_type`.
+
+- `GET /variables` is the **all-scope admin directory** (`{variables: [variable]}`); like the secret
+  directory it needs an all-scope grant, and a non-all scope is a 403 (`variable:read`).
+- `POST /variables` creates one from `{name, value_type: string|int|float|bool|json, owner_kind:
+  global|location|system|component, owner?, value}` (201, `variable:create`); a `global` variable needs
+  an all-scope grant, and the `value` is validated against `value_type`.
+- `PATCH /variables/{id}` replaces the `value` (validated against the fixed `value_type`;
+  `variable:update`).
+- `DELETE /variables/{id}` removes it (204, `variable:delete`).
+- `GET /components/{name}/effective-variables` is the **cascade** for one component: each a
+  `resolvedVariable` (`{id, name, value_type, owner_kind, owner_id?, owner_name?, band, depth, winner,
+  value}`) marking the winner and the shadowed candidates (`variable:read`; the component must be in the
+  caller's component read-scope).
+
+A `variable` body is `{id, name, value_type, owner_kind, owner_id?, owner_name?, value}`, the `value` in
+the clear.
+
 ## Reads beyond one resource are views
 
 A single resource reads through its typed `GET`. Anything richer, a dashboard, an explorer, the cascade
