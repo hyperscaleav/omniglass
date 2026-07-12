@@ -1,7 +1,7 @@
-import { For, Show, createMemo } from "solid-js";
+import { For, Show, createMemo, createResource } from "solid-js";
 import { A, useLocation, useNavigate } from "@solidjs/router";
 import { navItems, filterNav, type NavItem } from "../lib/nav";
-import { useMe, useLogout, can } from "../lib/auth";
+import { useMe, useLogout, can, fetchMyAvatar } from "../lib/auth";
 import { PanelLeft, LogOut } from "./icons";
 import { BrandMark, Wordmark } from "./Brand";
 import Button from "./Button";
@@ -16,6 +16,14 @@ export default function Sidebar(props: { collapsed: boolean; onToggle: () => voi
   const navigate = useNavigate();
   const me = useMe();
   const logout = useLogout();
+  // The identity footer shows the caller's own picture when set (fetched via the
+  // self route, so a scoped viewer who cannot read others' avatars still sees their
+  // own), falling back to initials. Reacting to has_avatar keeps it in step with an
+  // upload or removal on the profile page.
+  const [avatarUrl] = createResource(
+    () => me.data?.human?.has_avatar ?? false,
+    (has) => (has ? fetchMyAvatar() : Promise.resolve(null)),
+  );
   const rel = () => {
     const p = location.pathname.startsWith(BASE) ? location.pathname.slice(BASE.length) : location.pathname;
     return p === "" ? "/" : p;
@@ -73,11 +81,22 @@ export default function Sidebar(props: { collapsed: boolean; onToggle: () => voi
             data-tip={props.collapsed ? "Your profile" : undefined}
             title="Your profile"
           >
-            <div class="avatar avatar-placeholder">
-              <div class="w-7 rounded-full bg-linear-to-br from-primary to-info text-primary-content">
-                <span class="font-data text-[11px] font-bold uppercase">{ident().name.slice(0, 2)}</span>
+            <Show
+              when={avatarUrl()}
+              fallback={
+                <div class="avatar avatar-placeholder">
+                  <div class="w-7 rounded-full bg-linear-to-br from-primary to-info text-primary-content">
+                    <span class="font-data text-[11px] font-bold uppercase">{ident().name.slice(0, 2)}</span>
+                  </div>
+                </div>
+              }
+            >
+              <div class="avatar">
+                <div class="w-7 rounded-full">
+                  <img src={avatarUrl()!} alt="Your profile picture" />
+                </div>
               </div>
-            </div>
+            </Show>
             <Show when={!props.collapsed}>
               <div class="min-w-0 flex-1 leading-tight">
                 <div class="truncate font-data text-xs font-semibold">{ident().name}</div>

@@ -1,5 +1,6 @@
 import { createSignal } from "solid-js";
 import { api } from "../api/client";
+import { fileToBase64 } from "./auth";
 import type { FilterKey } from "./predicate";
 
 // The principals data layer: thin typed wrappers over the generated client, so
@@ -18,7 +19,9 @@ export type Principal = {
   // Set when the principal is archived (soft-deleted): hidden from the default
   // directory, cannot authenticate, reversible until purged. Absent means live.
   archived_at?: string;
-  human?: { username: string; email?: string; display_name?: string };
+  // has_avatar is a boolean flag (never the bytes): the image is fetched lazily via
+  // principalAvatarUrl only when it is set, so the directory stays cheap to load.
+  human?: { username: string; email?: string; display_name?: string; has_avatar?: boolean };
   service?: { label: string };
   grants: Grant[];
   // The principal groups this principal belongs to; the grants they confer ride
@@ -114,6 +117,30 @@ export async function setPrincipalActive(id: string, active: boolean): Promise<v
 export async function resetPrincipalPassword(id: string, password: string): Promise<void> {
   const { error } = await api.POST("/principals/{id}:resetPassword", { params: { path: { id } }, body: { password } });
   if (error) throw error;
+}
+
+// setPrincipalAvatar sets another principal's profile picture (an admin action).
+// Gated by principal:set-avatar; the server normalizes the upload to a 256x256 JPEG
+// and rejects a bad or oversize image with a 422.
+export async function setPrincipalAvatar(id: string, file: File): Promise<void> {
+  const image_base64 = await fileToBase64(file);
+  const { error } = await api.POST("/principals/{id}:setAvatar", { params: { path: { id } }, body: { image_base64 } });
+  if (error) throw error;
+}
+
+// removePrincipalAvatar clears another principal's profile picture (a no-op if none
+// is set). Gated by principal:set-avatar.
+export async function removePrincipalAvatar(id: string): Promise<void> {
+  const { error } = await api.POST("/principals/{id}:removeAvatar", { params: { path: { id } } });
+  if (error) throw error;
+}
+
+// principalAvatarUrl reads a principal's profile picture and returns it as a data
+// URL, or null when there is none (a 404). Gated by principal:read.
+export async function principalAvatarUrl(id: string): Promise<string | null> {
+  const { data, error } = await api.GET("/principals/{id}/avatar", { params: { path: { id } } });
+  if (error || !data) return null;
+  return `data:image/jpeg;base64,${data.image_base64}`;
 }
 
 // The soft/hard delete lifecycle: archive hides the account (reversible),

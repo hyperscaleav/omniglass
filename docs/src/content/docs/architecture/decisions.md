@@ -51,6 +51,9 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0014](#adr-0014-the-audit-trail-is-a-sensitive-read-not-reached-by-a-partial-global-wildcard) | 2026-07-07 | Superseded by [ADR-0015](#adr-0015-permissions-are-topic-patterns-single-token-and-tail-wildcards) | The audit trail is admin/owner-only: `audit` is a sensitive resource that `*:read` does not confer, only an explicit `audit:read` or `*:*` |
 | [ADR-0015](#adr-0015-permissions-are-topic-patterns-single-token-and-tail-wildcards) | 2026-07-07 | Accepted | Permissions match like NATS subjects (`*` one token, `>` tail); admin-sensitivity is a deeper `:admin` token no partial wildcard reaches; owner is `>` |
 | [ADR-0016](#adr-0016-a-principal-can-be-purged-and-the-audit-trail-is-denormalized-to-survive-it) | 2026-07-09 | Accepted | A principal can be hard-deleted (purge, gated on archival); the audit trail survives via a denormalized actor label and `ON DELETE SET NULL`, retiring the "never hard-deleted" rule (soft-delete verb: archive) |
+| [ADR-0017](#adr-0017-credential-is-renamed-secret-the-cascade-is-the-reuse-mechanism) | 2026-07-09 | Accepted | The access-secret member of the config / credential / variable trio is renamed credential to secret: an encrypted-at-rest typed value resolved most-specific-wins down the cascade |
+| [ADR-0018](#adr-0018-the-avatar-read-endpoint-is-json-not-raw-image-bytes) | 2026-07-10 | Accepted | A profile picture is read through a JSON `image_base64` endpoint the console renders as a data URL, not a raw `image/jpeg` handler, so every route stays under the Huma authz middleware |
+| [ADR-0020](#adr-0020-variable-slice-1-types-inline-and-mirrors-the-secret-arc) | 2026-07-11 | Accepted | The variable member ships plaintext, typed inline against a `value_type` enum (no `variable_type` registry), on the secret owner arc; template scope, groups, the `$var:` consumer deferred |
 
 ## Entries
 
@@ -366,6 +369,26 @@ below from the project's history. From here it grows one slice at a time.
 - **Closes:** issue [#143](https://github.com/hyperscaleav/omniglass/issues/143) (backend),
   [#146](https://github.com/hyperscaleav/omniglass/issues/146) (console + rename).
 
+### ADR-0018: The avatar read endpoint is JSON, not raw image bytes
+
+- **Date:** 2026-07-10 | **Status:** Accepted | **Pages:** [identity and access](/architecture/identity-access/)
+- **Decision:** A human principal's profile picture is read through a **JSON** endpoint
+  (`GET /principals/{id}/avatar` gated `principal:read`, `GET /auth/me/avatar` on the self lane) that returns
+  `{ image_base64 }`, which the console decodes into a `data:` URL for the `<img>`. The write lanes take base64
+  JSON in (`POST /principals/{id}:setAvatar` and the `/auth/me` self lane), and the server-normalized 256x256
+  JPEG is stored base64 on the `human` row; the principal read models carry only a `has_avatar` bool, so no
+  image payload rides a list or the `loadPrincipal` hot path.
+- **Context:** The slice design spec proposed a **raw `image/jpeg`** read endpoint (with `ETag` /
+  `Cache-Control` / `304`) so a browser `<img src>` could load it directly. But a raw-bytes handler would be a
+  chi-native route sitting **outside** the Huma authz middleware, breaking the two-layer invariant that a
+  `<resource>:<action>` capability is checked on **every** route, and a bare `<img src>` cannot send a bearer
+  header, so a token-only (non-cookie) session could not authenticate the image. Keeping the read as a Huma
+  JSON route puts it under the same `authn` + `require("principal","read")` (admin) or authn-only (self) path
+  as every other route, and the typed client (session cookie or bearer, both work) fetches the JSON and builds
+  the data URL. The one normalized size is small (roughly 30 to 50 KB base64), so per-request payload is not a
+  concern, and HTTP caching over `avatar_updated_at` is a later refinement if it is ever needed. This
+  supersedes the spec's raw-bytes read decision; the write transport (base64 JSON) is unchanged.
+
 ### ADR-0017: `credential` is renamed `secret`; the cascade is the reuse mechanism
 
 - **Date:** 2026-07-09 | **Status:** Accepted | **Pages:** [config, credentials, and variables](/architecture/variables/)
@@ -394,7 +417,7 @@ below from the project's history. From here it grows one slice at a time.
   `Design`.
 - **Closes:** issue [#155](https://github.com/hyperscaleav/omniglass/issues/155) (secret slice 1).
 
-### ADR-0018: `variable` slice 1 types inline and mirrors the secret arc
+### ADR-0020: `variable` slice 1 types inline and mirrors the secret arc
 
 - **Date:** 2026-07-11 | **Status:** Accepted | **Pages:** [config, secrets, and variables](/architecture/variables/)
 - **Decision:** The **variable** member of the trio ships its first slice: a typed, cascade-resolved **plaintext**

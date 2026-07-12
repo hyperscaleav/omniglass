@@ -2,12 +2,14 @@ package api
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"net/http"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/hyperscaleav/omniglass/internal/auth"
+	"github.com/hyperscaleav/omniglass/internal/avatar"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
@@ -22,20 +24,20 @@ type principalGroupRef struct {
 }
 
 type principalBody struct {
-	ID            string              `json:"id"`
-	Kind          string              `json:"kind"`
-	Active        bool                `json:"active"`
-	ArchivedAt    *time.Time          `json:"archived_at,omitempty" doc:"Set when the principal is archived (soft-deleted); absent means live"`
-	Human         *humanBody          `json:"human,omitempty"`
-	Service       *svcBody            `json:"service,omitempty"`
-	Grants        []grantBody         `json:"grants"`
-	Groups        []principalGroupRef `json:"groups"`
+	ID         string              `json:"id"`
+	Kind       string              `json:"kind"`
+	Active     bool                `json:"active"`
+	ArchivedAt *time.Time          `json:"archived_at,omitempty" doc:"Set when the principal is archived (soft-deleted); absent means live"`
+	Human      *humanBody          `json:"human,omitempty"`
+	Service    *svcBody            `json:"service,omitempty"`
+	Grants     []grantBody         `json:"grants"`
+	Groups     []principalGroupRef `json:"groups"`
 }
 
 func toPrincipalBody(pr *storage.Principal) principalBody {
 	b := principalBody{ID: pr.ID, Kind: pr.Kind, Active: pr.Active, ArchivedAt: pr.ArchivedAt, Grants: make([]grantBody, 0, len(pr.Grants)), Groups: make([]principalGroupRef, 0, len(pr.Groups))}
 	if pr.Human != nil {
-		b.Human = &humanBody{Username: pr.Human.Username, Email: pr.Human.Email, DisplayName: pr.Human.DisplayName}
+		b.Human = &humanBody{Username: pr.Human.Username, Email: pr.Human.Email, DisplayName: pr.Human.DisplayName, HasAvatar: pr.Human.HasAvatar}
 	}
 	if pr.Service != nil {
 		b.Service = &svcBody{Label: pr.Service.Label}
@@ -68,6 +70,27 @@ type resetPasswordInput struct {
 	ID   string `path:"id" doc:"The principal, addressed by its uuid or a human username"`
 	Body struct {
 		Password string `json:"password" minLength:"12" maxLength:"256" doc:"The new password (at least 12 characters, not a common password, not containing the username)"`
+	}
+}
+
+type setAvatarInput struct {
+	ID   string `path:"id" doc:"The principal, addressed by its uuid or a human username"`
+	Body struct {
+		ImageBase64 string `json:"image_base64" doc:"The image (JPEG, PNG, or WebP), base64-encoded; normalized server-side to a 256x256 JPEG"`
+	}
+}
+
+type avatarPathInput struct {
+	ID string `path:"id" doc:"The principal, addressed by its uuid or a human username"`
+}
+
+// avatarOutput carries a principal's profile picture as base64. The read side is a
+// JSON route (not a raw image/jpeg handler) so it stays under the Huma authz
+// middleware; the console renders it as a data URL. Shared by the admin and self
+// read handlers.
+type avatarOutput struct {
+	Body struct {
+		ImageBase64 string `json:"image_base64" doc:"The profile picture as a base64-encoded 256x256 JPEG"`
 	}
 }
 
@@ -428,6 +451,90 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		}
 		return nil, nil
 	})
+
+	huma.Register(api, huma.Operation{
+		OperationID:   "set-principal-avatar",
+		Method:        http.MethodPost,
+		Path:          "/principals/{id}:setAvatar",
+		DefaultStatus: http.StatusNoContent,
+		Summary:       "Set a principal's profile picture",
+		Description:   "Sets another human principal's profile picture (an administrator action). Gated by principal:set-avatar (all-scope). The image (JPEG, PNG, or WebP, base64-encoded) is normalized server-side to a 256x256 JPEG; a bad or oversize image is a 422. Audited with the administrator as the actor.",
+		Middlewares:   huma.Middlewares{a.authn, a.require("principal", "set-avatar")},
+	}, func(ctx context.Context, in *setAvatarInput) (*struct{}, error) {
+		id, rerr := a.resolvePrincipalRef(ctx, in.ID)
+		if rerr != nil {
+			return nil, rerr
+		}
+		b64, aerr := normalizeAvatar(in.Body.ImageBase64)
+		if aerr != nil {
+			return nil, aerr
+		}
+		if err := gw.SetPrincipalAvatar(ctx, actorID(ctx), id, b64, a.scopeFor(ctx, "principal", "set-avatar")); err != nil {
+			return nil, mapPrincipalErr(err)
+		}
+		return nil, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID:   "remove-principal-avatar",
+		Method:        http.MethodPost,
+		Path:          "/principals/{id}:removeAvatar",
+		DefaultStatus: http.StatusNoContent,
+		Summary:       "Remove a principal's profile picture",
+		Description:   "Clears another human principal's profile picture. Gated by principal:set-avatar (all-scope). Removing an absent picture is a no-op. Audited with the administrator as the actor.",
+		Middlewares:   huma.Middlewares{a.authn, a.require("principal", "set-avatar")},
+	}, func(ctx context.Context, in *avatarPathInput) (*struct{}, error) {
+		id, rerr := a.resolvePrincipalRef(ctx, in.ID)
+		if rerr != nil {
+			return nil, rerr
+		}
+		if err := gw.ClearPrincipalAvatar(ctx, actorID(ctx), id, a.scopeFor(ctx, "principal", "set-avatar")); err != nil {
+			return nil, mapPrincipalErr(err)
+		}
+		return nil, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "get-principal-avatar",
+		Method:      http.MethodGet,
+		Path:        "/principals/{id}/avatar",
+		Summary:     "Get a principal's profile picture",
+		Description: "Returns the principal's profile picture as a base64-encoded JPEG. Gated by principal:read (all-scope). A principal without a picture is a 404.",
+		Middlewares: huma.Middlewares{a.authn, a.require("principal", "read")},
+	}, func(ctx context.Context, in *avatarPathInput) (*avatarOutput, error) {
+		id, rerr := a.resolvePrincipalRef(ctx, in.ID)
+		if rerr != nil {
+			return nil, rerr
+		}
+		b64, ok, err := gw.GetPrincipalAvatar(ctx, id, a.scopeFor(ctx, "principal", "read"))
+		if err != nil {
+			return nil, mapPrincipalErr(err)
+		}
+		if !ok {
+			return nil, huma.Error404NotFound("no profile picture")
+		}
+		out := &avatarOutput{}
+		out.Body.ImageBase64 = b64
+		return out, nil
+	})
+}
+
+// normalizeAvatar decodes the base64 upload, normalizes the image, and returns it
+// re-encoded as base64 for storage. Bad base64 or a bad/oversize image is a 422;
+// anything else is a 500. Shared by the admin and self avatar write handlers.
+func normalizeAvatar(imageB64 string) (string, error) {
+	raw, err := base64.StdEncoding.DecodeString(imageB64)
+	if err != nil {
+		return "", huma.Error422UnprocessableEntity("image_base64 is not valid base64")
+	}
+	jpeg, err := avatar.Normalize(raw)
+	if err != nil {
+		if errors.Is(err, avatar.ErrTooLarge) || errors.Is(err, avatar.ErrUnsupported) {
+			return "", huma.Error422UnprocessableEntity(err.Error())
+		}
+		return "", huma.Error500InternalServerError("normalize avatar")
+	}
+	return base64.StdEncoding.EncodeToString(jpeg), nil
 }
 
 // mapPrincipalErr translates the gateway's principal sentinels into HTTP status:

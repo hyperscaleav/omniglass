@@ -37,7 +37,10 @@ denormalizing the actor's label into each row (the audit foreign keys go `ON DEL
 history survives even after its actor is gone. And the per-action `visible_set` resolver enforced in the
 Storage Gateway across locations, systems, and components, and **principal groups**
 (`GET` / `POST` / `PATCH` / `DELETE /principal-groups`, membership, and group grants) whose members
-**inherit** the group's grants through the grant-loader union, gated by `principal_group`. Still `Design`:
+**inherit** the group's grants through the grant-loader union, gated by `principal_group`, and **profile
+pictures** (a human's avatar: self-managed via `POST /auth/me:setAvatar` / `:removeAvatar`, admin-managed via
+`POST /principals/{id}:setAvatar` gated `principal:set-avatar`, normalized server-side to a 256x256 JPEG and
+stored base64 on the human row). Still `Design`:
 OIDC / SAML auth, the node / NATS path, the permission cache, custom-role management, and the tenant-policy
 lever. The per-slice breakdown is on [implementation status](/architecture/status/).
 
@@ -433,6 +436,37 @@ GET /api/v1/auth/me
 The `/auth/me` family is also where a principal manages **its own** identity: `PATCH /api/v1/auth/me` edits the caller's own `display_name` (email is an administrator-set field, not self-editable), and `POST /api/v1/auth/me:changePassword` (an AIP `:verb` custom method) verifies the current password and installs a new one. Both are **authn-only and self-scoped**: they resolve the target from the session, never a path id, so they need no capability and join the route-gating allow-list next to the `GET`. Acting on **another** principal (create, disable, reset, regrant) is the admin surface and does carry capabilities. Changing a password does not, today, revoke the principal's other live sessions.
 
 `permissions` is flat and wildcard-expanded, ready for O(1) `useCan(...)` checks in the web app. It is a **fast-reject / UI hint only**, the union over all grants: it answers "could this principal ever do X anywhere", never "can it do X to **this** entity". List visibility likewise (a row in `GET /alarms` is read-scoped) does **not** imply per-action authority on that row. Per-row action affordances (the ack/snooze button on a specific alarm) must be computed against `visible_set(P, action)` for that target, which the `grants` array drives: `grants` is the source for advanced UI logic (scope chips, deciding per-row actionability, explaining why a button is or is not shown). The server is the only authority regardless; the flat list and the list view are hints, the scoped gateway decides.
+
+## Profile pictures
+
+A human principal can carry a **profile picture**, managed on two lanes that mirror the rest of the identity
+surface. **Self**: any signed-in user sets or removes their own avatar (`POST /auth/me:setAvatar` /
+`:removeAvatar`), authn-only and self-scoped, needing no capability, on the same ungated lane as the profile
+edit and change-password. **Admin**: `principal:set-avatar` (an all-scope capability, held by `admin` through
+`principal:*` and `owner` through `>`) sets or removes **any** principal's avatar
+(`POST /principals/{id}:setAvatar` / `:removeAvatar`), audited with the administrator as the actor. An avatar
+is not a capability, so the admin lane carries no takeover guard (unlike a password reset). The one-line
+catalog entry: `principal:set-avatar` is *set or remove any principal's profile picture; self-management
+needs no capability*.
+
+The upload is **normalized server-side and authoritatively** by the pure `avatar.Normalize` primitive, so the
+client cannot bypass it: it accepts JPEG, PNG, or WebP (GIF and everything else is rejected), refuses a
+payload over 8 MiB or any source dimension over 8000px (two decompression-bomb guards, one on the input bytes
+and one on the decoded pixels), center-crops to the largest centered square, resizes to 256x256, and
+re-encodes as JPEG at quality 82. A bad or oversize image is a **422**. The one normalized size is stored
+**base64 on the human row** (`avatar`, alongside `avatar_updated_at`); the bytes are **never** loaded on the
+`loadPrincipal` hot path, which selects only `avatar is not null` (a bool), so the read models carry a cheap
+`has_avatar` flag and the console knows whether to render an image or fall back to initials without paying for
+the payload per row.
+
+The **read side is a JSON endpoint** (`GET /principals/{id}/avatar` gated `principal:read`,
+`GET /auth/me/avatar` on the self lane) returning `{ image_base64 }`, which the console renders as a `data:`
+URL; a principal without a picture is a **404**. It is deliberately JSON and **not** a raw `image/jpeg`
+handler ([ADR-0018](/architecture/decisions/#adr-0018-the-avatar-read-endpoint-is-json-not-raw-image-bytes)):
+a raw-bytes chi handler would sit **outside** the Huma authz middleware, breaking the
+permission-on-every-route invariant, and a bare `<img src>` cannot carry a bearer, so a token-only session
+could not authenticate it. The typed client fetches the JSON (a session cookie or a bearer both work) and
+builds the data URL.
 
 ## The node path
 
