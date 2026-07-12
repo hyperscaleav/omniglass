@@ -221,6 +221,13 @@ has no lifecycle.
 
 ## tag: a normalized label vocabulary
 
+:::note[Built: slice 1, the registry, the bindings, and the cascade. See the [tags](/architecture/tags/) page.]
+The tag primitive's first slice is **built** ([ADR-0021](/architecture/decisions/#adr-0021-tag-slice-1-a-governed-key-registry-with-entity-update-gated-bindings)):
+the governed `tag` key registry, the per-entity `tag_binding` cell on the exclusive arc, and the union-on-key /
+override-on-value cascade resolver. The [tags](/architecture/tags/) page is its home; this section is the conceptual
+frame for how tags share the cascade with config, secrets, and variables.
+:::
+
 A **tag** is an operator **`key: value`** label attached to an entity to organize, filter, and scope by
 dimensions Omniglass does not model natively (`category: audio-dsp`, `environment: prod`,
 `cost_center: 4021`). A tag is not a signal and carries no lifecycle; it rides the cascade with a
@@ -322,6 +329,6 @@ exclusive-arc scope either way.
 | `secret_type` | id, **official**, schema (per-field `{name, type, secret, origin}`) | **Built.** The secret **shape** registry (`snmp-community`, `basic-auth` seeded); `official` marks shipped-canonical versus org-local, like the datapoint and role registries |
 | `secret` | (name, **owner arc**), secret_type, **value** (secret fields as `{ciphertext, nonce, wrapped_dek, key_id}` envelopes, non-secret fields plaintext) | **Built.** The encrypted cell and the `$sec:` cascade key; scope is the exclusive arc (global/location/system/component). Read masked; decrypted only through the audited `:reveal` / `:copy` path |
 | `variable` | (name, **owner arc**), **value_type** (`string`/`int`/`float`/`bool`/`json`), **value** (jsonb) | **Built.** The plaintext variable cell and the `$var:` cascade key; scope is the exclusive arc. Typed inline (no `variable_type` registry: the value is validated against `value_type` in the app), no observed side. The **config** cell (declared/observed/reconcile) is a separate, deferred member |
-| `tag` | name, applies_to, propagates | the **tenant-wide governed key vocabulary**; minting a key needs `tag:create` ([identity and access](/architecture/identity-access/)). No `_type`, no namespace; values bind via `tag_binding` |
-| `tag_binding` | (scope_kind, scope_id, tag), value | the `key: value` binding: **union on key, override on value** down the [cascade](/architecture/cascade/), bindable at any scope and via groups |
+| `tag` | name, applies_to, propagates | **Built.** The **tenant-wide governed key vocabulary**; minting a key needs `tag:create` ([identity and access](/architecture/identity-access/)). No `_type`, no namespace; values bind via `tag_binding`. See [tags](/architecture/tags/) |
+| `tag_binding` | (tag, **owner arc**), value | **Built.** The `key: value` binding: **union on key, override on value** down the [cascade](/architecture/cascade/), owned on the exclusive arc (`global / location / system / component`); setting a value is the owner's own `update` write. Binding via groups and a `template` default are deferred |
 

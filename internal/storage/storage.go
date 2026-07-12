@@ -227,6 +227,20 @@ type Gateway interface {
 	DeleteVariable(ctx context.Context, actorID, id string, read, action scope.Set) error
 	ResolveVariables(ctx context.Context, componentID string, read scope.Set) ([]ResolvedVariable, error)
 
+	// The tag tier: the governed key vocabulary and the per-entity value
+	// bindings. Minting a key (tag:create) is a tenant-wide governance action;
+	// binding a value is the owner's own write, so the binding methods take the
+	// owner's read/action scopes. ResolveTags is the per-component effective-tags
+	// view (union on key, override on value) down the structural cascade.
+	ListTags(ctx context.Context) ([]Tag, error)
+	CreateTag(ctx context.Context, actorID string, spec TagSpec, create scope.Set) (*Tag, error)
+	UpdateTag(ctx context.Context, actorID, name string, spec TagSpec, action scope.Set) (*Tag, error)
+	DeleteTag(ctx context.Context, actorID, name string, action scope.Set) error
+	SetTagBinding(ctx context.Context, actorID, key, ownerKind string, ownerName *string, value string, read, action scope.Set) (*TagBinding, error)
+	DeleteTagBinding(ctx context.Context, actorID, key, ownerKind string, ownerName *string, read, action scope.Set) error
+	ListEntityTags(ctx context.Context, ownerKind string, ownerName *string, read scope.Set) ([]TagBinding, error)
+	ResolveTags(ctx context.Context, componentID string, read scope.Set) ([]ResolvedTag, error)
+
 	// Close releases the underlying connection pool. Idempotent at the pool
 	// level; call once on shutdown.
 	Close()

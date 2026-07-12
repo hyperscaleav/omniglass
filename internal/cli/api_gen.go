@@ -178,6 +178,48 @@ func generatedCommands() []*cobra.Command {
 	}
 	{
 		parent := &cobra.Command{
+			Use:   "binding",
+			Short: "Commands for the binding resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			var fValue string
+			cmd := &cobra.Command{
+				Use:     "list <name>",
+				Short:   "Set a global tag value",
+				Long:    "Binds a tenant-wide default value for a key at the global scope. Gated by tag:update (all-scope).",
+				Example: "  omniglass binding list <name> --value value",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/tags/%s/binding", url.PathEscape(args[0]))
+					body := map[string]any{}
+					if cmd.Flags().Changed("value") {
+						body["value"] = fValue
+					}
+					return runAPICommand(cmd, "PUT", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fValue, "value", "", "The bound value")
+			_ = cmd.MarkFlagRequired("value")
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "list <name>",
+				Short:   "Delete a global tag value",
+				Long:    "Removes the global binding for a key. Gated by tag:update (all-scope).",
+				Example: "  omniglass binding list <name>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/tags/%s/binding", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "DELETE", path, nil)
+				},
+			}
+			return cmd
+		}())
+		roots = append(roots, parent)
+	}
+	{
+		parent := &cobra.Command{
 			Use:   "component",
 			Short: "Commands for the component resource",
 		}
@@ -311,6 +353,27 @@ func generatedCommands() []*cobra.Command {
 				Args:    cobra.ExactArgs(1),
 				RunE: func(cmd *cobra.Command, args []string) error {
 					path := fmt.Sprintf("/api/v1/components/%s/effective-secrets", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		roots = append(roots, parent)
+	}
+	{
+		parent := &cobra.Command{
+			Use:   "effective-tag",
+			Short: "Commands for the effective-tag resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "list <name>",
+				Short:   "Effective tags for a component",
+				Long:    "Resolves the tags that cascade onto a component (global -> location -> system -> component): keys union, values override most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves only from a binding on the component itself. Gated by component:read; the component must be in the caller's component read scope.",
+				Example: "  omniglass effective-tag list <name>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/components/%s/effective-tags", url.PathEscape(args[0]))
 					return runAPICommand(cmd, "GET", path, nil)
 				},
 			}
@@ -1441,6 +1504,244 @@ func generatedCommands() []*cobra.Command {
 			}
 			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
 			cmd.Flags().StringVar(&fSystemType, "system-type", "", "")
+			return cmd
+		}())
+		roots = append(roots, parent)
+	}
+	{
+		parent := &cobra.Command{
+			Use:   "tag",
+			Short: "Commands for the tag resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			var fAppliesTo string
+			var fName string
+			var fPropagates string
+			cmd := &cobra.Command{
+				Use:     "create",
+				Short:   "Mint a tag key",
+				Long:    "Adds a key to the governed vocabulary. The name is normalized (a lowercase identifier). Gated by tag:create (all-scope, an admin action).",
+				Example: "  omniglass tag create --name name",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/tags")
+					body := map[string]any{}
+					if cmd.Flags().Changed("applies-to") {
+						body["applies_to"] = jsonOrString(fAppliesTo)
+					}
+					if cmd.Flags().Changed("name") {
+						body["name"] = fName
+					}
+					if cmd.Flags().Changed("propagates") {
+						body["propagates"] = fPropagates
+					}
+					return runAPICommand(cmd, "POST", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fAppliesTo, "applies-to", "", "Entity kinds this key may bind to (component, system, location); omit for universal")
+			cmd.Flags().StringVar(&fName, "name", "", "The normalized key: a lowercase identifier, unique tenant-wide")
+			_ = cmd.MarkFlagRequired("name")
+			cmd.Flags().StringVar(&fPropagates, "propagates", "", "Whether bindings cascade to descendants; defaults true")
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "delete <name> <key>",
+				Short:   "Remove a tag value from a location",
+				Long:    "Removes a key's value from a location. Gated by location:update.",
+				Example: "  omniglass tag delete <name> <key>",
+				Args:    cobra.ExactArgs(2),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/locations/%s/tags/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+					return runAPICommand(cmd, "DELETE", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "delete <name>",
+				Short:   "Delete a tag key",
+				Long:    "Removes a key from the vocabulary, cascading its bindings. Gated by tag:delete (all-scope).",
+				Example: "  omniglass tag delete <name>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/tags/%s", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "DELETE", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "delete <name> <key>",
+				Short:   "Remove a tag value from a component",
+				Long:    "Removes a key's value from a component. Gated by component:update.",
+				Example: "  omniglass tag delete <name> <key>",
+				Args:    cobra.ExactArgs(2),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/components/%s/tags/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+					return runAPICommand(cmd, "DELETE", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "delete <name> <key>",
+				Short:   "Remove a tag value from a system",
+				Long:    "Removes a key's value from a system. Gated by system:update.",
+				Example: "  omniglass tag delete <name> <key>",
+				Args:    cobra.ExactArgs(2),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/systems/%s/tags/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+					return runAPICommand(cmd, "DELETE", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "list <name>",
+				Short:   "List tags on a system",
+				Long:    "Lists the tags bound directly on a system (not the resolved cascade). Gated by system:read.",
+				Example: "  omniglass tag list <name>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/systems/%s/tags", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "list <name>",
+				Short:   "List tags on a component",
+				Long:    "Lists the tags bound directly on a component (not the resolved cascade). Gated by component:read.",
+				Example: "  omniglass tag list <name>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/components/%s/tags", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "list",
+				Short:   "List tag keys",
+				Long:    "Lists the governed key vocabulary. Rides the tag:read floor.",
+				Example: "  omniglass tag list",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/tags")
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "list <name>",
+				Short:   "List tags on a location",
+				Long:    "Lists the tags bound directly on a location (not the resolved cascade). Gated by location:read.",
+				Example: "  omniglass tag list <name>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/locations/%s/tags", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			var fValue string
+			cmd := &cobra.Command{
+				Use:     "update <name> <key>",
+				Short:   "Set a tag value on a system",
+				Long:    "Binds a value for a key on a system. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by system:update.",
+				Example: "  omniglass tag update <name> <key> --value value",
+				Args:    cobra.ExactArgs(2),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/systems/%s/tags/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+					body := map[string]any{}
+					if cmd.Flags().Changed("value") {
+						body["value"] = fValue
+					}
+					return runAPICommand(cmd, "PUT", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fValue, "value", "", "The bound value")
+			_ = cmd.MarkFlagRequired("value")
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			var fValue string
+			cmd := &cobra.Command{
+				Use:     "update <name> <key>",
+				Short:   "Set a tag value on a location",
+				Long:    "Binds a value for a key on a location. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by location:update.",
+				Example: "  omniglass tag update <name> <key> --value value",
+				Args:    cobra.ExactArgs(2),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/locations/%s/tags/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+					body := map[string]any{}
+					if cmd.Flags().Changed("value") {
+						body["value"] = fValue
+					}
+					return runAPICommand(cmd, "PUT", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fValue, "value", "", "The bound value")
+			_ = cmd.MarkFlagRequired("value")
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			var fAppliesTo string
+			var fPropagates string
+			cmd := &cobra.Command{
+				Use:     "update <name>",
+				Short:   "Update a tag key",
+				Long:    "Replaces a key's governance fields (applies_to, propagates); the name is fixed. Gated by tag:update (all-scope).",
+				Example: "  omniglass tag update <name>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/tags/%s", url.PathEscape(args[0]))
+					body := map[string]any{}
+					if cmd.Flags().Changed("applies-to") {
+						body["applies_to"] = jsonOrString(fAppliesTo)
+					}
+					if cmd.Flags().Changed("propagates") {
+						body["propagates"] = fPropagates
+					}
+					return runAPICommand(cmd, "PATCH", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fAppliesTo, "applies-to", "", "Entity kinds this key may bind to; omit for universal")
+			cmd.Flags().StringVar(&fPropagates, "propagates", "", "Whether bindings cascade to descendants; defaults true")
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			var fValue string
+			cmd := &cobra.Command{
+				Use:     "update <name> <key>",
+				Short:   "Set a tag value on a component",
+				Long:    "Binds a value for a key on a component. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by component:update.",
+				Example: "  omniglass tag update <name> <key> --value value",
+				Args:    cobra.ExactArgs(2),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/components/%s/tags/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+					body := map[string]any{}
+					if cmd.Flags().Changed("value") {
+						body["value"] = fValue
+					}
+					return runAPICommand(cmd, "PUT", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fValue, "value", "", "The bound value")
+			_ = cmd.MarkFlagRequired("value")
 			return cmd
 		}())
 		roots = append(roots, parent)

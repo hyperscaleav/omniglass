@@ -238,4 +238,28 @@ func (UnimplementedGateway) DeleteVariable(context.Context, string, string, scop
 func (UnimplementedGateway) ResolveVariables(context.Context, string, scope.Set) ([]ResolvedVariable, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) ListTags(context.Context) ([]Tag, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) CreateTag(context.Context, string, TagSpec, scope.Set) (*Tag, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) UpdateTag(context.Context, string, string, TagSpec, scope.Set) (*Tag, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteTag(context.Context, string, string, scope.Set) error {
+	return nil
+}
+func (UnimplementedGateway) SetTagBinding(context.Context, string, string, string, *string, string, scope.Set, scope.Set) (*TagBinding, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteTagBinding(context.Context, string, string, string, *string, scope.Set, scope.Set) error {
+	return nil
+}
+func (UnimplementedGateway) ListEntityTags(context.Context, string, *string, scope.Set) ([]TagBinding, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) ResolveTags(context.Context, string, scope.Set) ([]ResolvedTag, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) Close() {}
