@@ -133,6 +133,9 @@ func TestTagBindingLifecycle(t *testing.T) {
 	if len(direct) != 1 || direct[0].Value != "video-dsp" {
 		t.Fatalf("direct = %+v, want one binding valued video-dsp", direct)
 	}
+	if direct[0].OwnerName != "codec-1" {
+		t.Errorf("direct binding owner_name = %q, want codec-1", direct[0].OwnerName)
+	}
 
 	// Delete the binding; the key survives.
 	if err := gw.DeleteTagBinding(ctx, "", "category", "component", strptr("codec-1"), all, all); err != nil {

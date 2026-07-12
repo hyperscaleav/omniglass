@@ -77,6 +77,17 @@ type ResolvedTag struct {
 
 const tagCols = `id, name, applies_to, propagates, created_at, updated_at`
 
+// tagBindingConflictArc maps an owner kind to the ON CONFLICT target that
+// matches its partial unique index, so an upsert lands on the one-value-per-owner
+// index for that arc. The values are compile-time constants (never user input),
+// keyed by an owner kind the write path has already validated.
+var tagBindingConflictArc = map[string]string{
+	"global":    "(tag_id) where owner_kind = 'global'",
+	"component": "(tag_id, component_id) where owner_kind = 'component'",
+	"system":    "(tag_id, system_id) where owner_kind = 'system'",
+	"location":  "(tag_id, location_id) where owner_kind = 'location'",
+}
+
 // CreateTag mints a new key in the governed vocabulary. Minting is a tenant-wide
 // governance action, so it needs an all-scope create grant (tag:create); the key
 // name is normalized-validated and the applies_to set checked before the write.
@@ -228,32 +239,22 @@ func (p *PG) SetTagBinding(ctx context.Context, actorID, key, ownerKind string, 
 		return nil, err
 	}
 
-	compID, sysID, locID := arcColumns(ownerKind, ownerID)
-	var existingID string
-	err = tx.QueryRow(ctx, `
-		select id from tag_binding
-		where tag_id = $1 and owner_kind = $2
-		  and component_id is not distinct from $3
-		  and system_id    is not distinct from $4
-		  and location_id  is not distinct from $5`,
-		t.ID, ownerKind, compID, sysID, locID).Scan(&existingID)
-	var b *TagBinding
-	switch {
-	case errors.Is(err, pgx.ErrNoRows):
-		b, err = scanBindingRow(tx.QueryRow(ctx, `
-			insert into tag_binding (tag_id, owner_kind, component_id, system_id, location_id, value)
-			values ($1, $2, $3, $4, $5, $6)
-			returning id, owner_kind, component_id, system_id, location_id, value, created_at, updated_at`,
-			t.ID, ownerKind, compID, sysID, locID, value))
-	case err != nil:
-		return nil, fmt.Errorf("storage: probe tag binding: %w", err)
-	default:
-		b, err = scanBindingRow(tx.QueryRow(ctx, `
-			update tag_binding set value = $2, updated_at = now()
-			where id = $1
-			returning id, owner_kind, component_id, system_id, location_id, value, created_at, updated_at`,
-			existingID, value))
+	// Atomic upsert on the per-owner partial unique index: two concurrent
+	// first-time binds of the same (key, owner) both take the same conflict arc,
+	// so the loser updates the winner's row instead of racing to a 500. The
+	// conflict target is a compile-time constant keyed by the (validated) owner
+	// kind, never user input, so interpolating it is injection-safe.
+	conflict, ok := tagBindingConflictArc[ownerKind]
+	if !ok {
+		return nil, ErrTagForbidden
 	}
+	compID, sysID, locID := arcColumns(ownerKind, ownerID)
+	b, err := scanBindingRow(tx.QueryRow(ctx, `
+		insert into tag_binding (tag_id, owner_kind, component_id, system_id, location_id, value)
+		values ($1, $2, $3, $4, $5, $6)
+		on conflict `+conflict+` do update set value = excluded.value, updated_at = now()
+		returning id, owner_kind, component_id, system_id, location_id, value, created_at, updated_at`,
+		t.ID, ownerKind, compID, sysID, locID, value))
 	if err != nil {
 		return nil, fmt.Errorf("storage: write tag binding: %w", err)
 	}
@@ -319,7 +320,7 @@ func (p *PG) DeleteTagBinding(ctx context.Context, actorID, key, ownerKind strin
 // or out-of-scope owner is the non-disclosing not-found for its kind. A global
 // listing (ownerName nil) needs an all-scope read.
 func (p *PG) ListEntityTags(ctx context.Context, ownerKind string, ownerName *string, read scope.Set) ([]TagBinding, error) {
-	ownerID, _, err := resolveTagBindingOwner(ctx, p.pool, ownerKind, ownerName, read, read)
+	ownerID, ownerDisplay, err := resolveTagBindingOwner(ctx, p.pool, ownerKind, ownerName, read, read)
 	if err != nil {
 		return nil, err
 	}
@@ -345,6 +346,7 @@ func (p *PG) ListEntityTags(ctx context.Context, ownerKind string, ownerName *st
 			return nil, err
 		}
 		b.Key = key
+		b.OwnerName = ownerDisplay
 		out = append(out, *b)
 	}
 	return out, rows.Err()
