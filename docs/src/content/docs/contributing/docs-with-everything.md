@@ -28,11 +28,13 @@ a genuine internal change, not as a routine escape hatch.
 - **Architecture pages** (`/architecture/`) hold the model: the spine plus leaf
   documents, and the current decisions. Each official term is defined once in the
   [glossary](/architecture/glossary/) and not redefined in the leaves.
-- **Operator guides** (`/guides/`) are how-to pages for someone *operating* the product:
-  the steps and the mental model for using a surface (the CLI, and now the console). **A
-  slice that ships or changes an operator-facing surface ships or updates its operator
-  guide in the same PR**, not just the architecture page. The architecture page says how
-  the surface is built; the guide says how to use it.
+- **Guides** (`/guides/`) are how-to pages for someone *using* the product, split by
+  audience: the **operator guide** (running the estate from the console and the CLI), the
+  **admin guide** (managing accounts, access, audit, and config), and **deployment**
+  (standing the platform up). **A slice that ships or changes a user-facing surface ships or
+  updates its guide in the same PR**, not just the architecture page, filed under the section
+  that matches who does the task. The architecture page says how the surface is built; the
+  guide says how to use it.
 - **Concept and learning pages** teach a concept interactively (see
   [the learning-tool restriction](/contributing/learning-tool/)). When a feature introduces a concept
   an operator must understand, the teaching surface ships with it.

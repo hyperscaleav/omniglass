@@ -106,10 +106,26 @@ export default defineConfig({
           ],
         },
         {
-          label: 'Guides',
+          label: 'Operator guide',
           items: [
+            { label: 'Overview', slug: 'guides/operator' },
             { label: 'The console', slug: 'guides/console' },
             { label: 'The CLI', slug: 'guides/cli' },
+          ],
+        },
+        {
+          label: 'Admin guide',
+          items: [
+            { label: 'Overview', slug: 'guides/admin' },
+            { label: 'Users, roles, and groups', slug: 'guides/admin/identity' },
+            { label: 'The audit trail', slug: 'guides/admin/audit' },
+            { label: 'Secrets and variables', slug: 'guides/admin/config' },
+          ],
+        },
+        {
+          label: 'Deployment',
+          items: [
+            { label: 'Overview', slug: 'guides/deployment' },
             { label: 'Install', slug: 'guides/install' },
             { label: 'Container image', slug: 'guides/container-image' },
             { label: 'Deploying with Helm', slug: 'guides/helm' },

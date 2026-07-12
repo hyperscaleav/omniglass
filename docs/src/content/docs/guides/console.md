@@ -4,8 +4,11 @@ description: "Operator guide to the Omniglass web console: signing in, the inven
 ---
 
 The console is the web operator surface, served by the binary at `/web`. This guide is the
-how-to for using it. How it is built is the [UI architecture](/architecture/ui/); how to add
-to it is the [design system](/contributing/design-system/).
+how-to for **operating** it: signing in, and working the inventory of locations, systems, and
+components. The platform-administration surfaces in the console's **Settings** area (Users, Roles,
+Groups, Audit, Secrets, Variables) are the [admin guide](/guides/admin/). How the console is built
+is the [UI architecture](/architecture/ui/); how to add to it is the [design
+system](/contributing/design-system/).
 
 ## Signing in
 
@@ -55,179 +58,19 @@ other page is refused (by the server, not just the console) until you choose a n
 the temporary password as the current one and set a new policy-compliant password; once it is saved
 the hold clears and you land in the console. Signing out is the only other way off the screen.
 
-## Users
+## Settings: administering the platform
 
-**Settings, Users** is the admin directory of every principal, humans and service accounts,
-each with the roles granted to it. Every row leads with the principal's avatar, its uploaded
-picture when it has one and its initials otherwise. You see it only if you hold `principal:read`, and because a
-principal is not part of any location or system tree, that grant must be **all-scope**: a
-location-scoped admin cannot list users.
+The console's **Settings** area holds the platform-administration surfaces: **Users**, **Roles**,
+**Groups**, **Audit**, **Secrets**, and **Variables**. Those are covered in the
+[admin guide](/guides/admin/):
 
-- Pick a row to open its **blade**: a principal's profile, the **groups** it belongs to (open
-  one to stack that group's blade over the user), and its **role grants** (each a role at a scope).
-- With `principal:create`, **New user** creates a human with a username and an optional initial
-  password (which must meet the **password policy**: at least 12 characters, not a common password,
-  and not containing the username). **Generate** fills a strong random password, kept masked, with a
-  **Copy** button to hand it over (or reveal it with the show/hide toggle). The new user can sign in right away and change that
-  password themselves; a fresh account holds no grants (so it can sign in but do nothing) until you
-  assign a role. The form
-  validates as you type: a **username** is a lowercase handle (letters, digits, and `. _ -`, no
-  capitals or spaces) and an **email** must be well formed, so an invalid field shows an inline
-  error and blocks the submit before the round-trip (the same rules the server enforces). The
-  same handle rule and inline check apply when you rename a user in edit mode. The new user's blade
-  opens **directly in edit mode**, so you assign its roles right away and one **Save** commits them.
-- With `principal:update`, the footer **Edit** opens edit mode, where you change a user's display name,
-  email, and **username**, or adjust its grants, and **Save** commits the lot; **Disable / Enable** sits in the
-  footer's left slot, available without entering edit.
-  Renaming is safe: their credentials and grants follow the account (they key on an internal id,
-  not the username), so a renamed user keeps their password and access. Only an administrator can
-  change a username; the user cannot change their own.
-- With `principal_grant:create` / `:delete`, the detail panel's **grant builder** stages a set of
-  changes and applies them only on **Save**, so there are no accidental edits. Type a role, then Tab
-  or Enter to the scope kind, then (for a non-`all` scope) the specific location, system, or
-  component from an indented tree, then the **operator** that says how that entity matches the tree:
-  each commit becomes a `role @ operator scope` chip. The operator is one of **at or under** (`≥`,
-  the entity and everything beneath it, the default), **under only** (`>`, the descendants but not
-  the entity itself, for update and delete), or **just this** (`=`, exactly the one entity, no
-  descendants and no adding children under it), so you can grant a field tech everything inside a room
-  without letting them rename the room, or lock an operator to a single node. Removing an existing grant marks it (dimmed and
-  struck, undoable), staging a new one shows it in green, and a pending-diff line ("+N to grant, -M
-  to revoke") previews exactly what **Save** will do. That is how a fresh user gets permissions. A
-  scope targets the entity by its internal id, so a grant survives a rename of that entity. One rule
-  the server always holds: the **last owner grant cannot be revoked**, so the platform can never be
-  locked out of administration.
-- A user has a **lifecycle** in the blade footer, escalating from reversible to permanent, and reads
-  pause to remove to destroy. The left slot is the reversible toggle: **Disable** (`principal:update`)
-  suspends sign-in (the row reads **inactive**), **Enable** restores it. The kebab holds the stronger,
-  red steps: **Archive** (`principal:archive`) soft-deletes a user (hidden from the directory, cannot
-  sign in, reversibly), and **Purge** (`principal:purge`, admin-sensitive so admin and owner only)
-  permanently deletes an archived user and its grants and memberships, with a confirm. The audit trail
-  is kept through a purge. An archived user shows **Restore** in the left slot; the **Show archived**
-  toggle above the directory surfaces hidden accounts so you can re-find one to restore or purge. The
-  **last active owner** cannot be disabled or archived, the same invariant that protects the last
-  owner grant.
-- With `principal:reset-password`, the kebab on **another user's** blade holds **Reset password**: it
-  opens an inline panel with a password field (the same **Generate** and inline policy check as the New
-  user form) and sets a new password for that user without their current one. The reset **immediately
-  signs the user out of every session and token**, so it doubles as a way to cut off a compromised or
-  departing account. The set password stays copyable so you can hand it over; the user changes it after
-  signing in. The reset is audited with **you** as the actor. It is refused on your **own** account (change your own password from **Your
-  profile**, which verifies your current one) and on an **owner** (owners cannot be reset by anyone).
-  This is a console path for what the CLI does with `omniglass set-password`; unlike that trusted
-  direct-DB lane, the console reset enforces the password policy and the takeover guard.
-- With `principal:set-avatar` (an all-scope capability), a user's **Edit** blade gains an **Upload /
-  Remove** picture panel: **Upload** sets that user's profile picture from an image file (JPEG, PNG, or
-  WebP, normalized server-side to a small square), **Remove** clears it, and the change is audited with
-  **you** as the actor. Without the capability the panel does not render, though the user's picture still
-  shows in the blade header and the directory. This is a console path for `omniglass principal setAvatar
-  <id>` / `removeAvatar <id>` on the CLI.
+- [Users, roles, and groups](/guides/admin/identity/) for the principal directory, the built-in
+  roles, user groups, and the grant builder.
+- [The audit trail](/guides/admin/audit/) for the record of privileged actions and sign-ins.
+- [Secrets and variables](/guides/admin/config/) for the cascade-resolved config and credentials.
 
-From the CLI the same surface is `omniglass principal list` / `get` / `create` / `update` /
-`disable` / `enable` / `archive` / `restore` / `purge`, and `omniglass grant create <id>` /
-`grant delete <id> <grantId>`.
-
-In the grant builder itself, hovering a role in the picker shows its description and the permissions it
-grants, so you can see what you are assigning before you stage it.
-
-## Roles
-
-**Settings > Roles** (with `role:read`) is the catalog of the built-in roles on the same list surface as Users
-and Groups: a directory row per role (its id, whether it is **official**, what it inherits, and how many
-permissions it confers), ordered least to most powerful (viewer, operator, deploy, admin, owner). Open a row for
-its read-only **blade**: the description and its **effective permissions**, the full set it confers once
-inheritance, wildcards, and the read floor are resolved (so `owner` reads as `> everything`, while `admin` is
-broad but not the superuser, and an admin-sensitive permission like `audit:read:admin` is marked with its
-`:admin` tier). It is a teaching surface: it renders the real seeded roles, not a static table. Custom-role
-creation and editing are coming; today the built-in roles are read-only.
-
-## Groups
-
-**Settings > Groups** (with `principal_group:read`) is the admin surface for **user groups**: a group holds
-`role @ scope` grants, and every member **inherits** them, so you assign access to a team once instead of per
-user. Pick a row to open the group's **blade**: its **members** (add any principal, remove one, or open a member to
-stack that user's blade over the group) and its **grants**, built with the same grant builder the user detail uses. A grant added to the group takes effect for every member
-immediately, and is bounded by the same rule as a direct grant (you cannot grant a role above your own tier).
-**New group** creates one (name, display name, description); the **name** is a lowercase handle (the same
-rule as a username, validated inline), while the display name is free text. The new group then opens
-**directly in edit mode**, so you add its members and grants right away and one **Save** commits them (they
-are attached to the group once it exists, so creating and populating stay one flow). Deleting a group drops
-the memberships and the inherited grants, but members keep their own direct grants.
-
-On a **user's** detail, grants split into two: the ones you granted the user **directly** (editable in the grant
-builder) and the ones **inherited from a group** (shown read-only, tagged `from <group>`), so it is always clear
-where a user's access comes from. To change an inherited grant, edit the group, not the user.
-
-From the CLI the surface is `omniglass principal-group list` / `get` / `create` / `update` / `delete`, plus its
-member and grant subcommands.
-
-## Audit
-
-**Settings > Audit** (with `audit:read`, so **administrators and owners** only) is the read-only audit trail:
-every privileged action and every sign-in, newest first, each with when it happened, who did it, the action,
-and the resource. An action taken while impersonating shows the **real administrator** as the actor, with an
-`as <account>` tag naming the principal whose identity they assumed (for example `admin as bob`), so
-accountability lands on the human who acted and impersonation never hides them. A read-only user (a viewer) does not
-see this page: the audit trail is admin-level information, so a plain "read everything" grant does not open it.
-Failed sign-ins on a real account show as **login failed** (and a sign-in to a disabled account as **login
-denied**), so you can spot a brute-force attempt; attempts on usernames that do not exist are not recorded.
-
-The page uses the same faceted search as the inventory lists: filter by **who**, **action**, **resource**, or
-**id** (type a term for a quick actor search, or `action:login` to pin a facet), and combine chips to narrow.
-Filtering runs over the rows already loaded; **Load older** pages further back in time, so a search that comes
-up short is a cue to load older and look deeper.
-
-## Secrets
-
-**Settings > Secrets** (with `secret:read`) is the directory of every [secret](/architecture/variables/):
-a typed, encrypted-at-rest value owned at one scope and resolved down the cascade. Each row shows its
-name, a **type badge**, an owner label, and a **masked** field preview (`••••••`, never a value). The
-same chip filter as the inventory narrows the list.
-
-- **New secret** (with `secret:create`) opens a create **drawer**: pick a **type** (the shape,
-  `snmp-community` or `basic-auth`), an **owner scope** (global, location, system, or component), then
-  the owner itself from the shared indented **tree picker**, and finally the type's operator fields (a
-  password input for a secret field). A global secret needs an all-scope grant.
-- Pick a row to open its **detail blade** on the shared action rail. Fields render masked; **Reveal
-  secret values** (with `secret:reveal`) runs the audited decrypt and shows the plaintext with a
-  per-field **Copy**. Because reveal is not part of the read floor, a plain read-everything operator
-  sees only masks: only an admin or owner reveals, and every reveal is written to the [audit
-  trail](#audit).
-- The footer **Edit** pencil (with `secret:update`) opens inline field edit; a **blank** secret field
-  keeps its stored value, so you rotate one field without re-entering the rest. **Delete** (with
-  `secret:delete`) sits in the footer behind a confirm.
-
-**Effective secrets on a component.** A component's detail carries an **Effective secrets** list: the
-secrets that resolve onto it through the cascade. Click one to open a nested blade showing the resolved
-(revealable) value and the **full cascade**, the winning tier and the candidates it shadowed, read as
-**most-specific wins: component > system > location > global**. It is the teaching view for why a given
-secret is the one in effect.
-
-From the CLI the same surface is `omniglass secret list` / `create` / `update` / `reveal` / `delete`,
-`omniglass secret-type list`, and `omniglass effective-secret list <component>` (see [the CLI
-guide](/guides/cli/)).
-
-## Variables
-
-**Settings > Variables** (with `variable:read`) is the plaintext sibling of Secrets: the directory of
-every [variable](/architecture/variables/), a typed free value (a macro) owned at one scope and resolved
-down the cascade. Each row shows its name, a **type badge** (`string`, `int`, `float`, `bool`, `json`),
-an owner label, and the **value in the clear** (no mask, no reveal, since a variable is not sensitive).
-
-- **New variable** (with `variable:create`) opens a create **drawer**: name the key, pick a **type** and
-  an **owner scope**, choose the owner from the shared tree picker, then enter the value in a
-  **type-aware editor** (a number input, a toggle for a bool, a textarea for json). A global variable
-  needs an all-scope grant. `variable:create` is on the **operator** role.
-- Pick a row to open its **detail blade**. The footer **Edit** pencil (with `variable:update`, also an
-  operator permission) opens the type-aware value editor; **Delete** (with `variable:delete`, admin and
-  owner) sits behind a confirm.
-
-**Effective variables on a component.** A component's detail carries an **Effective variables** list,
-below Effective secrets: the variables that resolve onto it through the cascade. Click one to open a
-nested blade showing the resolved value and the **full cascade**, the winning tier and the shadowed
-candidates, read **most-specific wins: component > system > location > global**.
-
-From the CLI the same surface is `omniglass variable list` / `create` / `update` / `delete` and
-`omniglass effective-variable list <component>`.
+You only see a Settings tab you hold the read grant for; the rest of this guide is the operator
+inventory that everyone with a scope can reach.
 
 ## The layout
 
