@@ -538,6 +538,23 @@ components:
       required:
         - variables
       type: object
+    EntityRemoveTagInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/EntityRemoveTagInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        key:
+          description: The tag key to remove
+          minLength: 1
+          type: string
+      required:
+        - key
+      type: object
     EntitySetTagInputBody:
       additionalProperties: false
       properties:
@@ -548,11 +565,16 @@ components:
           format: uri
           readOnly: true
           type: string
+        key:
+          description: The tag key (must exist and apply to this kind)
+          minLength: 1
+          type: string
         value:
           description: The bound value
           minLength: 1
           type: string
       required:
+        - key
         - value
       type: object
     EntityTagsOutputBody:
@@ -2304,7 +2326,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Effective variables for a component
-  /components/{name}/tags:
+  /components/{name}:listTags:
     get:
       description: Lists the tags bound directly on a component (not the resolved cascade). Gated by component:read.
       operationId: list-component-tags
@@ -2330,10 +2352,10 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List tags on a component
-  /components/{name}/tags/{key}:
-    delete:
+  /components/{name}:removeTag:
+    post:
       description: Removes a key's value from a component. Gated by component:update.
-      operationId: delete-component-tag
+      operationId: remove-component-tag
       parameters:
         - description: The entity's name
           in: path
@@ -2342,13 +2364,12 @@ paths:
           schema:
             description: The entity's name
             type: string
-        - description: The tag key
-          in: path
-          name: key
-          required: true
-          schema:
-            description: The tag key
-            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EntityRemoveTagInputBody"
+        required: true
       responses:
         "204":
           description: No Content
@@ -2359,7 +2380,8 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Remove a tag value from a component
-    put:
+  /components/{name}:setTag:
+    post:
       description: Binds a value for a key on a component. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by component:update.
       operationId: set-component-tag
       parameters:
@@ -2369,13 +2391,6 @@ paths:
           required: true
           schema:
             description: The entity's name
-            type: string
-        - description: The tag key
-          in: path
-          name: key
-          required: true
-          schema:
-            description: The tag key
             type: string
       requestBody:
         content:
@@ -2550,7 +2565,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Update a location
-  /locations/{name}/tags:
+  /locations/{name}:listTags:
     get:
       description: Lists the tags bound directly on a location (not the resolved cascade). Gated by location:read.
       operationId: list-location-tags
@@ -2576,10 +2591,10 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List tags on a location
-  /locations/{name}/tags/{key}:
-    delete:
+  /locations/{name}:removeTag:
+    post:
       description: Removes a key's value from a location. Gated by location:update.
-      operationId: delete-location-tag
+      operationId: remove-location-tag
       parameters:
         - description: The entity's name
           in: path
@@ -2588,13 +2603,12 @@ paths:
           schema:
             description: The entity's name
             type: string
-        - description: The tag key
-          in: path
-          name: key
-          required: true
-          schema:
-            description: The tag key
-            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EntityRemoveTagInputBody"
+        required: true
       responses:
         "204":
           description: No Content
@@ -2605,7 +2619,8 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Remove a tag value from a location
-    put:
+  /locations/{name}:setTag:
+    post:
       description: Binds a value for a key on a location. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by location:update.
       operationId: set-location-tag
       parameters:
@@ -2615,13 +2630,6 @@ paths:
           required: true
           schema:
             description: The entity's name
-            type: string
-        - description: The tag key
-          in: path
-          name: key
-          required: true
-          schema:
-            description: The tag key
             type: string
       requestBody:
         content:
@@ -3670,7 +3678,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Update a system
-  /systems/{name}/tags:
+  /systems/{name}:listTags:
     get:
       description: Lists the tags bound directly on a system (not the resolved cascade). Gated by system:read.
       operationId: list-system-tags
@@ -3696,10 +3704,10 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List tags on a system
-  /systems/{name}/tags/{key}:
-    delete:
+  /systems/{name}:removeTag:
+    post:
       description: Removes a key's value from a system. Gated by system:update.
-      operationId: delete-system-tag
+      operationId: remove-system-tag
       parameters:
         - description: The entity's name
           in: path
@@ -3708,13 +3716,12 @@ paths:
           schema:
             description: The entity's name
             type: string
-        - description: The tag key
-          in: path
-          name: key
-          required: true
-          schema:
-            description: The tag key
-            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EntityRemoveTagInputBody"
+        required: true
       responses:
         "204":
           description: No Content
@@ -3725,7 +3732,8 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Remove a tag value from a system
-    put:
+  /systems/{name}:setTag:
+    post:
       description: Binds a value for a key on a system. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by system:update.
       operationId: set-system-tag
       parameters:
@@ -3735,13 +3743,6 @@ paths:
           required: true
           schema:
             description: The entity's name
-            type: string
-        - description: The tag key
-          in: path
-          name: key
-          required: true
-          schema:
-            description: The tag key
             type: string
       requestBody:
         content:
@@ -3857,10 +3858,10 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Update a tag key
-  /tags/{name}/binding:
-    delete:
+  /tags/{name}:clearGlobal:
+    post:
       description: Removes the global binding for a key. Gated by tag:update (all-scope).
-      operationId: delete-global-tag
+      operationId: clear-global-tag
       parameters:
         - description: The tag key
           in: path
@@ -3878,8 +3879,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
-      summary: Delete a global tag value
-    put:
+      summary: Clear a global tag value
+  /tags/{name}:setGlobal:
+    post:
       description: Binds a tenant-wide default value for a key at the global scope. Gated by tag:update (all-scope).
       operationId: set-global-tag
       parameters:

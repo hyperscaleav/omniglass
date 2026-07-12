@@ -28,9 +28,29 @@ var fixturesYAML []byte
 
 // Doc is the parsed example-data fixture.
 type Doc struct {
-	Locations []Location `yaml:"locations"`
-	Users     []User     `yaml:"users"`
-	Variables []Variable `yaml:"variables"`
+	Locations   []Location   `yaml:"locations"`
+	Users       []User       `yaml:"users"`
+	Variables   []Variable   `yaml:"variables"`
+	Tags        []Tag        `yaml:"tags"`
+	TagBindings []TagBinding `yaml:"tag_bindings"`
+}
+
+// Tag is one example key in the governed vocabulary, optionally with a global
+// default value. Propagates is a pointer so an omitted field defaults to true (a
+// tag cascades unless the fixture opts out).
+type Tag struct {
+	Name        string   `yaml:"name"`
+	AppliesTo   []string `yaml:"applies_to"`
+	Propagates  *bool    `yaml:"propagates"`
+	GlobalValue string   `yaml:"global_value"`
+}
+
+// TagBinding is one example scoped binding, setting a key's value at a fixture
+// location so the effective-tags cascade comes up with an override to teach.
+type TagBinding struct {
+	Key      string `yaml:"key"`
+	Location string `yaml:"location"`
+	Value    string `yaml:"value"`
 }
 
 // Variable is one example global variable (a macro). Value is decoded from YAML
@@ -164,6 +184,33 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 		}
 		if err != nil {
 			return fmt.Errorf("devseed: create variable %q: %w", v.Name, err)
+		}
+	}
+
+	// Tag keys, then their example bindings, so the Tags vocabulary and the
+	// effective-tags cascade come up populated. A key that already exists
+	// (ErrTagExists) is left as is; a binding is an upsert, so a re-run is a no-op.
+	for _, tg := range doc.Tags {
+		propagates := true
+		if tg.Propagates != nil {
+			propagates = *tg.Propagates
+		}
+		_, err := gw.CreateTag(ctx, actorID, storage.TagSpec{
+			Name: tg.Name, AppliesTo: tg.AppliesTo, Propagates: propagates,
+		}, all)
+		if err != nil && !errors.Is(err, storage.ErrTagExists) {
+			return fmt.Errorf("devseed: create tag %q: %w", tg.Name, err)
+		}
+		if tg.GlobalValue != "" {
+			if _, err := gw.SetTagBinding(ctx, actorID, tg.Name, "global", nil, tg.GlobalValue, all, all); err != nil {
+				return fmt.Errorf("devseed: set global tag %q: %w", tg.Name, err)
+			}
+		}
+	}
+	for _, b := range doc.TagBindings {
+		loc := b.Location
+		if _, err := gw.SetTagBinding(ctx, actorID, b.Key, "location", &loc, b.Value, all, all); err != nil {
+			return fmt.Errorf("devseed: bind tag %q at %q: %w", b.Key, b.Location, err)
 		}
 	}
 	return nil

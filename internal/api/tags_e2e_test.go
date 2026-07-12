@@ -71,16 +71,16 @@ func TestTagAPI(t *testing.T) {
 	c.do(ownerTok, http.MethodPost, "/tags", map[string]any{"name": "environment"}, http.StatusConflict)
 
 	// Bind environment down the cascade: global -> room -> component.
-	c.do(ownerTok, http.MethodPut, "/tags/environment/binding", map[string]any{"value": "prod"}, http.StatusOK)
-	c.do(ownerTok, http.MethodPut, "/locations/room/tags/environment", map[string]any{"value": "staging"}, http.StatusOK)
-	c.do(ownerTok, http.MethodPut, "/components/codec-1/tags/environment", map[string]any{"value": "dev"}, http.StatusOK)
+	c.do(ownerTok, http.MethodPost, "/tags/environment:setGlobal", map[string]any{"value": "prod"}, http.StatusOK)
+	setTag(c, ownerTok, "locations", "room", "environment", "staging", http.StatusOK)
+	setTag(c, ownerTok, "components", "codec-1", "environment", "dev", http.StatusOK)
 	// asset_id is non-propagating: bind it above the component (room) and on it.
-	c.do(ownerTok, http.MethodPut, "/locations/room/tags/asset_id", map[string]any{"value": "R-1"}, http.StatusOK)
-	c.do(ownerTok, http.MethodPut, "/components/codec-1/tags/asset_id", map[string]any{"value": "A-42"}, http.StatusOK)
+	setTag(c, ownerTok, "locations", "room", "asset_id", "R-1", http.StatusOK)
+	setTag(c, ownerTok, "components", "codec-1", "asset_id", "A-42", http.StatusOK)
 	// A key that does not apply to the entity kind is a 422 (rack_key on a component).
-	c.do(ownerTok, http.MethodPut, "/components/codec-1/tags/rack_key", map[string]any{"value": "x"}, http.StatusUnprocessableEntity)
+	setTag(c, ownerTok, "components", "codec-1", "rack_key", "x", http.StatusUnprocessableEntity)
 	// Binding an unknown key is a 404.
-	c.do(ownerTok, http.MethodPut, "/components/codec-1/tags/ghost", map[string]any{"value": "x"}, http.StatusNotFound)
+	setTag(c, ownerTok, "components", "codec-1", "ghost", "x", http.StatusNotFound)
 
 	// The effective-tags cascade for the codec.
 	resolved := effectiveTags(t, c, ownerTok, "codec-1")
@@ -109,13 +109,13 @@ func TestTagAPI(t *testing.T) {
 			Value string `json:"value"`
 		} `json:"tags"`
 	}
-	json.Unmarshal(c.do(ownerTok, http.MethodGet, "/components/codec-1/tags", nil, http.StatusOK), &direct)
+	json.Unmarshal(c.do(ownerTok, http.MethodGet, "/components/codec-1:listTags", nil, http.StatusOK), &direct)
 	if len(direct.Tags) != 2 {
 		t.Fatalf("direct tags = %d, want 2", len(direct.Tags))
 	}
 
 	// Removing the component environment binding lets the room value resolve.
-	c.do(ownerTok, http.MethodDelete, "/components/codec-1/tags/environment", nil, http.StatusNoContent)
+	c.do(ownerTok, http.MethodPost, "/components/codec-1:removeTag", map[string]any{"key": "environment"}, http.StatusNoContent)
 	resolved = effectiveTags(t, c, ownerTok, "codec-1")
 	for _, r := range resolved {
 		if r.Key == "environment" && r.Winner && (r.OwnerKind != "location" || r.Value != "staging") {
@@ -127,10 +127,10 @@ func TestTagAPI(t *testing.T) {
 	// but may not mint a key (tag:create, admin) nor bind on the system it cannot
 	// write (system:update).
 	opTok := setupScopedViewer(t, ctx, dsn, "operator-codec", "operator", "component", comp.ID)
-	c.do(opTok, http.MethodPut, "/components/codec-1/tags/environment", map[string]any{"value": "op-set"}, http.StatusOK)
+	setTag(c, opTok, "components", "codec-1", "environment", "op-set", http.StatusOK)
 	c.do(opTok, http.MethodPost, "/tags", map[string]any{"name": "coined"}, http.StatusForbidden)
-	c.do(opTok, http.MethodPut, "/systems/sys/tags/environment", map[string]any{"value": "x"}, http.StatusForbidden)
-	c.do(opTok, http.MethodPut, "/tags/environment/binding", map[string]any{"value": "x"}, http.StatusForbidden)
+	setTag(c, opTok, "systems", "sys", "environment", "x", http.StatusForbidden)
+	c.do(opTok, http.MethodPost, "/tags/environment:setGlobal", map[string]any{"value": "x"}, http.StatusForbidden)
 
 	// A component-scoped viewer: may read keys and the cascade, forbidden to mint
 	// or bind.
@@ -140,7 +140,13 @@ func TestTagAPI(t *testing.T) {
 		t.Errorf("viewer cascade empty, want the resolved tags")
 	}
 	c.do(viewerTok, http.MethodPost, "/tags", map[string]any{"name": "nope"}, http.StatusForbidden)
-	c.do(viewerTok, http.MethodPut, "/components/codec-1/tags/environment", map[string]any{"value": "x"}, http.StatusForbidden)
+	setTag(c, viewerTok, "components", "codec-1", "environment", "x", http.StatusForbidden)
+}
+
+// setTag binds a value for a key on an entity via the entity's :setTag custom
+// method, asserting the status.
+func setTag(c *apiClient, tok, collection, name, key, value string, want int) {
+	c.do(tok, http.MethodPost, "/"+collection+"/"+name+":setTag", map[string]any{"key": key, "value": value}, want)
 }
 
 func effectiveTags(t *testing.T, c *apiClient, tok, comp string) []resolvedTagResp {

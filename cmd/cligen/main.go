@@ -345,18 +345,20 @@ func bodyFields(doc spec, op operation) []bodyField {
 
 	var fields []bodyField
 	for _, k := range props {
-		// A scalar property (string / integer / number / boolean) passes through as
-		// its flag string; anything else (object, array, or an untyped `any` value)
-		// is JSON-parsed so a typed or structured value survives the wire.
-		t := string(sc.Properties[k].Type)
-		scalar := t == "string" || t == "integer" || t == "number" || t == "boolean"
+		// A string property passes through as its flag string; every other type
+		// (boolean, number, integer, object, array, or an untyped `any` value) is
+		// JSON-parsed so a typed or structured value survives the wire. A string is
+		// the sole passthrough so a value that looks like JSON (a name `30`, a label
+		// `true`) stays a string; a `--propagates false` becomes a JSON boolean, not
+		// the string "false" a boolean body field would reject.
+		raw := string(sc.Properties[k].Type) == "string"
 		fields = append(fields, bodyField{
 			Name:     k,
 			Flag:     strings.ReplaceAll(k, "_", "-"),
 			Var:      "f" + goIdent(k),
 			Desc:     sc.Properties[k].Description,
 			Required: required[k],
-			JSON:     !scalar,
+			JSON:     !raw,
 		})
 	}
 	return fields

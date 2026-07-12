@@ -140,6 +140,40 @@ falls back to a string, so the common case needs no quoting. A string value that
 as JSON (`30`, `true`) is quoted to force a string: `--value '"30"'`. (`secret create --fields` parses
 the same way.)
 
+## Tags
+
+The [tag](/architecture/tags/) commands split along the governance line. The `tag` resource covers the
+**key vocabulary** (minting, editing, and deleting keys, plus the global default binding), while binding a
+value onto an entity is a **custom method on the entity** (`component set-tag` and friends), so it needs
+only the write the operator already holds on that entity. `effective-tag` reads the resolved cascade onto
+one component.
+
+```sh
+omniglass tag list                                  # the governed key vocabulary
+omniglass tag create --name environment             # mint a key (tag:create, admin)
+omniglass tag create --name rack_position --applies-to '["location"]' --propagates=false
+omniglass tag update environment --applies-to '["component","system"]'
+omniglass tag setGlobal environment --value prod    # a tenant-wide default (tag:update)
+omniglass tag clearGlobal environment
+omniglass tag delete environment                    # cascades its bindings
+
+omniglass component setTag codec-1 --key environment --value dev    # component:update
+omniglass component listTags codec-1                # the bindings set directly on the component
+omniglass component removeTag codec-1 --key environment
+omniglass system setTag east-auditorium-av --key environment --value prod
+omniglass location setTag hq --key environment --value staging
+
+omniglass effective-tag list codec-1                # the cascade resolved onto a component
+```
+
+Binding is a custom method on the entity (`component setTag`), like the principal lifecycle verbs, so it
+stays clear of the top-level `tag` commands. A key name is a normalized lowercase identifier (minting a
+bad name is a 422). `--applies-to` is an entity-kind allow-list passed as a JSON array
+(`'["component","system"]'`; empty means universal), checked when a value is bound. `--propagates`
+defaults true (the value cascades to descendants); `--propagates=false` binds a flat per-entity value
+that resolves only on its own entity. Resolving onto a component **unions** keys and **overrides** values
+most-specific-wins down the cascade.
+
 ## Generated versus hand-written
 
 - **Generated** (`internal/cli/api_gen.go`, do not edit): one command per API operation.

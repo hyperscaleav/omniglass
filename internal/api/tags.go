@@ -188,11 +188,12 @@ func registerTagRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	})
 
 	// Global binding: a tenant-wide default value for a key, gated by tag:update
-	// (there is no owning entity to defer to).
+	// (there is no owning entity to defer to). Modeled as custom methods on the
+	// key so the generated CLI reads `tag set-global <key>` / `tag clear-global`.
 	huma.Register(api, huma.Operation{
 		OperationID: "set-global-tag",
-		Method:      http.MethodPut,
-		Path:        "/tags/{name}/binding",
+		Method:      http.MethodPost,
+		Path:        "/tags/{name}:setGlobal",
 		Summary:     "Set a global tag value",
 		Description: "Binds a tenant-wide default value for a key at the global scope. Gated by tag:update (all-scope).",
 		Middlewares: huma.Middlewares{a.authn, a.require("tag", "update")},
@@ -206,11 +207,11 @@ func registerTagRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	})
 
 	huma.Register(api, huma.Operation{
-		OperationID:   "delete-global-tag",
-		Method:        http.MethodDelete,
-		Path:          "/tags/{name}/binding",
+		OperationID:   "clear-global-tag",
+		Method:        http.MethodPost,
+		Path:          "/tags/{name}:clearGlobal",
 		DefaultStatus: http.StatusNoContent,
-		Summary:       "Delete a global tag value",
+		Summary:       "Clear a global tag value",
 		Description:   "Removes the global binding for a key. Gated by tag:update (all-scope).",
 		Middlewares:   huma.Middlewares{a.authn, a.require("tag", "update")},
 	}, func(ctx context.Context, in *tagNameInput) (*struct{}, error) {
@@ -255,37 +256,42 @@ func registerTagRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	})
 }
 
-// entitySetTagInput / entityDeleteTagInput / entityListTagsInput carry the
-// entity name and (for a bind) the key and value; the entity kind is fixed by
-// the route the closure registers.
+// entitySetTagInput carries the entity name and the key + value to bind;
+// entityRemoveTagInput carries the name and the key to remove. The entity kind
+// is fixed by the route the closure registers.
 type entitySetTagInput struct {
 	Name string `path:"name" doc:"The entity's name"`
-	Key  string `path:"key" doc:"The tag key"`
 	Body struct {
+		Key   string `json:"key" minLength:"1" doc:"The tag key (must exist and apply to this kind)"`
 		Value string `json:"value" minLength:"1" doc:"The bound value"`
 	}
 }
 
-type entityTagKeyInput struct {
+type entityRemoveTagInput struct {
 	Name string `path:"name" doc:"The entity's name"`
-	Key  string `path:"key" doc:"The tag key"`
+	Body struct {
+		Key string `json:"key" minLength:"1" doc:"The tag key to remove"`
+	}
 }
 
 type entityNameInput struct {
 	Name string `path:"name" doc:"The entity's name"`
 }
 
-// registerEntityTagRoutes registers the list, set, and delete binding routes for
-// one entity kind. Reading an entity's tags rides that entity's read floor;
-// setting or removing a value is the entity's own update, so binding a tag needs
-// no new permission beyond the write the operator already holds on the entity.
+// registerEntityTagRoutes registers the list, set, and remove binding routes for
+// one entity kind. Binding is modeled as custom methods on the entity (like the
+// principal lifecycle actions), so the generated CLI reads `component set-tag
+// <name>` rather than colliding with the top-level tag resource. Reading an
+// entity's tags rides that entity's read floor; setting or removing a value is
+// the entity's own update, so binding a tag needs no permission beyond the write
+// the operator already holds on the entity.
 func registerEntityTagRoutes(api huma.API, a *authenticator, gw storage.Gateway, kind string) {
-	base := "/" + kind + "s/{name}/tags"
+	base := "/" + kind + "s/{name}"
 
 	huma.Register(api, huma.Operation{
 		OperationID: "list-" + kind + "-tags",
 		Method:      http.MethodGet,
-		Path:        base,
+		Path:        base + ":listTags",
 		Summary:     "List tags on a " + kind,
 		Description: "Lists the tags bound directly on a " + kind + " (not the resolved cascade). Gated by " + kind + ":read.",
 		Middlewares: huma.Middlewares{a.authn, a.require(kind, "read")},
@@ -304,13 +310,13 @@ func registerEntityTagRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 
 	huma.Register(api, huma.Operation{
 		OperationID: "set-" + kind + "-tag",
-		Method:      http.MethodPut,
-		Path:        base + "/{key}",
+		Method:      http.MethodPost,
+		Path:        base + ":setTag",
 		Summary:     "Set a tag value on a " + kind,
 		Description: "Binds a value for a key on a " + kind + ". The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by " + kind + ":update.",
 		Middlewares: huma.Middlewares{a.authn, a.require(kind, "update")},
 	}, func(ctx context.Context, in *entitySetTagInput) (*tagBindingOutput, error) {
-		b, err := gw.SetTagBinding(ctx, actorID(ctx), in.Key, kind, &in.Name, in.Body.Value,
+		b, err := gw.SetTagBinding(ctx, actorID(ctx), in.Body.Key, kind, &in.Name, in.Body.Value,
 			a.scopeFor(ctx, kind, "read"), a.scopeFor(ctx, kind, "update"))
 		if err != nil {
 			return nil, mapTagErr(err)
@@ -319,15 +325,15 @@ func registerEntityTagRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 	})
 
 	huma.Register(api, huma.Operation{
-		OperationID:   "delete-" + kind + "-tag",
-		Method:        http.MethodDelete,
-		Path:          base + "/{key}",
+		OperationID:   "remove-" + kind + "-tag",
+		Method:        http.MethodPost,
+		Path:          base + ":removeTag",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Remove a tag value from a " + kind,
 		Description:   "Removes a key's value from a " + kind + ". Gated by " + kind + ":update.",
 		Middlewares:   huma.Middlewares{a.authn, a.require(kind, "update")},
-	}, func(ctx context.Context, in *entityTagKeyInput) (*struct{}, error) {
-		if err := gw.DeleteTagBinding(ctx, actorID(ctx), in.Key, kind, &in.Name,
+	}, func(ctx context.Context, in *entityRemoveTagInput) (*struct{}, error) {
+		if err := gw.DeleteTagBinding(ctx, actorID(ctx), in.Body.Key, kind, &in.Name,
 			a.scopeFor(ctx, kind, "read"), a.scopeFor(ctx, kind, "update")); err != nil {
 			return nil, mapTagErr(err)
 		}
