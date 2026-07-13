@@ -118,6 +118,12 @@ up:
 down:
 	docker compose down
 
+# Capture the docs screenshots against the real console (dev stack + Playwright),
+# writing PNGs into docs/src/assets/screenshots/. Commit the regenerated images.
+# Needs the Playwright browser once: (cd web && npx playwright install chromium).
+docs-shots:
+	bash docs/screenshots/capture.sh
+
 # Full stack for a browser session: Postgres + the server with the console
 # embedded. Creates (idempotently) a dev owner with password "dev", also mints a
 # bearer token, then serves the API and console at http://localhost:8080/web.

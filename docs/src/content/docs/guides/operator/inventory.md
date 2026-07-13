@@ -8,6 +8,8 @@ once you know one you know all three. This page is how you **find** something in
 inventory; [working with an entity](/guides/operator/entities/) is what you do once you have
 opened it.
 
+![The Locations inventory: a summary board by place type, the chip filter, and the tree of campuses.](../../../../assets/screenshots/inventory.png)
+
 ## Filter
 
 The bar at the top of the table is a **chip filter**. Type a field name, then an operator,

@@ -14,6 +14,8 @@ a typed, encrypted-at-rest value owned at one scope and resolved down the cascad
 name, a **type badge**, an owner label, and a **masked** field preview (`••••••`, never a value). The
 same chip filter as the inventory narrows the list.
 
+![The Secrets directory: type badges, owner scope, and masked field previews, never a plaintext value.](../../../../assets/screenshots/secrets.png)
+
 - **New secret** (with `secret:create`) opens a create **drawer**: pick a **type** (the shape,
   `snmp-community` or `basic-auth`), an **owner scope** (global, location, system, or component), then
   the owner itself from the shared indented **tree picker**, and finally the type's operator fields (a

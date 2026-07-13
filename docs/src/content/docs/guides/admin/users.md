@@ -14,6 +14,8 @@ initials otherwise. You see the directory only if you hold `principal:read`, and
 principal is not part of any location or system tree, that grant must be **all-scope**: a
 location-scoped admin cannot list users.
 
+![The Users directory: each principal with its avatar, kind badge, and grant count, plus New user and Show archived.](../../../../assets/screenshots/users.png)
+
 - Pick a row to open its **blade**: a principal's profile, the **groups** it belongs to (open
   one to stack that group's blade over the user), and its **role grants** (each a role at a scope).
 - With `principal:create`, **New user** creates a human with a username and an optional initial
