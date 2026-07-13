@@ -20,6 +20,7 @@ import Roles from "./pages/Roles";
 import Groups from "./pages/Groups";
 import Secrets from "./pages/Secrets";
 import Variables from "./pages/Variables";
+import Tags from "./pages/Tags";
 import Audit from "./pages/Audit";
 import SectionStub from "./pages/SectionStub";
 import NotFound from "./pages/NotFound";
@@ -51,7 +52,7 @@ const ProtectedShell: ParentComponent = (props) => (
 // Stubbed sections: backends not built yet. The design draws them as stubs too.
 const STUBS = [
   "/dashboards", "/alarms", "/interfaces", "/nodes", "/tasks",
-  "/templates", "/types", "/tags", "/rules", "/explore", "/learn",
+  "/templates", "/types", "/rules", "/explore", "/learn",
   "/config",
 ];
 
@@ -76,6 +77,7 @@ render(
           <Route path="/groups" component={Groups} />
           <Route path="/secrets" component={Secrets} />
           <Route path="/variables" component={Variables} />
+          <Route path="/tags" component={Tags} />
           <Route path="/audit" component={Audit} />
           {STUBS.map((p) => <Route path={p} component={SectionStub} />)}
           <Route path="*" component={NotFound} />
