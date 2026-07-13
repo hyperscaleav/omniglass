@@ -60,7 +60,7 @@ type createSystemTypeInput struct {
 	Body struct {
 		ID          string `json:"id" minLength:"1" doc:"Globally unique type id"`
 		DisplayName string `json:"display_name" minLength:"1"`
-		Rank        int    `json:"rank,omitempty"`
+		Rank        int    `json:"rank,omitempty" doc:"Ordering rank; lower sorts first"`
 	}
 }
 

@@ -58,4 +58,12 @@ func TestSystemTypesAPI(t *testing.T) {
 	c.do(ownerTok, http.MethodDelete, "/system-types/kiosk", nil, http.StatusConflict)
 	c.do(ownerTok, http.MethodDelete, "/systems/k1", nil, http.StatusNoContent)
 	c.do(ownerTok, http.MethodDelete, "/system-types/kiosk", nil, http.StatusNoContent)
+
+	// Official rows are read-only (422 on update and delete).
+	c.do(ownerTok, http.MethodPatch, "/system-types/meeting-room",
+		map[string]any{"display_name": "X"}, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodDelete, "/system-types/meeting-room", nil, http.StatusUnprocessableEntity)
+
+	// Unknown id is a 404.
+	c.do(ownerTok, http.MethodDelete, "/system-types/nope", nil, http.StatusNotFound)
 }

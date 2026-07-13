@@ -42,4 +42,17 @@ func TestSystemTypeCRUD(t *testing.T) {
 	if err := gw.DeleteSystemType(ctx, "", "kiosk"); !errors.Is(err, storage.ErrTypeInUse) {
 		t.Fatalf("delete in-use err = %v, want ErrTypeInUse", err)
 	}
+
+	// Official rows are read-only.
+	if _, err := gw.UpdateSystemType(ctx, "", "meeting-room", storage.SystemTypePatch{DisplayName: &name}); !errors.Is(err, storage.ErrTypeOfficial) {
+		t.Fatalf("update official err = %v, want ErrTypeOfficial", err)
+	}
+	if err := gw.DeleteSystemType(ctx, "", "meeting-room"); !errors.Is(err, storage.ErrTypeOfficial) {
+		t.Fatalf("delete official err = %v, want ErrTypeOfficial", err)
+	}
+
+	// Unknown id is ErrTypeNotFound.
+	if err := gw.DeleteSystemType(ctx, "", "nope"); !errors.Is(err, storage.ErrTypeNotFound) {
+		t.Fatalf("delete unknown err = %v, want ErrTypeNotFound", err)
+	}
 }
