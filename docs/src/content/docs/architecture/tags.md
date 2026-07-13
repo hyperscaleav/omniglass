@@ -7,11 +7,13 @@ sidebar:
     variant: note
 ---
 
-:::note[Partial: the registry, the bindings, and the cascade are built; the console surface and the cascade extensions are deferred]
+:::note[Partial: the registry, the bindings, the cascade, and the console key directory are built; the per-entity binding editor and the cascade extensions are deferred]
 The first slice ([ADR-0021](/architecture/decisions/#adr-0021-tag-slice-1-a-governed-key-registry-with-entity-update-gated-bindings)) is
 **built**: the governed **`tag`** key registry, the per-entity **`tag_binding`** cell on the exclusive arc, and the
-union-on-key / override-on-value **cascade** resolver, over the API and the generated CLI. Deferred to later slices:
-the operator console surface (a Tags directory and a per-entity tag editor,
+union-on-key / override-on-value **cascade** resolver, over the API and the generated CLI. The **console Tags
+directory** (mint, edit governance fields, delete a key) is built too
+([#189](https://github.com/hyperscaleav/omniglass/issues/189)). Deferred to later slices: the per-entity **binding
+editor** and the **effective-tags** cascade panel on an entity's detail (the rest of
 [#189](https://github.com/hyperscaleav/omniglass/issues/189)), binding through [groups](/architecture/groups/) and a
 `template`-scoped default (the shared-resolver work in [#184](https://github.com/hyperscaleav/omniglass/issues/184)),
 value-domain governance (an open question below, [#190](https://github.com/hyperscaleav/omniglass/issues/190)), and

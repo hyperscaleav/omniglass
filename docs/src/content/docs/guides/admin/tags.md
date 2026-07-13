@@ -1,0 +1,24 @@
+---
+title: Tags
+description: "The Tags directory: mint the governed key vocabulary, set what each key applies to and whether it cascades, and edit or delete a key."
+---
+
+**Catalog > Tags** (with `tag:read`) is the directory of the governed [tag](/architecture/tags/) key
+vocabulary: the tenant-wide set of `key: value` label names an operator binds onto the estate. Each row
+shows the **key**, its **Applies to** (the entity kinds it may bind to, or **Any**), and its **Binding**
+(**cascades** to descendants, or **flat**, a per-entity label).
+
+- **New tag key** (with `tag:create`, an admin permission) opens a create **drawer**: name the key (a
+  normalized lowercase identifier, unique tenant-wide), check the entity kinds it **applies to** (leave
+  all unchecked for any), and toggle whether its bindings **cascade**. Minting the vocabulary is
+  deliberately admin-gated; *setting a value* on a key is the ordinary entity write, done on that
+  entity's own page.
+- Pick a row to open its **detail blade**. The footer **Edit** pencil (with `tag:update`) edits the
+  governance fields (applies_to, propagates); the key name is fixed. **Delete** (with `tag:delete`)
+  removes the key and, with it, every binding across the estate, behind a confirm.
+
+The estate directories already **show** each row's effective tags in a colored [Tags column](/guides/operator/inventory/)
+(the resolved cascade, keys unioning and values overriding most-specific-wins). **Setting** a value from the
+console is a later slice; today a value is bound with `omniglass component setTag` / `system setTag` /
+`location setTag`, and the per-component cascade is read with `omniglass effective-tag list <component>`.
+Minting and editing keys is `omniglass tag list` / `create` / `update` / `delete`.
