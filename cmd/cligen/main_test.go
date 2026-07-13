@@ -17,7 +17,8 @@ func TestBodyFieldsJSON(t *testing.T) {
 	  "properties":{
 	    "name":{"type":"string"},
 	    "value":{"description":"the value, any shape"},
-	    "fields":{"type":"object"}
+	    "fields":{"type":"object"},
+	    "propagates":{"type":"boolean"}
 	  }}}}}`
 	const opRaw = `{"operationId":"create-thing","requestBody":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/CreateBody"}}}}}`
 	var doc spec
@@ -42,6 +43,9 @@ func TestBodyFieldsJSON(t *testing.T) {
 	if !byName["fields"].JSON {
 		t.Errorf("object field should be JSON: %+v", byName["fields"])
 	}
+	if !byName["propagates"].JSON {
+		t.Errorf("boolean field should be JSON so it serializes as a bool, not a string: %+v", byName["propagates"])
+	}
 
 	// The rendered source parses the JSON fields and passes the scalar through.
 	cmd := buildCommand(doc, "/api/v1", "/things", "post", op)
@@ -53,6 +57,7 @@ func TestBodyFieldsJSON(t *testing.T) {
 	for _, want := range []string{
 		`body["value"] = jsonOrString(fValue)`,
 		`body["fields"] = jsonOrString(fFields)`,
+		`body["propagates"] = jsonOrString(fPropagates)`,
 		`body["name"] = fName`,
 	} {
 		if !strings.Contains(src, want) {

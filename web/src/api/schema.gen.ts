@@ -280,6 +280,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/components/{name}/effective-tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Effective tags for a component
+         * @description Resolves the tags that cascade onto a component (global -> location -> system -> component): keys union, values override most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves only from a binding on the component itself. Gated by component:read; the component must be in the caller's component read scope.
+         */
+        get: operations["effective-tags"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/components/{name}/effective-variables": {
         parameters: {
             query?: never;
@@ -294,6 +314,66 @@ export interface paths {
         get: operations["effective-variables"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/components/{name}:listTags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List tags on a component
+         * @description Lists the tags bound directly on a component (not the resolved cascade). Gated by component:read.
+         */
+        get: operations["list-component-tags"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/components/{name}:removeTag": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Remove a tag value from a component
+         * @description Removes a key's value from a component. Gated by component:update.
+         */
+        post: operations["remove-component-tag"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/components/{name}:setTag": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set a tag value on a component
+         * @description Binds a value for a key on a component. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by component:update.
+         */
+        post: operations["set-component-tag"];
         delete?: never;
         options?: never;
         head?: never;
@@ -390,6 +470,66 @@ export interface paths {
          * @description Patches a location's display_name or location_type. Gated by location:update; the read and update scopes drive the 404 versus 403 split.
          */
         patch: operations["update-location"];
+        trace?: never;
+    };
+    "/locations/{name}:listTags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List tags on a location
+         * @description Lists the tags bound directly on a location (not the resolved cascade). Gated by location:read.
+         */
+        get: operations["list-location-tags"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/locations/{name}:removeTag": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Remove a tag value from a location
+         * @description Removes a key's value from a location. Gated by location:update.
+         */
+        post: operations["remove-location-tag"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/locations/{name}:setTag": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set a tag value on a location
+         * @description Binds a value for a key on a location. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by location:update.
+         */
+        post: operations["set-location-tag"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/principal-groups": {
@@ -1000,6 +1140,154 @@ export interface paths {
         patch: operations["update-system"];
         trace?: never;
     };
+    "/systems/{name}:listTags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List tags on a system
+         * @description Lists the tags bound directly on a system (not the resolved cascade). Gated by system:read.
+         */
+        get: operations["list-system-tags"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/systems/{name}:removeTag": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Remove a tag value from a system
+         * @description Removes a key's value from a system. Gated by system:update.
+         */
+        post: operations["remove-system-tag"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/systems/{name}:setTag": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set a tag value on a system
+         * @description Binds a value for a key on a system. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by system:update.
+         */
+        post: operations["set-system-tag"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List tag keys
+         * @description Lists the governed key vocabulary. Rides the tag:read floor.
+         */
+        get: operations["list-tags"];
+        put?: never;
+        /**
+         * Mint a tag key
+         * @description Adds a key to the governed vocabulary. The name is normalized (a lowercase identifier). Gated by tag:create (all-scope, an admin action).
+         */
+        post: operations["create-tag"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tags/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete a tag key
+         * @description Removes a key from the vocabulary, cascading its bindings. Gated by tag:delete (all-scope).
+         */
+        delete: operations["delete-tag"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a tag key
+         * @description Replaces a key's governance fields (applies_to, propagates); the name is fixed. Gated by tag:update (all-scope).
+         */
+        patch: operations["update-tag"];
+        trace?: never;
+    };
+    "/tags/{name}:clearGlobal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Clear a global tag value
+         * @description Removes the global binding for a key. Gated by tag:update (all-scope).
+         */
+        post: operations["clear-global-tag"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tags/{name}:setGlobal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set a global tag value
+         * @description Binds a tenant-wide default value for a key at the global scope. Gated by tag:update (all-scope).
+         */
+        post: operations["set-global-tag"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/variables": {
         parameters: {
             query?: never;
@@ -1275,6 +1563,20 @@ export interface components {
             /** @description A system_type id */
             system_type: string;
         };
+        CreateTagInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateTagInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Entity kinds this key may bind to (component, system, location); omit for universal */
+            applies_to?: string[] | null;
+            /** @description The normalized key: a lowercase identifier, unique tenant-wide */
+            name: string;
+            /** @description Whether bindings cascade to descendants; defaults true */
+            propagates?: boolean;
+        };
         CreateVariableInputBody: {
             /**
              * Format: uri
@@ -1308,6 +1610,15 @@ export interface components {
             readonly $schema?: string;
             secrets: components["schemas"]["ResolvedSecretBody"][] | null;
         };
+        EffectiveTagsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/EffectiveTagsOutputBody.json
+             */
+            readonly $schema?: string;
+            tags: components["schemas"]["ResolvedTagBody"][] | null;
+        };
         EffectiveVariablesOutputBody: {
             /**
              * Format: uri
@@ -1316,6 +1627,37 @@ export interface components {
              */
             readonly $schema?: string;
             variables: components["schemas"]["ResolvedVariableBody"][] | null;
+        };
+        EntityRemoveTagInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/EntityRemoveTagInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The tag key to remove */
+            key: string;
+        };
+        EntitySetTagInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/EntitySetTagInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The tag key (must exist and apply to this kind) */
+            key: string;
+            /** @description The bound value */
+            value: string;
+        };
+        EntityTagsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/EntityTagsOutputBody.json
+             */
+            readonly $schema?: string;
+            tags: components["schemas"]["TagBindingBody"][] | null;
         };
         ErrorDetail: {
             /** @description Where the error occurred, e.g. 'body.items[3].tags' or 'path.thing-id' */
@@ -1363,6 +1705,16 @@ export interface components {
              * @example https://example.com/errors/example
              */
             type: string;
+        };
+        GlobalBindingInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/GlobalBindingInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The bound value */
+            value: string;
         };
         GrantBody: {
             /**
@@ -1555,6 +1907,15 @@ export interface components {
             readonly $schema?: string;
             systems: components["schemas"]["SystemBody"][] | null;
         };
+        ListTagsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListTagsOutputBody.json
+             */
+            readonly $schema?: string;
+            tags: components["schemas"]["TagBody"][] | null;
+        };
         ListVariablesOutputBody: {
             /**
              * Format: uri
@@ -1672,6 +2033,25 @@ export interface components {
             owner_kind: string;
             owner_name?: string;
             secret_type: string;
+            /** @description True for the resolved value; false for a shadowed candidate */
+            winner: boolean;
+        };
+        ResolvedTagBody: {
+            /**
+             * Format: int64
+             * @description Cascade tier: 0 global, 1 location, 2 system, 3 component
+             */
+            band: number;
+            /**
+             * Format: int64
+             * @description Distance up the tier's tree from the component (0 nearest)
+             */
+            depth: number;
+            key: string;
+            owner_id?: string;
+            owner_kind: string;
+            owner_name?: string;
+            value: string;
             /** @description True for the resolved value; false for a shadowed candidate */
             winner: boolean;
         };
@@ -1800,6 +2180,33 @@ export interface components {
             parent_id?: string;
             system_type: string;
         };
+        TagBindingBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/TagBindingBody.json
+             */
+            readonly $schema?: string;
+            key: string;
+            owner_id?: string;
+            owner_kind: string;
+            owner_name?: string;
+            value: string;
+        };
+        TagBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/TagBody.json
+             */
+            readonly $schema?: string;
+            /** @description Entity kinds this key may bind to; empty means universal */
+            applies_to: string[] | null;
+            id: string;
+            name: string;
+            /** @description Whether a bound value cascades to descendants */
+            propagates: boolean;
+        };
         UpdateComponentInputBody: {
             /**
              * Format: uri
@@ -1879,6 +2286,18 @@ export interface components {
             readonly $schema?: string;
             display_name?: string;
             system_type?: string;
+        };
+        UpdateTagInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/UpdateTagInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Entity kinds this key may bind to; omit for universal */
+            applies_to?: string[] | null;
+            /** @description Whether bindings cascade to descendants; defaults true */
+            propagates?: boolean;
         };
         UpdateVariableInputBody: {
             /**
@@ -2478,6 +2897,38 @@ export interface operations {
             };
         };
     };
+    "effective-tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The component's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EffectiveTagsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "effective-variables": {
         parameters: {
             query?: never;
@@ -2497,6 +2948,108 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EffectiveVariablesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-component-tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The entity's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityTagsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "remove-component-tag": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The entity's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EntityRemoveTagInputBody"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "set-component-tag": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The entity's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EntitySetTagInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagBindingBody"];
                 };
             };
             /** @description Error */
@@ -2714,6 +3267,108 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LocationBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-location-tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The entity's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityTagsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "remove-location-tag": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The entity's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EntityRemoveTagInputBody"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "set-location-tag": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The entity's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EntitySetTagInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagBindingBody"];
                 };
             };
             /** @description Error */
@@ -4027,6 +4682,302 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SystemBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-system-tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The entity's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityTagsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "remove-system-tag": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The entity's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EntityRemoveTagInputBody"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "set-system-tag": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The entity's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EntitySetTagInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagBindingBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListTagsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-tag": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateTagInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-tag": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The tag key */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "update-tag": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The tag key */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateTagInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "clear-global-tag": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The tag key */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "set-global-tag": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The tag key */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GlobalBindingInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagBindingBody"];
                 };
             };
             /** @description Error */

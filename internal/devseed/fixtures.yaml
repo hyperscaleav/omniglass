@@ -116,3 +116,21 @@ variables:
     value:
       retries: 3
       backoff: 1s
+
+# Tags: a governed key vocabulary plus a couple of example bindings, so the Tags
+# directory and the effective-tags cascade come up populated. `environment` is
+# universal with a tenant-wide default; `category` is narrowed to components;
+# `asset_id` is non-propagating (a flat per-entity label). The scoped binding
+# overrides the global default for the west building's subtree, so a component
+# under it teaches the override.
+tags:
+  - name: environment
+    global_value: prod
+  - name: category
+    applies_to: [component]
+  - name: asset_id
+    propagates: false
+tag_bindings:
+  - key: environment
+    location: hq-west
+    value: staging

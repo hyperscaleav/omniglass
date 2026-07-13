@@ -412,6 +412,33 @@ components:
         - name
         - system_type
       type: object
+    CreateTagInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateTagInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        applies_to:
+          description: Entity kinds this key may bind to (component, system, location); omit for universal
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        name:
+          description: "The normalized key: a lowercase identifier, unique tenant-wide"
+          minLength: 1
+          type: string
+        propagates:
+          description: Whether bindings cascade to descendants; defaults true
+          type: boolean
+      required:
+        - name
+      type: object
     CreateVariableInputBody:
       additionalProperties: false
       properties:
@@ -473,6 +500,25 @@ components:
       required:
         - secrets
       type: object
+    EffectiveTagsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/EffectiveTagsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        tags:
+          items:
+            $ref: "#/components/schemas/ResolvedTagBody"
+          type:
+            - array
+            - "null"
+      required:
+        - tags
+      type: object
     EffectiveVariablesOutputBody:
       additionalProperties: false
       properties:
@@ -491,6 +537,64 @@ components:
             - "null"
       required:
         - variables
+      type: object
+    EntityRemoveTagInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/EntityRemoveTagInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        key:
+          description: The tag key to remove
+          minLength: 1
+          type: string
+      required:
+        - key
+      type: object
+    EntitySetTagInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/EntitySetTagInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        key:
+          description: The tag key (must exist and apply to this kind)
+          minLength: 1
+          type: string
+        value:
+          description: The bound value
+          minLength: 1
+          type: string
+      required:
+        - key
+        - value
+      type: object
+    EntityTagsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/EntityTagsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        tags:
+          items:
+            $ref: "#/components/schemas/TagBindingBody"
+          type:
+            - array
+            - "null"
+      required:
+        - tags
       type: object
     ErrorDetail:
       additionalProperties: false
@@ -550,6 +654,23 @@ components:
             - https://example.com/errors/example
           format: uri
           type: string
+      type: object
+    GlobalBindingInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/GlobalBindingInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        value:
+          description: The bound value
+          minLength: 1
+          type: string
+      required:
+        - value
       type: object
     GrantBody:
       additionalProperties: false
@@ -903,6 +1024,25 @@ components:
       required:
         - systems
       type: object
+    ListTagsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListTagsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        tags:
+          items:
+            $ref: "#/components/schemas/TagBody"
+          type:
+            - array
+            - "null"
+      required:
+        - tags
+      type: object
     ListVariablesOutputBody:
       additionalProperties: false
       properties:
@@ -1165,6 +1305,38 @@ components:
         - depth
         - winner
         - fields
+      type: object
+    ResolvedTagBody:
+      additionalProperties: false
+      properties:
+        band:
+          description: "Cascade tier: 0 global, 1 location, 2 system, 3 component"
+          format: int64
+          type: integer
+        depth:
+          description: Distance up the tier's tree from the component (0 nearest)
+          format: int64
+          type: integer
+        key:
+          type: string
+        owner_id:
+          type: string
+        owner_kind:
+          type: string
+        owner_name:
+          type: string
+        value:
+          type: string
+        winner:
+          description: True for the resolved value; false for a shadowed candidate
+          type: boolean
+      required:
+        - key
+        - value
+        - owner_kind
+        - band
+        - depth
+        - winner
       type: object
     ResolvedVariableBody:
       additionalProperties: false
@@ -1440,6 +1612,61 @@ components:
         - name
         - system_type
       type: object
+    TagBindingBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/TagBindingBody.json
+          format: uri
+          readOnly: true
+          type: string
+        key:
+          type: string
+        owner_id:
+          type: string
+        owner_kind:
+          type: string
+        owner_name:
+          type: string
+        value:
+          type: string
+      required:
+        - key
+        - value
+        - owner_kind
+      type: object
+    TagBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/TagBody.json
+          format: uri
+          readOnly: true
+          type: string
+        applies_to:
+          description: Entity kinds this key may bind to; empty means universal
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        id:
+          type: string
+        name:
+          type: string
+        propagates:
+          description: Whether a bound value cascades to descendants
+          type: boolean
+      required:
+        - id
+        - name
+        - applies_to
+        - propagates
+      type: object
     UpdateComponentInputBody:
       additionalProperties: false
       properties:
@@ -1567,6 +1794,27 @@ components:
           type: string
         system_type:
           type: string
+      type: object
+    UpdateTagInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/UpdateTagInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        applies_to:
+          description: Entity kinds this key may bind to; omit for universal
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        propagates:
+          description: Whether bindings cascade to descendants; defaults true
+          type: boolean
       type: object
     UpdateVariableInputBody:
       additionalProperties: false
@@ -2026,6 +2274,32 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Effective secrets for a component
+  /components/{name}/effective-tags:
+    get:
+      description: "Resolves the tags that cascade onto a component (global -> location -> system -> component): keys union, values override most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves only from a binding on the component itself. Gated by component:read; the component must be in the caller's component read scope."
+      operationId: effective-tags
+      parameters:
+        - description: The component's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The component's name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EffectiveTagsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Effective tags for a component
   /components/{name}/effective-variables:
     get:
       description: Resolves the variables that cascade onto a component (global -> location -> system -> component, most-specific winning), winner and shadowed candidates. Gated by variable:read; the component must be in the caller's component read scope.
@@ -2052,6 +2326,92 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Effective variables for a component
+  /components/{name}:listTags:
+    get:
+      description: Lists the tags bound directly on a component (not the resolved cascade). Gated by component:read.
+      operationId: list-component-tags
+      parameters:
+        - description: The entity's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The entity's name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntityTagsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List tags on a component
+  /components/{name}:removeTag:
+    post:
+      description: Removes a key's value from a component. Gated by component:update.
+      operationId: remove-component-tag
+      parameters:
+        - description: The entity's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The entity's name
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EntityRemoveTagInputBody"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Remove a tag value from a component
+  /components/{name}:setTag:
+    post:
+      description: Binds a value for a key on a component. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by component:update.
+      operationId: set-component-tag
+      parameters:
+        - description: The entity's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The entity's name
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EntitySetTagInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TagBindingBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Set a tag value on a component
   /healthz:
     get:
       description: Reports process health and the database leg, pinged through the Storage Gateway.
@@ -2205,6 +2565,92 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Update a location
+  /locations/{name}:listTags:
+    get:
+      description: Lists the tags bound directly on a location (not the resolved cascade). Gated by location:read.
+      operationId: list-location-tags
+      parameters:
+        - description: The entity's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The entity's name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntityTagsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List tags on a location
+  /locations/{name}:removeTag:
+    post:
+      description: Removes a key's value from a location. Gated by location:update.
+      operationId: remove-location-tag
+      parameters:
+        - description: The entity's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The entity's name
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EntityRemoveTagInputBody"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Remove a tag value from a location
+  /locations/{name}:setTag:
+    post:
+      description: Binds a value for a key on a location. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by location:update.
+      operationId: set-location-tag
+      parameters:
+        - description: The entity's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The entity's name
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EntitySetTagInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TagBindingBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Set a tag value on a location
   /principal-groups:
     get:
       description: Every principal group. Gated by principal_group:read (all-scope).
@@ -3232,6 +3678,240 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Update a system
+  /systems/{name}:listTags:
+    get:
+      description: Lists the tags bound directly on a system (not the resolved cascade). Gated by system:read.
+      operationId: list-system-tags
+      parameters:
+        - description: The entity's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The entity's name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntityTagsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List tags on a system
+  /systems/{name}:removeTag:
+    post:
+      description: Removes a key's value from a system. Gated by system:update.
+      operationId: remove-system-tag
+      parameters:
+        - description: The entity's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The entity's name
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EntityRemoveTagInputBody"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Remove a tag value from a system
+  /systems/{name}:setTag:
+    post:
+      description: Binds a value for a key on a system. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by system:update.
+      operationId: set-system-tag
+      parameters:
+        - description: The entity's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The entity's name
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EntitySetTagInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TagBindingBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Set a tag value on a system
+  /tags:
+    get:
+      description: Lists the governed key vocabulary. Rides the tag:read floor.
+      operationId: list-tags
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListTagsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List tag keys
+    post:
+      description: Adds a key to the governed vocabulary. The name is normalized (a lowercase identifier). Gated by tag:create (all-scope, an admin action).
+      operationId: create-tag
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTagInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TagBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Mint a tag key
+  /tags/{name}:
+    delete:
+      description: Removes a key from the vocabulary, cascading its bindings. Gated by tag:delete (all-scope).
+      operationId: delete-tag
+      parameters:
+        - description: The tag key
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The tag key
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Delete a tag key
+    patch:
+      description: Replaces a key's governance fields (applies_to, propagates); the name is fixed. Gated by tag:update (all-scope).
+      operationId: update-tag
+      parameters:
+        - description: The tag key
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The tag key
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTagInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TagBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Update a tag key
+  /tags/{name}:clearGlobal:
+    post:
+      description: Removes the global binding for a key. Gated by tag:update (all-scope).
+      operationId: clear-global-tag
+      parameters:
+        - description: The tag key
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The tag key
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Clear a global tag value
+  /tags/{name}:setGlobal:
+    post:
+      description: Binds a tenant-wide default value for a key at the global scope. Gated by tag:update (all-scope).
+      operationId: set-global-tag
+      parameters:
+        - description: The tag key
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The tag key
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GlobalBindingInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TagBindingBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Set a global tag value
   /variables:
     get:
       description: Lists every variable. Requires an all-scope read; the scoped, per-component view is the effective-variables route. Gated by variable:read.
