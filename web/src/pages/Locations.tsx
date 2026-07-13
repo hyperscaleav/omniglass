@@ -4,6 +4,7 @@ import { useNavigate, useParams } from "@solidjs/router";
 import TreeList, { type ListConfig, type ListCtx, type ListNode, type PageDescriptor, type Widget } from "../components/TreeList";
 import Donut from "../components/Donut";
 import TreeSelect from "../components/TreeSelect";
+import TagPills from "../components/TagPills";
 import {
   type Location,
   LOCATIONS_KEY,
@@ -25,7 +26,7 @@ import { DrawerFooter } from "../components/Drawer";
 // config-driven shell every inventory page uses: embedded filter, action rail,
 // tree, blades, full-page detail, create/edit Drawer. The tree comes from
 // parent_id; the live API carries names/types/placement only.
-type LocNode = ListNode & { type: string; raw: Location };
+type LocNode = ListNode & { type: string; tags: Record<string, string>; raw: Location };
 
 // A loose visual ranking for the seeded place types; unknown types sort last.
 const TYPE_RANK: Record<string, number> = { campus: 0, site: 0, region: 0, building: 1, floor: 2, room: 3 };
@@ -46,9 +47,10 @@ export const locationsDescriptor: PageDescriptor = {
     type: { label: "Type", width: 120 },
     parent: { label: "Parent", width: 190 },
     tech: { label: "Technical name", width: 200 },
+    tags: { label: "Tags", width: 340 },
   },
-  columnKeys: ["type", "parent", "tech"],
-  defaultCols: ["type", "parent"],
+  columnKeys: ["type", "parent", "tech", "tags"],
+  defaultCols: ["type", "parent", "tags"],
 };
 
 export default function Locations() {
@@ -71,7 +73,7 @@ export default function Locations() {
     const list = locations.data ?? [];
     const byId = new Map<string, LocNode>();
     for (const l of list) {
-      byId.set(l.id, { id: l.name, display: l.display_name || l.name, children: [], type: l.location_type, actions: l.actions, raw: l });
+      byId.set(l.id, { id: l.name, display: l.display_name || l.name, children: [], type: l.location_type, actions: l.actions, tags: l.effective_tags ?? {}, raw: l });
     }
     const roots: LocNode[] = [];
     for (const l of list) {
@@ -334,6 +336,7 @@ export default function Locations() {
       if (key === "type") return <span class={typeBadge(n.type)}>{n.type}</span>;
       if (key === "parent") { const p = ctx.parentOf(n); return p ? <span class="text-base-content/70">{p.display}</span> : <span class="text-base-content/40">—</span>; }
       if (key === "tech") return <span class="font-data text-[11.5px] text-base-content/50">{n.raw.name}</span>;
+      if (key === "tags") return <TagPills tags={n.tags} />;
       return null;
     },
     filterKeys: [
@@ -344,6 +347,7 @@ export default function Locations() {
       if (key === "type") return TYPE_RANK[n.type] ?? 9;
       if (key === "parent") return ""; // parent resolved via ctx; name sort is the useful default
       if (key === "tech") return n.raw.name.toLowerCase();
+      if (key === "tags") return Object.keys(n.tags).sort().join(",");
       return n.display.toLowerCase();
     },
     widgets,

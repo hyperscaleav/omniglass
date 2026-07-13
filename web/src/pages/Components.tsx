@@ -18,6 +18,7 @@ import { ChevronRight, Pencil, Plus, Save, X } from "../components/icons";
 import Button from "../components/Button";
 import { DrawerFooter } from "../components/Drawer";
 import EffectiveSecrets, { secretCascadeBlade, cascadeBladeId } from "../components/EffectiveSecrets";
+import TagPills from "../components/TagPills";
 import EffectiveVariables, { variableCascadeBlade, varCascadeBladeId } from "../components/EffectiveVariables";
 
 // Components: the device inventory, the first page built on the generic TreeList.
@@ -31,6 +32,7 @@ type CompNode = ListNode & {
   systemName: string;
   systemAddr: string;
   locationName: string;
+  tags: Record<string, string>;
   raw: Comp;
 };
 
@@ -43,9 +45,10 @@ export const componentsDescriptor: PageDescriptor = {
     type: { label: "Type", width: 170 },
     system: { label: "System", width: 190 },
     location: { label: "Location", width: 190 },
+    tags: { label: "Tags", width: 340 },
   },
-  columnKeys: ["type", "system", "location"],
-  defaultCols: ["type", "system", "location"],
+  columnKeys: ["type", "system", "location", "tags"],
+  defaultCols: ["type", "system", "location", "tags"],
 };
 
 export default function Components() {
@@ -80,6 +83,7 @@ export default function Components() {
         systemName: c.system_id ? label(sm.get(c.system_id) ?? { name: c.system_id }) : "",
         systemAddr: c.system_id ? (sm.get(c.system_id)?.name ?? c.system_id) : "",
         locationName: c.location_id ? label(lm.get(c.location_id) ?? { name: c.location_id }) : "",
+        tags: c.effective_tags ?? {},
         raw: c,
       });
     }
@@ -292,6 +296,7 @@ export default function Components() {
       if (key === "type") return <span class="badge badge-soft badge-neutral badge-sm">{n.type}</span>;
       if (key === "system") return <span class="text-base-content/70">{n.systemName || "—"}</span>;
       if (key === "location") return <span class="text-base-content/70">{n.locationName || "—"}</span>;
+      if (key === "tags") return <TagPills tags={n.tags} />;
       return null;
     },
     filterKeys: [
@@ -304,6 +309,7 @@ export default function Components() {
       if (key === "type") return n.type.toLowerCase();
       if (key === "system") return n.systemName.toLowerCase();
       if (key === "location") return n.locationName.toLowerCase();
+      if (key === "tags") return Object.keys(n.tags).sort().join(",");
       return n.display.toLowerCase();
     },
     canAddChild: () => can(me.data, "component", "create"),

@@ -12,6 +12,7 @@ export type System = {
   location_id?: string;
   parent_id?: string;
   actions?: string[];
+  effective_tags?: Record<string, string>;
 };
 
 export const SYSTEMS_KEY = ["systems"] as const;

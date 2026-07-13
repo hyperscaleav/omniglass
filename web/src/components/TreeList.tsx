@@ -424,7 +424,7 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
           }
         }}
       >
-        <td>
+        <td class="min-w-52">
           <span class="inline-flex w-full items-center gap-1.5" style={{ "padding-left": isTree() ? `${p.row.depth * 20}px` : "0" }}>
             <Show when={isTree()}>
               <span class="inline-flex w-4 flex-none justify-center text-base-content/40">
@@ -549,7 +549,7 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
             <colgroup>
               <col />
               <For each={visible()}>{(k) => <col style={{ width: `${cfg.columns[k].width}px` }} />}</For>
-              <col style={{ width: "104px" }} />
+              <col style={{ width: "150px" }} />
             </colgroup>
             <thead>
               <tr>

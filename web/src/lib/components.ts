@@ -13,6 +13,7 @@ export type Component = {
   parent_id?: string;
   system_id?: string;
   actions?: string[];
+  effective_tags?: Record<string, string>;
 };
 
 export const COMPONENTS_KEY = ["components"] as const;

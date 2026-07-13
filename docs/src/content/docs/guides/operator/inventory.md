@@ -41,6 +41,12 @@ sections ([getting around](/guides/operator/#getting-around)).
   floor, and room each read differently at a glance), tinted the same hue as the type badge.
 - On Locations, a **summary board** at the top breaks the estate down by place type (a donut
   plus count cards); click any segment or card to filter to it.
+- A **Tags** column shows each row's **effective [tags](/architecture/tags/)**: the `key = value`
+  labels that resolve onto it down the cascade, not only the ones set directly on it (so a component
+  wears the tags of its location and system too). Each key gets its own consistent color, so the same
+  tag reads the same everywhere. The chips stay on **one line**, fading at the edge when there are more
+  than fit; **hover the row's tags to reveal the full set** in a popover. The column is on by default;
+  hide it from the columns menu.
 
 Everything on these pages is already filtered to [your scope](/guides/operator/#what-you-see-is-your-scope):
 you are searching within the subtree your grants reach, not the whole estate.

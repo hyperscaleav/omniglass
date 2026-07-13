@@ -10,6 +10,7 @@ export type Location = {
   location_type: string;
   parent_id?: string;
   actions?: string[];
+  effective_tags?: Record<string, string>;
 };
 
 export const LOCATIONS_KEY = ["locations"] as const;
