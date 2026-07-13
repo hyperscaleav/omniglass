@@ -203,9 +203,9 @@ function PropagatesToggle(p: { value: boolean; onChange: (v: boolean) => void })
 
 // CreateTagForm: name the key (a normalized lowercase identifier), pick the
 // entity kinds it applies to and whether it cascades, then mint it.
-function CreateTagForm(p: { onCreated: () => void }): JSX.Element {
+export function CreateTagForm(p: { onCreated: (name: string) => void; initialName?: string }): JSX.Element {
   const qc = useQueryClient();
-  const [name, setName] = createSignal("");
+  const [name, setName] = createSignal(p.initialName ?? "");
   const [appliesTo, setAppliesTo] = createSignal<EntityKind[]>([]);
   const [propagates, setPropagates] = createSignal(true);
   const [busy, setBusy] = createSignal(false);
@@ -222,7 +222,7 @@ function CreateTagForm(p: { onCreated: () => void }): JSX.Element {
         propagates: propagates(),
       });
       await qc.invalidateQueries({ queryKey: TAGS_KEY });
-      p.onCreated();
+      p.onCreated(name().trim());
     } catch (er) {
       setFormErr(describeError(er));
     } finally {

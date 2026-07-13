@@ -19,6 +19,7 @@ import Button from "../components/Button";
 import { DrawerFooter } from "../components/Drawer";
 import EffectiveSecrets, { secretCascadeBlade, cascadeBladeId } from "../components/EffectiveSecrets";
 import TagPills from "../components/TagPills";
+import TagAdder from "../components/TagAdder";
 import EffectiveVariables, { variableCascadeBlade, varCascadeBladeId } from "../components/EffectiveVariables";
 
 // Components: the device inventory, the first page built on the generic TreeList.
@@ -168,6 +169,7 @@ export default function Components() {
             onOpen={(variableName) => ctx.openBlade({ kind: "variable-cascade", id: varCascadeBladeId(n.raw.name, variableName) })}
           />
         </Show>
+        <TagAdder kind="component" name={n.raw.name} canUpdate={can(me.data, "component", "update")} canCreateKey={can(me.data, "tag", "create")} />
         <Show when={ctx.full}>
           <div class="flex items-center gap-2 border-t border-base-300 pt-4">
             <Show when={can(me.data, "component", "delete")}>

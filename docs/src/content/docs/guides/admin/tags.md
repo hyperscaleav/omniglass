@@ -17,8 +17,12 @@ shows the **key**, its **Applies to** (the entity kinds it may bind to, or **Any
   governance fields (applies_to, propagates); the key name is fixed. **Delete** (with `tag:delete`)
   removes the key and, with it, every binding across the estate, behind a confirm.
 
-The estate directories already **show** each row's effective tags in a colored [Tags column](/guides/operator/inventory/)
-(the resolved cascade, keys unioning and values overriding most-specific-wins). **Setting** a value from the
-console is a later slice; today a value is bound with `omniglass component setTag` / `system setTag` /
-`location setTag`, and the per-component cascade is read with `omniglass effective-tag list <component>`.
-Minting and editing keys is `omniglass tag list` / `create` / `update` / `delete`.
+Minting a **key** is admin-gated here; **setting a value** on a key is the ordinary entity write. Open a
+component, system, or location, and its detail blade carries a **Tags** panel: type a key (the picker
+offers the registry keys that apply to that entity kind, and with `tag:create` a **Create key** shortcut
+opens this same create form), give it a value, and it binds on **Add**; the **x** on a chip removes it.
+Each write is gated by that entity's own `:update`, so an operator tags what it may already edit. The
+estate directories then **show** each row's effective tags in a colored [Tags column](/guides/operator/inventory/)
+(the resolved cascade, keys unioning and values overriding most-specific-wins). The same operations are
+`omniglass component setTag` / `system setTag` / `location setTag` and `omniglass effective-tag list
+<component>` from the CLI.
