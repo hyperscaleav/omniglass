@@ -95,6 +95,78 @@ func (p *PG) ListSystemTypes(ctx context.Context) ([]SystemType, error) {
 	return out, rows.Err()
 }
 
+// SystemTypePatch carries the mutable fields of a system_type update; a nil field
+// is left unchanged.
+type SystemTypePatch struct {
+	DisplayName *string
+	Rank        *int
+}
+
+// CreateSystemType inserts a custom (official=false) system_type and audits it. A
+// duplicate id is ErrTypeExists.
+func (p *PG) CreateSystemType(ctx context.Context, actorID string, st SystemType) (*SystemType, error) {
+	st.Official = false
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("storage: begin create system_type: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	if _, err := tx.Exec(ctx,
+		`insert into system_type (id, official, display_name, rank) values ($1, false, $2, $3)`,
+		st.ID, st.DisplayName, st.Rank); err != nil {
+		if isUniqueViolation(err) {
+			return nil, ErrTypeExists
+		}
+		return nil, fmt.Errorf("storage: insert system_type %q: %w", st.ID, err)
+	}
+	if err := writeAuditRes(ctx, tx, actorID, "create", "system_type", st.ID, nil, st); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("storage: commit create system_type: %w", err)
+	}
+	return &st, nil
+}
+
+// UpdateSystemType patches a custom system_type (nil fields unchanged) and audits
+// it. Official rows are read-only; an unknown id is ErrTypeNotFound.
+func (p *PG) UpdateSystemType(ctx context.Context, actorID, id string, patch SystemTypePatch) (*SystemType, error) {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("storage: begin update system_type: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	if err := guardTypeMutable(ctx, tx, "system_type", id); err != nil {
+		return nil, err
+	}
+	var st SystemType
+	if err := tx.QueryRow(ctx, `
+		update system_type set
+			display_name = coalesce($2, display_name),
+			rank         = coalesce($3, rank)
+		where id = $1
+		returning id, official, display_name, rank`,
+		id, patch.DisplayName, patch.Rank).
+		Scan(&st.ID, &st.Official, &st.DisplayName, &st.Rank); err != nil {
+		return nil, fmt.Errorf("storage: update system_type %q: %w", id, err)
+	}
+	if err := writeAuditRes(ctx, tx, actorID, "update", "system_type", id, nil, st); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("storage: commit update system_type: %w", err)
+	}
+	return &st, nil
+}
+
+// DeleteSystemType removes a custom system_type, refusing an official row and a
+// row still referenced by a system.
+func (p *PG) DeleteSystemType(ctx context.Context, actorID, id string) error {
+	return deleteTypeRow(ctx, p, "system_type", "system_type", typeRef{table: "system", col: "system_type"}, actorID, id)
+}
+
 // --- system CRUD -------------------------------------------------------------
 
 const systemCols = `id, name, coalesce(display_name, ''), system_type, parent_id, location_id, created_at, updated_at`

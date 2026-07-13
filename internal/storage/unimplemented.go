@@ -177,6 +177,13 @@ func (UnimplementedGateway) UpsertSystemType(context.Context, SystemType) error 
 func (UnimplementedGateway) ListSystemTypes(context.Context) ([]SystemType, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) CreateSystemType(context.Context, string, SystemType) (*SystemType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) UpdateSystemType(context.Context, string, string, SystemTypePatch) (*SystemType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteSystemType(context.Context, string, string) error { return nil }
 func (UnimplementedGateway) ListSystems(context.Context, scope.Set) ([]System, error) {
 	return nil, nil
 }

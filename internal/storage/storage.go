@@ -212,6 +212,9 @@ type Gateway interface {
 	// The system tier: a type registry and scoped CRUD, mirroring locations.
 	UpsertSystemType(ctx context.Context, st SystemType) error
 	ListSystemTypes(ctx context.Context) ([]SystemType, error)
+	CreateSystemType(ctx context.Context, actorID string, st SystemType) (*SystemType, error)
+	UpdateSystemType(ctx context.Context, actorID, id string, patch SystemTypePatch) (*SystemType, error)
+	DeleteSystemType(ctx context.Context, actorID, id string) error
 	ListSystems(ctx context.Context, read scope.Set) ([]System, error)
 	GetSystem(ctx context.Context, name string, read scope.Set) (*System, error)
 	CreateSystem(ctx context.Context, actorID string, spec SystemSpec, create scope.Set) (*System, error)
