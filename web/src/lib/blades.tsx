@@ -72,24 +72,38 @@ export function useBlades(): BladeController {
 // destructive action (Delete for a group, Disable / Enable for a user), always
 // available, and a list of secondary actions (Impersonate, copy id) shown in a
 // kebab. Both are accessors so their label / tone stay reactive (Disable <-> Enable).
-export type BladeDestructive = { label: string; tone?: "danger" | "warn"; onClick: () => void };
-export type BladeSecondary = { label: string; icon?: JSX.Element; onClick: () => void };
+// tone: "danger" (red, a hard/irreversible action), "warn" (yellow, a reversible
+// pause), or "ok" (green, a restore). The left footer slot holds one at a time.
+export type BladeDestructive = { label: string; tone?: "danger" | "warn" | "ok"; onClick: () => void };
+// A kebab item; tone "danger" renders it red (a destructive escalation like
+// archive or purge sitting among neutral secondary actions).
+export type BladeSecondary = { label: string; icon?: JSX.Element; tone?: "danger"; onClick: () => void };
+// The one prominent right-side footer action for a blade whose edit is NOT the
+// inline pencil model but a separate flow (an inventory row edits in a Drawer):
+// a filled button (e.g. Edit) that opens it. Shown only when not in inline edit.
+export type BladePrimary = { label: string; icon?: JSX.Element; onClick: () => void };
 
 export type BladeEdit = {
   editable: () => boolean;
   editing: () => boolean;
   saving: () => boolean;
+  // valid gates the footer Save: false disables it, so a body with a field that
+  // fails inline validation cannot be committed. Defaults to always-valid.
+  valid: () => boolean;
   begin: () => void;
   cancel: () => void;
   save: () => Promise<void>;
   destructive: () => BladeDestructive | undefined;
   secondary: () => BladeSecondary[];
+  primary: () => BladePrimary | undefined;
   bind: (h: {
     editable?: () => boolean;
+    valid?: () => boolean;
     save?: () => Promise<void>;
     cancel?: () => void;
     destructive?: () => BladeDestructive | undefined;
     secondary?: () => BladeSecondary[];
+    primary?: () => BladePrimary | undefined;
   }) => void;
 };
 
@@ -99,12 +113,15 @@ export function createEditSlot(): BladeEdit {
   const [bound, setBound] = createSignal(false);
   let handler: { save: () => Promise<void>; cancel: () => void } = { save: async () => {}, cancel: () => {} };
   let editablePred: () => boolean = () => false;
+  let validPred: () => boolean = () => true;
   let destructivePred: () => BladeDestructive | undefined = () => undefined;
   let secondaryPred: () => BladeSecondary[] = () => [];
+  let primaryPred: () => BladePrimary | undefined = () => undefined;
   return {
     editable: () => bound() && editablePred(),
     editing,
     saving,
+    valid: () => validPred(),
     begin: () => setEditing(true),
     cancel: () => {
       handler.cancel();
@@ -121,13 +138,16 @@ export function createEditSlot(): BladeEdit {
     },
     destructive: () => (bound() ? destructivePred() : undefined),
     secondary: () => (bound() ? secondaryPred() : []),
+    primary: () => (bound() ? primaryPred() : undefined),
     bind: (h) => {
       // A body that supplies a saver is editable (unless it gates with `editable`);
       // one that only registers a destructive / secondary action is not.
       editablePred = h.editable ?? (() => !!h.save);
+      validPred = h.valid ?? (() => true);
       handler = { save: h.save ?? (async () => {}), cancel: h.cancel ?? (() => {}) };
       destructivePred = h.destructive ?? (() => undefined);
       secondaryPred = h.secondary ?? (() => []);
+      primaryPred = h.primary ?? (() => undefined);
       setBound(true);
     },
   };

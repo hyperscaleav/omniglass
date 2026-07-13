@@ -57,14 +57,16 @@ no running server needed):
 
 ```sh
 # Mints a bearer credential (the token is printed once) and, with --password, a password
-# credential (argon2id) so the owner can sign in to the console.
-omniglass bootstrap ops --password 's3cret-pw' --email ops@example.com --display-name "Ops Lead"
+# credential (argon2id) so the owner can sign in to the console. This is a trusted direct-DB
+# lane, so it is exempt from the password policy (unlike the console/API paths).
+omniglass bootstrap ops --password 'set-a-strong-one' --email ops@example.com --display-name "Ops Lead"
 
-# Reprint a fresh bearer token for an existing user (direct-DB, owner lane).
+# Reprint a fresh bearer token for an existing user (direct-DB, owner lane). A CLI
+# token does not expire (unlike a web-login session cookie, which has a fixed lifetime).
 omniglass token ops
 
-# Set or rotate a user's password (direct-DB, owner lane).
-omniglass set-password ops 'new-s3cret-pw'
+# Set or rotate a user's password (direct-DB, owner lane; also policy-exempt as the recovery path).
+omniglass set-password ops 'set-a-strong-one'
 
 # Seed a dev database with an example estate (locations, users, grants). Idempotent and
 # dev-only; `make dev` runs it for you, so a fresh console is populated instead of empty.
@@ -73,12 +75,15 @@ omniglass seed-dev
 ```
 
 Once a server is running, a signed-in principal manages **its own** account through the
-generated `auth` commands (self-scoped: each edits only the caller's own profile):
+generated self-scoped commands (each edits only the caller's own profile):
 
 ```sh
 omniglass auth me                                    # your principal, permissions, and grants
 omniglass auth update-profile --display-name "Ops Lead"
-omniglass auth change-password --current-password 's3cret-pw' --new-password 'brand-new-pw'
+omniglass auth change-password --current-password 'orange-boat-42x' --new-password 'purple-canyon-7'
+omniglass me setAvatar --image-base64 "$(base64 -w0 me.jpg)"   # set your profile picture
+omniglass me removeAvatar                            # clear it, falling back to initials
+omniglass avatar list                                # read your picture back as { image_base64 }
 ```
 
 ## Collection commands
@@ -142,16 +147,108 @@ recent transitions the availability strip draws):
 ```sh
 omniglass reachability list disp-1                              # needs component:read
 ```
+`--image-base64` takes a plain base64 string, not a file path (base64-encode the image
+yourself, as the `$(base64 …)` above does); the server accepts JPEG, PNG, or WebP and
+normalizes it to a 256x256 JPEG. An administrator manages **any** principal's picture with
+`omniglass principal setAvatar <id> --image-base64 …` and `omniglass principal removeAvatar <id>`
+(gated by `principal:set-avatar`), reading one back with `omniglass avatar list <id>` (gated by
+`principal:read`). A principal with no picture is a 404.
+
+## Secrets
+
+The [secret](/architecture/variables/) commands are generated like every other resource. `secret`
+covers the encrypted values, `secret-type` lists the shape registry, and `effective-secret` reads the
+masked cascade onto one component. Output is masked JSON, the same as the console; plaintext lives
+behind `reveal`, which the server audits and which only admin and owner may call.
+
+```sh
+omniglass secret-type list                          # the shape registry (snmp-community, basic-auth)
+omniglass secret list                               # the all-scope admin directory (masked fields)
+omniglass secret create --name core-snmp --secret-type snmp-community \
+  --owner-kind location --owner hq --fields '{"community":"public"}'
+omniglass secret update <id> --fields '{"community":"s3cret"}'   # an omitted field keeps its value
+omniglass secret reveal <id>                        # audited plaintext decrypt (secret:reveal)
+omniglass secret delete <id>
+
+omniglass effective-secret list <component>         # the masked cascade resolved onto a component
+```
+
+`--owner-kind` is one of `global | location | system | component`; `--owner` names the owning entity
+and is omitted for a `global` secret (which needs an all-scope grant). Field maps pass as a JSON object
+to `--fields`, validated against the type's shape.
+
+## Variables
+
+The [variable](/architecture/variables/) commands are generated the same way. `variable` covers the
+plaintext values and `effective-variable` reads the cascade onto one component. There is no reveal:
+the value is shown in the clear.
+
+```sh
+omniglass variable list                             # the all-scope admin directory
+omniglass variable create --name poll_interval --value-type int \
+  --owner-kind system --owner east-auditorium-av --value 30
+omniglass variable create --name retry --value-type json --owner-kind global \
+  --value '{"retries":3,"backoff":"1s"}'
+omniglass variable update <id> --value 60           # validated against the fixed value_type
+omniglass variable delete <id>
+
+omniglass effective-variable list <component>       # the cascade resolved onto a component
+```
+
+`--value-type` is one of `string | int | float | bool | json`. `--value` is **parsed as JSON**, so a
+bare `30`, `true`, or `{"k":"v"}` sends the number, the boolean, or the object; a bare word like `HDMI1`
+falls back to a string, so the common case needs no quoting. A string value that would otherwise parse
+as JSON (`30`, `true`) is quoted to force a string: `--value '"30"'`. (`secret create --fields` parses
+the same way.)
+
+## Tags
+
+The [tag](/architecture/tags/) commands split along the governance line. The `tag` resource covers the
+**key vocabulary** (minting, editing, and deleting keys, plus the global default binding), while binding a
+value onto an entity is a **custom method on the entity** (`component set-tag` and friends), so it needs
+only the write the operator already holds on that entity. `effective-tag` reads the resolved cascade onto
+one component.
+
+```sh
+omniglass tag list                                  # the governed key vocabulary
+omniglass tag create --name environment             # mint a key (tag:create, admin)
+omniglass tag create --name rack_position --applies-to '["location"]' --propagates=false
+omniglass tag update environment --applies-to '["component","system"]'
+omniglass tag setGlobal environment --value prod    # a tenant-wide default (tag:update)
+omniglass tag clearGlobal environment
+omniglass tag delete environment                    # cascades its bindings
+
+omniglass component setTag codec-1 --key environment --value dev    # component:update
+omniglass component listTags codec-1                # the bindings set directly on the component
+omniglass component removeTag codec-1 --key environment
+omniglass system setTag east-auditorium-av --key environment --value prod
+omniglass location setTag hq --key environment --value staging
+
+omniglass effective-tag list codec-1                # the cascade resolved onto a component
+```
+
+Binding is a custom method on the entity (`component setTag`), like the principal lifecycle verbs, so it
+stays clear of the top-level `tag` commands. A key name is a normalized lowercase identifier (minting a
+bad name is a 422). `--applies-to` is an entity-kind allow-list passed as a JSON array
+(`'["component","system"]'`; empty means universal), checked when a value is bound. `--propagates`
+defaults true (the value cascades to descendants); `--propagates=false` binds a flat per-entity value
+that resolves only on its own entity. Resolving onto a component **unions** keys and **overrides** values
+most-specific-wins down the cascade.
 
 ## Generated versus hand-written
 
 - **Generated** (`internal/cli/api_gen.go`, do not edit): one command per API operation.
   The resource and verb come from the AIP-style path (`POST /locations` is `location
   create`, `GET /locations/{name}` is `location get <name>`, a `:verb` custom method is
-  `<resource> <verb> <id>`, so the principal lifecycle is `principal disable`, `principal
-  deactivate`, `principal reactivate`, and `principal purge <id>`); path parameters are positional args, the request body is
-  `--flags`, and `--help` plus the example come from the operation's summary and
-  description.
+  `<resource> <verb> <id>`, so the principal lifecycle is `principal disable <id>`,
+  `principal archive <id>`, `principal restore <id>`, and `principal purge <id>`); path
+  parameters are positional args, the request body is
+  `--flags`, and OpenAPI query parameters become optional `--flags` (a set flag is
+  appended to the request query string, an unset one keeps the server default), so
+  `principal list --include-archived --kind service` filters the listing. A principal
+  `<id>` argument accepts either the uuid or a human's username (`omniglass principal
+  archive alice`), resolved by the server, so you rarely need to look a uuid up first.
+  `--help` plus the example come from the operation's summary and description.
 - **Hand-written** (`internal/cli/api_hooks.go` and the run-mode files): the client
   runtime the generated tree calls, plus commands that are not API operations, the
   `server` and `migrate` run modes and the trusted direct-DB owner lane (`bootstrap`,

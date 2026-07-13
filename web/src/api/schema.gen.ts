@@ -88,6 +88,26 @@ export interface paths {
         patch: operations["update-auth-me"];
         trace?: never;
     };
+    "/auth/me/avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get your own profile picture
+         * @description Returns the caller's profile picture as a base64-encoded JPEG. Requires authentication; self-scoped. No picture is a 404.
+         */
+        get: operations["get-auth-me-avatar"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/me:changePassword": {
         parameters: {
             query?: never;
@@ -102,6 +122,46 @@ export interface paths {
          * @description Verifies the current password and sets a new one. Requires authentication; self-scoped.
          */
         post: operations["change-auth-me-password"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/me:removeAvatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Remove your own profile picture
+         * @description Clears the caller's profile picture. Requires authentication; self-scoped.
+         */
+        post: operations["remove-auth-me-avatar"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/me:setAvatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set your own profile picture
+         * @description Sets the caller's profile picture (JPEG, PNG, or WebP, base64-encoded), normalized server-side to a 256x256 JPEG. Requires authentication; self-scoped. A bad or oversize image is a 422.
+         */
+        post: operations["set-auth-me-avatar"];
         delete?: never;
         options?: never;
         head?: never;
@@ -200,6 +260,66 @@ export interface paths {
         patch: operations["update-component"];
         trace?: never;
     };
+    "/components/{name}/effective-secrets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Effective secrets for a component
+         * @description Resolves the secrets that cascade onto a component (global -> location -> system -> component, most-specific winning), each masked, winner and shadowed candidates. Gated by secret:read; the component must be in the caller's component read scope.
+         */
+        get: operations["effective-secrets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/components/{name}/effective-tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Effective tags for a component
+         * @description Resolves the tags that cascade onto a component (global -> location -> system -> component): keys union, values override most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves only from a binding on the component itself. Gated by component:read; the component must be in the caller's component read scope.
+         */
+        get: operations["effective-tags"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/components/{name}/effective-variables": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Effective variables for a component
+         * @description Resolves the variables that cascade onto a component (global -> location -> system -> component, most-specific winning), winner and shadowed candidates. Gated by variable:read; the component must be in the caller's component read scope.
+         */
+        get: operations["effective-variables"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/components/{name}/reachability": {
         parameters: {
             query?: never;
@@ -214,6 +334,66 @@ export interface paths {
         get: operations["get-component-reachability"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/components/{name}:listTags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List tags on a component
+         * @description Lists the tags bound directly on a component (not the resolved cascade). Gated by component:read.
+         */
+        get: operations["list-component-tags"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/components/{name}:removeTag": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Remove a tag value from a component
+         * @description Removes a key's value from a component. Gated by component:update.
+         */
+        post: operations["remove-component-tag"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/components/{name}:setTag": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set a tag value on a component
+         * @description Binds a value for a key on a component. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by component:update.
+         */
+        post: operations["set-component-tag"];
         delete?: never;
         options?: never;
         head?: never;
@@ -362,6 +542,66 @@ export interface paths {
          * @description Patches a location's display_name or location_type. Gated by location:update; the read and update scopes drive the 404 versus 403 split.
          */
         patch: operations["update-location"];
+        trace?: never;
+    };
+    "/locations/{name}:listTags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List tags on a location
+         * @description Lists the tags bound directly on a location (not the resolved cascade). Gated by location:read.
+         */
+        get: operations["list-location-tags"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/locations/{name}:removeTag": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Remove a tag value from a location
+         * @description Removes a key's value from a location. Gated by location:update.
+         */
+        post: operations["remove-location-tag"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/locations/{name}:setTag": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set a tag value on a location
+         * @description Binds a value for a key on a location. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by location:update.
+         */
+        post: operations["set-location-tag"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/nodes": {
@@ -636,6 +876,26 @@ export interface paths {
         patch: operations["update-principal"];
         trace?: never;
     };
+    "/principals/{id}/avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a principal's profile picture
+         * @description Returns the principal's profile picture as a base64-encoded JPEG. Gated by principal:read (all-scope). A principal without a picture is a 404.
+         */
+        get: operations["get-principal-avatar"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/principals/{id}/grants": {
         parameters: {
             query?: never;
@@ -676,7 +936,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/principals/{id}:deactivate": {
+    "/principals/{id}:archive": {
         parameters: {
             query?: never;
             header?: never;
@@ -686,10 +946,10 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Deactivate a principal
-         * @description Soft-deletes a principal: it is hidden from the directory, can no longer authenticate, and its rows stay intact, reversibly (reactivate) until purged. Gated by principal:deactivate (all-scope). The last active owner cannot be deactivated.
+         * Archive a principal
+         * @description Soft-deletes a principal: it is hidden from the directory, can no longer authenticate, and its rows stay intact, reversibly (restore) until purged. Gated by principal:archive (all-scope). The last active owner cannot be archived.
          */
-        post: operations["deactivate-principal"];
+        post: operations["archive-principal"];
         delete?: never;
         options?: never;
         head?: never;
@@ -767,7 +1027,7 @@ export interface paths {
         put?: never;
         /**
          * Purge a principal
-         * @description Hard-deletes a deactivated principal and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. Gated by principal:purge (admin-sensitive, all-scope), and the principal must be deactivated first.
+         * @description Hard-deletes an archived principal and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. Gated by principal:purge (admin-sensitive, all-scope), and the principal must be archived first.
          */
         post: operations["purge-principal"];
         delete?: never;
@@ -776,7 +1036,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/principals/{id}:reactivate": {
+    "/principals/{id}:removeAvatar": {
         parameters: {
             query?: never;
             header?: never;
@@ -786,10 +1046,70 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Reactivate a principal
-         * @description Reverses a deactivation: the account is restored to active and can authenticate again. Gated by principal:deactivate (all-scope).
+         * Remove a principal's profile picture
+         * @description Clears another human principal's profile picture. Gated by principal:set-avatar (all-scope). Removing an absent picture is a no-op. Audited with the administrator as the actor.
          */
-        post: operations["reactivate-principal"];
+        post: operations["remove-principal-avatar"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/principals/{id}:resetPassword": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reset a principal's password
+         * @description Sets a new password for another human principal (an administrator action; the target's current password is not required). Gated by principal:reset-password (all-scope). The new password must meet the password policy; a violation is a 422. Refused on yourself (change your own password from your profile, which verifies your current one), on an owner (owners cannot be reset by anyone), or when it would exceed the caller's own capabilities (the takeover guard, shared with impersonation). The action is audited with the administrator as the actor.
+         */
+        post: operations["reset-principal-password"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/principals/{id}:restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore a principal
+         * @description Reverses an archive: the account is restored to active and can authenticate again. Gated by principal:archive (all-scope).
+         */
+        post: operations["restore-principal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/principals/{id}:setAvatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set a principal's profile picture
+         * @description Sets another human principal's profile picture (an administrator action). Gated by principal:set-avatar (all-scope). The image (JPEG, PNG, or WebP, base64-encoded) is normalized server-side to a 256x256 JPEG; a bad or oversize image is a 422. Audited with the administrator as the actor.
+         */
+        post: operations["set-principal-avatar"];
         delete?: never;
         options?: never;
         head?: never;
@@ -810,6 +1130,114 @@ export interface paths {
         get: operations["list-roles"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/secret-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List secret types
+         * @description Lists the secret_type shapes a secret can take, for the create form. Gated by secret:read.
+         */
+        get: operations["list-secret-types"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/secrets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List secrets (admin directory)
+         * @description Lists every secret with masked fields. Requires an all-scope read; the scoped, per-component view is the effective-secrets route. Gated by secret:read.
+         */
+        get: operations["list-secrets"];
+        put?: never;
+        /**
+         * Create a secret
+         * @description Seals a secret at an owner scope (a global secret needs an all-scoped grant). Fields are validated and encrypted against the type shape. Gated by secret:create.
+         */
+        post: operations["create-secret"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/secrets/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete a secret
+         * @description Removes a secret by id. Gated by secret:delete; read and delete scopes on the owner drive the 404 versus 403 split.
+         */
+        delete: operations["delete-secret"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a secret's field values
+         * @description Replaces the given field values on a secret, re-sealing secret fields. Only values change; name, type, and owner are fixed at creation. An omitted field keeps its value. Gated by secret:update.
+         */
+        patch: operations["update-secret"];
+        trace?: never;
+    };
+    "/secrets/{id}:copy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decrypt a secret for clipboard copy
+         * @description Decrypts and returns a secret's field values for a clipboard copy, audited under the copy verb (distinct from an on-screen reveal). Same exposure and the same secret:reveal gate as reveal.
+         */
+        post: operations["copy-secret"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/secrets/{id}:reveal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reveal a secret's plaintext
+         * @description Decrypts and returns a secret's field values, auditing the decrypt. Sensitive: gated by secret:reveal, which the viewer read floor does not carry, so only admin (secret:*) and owner may reveal.
+         */
+        post: operations["reveal-secret"];
         delete?: never;
         options?: never;
         head?: never;
@@ -868,6 +1296,154 @@ export interface paths {
         patch: operations["update-system"];
         trace?: never;
     };
+    "/systems/{name}:listTags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List tags on a system
+         * @description Lists the tags bound directly on a system (not the resolved cascade). Gated by system:read.
+         */
+        get: operations["list-system-tags"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/systems/{name}:removeTag": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Remove a tag value from a system
+         * @description Removes a key's value from a system. Gated by system:update.
+         */
+        post: operations["remove-system-tag"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/systems/{name}:setTag": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set a tag value on a system
+         * @description Binds a value for a key on a system. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by system:update.
+         */
+        post: operations["set-system-tag"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List tag keys
+         * @description Lists the governed key vocabulary. Rides the tag:read floor.
+         */
+        get: operations["list-tags"];
+        put?: never;
+        /**
+         * Mint a tag key
+         * @description Adds a key to the governed vocabulary. The name is normalized (a lowercase identifier). Gated by tag:create (all-scope, an admin action).
+         */
+        post: operations["create-tag"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tags/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete a tag key
+         * @description Removes a key from the vocabulary, cascading its bindings. Gated by tag:delete (all-scope).
+         */
+        delete: operations["delete-tag"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a tag key
+         * @description Replaces a key's governance fields (applies_to, propagates); the name is fixed. Gated by tag:update (all-scope).
+         */
+        patch: operations["update-tag"];
+        trace?: never;
+    };
+    "/tags/{name}:clearGlobal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Clear a global tag value
+         * @description Removes the global binding for a key. Gated by tag:update (all-scope).
+         */
+        post: operations["clear-global-tag"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tags/{name}:setGlobal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set a global tag value
+         * @description Binds a tenant-wide default value for a key at the global scope. Gated by tag:update (all-scope).
+         */
+        post: operations["set-global-tag"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/tasks": {
         parameters: {
             query?: never;
@@ -920,6 +1496,54 @@ export interface paths {
         patch: operations["update-task"];
         trace?: never;
     };
+    "/variables": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List variables (admin directory)
+         * @description Lists every variable. Requires an all-scope read; the scoped, per-component view is the effective-variables route. Gated by variable:read.
+         */
+        get: operations["list-variables"];
+        put?: never;
+        /**
+         * Create a variable
+         * @description Sets a variable at an owner scope (a global variable needs an all-scoped grant). The value is validated against value_type. Gated by variable:create.
+         */
+        post: operations["create-variable"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/variables/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete a variable
+         * @description Removes a variable by id. Gated by variable:delete; read and delete scopes on the owner drive the 404 versus 403 split.
+         */
+        delete: operations["delete-variable"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a variable's value
+         * @description Replaces a variable's value, validated against its fixed value_type. Only the value changes; name, type, and owner are fixed at creation. Gated by variable:update.
+         */
+        patch: operations["update-variable"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -963,6 +1587,16 @@ export interface components {
             readonly $schema?: string;
             bootstrapped: boolean;
         };
+        AvatarOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/AvatarOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The profile picture as a base64-encoded 256x256 JPEG */
+            image_base64: string;
+        };
         ChangePasswordInputBody: {
             /**
              * Format: uri
@@ -972,7 +1606,7 @@ export interface components {
             readonly $schema?: string;
             /** @description Your current password */
             current_password: string;
-            /** @description The new password (at least 8 characters) */
+            /** @description The new password (at least 12 characters, not a common password, not containing the username) */
             new_password: string;
         };
         ClaimNodeInputBody: {
@@ -1088,7 +1722,7 @@ export interface components {
             readonly $schema?: string;
             description?: string;
             display_name?: string;
-            /** @description Unique group name */
+            /** @description Unique group name (lowercase letters, digits, and . _ -) */
             name: string;
         };
         CreateInterfaceInputBody: {
@@ -1143,11 +1777,35 @@ export interface components {
              */
             readonly $schema?: string;
             display_name?: string;
+            /** Format: email */
             email?: string;
-            /** @description Optional initial password; the user changes it after signing in */
+            /** @description Optional initial password (at least 12 characters, not a common password, not containing the username); the user changes it after signing in */
             password?: string;
-            /** @description Unique sign-in name */
+            /** @description Unique sign-in name (lowercase letters, digits, and . _ -) */
             username: string;
+        };
+        CreateSecretInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateSecretInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The operator field map, validated against the type shape */
+            fields: {
+                [key: string]: string;
+            };
+            /** @description The cascade key; unique per owner */
+            name: string;
+            /** @description The owning entity's name; omit for a global secret */
+            owner?: string;
+            /**
+             * @description Which tier owns this secret
+             * @enum {string}
+             */
+            owner_kind: "global" | "location" | "system" | "component";
+            /** @description A secret_type id */
+            secret_type: string;
         };
         CreateSystemInputBody: {
             /**
@@ -1165,6 +1823,20 @@ export interface components {
             parent?: string;
             /** @description A system_type id */
             system_type: string;
+        };
+        CreateTagInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateTagInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Entity kinds this key may bind to (component, system, location); omit for universal */
+            applies_to?: string[] | null;
+            /** @description The normalized key: a lowercase identifier, unique tenant-wide */
+            name: string;
+            /** @description Whether bindings cascade to descendants; defaults true */
+            propagates?: boolean;
         };
         CreateTaskInputBody: {
             /**
@@ -1191,6 +1863,57 @@ export interface components {
             /** @description Inline probe settings (jsonb) */
             spec?: unknown;
         };
+        CreateVariableInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateVariableInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The cascade key; unique per owner */
+            name: string;
+            /** @description The owning entity's name; omit for a global variable */
+            owner?: string;
+            /**
+             * @description Which tier owns this variable
+             * @enum {string}
+             */
+            owner_kind: "global" | "location" | "system" | "component";
+            /** @description The value, validated against value_type */
+            value: unknown;
+            /**
+             * @description The declared value type
+             * @enum {string}
+             */
+            value_type: "string" | "int" | "float" | "bool" | "json";
+        };
+        EffectiveSecretsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/EffectiveSecretsOutputBody.json
+             */
+            readonly $schema?: string;
+            secrets: components["schemas"]["ResolvedSecretBody"][] | null;
+        };
+        EffectiveTagsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/EffectiveTagsOutputBody.json
+             */
+            readonly $schema?: string;
+            tags: components["schemas"]["ResolvedTagBody"][] | null;
+        };
+        EffectiveVariablesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/EffectiveVariablesOutputBody.json
+             */
+            readonly $schema?: string;
+            variables: components["schemas"]["ResolvedVariableBody"][] | null;
+        };
         EnrollOutputBody: {
             /**
              * Format: uri
@@ -1201,6 +1924,37 @@ export interface components {
             name: string;
             /** @description The enrollment token, shown once. Hand it to the node deployment; the node presents it to claim its NATS credential. */
             token: string;
+        };
+        EntityRemoveTagInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/EntityRemoveTagInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The tag key to remove */
+            key: string;
+        };
+        EntitySetTagInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/EntitySetTagInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The tag key (must exist and apply to this kind) */
+            key: string;
+            /** @description The bound value */
+            value: string;
+        };
+        EntityTagsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/EntityTagsOutputBody.json
+             */
+            readonly $schema?: string;
+            tags: components["schemas"]["TagBindingBody"][] | null;
         };
         ErrorDetail: {
             /** @description Where the error occurred, e.g. 'body.items[3].tags' or 'path.thing-id' */
@@ -1248,6 +2002,16 @@ export interface components {
              * @example https://example.com/errors/example
              */
             type: string;
+        };
+        GlobalBindingInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/GlobalBindingInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The bound value */
+            value: string;
         };
         GrantBody: {
             /**
@@ -1313,6 +2077,10 @@ export interface components {
             readonly $schema?: string;
             display_name?: string;
             email?: string;
+            /** @description True when the principal has a profile picture; fetch it from the avatar endpoint. */
+            has_avatar?: boolean;
+            /** @description True when an admin reset the password and the user must change it before doing anything else; the console gates every route to the change-password form until it clears. */
+            must_change_password?: boolean;
             username: string;
         };
         ImpersonateInputBody: {
@@ -1446,6 +2214,24 @@ export interface components {
             readonly $schema?: string;
             principals: components["schemas"]["PrincipalBody"][] | null;
         };
+        ListSecretTypesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListSecretTypesOutputBody.json
+             */
+            readonly $schema?: string;
+            secret_types: components["schemas"]["SecretTypeBody"][] | null;
+        };
+        ListSecretsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListSecretsOutputBody.json
+             */
+            readonly $schema?: string;
+            secrets: components["schemas"]["SecretBody"][] | null;
+        };
         ListSystemsOutputBody: {
             /**
              * Format: uri
@@ -1455,6 +2241,15 @@ export interface components {
             readonly $schema?: string;
             systems: components["schemas"]["SystemBody"][] | null;
         };
+        ListTagsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListTagsOutputBody.json
+             */
+            readonly $schema?: string;
+            tags: components["schemas"]["TagBody"][] | null;
+        };
         ListTasksOutputBody: {
             /**
              * Format: uri
@@ -1463,6 +2258,15 @@ export interface components {
              */
             readonly $schema?: string;
             tasks: components["schemas"]["TaskBody"][] | null;
+        };
+        ListVariablesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListVariablesOutputBody.json
+             */
+            readonly $schema?: string;
+            variables: components["schemas"]["VariableBody"][] | null;
         };
         LocationBody: {
             /**
@@ -1541,9 +2345,9 @@ export interface components {
             active: boolean;
             /**
              * Format: date-time
-             * @description Set when the principal is deactivated (soft-deleted); absent means live
+             * @description Set when the principal is archived (soft-deleted); absent means live
              */
-            deactivated_at?: string;
+            archived_at?: string;
             grants: components["schemas"]["GrantBody"][] | null;
             groups: components["schemas"]["PrincipalGroupRef"][] | null;
             human?: components["schemas"]["HumanBody"];
@@ -1617,6 +2421,90 @@ export interface components {
             component: string;
             interfaces: components["schemas"]["ReachInterfaceBody"][] | null;
         };
+        ResetPasswordInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ResetPasswordInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The new password (at least 12 characters, not a common password, not containing the username) */
+            password: string;
+        };
+        ResolvedSecretBody: {
+            /**
+             * Format: int64
+             * @description Cascade tier: 0 global, 1 location, 2 system, 3 component
+             */
+            band: number;
+            /**
+             * Format: int64
+             * @description Distance up the tier's tree from the component (0 nearest)
+             */
+            depth: number;
+            fields: components["schemas"]["SecretFieldBody"][] | null;
+            id: string;
+            name: string;
+            owner_id?: string;
+            owner_kind: string;
+            owner_name?: string;
+            secret_type: string;
+            /** @description True for the resolved value; false for a shadowed candidate */
+            winner: boolean;
+        };
+        ResolvedTagBody: {
+            /**
+             * Format: int64
+             * @description Cascade tier: 0 global, 1 location, 2 system, 3 component
+             */
+            band: number;
+            /**
+             * Format: int64
+             * @description Distance up the tier's tree from the component (0 nearest)
+             */
+            depth: number;
+            key: string;
+            owner_id?: string;
+            owner_kind: string;
+            owner_name?: string;
+            value: string;
+            /** @description True for the resolved value; false for a shadowed candidate */
+            winner: boolean;
+        };
+        ResolvedVariableBody: {
+            /**
+             * Format: int64
+             * @description Cascade tier: 0 global, 1 location, 2 system, 3 component
+             */
+            band: number;
+            /**
+             * Format: int64
+             * @description Distance up the tier's tree from the component (0 nearest)
+             */
+            depth: number;
+            id: string;
+            name: string;
+            owner_id?: string;
+            owner_kind: string;
+            owner_name?: string;
+            /** @description The value, shape given by value_type */
+            value: unknown;
+            value_type: string;
+            /** @description True for the resolved value; false for a shadowed candidate */
+            winner: boolean;
+        };
+        RevealSecretOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/RevealSecretOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The decrypted field values, keyed by field name */
+            fields: {
+                [key: string]: string;
+            };
+        };
         RoleBody: {
             description?: string;
             display_name?: string;
@@ -1634,6 +2522,60 @@ export interface components {
              */
             readonly $schema?: string;
             roles: components["schemas"]["RoleBody"][] | null;
+        };
+        SecretBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/SecretBody.json
+             */
+            readonly $schema?: string;
+            fields: components["schemas"]["SecretFieldBody"][] | null;
+            id: string;
+            name: string;
+            owner_id?: string;
+            owner_kind: string;
+            owner_name?: string;
+            secret_type: string;
+        };
+        SecretFieldBody: {
+            name: string;
+            /** @description Whether the field is encrypted at rest and masked here */
+            secret: boolean;
+            value: string;
+        };
+        SecretTypeBody: {
+            display_name: string;
+            fields: components["schemas"]["SecretTypeFieldBody"][] | null;
+            id: string;
+            official: boolean;
+        };
+        SecretTypeFieldBody: {
+            name: string;
+            /** @description operator (set at creation) or lifecycle (filled by the secret's own machinery) */
+            origin: string;
+            secret: boolean;
+            type: string;
+        };
+        SetAvatarInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/SetAvatarInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The image (JPEG, PNG, or WebP), base64-encoded; normalized server-side to a 256x256 JPEG */
+            image_base64: string;
+        };
+        SetAvatarMeInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/SetAvatarMeInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The image (JPEG, PNG, or WebP), base64-encoded; normalized server-side to a 256x256 JPEG */
+            image_base64: string;
         };
         SvcBody: {
             label: string;
@@ -1653,6 +2595,33 @@ export interface components {
             name: string;
             parent_id?: string;
             system_type: string;
+        };
+        TagBindingBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/TagBindingBody.json
+             */
+            readonly $schema?: string;
+            key: string;
+            owner_id?: string;
+            owner_kind: string;
+            owner_name?: string;
+            value: string;
+        };
+        TagBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/TagBody.json
+             */
+            readonly $schema?: string;
+            /** @description Entity kinds this key may bind to; empty means universal */
+            applies_to: string[] | null;
+            id: string;
+            name: string;
+            /** @description Whether a bound value cascades to descendants */
+            propagates: boolean;
         };
         TaskBody: {
             /**
@@ -1693,7 +2662,7 @@ export interface components {
             description?: string;
             /** @description Display name; empty clears it */
             display_name?: string;
-            /** @description Group name; renaming is safe */
+            /** @description Group name (lowercase letters, digits, and . _ -); renaming is safe */
             name?: string;
         };
         UpdateInterfaceInputBody: {
@@ -1739,8 +2708,20 @@ export interface components {
             display_name?: string;
             /** @description Email; empty clears it */
             email?: string;
-            /** @description Sign-in name; renaming is safe */
+            /** @description Sign-in name (lowercase letters, digits, and . _ -); renaming is safe */
             username?: string;
+        };
+        UpdateSecretInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/UpdateSecretInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The field values to replace; an omitted field keeps its value */
+            fields: {
+                [key: string]: string;
+            };
         };
         UpdateSystemInputBody: {
             /**
@@ -1751,6 +2732,18 @@ export interface components {
             readonly $schema?: string;
             display_name?: string;
             system_type?: string;
+        };
+        UpdateTagInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/UpdateTagInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Entity kinds this key may bind to; omit for universal */
+            applies_to?: string[] | null;
+            /** @description Whether bindings cascade to descendants; defaults true */
+            propagates?: boolean;
         };
         UpdateTaskInputBody: {
             /**
@@ -1766,6 +2759,32 @@ export interface components {
             node?: string;
             /** @description Replace the inline probe settings (jsonb) */
             spec?: unknown;
+        };
+        UpdateVariableInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/UpdateVariableInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The new value, validated against the fixed value_type */
+            value: unknown;
+        };
+        VariableBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/VariableBody.json
+             */
+            readonly $schema?: string;
+            id: string;
+            name: string;
+            owner_id?: string;
+            owner_kind: string;
+            owner_name?: string;
+            /** @description The value, shape given by value_type */
+            value: unknown;
+            value_type: string;
         };
     };
     responses: never;
@@ -1965,6 +2984,35 @@ export interface operations {
             };
         };
     };
+    "get-auth-me-avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AvatarOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "change-auth-me-password": {
         parameters: {
             query?: never;
@@ -1975,6 +3023,64 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ChangePasswordInputBody"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "remove-auth-me-avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "set-auth-me-avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetAvatarMeInputBody"];
             };
         };
         responses: {
@@ -2220,6 +3326,102 @@ export interface operations {
             };
         };
     };
+    "effective-secrets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The component's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EffectiveSecretsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "effective-tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The component's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EffectiveTagsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "effective-variables": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The component's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EffectiveVariablesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "get-component-reachability": {
         parameters: {
             query?: never;
@@ -2239,6 +3441,108 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReachabilityOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-component-tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The entity's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityTagsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "remove-component-tag": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The entity's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EntityRemoveTagInputBody"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "set-component-tag": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The entity's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EntitySetTagInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagBindingBody"];
                 };
             };
             /** @description Error */
@@ -2615,6 +3919,108 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LocationBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-location-tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The entity's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityTagsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "remove-location-tag": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The entity's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EntityRemoveTagInputBody"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "set-location-tag": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The entity's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EntitySetTagInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagBindingBody"];
                 };
             };
             /** @description Error */
@@ -3168,6 +4574,8 @@ export interface operations {
             query?: {
                 /** @description Optionally filter by principal kind */
                 kind?: "human" | "service";
+                /** @description Include archived (soft-deleted) principals, hidden by default */
+                include_archived?: boolean;
             };
             header?: never;
             path?: never;
@@ -3233,7 +4641,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The principal's id (uuid) */
+                /** @description The principal, addressed by its uuid or a human username */
                 id: string;
             };
             cookie?: never;
@@ -3265,7 +4673,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The principal's id (uuid) */
+                /** @description The principal, addressed by its uuid or a human username */
                 id: string;
             };
             cookie?: never;
@@ -3296,12 +4704,44 @@ export interface operations {
             };
         };
     };
+    "get-principal-avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The principal, addressed by its uuid or a human username */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AvatarOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "create-grant": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description The principal's id (uuid) */
+                /** @description The principal, addressed by its uuid or a human username */
                 id: string;
             };
             cookie?: never;
@@ -3337,7 +4777,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The principal's id (uuid) */
+                /** @description The principal, addressed by its uuid or a human username */
                 id: string;
                 /** @description The grant's id (uuid) */
                 grantId: string;
@@ -3364,12 +4804,12 @@ export interface operations {
             };
         };
     };
-    "deactivate-principal": {
+    "archive-principal": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description The principal's id (uuid) */
+                /** @description The principal, addressed by its uuid or a human username */
                 id: string;
             };
             cookie?: never;
@@ -3399,7 +4839,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The principal's id (uuid) */
+                /** @description The principal, addressed by its uuid or a human username */
                 id: string;
             };
             cookie?: never;
@@ -3429,7 +4869,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The principal's id (uuid) */
+                /** @description The principal, addressed by its uuid or a human username */
                 id: string;
             };
             cookie?: never;
@@ -3459,7 +4899,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The principal to impersonate (uuid) */
+                /** @description The principal to impersonate, addressed by its uuid or a human username */
                 id: string;
             };
             cookie?: never;
@@ -3522,7 +4962,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The principal's id (uuid) */
+                /** @description The principal, addressed by its uuid or a human username */
                 id: string;
             };
             cookie?: never;
@@ -3547,17 +4987,115 @@ export interface operations {
             };
         };
     };
-    "reactivate-principal": {
+    "remove-principal-avatar": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description The principal's id (uuid) */
+                /** @description The principal, addressed by its uuid or a human username */
                 id: string;
             };
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "reset-principal-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The principal, addressed by its uuid or a human username */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResetPasswordInputBody"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "restore-principal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The principal, addressed by its uuid or a human username */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "set-principal-avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The principal, addressed by its uuid or a human username */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetAvatarInputBody"];
+            };
+        };
         responses: {
             /** @description No Content */
             204: {
@@ -3593,6 +5131,227 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RolesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-secret-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListSecretTypesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-secrets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListSecretsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-secret": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSecretInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-secret": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The secret's id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "update-secret": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The secret's id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSecretInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "copy-secret": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The secret's id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevealSecretOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "reveal-secret": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The secret's id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevealSecretOutputBody"];
                 };
             };
             /** @description Error */
@@ -3765,6 +5524,302 @@ export interface operations {
             };
         };
     };
+    "list-system-tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The entity's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityTagsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "remove-system-tag": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The entity's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EntityRemoveTagInputBody"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "set-system-tag": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The entity's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EntitySetTagInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagBindingBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListTagsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-tag": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateTagInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-tag": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The tag key */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "update-tag": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The tag key */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateTagInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "clear-global-tag": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The tag key */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "set-global-tag": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The tag key */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GlobalBindingInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagBindingBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "list-tasks": {
         parameters: {
             query?: never;
@@ -3911,6 +5966,134 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TaskBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-variables": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListVariablesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-variable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateVariableInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VariableBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-variable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The variable's id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "update-variable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The variable's id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateVariableInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VariableBody"];
                 };
             };
             /** @description Error */

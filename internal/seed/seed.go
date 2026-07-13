@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/hyperscaleav/omniglass/internal/secret"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"gopkg.in/yaml.v3"
 )
@@ -32,6 +33,9 @@ var datapointTypesYAML []byte
 
 //go:embed interface_types.yaml
 var interfaceTypesYAML []byte
+
+//go:embed secret_types.yaml
+var secretTypesYAML []byte
 
 type rolesDoc struct {
 	Roles []struct {
@@ -88,6 +92,19 @@ type interfaceTypesDoc struct {
 	} `yaml:"interface_types"`
 }
 
+type secretTypesDoc struct {
+	SecretTypes []struct {
+		ID          string `yaml:"id"`
+		DisplayName string `yaml:"display_name"`
+		Fields      []struct {
+			Name   string `yaml:"name"`
+			Type   string `yaml:"type"`
+			Secret bool   `yaml:"secret"`
+			Origin string `yaml:"origin"`
+		} `yaml:"fields"`
+	} `yaml:"secret_types"`
+}
+
 // Run upserts the ship-with reference data: the official roles and location
 // types. Idempotent, so it is safe to call on every boot; a release that changes
 // a default takes effect on the next start.
@@ -107,7 +124,10 @@ func Run(ctx context.Context, gw storage.Gateway) error {
 	if err := seedInterfaceTypes(ctx, gw); err != nil {
 		return err
 	}
-	return seedDatapointTypes(ctx, gw)
+	if err := seedDatapointTypes(ctx, gw); err != nil {
+		return err
+	}
+	return seedSecretTypes(ctx, gw)
 }
 
 func seedInterfaceTypes(ctx context.Context, gw storage.Gateway) error {
@@ -148,6 +168,28 @@ func seedDatapointTypes(ctx context.Context, gw storage.Gateway) error {
 			Scope: "official", Name: dt.Name, DisplayName: dt.DisplayName,
 			Kind: dt.Kind, ValueType: dt.ValueType, Unit: unit,
 			Validation: validation, Description: dt.Description,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func seedSecretTypes(ctx context.Context, gw storage.Gateway) error {
+	var doc secretTypesDoc
+	if err := yaml.Unmarshal(secretTypesYAML, &doc); err != nil {
+		return fmt.Errorf("seed: parse secret_types: %w", err)
+	}
+	for _, st := range doc.SecretTypes {
+		fields := make([]secret.Field, len(st.Fields))
+		for i, f := range st.Fields {
+			fields[i] = secret.Field{Name: f.Name, Type: f.Type, Secret: f.Secret, Origin: secret.Origin(f.Origin)}
+		}
+		if err := gw.UpsertSecretType(ctx, storage.SecretType{
+			ID:          st.ID,
+			Official:    true,
+			DisplayName: st.DisplayName,
+			Fields:      fields,
 		}); err != nil {
 			return err
 		}

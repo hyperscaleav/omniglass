@@ -98,4 +98,20 @@ func TestSeedRolesIdempotent(t *testing.T) {
 	if compTypeCount != 11 {
 		t.Errorf("official component_types = %d, want 11", compTypeCount)
 	}
+
+	// The official secret_types seed with their per-field shape.
+	var secTypeCount int
+	if err := conn.QueryRow(ctx, `select count(*) from secret_type where official`).Scan(&secTypeCount); err != nil {
+		t.Fatalf("count secret_types: %v", err)
+	}
+	if secTypeCount != 2 {
+		t.Errorf("official secret_types = %d, want 2", secTypeCount)
+	}
+	var community string
+	if err := conn.QueryRow(ctx, `select schema->0->>'name' from secret_type where id = 'snmp-community'`).Scan(&community); err != nil {
+		t.Fatalf("read snmp-community schema: %v", err)
+	}
+	if community != "community" {
+		t.Errorf("snmp-community first field = %q, want community", community)
+	}
 }

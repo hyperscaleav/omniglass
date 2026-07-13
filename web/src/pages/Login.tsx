@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "@solidjs/router";
 import { useLogin, useTokenLogin } from "../lib/auth";
 import { api } from "../api/client";
 import { BrandMark, Wordmark } from "../components/Brand";
+import Button from "../components/Button";
 
 // Login signs in with a username + password (the default, session-cookie path) or,
 // behind a toggle, a pasted bearer token. On success it lands at ?next= (a safe
@@ -124,10 +125,9 @@ export default function Login() {
             <Show when={error()}>
               <div role="alert" class="alert alert-error alert-soft text-sm"><span>{error()}</span></div>
             </Show>
-            <button type="submit" class="btn btn-action w-full" disabled={busy() || !canSubmit()}>
-              <Show when={busy()}><span class="loading loading-spinner loading-xs" /></Show>
+            <Button type="submit" intent="action" size="md" class="w-full" loading={busy()} disabled={!canSubmit()}>
               {busy() ? "Signing in…" : "Sign in"}
-            </button>
+            </Button>
           </form>
           <button
             type="button"

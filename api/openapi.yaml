@@ -78,6 +78,22 @@ components:
       required:
         - bootstrapped
       type: object
+    AvatarOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/AvatarOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        image_base64:
+          description: The profile picture as a base64-encoded 256x256 JPEG
+          type: string
+      required:
+        - image_base64
+      type: object
     ChangePasswordInputBody:
       additionalProperties: false
       properties:
@@ -92,9 +108,9 @@ components:
           description: Your current password
           type: string
         new_password:
-          description: The new password (at least 8 characters)
+          description: The new password (at least 12 characters, not a common password, not containing the username)
           maxLength: 256
-          minLength: 8
+          minLength: 12
           type: string
       required:
         - current_password
@@ -304,9 +320,10 @@ components:
           maxLength: 200
           type: string
         name:
-          description: Unique group name
+          description: Unique group name (lowercase letters, digits, and . _ -)
           maxLength: 200
           minLength: 1
+          pattern: ^[a-z0-9][a-z0-9._-]*$
           type: string
       required:
         - name
@@ -401,20 +418,62 @@ components:
           maxLength: 200
           type: string
         email:
+          format: email
           maxLength: 320
           type: string
         password:
-          description: Optional initial password; the user changes it after signing in
+          description: Optional initial password (at least 12 characters, not a common password, not containing the username); the user changes it after signing in
           maxLength: 256
-          minLength: 8
+          minLength: 12
           type: string
         username:
-          description: Unique sign-in name
+          description: Unique sign-in name (lowercase letters, digits, and . _ -)
           maxLength: 200
           minLength: 1
+          pattern: ^[a-z0-9][a-z0-9._-]*$
           type: string
       required:
         - username
+      type: object
+    CreateSecretInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateSecretInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        fields:
+          additionalProperties:
+            type: string
+          description: The operator field map, validated against the type shape
+          type: object
+        name:
+          description: The cascade key; unique per owner
+          minLength: 1
+          type: string
+        owner:
+          description: The owning entity's name; omit for a global secret
+          type: string
+        owner_kind:
+          description: Which tier owns this secret
+          enum:
+            - global
+            - location
+            - system
+            - component
+          type: string
+        secret_type:
+          description: A secret_type id
+          minLength: 1
+          type: string
+      required:
+        - name
+        - secret_type
+        - owner_kind
+        - fields
       type: object
     CreateSystemInputBody:
       additionalProperties: false
@@ -445,6 +504,33 @@ components:
       required:
         - name
         - system_type
+      type: object
+    CreateTagInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateTagInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        applies_to:
+          description: Entity kinds this key may bind to (component, system, location); omit for universal
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        name:
+          description: "The normalized key: a lowercase identifier, unique tenant-wide"
+          minLength: 1
+          type: string
+        propagates:
+          description: Whether bindings cascade to descendants; defaults true
+          type: boolean
+      required:
+        - name
       type: object
     CreateTaskInputBody:
       additionalProperties: false
@@ -480,6 +566,105 @@ components:
         - mode
         - interface_id
       type: object
+    CreateVariableInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateVariableInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        name:
+          description: The cascade key; unique per owner
+          minLength: 1
+          type: string
+        owner:
+          description: The owning entity's name; omit for a global variable
+          type: string
+        owner_kind:
+          description: Which tier owns this variable
+          enum:
+            - global
+            - location
+            - system
+            - component
+          type: string
+        value:
+          description: The value, validated against value_type
+        value_type:
+          description: The declared value type
+          enum:
+            - string
+            - int
+            - float
+            - bool
+            - json
+          type: string
+      required:
+        - name
+        - value_type
+        - owner_kind
+        - value
+      type: object
+    EffectiveSecretsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/EffectiveSecretsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        secrets:
+          items:
+            $ref: "#/components/schemas/ResolvedSecretBody"
+          type:
+            - array
+            - "null"
+      required:
+        - secrets
+      type: object
+    EffectiveTagsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/EffectiveTagsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        tags:
+          items:
+            $ref: "#/components/schemas/ResolvedTagBody"
+          type:
+            - array
+            - "null"
+      required:
+        - tags
+      type: object
+    EffectiveVariablesOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/EffectiveVariablesOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        variables:
+          items:
+            $ref: "#/components/schemas/ResolvedVariableBody"
+          type:
+            - array
+            - "null"
+      required:
+        - variables
+      type: object
     EnrollOutputBody:
       additionalProperties: false
       properties:
@@ -498,6 +683,64 @@ components:
       required:
         - name
         - token
+      type: object
+    EntityRemoveTagInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/EntityRemoveTagInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        key:
+          description: The tag key to remove
+          minLength: 1
+          type: string
+      required:
+        - key
+      type: object
+    EntitySetTagInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/EntitySetTagInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        key:
+          description: The tag key (must exist and apply to this kind)
+          minLength: 1
+          type: string
+        value:
+          description: The bound value
+          minLength: 1
+          type: string
+      required:
+        - key
+        - value
+      type: object
+    EntityTagsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/EntityTagsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        tags:
+          items:
+            $ref: "#/components/schemas/TagBindingBody"
+          type:
+            - array
+            - "null"
+      required:
+        - tags
       type: object
     ErrorDetail:
       additionalProperties: false
@@ -557,6 +800,23 @@ components:
             - https://example.com/errors/example
           format: uri
           type: string
+      type: object
+    GlobalBindingInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/GlobalBindingInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        value:
+          description: The bound value
+          minLength: 1
+          type: string
+      required:
+        - value
       type: object
     GrantBody:
       additionalProperties: false
@@ -659,6 +919,12 @@ components:
           type: string
         email:
           type: string
+        has_avatar:
+          description: True when the principal has a profile picture; fetch it from the avatar endpoint.
+          type: boolean
+        must_change_password:
+          description: True when an admin reset the password and the user must change it before doing anything else; the console gates every route to the change-password form until it clears.
+          type: boolean
         username:
           type: string
       required:
@@ -916,6 +1182,44 @@ components:
       required:
         - principals
       type: object
+    ListSecretTypesOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListSecretTypesOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        secret_types:
+          items:
+            $ref: "#/components/schemas/SecretTypeBody"
+          type:
+            - array
+            - "null"
+      required:
+        - secret_types
+      type: object
+    ListSecretsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListSecretsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        secrets:
+          items:
+            $ref: "#/components/schemas/SecretBody"
+          type:
+            - array
+            - "null"
+      required:
+        - secrets
+      type: object
     ListSystemsOutputBody:
       additionalProperties: false
       properties:
@@ -935,6 +1239,25 @@ components:
       required:
         - systems
       type: object
+    ListTagsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListTagsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        tags:
+          items:
+            $ref: "#/components/schemas/TagBody"
+          type:
+            - array
+            - "null"
+      required:
+        - tags
+      type: object
     ListTasksOutputBody:
       additionalProperties: false
       properties:
@@ -953,6 +1276,25 @@ components:
             - "null"
       required:
         - tasks
+      type: object
+    ListVariablesOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListVariablesOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        variables:
+          items:
+            $ref: "#/components/schemas/VariableBody"
+          type:
+            - array
+            - "null"
+      required:
+        - variables
       type: object
     LocationBody:
       additionalProperties: false
@@ -1111,8 +1453,8 @@ components:
           type: string
         active:
           type: boolean
-        deactivated_at:
-          description: Set when the principal is deactivated (soft-deleted); absent means live
+        archived_at:
+          description: Set when the principal is archived (soft-deleted); absent means live
           format: date-time
           type: string
         grants:
@@ -1277,6 +1619,154 @@ components:
         - component
         - interfaces
       type: object
+    ResetPasswordInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ResetPasswordInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        password:
+          description: The new password (at least 12 characters, not a common password, not containing the username)
+          maxLength: 256
+          minLength: 12
+          type: string
+      required:
+        - password
+      type: object
+    ResolvedSecretBody:
+      additionalProperties: false
+      properties:
+        band:
+          description: "Cascade tier: 0 global, 1 location, 2 system, 3 component"
+          format: int64
+          type: integer
+        depth:
+          description: Distance up the tier's tree from the component (0 nearest)
+          format: int64
+          type: integer
+        fields:
+          items:
+            $ref: "#/components/schemas/SecretFieldBody"
+          type:
+            - array
+            - "null"
+        id:
+          type: string
+        name:
+          type: string
+        owner_id:
+          type: string
+        owner_kind:
+          type: string
+        owner_name:
+          type: string
+        secret_type:
+          type: string
+        winner:
+          description: True for the resolved value; false for a shadowed candidate
+          type: boolean
+      required:
+        - id
+        - name
+        - secret_type
+        - owner_kind
+        - band
+        - depth
+        - winner
+        - fields
+      type: object
+    ResolvedTagBody:
+      additionalProperties: false
+      properties:
+        band:
+          description: "Cascade tier: 0 global, 1 location, 2 system, 3 component"
+          format: int64
+          type: integer
+        depth:
+          description: Distance up the tier's tree from the component (0 nearest)
+          format: int64
+          type: integer
+        key:
+          type: string
+        owner_id:
+          type: string
+        owner_kind:
+          type: string
+        owner_name:
+          type: string
+        value:
+          type: string
+        winner:
+          description: True for the resolved value; false for a shadowed candidate
+          type: boolean
+      required:
+        - key
+        - value
+        - owner_kind
+        - band
+        - depth
+        - winner
+      type: object
+    ResolvedVariableBody:
+      additionalProperties: false
+      properties:
+        band:
+          description: "Cascade tier: 0 global, 1 location, 2 system, 3 component"
+          format: int64
+          type: integer
+        depth:
+          description: Distance up the tier's tree from the component (0 nearest)
+          format: int64
+          type: integer
+        id:
+          type: string
+        name:
+          type: string
+        owner_id:
+          type: string
+        owner_kind:
+          type: string
+        owner_name:
+          type: string
+        value:
+          description: The value, shape given by value_type
+        value_type:
+          type: string
+        winner:
+          description: True for the resolved value; false for a shadowed candidate
+          type: boolean
+      required:
+        - id
+        - name
+        - value_type
+        - owner_kind
+        - band
+        - depth
+        - winner
+        - value
+      type: object
+    RevealSecretOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/RevealSecretOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        fields:
+          additionalProperties:
+            type: string
+          description: The decrypted field values, keyed by field name
+          type: object
+      required:
+        - fields
+      type: object
     RoleBody:
       additionalProperties: false
       properties:
@@ -1332,6 +1822,127 @@ components:
       required:
         - roles
       type: object
+    SecretBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/SecretBody.json
+          format: uri
+          readOnly: true
+          type: string
+        fields:
+          items:
+            $ref: "#/components/schemas/SecretFieldBody"
+          type:
+            - array
+            - "null"
+        id:
+          type: string
+        name:
+          type: string
+        owner_id:
+          type: string
+        owner_kind:
+          type: string
+        owner_name:
+          type: string
+        secret_type:
+          type: string
+      required:
+        - id
+        - name
+        - secret_type
+        - owner_kind
+        - fields
+      type: object
+    SecretFieldBody:
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+        secret:
+          description: Whether the field is encrypted at rest and masked here
+          type: boolean
+        value:
+          type: string
+      required:
+        - name
+        - value
+        - secret
+      type: object
+    SecretTypeBody:
+      additionalProperties: false
+      properties:
+        display_name:
+          type: string
+        fields:
+          items:
+            $ref: "#/components/schemas/SecretTypeFieldBody"
+          type:
+            - array
+            - "null"
+        id:
+          type: string
+        official:
+          type: boolean
+      required:
+        - id
+        - display_name
+        - official
+        - fields
+      type: object
+    SecretTypeFieldBody:
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+        origin:
+          description: operator (set at creation) or lifecycle (filled by the secret's own machinery)
+          type: string
+        secret:
+          type: boolean
+        type:
+          type: string
+      required:
+        - name
+        - type
+        - secret
+        - origin
+      type: object
+    SetAvatarInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/SetAvatarInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        image_base64:
+          description: The image (JPEG, PNG, or WebP), base64-encoded; normalized server-side to a 256x256 JPEG
+          type: string
+      required:
+        - image_base64
+      type: object
+    SetAvatarMeInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/SetAvatarMeInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        image_base64:
+          description: The image (JPEG, PNG, or WebP), base64-encoded; normalized server-side to a 256x256 JPEG
+          type: string
+      required:
+        - image_base64
+      type: object
     SvcBody:
       additionalProperties: false
       properties:
@@ -1373,6 +1984,61 @@ components:
         - id
         - name
         - system_type
+      type: object
+    TagBindingBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/TagBindingBody.json
+          format: uri
+          readOnly: true
+          type: string
+        key:
+          type: string
+        owner_id:
+          type: string
+        owner_kind:
+          type: string
+        owner_name:
+          type: string
+        value:
+          type: string
+      required:
+        - key
+        - value
+        - owner_kind
+      type: object
+    TagBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/TagBody.json
+          format: uri
+          readOnly: true
+          type: string
+        applies_to:
+          description: Entity kinds this key may bind to; empty means universal
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        id:
+          type: string
+        name:
+          type: string
+        propagates:
+          description: Whether a bound value cascades to descendants
+          type: boolean
+      required:
+        - id
+        - name
+        - applies_to
+        - propagates
       type: object
     TaskBody:
       additionalProperties: false
@@ -1440,9 +2106,10 @@ components:
           maxLength: 200
           type: string
         name:
-          description: Group name; renaming is safe
+          description: Group name (lowercase letters, digits, and . _ -); renaming is safe
           maxLength: 200
           minLength: 1
+          pattern: ^[a-z0-9][a-z0-9._-]*$
           type: string
       type: object
     UpdateInterfaceInputBody:
@@ -1510,10 +2177,29 @@ components:
           maxLength: 320
           type: string
         username:
-          description: Sign-in name; renaming is safe
+          description: Sign-in name (lowercase letters, digits, and . _ -); renaming is safe
           maxLength: 200
           minLength: 1
+          pattern: ^[a-z0-9][a-z0-9._-]*$
           type: string
+      type: object
+    UpdateSecretInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/UpdateSecretInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        fields:
+          additionalProperties:
+            type: string
+          description: The field values to replace; an omitted field keeps its value
+          type: object
+      required:
+        - fields
       type: object
     UpdateSystemInputBody:
       additionalProperties: false
@@ -1529,6 +2215,27 @@ components:
           type: string
         system_type:
           type: string
+      type: object
+    UpdateTagInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/UpdateTagInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        applies_to:
+          description: Entity kinds this key may bind to; omit for universal
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        propagates:
+          description: Whether bindings cascade to descendants; defaults true
+          type: boolean
       type: object
     UpdateTaskInputBody:
       additionalProperties: false
@@ -1550,6 +2257,52 @@ components:
           type: string
         spec:
           description: Replace the inline probe settings (jsonb)
+      type: object
+    UpdateVariableInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/UpdateVariableInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        value:
+          description: The new value, validated against the fixed value_type
+      required:
+        - value
+      type: object
+    VariableBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/VariableBody.json
+          format: uri
+          readOnly: true
+          type: string
+        id:
+          type: string
+        name:
+          type: string
+        owner_id:
+          type: string
+        owner_kind:
+          type: string
+        owner_name:
+          type: string
+        value:
+          description: The value, shape given by value_type
+        value_type:
+          type: string
+      required:
+        - id
+        - name
+        - value_type
+        - owner_kind
+        - value
       type: object
 info:
   title: Omniglass
@@ -1710,6 +2463,24 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Update your own profile
+  /auth/me/avatar:
+    get:
+      description: Returns the caller's profile picture as a base64-encoded JPEG. Requires authentication; self-scoped. No picture is a 404.
+      operationId: get-auth-me-avatar
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AvatarOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get your own profile picture
   /auth/me:changePassword:
     post:
       description: Verifies the current password and sets a new one. Requires authentication; self-scoped.
@@ -1730,6 +2501,40 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Change your own password
+  /auth/me:removeAvatar:
+    post:
+      description: Clears the caller's profile picture. Requires authentication; self-scoped.
+      operationId: remove-auth-me-avatar
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Remove your own profile picture
+  /auth/me:setAvatar:
+    post:
+      description: Sets the caller's profile picture (JPEG, PNG, or WebP, base64-encoded), normalized server-side to a 256x256 JPEG. Requires authentication; self-scoped. A bad or oversize image is a 422.
+      operationId: set-auth-me-avatar
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetAvatarMeInputBody"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Set your own profile picture
   /auth/me:stopImpersonation:
     post:
       description: Revokes the impersonation session presented by the request token, ending the view-as / act-as. Requires an impersonation token.
@@ -1885,6 +2690,84 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Update a component
+  /components/{name}/effective-secrets:
+    get:
+      description: Resolves the secrets that cascade onto a component (global -> location -> system -> component, most-specific winning), each masked, winner and shadowed candidates. Gated by secret:read; the component must be in the caller's component read scope.
+      operationId: effective-secrets
+      parameters:
+        - description: The component's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The component's name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EffectiveSecretsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Effective secrets for a component
+  /components/{name}/effective-tags:
+    get:
+      description: "Resolves the tags that cascade onto a component (global -> location -> system -> component): keys union, values override most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves only from a binding on the component itself. Gated by component:read; the component must be in the caller's component read scope."
+      operationId: effective-tags
+      parameters:
+        - description: The component's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The component's name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EffectiveTagsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Effective tags for a component
+  /components/{name}/effective-variables:
+    get:
+      description: Resolves the variables that cascade onto a component (global -> location -> system -> component, most-specific winning), winner and shadowed candidates. Gated by variable:read; the component must be in the caller's component read scope.
+      operationId: effective-variables
+      parameters:
+        - description: The component's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The component's name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EffectiveVariablesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Effective variables for a component
   /components/{name}/reachability:
     get:
       description: Composes, per interface, the latest reachability verdict, the probe-layer signals that compose it, and the recent verdict transitions for the availability strip. Gated by component:read; an out-of-scope component is a non-disclosing 404.
@@ -1911,6 +2794,92 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Read a component's per-interface reachability
+  /components/{name}:listTags:
+    get:
+      description: Lists the tags bound directly on a component (not the resolved cascade). Gated by component:read.
+      operationId: list-component-tags
+      parameters:
+        - description: The entity's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The entity's name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntityTagsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List tags on a component
+  /components/{name}:removeTag:
+    post:
+      description: Removes a key's value from a component. Gated by component:update.
+      operationId: remove-component-tag
+      parameters:
+        - description: The entity's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The entity's name
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EntityRemoveTagInputBody"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Remove a tag value from a component
+  /components/{name}:setTag:
+    post:
+      description: Binds a value for a key on a component. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by component:update.
+      operationId: set-component-tag
+      parameters:
+        - description: The entity's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The entity's name
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EntitySetTagInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TagBindingBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Set a tag value on a component
   /healthz:
     get:
       description: Reports process health and the database leg, pinged through the Storage Gateway.
@@ -2181,6 +3150,92 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Update a location
+  /locations/{name}:listTags:
+    get:
+      description: Lists the tags bound directly on a location (not the resolved cascade). Gated by location:read.
+      operationId: list-location-tags
+      parameters:
+        - description: The entity's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The entity's name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntityTagsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List tags on a location
+  /locations/{name}:removeTag:
+    post:
+      description: Removes a key's value from a location. Gated by location:update.
+      operationId: remove-location-tag
+      parameters:
+        - description: The entity's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The entity's name
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EntityRemoveTagInputBody"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Remove a tag value from a location
+  /locations/{name}:setTag:
+    post:
+      description: Binds a value for a key on a location. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by location:update.
+      operationId: set-location-tag
+      parameters:
+        - description: The entity's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The entity's name
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EntitySetTagInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TagBindingBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Set a tag value on a location
   /nodes:
     get:
       description: Lists the edge nodes. A node is estate-wide, so listing requires an all-scope read. Gated by node:read.
@@ -2612,6 +3667,13 @@ paths:
               - human
               - service
             type: string
+        - description: Include archived (soft-deleted) principals, hidden by default
+          explode: false
+          in: query
+          name: include_archived
+          schema:
+            description: Include archived (soft-deleted) principals, hidden by default
+            type: boolean
       responses:
         "200":
           content:
@@ -2654,12 +3716,12 @@ paths:
       description: Fetches one principal by id with its profile and grants. Gated by principal:read (all-scope).
       operationId: get-principal
       parameters:
-        - description: The principal's id (uuid)
+        - description: The principal, addressed by its uuid or a human username
           in: path
           name: id
           required: true
           schema:
-            description: The principal's id (uuid)
+            description: The principal, addressed by its uuid or a human username
             type: string
       responses:
         "200":
@@ -2679,12 +3741,12 @@ paths:
       description: "Updates a human principal's display name, email, and username. Gated by principal:update (all-scope). Renaming is safe: nothing keys on the username."
       operationId: update-principal
       parameters:
-        - description: The principal's id (uuid)
+        - description: The principal, addressed by its uuid or a human username
           in: path
           name: id
           required: true
           schema:
-            description: The principal's id (uuid)
+            description: The principal, addressed by its uuid or a human username
             type: string
       requestBody:
         content:
@@ -2706,17 +3768,43 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Update a principal
+  /principals/{id}/avatar:
+    get:
+      description: Returns the principal's profile picture as a base64-encoded JPEG. Gated by principal:read (all-scope). A principal without a picture is a 404.
+      operationId: get-principal-avatar
+      parameters:
+        - description: The principal, addressed by its uuid or a human username
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The principal, addressed by its uuid or a human username
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AvatarOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get a principal's profile picture
   /principals/{id}/grants:
     post:
       description: Assigns a role at a scope to a principal. Gated by principal_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own (no promoting anyone, including yourself, to a higher tier such as owner). A duplicate is 409, an unknown role or bad scope 422.
       operationId: create-grant
       parameters:
-        - description: The principal's id (uuid)
+        - description: The principal, addressed by its uuid or a human username
           in: path
           name: id
           required: true
           schema:
-            description: The principal's id (uuid)
+            description: The principal, addressed by its uuid or a human username
             type: string
       requestBody:
         content:
@@ -2743,12 +3831,12 @@ paths:
       description: Removes one grant from a principal. Gated by principal_grant:delete (all-scope). The last owner grant cannot be revoked.
       operationId: revoke-grant
       parameters:
-        - description: The principal's id (uuid)
+        - description: The principal, addressed by its uuid or a human username
           in: path
           name: id
           required: true
           schema:
-            description: The principal's id (uuid)
+            description: The principal, addressed by its uuid or a human username
             type: string
         - description: The grant's id (uuid)
           in: path
@@ -2767,17 +3855,17 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Revoke a grant
-  /principals/{id}:deactivate:
+  /principals/{id}:archive:
     post:
-      description: "Soft-deletes a principal: it is hidden from the directory, can no longer authenticate, and its rows stay intact, reversibly (reactivate) until purged. Gated by principal:deactivate (all-scope). The last active owner cannot be deactivated."
-      operationId: deactivate-principal
+      description: "Soft-deletes a principal: it is hidden from the directory, can no longer authenticate, and its rows stay intact, reversibly (restore) until purged. Gated by principal:archive (all-scope). The last active owner cannot be archived."
+      operationId: archive-principal
       parameters:
-        - description: The principal's id (uuid)
+        - description: The principal, addressed by its uuid or a human username
           in: path
           name: id
           required: true
           schema:
-            description: The principal's id (uuid)
+            description: The principal, addressed by its uuid or a human username
             type: string
       responses:
         "204":
@@ -2788,18 +3876,18 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
-      summary: Deactivate a principal
+      summary: Archive a principal
   /principals/{id}:disable:
     post:
       description: Soft-disables a principal so it can no longer authenticate; its audit trail is kept. Gated by principal:update (all-scope). The last active owner cannot be disabled.
       operationId: disable-principal
       parameters:
-        - description: The principal's id (uuid)
+        - description: The principal, addressed by its uuid or a human username
           in: path
           name: id
           required: true
           schema:
-            description: The principal's id (uuid)
+            description: The principal, addressed by its uuid or a human username
             type: string
       responses:
         "204":
@@ -2816,12 +3904,12 @@ paths:
       description: Re-enables a disabled principal, restoring its ability to authenticate. Gated by principal:update (all-scope).
       operationId: enable-principal
       parameters:
-        - description: The principal's id (uuid)
+        - description: The principal, addressed by its uuid or a human username
           in: path
           name: id
           required: true
           schema:
-            description: The principal's id (uuid)
+            description: The principal, addressed by its uuid or a human username
             type: string
       responses:
         "204":
@@ -2838,12 +3926,12 @@ paths:
       description: Mints a bounded, revocable token to view as (read-only) or act as (full) the target. Gated by principal:impersonate (all-scope). Refused on self, on an owner target (owners are un-impersonatable by anyone), when it would grant a capability the caller lacks (the escalation guard), or from within an existing impersonation.
       operationId: impersonate-principal
       parameters:
-        - description: The principal to impersonate (uuid)
+        - description: The principal to impersonate, addressed by its uuid or a human username
           in: path
           name: id
           required: true
           schema:
-            description: The principal to impersonate (uuid)
+            description: The principal to impersonate, addressed by its uuid or a human username
             type: string
       requestBody:
         content:
@@ -2885,15 +3973,15 @@ paths:
       summary: Impersonate a principal (view-as or act-as)
   /principals/{id}:purge:
     post:
-      description: Hard-deletes a deactivated principal and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. Gated by principal:purge (admin-sensitive, all-scope), and the principal must be deactivated first.
+      description: Hard-deletes an archived principal and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. Gated by principal:purge (admin-sensitive, all-scope), and the principal must be archived first.
       operationId: purge-principal
       parameters:
-        - description: The principal's id (uuid)
+        - description: The principal, addressed by its uuid or a human username
           in: path
           name: id
           required: true
           schema:
-            description: The principal's id (uuid)
+            description: The principal, addressed by its uuid or a human username
             type: string
       responses:
         "204":
@@ -2905,17 +3993,17 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Purge a principal
-  /principals/{id}:reactivate:
+  /principals/{id}:removeAvatar:
     post:
-      description: "Reverses a deactivation: the account is restored to active and can authenticate again. Gated by principal:deactivate (all-scope)."
-      operationId: reactivate-principal
+      description: Clears another human principal's profile picture. Gated by principal:set-avatar (all-scope). Removing an absent picture is a no-op. Audited with the administrator as the actor.
+      operationId: remove-principal-avatar
       parameters:
-        - description: The principal's id (uuid)
+        - description: The principal, addressed by its uuid or a human username
           in: path
           name: id
           required: true
           schema:
-            description: The principal's id (uuid)
+            description: The principal, addressed by its uuid or a human username
             type: string
       responses:
         "204":
@@ -2926,7 +4014,85 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
-      summary: Reactivate a principal
+      summary: Remove a principal's profile picture
+  /principals/{id}:resetPassword:
+    post:
+      description: Sets a new password for another human principal (an administrator action; the target's current password is not required). Gated by principal:reset-password (all-scope). The new password must meet the password policy; a violation is a 422. Refused on yourself (change your own password from your profile, which verifies your current one), on an owner (owners cannot be reset by anyone), or when it would exceed the caller's own capabilities (the takeover guard, shared with impersonation). The action is audited with the administrator as the actor.
+      operationId: reset-principal-password
+      parameters:
+        - description: The principal, addressed by its uuid or a human username
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The principal, addressed by its uuid or a human username
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResetPasswordInputBody"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Reset a principal's password
+  /principals/{id}:restore:
+    post:
+      description: "Reverses an archive: the account is restored to active and can authenticate again. Gated by principal:archive (all-scope)."
+      operationId: restore-principal
+      parameters:
+        - description: The principal, addressed by its uuid or a human username
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The principal, addressed by its uuid or a human username
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Restore a principal
+  /principals/{id}:setAvatar:
+    post:
+      description: Sets another human principal's profile picture (an administrator action). Gated by principal:set-avatar (all-scope). The image (JPEG, PNG, or WebP, base64-encoded) is normalized server-side to a 256x256 JPEG; a bad or oversize image is a 422. Audited with the administrator as the actor.
+      operationId: set-principal-avatar
+      parameters:
+        - description: The principal, addressed by its uuid or a human username
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The principal, addressed by its uuid or a human username
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetAvatarInputBody"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Set a principal's profile picture
   /roles:
     get:
       description: Lists the roles with their metadata and effective (flattened) permissions. Gated by the role:read capability.
@@ -2945,6 +4111,170 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List roles
+  /secret-types:
+    get:
+      description: Lists the secret_type shapes a secret can take, for the create form. Gated by secret:read.
+      operationId: list-secret-types
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListSecretTypesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List secret types
+  /secrets:
+    get:
+      description: Lists every secret with masked fields. Requires an all-scope read; the scoped, per-component view is the effective-secrets route. Gated by secret:read.
+      operationId: list-secrets
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListSecretsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List secrets (admin directory)
+    post:
+      description: Seals a secret at an owner scope (a global secret needs an all-scoped grant). Fields are validated and encrypted against the type shape. Gated by secret:create.
+      operationId: create-secret
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSecretInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SecretBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Create a secret
+  /secrets/{id}:
+    delete:
+      description: Removes a secret by id. Gated by secret:delete; read and delete scopes on the owner drive the 404 versus 403 split.
+      operationId: delete-secret
+      parameters:
+        - description: The secret's id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The secret's id
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Delete a secret
+    patch:
+      description: Replaces the given field values on a secret, re-sealing secret fields. Only values change; name, type, and owner are fixed at creation. An omitted field keeps its value. Gated by secret:update.
+      operationId: update-secret
+      parameters:
+        - description: The secret's id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The secret's id
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSecretInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SecretBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Update a secret's field values
+  /secrets/{id}:copy:
+    post:
+      description: Decrypts and returns a secret's field values for a clipboard copy, audited under the copy verb (distinct from an on-screen reveal). Same exposure and the same secret:reveal gate as reveal.
+      operationId: copy-secret
+      parameters:
+        - description: The secret's id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The secret's id
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RevealSecretOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Decrypt a secret for clipboard copy
+  /secrets/{id}:reveal:
+    post:
+      description: "Decrypts and returns a secret's field values, auditing the decrypt. Sensitive: gated by secret:reveal, which the viewer read floor does not carry, so only admin (secret:*) and owner may reveal."
+      operationId: reveal-secret
+      parameters:
+        - description: The secret's id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The secret's id
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RevealSecretOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Reveal a secret's plaintext
   /systems:
     get:
       description: Lists the systems the caller may read, each filtered to its scope subtree. Gated by system:read.
@@ -3062,6 +4392,240 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Update a system
+  /systems/{name}:listTags:
+    get:
+      description: Lists the tags bound directly on a system (not the resolved cascade). Gated by system:read.
+      operationId: list-system-tags
+      parameters:
+        - description: The entity's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The entity's name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntityTagsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List tags on a system
+  /systems/{name}:removeTag:
+    post:
+      description: Removes a key's value from a system. Gated by system:update.
+      operationId: remove-system-tag
+      parameters:
+        - description: The entity's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The entity's name
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EntityRemoveTagInputBody"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Remove a tag value from a system
+  /systems/{name}:setTag:
+    post:
+      description: Binds a value for a key on a system. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by system:update.
+      operationId: set-system-tag
+      parameters:
+        - description: The entity's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The entity's name
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EntitySetTagInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TagBindingBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Set a tag value on a system
+  /tags:
+    get:
+      description: Lists the governed key vocabulary. Rides the tag:read floor.
+      operationId: list-tags
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListTagsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List tag keys
+    post:
+      description: Adds a key to the governed vocabulary. The name is normalized (a lowercase identifier). Gated by tag:create (all-scope, an admin action).
+      operationId: create-tag
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTagInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TagBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Mint a tag key
+  /tags/{name}:
+    delete:
+      description: Removes a key from the vocabulary, cascading its bindings. Gated by tag:delete (all-scope).
+      operationId: delete-tag
+      parameters:
+        - description: The tag key
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The tag key
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Delete a tag key
+    patch:
+      description: Replaces a key's governance fields (applies_to, propagates); the name is fixed. Gated by tag:update (all-scope).
+      operationId: update-tag
+      parameters:
+        - description: The tag key
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The tag key
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTagInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TagBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Update a tag key
+  /tags/{name}:clearGlobal:
+    post:
+      description: Removes the global binding for a key. Gated by tag:update (all-scope).
+      operationId: clear-global-tag
+      parameters:
+        - description: The tag key
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The tag key
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Clear a global tag value
+  /tags/{name}:setGlobal:
+    post:
+      description: Binds a tenant-wide default value for a key at the global scope. Gated by tag:update (all-scope).
+      operationId: set-global-tag
+      parameters:
+        - description: The tag key
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The tag key
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GlobalBindingInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TagBindingBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Set a global tag value
   /tasks:
     get:
       description: Lists the tasks whose interface's owning component the caller may read (the component cascade). Gated by task:read.
@@ -3179,6 +4743,100 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Update a task
+  /variables:
+    get:
+      description: Lists every variable. Requires an all-scope read; the scoped, per-component view is the effective-variables route. Gated by variable:read.
+      operationId: list-variables
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListVariablesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List variables (admin directory)
+    post:
+      description: Sets a variable at an owner scope (a global variable needs an all-scoped grant). The value is validated against value_type. Gated by variable:create.
+      operationId: create-variable
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateVariableInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VariableBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Create a variable
+  /variables/{id}:
+    delete:
+      description: Removes a variable by id. Gated by variable:delete; read and delete scopes on the owner drive the 404 versus 403 split.
+      operationId: delete-variable
+      parameters:
+        - description: The variable's id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The variable's id
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Delete a variable
+    patch:
+      description: Replaces a variable's value, validated against its fixed value_type. Only the value changes; name, type, and owner are fixed at creation. Gated by variable:update.
+      operationId: update-variable
+      parameters:
+        - description: The variable's id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The variable's id
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateVariableInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VariableBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Update a variable's value
 servers:
   - url: /api/v1
 

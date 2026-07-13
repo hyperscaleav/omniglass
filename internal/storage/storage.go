@@ -12,10 +12,12 @@ package storage
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/scope"
+	"github.com/hyperscaleav/omniglass/internal/secret"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -38,11 +40,15 @@ type Gateway interface {
 	// IssueBearerCredential mints an additional bearer credential for an existing
 	// principal by human username (token reissue / break-glass / dev login).
 	// Returns false if no such username.
-	IssueBearerCredential(ctx context.Context, username string, hash []byte, prefix string) (bool, error)
+	IssueBearerCredential(ctx context.Context, username string, hash []byte, prefix string, expiresAt *time.Time) (bool, error)
 	// AuthenticateBearer resolves a bearer credential by its sha256 hash to the
 	// principal, its kind profile, and its grants. Returns ErrCredentialNotFound
 	// if no credential matches.
 	AuthenticateBearer(ctx context.Context, hash []byte) (*Principal, error)
+	// ResolvePrincipalRef maps a principal reference (a uuid or a human username) to
+	// the principal id: a uuid passes through, a username is looked up, and an unknown
+	// username is ErrPrincipalNotFound. Backs addressing a principal by username.
+	ResolvePrincipalRef(ctx context.Context, ref string) (string, error)
 	// The impersonation surface: an admin views/acts as another principal, audited
 	// with the real actor. BeginImpersonation persists a session (the API enforces
 	// the escalation guard first); AuthenticateImpersonation is the authn fallback
@@ -64,8 +70,9 @@ type Gateway interface {
 	UpdateHumanProfile(ctx context.Context, principalID string, patch HumanProfilePatch) error
 	// ListPrincipals returns every principal with its profile and grants (the admin
 	// directory). Requires an all-scope read (a principal is not scope-tree scoped);
-	// a non-all scope is ErrPrincipalForbidden. No credential secret is loaded.
-	ListPrincipals(ctx context.Context, read scope.Set) ([]Principal, error)
+	// a non-all scope is ErrPrincipalForbidden. Archived principals are excluded
+	// unless includeArchived is set. No credential secret is loaded.
+	ListPrincipals(ctx context.Context, read scope.Set, includeArchived bool) ([]Principal, error)
 	// GetPrincipal resolves one principal by id with its profile and grants.
 	// Requires an all-scope read; an unknown id is ErrPrincipalNotFound.
 	GetPrincipal(ctx context.Context, id string, read scope.Set) (*Principal, error)
@@ -107,14 +114,40 @@ type Gateway interface {
 	// an all-scope grant. Disabling the last active owner is ErrLastOwner; a
 	// disabled principal cannot authenticate.
 	SetPrincipalActive(ctx context.Context, actorID, id string, active bool, action scope.Set) error
-	// DeactivatePrincipal soft-deletes a principal (hidden from the directory, cannot
-	// authenticate, reversible); ReactivatePrincipal reverses it; PurgePrincipal
-	// hard-deletes a deactivated one (ErrNotDeactivated if not deactivated first, the
-	// hard gate). All require an all-scope grant; deactivating the last active owner
+	// ArchivePrincipal soft-deletes a principal (hidden from the directory, cannot
+	// authenticate, reversible); RestorePrincipal reverses it; PurgePrincipal
+	// hard-deletes an archived one (ErrNotArchived if not archived first, the
+	// hard gate). All require an all-scope grant; archiving the last active owner
 	// is ErrLastOwner. Purge preserves the audit trail (denormalized actor label).
-	DeactivatePrincipal(ctx context.Context, actorID, id string, action scope.Set) error
-	ReactivatePrincipal(ctx context.Context, actorID, id string, action scope.Set) error
+	ArchivePrincipal(ctx context.Context, actorID, id string, action scope.Set) error
+	RestorePrincipal(ctx context.Context, actorID, id string, action scope.Set) error
 	PurgePrincipal(ctx context.Context, actorID, id string, action scope.Set) error
+	// SetPrincipalPassword resets a human principal's password by id (an admin action,
+	// audited as the admin), requiring an all-scope grant. Unknown id is ErrPrincipalNotFound.
+	// It also revokes every one of the target's bearer credentials (force logout).
+	SetPrincipalPassword(ctx context.Context, actorID, id, encoded string, action scope.Set) error
+	// SetOwnAvatar / ClearOwnAvatar write or clear the caller's own profile picture
+	// (a normalized base64 JPEG), audited as the caller. No capability is required;
+	// the caller resolves from their session.
+	SetOwnAvatar(ctx context.Context, principalID, jpegB64 string) error
+	ClearOwnAvatar(ctx context.Context, principalID string) error
+	// SetPrincipalAvatar / ClearPrincipalAvatar write or clear another principal's
+	// profile picture (an admin action, audited as the actor), requiring an all-scope
+	// grant. An unknown id is ErrPrincipalNotFound; a non-all scope is ErrPrincipalForbidden.
+	SetPrincipalAvatar(ctx context.Context, actorID, id, jpegB64 string, action scope.Set) error
+	ClearPrincipalAvatar(ctx context.Context, actorID, id string, action scope.Set) error
+	// GetHumanAvatar returns a human's profile picture as a base64 JPEG. The bool is
+	// false (with no error) when the human has no picture; an unknown id is
+	// ErrPrincipalNotFound. Unscoped: it backs the self read (the caller's own row).
+	GetHumanAvatar(ctx context.Context, id string) (string, bool, error)
+	// GetPrincipalAvatar is the admin read of another principal's profile picture: it
+	// applies the same all-scope invariant as the rest of the directory (a non-all
+	// scope is ErrPrincipalForbidden), then delegates to GetHumanAvatar.
+	GetPrincipalAvatar(ctx context.Context, id string, action scope.Set) (string, bool, error)
+	// RevokePrincipalBearers deletes a principal's bearer credentials (sessions and
+	// tokens) except any sha256 hash in keep (empty revokes all); the force-logout on a
+	// self-service password change keeps the caller's own session. Returns the count.
+	RevokePrincipalBearers(ctx context.Context, principalID string, keep [][]byte) (int, error)
 	// RevokeBearer deletes the bearer credential with the given sha256 hash
 	// (session logout). A no-op if none matches.
 	RevokeBearer(ctx context.Context, hash []byte) error
@@ -235,6 +268,45 @@ type Gateway interface {
 	GetNode(ctx context.Context, name string, read scope.Set) (*Node, error)
 	ListNodes(ctx context.Context, read scope.Set) ([]Node, error)
 
+	// The secret tier: a shape registry, scoped CRUD, an audited reveal, and the
+	// cascade resolver. A secret is owned on the exclusive arc (global or one of
+	// the three trees) and encrypted at rest; ResolveSecrets is the per-component
+	// effective-value view down the structural cascade.
+	UpsertSecretType(ctx context.Context, st SecretType) error
+	ListSecretTypes(ctx context.Context) ([]SecretType, error)
+	GetSecretType(ctx context.Context, id string) (*SecretType, error)
+	ListSecrets(ctx context.Context, read scope.Set) ([]Secret, error)
+	CreateSecret(ctx context.Context, actorID string, spec SecretSpec, create scope.Set) (*Secret, error)
+	UpdateSecret(ctx context.Context, actorID, id string, fields map[string]string, read, action scope.Set) (*Secret, error)
+	DeleteSecret(ctx context.Context, actorID, id string, read, action scope.Set) error
+	RevealSecret(ctx context.Context, actorID, id string, read, action scope.Set) (map[string]string, error)
+	CopySecret(ctx context.Context, actorID, id string, read, action scope.Set) (map[string]string, error)
+	ResolveSecrets(ctx context.Context, componentID string, read scope.Set) ([]ResolvedSecret, error)
+
+	// The variable tier: a typed, cascade-resolved plaintext value (a macro),
+	// owned on the same exclusive arc as a secret but shown in the clear (no
+	// registry, no crypto, no reveal). ResolveVariables is the per-component
+	// effective-value view down the structural cascade.
+	ListVariables(ctx context.Context, read scope.Set) ([]Variable, error)
+	CreateVariable(ctx context.Context, actorID string, spec VariableSpec, create scope.Set) (*Variable, error)
+	UpdateVariable(ctx context.Context, actorID, id string, value json.RawMessage, read, action scope.Set) (*Variable, error)
+	DeleteVariable(ctx context.Context, actorID, id string, read, action scope.Set) error
+	ResolveVariables(ctx context.Context, componentID string, read scope.Set) ([]ResolvedVariable, error)
+
+	// The tag tier: the governed key vocabulary and the per-entity value
+	// bindings. Minting a key (tag:create) is a tenant-wide governance action;
+	// binding a value is the owner's own write, so the binding methods take the
+	// owner's read/action scopes. ResolveTags is the per-component effective-tags
+	// view (union on key, override on value) down the structural cascade.
+	ListTags(ctx context.Context) ([]Tag, error)
+	CreateTag(ctx context.Context, actorID string, spec TagSpec, create scope.Set) (*Tag, error)
+	UpdateTag(ctx context.Context, actorID, name string, spec TagSpec, action scope.Set) (*Tag, error)
+	DeleteTag(ctx context.Context, actorID, name string, action scope.Set) error
+	SetTagBinding(ctx context.Context, actorID, key, ownerKind string, ownerName *string, value string, read, action scope.Set) (*TagBinding, error)
+	DeleteTagBinding(ctx context.Context, actorID, key, ownerKind string, ownerName *string, read, action scope.Set) error
+	ListEntityTags(ctx context.Context, ownerKind string, ownerName *string, read scope.Set) ([]TagBinding, error)
+	ResolveTags(ctx context.Context, componentID string, read scope.Set) ([]ResolvedTag, error)
+
 	// Close releases the underlying connection pool. Idempotent at the pool
 	// level; call once on shutdown.
 	Close()
@@ -242,13 +314,27 @@ type Gateway interface {
 
 // PG is the Postgres-backed Gateway implementation over a pgx connection pool.
 type PG struct {
-	pool *pgxpool.Pool
+	pool   *pgxpool.Pool
+	secret secret.Provider
+}
+
+// Option configures a PG at construction. The secret provider is optional so
+// the CLI lanes that never touch secrets (token, migrate) need not build a KEK;
+// a secret write without a provider fails with ErrNoSecretProvider rather than a
+// nil panic.
+type Option func(*PG)
+
+// WithSecretProvider installs the envelope-encryption provider the secret writes
+// seal with. The server and the dev-seed lanes pass one; a nil provider leaves
+// secret writes disabled.
+func WithSecretProvider(prov secret.Provider) Option {
+	return func(p *PG) { p.secret = prov }
 }
 
 // NewPG opens a pgx pool against dsn and verifies connectivity once before
 // returning, so a bad DSN or an unreachable database fails fast at boot rather
 // than on the first query.
-func NewPG(ctx context.Context, dsn string) (*PG, error) {
+func NewPG(ctx context.Context, dsn string, opts ...Option) (*PG, error) {
 	pool, err := pgxpool.New(ctx, dsn)
 	if err != nil {
 		return nil, fmt.Errorf("storage: open pool: %w", err)
@@ -257,7 +343,11 @@ func NewPG(ctx context.Context, dsn string) (*PG, error) {
 		pool.Close()
 		return nil, fmt.Errorf("storage: ping: %w", err)
 	}
-	return &PG{pool: pool}, nil
+	p := &PG{pool: pool}
+	for _, opt := range opts {
+		opt(p)
+	}
+	return p, nil
 }
 
 // Ping checks backend reachability through the pool.

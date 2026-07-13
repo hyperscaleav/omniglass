@@ -613,22 +613,52 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   diff commits as part of the one blade Save; the destructive action (Delete for a group, Disable / Enable for a
   user, per the accounts-never-deleted invariant) confirms and is reachable straight from read mode. Save commits
   the staged session together and Cancel reverts. A single consolidated audit event and a config restore point
-  (one backend action per Save) remain deferred to a batched endpoint; the user deactivate / purge lifecycle is
+  (one backend action per Save) remain deferred to a batched endpoint; the user archive / purge lifecycle is
   its own slice. Proven by the web suite (the edit-slot, the `BladeStack` footer-bar chrome, and the Group / User
   read-vs-edit tests) and tsc.
-- **Identity: the principal lifecycle (deactivate + purge), backend.** Beyond the reversible disable, a principal
-  can be **deactivated** (a soft delete, `deactivated_at`: hidden from the directory, cannot authenticate,
-  reversible) and then **purged** (an irreversible hard delete, gated on prior deactivation and on the
+- **Identity: the principal lifecycle (archive + purge), backend.** Beyond the reversible disable, a principal
+  can be **archived** (a soft delete, `archived_at`: hidden from the directory, cannot authenticate,
+  reversible) and then **purged** (an irreversible hard delete, gated on prior archival and on the
   admin-sensitive `principal:purge:admin`, so admin and owner can purge but a two-token `principal:*` cannot
   reach it). The purge preserves the audit trail: every `audit_log` row now denormalizes the actor's label at
   write time, the audit foreign keys are `ON DELETE SET NULL`, and the read coalesces the live join to the
   snapshot, so a purged actor's history stays legible ([ADR-0016](/architecture/decisions/#adr-0016-a-principal-can-be-purged-and-the-audit-trail-is-denormalized-to-survive-it),
-  retiring the "never hard-deleted" rule). The last-active-owner guard extends to deactivate. Gateway
-  (`DeactivatePrincipal` / `ReactivatePrincipal` / `PurgePrincipal`), the `:deactivate` / `:reactivate` /
+  retiring the "never hard-deleted" rule). The last-active-owner guard extends to archive. Gateway
+  (`ArchivePrincipal` / `RestorePrincipal` / `PurgePrincipal`), the `:archive` / `:restore` /
   `:purge` API custom methods, and the generated CLI / client ship; proven against real Postgres by a storage
   integration test (lifecycle + audit-actor survival + owner guard) and an HTTP end-to-end test (the capability
-  split, the deactivate-before-purge gate, soft-delete visibility). The console UI for the lifecycle is a
+  split, the archive-before-purge gate, soft-delete visibility). The console UI for the lifecycle is a
   follow-up ([#143](https://github.com/hyperscaleav/omniglass/issues/143) backend).
+- **Identity: the principal lifecycle in the console, UI.** The user blade's footer action bar presents the
+  lifecycle by state: the left slot is the reversible toggle (Disable / Enable, or Restore for an archived
+  account), and the kebab holds the escalating red steps (Archive when live, Purge when archived and the
+  caller holds `principal:purge:admin`), each confirmed. The detail fetches the principal by id (not the
+  directory list, which hides archived) so a just-soft-deleted user stays resolvable, and a **Show
+  archived** toggle on the Users directory (a new `include_archived` list param) surfaces hidden accounts
+  to re-find one. `BladeSecondary` gains a red tone and the destructive slot a restore tone; the web `can()`
+  already honours the three-token `principal:purge:admin`. This slice also **renamed the soft-delete verb
+  deactivate to archive** (restore, not reactivate) so the ladder reads pause (disable) to remove (archive)
+  to destroy (purge), instead of two pause-synonyms; the column, endpoints, capability, and list param follow.
+  Proven by the web suite (the live and archived footer states and the show-archived flow) and a storage test
+  for the include-archived list; completes
+  [#143](https://github.com/hyperscaleav/omniglass/issues/143) / [#146](https://github.com/hyperscaleav/omniglass/issues/146).
+- **Identity: IAM console form + blade hardening, UI.** A polish pass over the identity surfaces. Removing a
+  principal now closes its blade cleanly: **archiving**, **purging** (and a group **delete**) closes the blade
+  first, drops the dead detail query, then refreshes the list, so the blade never lingers on a stale or 404 view
+  of the entity it just removed from the working set.
+  **Impersonation** (start and stop) now reboots the console to Home (`window.location`), so the
+  permission-driven sidebar and route guard rebuild from the new identity rather than showing the previous
+  principal's navigation. The forms gain **inline validation** that mirrors the server's Huma constraints: a
+  username and a group name are lowercase handles (pattern `^[a-z0-9][a-z0-9._-]*$`, no capitals or spaces) and
+  an email must be well formed (`format: email`), each enforced on the create body server-side and checked in
+  the form so an invalid field shows an inline error and disables the submit before the round-trip (a new
+  `valid` gate on the blade edit contract disables the footer **Save**). The group create Drawer title now reads
+  **New group** (it leaked the `principal_group` resource key), the group create form gained the same
+  subtitle the user form has, and the form placeholders are consistent across create and edit. A newly created
+  **user or group** opens **directly in edit mode** so its grants (and a group's members, child resources that
+  need the parent id) are added in one flow rather than a second step. Proven by an API
+  validation test (a malformed username, name, or email is a 422; a valid one is accepted) and web tests (the
+  blade closes without an orphan refetch, and an invalid field blocks create and the footer Save).
 - **Identity: the Groups console + inherited-vs-direct grants, UI.** A **Groups** page (`Settings > Groups`,
   gated `principal_group:read`) as a config over the shared `FlatList`: list and create, and a row Drawer with
   member add/remove and the grant builder (reused, wired to the group grant endpoints, so a group's members
@@ -638,3 +668,189 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   with the route guard and sidebar both gating `/groups` on `principal_group`. This completes grant-by-group
   ([#90](https://github.com/hyperscaleav/omniglass/issues/90)); dynamic membership and SCIM group mapping remain
   deferred.
+- **Identity: password policy + generator.** A single pure validator (`auth.ValidatePassword`) enforces a
+  password policy on the API password surfaces: **create a user** and **self-service change-password**. The
+  direct-DB break-glass lanes (`bootstrap`, `set-password`) are exempt (fully trusted, DB-access-gated, the
+  recovery path). The policy is **at least 12 characters, not on an embedded common-password denylist, and not
+  containing the username** (NIST 800-63B style: length and a blocklist over composition rules). The API bodies
+  raise their `minLength` to 12 and map a violation to 422 with a specific message; the console mirrors the
+  length and username rules inline (a new `passwordError`) and gates the submit, while the denylist stays
+  server-side (a 422 on a manually typed common password). A shared **`PasswordField`** component adds a
+  show/hide toggle and, on the New user and change-password forms, a crypto-strong **Generate** action
+  (`generatePassword`, a readable charset with no look-alike characters, kept masked and copied or revealed on
+  demand) plus a **Copy** button. Proven by an `internal/auth` unit test (short / common / contains-username / valid), an API
+  test (a weak, common, or username-containing password is a 422 on create, a strong one is accepted), and web
+  tests (the generator's length / charset / policy-compliance, `passwordError`, and the Generate-fills-and-enables
+  flow). Completes [#104](https://github.com/hyperscaleav/omniglass/issues/104) and
+  [#151](https://github.com/hyperscaleav/omniglass/issues/151); an operator-configurable policy and a HIBP
+  breached-password check remain deferred.
+- **Identity: admin password reset.** An administrator can reset another user's password without the
+  user's current one: `POST /principals/{id}:resetPassword` gated by a new `principal:reset-password`
+  capability (all-scope; admin holds it via `principal:*`, so a future help-desk role can be granted only
+  the reset), policy-enforced (a 422 on a weak password), refused on self (change your own password from
+  your profile, which verifies the current one), behind the same **takeover guard** as
+  impersonation (an owner cannot be reset by anyone, and a caller cannot reset a principal whose
+  capabilities exceed their own, a shared `checkTakeoverGuard`, plus the shared `allScopeCovers`
+  all-scope-only cover that act-as uses so a reset cannot promote a narrow-scope capability estate-wide),
+  and audited with the admin as the actor (the
+  storage method `SetPrincipalPassword` sets by id, distinct from the self-service `SetPassword` that keys
+  on username and audits the target). It also **forces logout**: a reset revokes every one of the target's
+  bearer credentials (all sessions and tokens) in the same transaction, so a compromised or departing
+  account is cut off at once; the self-service change-password revokes the caller's OTHER sessions
+  (`RevokePrincipalBearers` keeping the current session's hash, stashed in the request context by authn). The console adds a **Reset password** kebab action on the user blade
+  that opens an inline panel reusing the `PasswordField` (Generate, Copy, inline policy check); the set
+  password stays copyable to hand over. This is the console counterpart to the CLI `set-password` (which,
+  as a trusted direct-DB lane, stays policy-exempt). Proven by a storage test (the new secret
+  authenticates and the old does not, the reset is audited as the admin, non-all scope and unknown id are
+  refused), an API test (an operator lacks the capability 403, a weak / common / username-containing
+  password is a 422, resetting yourself is a 422 and an owner is a 403, the admin reset lets the user
+  sign in with the new password), and web tests (the kebab opens the panel and Generate + Set password
+  calls the endpoint and confirms; the action is hidden on your own blade).
+- **Identity: bearer session expiry.** Bearer credentials gain a nullable `credential.expires_at` (a new
+  additive migration), and `AuthenticateBearer` refuses a credential whose expiry has passed (an expired
+  session authenticates nothing). A web login installs its session cookie with a fixed absolute lifetime
+  (12h), setting both the credential's `expires_at` and the cookie `Max-Age`, so a stolen session cookie is
+  no longer valid forever; the `IssueBearerCredential` gateway method gained an `expiresAt` argument. CLI
+  API tokens (`omniglass token`) and the bootstrap token pass a null expiry and do not expire, so
+  automation keeps working. Proven by a storage test (a past-expiry bearer is `ErrCredentialNotFound`, a
+  future or null one authenticates). A sliding idle timeout and a background sweep of expired rows are
+  deferred refinements; the security floor (expired is refused at auth) lands here.
+
+- **Identity: login brute-force lockout.** Failed password logins are now throttled. Two additive columns
+  on `human` (`failed_login_count`, `locked_until`) count consecutive misses on a real account and, on the
+  5th, lock it for 15 minutes. Inside the window `AuthenticatePassword` refuses every attempt (even the
+  correct password) via a new `ErrAccountLocked`, which the login handler maps to the **same generic 401**
+  as a bad credential so the lock is not an enumeration oracle (only the `login_locked` audit records it).
+  The lock is decided after the argon2 verify (a locked account is not a faster probe), and a correct
+  password below the threshold clears the counter. The decision itself is a pure, unit-tested function;
+  proven end to end by a storage integration test (5 misses lock, the correct password is refused while
+  locked, an expired window lets it through and resets) and a real-endpoint test (the lockout as seen over
+  `POST /auth/login`). Per-IP throttling and a configurable threshold are deferred.
+
+- **Identity: force a password change after an admin reset.** An admin reset now sets a new additive
+  `human.must_change_password` flag; the user's own change-password clears it. While set, the `authn`
+  choke point (the same place view-as read-only is enforced) refuses **every** route with a 403 except
+  reading their own principal and the change itself, so the admin-known secret cannot be used to act.
+  `GET /auth/me` carries `must_change_password`, and the console's `AuthGuard` swaps the whole app shell
+  for a forced change-password screen until it clears (a `useChangePassword` that invalidates `/auth/me`
+  releases the gate on success). Proven by a storage test (a reset sets the flag, a self-change clears
+  it), a real-endpoint test (a flagged user reads `/auth/me` but every other route is a distinct
+  "password change required" 403 until the change, then the gate releases), and a web test (the guard
+  renders the forced screen only when flagged). Enforcement is a hard block on all routes; the CLI
+  break-glass lanes do not set the flag.
+
+- **Identity: address a principal by username or uuid.** Every `/principals/{id}` route (read, update,
+  grants, the lifecycle verbs, reset, impersonate) now accepts either the principal's uuid or a human's
+  current username. A new gateway primitive `ResolvePrincipalRef` resolves it (a uuid passes through
+  unchanged, so an unknown uuid keeps its existing not-found handling; otherwise a username lookup, and an
+  unknown username is a 404), and each handler resolves at the top, before any self-check (so addressing
+  yourself by username is caught for a reset or impersonation). The uuid stays the stable identity; a
+  username is a convenience address resolved at call time. Service principals have no username and stay
+  uuid-addressed. This makes the CLI usable without a uuid lookup first (`omniglass principal archive
+  alice`). Proven by a storage test (username resolves, a uuid passes through, an unknown username is not
+  found) and an API test (get by username matches get by uuid, a `:verb` method archives by username, an
+  unknown username is a 404).
+- **Tag: the governed label vocabulary and its cascaded bindings.** The [tag](/architecture/tags/) primitive lands as
+  its own page: a governed **`tag`** key registry (a normalized lowercase-identifier vocabulary, minting gated by
+  all-scope `tag:create`, broadened to `tag:*` for admin), a per-entity **`tag_binding`** cell owned on the same
+  exclusive arc as a secret and a variable (`global | location | system | component`), and a resolver that **unions
+  keys and overrides values** most-specific-wins down the [cascade](/architecture/cascade/). The governance split is the
+  point: minting a key is admin-curated, but **setting a value is the entity's own write** (`component:update` and
+  friends), so an operator tags what it may already edit with no new grant; a global binding is `tag:update`. A key
+  carries **`applies_to`** (an entity-kind allow-list, checked on bind) and **`propagates`** (cascade inheritance
+  versus a flat per-entity set, the shape a [file](/architecture/files/) reuses). `GET|POST /tags`,
+  `PATCH|DELETE /tags/{name}`, `POST /tags/{name}:setGlobal|:clearGlobal` (the global value), and per-entity custom
+  methods `GET /{components,systems,locations}/{name}:listTags` and `POST .../{name}:setTag|:removeTag` (bindings are
+  entity custom methods, like the principal lifecycle, so the generated CLI stays collision-free), plus
+  `GET /components/{name}/effective-tags` (the per-component cascade). Deferred (ADR-0021): the console surface (a Tags
+  directory and per-entity editor, [#189](https://github.com/hyperscaleav/omniglass/issues/189)), binding via
+  [groups](/architecture/groups/) and a `template` default ([#184](https://github.com/hyperscaleav/omniglass/issues/184)),
+  value-domain governance ([#190](https://github.com/hyperscaleav/omniglass/issues/190)), and binding onto a file
+  ([#191](https://github.com/hyperscaleav/omniglass/issues/191)). Proven by a pure `internal/tag` validation unit test (key
+  normalization, value bounds, the applies_to allow-list), a storage integration test (the registry CRUD and all-scope
+  gate, the applies_to and value gates, the binding upsert and the owner-update scope split, the full union-on-key /
+  override-on-value cascade incl. the non-propagating flat case, and the delete-key cascade to bindings), and an HTTP
+  e2e (the cascade over the wire and the mint-versus-bind authz split: an operator binds on its component but cannot
+  mint a key nor bind on a system it cannot write, a viewer reads but cannot mint or bind).
+- **Variable: the cascade-resolved free value.** The second member of the [config, secrets, and
+  variables](/architecture/variables/) trio lands, after the secret. A **variable** is a typed **plaintext**
+  value (a macro) owned on the same exclusive arc as a secret (`global | location | system | component`) and
+  resolved most-specific-wins down the [cascade](/architecture/cascade/), but shown in the clear (no crypto, no
+  masking, no reveal). Typing is **inline**: a `value_type` of `string` / `int` / `float` / `bool` / `json` plus a
+  jsonb `value`, validated against the type in a pure `internal/variable` package (no shape registry, unlike the
+  secret). `GET|POST /variables`, `PATCH|DELETE /variables/{id}`, and `GET /components/{name}/effective-variables`
+  (the per-component cascade view). Reads ride the viewer floor; **create and update are granted to operators**
+  (`variable:create,update`), delete stays `variable:delete` (admin, owner), the same split the secret got.
+  Scoping a variable required wiring `variable` into the ABAC resolver's owner-arc tiers, exactly as the secret
+  did. The console adds a **Variables** directory (type in its own column) with a type-aware value editor and, on a
+  component's detail, the **effective-variables** cascade panel (top-to-bottom, the deepest winning). Deferred
+  (ADR-0020): the **`template`** owner scope and cascade groups ([#184](https://github.com/hyperscaleav/omniglass/issues/184)),
+  a `variable_type` registry (types are inline), the **`$var:`** interpolation consumer, and the secret-flagged
+  variable.
+  Proven by a `value_type` validation unit test (each scalar's valid and invalid forms), a storage integration test
+  (jsonb round-trip per type, full cascade precedence, the owner-scope split), an HTTP e2e (the cascade, the authz
+  split incl. the scoped-operator create / update and the viewer 403s), a scope-resolver unit test for the
+  owner-arc kinds, and the web data-layer suite.
+- **Secret: the cascade-resolved encrypted value.** The first of the [config, credentials, and
+  variables](/architecture/variables/) trio lands, and the prerequisite for the [collection](/architecture/collection/)
+  driver's interface inputs ([#155](https://github.com/hyperscaleav/omniglass/issues/155)). A **secret** is a
+  typed, encrypted-at-rest value owned on the exclusive arc (`global | location | system | component`) and
+  resolved most-specific-wins down the [cascade](/architecture/cascade/). Its shape is a `secret_type` registry
+  (per-field secrecy and origin; `snmp-community` and `basic-auth` seeded); crypto is **envelope AES-256-GCM**
+  behind a pluggable KEK provider (env / file / fallback), with `(owner, name, field)` bound as AAD so a
+  ciphertext cannot be lifted between rows. The load-bearing new piece is the **cascade resolver**: it walks the
+  three owner trees up from a component, tags each owner with a band and depth, and ranks per name (highest tier,
+  then deepest), returning the winner and the shadowed candidates. `GET /secret-types`, `/secrets` (all-scope
+  list, create, update, delete), `GET /components/{name}/effective-secrets` (the masked cascade view), and the
+  audited decrypts `POST /secrets/{id}:reveal` and `:copy` (a clipboard copy, recorded under a distinct `copy`
+  verb). Masked reads ride the viewer floor; **create and update** are gated by `secret:create` / `secret:update`
+  and granted to **operators** in their scope; **delete** stays `secret:delete` (admin, owner); **reveal** and
+  **copy** by the sensitive `secret:reveal`, which the `*:read` floor does not carry, so only admin (`secret:*`)
+  and owner may decrypt. Scoping a secret required wiring `secret` into the ABAC resolver's owner-arc tiers
+  (location / system / component), so a scoped grant now confers secret scope over its subtree (before, only an
+  all-scope owner could). The console adds a **Secrets** directory (type in its own column) with per-field
+  in-place reveal + copy adornments, and, on a component's detail, the **effective-secrets** list: each resolved
+  secret opens a blade that decrypts the value and shows the full cascade top-to-bottom (global to component,
+  the deepest winning). Renamed **credential to secret** (ADR-0017).
+  Proven by a real-crypto testcontainer test (seal, jsonb round-trip, unseal; encrypted-at-rest; full cascade
+  precedence), an HTTP e2e (the cascade, the authz split incl. the scoped-operator create / update, and the
+  reveal / copy round-trips plus their 403s), a scope-resolver unit test for the owner-arc kinds, and the web
+  data-layer suite. Deferred: the **variable** and **config** members of the page, the interpolation consumer,
+  secret **lifecycle** (oauth2 refresh, rotation), and groups / weighted precedence in the cascade.
+
+- **Identity: clear the login lockout on a password rotation.** Rotating a password now clears the
+  brute-force lockout (`failed_login_count = 0`, `locked_until = null`) in the same transaction as the new
+  secret. Before this the lock (from the login-throttle slice) only cleared lazily at the next login, so an
+  admin reset left the account locked for the rest of the 15-minute window even with the new password. Both
+  rotation lanes clear it: the admin reset (`SetPrincipalPassword`, the reachable intervention while an
+  account is locked) and the self-service change / CLI set-password (`SetPassword`). No new endpoint or
+  capability: rotating the secret is the intervention (auto-unlock over a dedicated `:unlock` action).
+  Proven by a storage test that locks the account with five misses, confirms it is locked, rotates via each
+  lane, and asserts the new secret authenticates immediately with no wait. No migration (the columns exist);
+  no operator-facing surface change.
+
+- **Identity: profile pictures for human principals.** A human principal can carry a **profile picture**,
+  managed on two lanes: **self** (any signed-in user sets or removes their own via `POST /auth/me:setAvatar`
+  / `:removeAvatar`, authn-only and self-scoped, no capability, on the ungated self-service lane) and
+  **admin** (a new `principal:set-avatar` all-scope capability sets or removes any principal's via
+  `POST /principals/{id}:setAvatar` / `:removeAvatar`, audited with the admin as actor; `admin` holds it
+  through `principal:*` and `owner` through `>`, so no `roles.yaml` change). A pure `internal/avatar.Normalize`
+  primitive is the server-authoritative pipeline: accept JPEG/PNG/WebP (GIF and all else rejected), reject a
+  payload over 8 MiB or any dimension over 8000px (decompression-bomb guards), center-crop to a square, resize
+  256x256, re-encode JPEG q82; a bad or oversize image is a 422. Two additive columns on `human` (`avatar`
+  base64, `avatar_updated_at`) store the one normalized size; the bytes never load on the `loadPrincipal` hot
+  path (which selects only `avatar is not null`), so a cheap `has_avatar` bool rides the read models
+  (`GET /principals/{id}`, the Users list, `GET /auth/me`). The **read endpoint is JSON**
+  (`GET /principals/{id}/avatar` gated `principal:read`, `GET /auth/me/avatar` self), returning
+  `{ image_base64 }` the console renders as a `data:` URL, deliberately not a raw `image/jpeg` handler so every
+  route stays under the Huma authz middleware
+  ([ADR-0018](/architecture/decisions/#adr-0018-the-avatar-read-endpoint-is-json-not-raw-image-bytes)); a
+  principal without a picture is a 404. The console **Profile** page gains an image-backed avatar with
+  upload/remove (initials fallback), and the **Users** directory renders per-row thumbnails plus an admin
+  upload/remove panel gated on `principal:set-avatar`. The CLI and typed client fall out of the generator
+  (`omniglass principal setAvatar` / `removeAvatar`). Proven by the `internal/avatar` golden-fixture unit
+  suite (a square JPEG out, non-image / GIF / oversize rejected), a storage round-trip (set / get / clear,
+  `has_avatar` and `avatar_updated_at`, the all-scope gate on the admin write), and a real-binary API test
+  (self set + read + remove, garbage 422, the admin permission 403 without `principal:set-avatar` and success
+  with), plus web tests for both surfaces. Deferred: the top-nav avatar, non-human avatars, multiple sizes /
+  srcset, and external (Gravatar) sources.

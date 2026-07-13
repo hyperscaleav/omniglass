@@ -16,6 +16,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/bus"
 	"github.com/hyperscaleav/omniglass/internal/config"
 	"github.com/hyperscaleav/omniglass/internal/migrate"
+	"github.com/hyperscaleav/omniglass/internal/secret"
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/spf13/cobra"
@@ -42,7 +43,13 @@ func runServer(ctx context.Context, _ string) error {
 	}
 	log.Info("migrations applied")
 
-	gw, err := storage.NewPG(ctx, c.DSN)
+	kek, source, err := secret.LoadKEK(os.Getenv, c.DataDir, func(msg string) { log.Warn(msg) })
+	if err != nil {
+		return err
+	}
+	log.Info("secret key loaded", "source", source)
+
+	gw, err := storage.NewPG(ctx, c.DSN, storage.WithSecretProvider(secret.NewStaticProvider(kek)))
 	if err != nil {
 		return err
 	}

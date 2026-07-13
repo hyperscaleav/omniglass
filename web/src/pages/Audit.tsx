@@ -1,5 +1,6 @@
 import { Show, createSignal, onMount } from "solid-js";
 import FlatList, { type FlatColumn } from "../components/FlatList";
+import Button from "../components/Button";
 import { type AuditEvent, AUDIT_PAGE, auditFilterKeys, listAuditLog, actorLabel, accountableLabel } from "../lib/audit";
 
 // Audit: the read-only audit trail, now a config over the shared FlatList (the flat
@@ -15,6 +16,7 @@ const verbClass = (verb: string): string => {
   if (verb === "delete" || verb === "login_failed") return "badge-soft badge-error";
   if (verb === "create") return "badge-soft badge-success";
   if (verb === "update" || verb === "change_password" || verb === "login_denied") return "badge-soft badge-warning";
+  if (verb === "reveal" || verb === "copy") return "badge-soft badge-warning";
   if (verb === "login" || verb === "logout") return "badge-soft badge-info";
   if (verb === "impersonate") return "badge-soft badge-primary";
   return "badge-ghost";
@@ -90,13 +92,13 @@ export default function Audit() {
               {shown}
               <Show when={filtering}> of {total} loaded</Show> shown
             </span>
-            <button
-              class="btn btn-quiet btn-sm text-xs"
+            <Button
+              class="text-xs"
               disabled={done() || loadingOlder() || loading()}
               onClick={() => load(oldest())}
             >
               {loadingOlder() ? "Loading…" : done() ? "No older events" : "Load older"}
-            </button>
+            </Button>
           </>
         ),
       }}

@@ -27,6 +27,11 @@ const (
 	// DefaultNatsURL is the URL the node-claim exchange advertises. Override with
 	// OMNIGLASS_NATS_URL when the node reaches the bus at a different address.
 	DefaultNatsURL = "nats://127.0.0.1:4222"
+	// DefaultDataDir holds local server state that is not in Postgres, notably
+	// the fallback secret key when no KEK is provided. Override with
+	// OMNIGLASS_DATA_DIR; a real deployment sets OMNIGLASS_SECRET_KEY_FILE and
+	// never touches this.
+	DefaultDataDir = ".omniglass"
 )
 
 // Config is the resolved runtime configuration for one process.
@@ -44,6 +49,9 @@ type Config struct {
 	NatsStoreDir string
 	// NatsURL is the address the node-claim reply advertises to nodes.
 	NatsURL string
+	// DataDir is the directory for local, non-Postgres server state (the fallback
+	// secret key). Override with OMNIGLASS_DATA_DIR.
+	DataDir string
 }
 
 // Load resolves the configuration from the environment, applying defaults for
@@ -62,6 +70,7 @@ func Load() Config {
 		NatsAddr:      firstNonEmpty(os.Getenv("OMNIGLASS_NATS_ADDR"), DefaultNatsAddr),
 		NatsStoreDir:  firstNonEmpty(os.Getenv("OMNIGLASS_NATS_STORE_DIR"), filepath.Join(os.TempDir(), "omniglass-nats")),
 		NatsURL:       firstNonEmpty(os.Getenv("OMNIGLASS_NATS_URL"), DefaultNatsURL),
+		DataDir:       firstNonEmpty(os.Getenv("OMNIGLASS_DATA_DIR"), DefaultDataDir),
 	}
 }
 

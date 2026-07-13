@@ -41,7 +41,7 @@ func TestPrincipalDirectory(t *testing.T) {
 	all := scope.Set{All: true}
 
 	// A non-all scope is refused for both reads (a principal is not under a location).
-	if _, err := gw.ListPrincipals(ctx, scope.Set{}); !errors.Is(err, storage.ErrPrincipalForbidden) {
+	if _, err := gw.ListPrincipals(ctx, scope.Set{}, false); !errors.Is(err, storage.ErrPrincipalForbidden) {
 		t.Fatalf("list with empty scope: want ErrPrincipalForbidden, got %v", err)
 	}
 	if _, err := gw.GetPrincipal(ctx, owner.ID, scope.Set{IDs: []string{"HQ"}}); !errors.Is(err, storage.ErrPrincipalForbidden) {
@@ -49,7 +49,7 @@ func TestPrincipalDirectory(t *testing.T) {
 	}
 
 	// All-scope lists the owner.
-	list, err := gw.ListPrincipals(ctx, all)
+	list, err := gw.ListPrincipals(ctx, all, false)
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -79,7 +79,7 @@ func TestPrincipalDirectory(t *testing.T) {
 	if _, err := gw.AuthenticatePassword(ctx, "alice", "alice-s3cret"); err != nil {
 		t.Fatalf("created password should authenticate: %v", err)
 	}
-	if list, err := gw.ListPrincipals(ctx, all); err != nil || len(list) != 2 {
+	if list, err := gw.ListPrincipals(ctx, all, false); err != nil || len(list) != 2 {
 		t.Fatalf("list after create: want 2, got %d (err %v)", len(list), err)
 	}
 	if got, err := gw.GetPrincipal(ctx, alice.ID, all); err != nil || got.Human.Username != "alice" {

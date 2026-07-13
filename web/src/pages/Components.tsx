@@ -14,7 +14,11 @@ import { SYSTEMS_KEY, listSystems } from "../lib/systems";
 import { LOCATIONS_KEY, listLocations } from "../lib/locations";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
-import { ChevronRight } from "../components/icons";
+import { ChevronRight, Pencil, Plus, Save, X } from "../components/icons";
+import Button from "../components/Button";
+import { DrawerFooter } from "../components/Drawer";
+import EffectiveSecrets, { secretCascadeBlade, cascadeBladeId } from "../components/EffectiveSecrets";
+import EffectiveVariables, { variableCascadeBlade, varCascadeBladeId } from "../components/EffectiveVariables";
 import ReachabilityPanel from "../components/ReachabilityPanel";
 
 // Components: the device inventory, the first page built on the generic TreeList.
@@ -150,15 +154,29 @@ export default function Components() {
           </div>
         </Show>
         <ReachabilityPanel name={n.raw.name} />
-        <div class="flex items-center gap-2 border-t border-base-300 pt-4">
-          <Show when={can(me.data, "component", "delete")}>
-            <button class="btn btn-danger btn-sm gap-1.5" onClick={() => { ctx.closeBlades(); del(n); }}>Delete</button>
-          </Show>
-          <span class="flex-1" />
-          <Show when={can(me.data, "component", "update")}>
-            <button class="btn btn-action btn-sm" onClick={() => ctx.openEdit(n)}>Edit</button>
-          </Show>
-        </div>
+        <Show when={can(me.data, "secret", "read")}>
+          <EffectiveSecrets
+            component={n.raw.name}
+            onOpen={(secretName) => ctx.openBlade({ kind: "secret-cascade", id: cascadeBladeId(n.raw.name, secretName) })}
+          />
+        </Show>
+        <Show when={can(me.data, "variable", "read")}>
+          <EffectiveVariables
+            component={n.raw.name}
+            onOpen={(variableName) => ctx.openBlade({ kind: "variable-cascade", id: varCascadeBladeId(n.raw.name, variableName) })}
+          />
+        </Show>
+        <Show when={ctx.full}>
+          <div class="flex items-center gap-2 border-t border-base-300 pt-4">
+            <Show when={can(me.data, "component", "delete")}>
+              <Button intent="danger" onClick={() => { ctx.closeBlades(); del(n); }}>Delete</Button>
+            </Show>
+            <span class="flex-1" />
+            <Show when={can(me.data, "component", "update")}>
+              <Button intent="action" icon={Pencil} onClick={() => ctx.openEdit(n)}>Edit</Button>
+            </Show>
+          </div>
+        </Show>
       </div>
     );
   }
@@ -207,7 +225,7 @@ export default function Components() {
     }
 
     return (
-      <form class="flex flex-col gap-4" onSubmit={submit}>
+      <form class="flex min-h-full flex-col gap-4" onSubmit={submit}>
         <Show when={formErr()}>
           <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
         </Show>
@@ -251,10 +269,10 @@ export default function Components() {
             "Omit for a root component.",
           )}
         </Show>
-        <div class="mt-1 flex justify-end gap-2">
-          <button type="button" class="btn btn-quiet btn-sm" onClick={p.close}>Cancel</button>
-          <button type="submit" class="btn btn-action btn-sm" disabled={busy()}>{editing ? "Save changes" : "Create component"}</button>
-        </div>
+        <DrawerFooter>
+          <Button icon={X} onClick={p.close}>Cancel</Button>
+          <Button type="submit" intent="action" icon={editing ? Save : Plus} disabled={busy()}>{editing ? "Save changes" : "Create component"}</Button>
+        </DrawerFooter>
       </form>
     );
   }
@@ -295,6 +313,7 @@ export default function Components() {
     onBack: () => navigate("/components"),
     onDelete: (n) => del(n),
     renderDetail: (n, ctx) => detail(n, ctx),
+    extraBlades: { "secret-cascade": secretCascadeBlade, "variable-cascade": variableCascadeBlade },
     FormBody,
   };
 

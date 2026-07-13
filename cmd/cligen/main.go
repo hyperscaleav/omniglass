@@ -78,8 +78,15 @@ type operation struct {
 }
 
 type param struct {
-	Name string `json:"name"`
-	In   string `json:"in"`
+	Name        string      `json:"name"`
+	In          string      `json:"in"`
+	Description string      `json:"description"`
+	Required    bool        `json:"required"`
+	Schema      paramSchema `json:"schema"`
+}
+
+type paramSchema struct {
+	Type string `json:"type"`
 }
 
 type requestBody struct {
@@ -100,7 +107,31 @@ type schema struct {
 }
 
 type property struct {
-	Description string `json:"description"`
+	Description string   `json:"description"`
+	Type       jsonType `json:"type"`
+}
+
+// jsonType is an OpenAPI `type` that may be a single string ("string") or, for a
+// nullable schema, an array (`["array", "null"]`). It resolves to the first
+// non-null member, or "" for an absent/untyped `any`.
+type jsonType string
+
+func (t *jsonType) UnmarshalJSON(b []byte) error {
+	var s string
+	if json.Unmarshal(b, &s) == nil {
+		*t = jsonType(s)
+		return nil
+	}
+	var arr []string
+	if json.Unmarshal(b, &arr) == nil {
+		for _, x := range arr {
+			if x != "null" {
+				*t = jsonType(x)
+				return nil
+			}
+		}
+	}
+	return nil // an absent or unexpected shape resolves to the untyped ""
 }
 
 var httpMethods = []string{"get", "post", "put", "patch", "delete"}
@@ -113,6 +144,7 @@ type command struct {
 	APIPath string   // Go format template, e.g. /api/v1/locations/%s
 	Args    []string // positional arg names, in path order
 	Body    []bodyField
+	Query   []queryField // OpenAPI query parameters, as optional flags
 	Short   string
 	Long    string
 	Example string
@@ -122,6 +154,26 @@ type bodyField struct {
 	Name     string
 	Flag     string // hyphenated flag name
 	Var      string // generated Go variable name
+	Desc     string
+	Required bool
+	// JSON marks a field whose value is not a plain scalar (an object, an array,
+	// or an untyped `any`): its flag still takes a string, but the string is
+	// parsed as JSON (with a bare-string fallback) before it enters the request
+	// body, so `--value 30` sends the number 30 and `--fields '{"k":"v"}'` sends
+	// the object, not their quoted-string forms.
+	JSON bool
+}
+
+// queryField is one OpenAPI query parameter surfaced as a cobra flag. The flag
+// is optional by default: only a flag the operator actually sets is appended to
+// the request query string, so an unset param keeps the server default.
+type queryField struct {
+	Name     string // OpenAPI param name (snake_case), the query-string key
+	Flag     string // kebab-case flag name
+	Var      string // generated Go variable name
+	GoType   string // Go flag variable type: string, bool, int
+	FlagFunc string // cobra flag setter: StringVar, BoolVar, IntVar
+	Zero     string // Go source for the flag default: "", false, 0
 	Desc     string
 	Required bool
 }
@@ -160,12 +212,14 @@ func buildCommands(doc spec, base string) []command {
 func buildCommand(doc spec, base, path, method string, op operation) command {
 	words := commandWords(path, method, op.OperationID)
 
-	// Path params become positional args and %s slots, in path order.
+	// Path params become positional args and %s slots, in path order. A custom
+	// method fuses the param and the verb in one segment ({id}:archive); the param
+	// still binds as a positional arg and the ":verb" suffix stays literal.
 	apiPath := base
 	var args []string
 	for _, seg := range splitPath(path) {
-		if name, ok := pathParam(seg); ok {
-			apiPath += "/%s"
+		if name, suffix, ok := pathParamSeg(seg); ok {
+			apiPath += "/%s" + suffix
 			args = append(args, name)
 		} else {
 			apiPath += "/" + seg
@@ -181,8 +235,40 @@ func buildCommand(doc spec, base, path, method string, op operation) command {
 		Long:    op.Description,
 	}
 	c.Body = bodyFields(doc, op)
+	c.Query = queryFields(op)
 	c.Example = example(words, args, c.Body)
 	return c
+}
+
+// queryFields maps an operation's OpenAPI query parameters (in: query) to
+// optional cobra flags, in spec order. The OpenAPI type selects the flag setter
+// (string -> StringVar, boolean -> BoolVar, integer -> IntVar); any other type
+// falls back to a string flag. Path and other parameter locations are ignored.
+func queryFields(op operation) []queryField {
+	var out []queryField
+	for _, p := range op.Parameters {
+		if p.In != "query" {
+			continue
+		}
+		goType, flagFunc, zero := "string", "StringVar", `""`
+		switch p.Schema.Type {
+		case "boolean":
+			goType, flagFunc, zero = "bool", "BoolVar", "false"
+		case "integer":
+			goType, flagFunc, zero = "int", "IntVar", "0"
+		}
+		out = append(out, queryField{
+			Name:     p.Name,
+			Flag:     strings.ReplaceAll(p.Name, "_", "-"),
+			Var:      "q" + goIdent(p.Name),
+			GoType:   goType,
+			FlagFunc: flagFunc,
+			Zero:     zero,
+			Desc:     p.Description,
+			Required: p.Required,
+		})
+	}
+	return out
 }
 
 // commandWords derives the cobra command path. An override wins; otherwise the
@@ -259,12 +345,20 @@ func bodyFields(doc spec, op operation) []bodyField {
 
 	var fields []bodyField
 	for _, k := range props {
+		// A string property passes through as its flag string; every other type
+		// (boolean, number, integer, object, array, or an untyped `any` value) is
+		// JSON-parsed so a typed or structured value survives the wire. A string is
+		// the sole passthrough so a value that looks like JSON (a name `30`, a label
+		// `true`) stays a string; a `--propagates false` becomes a JSON boolean, not
+		// the string "false" a boolean body field would reject.
+		raw := string(sc.Properties[k].Type) == "string"
 		fields = append(fields, bodyField{
 			Name:     k,
 			Flag:     strings.ReplaceAll(k, "_", "-"),
 			Var:      "f" + goIdent(k),
 			Desc:     sc.Properties[k].Description,
 			Required: required[k],
+			JSON:     !raw,
 		})
 	}
 	return fields
@@ -332,6 +426,21 @@ func pathParam(seg string) (string, bool) {
 		return seg[1 : len(seg)-1], true
 	}
 	return "", false
+}
+
+// pathParamSeg recognizes a path-parameter segment, including a custom-method
+// segment where the param and the verb are fused ({id}:archive). It returns the
+// param name and any trailing literal (":archive", or "" for a plain {id}). A
+// non-param segment (a collection, or a collection:verb) returns ok == false.
+func pathParamSeg(seg string) (name, suffix string, ok bool) {
+	if !strings.HasPrefix(seg, "{") {
+		return "", "", false
+	}
+	end := strings.Index(seg, "}")
+	if end < 0 {
+		return "", "", false
+	}
+	return seg[1:end], seg[end+1:], true
 }
 
 // singular is a naive depluralizer good enough for the AIP collection nouns in
@@ -422,6 +531,9 @@ func generatedCommands() []*cobra.Command {
 		{{- range $f := .Body}}
 		var {{$f.Var}} string
 		{{- end}}
+		{{- range $q := .Query}}
+		var {{$q.Var}} {{$q.GoType}}
+		{{- end}}
 		cmd := &cobra.Command{
 			Use:     {{quote .LeafUse}},
 			Short:   {{quote .Short}},
@@ -430,11 +542,22 @@ func generatedCommands() []*cobra.Command {
 			Args:    cobra.ExactArgs({{len .Args}}),
 			RunE: func(cmd *cobra.Command, args []string) error {
 				path := fmt.Sprintf({{quote .APIPath}}{{range $i, $a := .Args}}, url.PathEscape(args[{{$i}}]){{end}})
+				{{- if .Query}}
+				q := url.Values{}
+				{{- range $qp := .Query}}
+				if cmd.Flags().Changed({{quote $qp.Flag}}) {
+					q.Set({{quote $qp.Name}}, fmt.Sprintf("%v", {{$qp.Var}}))
+				}
+				{{- end}}
+				if enc := q.Encode(); enc != "" {
+					path += "?" + enc
+				}
+				{{- end}}
 				{{- if .Body}}
 				body := map[string]any{}
 				{{- range $f := .Body}}
 				if cmd.Flags().Changed({{quote $f.Flag}}) {
-					body[{{quote $f.Name}}] = {{$f.Var}}
+					body[{{quote $f.Name}}] = {{if $f.JSON}}jsonOrString({{$f.Var}}){{else}}{{$f.Var}}{{end}}
 				}
 				{{- end}}
 				return runAPICommand(cmd, {{quote .Method}}, path, body)
@@ -447,6 +570,12 @@ func generatedCommands() []*cobra.Command {
 		cmd.Flags().StringVar(&{{$f.Var}}, {{quote $f.Flag}}, "", {{quote $f.Desc}})
 		{{- if $f.Required}}
 		_ = cmd.MarkFlagRequired({{quote $f.Flag}})
+		{{- end}}
+		{{- end}}
+		{{- range $qp := .Query}}
+		cmd.Flags().{{$qp.FlagFunc}}(&{{$qp.Var}}, {{quote $qp.Flag}}, {{$qp.Zero}}, {{quote $qp.Desc}})
+		{{- if $qp.Required}}
+		_ = cmd.MarkFlagRequired({{quote $qp.Flag}})
 		{{- end}}
 		{{- end}}
 		return cmd

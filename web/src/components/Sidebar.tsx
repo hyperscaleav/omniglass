@@ -1,9 +1,10 @@
-import { For, Show, createMemo } from "solid-js";
+import { For, Show, createMemo, createResource } from "solid-js";
 import { A, useLocation, useNavigate } from "@solidjs/router";
 import { navItems, filterNav, type NavItem } from "../lib/nav";
-import { useMe, useLogout, can } from "../lib/auth";
+import { useMe, useLogout, can, fetchMyAvatar } from "../lib/auth";
 import { PanelLeft, LogOut } from "./icons";
 import { BrandMark, Wordmark } from "./Brand";
+import Button from "./Button";
 
 // The navigation rail: a daisyUI `menu` with collapsible clusters, the brand
 // lockup, a collapse toggle, and an identity footer. Routing and active state go
@@ -15,6 +16,14 @@ export default function Sidebar(props: { collapsed: boolean; onToggle: () => voi
   const navigate = useNavigate();
   const me = useMe();
   const logout = useLogout();
+  // The identity footer shows the caller's own picture when set (fetched via the
+  // self route, so a scoped viewer who cannot read others' avatars still sees their
+  // own), falling back to initials. Reacting to has_avatar keeps it in step with an
+  // upload or removal on the profile page.
+  const [avatarUrl] = createResource(
+    () => me.data?.human?.has_avatar ?? false,
+    (has) => (has ? fetchMyAvatar() : Promise.resolve(null)),
+  );
   const rel = () => {
     const p = location.pathname.startsWith(BASE) ? location.pathname.slice(BASE.length) : location.pathname;
     return p === "" ? "/" : p;
@@ -44,16 +53,12 @@ export default function Sidebar(props: { collapsed: boolean; onToggle: () => voi
       <div class="flex h-14 items-center gap-2" classList={{ "justify-center": props.collapsed, "justify-between px-4 pr-2": !props.collapsed }}>
         <Show when={!props.collapsed} fallback={<BrandMark />}><Lockup /></Show>
         <Show when={!props.collapsed}>
-          <button class="btn btn-quiet btn-sm btn-square text-base-content/50" onClick={props.onToggle} title="Collapse" aria-label="Toggle sidebar">
-            <PanelLeft size={16} />
-          </button>
+          <Button square icon={PanelLeft} onClick={props.onToggle} title="Collapse" label="Toggle sidebar" class="text-base-content/50" />
         </Show>
       </div>
       <Show when={props.collapsed}>
         <div class="flex justify-center pb-1">
-          <button class="btn btn-quiet btn-sm btn-square text-base-content/50" onClick={props.onToggle} title="Expand" aria-label="Toggle sidebar">
-            <PanelLeft size={16} />
-          </button>
+          <Button square icon={PanelLeft} onClick={props.onToggle} title="Expand" label="Toggle sidebar" class="text-base-content/50" />
         </div>
       </Show>
 
@@ -76,11 +81,22 @@ export default function Sidebar(props: { collapsed: boolean; onToggle: () => voi
             data-tip={props.collapsed ? "Your profile" : undefined}
             title="Your profile"
           >
-            <div class="avatar avatar-placeholder">
-              <div class="w-7 rounded-full bg-linear-to-br from-primary to-info text-primary-content">
-                <span class="font-data text-[11px] font-bold uppercase">{ident().name.slice(0, 2)}</span>
+            <Show
+              when={avatarUrl()}
+              fallback={
+                <div class="avatar avatar-placeholder">
+                  <div class="w-7 rounded-full bg-linear-to-br from-primary to-info text-primary-content">
+                    <span class="font-data text-[11px] font-bold uppercase">{ident().name.slice(0, 2)}</span>
+                  </div>
+                </div>
+              }
+            >
+              <div class="avatar">
+                <div class="w-7 rounded-full">
+                  <img src={avatarUrl()!} alt="Your profile picture" />
+                </div>
               </div>
-            </div>
+            </Show>
             <Show when={!props.collapsed}>
               <div class="min-w-0 flex-1 leading-tight">
                 <div class="truncate font-data text-xs font-semibold">{ident().name}</div>
@@ -89,17 +105,17 @@ export default function Sidebar(props: { collapsed: boolean; onToggle: () => voi
             </Show>
           </A>
           <Show when={!props.collapsed}>
-            <button
-              class="btn btn-quiet btn-sm btn-square flex-none text-base-content/50"
+            <Button
+              square
+              icon={LogOut}
               title="Sign out"
-              aria-label="Sign out"
+              label="Sign out"
+              class="flex-none text-base-content/50"
               onClick={async () => {
                 await logout();
                 navigate("/login");
               }}
-            >
-              <LogOut size={16} />
-            </button>
+            />
           </Show>
         </div>
       </div>

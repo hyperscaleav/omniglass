@@ -39,6 +39,12 @@ Everything lives under `/api/v1`. The path shape is derivable, not special-cased
   [authorization](/architecture/identity-access/) check share one vocabulary.
 - **Singular kind sub-segments** for the typed families: `/rules/calc`, `/datapoints/metric`,
   `/types/component`.
+- **A principal is addressable by uuid or username.** Every `/principals/{id}` route (read, update,
+  grants, the lifecycle verbs, reset, impersonate) accepts either the principal's uuid or a human's
+  current username, resolved server-side (a value that parses as a uuid is used directly; otherwise it
+  is a username lookup, and an unknown one is a 404). The uuid is still the stable identity (a username
+  is mutable and nothing keys on it), so a username is a convenience address resolved at call time.
+  Service principals have no username and stay uuid-addressed.
 
 ## Lists: filter, order, page
 
@@ -197,6 +203,92 @@ placement, and spec; the interface and mode that form its content-addressed iden
 and it is a new task). The two built interface types are `icmp` and `tcp`; there is no `interface_type` list
 route yet.
 :::
+## Secrets: masked reads, an audited reveal
+
+A **secret** is a typed, encrypted-at-rest operator value ([config, credentials, and
+variables](/architecture/variables/)), and its routes are a worked instance of the conventions above:
+the AIP resource plus a `:verb` custom method, the verb-is-the-permission rule, the implicit `PATCH`
+write mask, same-transaction audit, and a scoped read. The registry, the directory, and the
+per-component cascade read all ride the **viewer read floor** (`secret:read`, which `*:read` satisfies);
+the three writes gate on `secret:create` / `secret:update` / `secret:delete`; the plaintext decrypt
+gates on **`secret:reveal`**, a permission the `*:read` floor does **not** carry, so a plain "read
+everything" grant sees only masks and **only admin (`secret:*`) and owner (`>`) reveal**. Every
+`:reveal` writes an [audit](/architecture/audit/) row (verb `reveal`) in the same call.
+
+- `GET /secret-types` lists the shape registry, each `{id, display_name, official, fields:[{name, type,
+  secret, origin}]}` (`secret:read`).
+- `GET /secrets` is the **all-scope admin directory** (`{secrets: [secret]}`); like the principal
+  directory it needs an all-scope grant, and a non-all scope is a 403 (`secret:read`).
+- `POST /secrets` creates one from `{name, secret_type, owner_kind: global|location|system|component,
+  owner?, fields}` (201, `secret:create`); a `global` secret needs an all-scope grant.
+- `PATCH /secrets/{id}` re-seals the given `fields`, merged over the stored value so an omitted field
+  keeps its value (`secret:update`).
+- `DELETE /secrets/{id}` removes it (204, `secret:delete`).
+- `POST /secrets/{id}:reveal` returns the decrypted `{fields: {name: plaintext}}` (`secret:reveal`,
+  audited).
+- `GET /components/{name}/effective-secrets` is the **masked cascade** for one component: the secrets
+  that resolve onto it, each a `resolvedSecret` (`{id, name, secret_type, owner_kind, owner_id?,
+  owner_name?, band, depth, winner, fields}`) marking the winner and the shadowed candidates
+  (`secret:read`; the component must be in the caller's component read-scope).
+
+A secret's fields are masked in every read: the `secret` body (`{id, name, secret_type, owner_kind,
+owner_id?, owner_name?, fields:[{name, value, secret}]}`) returns `••••••` for a secret field, and only
+`:reveal` returns plaintext.
+
+A **variable** is the plaintext sibling of a secret ([config, secrets, and
+variables](/architecture/variables/)): the same owner arc and cascade, but shown in the clear (no
+registry, no mask, no reveal). The directory and the per-component cascade read ride the viewer floor
+(`variable:read`); `POST` / `PATCH` gate on `variable:create` / `variable:update` (granted to
+operators); `DELETE` gates on `variable:delete` (admin, owner). The value is polymorphic JSON typed by
+`value_type`.
+
+- `GET /variables` is the **all-scope admin directory** (`{variables: [variable]}`); like the secret
+  directory it needs an all-scope grant, and a non-all scope is a 403 (`variable:read`).
+- `POST /variables` creates one from `{name, value_type: string|int|float|bool|json, owner_kind:
+  global|location|system|component, owner?, value}` (201, `variable:create`); a `global` variable needs
+  an all-scope grant, and the `value` is validated against `value_type`.
+- `PATCH /variables/{id}` replaces the `value` (validated against the fixed `value_type`;
+  `variable:update`).
+- `DELETE /variables/{id}` removes it (204, `variable:delete`).
+- `GET /components/{name}/effective-variables` is the **cascade** for one component: each a
+  `resolvedVariable` (`{id, name, value_type, owner_kind, owner_id?, owner_name?, band, depth, winner,
+  value}`) marking the winner and the shadowed candidates (`variable:read`; the component must be in the
+  caller's component read-scope).
+
+A `variable` body is `{id, name, value_type, owner_kind, owner_id?, owner_name?, value}`, the `value` in
+the clear.
+
+A **tag** ([tags](/architecture/tags/)) is a `key: value` label, and its routes split along the
+governance line: **minting a key** is a tenant-wide governance action, but **setting a value** is the
+owning entity's own write. The key vocabulary and an entity's tags read on the viewer floor
+(`tag:read`, `component:read`).
+
+- `GET /tags` lists the governed key vocabulary (`{tags: [tag]}`, `tag:read`); a `tag` body is `{id,
+  name, applies_to, propagates}`.
+- `POST /tags` mints a key from `{name, applies_to?, propagates?}` (201, `tag:create`, all-scope); the
+  name is normalized to a lowercase identifier (a 422 otherwise), `applies_to` is an entity-kind
+  allow-list (empty = universal), and `propagates` defaults true.
+- `PATCH /tags/{name}` replaces a key's `{applies_to?, propagates?}` (`tag:update`, all-scope); the name
+  is fixed.
+- `DELETE /tags/{name}` removes a key, cascading its bindings (204, `tag:delete`, all-scope).
+- `POST /tags/{name}:setGlobal` sets the **global** value for a key from `{value}` (`tag:update`);
+  `POST /tags/{name}:clearGlobal` removes it (204). A global binding has no owning entity, so it gates on
+  `tag:update`.
+- `GET /{components,systems,locations}/{name}:listTags` lists the bindings set **directly** on one entity
+  (`{tags: [tagBinding]}`, the entity's `:read`).
+- `POST /{components,systems,locations}/{name}:setTag` binds a value from `{key, value}` on the entity;
+  the key must exist and its `applies_to` must admit the kind (a 422 otherwise). Setting a value is the
+  entity's own write, so it gates on the entity's **`:update`** (`component:update` and friends), not a
+  tag permission. `POST /{...}/{name}:removeTag` from `{key}` removes the binding (204). Bindings are
+  custom methods on the entity (like the principal lifecycle) rather than a nested collection, so the
+  generated CLI stays collision-free.
+- `GET /components/{name}/effective-tags` is the **cascade** for one component: each a `resolvedTag`
+  (`{key, value, owner_kind, owner_id?, owner_name?, band, depth, winner}`), keys unioning and values
+  overriding most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves
+  only from a binding on the component itself (`component:read`; the component must be in the caller's
+  component read-scope).
+
+A `tagBinding` body is `{key, value, owner_kind, owner_id?, owner_name?}`.
 
 ## Reads beyond one resource are views
 

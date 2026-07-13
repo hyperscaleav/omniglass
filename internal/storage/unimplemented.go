@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/scope"
@@ -18,11 +19,14 @@ func (UnimplementedGateway) UpsertRole(context.Context, Role) error { return nil
 func (UnimplementedGateway) BootstrapOwner(context.Context, OwnerSpec) (bool, error) {
 	return false, nil
 }
-func (UnimplementedGateway) IssueBearerCredential(context.Context, string, []byte, string) (bool, error) {
+func (UnimplementedGateway) IssueBearerCredential(context.Context, string, []byte, string, *time.Time) (bool, error) {
 	return false, nil
 }
 func (UnimplementedGateway) AuthenticateBearer(context.Context, []byte) (*Principal, error) {
 	return nil, nil
+}
+func (UnimplementedGateway) ResolvePrincipalRef(context.Context, string) (string, error) {
+	return "", nil
 }
 func (UnimplementedGateway) BeginImpersonation(context.Context, string, string, string, time.Duration) (string, *ImpersonationSession, error) {
 	return "", nil, nil
@@ -40,7 +44,7 @@ func (UnimplementedGateway) SetPassword(context.Context, string, string) (bool, 
 func (UnimplementedGateway) UpdateHumanProfile(context.Context, string, HumanProfilePatch) error {
 	return nil
 }
-func (UnimplementedGateway) ListPrincipals(context.Context, scope.Set) ([]Principal, error) {
+func (UnimplementedGateway) ListPrincipals(context.Context, scope.Set, bool) ([]Principal, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) GetPrincipal(context.Context, string, scope.Set) (*Principal, error) {
@@ -93,14 +97,34 @@ func (UnimplementedGateway) ListGroupGrants(context.Context, string, scope.Set) 
 func (UnimplementedGateway) SetPrincipalActive(context.Context, string, string, bool, scope.Set) error {
 	return nil
 }
-func (UnimplementedGateway) DeactivatePrincipal(context.Context, string, string, scope.Set) error {
+func (UnimplementedGateway) ArchivePrincipal(context.Context, string, string, scope.Set) error {
 	return nil
 }
-func (UnimplementedGateway) ReactivatePrincipal(context.Context, string, string, scope.Set) error {
+func (UnimplementedGateway) RestorePrincipal(context.Context, string, string, scope.Set) error {
 	return nil
 }
 func (UnimplementedGateway) PurgePrincipal(context.Context, string, string, scope.Set) error {
 	return nil
+}
+func (UnimplementedGateway) SetPrincipalPassword(context.Context, string, string, string, scope.Set) error {
+	return nil
+}
+func (UnimplementedGateway) SetOwnAvatar(context.Context, string, string) error { return nil }
+func (UnimplementedGateway) ClearOwnAvatar(context.Context, string) error       { return nil }
+func (UnimplementedGateway) SetPrincipalAvatar(context.Context, string, string, string, scope.Set) error {
+	return nil
+}
+func (UnimplementedGateway) ClearPrincipalAvatar(context.Context, string, string, scope.Set) error {
+	return nil
+}
+func (UnimplementedGateway) GetHumanAvatar(context.Context, string) (string, bool, error) {
+	return "", false, nil
+}
+func (UnimplementedGateway) GetPrincipalAvatar(context.Context, string, scope.Set) (string, bool, error) {
+	return "", false, nil
+}
+func (UnimplementedGateway) RevokePrincipalBearers(context.Context, string, [][]byte) (int, error) {
+	return 0, nil
 }
 func (UnimplementedGateway) RevokeBearer(context.Context, []byte) error { return nil }
 func (UnimplementedGateway) AnyHuman(context.Context) (bool, error)     { return false, nil }
@@ -257,6 +281,73 @@ func (UnimplementedGateway) GetNode(context.Context, string, scope.Set) (*Node, 
 	return nil, nil
 }
 func (UnimplementedGateway) ListNodes(context.Context, scope.Set) ([]Node, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) UpsertSecretType(context.Context, SecretType) error { return nil }
+func (UnimplementedGateway) ListSecretTypes(context.Context) ([]SecretType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) GetSecretType(context.Context, string) (*SecretType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) ListSecrets(context.Context, scope.Set) ([]Secret, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) CreateSecret(context.Context, string, SecretSpec, scope.Set) (*Secret, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) UpdateSecret(context.Context, string, string, map[string]string, scope.Set, scope.Set) (*Secret, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteSecret(context.Context, string, string, scope.Set, scope.Set) error {
+	return nil
+}
+func (UnimplementedGateway) RevealSecret(context.Context, string, string, scope.Set, scope.Set) (map[string]string, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) CopySecret(context.Context, string, string, scope.Set, scope.Set) (map[string]string, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) ResolveSecrets(context.Context, string, scope.Set) ([]ResolvedSecret, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) ListVariables(context.Context, scope.Set) ([]Variable, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) CreateVariable(context.Context, string, VariableSpec, scope.Set) (*Variable, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) UpdateVariable(context.Context, string, string, json.RawMessage, scope.Set, scope.Set) (*Variable, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteVariable(context.Context, string, string, scope.Set, scope.Set) error {
+	return nil
+}
+func (UnimplementedGateway) ResolveVariables(context.Context, string, scope.Set) ([]ResolvedVariable, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) ListTags(context.Context) ([]Tag, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) CreateTag(context.Context, string, TagSpec, scope.Set) (*Tag, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) UpdateTag(context.Context, string, string, TagSpec, scope.Set) (*Tag, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteTag(context.Context, string, string, scope.Set) error {
+	return nil
+}
+func (UnimplementedGateway) SetTagBinding(context.Context, string, string, string, *string, string, scope.Set, scope.Set) (*TagBinding, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteTagBinding(context.Context, string, string, string, *string, scope.Set, scope.Set) error {
+	return nil
+}
+func (UnimplementedGateway) ListEntityTags(context.Context, string, *string, scope.Set) ([]TagBinding, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) ResolveTags(context.Context, string, scope.Set) ([]ResolvedTag, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) Close() {}

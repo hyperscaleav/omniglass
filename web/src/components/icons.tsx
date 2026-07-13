@@ -78,6 +78,9 @@ export const Sliders: Component<P> = (p) => (
 export const Pencil: Component<P> = (p) => (
   <Svg size={p.size}><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" /></Svg>
 );
+export const Save: Component<P> = (p) => (
+  <Svg size={p.size}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" /><path d="M17 21v-8H7v8" /><path d="M7 3v5h8" /></Svg>
+);
 export const Trash: Component<P> = (p) => (
   <Svg size={p.size}><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" /></Svg>
 );
@@ -90,8 +93,23 @@ export const Ban: Component<P> = (p) => (
 export const Eye: Component<P> = (p) => (
   <Svg size={p.size}><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></Svg>
 );
+export const Key: Component<P> = (p) => (
+  <Svg size={p.size}><circle cx="7.5" cy="15.5" r="4.5" /><path d="M10.7 12.3 20 3" /><path d="m17 6 2 2" /><path d="m14 9 2 2" /></Svg>
+);
+export const EyeOff: Component<P> = (p) => (
+  <Svg size={p.size}><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c6.5 0 10 8 10 8a13.2 13.2 0 0 1-1.67 2.68" /><path d="M6.61 6.61A13.5 13.5 0 0 0 2 12s3.5 8 10 8a9.1 9.1 0 0 0 5.39-1.61" /><line x1="2" y1="2" x2="22" y2="22" /></Svg>
+);
+export const Copy: Component<P> = (p) => (
+  <Svg size={p.size}><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></Svg>
+);
+export const RefreshCw: Component<P> = (p) => (
+  <Svg size={p.size}><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" /><path d="M21 21v-5h-5" /></Svg>
+);
 export const Mask: Component<P> = (p) => (
   <Svg size={p.size}><path d="M4 6a2 2 0 0 0-2 2v4a5 5 0 0 0 5 5 8 8 0 0 0 5-2 8 8 0 0 0 5 2 5 5 0 0 0 5-5V8a2 2 0 0 0-2-2h-3a8 8 0 0 0-5 2 8 8 0 0 0-5-2z" /><path d="M6 11c1.5 0 2.5.5 3 2" /><path d="M18 11c-1.5 0-2.5.5-3 2" /></Svg>
+);
+export const RotateCcw: Component<P> = (p) => (
+  <Svg size={p.size}><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /></Svg>
 );
 export const ChevronRight: Component<P> = (p) => (
   <Svg size={p.size}><path d="m9 6 6 6-6 6" /></Svg>
@@ -107,9 +125,6 @@ export const Maximize: Component<P> = (p) => (
 );
 export const Check: Component<P> = (p) => (
   <Svg size={p.size}><path d="m20 6-11 11-5-5" /></Svg>
-);
-export const Copy: Component<P> = (p) => (
-  <Svg size={p.size}><rect x="9" y="9" width="12" height="12" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></Svg>
 );
 export const Server: Component<P> = (p) => (
   <Svg size={p.size}><rect x="3" y="4" width="18" height="7" rx="1.5" /><rect x="3" y="13" width="18" height="7" rx="1.5" /><path d="M7 7.5h.01M7 16.5h.01" /></Svg>

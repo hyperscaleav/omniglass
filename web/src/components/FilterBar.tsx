@@ -1,6 +1,7 @@
 import { For, Show, createMemo, createSignal, createUniqueId, type JSX } from "solid-js";
 import { OP, opsFor, tokenToChip, chipGlyph, type FilterKey, type Chip, type OpKey } from "../lib/predicate";
 import { Search, X } from "./icons";
+import Button from "./Button";
 
 // FilterBar: the keyboard-driven chip search. A staged pipeline over one input:
 // type a key, pick an operator, pick/enter a value; each commit is a chip. The
@@ -214,7 +215,7 @@ export default function FilterBar<T>(props: {
           </Show>
         </div>
         <Show when={props.clearable && props.chips.length > 0}>
-          <button class="btn btn-quiet btn-sm flex-none text-xs" onClick={() => props.onChips([])}>Clear</button>
+          <Button class="flex-none text-xs" onClick={() => props.onChips([])}>Clear</Button>
         </Show>
         <Show when={props.trailing}>
           <div class="ml-auto flex flex-none items-center gap-1.5">{props.trailing}</div>

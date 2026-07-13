@@ -16,7 +16,9 @@ import {
 } from "../lib/locations";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
-import { ChevronRight, Plus, resolveIcon } from "../components/icons";
+import { ChevronRight, Pencil, Plus, Save, X, resolveIcon } from "../components/icons";
+import Button from "../components/Button";
+import { DrawerFooter } from "../components/Drawer";
 
 // Locations: the place tree on the generic TreeList (campuses, buildings, floors,
 // rooms). Replaces the standalone Locations page/new/detail trio with the same
@@ -228,18 +230,20 @@ export default function Locations() {
             </div>
           </div>
         </Show>
-        <div class="flex flex-wrap items-center gap-2 border-t border-base-300 pt-4">
-          <Show when={can(me.data, "location", "delete")}>
-            <button class="btn btn-danger btn-sm" onClick={() => { ctx.closeBlades(); del(n); }}>Delete</button>
-          </Show>
-          <span class="flex-1" />
-          <Show when={n.type !== "room" && can(me.data, "location", "create")}>
-            <button class="btn btn-sm gap-1.5" onClick={() => ctx.openCreate(n)}><Plus size={14} /> Add child</button>
-          </Show>
-          <Show when={can(me.data, "location", "update")}>
-            <button class="btn btn-action btn-sm" onClick={() => ctx.openEdit(n)}>Edit</button>
-          </Show>
-        </div>
+        <Show when={ctx.full || (n.type !== "room" && can(me.data, "location", "create"))}>
+          <div class="flex flex-wrap items-center gap-2 border-t border-base-300 pt-4">
+            <Show when={ctx.full && can(me.data, "location", "delete")}>
+              <Button intent="danger" onClick={() => { ctx.closeBlades(); del(n); }}>Delete</Button>
+            </Show>
+            <span class="flex-1" />
+            <Show when={n.type !== "room" && can(me.data, "location", "create")}>
+              <Button icon={Plus} onClick={() => ctx.openCreate(n)}>Add child</Button>
+            </Show>
+            <Show when={ctx.full && can(me.data, "location", "update")}>
+              <Button intent="action" icon={Pencil} onClick={() => ctx.openEdit(n)}>Edit</Button>
+            </Show>
+          </div>
+        </Show>
       </div>
     );
   }
@@ -277,7 +281,7 @@ export default function Locations() {
     }
 
     return (
-      <form class="flex flex-col gap-4" onSubmit={submit}>
+      <form class="flex min-h-full flex-col gap-4" onSubmit={submit}>
         <Show when={formErr()}>
           <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
         </Show>
@@ -303,10 +307,10 @@ export default function Locations() {
             )}
           </Show>
         </div>
-        <div class="mt-1 flex justify-end gap-2">
-          <button type="button" class="btn btn-quiet btn-sm" onClick={p.close}>Cancel</button>
-          <button type="submit" class="btn btn-action btn-sm" disabled={busy() || locationTypes.isLoading}>{editing ? "Save changes" : "Create location"}</button>
-        </div>
+        <DrawerFooter>
+          <Button icon={X} onClick={p.close}>Cancel</Button>
+          <Button type="submit" intent="action" icon={editing ? Save : Plus} disabled={busy() || locationTypes.isLoading}>{editing ? "Save changes" : "Create location"}</Button>
+        </DrawerFooter>
       </form>
     );
   }

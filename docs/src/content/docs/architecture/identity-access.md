@@ -15,19 +15,32 @@ Built and tested today: the `principal` (+ per-kind `human` / `service`) and `cr
 (argon2id) behind an httpOnly session cookie** (`POST /auth/login` and `/auth/logout`, the public
 `GET /auth/status`), the self-service `GET` / `PATCH /auth/me` and `POST /auth/me:changePassword`, the
 admin **principal directory** (`GET /principals`, `GET /principals/{id}`), human **create**
-(`POST /principals`) and **update** (`PATCH /principals/{id}`: display name, email, username), **role
+(`POST /principals`) and **update** (`PATCH /principals/{id}`: display name, email, username), an
+admin **password reset** (`POST /principals/{id}:resetPassword`, gated `principal:reset-password`,
+policy-enforced, no current password, audited as the admin, refused on self (change your own password
+from your profile, which verifies your current one), behind the same **takeover guard** as
+impersonation so an owner cannot be reset and a caller cannot reset a principal whose capabilities
+exceed their own, and **force-logout**: a reset revokes every one of the target's bearer credentials
+(all sessions and tokens) so it takes effect at once, and a self-service change revokes the caller's
+other sessions while keeping the current one, and **force-change-on-next-login**: a reset sets
+`human.must_change_password`, and until the user changes it (which clears the flag) the `authn` choke
+point refuses **every** route except reading their own principal and the change itself with a 403, so
+the admin-known secret is short-lived and cannot be used to act), **role
 assignment** (`POST` / `DELETE /principals/{id}/grants`) with the **owner-invariant trigger** enforcing
 that the last `owner @ all` grant cannot be revoked, and the **principal lifecycle**: reversible
 **disable** (`POST /principals/{id}:disable` / `:enable`, which refuses authentication for a disabled
-principal), a stronger **deactivate** (`:deactivate` / `:reactivate`, a soft delete that hides the account
+principal), a stronger **archive** (`:archive` / `:restore`, a soft delete that hides the account
 from the directory and blocks authentication, reversibly until purged), and **purge** (`:purge`, an
-irreversible hard delete, gated on prior deactivation and on the admin-sensitive `principal:purge:admin`);
-disabling or deactivating the last active owner is refused, and a purge preserves the audit trail by
+irreversible hard delete, gated on prior archival and on the admin-sensitive `principal:purge:admin`);
+disabling or archiving the last active owner is refused, and a purge preserves the audit trail by
 denormalizing the actor's label into each row (the audit foreign keys go `ON DELETE SET NULL`), so the
 history survives even after its actor is gone. And the per-action `visible_set` resolver enforced in the
 Storage Gateway across locations, systems, and components, and **principal groups**
 (`GET` / `POST` / `PATCH` / `DELETE /principal-groups`, membership, and group grants) whose members
-**inherit** the group's grants through the grant-loader union, gated by `principal_group`. Still `Design`:
+**inherit** the group's grants through the grant-loader union, gated by `principal_group`, and **profile
+pictures** (a human's avatar: self-managed via `POST /auth/me:setAvatar` / `:removeAvatar`, admin-managed via
+`POST /principals/{id}:setAvatar` gated `principal:set-avatar`, normalized server-side to a 256x256 JPEG and
+stored base64 on the human row). Still `Design`:
 OIDC / SAML auth, the node / NATS path, the permission cache, custom-role management, and the tenant-policy
 lever. The per-slice breakdown is on [implementation status](/architecture/status/).
 
@@ -37,6 +50,36 @@ Where the build currently differs from the present-tense design below (each logg
 - **Credentials are `bearer` or `password`.** `credential.kind` is `bearer` or `password` (argon2id,
   PHC-encoded, one password per principal); the `oidc` / `nats` methods and the full
   `(method, identifier)` lookup are still deferred. The minted bearer token prefix is `ogp_`.
+- **A bearer credential can expire.** `credential.expires_at` (nullable) bounds a bearer's lifetime, and
+  `AuthenticateBearer` treats a passed expiry as absent (the credential authenticates nothing). A **web
+  login** installs a session cookie with a fixed absolute lifetime (12h today), so a stolen cookie is not
+  valid forever, and the cookie's `Max-Age` matches. A CLI-minted **API token** (`omniglass token`) and the
+  bootstrap token leave `expires_at` null and do not expire. A sliding idle timeout and a background sweep
+  of expired rows are later refinements; today an expired row is simply refused at auth.
+- **Failed logins lock the account.** A run of wrong passwords on a real account is throttled by a
+  per-username lockout: `human.failed_login_count` counts consecutive misses and, on the 5th, sets
+  `human.locked_until` to 15 minutes out. Inside that window `AuthenticatePassword` refuses every
+  attempt (even the correct password) with a distinct internal signal that the login handler maps to
+  the **same generic 401** as a bad credential, so the lock is not an enumeration oracle; only the
+  audit (`login_locked`, attributed to the principal) records it. The lock decision is made **after**
+  the argon2 verify, so a locked account is not a measurably faster probe, and a correct password
+  below the threshold clears the counter. **Rotating the password clears the lock**: an admin reset
+  (`SetPrincipalPassword`) or a self-service change (`SetPassword`) sets `failed_login_count = 0` and
+  `locked_until = null` in the same transaction as the new secret, so the account is usable at once
+  rather than waiting out the window (the lock otherwise clears only lazily at the next login). The
+  threshold and window are fixed for now; per-IP throttling and a configurable policy are later
+  refinements.
+- **A password policy gates the API password surfaces.** A single pure validator
+  (`auth.ValidatePassword`) enforces the policy on the running-server paths that set a password:
+  **create a user** (`POST /principals`) and **self-service change-password**
+  (`POST /auth/me:changePassword`): **at least 12 characters, not on a common-password denylist, and
+  not containing the username**. No character-class composition rules (NIST 800-63B favors length and
+  a blocklist). The API maps a violation to 422; the console mirrors the length and username rules
+  inline and offers a crypto-strong **Generate** action, while the denylist stays server-side. The
+  **direct-DB break-glass lanes** (`bootstrap` and `set-password`) are deliberately **exempt**: they
+  already require database access (fully trusted) and are the recovery path, so the policy never
+  blocks initial setup or a lockout recovery. A breached-password check (HIBP k-anonymity) is a
+  planned enhancement over the embedded list.
 - **The `iam` command namespace is not built.** Owner creation is `omniglass bootstrap <username>
   [--password <pw>]` ([Bootstrap](#bootstrap)), not the `og iam create-owner` path; the broader `iam`
   admin CLI is deferred with the admin user surface.
@@ -122,7 +165,7 @@ viewer  <-  operator  <-  admin  <-  owner
 | role | what it can do |
 |---|---|
 | `viewer` | Read every operator-facing resource within scope. |
-| `operator` | viewer + create/update on components, interfaces, tasks, rules, config; ack/snooze/resolve alarms. |
+| `operator` | viewer + create/update on components, interfaces, tasks, rules, config, secrets; ack/snooze/resolve alarms. Secret **delete** and the **reveal/copy** decrypt stay off the role (admin `secret:*` and owner only). |
 | `deploy` | viewer + create/update on locations, systems, and components (the integrator / field-tech role, typically granted with the `subtree_excl_root` operator to build out a subtree without editing its root). No delete. |
 | `admin` | operator + delete on managed resources + manage IAM (principals, credentials, grants, custom roles) + curate registries (`<registry>:create`). IAM management is meaningful only from an `@ all` grant (a scoped `admin @ subtree` keeps the operator powers within its subtree but gets no IAM); registry curation is a plain capability, so a custom role can carry `<registry>:create` alone for a non-admin curator. Deliberately **not** the superuser: it cannot grant a role above its own tier ([ADR-0013](/architecture/decisions/#adr-0013-a-grant-cannot-confer-capabilities-the-granter-lacks)), so it cannot make itself owner, and it cannot delete `official` roles. |
 | `owner` | The break-glass superuser (`>`, the tail wildcard, covering every capability at every tier, including admin-sensitive ones and future resources). The unkillable role: at least one active `owner@all` grant must exist at all times (enforced by DB trigger), and an owner account cannot be impersonated. The bootstrap creates the first owner. |
@@ -393,6 +436,37 @@ GET /api/v1/auth/me
 The `/auth/me` family is also where a principal manages **its own** identity: `PATCH /api/v1/auth/me` edits the caller's own `display_name` (email is an administrator-set field, not self-editable), and `POST /api/v1/auth/me:changePassword` (an AIP `:verb` custom method) verifies the current password and installs a new one. Both are **authn-only and self-scoped**: they resolve the target from the session, never a path id, so they need no capability and join the route-gating allow-list next to the `GET`. Acting on **another** principal (create, disable, reset, regrant) is the admin surface and does carry capabilities. Changing a password does not, today, revoke the principal's other live sessions.
 
 `permissions` is flat and wildcard-expanded, ready for O(1) `useCan(...)` checks in the web app. It is a **fast-reject / UI hint only**, the union over all grants: it answers "could this principal ever do X anywhere", never "can it do X to **this** entity". List visibility likewise (a row in `GET /alarms` is read-scoped) does **not** imply per-action authority on that row. Per-row action affordances (the ack/snooze button on a specific alarm) must be computed against `visible_set(P, action)` for that target, which the `grants` array drives: `grants` is the source for advanced UI logic (scope chips, deciding per-row actionability, explaining why a button is or is not shown). The server is the only authority regardless; the flat list and the list view are hints, the scoped gateway decides.
+
+## Profile pictures
+
+A human principal can carry a **profile picture**, managed on two lanes that mirror the rest of the identity
+surface. **Self**: any signed-in user sets or removes their own avatar (`POST /auth/me:setAvatar` /
+`:removeAvatar`), authn-only and self-scoped, needing no capability, on the same ungated lane as the profile
+edit and change-password. **Admin**: `principal:set-avatar` (an all-scope capability, held by `admin` through
+`principal:*` and `owner` through `>`) sets or removes **any** principal's avatar
+(`POST /principals/{id}:setAvatar` / `:removeAvatar`), audited with the administrator as the actor. An avatar
+is not a capability, so the admin lane carries no takeover guard (unlike a password reset). The one-line
+catalog entry: `principal:set-avatar` is *set or remove any principal's profile picture; self-management
+needs no capability*.
+
+The upload is **normalized server-side and authoritatively** by the pure `avatar.Normalize` primitive, so the
+client cannot bypass it: it accepts JPEG, PNG, or WebP (GIF and everything else is rejected), refuses a
+payload over 8 MiB or any source dimension over 8000px (two decompression-bomb guards, one on the input bytes
+and one on the decoded pixels), center-crops to the largest centered square, resizes to 256x256, and
+re-encodes as JPEG at quality 82. A bad or oversize image is a **422**. The one normalized size is stored
+**base64 on the human row** (`avatar`, alongside `avatar_updated_at`); the bytes are **never** loaded on the
+`loadPrincipal` hot path, which selects only `avatar is not null` (a bool), so the read models carry a cheap
+`has_avatar` flag and the console knows whether to render an image or fall back to initials without paying for
+the payload per row.
+
+The **read side is a JSON endpoint** (`GET /principals/{id}/avatar` gated `principal:read`,
+`GET /auth/me/avatar` on the self lane) returning `{ image_base64 }`, which the console renders as a `data:`
+URL; a principal without a picture is a **404**. It is deliberately JSON and **not** a raw `image/jpeg`
+handler ([ADR-0018](/architecture/decisions/#adr-0018-the-avatar-read-endpoint-is-json-not-raw-image-bytes)):
+a raw-bytes chi handler would sit **outside** the Huma authz middleware, breaking the
+permission-on-every-route invariant, and a bare `<img src>` cannot carry a bearer, so a token-only session
+could not authenticate it. The typed client fetches the JSON (a session cookie or a bearer both work) and
+builds the data URL.
 
 ## The node path
 

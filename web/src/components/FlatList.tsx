@@ -4,6 +4,7 @@ import Drawer from "./Drawer";
 import BladeStack from "./BladeStack";
 import { type BladeController, type BladeDef, BladesContext, createBladeController } from "../lib/blades";
 import { ChevronDown, ChevronRight, Plus } from "./icons";
+import Button from "./Button";
 import type { Chip, FilterKey } from "../lib/predicate";
 
 // FlatList is the body for a flat (non-tree) list surface: a sortable table over
@@ -25,7 +26,9 @@ export type FlatColumn<T> = {
 export type FlatDetail = { title: JSX.Element; body: JSX.Element };
 
 export type FlatConfig<T> = {
-  // entity.name is the authorization resource; plural labels empty/error copy.
+  // entity.name is the singular display noun (the create Drawer title reads
+  // "New <name>"); plural labels the empty/error copy. Both are UI text, not the
+  // authorization resource (auth is gated explicitly on the create config's `can`).
   entity: { name: string; plural: string };
   rows: Accessor<T[]>;
   loading?: Accessor<boolean>;
@@ -43,6 +46,9 @@ export type FlatConfig<T> = {
   // opens a row's detail Drawer (closing create), so a successful create can land
   // the operator straight on the new row.
   create?: { label: string; can: () => boolean; body: (ctx: { close: () => void; select: (row: T) => void }) => JSX.Element };
+  // An extra control in the action rail, left of the create button (e.g. a "show
+  // archived" toggle on the Users directory).
+  railExtra?: () => JSX.Element;
   // A trailing row under the table (counts, load-older); receives the shown/total
   // counts and whether a filter is active.
   footer?: (info: { shown: number; total: number; filtering: boolean }) => JSX.Element;
@@ -105,11 +111,12 @@ export default function FlatList<T>(props: { config: FlatConfig<T> }) {
   };
 
   const trailing = (
-    <Show when={cfg.create?.can()}>
-      <button class="btn btn-action btn-sm gap-1.5" onClick={() => setCreateOpen(true)}>
-        <Plus size={14} /> {cfg.create!.label}
-      </button>
-    </Show>
+    <>
+      {cfg.railExtra?.()}
+      <Show when={cfg.create?.can()}>
+        <Button intent="action" icon={Plus} onClick={() => setCreateOpen(true)}>{cfg.create!.label}</Button>
+      </Show>
+    </>
   );
 
   const Th = (p: { col: FlatColumn<T> }) => (

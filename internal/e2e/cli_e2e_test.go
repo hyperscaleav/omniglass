@@ -32,7 +32,9 @@ func TestCLIEndToEnd(t *testing.T) {
 	}
 
 	dsn := storagetest.NewDSN(t)
-	dbEnv := append(os.Environ(), "OMNIGLASS_DSN="+dsn)
+	// OMNIGLASS_DATA_DIR keeps the server's fallback secret key in a temp dir
+	// rather than this package's working directory under `go test`.
+	dbEnv := append(os.Environ(), "OMNIGLASS_DSN="+dsn, "OMNIGLASS_DATA_DIR="+t.TempDir())
 
 	// Hand-written command: bootstrap the owner (with a password, so the generated
 	// change-password command has a current secret to verify) and capture its token.
@@ -112,11 +114,32 @@ func TestCLIEndToEnd(t *testing.T) {
 	if out, code := cli("principal", "list"); code != 0 || !strings.Contains(out, `"username": "root"`) {
 		t.Fatalf("principal list exit %d:\n%s", code, out)
 	}
-	if out, code := cli("principal", "create", "--username", "charlie", "--password", "charlie-secret"); code != 0 || !strings.Contains(out, `"username": "charlie"`) {
+	if out, code := cli("principal", "create", "--username", "charlie", "--password", "orange-boat-42x"); code != 0 || !strings.Contains(out, `"username": "charlie"`) {
 		t.Fatalf("principal create exit %d:\n%s", code, out)
+	}
+	createOut, code := cli("principal", "create", "--username", "dana", "--password", "orange-boat-42x")
+	if code != 0 || !strings.Contains(createOut, `"username": "dana"`) {
+		t.Fatalf("principal create dana exit %d:\n%s", code, createOut)
 	}
 	if out, code := cli("principal", "list"); code != 0 || !strings.Contains(out, `"username": "charlie"`) {
 		t.Fatalf("principal list after create exit %d:\n%s", code, out)
+	}
+
+	// AIP :verb custom methods must substitute the {id} path param (regression for
+	// the generator leaving it literal). Reset dana's password, then archive dana,
+	// and confirm dana disappears from the default (active-only) directory.
+	danaID := regexp.MustCompile(`"id":\s*"([^"]+)"`).FindStringSubmatch(createOut)
+	if danaID == nil {
+		t.Fatalf("no id in principal create output:\n%s", createOut)
+	}
+	if out, code := cli("principal", "resetPassword", danaID[1], "--password", "purple-goat-91z"); code != 0 {
+		t.Fatalf("principal resetPassword exit %d (id must substitute, not 404):\n%s", code, out)
+	}
+	if out, code := cli("principal", "archive", danaID[1]); code != 0 {
+		t.Fatalf("principal archive exit %d (id must substitute, not 404):\n%s", code, out)
+	}
+	if out, code := cli("principal", "list"); code != 0 || strings.Contains(out, `"username": "dana"`) {
+		t.Fatalf("principal list after archive should hide dana, exit %d:\n%s", code, out)
 	}
 
 	// healthz needs no token.

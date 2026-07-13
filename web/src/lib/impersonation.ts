@@ -55,11 +55,16 @@ export async function impersonate(
   // refetching (and keep it forever if the refetch is refused, e.g. impersonating
   // a no-grant user); clearing drops it so nothing cross-principal can paint.
   qc.clear();
+  // The impersonation token is persisted, so a hard reload to Home reboots the app
+  // as the target: the permission-driven sidebar rebuilds from the target's grants,
+  // and the current route cannot linger on a page the target may not reach. The
+  // acting-as banner survives the reload (it rehydrates from localStorage).
+  reboot();
   return { ok: true };
 }
 
 // stopImpersonating ends the session server-side and restores the real admin
-// token, then refetches so the app returns to the admin's own view.
+// token, then reboots so the app returns to the admin's own view.
 export async function stopImpersonating(qc: QueryClient): Promise<void> {
   await api.POST("/auth/me:stopImpersonation", {}).catch(() => undefined);
   const real = localStorage.getItem(REAL_TOKEN_KEY);
@@ -71,4 +76,14 @@ export async function stopImpersonating(qc: QueryClient): Promise<void> {
   // Same as impersonate(): the principal changed back, so drop every cached query
   // rather than show the impersonated principal's rows during the refetch.
   qc.clear();
+  // Reboot to Home so the admin's own sidebar and access rebuild from scratch.
+  reboot();
+}
+
+// reboot does a full page reload to Home, so the whole app re-initializes with the
+// current token: the sidebar, route guard, and every query rebuild from the new
+// identity. Home is the base route (`/web`). Split out so both starting and stopping
+// impersonation reboot identically.
+function reboot(): void {
+  window.location.assign("/web");
 }

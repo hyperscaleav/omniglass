@@ -1,6 +1,7 @@
 import { Show, type ParentComponent, createEffect } from "solid-js";
 import { useLocation, useNavigate } from "@solidjs/router";
 import { useMe } from "../lib/auth";
+import ForceChangePassword from "./ForceChangePassword";
 
 // AuthGuard gates the console chrome. It reads /auth/me; while pending it shows
 // a loader, on 401 (me === null) it redirects to /login carrying the attempted
@@ -23,7 +24,11 @@ export const AuthGuard: ParentComponent = (props) => {
 
   return (
     <Show when={!me.isPending && me.data !== null} fallback={<FullScreenLoader pending={me.isPending} />}>
-      {props.children}
+      {/* An admin-reset account is gated to the change-password screen (the server
+          refuses every other route until it clears), replacing the whole shell. */}
+      <Show when={me.data?.human?.must_change_password} fallback={props.children}>
+        <ForceChangePassword />
+      </Show>
     </Show>
   );
 };

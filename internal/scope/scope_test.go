@@ -14,8 +14,46 @@ func index() rbac.RoleIndex {
 	return rbac.NewRoleIndex([]rbac.Role{
 		{ID: "viewer", Permissions: []string{"*:read"}},
 		{ID: "loc-editor", Permissions: []string{"location:create,update,delete"}},
+		{ID: "operator", Inherits: []string{"viewer"}, Permissions: []string{"secret:create,update", "variable:create,update"}},
 		{ID: "owner", Permissions: []string{"*:*"}},
 	})
+}
+
+// A secret is owned on the exclusive arc, so a grant scoped to any owning tier
+// (location / system / component) confers secret scope over that subtree. A
+// component-scoped operator resolves its own component as a create root, so it
+// can seal a secret owned there; a bare read floor never carries create.
+func TestResolveSecretArcKinds(t *testing.T) {
+	idx := index()
+	for _, kind := range []string{"location", "system", "component"} {
+		g := []scope.Grant{{Role: "operator", ScopeKind: kind, ScopeID: "ROOT"}}
+		set := scope.Resolve(g, idx, "secret", "create")
+		if len(set.IDs) != 1 || set.IDs[0] != "ROOT" {
+			t.Fatalf("operator@%s secret:create scope = %+v, want ROOT", kind, set)
+		}
+	}
+	// A viewer (read floor only) gets no create scope for secrets.
+	vr := scope.Resolve([]scope.Grant{{Role: "viewer", ScopeKind: "component", ScopeID: "C"}}, idx, "secret", "create")
+	if !vr.Empty() {
+		t.Fatalf("viewer secret:create scope = %+v, want empty", vr)
+	}
+}
+
+// A variable is owned on the same exclusive arc as a secret, so it resolves
+// scope against the three owner tiers identically.
+func TestResolveVariableArcKinds(t *testing.T) {
+	idx := index()
+	for _, kind := range []string{"location", "system", "component"} {
+		g := []scope.Grant{{Role: "operator", ScopeKind: kind, ScopeID: "ROOT"}}
+		set := scope.Resolve(g, idx, "variable", "create")
+		if len(set.IDs) != 1 || set.IDs[0] != "ROOT" {
+			t.Fatalf("operator@%s variable:create scope = %+v, want ROOT", kind, set)
+		}
+	}
+	vr := scope.Resolve([]scope.Grant{{Role: "viewer", ScopeKind: "component", ScopeID: "C"}}, idx, "variable", "create")
+	if !vr.Empty() {
+		t.Fatalf("viewer variable:create scope = %+v, want empty", vr)
+	}
 }
 
 func TestResolveAllScope(t *testing.T) {

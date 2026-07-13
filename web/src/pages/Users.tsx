@@ -2,11 +2,17 @@ import { For, Show, createSignal } from "solid-js";
 import { useSearchParams } from "@solidjs/router";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
-import { type Principal, PRINCIPALS_KEY, listPrincipals, createPrincipal, principalName, kindBadge, principalInitials } from "../lib/principals";
+import { DrawerFooter } from "../components/Drawer";
+import PasswordField from "../components/PasswordField";
+import { type Principal, PRINCIPALS_KEY, listPrincipals, createPrincipal, openPrincipalInEdit, principalName, kindBadge } from "../lib/principals";
+import UserAvatar from "../components/UserAvatar";
 import { identityRegistry } from "../lib/identityBlades";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
+import { handleError, emailError, passwordError, isPasswordPolicyMessage } from "../lib/validate";
 import type { FilterKey } from "../lib/predicate";
+import { Plus, X } from "../components/icons";
+import Button from "../components/Button";
 
 // Users: the admin principal directory, a config over the shared FlatList. A row per
 // principal (human or service account) opens its detail as a blade (rooted here on
@@ -30,11 +36,7 @@ const columns: FlatColumn<Principal>[] = [
     key: "name", label: "Name", sortVal: (p) => principalName(p).toLowerCase(),
     cell: (p) => (
       <div class="flex items-center gap-2.5">
-        <div class="avatar avatar-placeholder">
-          <div class="w-7 rounded-full bg-linear-to-br from-primary to-info text-primary-content">
-            <span class="font-data text-[10px] font-bold uppercase">{principalInitials(p)}</span>
-          </div>
-        </div>
+        <UserAvatar principal={p} size="w-7" textClass="text-[10px]" />
         <div class="min-w-0 leading-tight">
           <div class="truncate text-sm font-medium">{principalName(p)}</div>
           <Show when={p.human}><div class="truncate font-data text-[11px] text-base-content/40">{p.human!.username}</div></Show>
@@ -43,11 +45,13 @@ const columns: FlatColumn<Principal>[] = [
     ),
   },
   {
-    key: "kind", label: "Kind", width: "160px", sortVal: (p) => p.kind,
+    key: "kind", label: "Kind", width: "180px", sortVal: (p) => p.kind,
     cell: (p) => (
       <>
         <span class={kindBadge(p.kind)}>{p.kind}</span>
-        <Show when={!p.active}><span class="badge badge-soft badge-warning badge-sm ml-1">inactive</span></Show>
+        <Show when={p.archived_at} fallback={<Show when={!p.active}><span class="badge badge-soft badge-warning badge-sm ml-1">inactive</span></Show>}>
+          <span class="badge badge-soft badge-error badge-sm ml-1">archived</span>
+        </Show>
       </>
     ),
   },
@@ -70,7 +74,10 @@ const columns: FlatColumn<Principal>[] = [
 export default function Users() {
   const me = useMe();
   const [params] = useSearchParams();
-  const principals = useQuery(() => ({ queryKey: PRINCIPALS_KEY, queryFn: () => listPrincipals() }));
+  // Archived (soft-deleted) principals are hidden by default; the toggle includes
+  // them (a distinct query key) so an admin can re-find one to restore or purge.
+  const [showArchived, setShowArchived] = createSignal(false);
+  const principals = useQuery(() => ({ queryKey: [...PRINCIPALS_KEY, showArchived()], queryFn: () => listPrincipals(undefined, showArchived()) }));
   // ?u=<id> deep-links to a user (e.g. the cross-over from a group's member).
   const openId = () => (Array.isArray(params.u) ? params.u[0] : params.u) || undefined;
 
@@ -88,6 +95,12 @@ export default function Users() {
         rowId: (p) => p.id,
         openId,
         blades: { registry: identityRegistry, rootKind: "user" },
+        railExtra: () => (
+          <label class="flex cursor-pointer items-center gap-2 text-xs text-base-content/60">
+            <input type="checkbox" class="toggle toggle-xs" checked={showArchived()} onChange={(e) => setShowArchived(e.currentTarget.checked)} />
+            Show archived
+          </label>
+        ),
         create: {
           label: "New user",
           can: () => can(me.data, "principal", "create"),
@@ -110,11 +123,15 @@ function CreateUserForm(props: { close: () => void; onCreated: (p: Principal) =>
   const [password, setPassword] = createSignal("");
   const [busy, setBusy] = createSignal(false);
   const [err, setErr] = createSignal<string | null>(null);
+  // A password-policy rejection from the server (the denylist) is shown inline under
+  // the password field, not in the head-of-form alert, so it reads like the client checks.
+  const [pwServerError, setPwServerError] = createSignal<string | null>(null);
 
   async function submit(e: SubmitEvent) {
     e.preventDefault();
     setBusy(true);
     setErr(null);
+    setPwServerError(null);
     try {
       const created = await createPrincipal({
         username: username().trim(),
@@ -122,24 +139,31 @@ function CreateUserForm(props: { close: () => void; onCreated: (p: Principal) =>
         email: email().trim() || undefined,
         password: password() || undefined,
       });
+      // Seed the new user's detail cache so its blade opens instantly, and flag it to
+      // open in edit mode so grants can be assigned right away, then hand it to select.
+      qc.setQueryData([...PRINCIPALS_KEY, created.id], created);
+      openPrincipalInEdit(created.id);
       await qc.invalidateQueries({ queryKey: PRINCIPALS_KEY });
       props.onCreated(created);
     } catch (er) {
-      setErr(describeError(er));
+      const msg = describeError(er);
+      if (isPasswordPolicyMessage(msg)) setPwServerError(msg);
+      else setErr(msg);
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <form class="flex flex-col gap-3" onSubmit={submit}>
+    <form class="flex min-h-full flex-col gap-3" onSubmit={submit}>
       <p class="text-xs text-base-content/50">Creates a human principal. Assign roles afterwards; a user with no grants can sign in but has no permissions.</p>
       <Show when={err()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
       </Show>
       <div>
         <label class="eyebrow mb-1.5 block" for="new-username">Username</label>
-        <input id="new-username" autocomplete="off" class="input input-bordered w-full font-data" value={username()} placeholder="jordan" onInput={(e) => setUsername(e.currentTarget.value)} disabled={busy()} required />
+        <input id="new-username" autocomplete="off" class="input input-bordered w-full font-data" classList={{ "input-error": !!handleError(username()) }} value={username()} placeholder="jordan" onInput={(e) => setUsername(e.currentTarget.value)} disabled={busy()} required />
+        <Show when={handleError(username())}>{(msg) => <p class="mt-1 text-[11px] text-error">{msg()}</p>}</Show>
       </div>
       <div>
         <label class="eyebrow mb-1.5 block" for="new-display">Display name</label>
@@ -147,20 +171,18 @@ function CreateUserForm(props: { close: () => void; onCreated: (p: Principal) =>
       </div>
       <div>
         <label class="eyebrow mb-1.5 block" for="new-email">Email</label>
-        <input id="new-email" type="email" autocomplete="off" class="input input-bordered w-full" value={email()} onInput={(e) => setEmail(e.currentTarget.value)} disabled={busy()} />
+        <input id="new-email" type="email" autocomplete="off" class="input input-bordered w-full" classList={{ "input-error": !!emailError(email()) }} value={email()} placeholder="jordan@example.com" onInput={(e) => setEmail(e.currentTarget.value)} disabled={busy()} />
+        <Show when={emailError(email())}>{(msg) => <p class="mt-1 text-[11px] text-error">{msg()}</p>}</Show>
       </div>
       <div>
         <label class="eyebrow mb-1.5 block" for="new-password">Initial password</label>
-        <input id="new-password" type="password" autocomplete="new-password" minLength={8} class="input input-bordered w-full" value={password()} onInput={(e) => setPassword(e.currentTarget.value)} disabled={busy()} />
-        <p class="mt-1 text-[11px] text-base-content/40">Optional, at least 8 characters. The user changes it after signing in.</p>
+        <PasswordField id="new-password" value={password()} onInput={(v) => { setPassword(v); setPwServerError(null); }} username={username()} disabled={busy()} serverError={pwServerError()} generate />
+        <p class="mt-1 text-[11px] text-base-content/40">Optional. At least 12 characters. The user changes it after signing in.</p>
       </div>
-      <div class="mt-1 flex justify-end gap-2">
-        <button type="button" class="btn btn-quiet btn-sm" onClick={props.close} disabled={busy()}>Cancel</button>
-        <button type="submit" class="btn btn-action btn-sm" disabled={busy() || !username().trim()}>
-          <Show when={busy()}><span class="loading loading-spinner loading-xs" /></Show>
-          Create user
-        </button>
-      </div>
+      <DrawerFooter>
+        <Button icon={X} onClick={props.close} disabled={busy()}>Cancel</Button>
+        <Button type="submit" intent="action" icon={Plus} loading={busy()} disabled={!username().trim() || !!handleError(username()) || !!emailError(email()) || !!passwordError(password(), username())}>Create user</Button>
+      </DrawerFooter>
     </form>
   );
 }

@@ -14,10 +14,10 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
-// TestPrincipalLifecycleAPI drives the deactivate / reactivate / purge endpoints
+// TestPrincipalLifecycleAPI drives the archive / restore / purge endpoints
 // against the real binary: the capability split (an operator can do neither, an
-// admin can do both, purge is admin-sensitive), the deactivate-before-purge gate,
-// and the soft-delete visibility (deactivated principals leave the directory but
+// admin can do both, purge is admin-sensitive), the archive-before-purge gate,
+// and the soft-delete visibility (archived principals leave the directory but
 // are still gettable by id). Skipped under -short.
 func TestPrincipalLifecycleAPI(t *testing.T) {
 	dsn := storagetest.NewDSN(t)
@@ -51,32 +51,32 @@ func TestPrincipalLifecycleAPI(t *testing.T) {
 	alice := newID(ownerTok, "alice")
 	bob := newID(ownerTok, "bob")
 
-	// Capability: an operator (no principal:deactivate, no principal:purge:admin)
+	// Capability: an operator (no principal:archive, no principal:purge:admin)
 	// is refused both.
-	c.do(opTok, "POST", "/principals/"+alice+":deactivate", nil, http.StatusForbidden)
+	c.do(opTok, "POST", "/principals/"+alice+":archive", nil, http.StatusForbidden)
 	c.do(opTok, "POST", "/principals/"+bob+":purge", nil, http.StatusForbidden)
 
-	// Purge is gated on deactivation: bob is live, so an admin's purge is a 409.
+	// Purge is gated on archival: bob is live, so an admin's purge is a 409.
 	c.do(adminTok, "POST", "/principals/"+bob+":purge", nil, http.StatusConflict)
 
-	// Admin deactivates alice: she leaves the directory but is still gettable by id,
-	// carrying deactivated_at.
-	c.do(adminTok, "POST", "/principals/"+alice+":deactivate", nil, http.StatusNoContent)
+	// Admin archives alice: she leaves the directory but is still gettable by id,
+	// carrying archived_at.
+	c.do(adminTok, "POST", "/principals/"+alice+":archive", nil, http.StatusNoContent)
 	if _, body := c.send(ownerTok, "GET", "/principals", nil); bytes.Contains(body, []byte(`"alice"`)) {
-		t.Fatalf("deactivated alice should be hidden from the directory: %s", body)
+		t.Fatalf("archived alice should be hidden from the directory: %s", body)
 	}
-	if code, body := c.send(ownerTok, "GET", "/principals/"+alice, nil); code != 200 || !bytes.Contains(body, []byte(`"deactivated_at"`)) {
-		t.Fatalf("get deactivated alice: code %d body %s", code, body)
+	if code, body := c.send(ownerTok, "GET", "/principals/"+alice, nil); code != 200 || !bytes.Contains(body, []byte(`"archived_at"`)) {
+		t.Fatalf("get archived alice: code %d body %s", code, body)
 	}
 
-	// Reactivate restores her to the directory.
-	c.do(adminTok, "POST", "/principals/"+alice+":reactivate", nil, http.StatusNoContent)
+	// Restore returns her to the directory.
+	c.do(adminTok, "POST", "/principals/"+alice+":restore", nil, http.StatusNoContent)
 	if _, body := c.send(ownerTok, "GET", "/principals", nil); !bytes.Contains(body, []byte(`"alice"`)) {
-		t.Fatalf("reactivated alice should be back in the directory: %s", body)
+		t.Fatalf("restored alice should be back in the directory: %s", body)
 	}
 
-	// Admin deactivates then purges alice: gone, a get is a 404.
-	c.do(adminTok, "POST", "/principals/"+alice+":deactivate", nil, http.StatusNoContent)
+	// Admin archives then purges alice: gone, a get is a 404.
+	c.do(adminTok, "POST", "/principals/"+alice+":archive", nil, http.StatusNoContent)
 	c.do(adminTok, "POST", "/principals/"+alice+":purge", nil, http.StatusNoContent)
 	if code, _ := c.send(ownerTok, "GET", "/principals/"+alice, nil); code != http.StatusNotFound {
 		t.Fatalf("purged alice: want 404, got %d", code)

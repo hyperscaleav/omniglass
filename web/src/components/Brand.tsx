@@ -40,7 +40,7 @@ export function BrandMark(props: { size?: number }) {
 export function Wordmark(props: { class?: string }) {
   return (
     <span class={`og-wordmark font-data font-bold tracking-tight ${props.class ?? ""}`}>
-      OMNI<span class="text-primary">GLASS</span>
+      OMNI<span class="og-glass">GLASS</span>
     </span>
   );
 }
