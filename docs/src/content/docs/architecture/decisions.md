@@ -563,7 +563,11 @@ below from the project's history. From here it grows one slice at a time.
   until marked operational). Enforcement is a capability flag computed at the API (`canAdmin` = the caller holds
   `secret:<action>:admin`) and passed to the Storage Gateway alongside scope: the gateway hides admin-sensitive rows
   from a lister/resolver without it, and returns a **non-disclosing 404** (not a 403) to a revealer/updater/deleter
-  without it, so a platform credential's existence and field names never leak. Separately, `secret` joins a
+  without it, so a platform credential's existence and field names are not disclosed through the read, reveal, list,
+  or cascade paths. (One residual: because a secret name is unique per owner, an operator with create scope at the
+  same owner can distinguish a create-collision 409 from a 201, a narrow existence-and-name oracle, no field values.
+  It predates this slice, since operators already held `secret:create` without `secret:read`; closing it needs a
+  namespace or create-path change and is a tracked follow-up, not a value-disclosure path.) Separately, `secret` joins a
   **sensitive-resource set** that a bare single-token `*` does not reach, in both places `*` grants read (the direct
   topic match and the read floor); `>` (owner), a literal `secret:read`, and a `secret:*` still name it. So
   `viewer` (only `*:read`) reads no secrets at all (not the directory, not the per-component effective-secrets
