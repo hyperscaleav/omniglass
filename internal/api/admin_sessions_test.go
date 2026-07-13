@@ -257,7 +257,7 @@ func TestAdminRevokeAllAPI(t *testing.T) {
 	future := time.Now().Add(90 * 24 * time.Hour)
 	for i := 0; i < 2; i++ {
 		_, h, pfx, _ := auth.NewBearerToken()
-		if ok, err := gw.IssueBearerCredential(ctx, "alice", h, pfx, "token", &future); err != nil || !ok {
+		if ok, err := gw.IssueBearerCredential(ctx, storage.BearerIssue{Username: "alice", SecretHash: h, Prefix: pfx, Purpose: "token", ExpiresAt: &future}); err != nil || !ok {
 			t.Fatalf("mint alice token: ok=%v err=%v", ok, err)
 		}
 	}

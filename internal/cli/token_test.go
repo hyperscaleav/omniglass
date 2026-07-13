@@ -18,7 +18,7 @@ func TestTokenTTLCap(t *testing.T) {
 	overCap := auth.MaxTokenLifetime + 24*time.Hour
 
 	// omniglass token <user> --ttl <over cap> errors, and the message names the cap.
-	err := runToken(ctx, "root", overCap)
+	err := runToken(ctx, "root", overCap, "a token")
 	if err == nil {
 		t.Fatalf("runToken with ttl above the cap should error, got nil")
 	}

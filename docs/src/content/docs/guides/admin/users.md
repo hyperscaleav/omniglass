@@ -65,7 +65,8 @@ location-scoped admin cannot list users.
   shows in the blade header and the directory. This is a console path for `omniglass principal setAvatar
   <id>` / `removeAvatar <id>` on the CLI.
 - With `principal:revoke-session`, another user's blade gains **Sessions** and **API tokens** sections:
-  every credential the account holds, listed with its `ogp_` locator and expiry. **Revoke** any one, or
+  every credential the account holds, listed with its `ogp_` locator, the **device** and **address** that
+  created it, when it was **last active**, its expiry, and a token's **description**. **Revoke** any one, or
   use **Revoke all sessions** / **Revoke all tokens** in the blade's kebab, to cut off a lost laptop or
   a leaked token without resetting the account. The revoke is audited with **you** as the actor. As with
   the password reset, an **owner's** credentials cannot be revoked by anyone: their list renders

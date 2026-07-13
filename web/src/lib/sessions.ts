@@ -11,12 +11,30 @@ export type Session = {
   id: string;
   kind: "session" | "token";
   prefix: string;
+  description?: string;
+  user_agent?: string;
+  client_ip?: string;
   created_at: string;
+  last_used_at?: string;
   expires_at?: string;
   current: boolean;
 };
 
 export const SESSIONS_KEY = ["auth", "me", "sessions"] as const;
+
+// createSelfToken mints one of the caller's own API tokens (a required description, an
+// optional ttl in days) and returns the secret ONCE. The caller shows it (copyable) and
+// invalidates SESSIONS_KEY so the new token appears in the list.
+export async function createSelfToken(
+  description: string,
+  ttlDays?: number,
+): Promise<{ ok: true; token: string; prefix: string; expires_at: string } | { ok: false; message: string }> {
+  const body: { description: string; ttl_days?: number } = { description };
+  if (ttlDays) body.ttl_days = ttlDays;
+  const { data, error } = await api.POST("/auth/me/tokens", { body });
+  if (error || !data) return { ok: false, message: "Could not create the token." };
+  return { ok: true, token: data.token, prefix: data.prefix, expires_at: data.expires_at };
+}
 
 // useSessions lists the caller's own active sessions and tokens, newest first.
 export function useSessions() {
