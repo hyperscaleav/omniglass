@@ -52,6 +52,32 @@ type listLocationTypesOutput struct {
 	}
 }
 
+type locationTypePathInput struct {
+	ID string `path:"id" doc:"The location_type id"`
+}
+
+type createLocationTypeInput struct {
+	Body struct {
+		ID          string `json:"id" minLength:"1" doc:"Globally unique type id (kebab, e.g. wing)"`
+		DisplayName string `json:"display_name" minLength:"1"`
+		Rank        int    `json:"rank,omitempty" doc:"Ordering rank; lower sorts first"`
+		Icon        string `json:"icon,omitempty" doc:"A glyph key; the console falls back to map-pin when empty"`
+	}
+}
+
+type updateLocationTypeInput struct {
+	ID   string `path:"id"`
+	Body struct {
+		DisplayName *string `json:"display_name,omitempty"`
+		Rank        *int    `json:"rank,omitempty"`
+		Icon        *string `json:"icon,omitempty"`
+	}
+}
+
+type locationTypeOutput struct {
+	Body locationTypeBody
+}
+
 type locationOutput struct {
 	Body locationBody
 }
@@ -122,8 +148,8 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Method:      http.MethodGet,
 		Path:        "/location-types",
 		Summary:     "List location types",
-		Description: "Lists the location_type registry (the shape-definers a location is classified by), ordered by rank. Populates the type picker on the location form. Gated by location:read.",
-		Middlewares: huma.Middlewares{a.authn, a.require("location", "read")},
+		Description: "Lists the location_type registry (the shape-definers a location is classified by), ordered by rank. Populates the type picker on the location form. Gated by type:read.",
+		Middlewares: huma.Middlewares{a.authn, a.require("type", "read")},
 	}, func(ctx context.Context, _ *struct{}) (*listLocationTypesOutput, error) {
 		types, err := gw.ListLocationTypes(ctx)
 		if err != nil {
@@ -137,6 +163,56 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 			})
 		}
 		return out, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID:   "create-location-type",
+		Method:        http.MethodPost,
+		Path:          "/location-types",
+		DefaultStatus: http.StatusCreated,
+		Summary:       "Create a location type",
+		Description:   "Creates a custom (non-official) location_type. Gated by type:create.",
+		Middlewares:   huma.Middlewares{a.authn, a.require("type", "create")},
+	}, func(ctx context.Context, in *createLocationTypeInput) (*locationTypeOutput, error) {
+		lt, err := gw.CreateLocationType(ctx, actorID(ctx), storage.LocationType{
+			ID: in.Body.ID, DisplayName: in.Body.DisplayName, Rank: in.Body.Rank, Icon: in.Body.Icon,
+		})
+		if err != nil {
+			return nil, mapTypeErr(err, "location_type")
+		}
+		return &locationTypeOutput{Body: locationTypeBody{ID: lt.ID, DisplayName: lt.DisplayName, Rank: lt.Rank, Icon: lt.Icon, Official: lt.Official}}, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "update-location-type",
+		Method:      http.MethodPatch,
+		Path:        "/location-types/{id}",
+		Summary:     "Update a location type",
+		Description: "Patches a custom location_type's display_name, rank, or icon. Official types are read-only (422). Gated by type:update.",
+		Middlewares: huma.Middlewares{a.authn, a.require("type", "update")},
+	}, func(ctx context.Context, in *updateLocationTypeInput) (*locationTypeOutput, error) {
+		lt, err := gw.UpdateLocationType(ctx, actorID(ctx), in.ID, storage.LocationTypePatch{
+			DisplayName: in.Body.DisplayName, Rank: in.Body.Rank, Icon: in.Body.Icon,
+		})
+		if err != nil {
+			return nil, mapTypeErr(err, "location_type")
+		}
+		return &locationTypeOutput{Body: locationTypeBody{ID: lt.ID, DisplayName: lt.DisplayName, Rank: lt.Rank, Icon: lt.Icon, Official: lt.Official}}, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID:   "delete-location-type",
+		Method:        http.MethodDelete,
+		Path:          "/location-types/{id}",
+		DefaultStatus: http.StatusNoContent,
+		Summary:       "Delete a location type",
+		Description:   "Deletes a custom location_type, refused if official (422) or still referenced by a location (409). Gated by type:delete.",
+		Middlewares:   huma.Middlewares{a.authn, a.require("type", "delete")},
+	}, func(ctx context.Context, in *locationTypePathInput) (*struct{}, error) {
+		if err := gw.DeleteLocationType(ctx, actorID(ctx), in.ID); err != nil {
+			return nil, mapTypeErr(err, "location_type")
+		}
+		return nil, nil
 	})
 
 	huma.Register(api, huma.Operation{

@@ -76,3 +76,43 @@ func TestLocationTypesAPI(t *testing.T) {
 		}
 	}
 }
+
+func TestLocationTypeCRUDAPI(t *testing.T) {
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	ownerTok := bootstrapOwnerTok(t, ctx, gw)
+
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+
+	// Create a custom type (201), then it appears in the list.
+	c.do(ownerTok, http.MethodPost, "/location-types",
+		map[string]any{"id": "wing", "display_name": "Wing", "rank": 15, "icon": "layers"}, http.StatusCreated)
+
+	// Update it (200).
+	c.do(ownerTok, http.MethodPatch, "/location-types/wing",
+		map[string]any{"display_name": "West Wing"}, http.StatusOK)
+
+	// Official rows are read-only (422 on update and delete).
+	c.do(ownerTok, http.MethodPatch, "/location-types/campus",
+		map[string]any{"display_name": "X"}, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodDelete, "/location-types/campus", nil, http.StatusUnprocessableEntity)
+
+	// In use: place a location of type wing, delete is refused (409).
+	c.do(ownerTok, http.MethodPost, "/locations",
+		map[string]any{"name": "w1", "location_type": "wing"}, http.StatusCreated)
+	c.do(ownerTok, http.MethodDelete, "/location-types/wing", nil, http.StatusConflict)
+
+	// Remove the location, then the type deletes (204).
+	c.do(ownerTok, http.MethodDelete, "/locations/w1", nil, http.StatusNoContent)
+	c.do(ownerTok, http.MethodDelete, "/location-types/wing", nil, http.StatusNoContent)
+}
