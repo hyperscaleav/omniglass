@@ -625,6 +625,14 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   shared-ancestor pair with no false cycle, and the empty/unknown edges) and an HTTP e2e (`effective_tags` on the
   component, system, and location list bodies). The Tags column, the type-to-add editor, and tag search follow in
   later slices ([#189](https://github.com/hyperscaleav/omniglass/issues/189)).
+- **Tag: the console key directory.** The [tag](/architecture/tags/) vocabulary gets its operator surface: a **Tags**
+  directory under Catalog on the shared FlatList shell, where an admin mints a key (`tag:create`), edits its
+  governance fields (applies_to and the cascade-versus-flat `propagates` toggle, `tag:update`), and deletes it
+  (`tag:delete`, cascading its bindings). Rows address by the key **name** (the write paths key on the name), and the
+  create drawer plus the edit blade reuse the estate's drawer and blade primitives, no fork. Binding a value onto an
+  entity and the effective-tags cascade panel are the next console slice ([#189](https://github.com/hyperscaleav/omniglass/issues/189)).
+  Proven by a data-layer unit test (the envelope unwrap, the create/update/delete request shapes, the error throw)
+  and the full web suite, and live-verified against `make dev` (the directory, the create drawer, the edit blade).
 - **Tag: the governed label vocabulary and its cascaded bindings.** The [tag](/architecture/tags/) primitive lands as
   its own page: a governed **`tag`** key registry (a normalized lowercase-identifier vocabulary, minting gated by
   all-scope `tag:create`, broadened to `tag:*` for admin), a per-entity **`tag_binding`** cell owned on the same

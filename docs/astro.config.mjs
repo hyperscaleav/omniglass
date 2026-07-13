@@ -150,6 +150,7 @@ export default defineConfig({
             { label: 'The audit trail', slug: 'guides/admin/audit' },
             { label: 'Secrets', slug: 'guides/admin/secrets' },
             { label: 'Variables', slug: 'guides/admin/variables' },
+            { label: 'Tags', slug: 'guides/admin/tags' },
           ],
         },
         {

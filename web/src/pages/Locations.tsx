@@ -30,9 +30,9 @@ type LocNode = ListNode & { type: string; tags: Record<string, string>; raw: Loc
 
 // A loose visual ranking for the seeded place types; unknown types sort last.
 const TYPE_RANK: Record<string, number> = { campus: 0, site: 0, region: 0, building: 1, floor: 2, room: 3 };
-// Distinct, readable badge hues per place type. badge-neutral renders its text in
-// the dark neutral color, which is unreadable on the dark theme, so each type maps
-// to a bright daisyUI semantic; unknown types fall back to the readable ghost.
+// Distinct, readable badge hues per place type. daisyUI's neutral token renders its
+// text in the dark neutral color, which is unreadable on the dark theme, so each type
+// maps to a bright daisyUI semantic; unknown types fall back to the readable ghost.
 const TYPE_BADGE: Record<string, string> = { campus: "badge-primary", site: "badge-primary", region: "badge-primary", building: "badge-warning", floor: "badge-success", room: "badge-info" };
 // The same hues as CSS color values, for the type-mix donut.
 const TYPE_COLOR: Record<string, string> = { campus: "var(--color-primary)", site: "var(--color-primary)", region: "var(--color-primary)", building: "var(--color-warning)", floor: "var(--color-success)", room: "var(--color-info)" };
