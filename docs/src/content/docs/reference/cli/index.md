@@ -71,6 +71,27 @@ Example:
 omniglass auth change-password --current-password current_password --new-password new_password
 ```
 
+### `omniglass auth create-token`
+
+Create one of your own API tokens
+
+```
+omniglass auth create-token [flags]
+```
+
+Mints a CLI/API token for the caller and returns it once (store it now; it cannot be retrieved again). A description is required (what the token is for); an optional ttl_days bounds its lifetime (default 90, maximum 365). Requires authentication; self-scoped (always issued for you). The token is stamped with the device and address that created it.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--description` | string | (none) | What the token is for (required) |
+| `--ttl-days` | string | (none) | Days until the token expires (default 90, maximum 365) |
+
+Example:
+
+```sh
+omniglass auth create-token --description description
+```
+
 ### `omniglass auth me`
 
 The authenticated principal, its permissions, and grants
@@ -1753,10 +1774,11 @@ Mint an additional bearer token for an existing principal (direct DB)
 omniglass token <username> [flags]
 ```
 
-Issues a new bearer credential for an existing principal, addressed by username, and prints the token once. The same trusted direct-DB lane as bootstrap: token reissue, break-glass, or a fresh login token for `make dev` when the owner already exists. The token expires after --ttl (default 90 days, hard maximum 365 days); every credential is time-bounded.
+Issues a new bearer credential for an existing principal, addressed by username, and prints the token once. The same trusted direct-DB lane as bootstrap: token reissue, break-glass, or a fresh login token for `make dev` when the owner already exists. A --description (required) names what the token is for. The token expires after --ttl (default 90 days, hard maximum 365 days); every credential is time-bounded.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
+| `--description` | string | (none) | what the token is for (required) |
 | `--ttl` | duration | `2160h0m0s` | how long the token is valid before it expires (max 365 days) |
 
 ## `omniglass variable`

@@ -168,6 +168,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/me/tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create one of your own API tokens
+         * @description Mints a CLI/API token for the caller and returns it once (store it now; it cannot be retrieved again). A description is required (what the token is for); an optional ttl_days bounds its lifetime (default 90, maximum 365). Requires authentication; self-scoped (always issued for you). The token is stamped with the device and address that created it.
+         */
+        post: operations["create-auth-me-token"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/me:changePassword": {
         parameters: {
             query?: never;
@@ -1632,6 +1652,37 @@ export interface components {
             /** @description Parent location name; omit for a root location */
             parent?: string;
         };
+        CreateMeTokenInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateMeTokenInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description What the token is for (required) */
+            description: string;
+            /**
+             * Format: int64
+             * @description Days until the token expires (default 90, maximum 365)
+             */
+            ttl_days?: number;
+        };
+        CreateMeTokenOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateMeTokenOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description What the token is for */
+            description: string;
+            /** @description When the token expires (RFC 3339) */
+            expires_at: string;
+            /** @description The non-secret ogp locator for the new token */
+            prefix: string;
+            /** @description The bearer token, shown once. Store it now: it cannot be retrieved again. */
+            token: string;
+        };
         CreatePrincipalInputBody: {
             /**
              * Format: uri
@@ -2340,10 +2391,14 @@ export interface components {
             type: string;
         };
         SessionBody: {
+            /** @description The IP address the credential was created from */
+            client_ip?: string;
             /** @description When the credential was issued (RFC 3339) */
             created_at: string;
             /** @description True for the credential that authenticated this request; revoking it signs out the current session */
             current: boolean;
+            /** @description What a token is for (a token carries a description; a session does not) */
+            description?: string;
             /** @description When the credential expires (RFC 3339); every credential is now time-bounded */
             expires_at?: string;
             id: string;
@@ -2352,8 +2407,12 @@ export interface components {
              * @enum {string}
              */
             kind: "session" | "token";
+            /** @description When the credential last authenticated a request (RFC 3339), throttled to the minute */
+            last_used_at?: string;
             /** @description The non-secret ogp locator, so a credential is recognizable without exposing the token */
             prefix: string;
+            /** @description The User-Agent that created the credential, so the console can show a device label */
+            user_agent?: string;
         };
         SetAvatarInputBody: {
             /**
@@ -2867,6 +2926,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RevokeAllMeSessionsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-auth-me-token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateMeTokenInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateMeTokenOutputBody"];
                 };
             };
             /** @description Error */

@@ -31,12 +31,54 @@ const (
 	// request, so the change-password handler can keep the caller's own session when it
 	// signs out their other sessions.
 	sessionHashCtxKey
+	// clientMetaCtxKey carries the request's User-Agent and client IP (captured by a chi
+	// middleware) so login and self-service token creation can stamp a new credential
+	// with the device and address that created it.
+	clientMetaCtxKey
 )
 
 // sessionHashFrom returns the sha256 of the request's bearer token, if one resolved.
 func sessionHashFrom(ctx context.Context) ([]byte, bool) {
 	h, ok := ctx.Value(sessionHashCtxKey).([]byte)
 	return h, ok && len(h) > 0
+}
+
+// clientMeta is the request's User-Agent and client IP, for stamping a new credential.
+type clientMeta struct{ userAgent, clientIP string }
+
+// clientMetaFrom returns the captured User-Agent and client IP, empty when none.
+func clientMetaFrom(ctx context.Context) (userAgent, clientIP string) {
+	if m, ok := ctx.Value(clientMetaCtxKey).(clientMeta); ok {
+		return m.userAgent, m.clientIP
+	}
+	return "", ""
+}
+
+// captureClientMeta stashes the request's User-Agent and client IP in the context so
+// handlers can stamp a new credential with the device and address that created it. Runs
+// on every API request, before Huma, so both the public login and the authn-only token
+// creation see it.
+func captureClientMeta(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		m := clientMeta{userAgent: r.UserAgent(), clientIP: clientIP(r)}
+		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), clientMetaCtxKey, m)))
+	})
+}
+
+// clientIP extracts the caller's address: the first hop of X-Forwarded-For when set (the
+// original client behind a proxy), else the connection RemoteAddr without its port.
+func clientIP(r *http.Request) string {
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		if i := strings.IndexByte(xff, ','); i >= 0 {
+			return strings.TrimSpace(xff[:i])
+		}
+		return strings.TrimSpace(xff)
+	}
+	host := r.RemoteAddr
+	if i := strings.LastIndexByte(host, ':'); i >= 0 {
+		host = host[:i]
+	}
+	return host
 }
 
 func principalFrom(ctx context.Context) (*storage.Principal, bool) {
@@ -348,7 +390,11 @@ func (a *authenticator) loginHandler(ctx context.Context, in *loginInput) (*sess
 		return nil, huma.Error500InternalServerError("login failed")
 	}
 	expiresAt := time.Now().Add(sessionCookieLifetime)
-	if _, err := a.gw.IssueBearerCredential(ctx, pr.Human.Username, hash, prefix, "session", &expiresAt); err != nil {
+	ua, ip := clientMetaFrom(ctx)
+	if _, err := a.gw.IssueBearerCredential(ctx, storage.BearerIssue{
+		Username: pr.Human.Username, SecretHash: hash, Prefix: prefix, Purpose: "session",
+		ExpiresAt: &expiresAt, UserAgent: ua, ClientIP: ip,
+	}); err != nil {
 		return nil, huma.Error500InternalServerError("login failed")
 	}
 	if err := a.gw.WriteAuthEvent(ctx, pr.ID, "login"); err != nil {
@@ -537,12 +583,16 @@ func (a *authenticator) changePasswordHandler(ctx context.Context, in *changePas
 // whether expires_at is set. Current marks the credential that authenticated this very
 // request, so the console can mark it and read its revoke as a sign-out.
 type sessionBody struct {
-	ID        string  `json:"id"`
-	Kind      string  `json:"kind" enum:"session,token" doc:"session for a web login, token for a CLI/API credential (omniglass token)"`
-	Prefix    string  `json:"prefix" doc:"The non-secret ogp locator, so a credential is recognizable without exposing the token"`
-	CreatedAt string  `json:"created_at" doc:"When the credential was issued (RFC 3339)"`
-	ExpiresAt *string `json:"expires_at,omitempty" doc:"When the credential expires (RFC 3339); every credential is now time-bounded"`
-	Current   bool    `json:"current" doc:"True for the credential that authenticated this request; revoking it signs out the current session"`
+	ID          string  `json:"id"`
+	Kind        string  `json:"kind" enum:"session,token" doc:"session for a web login, token for a CLI/API credential (omniglass token)"`
+	Prefix      string  `json:"prefix" doc:"The non-secret ogp locator, so a credential is recognizable without exposing the token"`
+	Description string  `json:"description,omitempty" doc:"What a token is for (a token carries a description; a session does not)"`
+	UserAgent   string  `json:"user_agent,omitempty" doc:"The User-Agent that created the credential, so the console can show a device label"`
+	ClientIP    string  `json:"client_ip,omitempty" doc:"The IP address the credential was created from"`
+	CreatedAt   string  `json:"created_at" doc:"When the credential was issued (RFC 3339)"`
+	LastUsedAt  *string `json:"last_used_at,omitempty" doc:"When the credential last authenticated a request (RFC 3339), throttled to the minute"`
+	ExpiresAt   *string `json:"expires_at,omitempty" doc:"When the credential expires (RFC 3339); every credential is now time-bounded"`
+	Current     bool    `json:"current" doc:"True for the credential that authenticated this request; revoking it signs out the current session"`
 }
 
 // listMeSessionsOutput is the body of GET /api/v1/auth/me/sessions.
@@ -570,11 +620,18 @@ func toSessionBodies(creds []storage.BearerCredential) []sessionBody {
 			}
 		}
 		s := sessionBody{
-			ID:        c.ID,
-			Kind:      kind,
-			Prefix:    c.Prefix,
-			CreatedAt: c.CreatedAt.Format(time.RFC3339),
-			Current:   c.Current,
+			ID:          c.ID,
+			Kind:        kind,
+			Prefix:      c.Prefix,
+			Description: c.Description,
+			UserAgent:   c.UserAgent,
+			ClientIP:    c.ClientIP,
+			CreatedAt:   c.CreatedAt.Format(time.RFC3339),
+			Current:     c.Current,
+		}
+		if c.LastUsedAt != nil {
+			lu := c.LastUsedAt.Format(time.RFC3339)
+			s.LastUsedAt = &lu
 		}
 		if c.ExpiresAt != nil {
 			exp := c.ExpiresAt.Format(time.RFC3339)
@@ -663,6 +720,63 @@ func (a *authenticator) revokeAllMeSessionsHandler(ctx context.Context, in *revo
 	}
 	out := &revokeAllMeSessionsOutput{}
 	out.Body.Revoked = n
+	return out, nil
+}
+
+// createMeTokenInput is the body of POST /auth/me/tokens: mint the caller its own API
+// token. The description is required (a token must say what it is for); the ttl is
+// optional (default 90 days, hard-capped at 365 by validation).
+type createMeTokenInput struct {
+	Body struct {
+		Description string `json:"description" minLength:"1" maxLength:"200" doc:"What the token is for (required)"`
+		TTLDays     int    `json:"ttl_days,omitempty" minimum:"1" maximum:"365" doc:"Days until the token expires (default 90, maximum 365)"`
+	}
+}
+
+// createMeTokenOutput returns the newly minted token ONCE, plus its non-secret metadata.
+type createMeTokenOutput struct {
+	Body struct {
+		Token       string `json:"token" doc:"The bearer token, shown once. Store it now: it cannot be retrieved again."`
+		Prefix      string `json:"prefix" doc:"The non-secret ogp locator for the new token"`
+		Description string `json:"description" doc:"What the token is for"`
+		ExpiresAt   string `json:"expires_at" doc:"When the token expires (RFC 3339)"`
+	}
+}
+
+// createMeTokenHandler mints an API token for the caller and returns its secret once.
+// Authn-only and self-scoped: it always issues for the principal resolved from the
+// session, never another. The token is a bounded 'token' credential stamped with the
+// caller's description and the device/address that created it.
+func (a *authenticator) createMeTokenHandler(ctx context.Context, in *createMeTokenInput) (*createMeTokenOutput, error) {
+	pr, ok := principalFrom(ctx)
+	if !ok {
+		return nil, huma.Error401Unauthorized("unauthenticated")
+	}
+	if pr.Human == nil {
+		return nil, huma.Error422UnprocessableEntity("only human principals can mint API tokens")
+	}
+	ttl := auth.DefaultTokenLifetime
+	if in.Body.TTLDays > 0 {
+		ttl = time.Duration(in.Body.TTLDays) * 24 * time.Hour
+	}
+	token, hash, prefix, err := auth.NewBearerToken()
+	if err != nil {
+		return nil, huma.Error500InternalServerError("create token")
+	}
+	expiresAt := time.Now().Add(ttl)
+	ua, ip := clientMetaFrom(ctx)
+	issued, err := a.gw.IssueBearerCredential(ctx, storage.BearerIssue{
+		Username: pr.Human.Username, SecretHash: hash, Prefix: prefix, Purpose: "token",
+		ExpiresAt: &expiresAt, Description: in.Body.Description, UserAgent: ua, ClientIP: ip,
+	})
+	if err != nil || !issued {
+		return nil, huma.Error500InternalServerError("create token")
+	}
+	out := &createMeTokenOutput{}
+	out.Body.Token = token
+	out.Body.Prefix = prefix
+	out.Body.Description = in.Body.Description
+	out.Body.ExpiresAt = expiresAt.Format(time.RFC3339)
 	return out, nil
 }
 

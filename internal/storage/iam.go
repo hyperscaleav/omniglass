@@ -102,7 +102,7 @@ func (p *PG) BootstrapOwner(ctx context.Context, spec OwnerSpec) (created bool, 
 		return false, fmt.Errorf("storage: bootstrap human: %w", err)
 	}
 	if _, err := tx.Exec(ctx,
-		`insert into credential (principal_id, kind, secret_hash, prefix, purpose, expires_at) values ($1, 'bearer', $2, $3, 'token', $4)`,
+		`insert into credential (principal_id, kind, secret_hash, prefix, purpose, expires_at, description) values ($1, 'bearer', $2, $3, 'token', $4, 'bootstrap token')`,
 		pid, spec.SecretHash, spec.Prefix, spec.ExpiresAt); err != nil {
 		return false, fmt.Errorf("storage: bootstrap credential: %w", err)
 	}
@@ -133,18 +133,34 @@ func (p *PG) BootstrapOwner(ctx context.Context, spec OwnerSpec) (created bool, 
 // kinds of bearer, and expiresAt bounds the credential's lifetime: every credential
 // is time-bounded now (a session for 12h, a token for 90 days by default), so a
 // leaked bearer is never valid forever.
-func (p *PG) IssueBearerCredential(ctx context.Context, username string, hash []byte, prefix, purpose string, expiresAt *time.Time) (bool, error) {
+// BearerIssue is the input to IssueBearerCredential: the credential's secret hash and
+// prefix, its purpose ('session' or 'token'), its expiry, and identifying metadata. A
+// token carries a Description (what it is for); a session leaves it empty. UserAgent and
+// ClientIP record the device and address that created it, empty when unknown (a CLI).
+type BearerIssue struct {
+	Username    string
+	SecretHash  []byte
+	Prefix      string
+	Purpose     string
+	ExpiresAt   *time.Time
+	Description string
+	UserAgent   string
+	ClientIP    string
+}
+
+func (p *PG) IssueBearerCredential(ctx context.Context, spec BearerIssue) (bool, error) {
 	var pid string
-	err := p.pool.QueryRow(ctx, `select principal_id from human where username = $1`, username).Scan(&pid)
+	err := p.pool.QueryRow(ctx, `select principal_id from human where username = $1`, spec.Username).Scan(&pid)
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
 		return false, nil
 	case err != nil:
-		return false, fmt.Errorf("storage: lookup human %q: %w", username, err)
+		return false, fmt.Errorf("storage: lookup human %q: %w", spec.Username, err)
 	}
 	if _, err := p.pool.Exec(ctx,
-		`insert into credential (principal_id, kind, secret_hash, prefix, purpose, expires_at) values ($1, 'bearer', $2, $3, $4, $5)`,
-		pid, hash, prefix, purpose, expiresAt); err != nil {
+		`insert into credential (principal_id, kind, secret_hash, prefix, purpose, expires_at, description, user_agent, client_ip)
+			values ($1, 'bearer', $2, $3, $4, $5, nullif($6,''), nullif($7,''), nullif($8,''))`,
+		pid, spec.SecretHash, spec.Prefix, spec.Purpose, spec.ExpiresAt, spec.Description, spec.UserAgent, spec.ClientIP); err != nil {
 		return false, fmt.Errorf("storage: issue credential: %w", err)
 	}
 	return true, nil
@@ -293,6 +309,12 @@ func (p *PG) AuthenticateBearer(ctx context.Context, hash []byte) (*Principal, e
 	case err != nil:
 		return nil, fmt.Errorf("storage: authenticate: %w", err)
 	}
+	// Record activity so the session list can show "last active", throttled to at most
+	// once a minute so a burst of requests is not a burst of writes. Best-effort: a
+	// failed bump never fails the authentication.
+	_, _ = p.pool.Exec(ctx,
+		`update credential set last_used_at = now()
+			where secret_hash = $1 and (last_used_at is null or last_used_at < now() - interval '1 minute')`, hash)
 	if err := p.loadPrincipal(ctx, &pr); err != nil {
 		return nil, err
 	}
@@ -676,12 +698,16 @@ func (p *PG) RevokeBearer(ctx context.Context, hash []byte) error {
 // for the one credential that authenticated the request doing the listing (so the
 // console can label it and treat its revoke as a self sign-out).
 type BearerCredential struct {
-	ID        string
-	Prefix    string
-	Purpose   string
-	CreatedAt time.Time
-	ExpiresAt *time.Time
-	Current   bool
+	ID          string
+	Prefix      string
+	Purpose     string
+	Description string
+	UserAgent   string
+	ClientIP    string
+	CreatedAt   time.Time
+	LastUsedAt  *time.Time
+	ExpiresAt   *time.Time
+	Current     bool
 }
 
 // ListBearerCredentials returns the principal's own LIVE bearer credentials, newest
@@ -694,7 +720,8 @@ type BearerCredential struct {
 // self-service session list (issue #172).
 func (p *PG) ListBearerCredentials(ctx context.Context, principalID string, currentHash []byte) ([]BearerCredential, error) {
 	rows, err := p.pool.Query(ctx, `
-		select id, prefix, coalesce(purpose, ''), created_at, expires_at, coalesce(secret_hash = $2, false) as current
+		select id, prefix, coalesce(purpose, ''), coalesce(description, ''), coalesce(user_agent, ''), coalesce(client_ip, ''),
+			created_at, last_used_at, expires_at, coalesce(secret_hash = $2, false) as current
 		from credential
 		where principal_id = $1 and kind = 'bearer' and (expires_at is null or expires_at > now())
 		order by created_at desc`, principalID, currentHash)
@@ -705,7 +732,8 @@ func (p *PG) ListBearerCredentials(ctx context.Context, principalID string, curr
 	var out []BearerCredential
 	for rows.Next() {
 		var c BearerCredential
-		if err := rows.Scan(&c.ID, &c.Prefix, &c.Purpose, &c.CreatedAt, &c.ExpiresAt, &c.Current); err != nil {
+		if err := rows.Scan(&c.ID, &c.Prefix, &c.Purpose, &c.Description, &c.UserAgent, &c.ClientIP,
+			&c.CreatedAt, &c.LastUsedAt, &c.ExpiresAt, &c.Current); err != nil {
 			return nil, fmt.Errorf("storage: scan bearer credential: %w", err)
 		}
 		out = append(out, c)

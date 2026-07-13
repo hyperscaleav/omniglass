@@ -38,7 +38,7 @@ func TestListAndRevokeBearerCredentials(t *testing.T) {
 	// Issue a second bearer for the same principal, a web-login session (expires_at set).
 	_, hash2, prefix2, _ := auth.NewBearerToken()
 	future := time.Now().Add(12 * time.Hour)
-	if ok, err := gw.IssueBearerCredential(ctx, "root", hash2, prefix2, "session", &future); err != nil || !ok {
+	if ok, err := gw.IssueBearerCredential(ctx, storage.BearerIssue{Username: "root", SecretHash: hash2, Prefix: prefix2, Purpose: "session", ExpiresAt: &future}); err != nil || !ok {
 		t.Fatalf("issue second: ok=%v err=%v", ok, err)
 	}
 
@@ -121,6 +121,74 @@ func TestListAndRevokeBearerCredentials(t *testing.T) {
 	}
 }
 
+// TestBearerIdentityFields proves a bearer credential carries and returns its
+// identifying metadata: a token's description, the user-agent and client-ip that created
+// it, and a last_used_at that AuthenticateBearer bumps (issues #193, #205). The bootstrap
+// token gets a default description; a session leaves description empty.
+func TestBearerIdentityFields(t *testing.T) {
+	gw := storagetest.NewDB(t)
+	ctx := context.Background()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	_, bh, bp, _ := auth.NewBearerToken()
+	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: bh, Prefix: bp}); err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+	pid, err := gw.ResolvePrincipalRef(ctx, "root")
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+
+	// A token with a description and the device/address that created it.
+	_, th, tp, _ := auth.NewBearerToken()
+	future := time.Now().Add(90 * 24 * time.Hour)
+	if ok, err := gw.IssueBearerCredential(ctx, storage.BearerIssue{
+		Username: "root", SecretHash: th, Prefix: tp, Purpose: "token", ExpiresAt: &future,
+		Description: "ci pipeline", UserAgent: "curl/8.4", ClientIP: "203.0.113.7",
+	}); err != nil || !ok {
+		t.Fatalf("issue token: ok=%v err=%v", ok, err)
+	}
+
+	byPrefix := func() map[string]storage.BearerCredential {
+		creds, err := gw.ListBearerCredentials(ctx, pid, nil)
+		if err != nil {
+			t.Fatalf("list: %v", err)
+		}
+		m := map[string]storage.BearerCredential{}
+		for _, c := range creds {
+			m[c.Prefix] = c
+		}
+		return m
+	}
+
+	m := byPrefix()
+	// The minted token carries its description, user-agent, and client-ip.
+	if got := m[tp]; got.Description != "ci pipeline" || got.UserAgent != "curl/8.4" || got.ClientIP != "203.0.113.7" {
+		t.Errorf("token identity fields = %+v, want description/ua/ip set", got)
+	}
+	// The bootstrap token gets the default description; neither carries a user-agent.
+	if got := m[bp]; got.Description != "bootstrap token" {
+		t.Errorf("bootstrap description = %q, want 'bootstrap token'", got.Description)
+	}
+	// Neither has been used yet: last_used_at is nil.
+	if m[tp].LastUsedAt != nil {
+		t.Errorf("a fresh token should have no last_used_at, got %v", m[tp].LastUsedAt)
+	}
+
+	// Authenticating with the token bumps its last_used_at (the others stay nil).
+	if _, err := gw.AuthenticateBearer(ctx, th); err != nil {
+		t.Fatalf("authenticate token: %v", err)
+	}
+	m = byPrefix()
+	if m[tp].LastUsedAt == nil {
+		t.Errorf("last_used_at should be set after authentication")
+	}
+	if m[bp].LastUsedAt != nil {
+		t.Errorf("an unused credential's last_used_at must stay nil, got %v", m[bp].LastUsedAt)
+	}
+}
+
 // TestRevokeBearersByPurpose proves the purpose-filtered bulk revoke: it deletes
 // every bearer of one purpose for a principal (all its sessions, or all its tokens),
 // leaves the other purpose untouched, returns the count deleted, and is scoped to the
@@ -146,12 +214,12 @@ func TestRevokeBearersByPurpose(t *testing.T) {
 	future := time.Now().Add(12 * time.Hour)
 	for _, p := range []string{"session", "session"} {
 		_, h, pf, _ := auth.NewBearerToken()
-		if ok, err := gw.IssueBearerCredential(ctx, "root", h, pf, p, &future); err != nil || !ok {
+		if ok, err := gw.IssueBearerCredential(ctx, storage.BearerIssue{Username: "root", SecretHash: h, Prefix: pf, Purpose: p, ExpiresAt: &future}); err != nil || !ok {
 			t.Fatalf("issue %s: ok=%v err=%v", p, ok, err)
 		}
 	}
 	_, th, tp, _ := auth.NewBearerToken()
-	if ok, err := gw.IssueBearerCredential(ctx, "root", th, tp, "token", &future); err != nil || !ok {
+	if ok, err := gw.IssueBearerCredential(ctx, storage.BearerIssue{Username: "root", SecretHash: th, Prefix: tp, Purpose: "token", ExpiresAt: &future}); err != nil || !ok {
 		t.Fatalf("issue token: ok=%v err=%v", ok, err)
 	}
 	_ = tp
@@ -162,7 +230,7 @@ func TestRevokeBearersByPurpose(t *testing.T) {
 		t.Fatalf("create mallory: %v", err)
 	}
 	_, mh, mp, _ := auth.NewBearerToken()
-	if ok, err := gw.IssueBearerCredential(ctx, "mallory", mh, mp, "session", &future); err != nil || !ok {
+	if ok, err := gw.IssueBearerCredential(ctx, storage.BearerIssue{Username: "mallory", SecretHash: mh, Prefix: mp, Purpose: "session", ExpiresAt: &future}); err != nil || !ok {
 		t.Fatalf("issue mallory session: ok=%v err=%v", ok, err)
 	}
 
@@ -234,11 +302,11 @@ func TestRevokeBearersByPurposeExcept(t *testing.T) {
 	}
 	future := time.Now().Add(12 * time.Hour)
 	_, keepH, keepP, _ := auth.NewBearerToken() // the "current" session, to keep
-	if ok, err := gw.IssueBearerCredential(ctx, "root", keepH, keepP, "session", &future); err != nil || !ok {
+	if ok, err := gw.IssueBearerCredential(ctx, storage.BearerIssue{Username: "root", SecretHash: keepH, Prefix: keepP, Purpose: "session", ExpiresAt: &future}); err != nil || !ok {
 		t.Fatalf("issue keep session: ok=%v err=%v", ok, err)
 	}
 	_, otherH, _, _ := auth.NewBearerToken() // another session, to revoke
-	if ok, err := gw.IssueBearerCredential(ctx, "root", otherH, "og", "session", &future); err != nil || !ok {
+	if ok, err := gw.IssueBearerCredential(ctx, storage.BearerIssue{Username: "root", SecretHash: otherH, Prefix: "og", Purpose: "session", ExpiresAt: &future}); err != nil || !ok {
 		t.Fatalf("issue other session: ok=%v err=%v", ok, err)
 	}
 
@@ -309,14 +377,14 @@ func TestListBearerCredentialsPurposeAndLiveFilter(t *testing.T) {
 	// A live web-login session (future expiry, purpose session).
 	_, sh, sp, _ := auth.NewBearerToken()
 	future := time.Now().Add(12 * time.Hour)
-	if ok, err := gw.IssueBearerCredential(ctx, "root", sh, sp, "session", &future); err != nil || !ok {
+	if ok, err := gw.IssueBearerCredential(ctx, storage.BearerIssue{Username: "root", SecretHash: sh, Prefix: sp, Purpose: "session", ExpiresAt: &future}); err != nil || !ok {
 		t.Fatalf("issue session: ok=%v err=%v", ok, err)
 	}
 
 	// An expired token (past expiry): still a stored row, but dead, so the list omits it.
 	_, xh, xp, _ := auth.NewBearerToken()
 	past := time.Now().Add(-time.Minute)
-	if ok, err := gw.IssueBearerCredential(ctx, "root", xh, xp, "token", &past); err != nil || !ok {
+	if ok, err := gw.IssueBearerCredential(ctx, storage.BearerIssue{Username: "root", SecretHash: xh, Prefix: xp, Purpose: "token", ExpiresAt: &past}); err != nil || !ok {
 		t.Fatalf("issue expired: ok=%v err=%v", ok, err)
 	}
 

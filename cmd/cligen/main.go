@@ -108,7 +108,7 @@ type schema struct {
 
 type property struct {
 	Description string   `json:"description"`
-	Type       jsonType `json:"type"`
+	Type        jsonType `json:"type"`
 }
 
 // jsonType is an OpenAPI `type` that may be a single string ("string") or, for a
@@ -198,6 +198,9 @@ var nameOverride = map[string]([]string){
 	// The self-service bulk revoke shares the sessions collection with `session list` /
 	// `session revoke`; name it `session revoke-all` explicitly.
 	"revoke-all-auth-me-sessions": {"session", "revoke-all"},
+	// The self-service token creation would collapse to `token create`, colliding with
+	// the hand-written direct-DB `token <username>` command; group it under `auth`.
+	"create-auth-me-token": {"auth", "create-token"},
 }
 
 func buildCommands(doc spec, base string) []command {

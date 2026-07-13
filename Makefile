@@ -153,5 +153,5 @@ dev: up build-web
 	@./bin/omniglass seed-dev || true
 	@echo "console: http://localhost:8080/web"
 	@echo "  sign in with username 'dev' and password 'dev', or paste a bearer token:"
-	@./bin/omniglass token dev
+	@./bin/omniglass token dev --description "dev login token"
 	./bin/omniglass server

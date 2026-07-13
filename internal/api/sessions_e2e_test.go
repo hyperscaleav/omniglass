@@ -254,7 +254,7 @@ func TestSelfServiceRevokeAll(t *testing.T) {
 	}
 	// A second token beyond the bootstrap one, so a token revoke ends more than one.
 	_, th, tp, _ := auth.NewBearerToken()
-	if ok, err := gw.IssueBearerCredential(ctx, "ops", th, tp, "token", &future); err != nil || !ok {
+	if ok, err := gw.IssueBearerCredential(ctx, storage.BearerIssue{Username: "ops", SecretHash: th, Prefix: tp, Purpose: "token", ExpiresAt: &future}); err != nil || !ok {
 		t.Fatalf("mint token: ok=%v err=%v", ok, err)
 	}
 
@@ -367,5 +367,111 @@ func TestSelfServiceRevokeAll(t *testing.T) {
 	}
 	if s, tk := kinds(cookieA); s != 1 || tk != 0 {
 		t.Fatalf("after token revoke-all: want 1 session + 0 tokens, got %d + %d", s, tk)
+	}
+}
+
+// TestSelfServiceCreateToken drives the self-service token mint against the real binary
+// (issue #204): a signed-in user creates its own API token with a required description
+// and optional ttl, gets the secret back once, and that token authenticates and appears
+// in the session list as a described 'token'. A blank description or an over-cap ttl is a
+// 422. Skipped under -short.
+func TestSelfServiceCreateToken(t *testing.T) {
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	pwHash, err := auth.HashPassword("orange-boat-42x")
+	if err != nil {
+		t.Fatalf("hash: %v", err)
+	}
+	_, bh, bp, _ := auth.NewBearerToken()
+	future := time.Now().Add(auth.DefaultTokenLifetime)
+	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "ops", SecretHash: bh, Prefix: bp, PasswordHash: pwHash, ExpiresAt: &future}); err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+	base := srv.URL
+
+	// A login session cookie to act as the caller.
+	b, _ := json.Marshal(map[string]string{"username": "ops", "password": "orange-boat-42x"})
+	resp, err := http.Post(base+"/api/v1/auth/login", "application/json", bytes.NewReader(b))
+	if err != nil || resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("login: err %v status %v", err, resp.StatusCode)
+	}
+	var cookie string
+	for _, c := range resp.Cookies() {
+		if c.Name == "og_session" {
+			cookie = c.Value
+		}
+	}
+	resp.Body.Close()
+
+	createToken := func(body map[string]any) (int, string, string) {
+		raw, _ := json.Marshal(body)
+		req, _ := http.NewRequest("POST", base+"/api/v1/auth/me/tokens", bytes.NewReader(raw))
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(&http.Cookie{Name: "og_session", Value: cookie})
+		r, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("create token: %v", err)
+		}
+		defer r.Body.Close()
+		var out struct{ Token, Prefix, Description, ExpiresAt string }
+		if r.StatusCode == http.StatusCreated {
+			_ = json.NewDecoder(r.Body).Decode(&out)
+		}
+		return r.StatusCode, out.Token, out.Description
+	}
+
+	// A blank description is a 422 (a token must say what it is for).
+	if code, _, _ := createToken(map[string]any{"description": ""}); code != http.StatusUnprocessableEntity {
+		t.Fatalf("blank description: want 422, got %d", code)
+	}
+	// A ttl over the 365-day cap is a 422.
+	if code, _, _ := createToken(map[string]any{"description": "x", "ttl_days": 400}); code != http.StatusUnprocessableEntity {
+		t.Fatalf("over-cap ttl: want 422, got %d", code)
+	}
+
+	// A valid create returns the token once and its description.
+	code, token, desc := createToken(map[string]any{"description": "ci pipeline", "ttl_days": 30})
+	if code != http.StatusCreated || token == "" || desc != "ci pipeline" {
+		t.Fatalf("create: want (201, token, 'ci pipeline'), got (%d, %q, %q)", code, token, desc)
+	}
+
+	// The returned token authenticates a request.
+	req, _ := http.NewRequest("GET", base+"/api/v1/auth/me", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	r, err := http.DefaultClient.Do(req)
+	if err != nil || r.StatusCode != http.StatusOK {
+		t.Fatalf("new token should authenticate: err %v status %v", err, r.StatusCode)
+	}
+	r.Body.Close()
+
+	// It shows in the session list as a described token.
+	req, _ = http.NewRequest("GET", base+"/api/v1/auth/me/sessions", nil)
+	req.AddCookie(&http.Cookie{Name: "og_session", Value: cookie})
+	r, _ = http.DefaultClient.Do(req)
+	var listed struct {
+		Sessions []struct {
+			Kind, Description string
+		} `json:"sessions"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&listed)
+	r.Body.Close()
+	found := false
+	for _, s := range listed.Sessions {
+		if s.Kind == "token" && s.Description == "ci pipeline" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("the created token should list as a described token: %+v", listed.Sessions)
 	}
 }

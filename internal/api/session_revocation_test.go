@@ -90,7 +90,7 @@ func TestPasswordChangeRevokesSessions(t *testing.T) {
 	// change: a token is its own bearer secret, not tied to the password.
 	tok, hash, prefix, _ := auth.NewBearerToken()
 	future := time.Now().Add(90 * 24 * time.Hour)
-	if ok, err := gw.IssueBearerCredential(ctx, "alice", hash, prefix, "token", &future); err != nil || !ok {
+	if ok, err := gw.IssueBearerCredential(ctx, storage.BearerIssue{Username: "alice", SecretHash: hash, Prefix: prefix, Purpose: "token", ExpiresAt: &future}); err != nil || !ok {
 		t.Fatalf("mint alice token: ok=%v err=%v", ok, err)
 	}
 	tokenStatus := func() int {

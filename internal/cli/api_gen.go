@@ -106,6 +106,32 @@ func generatedCommands() []*cobra.Command {
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
+			var fDescription string
+			var fTtlDays string
+			cmd := &cobra.Command{
+				Use:     "create-token",
+				Short:   "Create one of your own API tokens",
+				Long:    "Mints a CLI/API token for the caller and returns it once (store it now; it cannot be retrieved again). A description is required (what the token is for); an optional ttl_days bounds its lifetime (default 90, maximum 365). Requires authentication; self-scoped (always issued for you). The token is stamped with the device and address that created it.",
+				Example: "  omniglass auth create-token --description description",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/auth/me/tokens")
+					body := map[string]any{}
+					if cmd.Flags().Changed("description") {
+						body["description"] = fDescription
+					}
+					if cmd.Flags().Changed("ttl-days") {
+						body["ttl_days"] = jsonOrString(fTtlDays)
+					}
+					return runAPICommand(cmd, "POST", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fDescription, "description", "", "What the token is for (required)")
+			_ = cmd.MarkFlagRequired("description")
+			cmd.Flags().StringVar(&fTtlDays, "ttl-days", "", "Days until the token expires (default 90, maximum 365)")
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
 			cmd := &cobra.Command{
 				Use:     "me",
 				Short:   "The authenticated principal, its permissions, and grants",

@@ -49,6 +49,9 @@ func NewHandler(gw storage.Gateway, opts ...Option) http.Handler {
 	}
 	r := chi.NewRouter()
 	r.Route("/api/v1", func(sub chi.Router) {
+		// Capture the User-Agent and client IP before Huma, so login and self-service
+		// token creation can stamp a credential with the device and address behind it.
+		sub.Use(captureClientMeta)
 		api := humachi.New(sub, apiConfig())
 		registerRoutes(api, gw, o)
 	})
@@ -175,6 +178,16 @@ func registerRoutes(api huma.API, gw storage.Gateway, o options) {
 		Description: "Revokes every one of the caller's own web-login sessions, or every one of its CLI/API tokens (chosen by purpose), returning how many were ended. Requires authentication; self-scoped. Always keeps the credential that made this request, so you are never signed out of the one you are on; sessions and tokens never cross.",
 		Middlewares: huma.Middlewares{a.authn},
 	}, a.revokeAllMeSessionsHandler)
+
+	huma.Register(api, huma.Operation{
+		OperationID:   "create-auth-me-token",
+		Method:        http.MethodPost,
+		Path:          "/auth/me/tokens",
+		DefaultStatus: http.StatusCreated,
+		Summary:       "Create one of your own API tokens",
+		Description:   "Mints a CLI/API token for the caller and returns it once (store it now; it cannot be retrieved again). A description is required (what the token is for); an optional ttl_days bounds its lifetime (default 90, maximum 365). Requires authentication; self-scoped (always issued for you). The token is stamped with the device and address that created it.",
+		Middlewares:   huma.Middlewares{a.authn},
+	}, a.createMeTokenHandler)
 
 	huma.Register(api, huma.Operation{
 		OperationID:   "set-auth-me-avatar",
