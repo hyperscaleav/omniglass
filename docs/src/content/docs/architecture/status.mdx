@@ -598,6 +598,19 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   alice`). Proven by a storage test (username resolves, a uuid passes through, an unknown username is not
   found) and an API test (get by username matches get by uuid, a `:verb` method archives by username, an
   unknown username is a 404).
+- **Tag: batch effective-tags on the directory rows.** The first slice of the tag-apply UI, backend only: the
+  directory list routes (`GET /components`, `/systems`, `/locations`) now carry an **`effective_tags`** map (key to
+  winning value, winners only) on each row, resolved for the whole page in one batched query per kind
+  (`Gateway.EffectiveTags`), feeding the coming Tags column with zero per-row fetch. Effective resolution extends past
+  the component: a **location** resolves `global` + its own location tree, and a **system** resolves `global` + its
+  system tree + **the location it is placed at** ([ADR-0022](/architecture/decisions/#adr-0022-effective-tags-resolve-onto-systems-and-locations-a-placed-system-inherits-its-location)),
+  so a system in a PCI building surfaces `compliance: pci`. Three per-kind recursive-CTE resolvers thread a target id
+  through the ancestor chains and rank per (target, key); the resolver is scopeless by contract (the list already
+  filtered the ids to the read scope, the rowActions batch pattern). Proven by a storage integration test (the
+  four-band component cascade, the placed-system-inherits-location case, the non-propagating flat case, a batched
+  shared-ancestor pair with no false cycle, and the empty/unknown edges) and an HTTP e2e (`effective_tags` on the
+  component, system, and location list bodies). The Tags column, the type-to-add editor, and tag search follow in
+  later slices ([#189](https://github.com/hyperscaleav/omniglass/issues/189)).
 - **Tag: the governed label vocabulary and its cascaded bindings.** The [tag](/architecture/tags/) primitive lands as
   its own page: a governed **`tag`** key registry (a normalized lowercase-identifier vocabulary, minting gated by
   all-scope `tag:create`, broadened to `tag:*` for admin), a per-entity **`tag_binding`** cell owned on the same
@@ -779,5 +792,5 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   `owner`'s `>` is unaffected, and create, update, and the lifecycle verbs stay two-token. Proven by a
   real-binary API test (a viewer@all 403s on `/principals`, `/roles`, `/principal-groups`; admin and owner
   200), the nav filter's web test (the three tabs hidden from `*:read`, shown to admin), and rbac matcher
-  cases ([ADR-0022](/architecture/decisions/#adr-0022-the-iam-directory-reads-principal-role-principal_group-are-admin-tier)).
+  cases ([ADR-0023](/architecture/decisions/#adr-0023-the-iam-directory-reads-principal-role-principal_group-are-admin-tier)).
   Secrets, which an operator legitimately reads in scope, are handled by a later slice.

@@ -4,10 +4,18 @@ import sitemap from '@astrojs/sitemap';
 import starlight from '@astrojs/starlight';
 import d2 from 'astro-d2';
 import { defineConfig } from 'astro/config';
+import remarkDirective from 'remark-directive';
 import starlightOpenAPI, { openAPISidebarGroups } from 'starlight-openapi';
+import { remarkScreenshots } from './src/plugins/remark-screenshots.mjs';
 
 export default defineConfig({
   site: 'https://docs.omniglass.hyperscaleav.com',
+  // remark-directive parses `::screenshot{#id}`; remarkScreenshots renders it
+  // into a figure from the page's screenshots frontmatter (the single source the
+  // capture generator reads too).
+  markdown: {
+    remarkPlugins: [remarkDirective, remarkScreenshots],
+  },
   // The monolithic "the console" guide was split into per-flow operator pages.
   // Keep its old URL alive for external links and bookmarks.
   redirects: {

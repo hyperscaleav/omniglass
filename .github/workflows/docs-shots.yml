@@ -1,0 +1,55 @@
+name: docs-shots
+
+# Two gates for the docs screenshots, which are a generated resource declared in
+# each page's `screenshots` frontmatter:
+#
+# - verify (fast, deterministic): every declared shot has a committed PNG, every
+#   PNG is declared, ids are unique. Catches a forgotten capture or an orphan.
+# - freshness (heavier): recapture against the real console (Postgres + the built
+#   binary + Playwright, all in Docker) and fail if any shot drifts beyond a small
+#   tolerance. Catches a UI change that was not re-captured. Tolerance rather than
+#   byte equality because the dev seed's random UUIDs move a fraction of a percent
+#   of pixels; DOCS_SHOTS_MAX_RATIO tunes it.
+
+on:
+  pull_request:
+    paths:
+      - docs/**
+      - web/**
+  push:
+    branches: [main]
+    paths:
+      - docs/**
+      - web/**
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install web deps
+        run: cd web && npm ci
+      - name: Verify screenshots are declared and present
+        run: make docs-shots-verify
+
+  freshness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install web deps
+        run: cd web && npm ci
+      - name: Recapture and compare against the committed screenshots
+        run: make docs-shots-check

@@ -258,6 +258,10 @@ type Gateway interface {
 	DeleteTagBinding(ctx context.Context, actorID, key, ownerKind string, ownerName *string, read, action scope.Set) error
 	ListEntityTags(ctx context.Context, ownerKind string, ownerName *string, read scope.Set) ([]TagBinding, error)
 	ResolveTags(ctx context.Context, componentID string, read scope.Set) ([]ResolvedTag, error)
+	// EffectiveTags batch-resolves the winning effective tags (key -> value) for a
+	// set of owners of one kind, feeding the directory Tags column. Scopeless: the
+	// caller passes ids already in the read scope (the rowActions batch contract).
+	EffectiveTags(ctx context.Context, kind string, ownerIDs []string) (map[string]map[string]string, error)
 
 	// Close releases the underlying connection pool. Idempotent at the pool
 	// level; call once on shutdown.

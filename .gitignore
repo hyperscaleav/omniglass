@@ -50,3 +50,6 @@ coverage.txt
 # Local server state: the fallback secret key when no KEK is provided
 # (OMNIGLASS_DATA_DIR). A real deploy sets OMNIGLASS_SECRET_KEY_FILE.
 .omniglass/
+
+# docs screenshot freshness-gate scratch
+.docs-shots-tmp/

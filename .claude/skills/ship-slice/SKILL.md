@@ -66,6 +66,16 @@ Each is a gate; a red one blocks the ship.
    under `.github/screenshots/` and embed by **immutable commit SHA**
    (`https://raw.githubusercontent.com/<owner>/<repo>/<sha>/.github/screenshots/...`), so the
    link survives the branch being deleted on squash-merge.
+
+   **Docs screenshots are a generated resource.** The images embedded *on the docs pages*
+   (not the PR body) are declared in each page's `screenshots` frontmatter and captured by
+   `make docs-shots` from the real console, never hand-added. A slice that changes an
+   operator-facing surface **re-runs `make docs-shots` and commits the refreshed PNGs**;
+   `make docs-shots-check` recaptures and fails if a shot drifts beyond a small tolerance
+   (the dev seed's random UUIDs move a fraction of a percent; a real change moves far more),
+   the visual sibling of the `make gen` drift check, so a stale screenshot cannot merge.
+   Adding a new one is a frontmatter entry plus a `::screenshot{#id}` directive in the prose,
+   not a code change.
 8. **Audit coverage.** Every privileged **mutation** and every **auth event** the slice adds
    writes an `audit_log` row: an estate or IAM mutation through `writeAuditRes` **in the same
    transaction** as the change (a committed change without its audit row is a red gate), and an

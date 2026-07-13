@@ -1,6 +1,10 @@
 ---
 title: Manage users
 description: "The principal directory: create a human, edit and rename, the disable-archive-purge lifecycle, admin password reset, and profile pictures."
+screenshots:
+  - id: users
+    path: /web/users
+    alt: "The Users directory: each principal with its avatar, kind badge, and grant count, plus New user and Show archived."
 ---
 
 **Settings, Users** is the admin directory of every principal, humans and service accounts,
@@ -15,7 +19,7 @@ admin-tier read that a plain `*:read` cannot reach, so a viewer or field tech ca
 users. Because a principal is not part of any location or system tree, that grant is inherently
 **all-scope**: a location-scoped admin cannot list users.
 
-![The Users directory: each principal with its avatar, kind badge, and grant count, plus New user and Show archived.](../../../../assets/screenshots/users.png)
+::screenshot{#users}
 
 - Pick a row to open its **blade**: a principal's profile, the **groups** it belongs to (open
   one to stack that group's blade over the user), and its **role grants** (each a role at a scope).

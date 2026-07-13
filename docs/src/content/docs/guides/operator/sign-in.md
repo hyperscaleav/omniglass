@@ -1,6 +1,11 @@
 ---
 title: Sign in and your profile
 description: "Getting into the console with a password or a bearer token, and managing your own display name, picture, and password."
+screenshots:
+  - id: sign-in
+    path: /web/login
+    auth: false
+    alt: "The console sign-in screen: a username and password, with a bearer-token option below."
 ---
 
 ## Signing in
@@ -10,7 +15,7 @@ cookie (the browser never exposes a token to scripts), and the cookie rides on e
 for the rest of the session. Sign out from the menu in the sidebar footer, which revokes the
 session and clears the cookie.
 
-![The console sign-in screen: a username and password, with a bearer-token option below.](../../../../assets/screenshots/sign-in.png)
+::screenshot{#sign-in}
 
 The login screen also has a **"Use a bearer token instead"** toggle: paste a token (for a
 service account, or an operator who works from the CLI) and the console authenticates with the
