@@ -1,7 +1,8 @@
-import { For, Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
+import { For, Show, createEffect, createMemo, createSignal, createUniqueId, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import TreeSelect from "../components/TreeSelect";
+import InfoTip from "../components/InfoTip";
 import Button from "../components/Button";
 import { DrawerFooter } from "../components/Drawer";
 import { Plus } from "../components/icons";
@@ -43,7 +44,7 @@ function ownerLabel(v: Variable): string {
 const columns: FlatColumn<Variable>[] = [
   { key: "name", label: "Name", sortVal: (v) => v.name, cell: (v) => <span class="font-data font-semibold">{v.name}</span> },
   { key: "type", label: "Type", width: "120px", sortVal: (v) => v.value_type, cell: (v) => <span class="badge badge-ghost badge-sm">{v.value_type}</span> },
-  { key: "owner", label: "Owner", width: "220px", sortVal: (v) => v.owner_kind, cell: (v) => <span class="text-base-content/70">{ownerLabel(v)}</span> },
+  { key: "owner", label: "Scope", width: "220px", sortVal: (v) => v.owner_kind, cell: (v) => <span class="text-base-content/70">{ownerLabel(v)}</span> },
   { key: "value", label: "Value", cell: (v) => <span class="font-data text-xs text-base-content/60">{displayValue(v.value)}</span> },
 ];
 
@@ -62,10 +63,10 @@ export default function Variables() {
         error: () => variables.error,
         filterKeys: [
           { key: "name", type: "string", hint: "substring", get: (v) => `${v.name} ${v.value_type}`, values: () => [] },
-          { key: "owner", type: "string", hint: "exact", get: (v) => v.owner_kind, values: (rs) => [...new Set(rs.map((r) => r.owner_kind))].sort() },
+          { key: "scope", type: "string", hint: "exact", get: (v) => v.owner_kind, values: (rs) => [...new Set(rs.map((r) => r.owner_kind))].sort() },
           { key: "type", type: "string", hint: "exact", get: (v) => v.value_type, values: (rs) => [...new Set(rs.map((r) => r.value_type))].sort() },
         ],
-        filterPlaceholder: "filter variables by name, type, owner…",
+        filterPlaceholder: "filter variables by name, type, scope…",
         columns,
         empty: "No variables yet.",
         rowId: (v) => v.id,
@@ -162,7 +163,7 @@ function VariableBladeBody(p: { id: string }): JSX.Element {
           </Show>
           <div class="grid grid-cols-2 gap-3 text-sm">
             <Fact label="Type"><span class="badge badge-ghost badge-sm">{v().value_type}</span></Fact>
-            <Fact label="Owner"><span>{ownerLabel(v())}</span></Fact>
+            <Fact label="Scope"><span>{ownerLabel(v())}</span></Fact>
           </div>
           <div class="flex flex-col gap-1.5">
             <span class="eyebrow">Value</span>
@@ -294,14 +295,18 @@ function CreateVariableForm(p: { onCreated: () => void }): JSX.Element {
             <For each={VALUE_TYPES}>{(t) => <option value={t}>{t}</option>}</For>
           </select>
         </Field>
-        <Field label="Owner scope">
+        <Field
+          label="Scope"
+          info="The estate scope this variable attaches to. It cascades down onto the components below it: global, or a location, system, or component."
+          docHref="https://docs.omniglass.hyperscaleav.com/architecture/variables/"
+        >
           <select class="select select-bordered w-full" value={ownerKind()} onChange={(e) => { setOwnerKind(e.currentTarget.value as OwnerKind); setOwner(""); }}>
             <For each={OWNER_KINDS}>{(k) => <option value={k}>{k.charAt(0).toUpperCase() + k.slice(1)}</option>}</For>
           </select>
         </Field>
       </div>
       <Show when={ownerKind() !== "global"}>
-        <Field label="Owner">
+        <Field label={ownerKind().charAt(0).toUpperCase() + ownerKind().slice(1)}>
           <TreeSelect items={ownerTree()} value={owner()} onChange={setOwner} rootLabel="Choose…" />
         </Field>
       </Show>
@@ -315,12 +320,22 @@ function CreateVariableForm(p: { onCreated: () => void }): JSX.Element {
   );
 }
 
-function Field(p: { label: string; hint?: string; children: JSX.Element }): JSX.Element {
+// Field labels a form control. An optional `info` renders the (i) tooltip beside
+// the label (with an optional `docHref` "learn more" link); the tooltip trigger
+// sits OUTSIDE the <label> and the label associates by `for`, so a labelable
+// button never steals the control's accessible name.
+function Field(p: { label: string; hint?: string; info?: string; docHref?: string; children: JSX.Element }): JSX.Element {
+  const id = createUniqueId();
+  const target = p.children instanceof Element ? p.children : undefined;
+  if (target && !target.id) target.id = id;
   return (
-    <label class="flex flex-col gap-1">
-      <span class="text-[12px] font-medium text-base-content/70">{p.label}</span>
+    <div class="flex flex-col gap-1">
+      <span class="flex items-center gap-1.5">
+        <label class="text-[12px] font-medium text-base-content/70" for={target?.id ?? id}>{p.label}</label>
+        <Show when={p.info}><InfoTip text={p.info!} label={p.label} href={p.docHref} hrefText="Docs" /></Show>
+      </span>
       {p.children}
       <Show when={p.hint}><span class="text-[11px] text-base-content/40">{p.hint}</span></Show>
-    </label>
+    </div>
   );
 }
