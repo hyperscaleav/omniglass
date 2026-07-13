@@ -1,6 +1,10 @@
 ---
 title: Variables
 description: "Plaintext typed free values owned at one scope and resolved down the cascade: the directory, create, edit, and the effective view on a component."
+screenshots:
+  - id: variables
+    path: /web/variables
+    alt: "The Variables directory: type badges and the value shown in the clear, the plaintext sibling of Secrets."
 ---
 
 A **variable** is the plaintext sibling of a [secret](/guides/admin/secrets/): a typed free
@@ -12,6 +16,8 @@ and credentials](/architecture/variables/).
 [variable](/architecture/variables/). Each row shows its name, a **type badge** (`string`,
 `int`, `float`, `bool`, `json`), an owner label, and the **value in the clear** (no mask, no
 reveal).
+
+::screenshot{#variables}
 
 - **New variable** (with `variable:create`) opens a create **drawer**: name the key, pick a **type** and
   an **owner scope**, choose the owner from the shared tree picker, then enter the value in a

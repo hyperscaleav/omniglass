@@ -1,6 +1,13 @@
 ---
 title: Work with an entity
 description: "Opening an entity's blade, drilling into its children, and creating, editing, or deleting through the footer action bar."
+screenshots:
+  - id: entity-blade
+    path: /web/locations
+    alt: "A location's blade slides in from the right with its details and a footer action bar."
+    steps:
+      - action: click
+        selector: "text=East Campus"
 ---
 
 Once you have [found an entity](/guides/operator/inventory/), you open it, read it, and change
@@ -13,6 +20,8 @@ details. From a blade you can drill into a child (it stacks another blade behind
 step back with the breadcrumb, or **Maximize** to the full detail page. The full page has its
 own URL, so it is shareable and bookmarkable; a blade is a quick look that does not change the
 URL. Rows are keyboard-operable: Tab to a row and press Enter to open it.
+
+::screenshot{#entity-blade}
 
 The identity pages (Users, Groups, and Roles) use the same blade, and there drilling crosses entities: from a
 user you open a group's blade over it, and from a group you open a member's user blade, each stacking so you can
