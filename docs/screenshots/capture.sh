@@ -53,7 +53,7 @@ docker run -d --name ogshots-srv --network "$NET" -v "$ROOT/bin/omniglass:/omnig
   -e OMNIGLASS_DSN="$DSN" "$APPIMG" /omniglass server >/dev/null
 until docker run --rm --network "$NET" "$PWIMG" bash -c 'curl -fsS http://ogshots-srv:8080/api/v1/healthz' >/dev/null 2>&1; do sleep 1; done
 
-TOK=$(app token dev 2>/dev/null | grep -o 'ogp_[A-Za-z0-9_-]*')
+TOK=$(app token dev --description "docs capture" 2>/dev/null | grep -o 'ogp_[A-Za-z0-9_-]*')
 # A couple of secrets so the Secrets surface renders real rows (idempotent).
 sec() { docker run --rm --network "$NET" -v "$ROOT/bin/omniglass:/omniglass:ro" \
   -e OMNIGLASS_SERVER=http://ogshots-srv:8080 -e OMNIGLASS_TOKEN="$TOK" "$APPIMG" /omniglass "$@" >/dev/null 2>&1 || true; }
