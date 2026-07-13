@@ -12,7 +12,7 @@ Two members are built. The **`secret`** member ([ADR-0017](/architecture/decisio
 [#155](https://github.com/hyperscaleav/omniglass/issues/155)): the typed encrypted-at-rest cell owned on the
 exclusive arc and resolved down the cascade, the `secret_type` shape registry, envelope AES-256-GCM crypto behind a
 pluggable KEK provider, the masked-with-audited-decrypt read path, the two-axis visibility (placement scope plus the
-per-secret `admin_sensitive` flag, with a scope-filtered directory, [ADR-0024](/architecture/decisions/#adr-0024-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier)),
+per-secret `admin_sensitive` flag, with a scope-filtered directory, [ADR-0025](/architecture/decisions/#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier)),
 and the operator surfaces. The **`variable`**
 member ([#183](https://github.com/hyperscaleav/omniglass/issues/183)): the typed **plaintext** cell on the same
 exclusive arc, resolved down the same cascade, with a Variables directory and a per-component effective-variables
@@ -168,7 +168,7 @@ separate, privileged action: `secret:reveal` gates the decrypt (both an on-scree
 clipboard **copy**, recorded under distinct `reveal` and `copy` verbs), and **every decrypt writes an
 [audit](/architecture/audit/) row**.
 
-**Two axes decide who reaches a secret** ([ADR-0024](/architecture/decisions/#adr-0024-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier)).
+**Two axes decide who reaches a secret** ([ADR-0025](/architecture/decisions/#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier)).
 **Placement scope** (where the secret attaches on the exclusive arc) gives locality: a Singapore-scoped
 field tech creates and reveals device secrets under Singapore and cannot reach one attached at global.
 A per-secret **`admin_sensitive` flag** gives same-scope sensitivity: when set, every action on that
@@ -354,7 +354,7 @@ exclusive-arc scope either way.
 | Table | Key columns | Notes |
 |---|---|---|
 | `secret_type` | id, **official**, schema (per-field `{name, type, secret, origin}`) | **Built.** The secret **shape** registry (`snmp-community`, `basic-auth` seeded); `official` marks shipped-canonical versus org-local, like the datapoint and role registries |
-| `secret` | (name, **owner arc**), secret_type, **`admin_sensitive`**, **value** (secret fields as `{ciphertext, nonce, wrapped_dek, key_id}` envelopes, non-secret fields plaintext) | **Built.** The encrypted cell and the `$sec:` cascade key; scope is the exclusive arc (global/location/system/component). Read masked through a **scope-filtered** directory; decrypted only through the audited `:reveal` / `:copy` path. Visibility is placement scope plus the per-secret `admin_sensitive` flag (admin-only when set); `secret` is off the `*:read` floor ([ADR-0024](/architecture/decisions/#adr-0024-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier)) |
+| `secret` | (name, **owner arc**), secret_type, **`admin_sensitive`**, **value** (secret fields as `{ciphertext, nonce, wrapped_dek, key_id}` envelopes, non-secret fields plaintext) | **Built.** The encrypted cell and the `$sec:` cascade key; scope is the exclusive arc (global/location/system/component). Read masked through a **scope-filtered** directory; decrypted only through the audited `:reveal` / `:copy` path. Visibility is placement scope plus the per-secret `admin_sensitive` flag (admin-only when set); `secret` is off the `*:read` floor ([ADR-0025](/architecture/decisions/#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier)) |
 | `variable` | (name, **owner arc**), **value_type** (`string`/`int`/`float`/`bool`/`json`), **value** (jsonb) | **Built.** The plaintext variable cell and the `$var:` cascade key; scope is the exclusive arc. Typed inline (no `variable_type` registry: the value is validated against `value_type` in the app), no observed side. The **config** cell (declared/observed/reconcile) is a separate, deferred member |
 | `tag` | name, applies_to, propagates | **Built.** The **tenant-wide governed key vocabulary**; minting a key needs `tag:create` ([identity and access](/architecture/identity-access/)). No `_type`, no namespace; values bind via `tag_binding`. See [tags](/architecture/tags/) |
 | `tag_binding` | (tag, **owner arc**), value | **Built.** The `key: value` binding: **union on key, override on value** down the [cascade](/architecture/cascade/), owned on the exclusive arc (`global / location / system / component`); setting a value is the owner's own `update` write. Binding via groups and a `template` default are deferred |

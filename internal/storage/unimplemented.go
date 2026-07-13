@@ -250,6 +250,9 @@ func (UnimplementedGateway) ResolveVariables(context.Context, string, scope.Set)
 func (UnimplementedGateway) ListTags(context.Context) ([]Tag, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) DistinctTagValues(context.Context, string) ([]string, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) CreateTag(context.Context, string, TagSpec, scope.Set) (*Tag, error) {
 	return nil, nil
 }

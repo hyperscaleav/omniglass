@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import Button from "../components/Button";
 import { DrawerFooter } from "../components/Drawer";
-import { Plus } from "../components/icons";
+import { Plus, X } from "../components/icons";
 import {
   type Tag,
   type EntityKind,
@@ -99,12 +99,16 @@ function TagBladeBody(p: { name: string }): JSX.Element {
   const [err, setErr] = createSignal<string | null>(null);
   const [appliesTo, setAppliesTo] = createSignal<EntityKind[]>([]);
   const [propagates, setPropagates] = createSignal(true);
+  const [isEnum, setIsEnum] = createSignal(false);
+  const [allowedValues, setAllowedValues] = createSignal<string[]>([]);
 
   createEffect(on(edit.editing, (editing) => {
     if (!editing) return;
     const t = tag();
     setAppliesTo((t?.applies_to ?? []) as EntityKind[]);
     setPropagates(t?.propagates ?? true);
+    setIsEnum((t?.allowed_values ?? []).length > 0);
+    setAllowedValues(t?.allowed_values ?? []);
     setErr(null);
   }));
 
@@ -127,7 +131,7 @@ function TagBladeBody(p: { name: string }): JSX.Element {
     if (!t) return;
     setErr(null);
     try {
-      await updateTag(t.name, { applies_to: appliesTo(), propagates: propagates() });
+      await updateTag(t.name, { applies_to: appliesTo(), propagates: propagates(), allowed_values: isEnum() ? allowedValues() : [] });
       await qc.invalidateQueries({ queryKey: TAGS_KEY });
     } catch (e) {
       setErr(describeError(e));
@@ -164,6 +168,15 @@ function TagBladeBody(p: { name: string }): JSX.Element {
               fallback={<div class="input input-bordered flex items-center text-sm">{t().propagates ? "cascades to descendants" : "flat (own entity only)"}</div>}
             >
               <PropagatesToggle value={propagates()} onChange={setPropagates} />
+            </Show>
+          </div>
+          <div class="flex flex-col gap-1.5">
+            <span class="eyebrow">Value domain</span>
+            <Show
+              when={edit.editing()}
+              fallback={<div class="input input-bordered flex items-center text-sm">{t().allowed_values.length ? `one of: ${t().allowed_values.join(", ")}` : "free text"}</div>}
+            >
+              <ValueDomainEditor isEnum={isEnum()} values={allowedValues()} onIsEnum={setIsEnum} onValues={setAllowedValues} />
             </Show>
           </div>
         </div>
@@ -203,11 +216,13 @@ function PropagatesToggle(p: { value: boolean; onChange: (v: boolean) => void })
 
 // CreateTagForm: name the key (a normalized lowercase identifier), pick the
 // entity kinds it applies to and whether it cascades, then mint it.
-function CreateTagForm(p: { onCreated: () => void }): JSX.Element {
+export function CreateTagForm(p: { onCreated: (name: string) => void; initialName?: string }): JSX.Element {
   const qc = useQueryClient();
-  const [name, setName] = createSignal("");
+  const [name, setName] = createSignal(p.initialName ?? "");
   const [appliesTo, setAppliesTo] = createSignal<EntityKind[]>([]);
   const [propagates, setPropagates] = createSignal(true);
+  const [isEnum, setIsEnum] = createSignal(false);
+  const [allowedValues, setAllowedValues] = createSignal<string[]>([]);
   const [busy, setBusy] = createSignal(false);
   const [formErr, setFormErr] = createSignal<string | null>(null);
 
@@ -220,9 +235,10 @@ function CreateTagForm(p: { onCreated: () => void }): JSX.Element {
         name: name().trim(),
         applies_to: appliesTo(),
         propagates: propagates(),
+        allowed_values: isEnum() ? allowedValues() : [],
       });
       await qc.invalidateQueries({ queryKey: TAGS_KEY });
-      p.onCreated();
+      p.onCreated(name().trim());
     } catch (er) {
       setFormErr(describeError(er));
     } finally {
@@ -244,10 +260,59 @@ function CreateTagForm(p: { onCreated: () => void }): JSX.Element {
       <Field label="Binding">
         <PropagatesToggle value={propagates()} onChange={setPropagates} />
       </Field>
+      <Field label="Value domain" hint="Leave free for any text, or constrain the values to a fixed set (an enum), like environment being one of prod, staging, dev.">
+        <ValueDomainEditor isEnum={isEnum()} values={allowedValues()} onIsEnum={setIsEnum} onValues={setAllowedValues} />
+      </Field>
       <DrawerFooter>
-        <Button type="submit" intent="action" icon={Plus} disabled={busy() || !name().trim()}>Create tag key</Button>
+        <Button type="submit" intent="action" icon={Plus} disabled={busy() || !name().trim() || (isEnum() && !allowedValues().length)}>Create tag key</Button>
       </DrawerFooter>
     </form>
+  );
+}
+
+// ValueDomainEditor edits a key's value domain: a checkbox turns the free-text
+// key into an enum, and when on, a chip list plus an add field build the allowed
+// value set. Empty enum is not submittable (the form guards it).
+function ValueDomainEditor(p: { isEnum: boolean; values: string[]; onIsEnum: (b: boolean) => void; onValues: (v: string[]) => void }): JSX.Element {
+  const [draft, setDraft] = createSignal("");
+  function addValue() {
+    const v = draft().trim();
+    if (v && !p.values.includes(v)) p.onValues([...p.values, v]);
+    setDraft("");
+  }
+  return (
+    <div class="flex flex-col gap-2">
+      <label class="flex items-center gap-2 text-sm font-normal">
+        <input type="checkbox" class="checkbox checkbox-sm" checked={p.isEnum} onChange={(e) => p.onIsEnum(e.currentTarget.checked)} />
+        Constrain to a fixed set of values
+      </label>
+      <Show when={p.isEnum}>
+        <div class="flex flex-col gap-2 rounded-box border border-base-300 p-2.5">
+          <div class="flex flex-wrap items-center gap-1.5">
+            <For each={p.values} fallback={<span class="text-[11px] text-base-content/40">No values yet. Add the allowed values below.</span>}>
+              {(v) => (
+                <span class="badge badge-ghost gap-1 font-data">
+                  {v}
+                  <button type="button" class="inline-flex opacity-60 hover:opacity-100" aria-label={`Remove ${v}`} onClick={() => p.onValues(p.values.filter((x) => x !== v))}>
+                    <X size={11} />
+                  </button>
+                </span>
+              )}
+            </For>
+          </div>
+          <div class="flex gap-1.5">
+            <input
+              class="input input-bordered input-sm flex-1 font-data"
+              placeholder="add a value (e.g. prod)"
+              value={draft()}
+              onInput={(e) => setDraft(e.currentTarget.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addValue(); } }}
+            />
+            <Button square intent="action" icon={Plus} label="Add value" title="Add value" disabled={!draft().trim()} onClick={addValue} />
+          </div>
+        </div>
+      </Show>
+    </div>
   );
 }
 

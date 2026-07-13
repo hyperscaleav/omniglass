@@ -1684,6 +1684,7 @@ Adds a key to the governed vocabulary. The name is normalized (a lowercase ident
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
+| `--allowed-values` | string | (none) | The value enum a bound value must belong to; omit for free text |
 | `--applies-to` | string | (none) | Entity kinds this key may bind to (component, system, location); omit for universal |
 | `--name` | string | (none) | The normalized key: a lowercase identifier, unique tenant-wide |
 | `--propagates` | string | (none) | Whether bindings cascade to descendants; defaults true |
@@ -1758,6 +1759,7 @@ Replaces a key's governance fields (applies_to, propagates); the name is fixed. 
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
+| `--allowed-values` | string | (none) | The value enum a bound value must belong to; omit for free text |
 | `--applies-to` | string | (none) | Entity kinds this key may bind to; omit for universal |
 | `--propagates` | string | (none) | Whether bindings cascade to descendants; defaults true |
 
@@ -1765,6 +1767,22 @@ Example:
 
 ```sh
 omniglass tag update <name>
+```
+
+### `omniglass tag values`
+
+List the distinct values bound for a key
+
+```
+omniglass tag values <name>
+```
+
+Returns the distinct values already bound for a key across the estate, for value autocomplete on a free-text key (an enum key carries its allowed set on the key itself). Rides the tag:read floor.
+
+Example:
+
+```sh
+omniglass tag values <name>
 ```
 
 ## `omniglass token`

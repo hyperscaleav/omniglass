@@ -4,6 +4,7 @@ import { useNavigate, useParams } from "@solidjs/router";
 import TreeList, { type ListConfig, type ListCtx, type ListNode, type PageDescriptor } from "../components/TreeList";
 import TreeSelect from "../components/TreeSelect";
 import TagPills from "../components/TagPills";
+import TagAdder from "../components/TagAdder";
 import {
   type System,
   SYSTEMS_KEY,
@@ -165,6 +166,7 @@ export default function Systems() {
             </div>
           </Show>
         </div>
+        <TagAdder kind="system" name={n.raw.name} canUpdate={can(me.data, "system", "update")} canCreateKey={can(me.data, "tag", "create")} />
         <div class="flex flex-wrap items-center gap-2 border-t border-base-300 pt-4">
           <Show when={ctx.full && can(me.data, "system", "delete")}>
             <Button intent="danger" onClick={() => { ctx.closeBlades(); del(n); }}>Delete</Button>

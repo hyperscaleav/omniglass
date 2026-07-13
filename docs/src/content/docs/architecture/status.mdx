@@ -598,6 +598,33 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   alice`). Proven by a storage test (username resolves, a uuid passes through, an unknown username is not
   found) and an API test (get by username matches get by uuid, a `:verb` method archives by username, an
   unknown username is a 404).
+- **Tag: value-domain enums and existing-value autocomplete.** A tag key can now **constrain its values to an enum**,
+  answering the enum half of the value-domain open question. A new **`allowed_values`** column on `tag` (empty = free
+  text) is the value set a bound value must belong to; `SetTagBinding` enforces it (a non-member is a dedicated 422,
+  `ErrTagValueNotAllowed`), so `environment` can be declared as one of `prod` / `staging` / `dev`. The Tags directory
+  create and edit forms gain a value-domain control (a checkbox that turns a key into an enum plus a value-list
+  editor), and the **TagAdder value stage** renders a **strict dropdown** for an enum key. A **free** key instead
+  autocompletes the **distinct values already in use** for it, via a new `GET /tags/{name}:values` read
+  (`select distinct value`), so an operator reaches for an existing value without the key declaring a set. Pure
+  `web/src/lib/tagdraft` helpers (`isEnumKey`, `valueOptions`, `valueAllowed`) and a pure `internal/tag`
+  (`ValidateAllowedValues`, `ValueAllowed`) hold the logic. Proven by unit suites on both pure cores, a storage
+  integration test (the enum admits members and rejects non-members, a free key admits anything, narrowing the enum is
+  enforced on the next bind, the distinct-values query dedupes and sorts) and an HTTP e2e (the enum 422, the values
+  endpoint, the round-trip). A typed `value_type` and input normalization stay deferred ([ADR-0024](/architecture/decisions/#adr-0024-a-tag-key-may-constrain-its-values-to-an-enum)).
+- **Tag: apply and remove tags from the entity detail blade (TagAdder).** The capability that closes the
+  set-side of the tag console: an operator now binds and unbinds tag values from the UI, not only the CLI. Each
+  component, system, and location detail blade carries a **Tags** panel listing the tags bound **directly** on the
+  entity as removable colored chips, plus a staged **key -> value** add row. The key stage autocompletes the registry
+  filtered by `applies_to` for the entity kind and by what is already bound (a pure `web/src/lib/tagdraft` core:
+  `keySuggestions`, `exactKey`, `canCoin`, `valueValid`); with `tag:create`, a **Create key** affordance opens the
+  Tags directory's create form ([#192](https://github.com/hyperscaleav/omniglass/issues/192)'s `CreateTagForm`, now
+  exported) in a drawer and returns with the minted key selected. Writes are immediate (each is the entity's own
+  `:setTag` / `:removeTag` write, gated by its `:update`), so there is no separate Save; the affordances hide without
+  the permission. The resolved cascade (inherited tags) stays in the directory [Tags column](/guides/operator/inventory/),
+  not the panel. Proven by a `tagdraft` unit suite (applies_to filtering, already-bound exclusion, exact-match and
+  coin eligibility, value validity) and a `TagAdder` render test (chips, the update-gated add row and per-chip remove,
+  the read-only and empty states). The full winner-plus-shadowed cascade provenance in the blade, the dynamic tag
+  search facets, and a stored per-key color override are later slices ([#189](https://github.com/hyperscaleav/omniglass/issues/189)).
 - **Tag: the colored effective-tags column on the directories.** The first VISIBLE tag surface, consuming the
   batch resolver: Components, Systems, and Locations each gain a **Tags** column rendering their **effective**
   tags (the resolved cascade winners, not just direct bindings) as `key = value` pills. Color is
@@ -836,4 +863,4 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   the owner see and reveal it), storage integration tests (the scoped list, the seeded type defaults), rbac
   matcher and covers cases, and the nav/`can()` web tests (Secrets hidden from `*:read`, shown to an explicit
   `secret:read`). The move of Secrets, Variables, and Config into Catalog is a separate branch
-  ([ADR-0024](/architecture/decisions/#adr-0024-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier)).
+  ([ADR-0025](/architecture/decisions/#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier)).

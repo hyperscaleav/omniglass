@@ -24,25 +24,28 @@ var (
 	ErrTagValueInvalid     = errors.New("storage: tag value invalid")
 	ErrTagKindNotAllowed   = errors.New("storage: tag key does not apply to this entity kind")
 	ErrTagBindingNotFound  = errors.New("storage: tag binding not found")
+	ErrTagValueNotAllowed  = errors.New("storage: value not in this key's allowed set")
 )
 
 // Tag is one key in the governed vocabulary: its normalized name, the entity
 // kinds it may apply to (empty = universal), and whether its bindings cascade to
 // descendants. It owns no value; values live in tag_binding.
 type Tag struct {
-	ID         string
-	Name       string
-	AppliesTo  []string
-	Propagates bool
-	CreatedAt  time.Time
-	UpdatedAt  time.Time
+	ID            string
+	Name          string
+	AppliesTo     []string
+	Propagates    bool
+	AllowedValues []string // the value enum; empty means the key is free-text
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
 }
 
 // TagSpec is the create/update input for a key.
 type TagSpec struct {
-	Name       string
-	AppliesTo  []string
-	Propagates bool
+	Name          string
+	AppliesTo     []string
+	Propagates    bool
+	AllowedValues []string
 }
 
 // TagBinding is one bound value: the key it sets, the value, and the owner on
@@ -75,7 +78,7 @@ type ResolvedTag struct {
 	Winner    bool
 }
 
-const tagCols = `id, name, applies_to, propagates, created_at, updated_at`
+const tagCols = `id, name, applies_to, propagates, allowed_values, created_at, updated_at`
 
 // tagBindingConflictArc maps an owner kind to the ON CONFLICT target that
 // matches its partial unique index, so an upsert lands on the one-value-per-owner
@@ -101,6 +104,9 @@ func (p *PG) CreateTag(ctx context.Context, actorID string, spec TagSpec, create
 	if err := tag.ValidateAppliesTo(spec.AppliesTo); err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrTagAppliesToInvalid, err)
 	}
+	if err := tag.ValidateAllowedValues(spec.AllowedValues); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrTagValueInvalid, err)
+	}
 
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -109,10 +115,10 @@ func (p *PG) CreateTag(ctx context.Context, actorID string, spec TagSpec, create
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	t, err := scanTagRow(tx.QueryRow(ctx, `
-		insert into tag (name, applies_to, propagates)
-		values ($1, $2, $3)
+		insert into tag (name, applies_to, propagates, allowed_values)
+		values ($1, $2, $3, $4)
 		returning `+tagCols,
-		spec.Name, normalizeAppliesTo(spec.AppliesTo), spec.Propagates))
+		spec.Name, normalizeAppliesTo(spec.AppliesTo), spec.Propagates, normalizeAppliesTo(spec.AllowedValues)))
 	if err != nil {
 		return nil, mapTagWriteErr(err)
 	}
@@ -145,6 +151,34 @@ func (p *PG) ListTags(ctx context.Context) ([]Tag, error) {
 	return out, rows.Err()
 }
 
+// DistinctTagValues returns the distinct values already bound for a key, ordered,
+// for the value-stage autocomplete on a free-text key (an enum key carries its
+// allowed set on the row instead). An unknown key is the non-disclosing
+// ErrTagNotFound; a key with no bindings yet is an empty slice.
+func (p *PG) DistinctTagValues(ctx context.Context, key string) ([]string, error) {
+	if _, err := loadTagByName(ctx, p.pool, key); err != nil {
+		return nil, err
+	}
+	rows, err := p.pool.Query(ctx, `
+		select distinct b.value
+		from tag_binding b join tag t on t.id = b.tag_id
+		where t.name = $1
+		order by b.value`, key)
+	if err != nil {
+		return nil, fmt.Errorf("storage: distinct tag values: %w", err)
+	}
+	defer rows.Close()
+	out := []string{}
+	for rows.Next() {
+		var v string
+		if err := rows.Scan(&v); err != nil {
+			return nil, fmt.Errorf("storage: scan distinct value: %w", err)
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
 // UpdateTag replaces a key's governance fields (applies_to, propagates); the
 // name is fixed at creation. An all-scope update grant is required (tag:update).
 func (p *PG) UpdateTag(ctx context.Context, actorID, name string, spec TagSpec, action scope.Set) (*Tag, error) {
@@ -154,6 +188,9 @@ func (p *PG) UpdateTag(ctx context.Context, actorID, name string, spec TagSpec, 
 	if err := tag.ValidateAppliesTo(spec.AppliesTo); err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrTagAppliesToInvalid, err)
 	}
+	if err := tag.ValidateAllowedValues(spec.AllowedValues); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrTagValueInvalid, err)
+	}
 
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -162,10 +199,10 @@ func (p *PG) UpdateTag(ctx context.Context, actorID, name string, spec TagSpec, 
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	t, err := scanTagRow(tx.QueryRow(ctx, `
-		update tag set applies_to = $2, propagates = $3, updated_at = now()
+		update tag set applies_to = $2, propagates = $3, allowed_values = $4, updated_at = now()
 		where name = $1
 		returning `+tagCols,
-		name, normalizeAppliesTo(spec.AppliesTo), spec.Propagates))
+		name, normalizeAppliesTo(spec.AppliesTo), spec.Propagates, normalizeAppliesTo(spec.AllowedValues)))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrTagNotFound
 	}
@@ -233,6 +270,9 @@ func (p *PG) SetTagBinding(ctx context.Context, actorID, key, ownerKind string, 
 	}
 	if ownerKind != "global" && !tag.AppliesToKind(t.AppliesTo, tag.EntityKind(ownerKind)) {
 		return nil, ErrTagKindNotAllowed
+	}
+	if !tag.ValueAllowed(t.AllowedValues, value) {
+		return nil, ErrTagValueNotAllowed
 	}
 	ownerID, ownerDisplay, err := resolveTagBindingOwner(ctx, tx, ownerKind, ownerName, read, action)
 	if err != nil {
@@ -673,11 +713,14 @@ func normalizeAppliesTo(kinds []string) []string {
 
 func scanTagRow(row pgx.Row) (*Tag, error) {
 	var t Tag
-	if err := row.Scan(&t.ID, &t.Name, &t.AppliesTo, &t.Propagates, &t.CreatedAt, &t.UpdatedAt); err != nil {
+	if err := row.Scan(&t.ID, &t.Name, &t.AppliesTo, &t.Propagates, &t.AllowedValues, &t.CreatedAt, &t.UpdatedAt); err != nil {
 		return nil, err
 	}
 	if t.AppliesTo == nil {
 		t.AppliesTo = []string{}
+	}
+	if t.AllowedValues == nil {
+		t.AllowedValues = []string{}
 	}
 	return &t, nil
 }
@@ -709,9 +752,10 @@ func scanBindingListRow(row pgx.Row) (*TagBinding, string, error) {
 
 func auditTag(t *Tag) map[string]any {
 	return map[string]any{
-		"name":       t.Name,
-		"applies_to": t.AppliesTo,
-		"propagates": t.Propagates,
+		"name":           t.Name,
+		"applies_to":     t.AppliesTo,
+		"propagates":     t.Propagates,
+		"allowed_values": t.AllowedValues,
 	}
 }
 
