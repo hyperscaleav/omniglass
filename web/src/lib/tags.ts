@@ -15,6 +15,7 @@ export type Tag = {
   name: string;
   applies_to: string[];
   propagates: boolean;
+  allowed_values: string[]; // the value enum; empty means the key is free-text
 };
 
 export const TAGS_KEY = ["tags"] as const;
@@ -23,11 +24,13 @@ export type CreateTag = {
   name: string;
   applies_to?: string[];
   propagates?: boolean;
+  allowed_values?: string[];
 };
 
 export type UpdateTag = {
   applies_to?: string[];
   propagates?: boolean;
+  allowed_values?: string[];
 };
 
 export async function listTags(): Promise<Tag[]> {
@@ -90,6 +93,19 @@ export async function setTag(kind: EntityKind, name: string, key: string, value:
     : kind === "system" ? await api.POST("/systems/{name}:setTag", p)
     : await api.POST("/locations/{name}:setTag", p);
   if (r.error) throw r.error;
+}
+
+// tagValuesKey is the TanStack query key for a key's distinct in-use values.
+export function tagValuesKey(name: string) {
+  return ["tag-values", name] as const;
+}
+
+// listTagValues returns the distinct values already bound for a key, for the
+// value-stage autocomplete on a free-text key.
+export async function listTagValues(name: string): Promise<string[]> {
+  const { data, error } = await api.GET("/tags/{name}:values", { params: { path: { name } } });
+  if (error) throw error;
+  return (data?.values ?? []) as string[];
 }
 
 export async function removeTag(kind: EntityKind, name: string, key: string): Promise<void> {

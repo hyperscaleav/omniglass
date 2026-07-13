@@ -1428,6 +1428,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tags/{name}:values": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the distinct values bound for a key
+         * @description Returns the distinct values already bound for a key across the estate, for value autocomplete on a free-text key (an enum key carries its allowed set on the key itself). Rides the tag:read floor.
+         */
+        get: operations["list-tag-values"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/variables": {
         parameters: {
             query?: never;
@@ -1745,6 +1765,8 @@ export interface components {
              * @example /api/v1/schemas/CreateTagInputBody.json
              */
             readonly $schema?: string;
+            /** @description The value enum a bound value must belong to; omit for free text */
+            allowed_values?: string[] | null;
             /** @description Entity kinds this key may bind to (component, system, location); omit for universal */
             applies_to?: string[] | null;
             /** @description The normalized key: a lowercase identifier, unique tenant-wide */
@@ -2477,12 +2499,23 @@ export interface components {
              * @example /api/v1/schemas/TagBody.json
              */
             readonly $schema?: string;
+            /** @description The value enum a bound value must belong to; empty means free text */
+            allowed_values: string[] | null;
             /** @description Entity kinds this key may bind to; empty means universal */
             applies_to: string[] | null;
             id: string;
             name: string;
             /** @description Whether a bound value cascades to descendants */
             propagates: boolean;
+        };
+        TagValuesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/TagValuesOutputBody.json
+             */
+            readonly $schema?: string;
+            values: string[] | null;
         };
         UpdateComponentInputBody: {
             /**
@@ -2571,6 +2604,8 @@ export interface components {
              * @example /api/v1/schemas/UpdateTagInputBody.json
              */
             readonly $schema?: string;
+            /** @description The value enum a bound value must belong to; omit for free text */
+            allowed_values?: string[] | null;
             /** @description Entity kinds this key may bind to; omit for universal */
             applies_to?: string[] | null;
             /** @description Whether bindings cascade to descendants; defaults true */
@@ -5579,6 +5614,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TagBindingBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-tag-values": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The tag key */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagValuesOutputBody"];
                 };
             };
             /** @description Error */

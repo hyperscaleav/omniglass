@@ -8,11 +8,13 @@ import {
   TAGS_KEY,
   listTags,
   listEntityTags,
+  listTagValues,
   setTag,
   removeTag,
   entityTagsKey,
+  tagValuesKey,
 } from "../lib/tags";
-import { keySuggestions, canCoin, valueValid } from "../lib/tagdraft";
+import { keySuggestions, canCoin, isEnumKey, valueOptions, valueAllowed } from "../lib/tagdraft";
 import { CreateTagForm } from "../pages/Tags";
 import Drawer from "./Drawer";
 import { describeError } from "../lib/format";
@@ -38,10 +40,29 @@ export default function TagAdder(props: { kind: EntityKind; name: string; canUpd
   const [busy, setBusy] = createSignal(false);
   const [err, setErr] = createSignal<string | null>(null);
 
+  const [valueFocused, setValueFocused] = createSignal(false);
+
   const boundKeys = () => (bindings.data ?? []).map((b) => b.key);
   const suggestions = () => keySuggestions(registry.data ?? [], props.kind, boundKeys(), keyQuery());
   const coinable = () => canCoin(registry.data ?? [], keyQuery(), props.canCreateKey);
   const listKey = () => entityTagsKey(props.kind, props.name);
+
+  // The chosen key's registry row drives the value stage: an enum key shows its
+  // allowed set, a free key its distinct in-use values (fetched lazily).
+  const pendTag = () => (registry.data ?? []).find((t) => t.name === pendKey());
+  const distinctValues = useQuery(() => ({
+    queryKey: tagValuesKey(pendKey()),
+    queryFn: () => listTagValues(pendKey()),
+    enabled: !!pendKey() && !!pendTag() && !isEnumKey(pendTag()!),
+  }));
+  const valueOpts = () => {
+    const t = pendTag();
+    return t ? valueOptions(t, distinctValues.data ?? [], pendValue()) : [];
+  };
+  const canAdd = () => {
+    const t = pendTag();
+    return !!t && valueAllowed(t, pendValue());
+  };
 
   function chooseKey(name: string) {
     setPendKey(name);
@@ -57,7 +78,7 @@ export default function TagAdder(props: { kind: EntityKind; name: string; canUpd
   }
 
   async function commit() {
-    if (!pendKey() || !valueValid(pendValue())) return;
+    if (!canAdd()) return;
     setBusy(true);
     setErr(null);
     try {
@@ -150,15 +171,32 @@ export default function TagAdder(props: { kind: EntityKind; name: string; canUpd
           <div class="flex items-center gap-1.5">
             <span class="badge badge-sm tag-pill flex-none" style={{ "--tag-h": String(tagHue(pendKey())) }}>{pendKey()}</span>
             <span class="text-base-content/40">=</span>
-            <input
-              class="input input-bordered input-sm min-w-0 flex-1 font-data"
-              placeholder="value"
-              autofocus
-              value={pendValue()}
-              onInput={(e) => setPendValue(e.currentTarget.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commit(); } else if (e.key === "Escape") resetAdd(); }}
-            />
-            <Button square intent="action" icon={Check} label="Add tag" title="Add tag" disabled={busy() || !valueValid(pendValue())} onClick={commit} />
+            <div class="relative min-w-0 flex-1">
+              <input
+                class="input input-bordered input-sm w-full font-data"
+                placeholder={pendTag() && isEnumKey(pendTag()!) ? "pick a value" : "value"}
+                autofocus
+                value={pendValue()}
+                onInput={(e) => setPendValue(e.currentTarget.value)}
+                onFocus={() => setValueFocused(true)}
+                onBlur={() => setTimeout(() => setValueFocused(false), 150)}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commit(); } else if (e.key === "Escape") resetAdd(); }}
+              />
+              <Show when={valueFocused() && valueOpts().length}>
+                <ul class="absolute z-30 mt-1 max-h-48 w-full overflow-auto rounded-box border border-base-300 bg-base-100 py-1 shadow-lg">
+                  <For each={valueOpts()}>
+                    {(v) => (
+                      <li>
+                        <button type="button" class="flex w-full px-3 py-1.5 text-left text-sm font-data hover:bg-base-content/5" onClick={() => { setPendValue(v); setValueFocused(false); }}>
+                          {v}
+                        </button>
+                      </li>
+                    )}
+                  </For>
+                </ul>
+              </Show>
+            </div>
+            <Button square intent="action" icon={Check} label="Add tag" title="Add tag" disabled={busy() || !canAdd()} onClick={commit} />
             <Button square icon={X} label="Cancel" title="Cancel" onClick={resetAdd} />
           </div>
         </Show>

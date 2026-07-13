@@ -479,6 +479,13 @@ components:
           format: uri
           readOnly: true
           type: string
+        allowed_values:
+          description: The value enum a bound value must belong to; omit for free text
+          items:
+            type: string
+          type:
+            - array
+            - "null"
         applies_to:
           description: Entity kinds this key may bind to (component, system, location); omit for universal
           items:
@@ -1866,6 +1873,13 @@ components:
           format: uri
           readOnly: true
           type: string
+        allowed_values:
+          description: The value enum a bound value must belong to; empty means free text
+          items:
+            type: string
+          type:
+            - array
+            - "null"
         applies_to:
           description: Entity kinds this key may bind to; empty means universal
           items:
@@ -1885,6 +1899,26 @@ components:
         - name
         - applies_to
         - propagates
+        - allowed_values
+      type: object
+    TagValuesOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/TagValuesOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        values:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+      required:
+        - values
       type: object
     UpdateComponentInputBody:
       additionalProperties: false
@@ -2024,6 +2058,13 @@ components:
           format: uri
           readOnly: true
           type: string
+        allowed_values:
+          description: The value enum a bound value must belong to; omit for free text
+          items:
+            type: string
+          type:
+            - array
+            - "null"
         applies_to:
           description: Entity kinds this key may bind to; omit for universal
           items:
@@ -4372,6 +4413,32 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Set a global tag value
+  /tags/{name}:values:
+    get:
+      description: Returns the distinct values already bound for a key across the estate, for value autocomplete on a free-text key (an enum key carries its allowed set on the key itself). Rides the tag:read floor.
+      operationId: list-tag-values
+      parameters:
+        - description: The tag key
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The tag key
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TagValuesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List the distinct values bound for a key
   /variables:
     get:
       description: Lists every variable. Requires an all-scope read; the scoped, per-component view is the effective-variables route. Gated by variable:read.

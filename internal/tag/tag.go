@@ -60,6 +60,39 @@ func ValidateValue(v string) error {
 	return nil
 }
 
+// ValidateAllowedValues reports whether a key's declared value enum is
+// well-formed: every entry a valid bound value (non-empty, within the length
+// bound) and no duplicates. An empty set is legal and means the key is
+// free-text; a non-empty set is the enum a bound value must belong to.
+func ValidateAllowedValues(values []string) error {
+	seen := make(map[string]bool, len(values))
+	for _, v := range values {
+		if err := ValidateValue(v); err != nil {
+			return fmt.Errorf("tag: allowed value %q invalid: %w", v, err)
+		}
+		if seen[v] {
+			return fmt.Errorf("tag: duplicate allowed value %q", v)
+		}
+		seen[v] = true
+	}
+	return nil
+}
+
+// ValueAllowed reports whether value satisfies a key's value domain: an empty
+// allowed set (a free-text key) admits any value, otherwise the value must be a
+// member of the declared enum.
+func ValueAllowed(allowed []string, value string) bool {
+	if len(allowed) == 0 {
+		return true
+	}
+	for _, a := range allowed {
+		if a == value {
+			return true
+		}
+	}
+	return false
+}
+
 // EntityKind is a kind of entity a tag can be bound to. These are the estate
 // tiers on the exclusive arc that carry bindings; a key's applies_to narrows a
 // key to a subset of them.

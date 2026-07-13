@@ -58,6 +58,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0021](#adr-0021-tag-slice-1-a-governed-key-registry-with-entity-update-gated-bindings) | 2026-07-12 | Accepted | The tag primitive ships its first slice (governed key registry, per-entity bindings, cascade); minting a key is admin `tag:create`, setting a value is the entity's own `update` |
 | [ADR-0022](#adr-0022-effective-tags-resolve-onto-systems-and-locations-a-placed-system-inherits-its-location) | 2026-07-13 | Accepted | Directory rows carry batch-resolved effective tags; effective resolution extends to systems and locations, and a placed system inherits its location's tags |
 | [ADR-0023](#adr-0023-the-iam-directory-reads-principal-role-principal_group-are-admin-tier) | 2026-07-13 | Accepted | The IAM directory reads (principal, role, principal_group) move to the admin tier (`<resource>:read:admin`), so viewer's `*:read` floor no longer reaches Users, Roles, and Groups |
+| [ADR-0024](#adr-0024-a-tag-key-may-constrain-its-values-to-an-enum) | 2026-07-13 | Accepted | A tag key may declare an `allowed_values` enum (empty = free text), enforced on the binding write; a free key autocompletes its distinct in-use values |
 
 ## Entries
 
@@ -548,3 +549,24 @@ below from the project's history. From here it grows one slice at a time.
   Secrets are a separate concern (an operator legitimately reads device secrets in scope), handled by a forthcoming
   slice that combines placement scope with a per-secret admin-sensitive flag; this ADR is the IAM directories only.
 - **Closes:** issue [#197](https://github.com/hyperscaleav/omniglass/issues/197).
+
+### ADR-0024: a tag key may constrain its values to an enum
+
+- **Date:** 2026-07-13 | **Status:** Accepted | **Pages:** [tags](/architecture/tags/)
+- **Decision:** A tag key gains an **`allowed_values`** set (a new `text[]` column, empty by default). Empty leaves
+  the key **free-text**, unchanged; a non-empty set is the **enum** a bound value must belong to, so `environment`
+  can be declared as one of `prod`, `staging`, `dev`. The **binding write enforces it**: `SetTagBinding` rejects a
+  value outside a key's non-empty allowed set with a dedicated 422 (`ErrTagValueNotAllowed`), so the constraint is a
+  real server gate, not a UI hint. The Tags directory create and edit forms carry a value-domain control (a checkbox
+  that turns the key into an enum plus a value-list editor), and the TagAdder value stage renders a **strict dropdown**
+  for an enum key. A **free** key instead offers **value autocomplete from the distinct values already bound** for it,
+  through a new `GET /tags/{name}:values` read (a `select distinct value`), so an operator reaches for an existing
+  value without the key having to declare a set up front. Only the enum (a string set) ships; a typed `value_type`
+  (int, bool, date) and input normalization (lowercase, trim, fold) stay the page's open question.
+- **Context:** The [tags](/architecture/tags/) page left value-domain governance an open question, with the enum, a
+  typed value_type, and normalization all on the table. Operators asked first for the plain case, a key like
+  `environment` that should only ever be one of a short list, so that shipped: a string enum on the key, enforced on
+  write, with a strict picker. The distinct-in-use autocomplete is the free-key counterpart, cheap (one `select
+  distinct`) and immediately useful, so the two ship together. This resolves the enum half of the page's open
+  question; the value_type and normalization halves remain deferred.
+- **Closes:** issue [#190](https://github.com/hyperscaleav/omniglass/issues/190) (tag value-domain governance, enum).

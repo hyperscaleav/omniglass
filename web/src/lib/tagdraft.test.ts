@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { keyApplies, keySuggestions, exactKey, canCoin, valueValid } from "./tagdraft";
+import { keyApplies, keySuggestions, exactKey, canCoin, valueValid, isEnumKey, valueOptions, valueAllowed } from "./tagdraft";
 import type { Tag } from "./tags";
 
-const tag = (name: string, applies_to: string[] = [], propagates = true): Tag => ({ id: name, name, applies_to, propagates });
+const tag = (name: string, applies_to: string[] = [], propagates = true, allowed_values: string[] = []): Tag => ({ id: name, name, applies_to, propagates, allowed_values });
 
 const registry: Tag[] = [
   tag("environment"),
@@ -65,5 +65,32 @@ describe("valueValid", () => {
     expect(valueValid("prod")).toBe(true);
     expect(valueValid("   ")).toBe(false);
     expect(valueValid("")).toBe(false);
+  });
+});
+
+describe("value domain", () => {
+  const enumKey = tag("environment", [], true, ["prod", "staging", "dev"]);
+  const freeKey = tag("note");
+
+  it("isEnumKey distinguishes an enum key from a free key", () => {
+    expect(isEnumKey(enumKey)).toBe(true);
+    expect(isEnumKey(freeKey)).toBe(false);
+  });
+
+  it("valueOptions offers the enum set (declared order) for an enum key", () => {
+    expect(valueOptions(enumKey, ["ignored"], "")).toEqual(["prod", "staging", "dev"]);
+    expect(valueOptions(enumKey, [], "st")).toEqual(["staging"]);
+  });
+
+  it("valueOptions offers the distinct in-use values for a free key", () => {
+    expect(valueOptions(freeKey, ["alpha", "beta"], "")).toEqual(["alpha", "beta"]);
+    expect(valueOptions(freeKey, ["alpha", "beta"], "be")).toEqual(["beta"]);
+  });
+
+  it("valueAllowed enforces the enum, and lets any non-empty value through a free key", () => {
+    expect(valueAllowed(enumKey, "prod")).toBe(true);
+    expect(valueAllowed(enumKey, "qa")).toBe(false);
+    expect(valueAllowed(freeKey, "whatever")).toBe(true);
+    expect(valueAllowed(freeKey, "  ")).toBe(false);
   });
 });
