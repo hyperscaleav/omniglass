@@ -1,9 +1,70 @@
 package main
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
+
+// TestBodyFieldsJSON asserts that a body property that is not a plain scalar (an
+// untyped `any` value, an object) is marked JSON so its flag string is parsed as
+// JSON before it enters the request body, while a scalar (string) passes through.
+// This is the fix that lets `variable create --value 30` send the number 30 and
+// `secret create --fields '{...}'` send the object, not their quoted-string forms.
+func TestBodyFieldsJSON(t *testing.T) {
+	const docRaw = `{"components":{"schemas":{"CreateBody":{
+	  "required":["name","value"],
+	  "properties":{
+	    "name":{"type":"string"},
+	    "value":{"description":"the value, any shape"},
+	    "fields":{"type":"object"},
+	    "propagates":{"type":"boolean"}
+	  }}}}}`
+	const opRaw = `{"operationId":"create-thing","requestBody":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/CreateBody"}}}}}`
+	var doc spec
+	if err := json.Unmarshal([]byte(docRaw), &doc); err != nil {
+		t.Fatalf("doc: %v", err)
+	}
+	var op operation
+	if err := json.Unmarshal([]byte(opRaw), &op); err != nil {
+		t.Fatalf("op: %v", err)
+	}
+
+	byName := map[string]bodyField{}
+	for _, f := range bodyFields(doc, op) {
+		byName[f.Name] = f
+	}
+	if byName["name"].JSON {
+		t.Errorf("string field name should not be JSON: %+v", byName["name"])
+	}
+	if !byName["value"].JSON {
+		t.Errorf("untyped value field should be JSON: %+v", byName["value"])
+	}
+	if !byName["fields"].JSON {
+		t.Errorf("object field should be JSON: %+v", byName["fields"])
+	}
+	if !byName["propagates"].JSON {
+		t.Errorf("boolean field should be JSON so it serializes as a bool, not a string: %+v", byName["propagates"])
+	}
+
+	// The rendered source parses the JSON fields and passes the scalar through.
+	cmd := buildCommand(doc, "/api/v1", "/things", "post", op)
+	out, err := render(group([]command{cmd}))
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	src := string(out)
+	for _, want := range []string{
+		`body["value"] = jsonOrString(fValue)`,
+		`body["fields"] = jsonOrString(fFields)`,
+		`body["propagates"] = jsonOrString(fPropagates)`,
+		`body["name"] = fName`,
+	} {
+		if !strings.Contains(src, want) {
+			t.Errorf("generated source missing %q", want)
+		}
+	}
+}
 
 // TestBuildCommandPathParams asserts that the generated request path substitutes
 // path parameters as %s slots and binds them as positional args, in path order,

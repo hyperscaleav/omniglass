@@ -180,6 +180,61 @@ A secret's fields are masked in every read: the `secret` body (`{id, name, secre
 owner_id?, owner_name?, fields:[{name, value, secret}]}`) returns `••••••` for a secret field, and only
 `:reveal` returns plaintext.
 
+A **variable** is the plaintext sibling of a secret ([config, secrets, and
+variables](/architecture/variables/)): the same owner arc and cascade, but shown in the clear (no
+registry, no mask, no reveal). The directory and the per-component cascade read ride the viewer floor
+(`variable:read`); `POST` / `PATCH` gate on `variable:create` / `variable:update` (granted to
+operators); `DELETE` gates on `variable:delete` (admin, owner). The value is polymorphic JSON typed by
+`value_type`.
+
+- `GET /variables` is the **all-scope admin directory** (`{variables: [variable]}`); like the secret
+  directory it needs an all-scope grant, and a non-all scope is a 403 (`variable:read`).
+- `POST /variables` creates one from `{name, value_type: string|int|float|bool|json, owner_kind:
+  global|location|system|component, owner?, value}` (201, `variable:create`); a `global` variable needs
+  an all-scope grant, and the `value` is validated against `value_type`.
+- `PATCH /variables/{id}` replaces the `value` (validated against the fixed `value_type`;
+  `variable:update`).
+- `DELETE /variables/{id}` removes it (204, `variable:delete`).
+- `GET /components/{name}/effective-variables` is the **cascade** for one component: each a
+  `resolvedVariable` (`{id, name, value_type, owner_kind, owner_id?, owner_name?, band, depth, winner,
+  value}`) marking the winner and the shadowed candidates (`variable:read`; the component must be in the
+  caller's component read-scope).
+
+A `variable` body is `{id, name, value_type, owner_kind, owner_id?, owner_name?, value}`, the `value` in
+the clear.
+
+A **tag** ([tags](/architecture/tags/)) is a `key: value` label, and its routes split along the
+governance line: **minting a key** is a tenant-wide governance action, but **setting a value** is the
+owning entity's own write. The key vocabulary and an entity's tags read on the viewer floor
+(`tag:read`, `component:read`).
+
+- `GET /tags` lists the governed key vocabulary (`{tags: [tag]}`, `tag:read`); a `tag` body is `{id,
+  name, applies_to, propagates}`.
+- `POST /tags` mints a key from `{name, applies_to?, propagates?}` (201, `tag:create`, all-scope); the
+  name is normalized to a lowercase identifier (a 422 otherwise), `applies_to` is an entity-kind
+  allow-list (empty = universal), and `propagates` defaults true.
+- `PATCH /tags/{name}` replaces a key's `{applies_to?, propagates?}` (`tag:update`, all-scope); the name
+  is fixed.
+- `DELETE /tags/{name}` removes a key, cascading its bindings (204, `tag:delete`, all-scope).
+- `POST /tags/{name}:setGlobal` sets the **global** value for a key from `{value}` (`tag:update`);
+  `POST /tags/{name}:clearGlobal` removes it (204). A global binding has no owning entity, so it gates on
+  `tag:update`.
+- `GET /{components,systems,locations}/{name}:listTags` lists the bindings set **directly** on one entity
+  (`{tags: [tagBinding]}`, the entity's `:read`).
+- `POST /{components,systems,locations}/{name}:setTag` binds a value from `{key, value}` on the entity;
+  the key must exist and its `applies_to` must admit the kind (a 422 otherwise). Setting a value is the
+  entity's own write, so it gates on the entity's **`:update`** (`component:update` and friends), not a
+  tag permission. `POST /{...}/{name}:removeTag` from `{key}` removes the binding (204). Bindings are
+  custom methods on the entity (like the principal lifecycle) rather than a nested collection, so the
+  generated CLI stays collision-free.
+- `GET /components/{name}/effective-tags` is the **cascade** for one component: each a `resolvedTag`
+  (`{key, value, owner_kind, owner_id?, owner_name?, band, depth, winner}`), keys unioning and values
+  overriding most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves
+  only from a binding on the component itself (`component:read`; the component must be in the caller's
+  component read-scope).
+
+A `tagBinding` body is `{key, value, owner_kind, owner_id?, owner_name?}`.
+
 ## Reads beyond one resource are views
 
 A single resource reads through its typed `GET`. Anything richer, a dashboard, an explorer, the cascade

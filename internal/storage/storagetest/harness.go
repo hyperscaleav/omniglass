@@ -65,6 +65,16 @@ func startContainer(ctx context.Context) (*tcpostgres.PostgresContainer, string,
 
 func ensureContainer() {
 	startOnce.Do(func() {
+		// Escape hatch for environments without a Docker daemon (some CI runners,
+		// sandboxes): OMNIGLASS_TEST_ADMIN_DSN points the harness at an already
+		// running Postgres (its default/admin database), and NewDSN creates and
+		// migrates a fresh, isolated database per test on it exactly as it does on
+		// the container. Unset (the default), the harness starts an ephemeral
+		// testcontainer, so nothing changes for a normal `make test` with Docker.
+		if dsn := os.Getenv("OMNIGLASS_TEST_ADMIN_DSN"); dsn != "" {
+			adminDSN = dsn
+			return
+		}
 		ctr, adminDSN, startErr = startContainer(context.Background())
 	})
 }

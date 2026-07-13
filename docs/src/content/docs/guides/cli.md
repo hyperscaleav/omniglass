@@ -9,6 +9,9 @@ from the API: a new route is a new command on the next regeneration. A small set
 commands (the run modes and the trusted bootstrap) are hand-written and compose with the
 generated tree on the same root.
 
+This page is the mental model and the setup. For the exhaustive, generated list of every
+command, its flags, and an example, see the **[CLI reference](/reference/cli/)**.
+
 ## Running the full stack locally
 
 `make dev` brings up the whole stack for a browser session: a dev Postgres (docker
@@ -73,54 +76,47 @@ omniglass token ops --ttl 720h   # a 30-day token
 # tokens are kept unless --revoke-tokens is given (a full lockout of a compromised account).
 omniglass set-password ops 'set-a-strong-one'
 omniglass set-password ops 'set-a-strong-one' --revoke-tokens   # full lockout: sessions and tokens
-
-# Seed a dev database with an example estate (locations, users, grants). Idempotent and
-# dev-only; `make dev` runs it for you, so a fresh console is populated instead of empty.
-# Never for production: these are operator rows, not ship-with reference data.
-omniglass seed-dev
 ```
 
 Once a server is running, a signed-in principal manages **its own** account through the
-generated self-scoped commands (each edits only the caller's own profile):
+generated self-scoped commands (`omniglass auth me`, `auth update-profile`,
+`auth change-password`, `me setAvatar` / `removeAvatar`); an administrator manages other
+principals, roles, groups, secrets, and variables through the resource commands, all covered
+in the [admin guide](/guides/admin/) and listed in full in the [CLI reference](/reference/cli/).
+
+## Tags
+
+The [tag](/architecture/tags/) commands split along the governance line. The `tag` resource covers the
+**key vocabulary** (minting, editing, and deleting keys, plus the global default binding), while binding a
+value onto an entity is a **custom method on the entity** (`component set-tag` and friends), so it needs
+only the write the operator already holds on that entity. `effective-tag` reads the resolved cascade onto
+one component.
 
 ```sh
-omniglass auth me                                    # your principal, permissions, and grants
-omniglass auth update-profile --display-name "Ops Lead"
-omniglass auth change-password --current-password 'orange-boat-42x' --new-password 'purple-canyon-7'
-omniglass me setAvatar --image-base64 "$(base64 -w0 me.jpg)"   # set your profile picture
-omniglass me removeAvatar                            # clear it, falling back to initials
-omniglass avatar list                                # read your picture back as { image_base64 }
+omniglass tag list                                  # the governed key vocabulary
+omniglass tag create --name environment             # mint a key (tag:create, admin)
+omniglass tag create --name rack_position --applies-to '["location"]' --propagates=false
+omniglass tag update environment --applies-to '["component","system"]'
+omniglass tag setGlobal environment --value prod    # a tenant-wide default (tag:update)
+omniglass tag clearGlobal environment
+omniglass tag delete environment                    # cascades its bindings
+
+omniglass component setTag codec-1 --key environment --value dev    # component:update
+omniglass component listTags codec-1                # the bindings set directly on the component
+omniglass component removeTag codec-1 --key environment
+omniglass system setTag east-auditorium-av --key environment --value prod
+omniglass location setTag hq --key environment --value staging
+
+omniglass effective-tag list codec-1                # the cascade resolved onto a component
 ```
 
-`--image-base64` takes a plain base64 string, not a file path (base64-encode the image
-yourself, as the `$(base64 …)` above does); the server accepts JPEG, PNG, or WebP and
-normalizes it to a 256x256 JPEG. An administrator manages **any** principal's picture with
-`omniglass principal setAvatar <id> --image-base64 …` and `omniglass principal removeAvatar <id>`
-(gated by `principal:set-avatar`), reading one back with `omniglass avatar list <id>` (gated by
-`principal:read`). A principal with no picture is a 404.
-
-## Secrets
-
-The [secret](/architecture/variables/) commands are generated like every other resource. `secret`
-covers the encrypted values, `secret-type` lists the shape registry, and `effective-secret` reads the
-masked cascade onto one component. Output is masked JSON, the same as the console; plaintext lives
-behind `reveal`, which the server audits and which only admin and owner may call.
-
-```sh
-omniglass secret-type list                          # the shape registry (snmp-community, basic-auth)
-omniglass secret list                               # the all-scope admin directory (masked fields)
-omniglass secret create --name core-snmp --secret-type snmp-community \
-  --owner-kind location --owner hq --fields '{"community":"public"}'
-omniglass secret update <id> --fields '{"community":"s3cret"}'   # an omitted field keeps its value
-omniglass secret reveal <id>                        # audited plaintext decrypt (secret:reveal)
-omniglass secret delete <id>
-
-omniglass effective-secret list <component>         # the masked cascade resolved onto a component
-```
-
-`--owner-kind` is one of `global | location | system | component`; `--owner` names the owning entity
-and is omitted for a `global` secret (which needs an all-scope grant). Field maps pass as a JSON object
-to `--fields`, validated against the type's shape.
+Binding is a custom method on the entity (`component setTag`), like the principal lifecycle verbs, so it
+stays clear of the top-level `tag` commands. A key name is a normalized lowercase identifier (minting a
+bad name is a 422). `--applies-to` is an entity-kind allow-list passed as a JSON array
+(`'["component","system"]'`; empty means universal), checked when a value is bound. `--propagates`
+defaults true (the value cascades to descendants); `--propagates=false` binds a flat per-entity value
+that resolves only on its own entity. Resolving onto a component **unions** keys and **overrides** values
+most-specific-wins down the cascade.
 
 ## Generated versus hand-written
 

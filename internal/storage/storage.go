@@ -12,6 +12,7 @@ package storage
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -233,6 +234,30 @@ type Gateway interface {
 	RevealSecret(ctx context.Context, actorID, id string, read, action scope.Set) (map[string]string, error)
 	CopySecret(ctx context.Context, actorID, id string, read, action scope.Set) (map[string]string, error)
 	ResolveSecrets(ctx context.Context, componentID string, read scope.Set) ([]ResolvedSecret, error)
+
+	// The variable tier: a typed, cascade-resolved plaintext value (a macro),
+	// owned on the same exclusive arc as a secret but shown in the clear (no
+	// registry, no crypto, no reveal). ResolveVariables is the per-component
+	// effective-value view down the structural cascade.
+	ListVariables(ctx context.Context, read scope.Set) ([]Variable, error)
+	CreateVariable(ctx context.Context, actorID string, spec VariableSpec, create scope.Set) (*Variable, error)
+	UpdateVariable(ctx context.Context, actorID, id string, value json.RawMessage, read, action scope.Set) (*Variable, error)
+	DeleteVariable(ctx context.Context, actorID, id string, read, action scope.Set) error
+	ResolveVariables(ctx context.Context, componentID string, read scope.Set) ([]ResolvedVariable, error)
+
+	// The tag tier: the governed key vocabulary and the per-entity value
+	// bindings. Minting a key (tag:create) is a tenant-wide governance action;
+	// binding a value is the owner's own write, so the binding methods take the
+	// owner's read/action scopes. ResolveTags is the per-component effective-tags
+	// view (union on key, override on value) down the structural cascade.
+	ListTags(ctx context.Context) ([]Tag, error)
+	CreateTag(ctx context.Context, actorID string, spec TagSpec, create scope.Set) (*Tag, error)
+	UpdateTag(ctx context.Context, actorID, name string, spec TagSpec, action scope.Set) (*Tag, error)
+	DeleteTag(ctx context.Context, actorID, name string, action scope.Set) error
+	SetTagBinding(ctx context.Context, actorID, key, ownerKind string, ownerName *string, value string, read, action scope.Set) (*TagBinding, error)
+	DeleteTagBinding(ctx context.Context, actorID, key, ownerKind string, ownerName *string, read, action scope.Set) error
+	ListEntityTags(ctx context.Context, ownerKind string, ownerName *string, read scope.Set) ([]TagBinding, error)
+	ResolveTags(ctx context.Context, componentID string, read scope.Set) ([]ResolvedTag, error)
 
 	// Close releases the underlying connection pool. Idempotent at the pool
 	// level; call once on shutdown.

@@ -41,6 +41,11 @@ func newRoot(version string) *cobra.Command {
 	return root
 }
 
+// Root returns the fully assembled command tree without executing it. It is the
+// seam the docs generator (cmd/docsgen) walks to render the CLI reference, so the
+// reference is always the real command surface, never a hand-maintained copy.
+func Root(version string) *cobra.Command { return newRoot(version) }
+
 // Execute runs the root command. version is the build-time-injected release
 // tag (or "dev" for local builds), surfaced via `omniglass --version`.
 func Execute(version string) {

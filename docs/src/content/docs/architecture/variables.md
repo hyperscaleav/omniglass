@@ -7,15 +7,16 @@ sidebar:
     variant: note
 ---
 
-:::note[Partial: the secret member is built; config and variable are Design]
-The **`secret`** member is built ([ADR-0017](/architecture/decisions/#adr-0017-credential-is-renamed-secret-the-cascade-is-the-reuse-mechanism),
+:::note[Partial: the secret and variable members are built; config is Design]
+Two members are built. The **`secret`** member ([ADR-0017](/architecture/decisions/#adr-0017-credential-is-renamed-secret-the-cascade-is-the-reuse-mechanism),
 [#155](https://github.com/hyperscaleav/omniglass/issues/155)): the typed encrypted-at-rest cell owned on the
 exclusive arc and resolved down the cascade, the `secret_type` shape registry, envelope AES-256-GCM crypto behind a
-pluggable KEK provider, the masked-with-audited-decrypt read path, and the operator surfaces (a Secrets directory
-and the per-component effective-secrets cascade panel). Its own section below marks what is built versus deferred;
-the [build progress](/architecture/status/#build-progress) note carries the shipped shape. The **config** and
-**variable** members stay `Design`, so this page is `Partial`. (`secret` was renamed from `credential`; the ADR
-anchor keeps the old term.)
+pluggable KEK provider, the masked-with-audited-decrypt read path, and the operator surfaces. The **`variable`**
+member ([#183](https://github.com/hyperscaleav/omniglass/issues/183)): the typed **plaintext** cell on the same
+exclusive arc, resolved down the same cascade, with a Variables directory and a per-component effective-variables
+panel. Each member's section below marks what is built versus deferred; the
+[build progress](/architecture/status/#build-progress) note carries the shipped shape. The **config** member stays
+`Design`, so this page is `Partial`. (`secret` was renamed from `credential`; the ADR anchor keeps the old term.)
 :::
 
 Everything an operator **sets** resolves the same way: a typed value, owned at a scope, resolved
@@ -27,8 +28,8 @@ kinds share that resolution but differ in what they are keyed to and what lifecy
 - **secret** (**built**): an access secret, encrypted at rest. Its own `secret_type` shape registry,
   envelope crypto behind a pluggable KEK provider, resolved down the cascade and consumed by a `$sec:`
   token.
-- **variable** (`Design`): a free interpolated value (a macro). Not bound to a signal, just resolved
-  and spliced into functions and interfaces.
+- **variable** (**built**): a free interpolated value (a macro). Not bound to a signal, just resolved
+  down the cascade; the `$var:` splice into functions and interfaces is a later slice.
 
 | | **config** | **secret** | **variable** (macro) |
 |---|---|---|---|
@@ -185,6 +186,19 @@ split to model; it is the cascade, like everything else.
 
 ## variable: free interpolated values (macros)
 
+:::note[Built: slice 1, plaintext cell + cascade]
+The first slice ([#183](https://github.com/hyperscaleav/omniglass/issues/183)) is **built**: the typed plaintext
+cell (a `value_type` of `string` / `int` / `float` / `bool` / `json`, its value stored as jsonb and validated
+against the type in the app), owned on the exclusive arc and resolved down the cascade, with a Variables directory
+and the per-component effective-variables panel. It **grants `variable:create,update` to operators** (delete stays
+admin and owner), mirroring the secret member. Three parts of the design below are deferred: the **`template`**
+owner scope (slice 1 mirrors the secret arc, `global | location | system | component`; template scope and cascade
+groups are [#184](https://github.com/hyperscaleav/omniglass/issues/184)); a **`variable_type` registry** (slice 1
+types inline with the `value_type` enum, no registry table, matching the "operator-defined, not curated" model); and
+the **`$var:` consumer** and the **secret-flagged** variable. These divergences are logged in the
+[decision log](/architecture/decisions/).
+:::
+
 A **variable** is the leftover, and the most familiar: a value you splice into behavior that is **not**
 a device signal and carries no lifecycle, like a poll interval, a base URL, an environment label, or a
 tuning constant. These are Zabbix-style **macros**, resolved `global → template → instance` down the
@@ -206,6 +220,13 @@ flagged secret (a free secret like a webhook signing token) without being a full
 has no lifecycle.
 
 ## tag: a normalized label vocabulary
+
+:::note[Built: slice 1, the registry, the bindings, and the cascade. See the [tags](/architecture/tags/) page.]
+The tag primitive's first slice is **built** ([ADR-0021](/architecture/decisions/#adr-0021-tag-slice-1-a-governed-key-registry-with-entity-update-gated-bindings)):
+the governed `tag` key registry, the per-entity `tag_binding` cell on the exclusive arc, and the union-on-key /
+override-on-value cascade resolver. The [tags](/architecture/tags/) page is its home; this section is the conceptual
+frame for how tags share the cascade with config, secrets, and variables.
+:::
 
 A **tag** is an operator **`key: value`** label attached to an entity to organize, filter, and scope by
 dimensions Omniglass does not model natively (`category: audio-dsp`, `environment: prod`,
@@ -249,12 +270,12 @@ Free-text values ship either way; the question is how much governance a key plac
 - **The exclusive-arc scope.** Each value is owned at exactly one scope: the same exclusive-arc
   ownership as datapoints, plus a `template`-scoped default the datapoint arc lacks (and config is
   not `node`-owned).
-- **Shape registries** back secrets (`secret_type`, structured with per-field secrecy and origin) and
-  variables (`variable_type`, scalar); config instead borrows the `datapoint_type`'s domain, because
-  its key *is* a signal.
-- **Interpolation** renders variables (`$var:`) and secret fields (`$sec:`) into requests; config is
-  read by key like a datapoint. Secrets are **masked** in every read and surface in the clear only
-  through the audited reveal, never in a log line, error string, or datapoint label.
+- **Typing.** A secret takes a structured `secret_type` shape registry (per-field secrecy and origin);
+  a variable types inline against its `value_type` (a scalar, validated in the app, no registry); config
+  instead borrows the `datapoint_type`'s domain, because its key *is* a signal.
+- **Interpolation** renders variables (`$var:`) and secret fields (`$sec:`) into requests (a later
+  consumer slice for both); config is read by key like a datapoint. Secrets are **masked** in every
+  read and surface in the clear only through the audited reveal; a variable is plaintext.
 
 The observed side of config is maintained by one **event-driven worker** (the one-worker-plus-stages
 model): when a `state_datapoint` lands whose `(owner, key)` a config item is keyed to, it refreshes
@@ -294,21 +315,20 @@ provenance with operator intent.
 ## Storage
 
 The shape registries, the value cells, and the operator-label tables; the physical layout (the owner
-arc, the cascade key) lives on [storage](/architecture/storage/). The **secret** tables below are
-**built**; the **config** and **variable** cells are `Design`.
+arc, the cascade key) lives on [storage](/architecture/storage/). The **secret** and **variable** cells
+below are **built**; the **config** cell is `Design`.
 
-The shipped secret answered the "one table or three" question for its own member: **`secret` is its
-own pair of tables** (`secret_type` + `secret`), not a discriminated row in a shared cell, because it
-carries encryption and a masked read path a plain value does not. Whether the remaining `config` and
-`variable` cells share one table with a discriminator or stay separate is still open; they share the
-cascade and the exclusive-arc scope either way.
+The two shipped members each got their own table rather than a shared discriminated cell: **`secret`**
+is its own `secret_type` + `secret` pair (it carries encryption and a masked read path), and
+**`variable`** is a single table typed inline. Whether the remaining `config` cell joins `variable` in
+one table with a discriminator or stays separate is still open; they share the cascade and the
+exclusive-arc scope either way.
 
 | Table | Key columns | Notes |
 |---|---|---|
 | `secret_type` | id, **official**, schema (per-field `{name, type, secret, origin}`) | **Built.** The secret **shape** registry (`snmp-community`, `basic-auth` seeded); `official` marks shipped-canonical versus org-local, like the datapoint and role registries |
 | `secret` | (name, **owner arc**), secret_type, **value** (secret fields as `{ciphertext, nonce, wrapped_dek, key_id}` envelopes, non-secret fields plaintext) | **Built.** The encrypted cell and the `$sec:` cascade key; scope is the exclusive arc (global/location/system/component). Read masked; decrypted only through the audited `:reveal` / `:copy` path |
-| `variable_type` | name, schema (scalar or fields + **per-field secret**), validation, **official** | `Design`. The variable **shape** registry (a scalar `string`/`int`/`float`/`bool`/`json`); `official` marks shipped-canonical versus org-local |
-| `variable` | (name, **owner arc**), type, **declared_value**, **linked_state** (-> state_datapoint, nullable), **observed_value**, reconcile | `Design`. The config/variable cell and the `$var:` cascade key; scope is the exclusive arc. Holds declared intent, optionally mirrors an observed datapoint for drift |
-| `tag` | name, applies_to, propagates | the **tenant-wide governed key vocabulary**; minting a key needs `tag:create` ([identity and access](/architecture/identity-access/)). No `_type`, no namespace; values bind via `tag_binding` |
-| `tag_binding` | (scope_kind, scope_id, tag), value | the `key: value` binding: **union on key, override on value** down the [cascade](/architecture/cascade/), bindable at any scope and via groups |
+| `variable` | (name, **owner arc**), **value_type** (`string`/`int`/`float`/`bool`/`json`), **value** (jsonb) | **Built.** The plaintext variable cell and the `$var:` cascade key; scope is the exclusive arc. Typed inline (no `variable_type` registry: the value is validated against `value_type` in the app), no observed side. The **config** cell (declared/observed/reconcile) is a separate, deferred member |
+| `tag` | name, applies_to, propagates | **Built.** The **tenant-wide governed key vocabulary**; minting a key needs `tag:create` ([identity and access](/architecture/identity-access/)). No `_type`, no namespace; values bind via `tag_binding`. See [tags](/architecture/tags/) |
+| `tag_binding` | (tag, **owner arc**), value | **Built.** The `key: value` binding: **union on key, override on value** down the [cascade](/architecture/cascade/), owned on the exclusive arc (`global / location / system / component`); setting a value is the owner's own `update` write. Binding via groups and a `template` default are deferred |
 

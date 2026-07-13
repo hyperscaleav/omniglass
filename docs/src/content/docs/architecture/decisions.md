@@ -54,6 +54,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0017](#adr-0017-credential-is-renamed-secret-the-cascade-is-the-reuse-mechanism) | 2026-07-09 | Accepted | The access-secret member of the config / credential / variable trio is renamed credential to secret: an encrypted-at-rest typed value resolved most-specific-wins down the cascade |
 | [ADR-0018](#adr-0018-the-avatar-read-endpoint-is-json-not-raw-image-bytes) | 2026-07-10 | Accepted | A profile picture is read through a JSON `image_base64` endpoint the console renders as a data URL, not a raw `image/jpeg` handler, so every route stays under the Huma authz middleware |
 | [ADR-0019](#adr-0019-every-credential-is-time-bounded-token-purpose-not-expiry-shape) | 2026-07-11 | Accepted | Every credential is time-bounded (reverses tokens-never-expire): session 12h, token / bootstrap 90d default with a `--ttl` capped at 365d; a `credential.purpose` column, not the expiry shape, tells session from token |
+| [ADR-0020](#adr-0020-variable-slice-1-types-inline-and-mirrors-the-secret-arc) | 2026-07-11 | Accepted | The variable member ships plaintext, typed inline against a `value_type` enum (no `variable_type` registry), on the secret owner arc; template scope, groups, the `$var:` consumer deferred |
 
 ## Entries
 
@@ -411,6 +412,7 @@ below from the project's history. From here it grows one slice at a time.
   the data URL. The one normalized size is small (roughly 30 to 50 KB base64), so per-request payload is not a
   concern, and HTTP caching over `avatar_updated_at` is a later refinement if it is ever needed. This
   supersedes the spec's raw-bytes read decision; the write transport (base64 JSON) is unchanged.
+
 ### ADR-0017: `credential` is renamed `secret`; the cascade is the reuse mechanism
 
 - **Date:** 2026-07-09 | **Status:** Accepted | **Pages:** [config, credentials, and variables](/architecture/variables/)
@@ -438,3 +440,60 @@ below from the project's history. From here it grows one slice at a time.
   naming and any "references inside the value" reading on the page; the `variable` and `config` members stay
   `Design`.
 - **Closes:** issue [#155](https://github.com/hyperscaleav/omniglass/issues/155) (secret slice 1).
+
+### ADR-0020: `variable` slice 1 types inline and mirrors the secret arc
+
+- **Date:** 2026-07-11 | **Status:** Accepted | **Pages:** [config, secrets, and variables](/architecture/variables/)
+- **Decision:** The **variable** member of the trio ships its first slice: a typed, cascade-resolved **plaintext**
+  value owned on the exclusive arc and resolved most-specific-wins down the [cascade](/architecture/cascade/), with a
+  Variables directory and a per-component effective-variables panel, mirroring the [secret](#adr-0017-credential-is-renamed-secret-the-cascade-is-the-reuse-mechanism)
+  member minus crypto, masking, and the reveal. `variable:create,update` is granted to **operators** (delete stays
+  admin and owner), the same split secret got. Three parts of the written design are deferred to keep the slice one
+  vertical cut. First, **typing is inline**: a `value_type` enum (`string | int | float | bool | json`) on the row
+  plus a jsonb `value` validated against it in a pure `internal/variable` package, **not** a `variable_type` shape
+  registry. A scalar needs no governed vocabulary, and the page itself calls variables the "operator-defined, not
+  curated" member, so a registry would contradict the model. Second, the **`template` owner scope** (the design's
+  `global -> template -> instance`) is out: slice 1 mirrors the secret arc (`global | location | system | component`),
+  and template scope plus cascade groups land together in [#184](https://github.com/hyperscaleav/omniglass/issues/184),
+  because they touch the shared resolver once for both members. Third, the **`$var:` consumer** and the
+  **secret-flagged** variable are deferred (the consumer has no live interpolation site yet, as with `$sec:`).
+- **Context:** The written [variables](/architecture/variables/) page sketched a `variable_type` registry and a
+  shared config/variable cell carrying `observed_value` and `reconcile`. Building the member showed those belong to
+  **config** (the declared-vs-observed member), not the free macro: a variable has no observed side. So `variable`
+  shipped as its own single table, typed inline, and the page's Storage section is corrected to match. This diverges
+  from the page's `variable_type`-registry and shared-cell sketch; the `config` member stays `Design`.
+- **Closes:** issue [#183](https://github.com/hyperscaleav/omniglass/issues/183) (variable slice 1).
+
+### ADR-0021: `tag` slice 1, a governed key registry with entity-update-gated bindings
+
+- **Date:** 2026-07-12 | **Status:** Accepted | **Pages:** [tags](/architecture/tags/), [config, secrets, and variables](/architecture/variables/)
+- **Decision:** The **tag** primitive ships its first slice on its own [tags](/architecture/tags/) page: the governed
+  **`tag`** key vocabulary, the per-entity **`tag_binding`** value cell owned on the exclusive arc
+  (`global | location | system | component`), and a resolver that unions keys and overrides values most-specific-wins
+  down the [cascade](/architecture/cascade/). Two permissions, not one: **minting a key** is a tenant-wide governance
+  action gated by an all-scope **`tag:create`** (broadened to `tag:*` for admin, covering update and delete of keys),
+  while **setting a value** is the owner's ordinary write (`component:update` and friends), so an operator who may edit
+  an entity may tag it with no new grant; a global binding, having no owning entity, is gated by `tag:update`. A key
+  carries **`applies_to`** (an entity-kind allow-list, empty = universal, checked on bind) and **`propagates`** (a flag
+  that toggles cascade inheritance versus a flat per-entity set, the shape a [file](/architecture/files/) will reuse).
+  Key names are validated as lowercase identifiers in a pure `internal/tag` package, keeping the vocabulary normalized.
+  Four parts of the written design are deferred to keep the slice one vertical cut. First, the **operator console
+  surface** (a Tags directory and a per-entity tag editor) is out; the slice ships over the API and the generated CLI,
+  matching the files-first ordering the estate chose. Second, binding through **[groups](/architecture/groups/)** and a
+  **`template`**-scoped default are out, landing with the shared-resolver work in
+  [#184](https://github.com/hyperscaleav/omniglass/issues/184) that the variable member also waits on. Third,
+  **value-domain governance** (a key constraining or normalizing its values) stays the page's open question; slice 1
+  ships free-text values. Fourth, binding a tag onto a **[file](/architecture/files/)** waits on the files primitive.
+- **Context:** The tag design lived inside the [config, secrets, and variables](/architecture/variables/) page as the
+  fourth cascade user. Building it earned tags a page of its own, because its **governance model is distinct**: unlike a
+  variable (one free value, one `variable:*` permission), a tag splits a curated key vocabulary (admin-minted) from
+  routine value binding (operator-open via the entity's own write), and it resolves with a **union-on-key** combinator
+  rather than a single value. The exclusive-arc scope and the cascade walk are shared with the variable and secret
+  resolvers; the combinator and the two-permission split are what make it its own primitive. This diverges from the
+  variables page's single-table sketch (the binding is its own `tag_binding` cell) and its "bindable via groups"
+  note (deferred); the variables page's tag section now frames the shared cascade and points at the tags page.
+- **Closes:** issue [#188](https://github.com/hyperscaleav/omniglass/issues/188) (tag slice 1). The deferrals are
+  filed: the console surface [#189](https://github.com/hyperscaleav/omniglass/issues/189), value-domain governance
+  [#190](https://github.com/hyperscaleav/omniglass/issues/190), and binding onto a file
+  [#191](https://github.com/hyperscaleav/omniglass/issues/191); groups and template scope ride
+  [#184](https://github.com/hyperscaleav/omniglass/issues/184).

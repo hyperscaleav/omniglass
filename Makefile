@@ -28,13 +28,14 @@ image:
 
 # Regenerate the derived artifacts from the Huma API (the source of truth): the
 # OpenAPI 3.1 document (server-less, into api/openapi.{json,yaml}), the cobra
-# command tree (internal/cli/api_gen.go), and the typed SPA client
-# (web/src/api/schema.gen.ts). The spec is the seam every downstream client is
-# generated from. Run after any API change; the results are committed and
-# reviewed like code.
+# command tree (internal/cli/api_gen.go), the CLI reference page (from that
+# command tree, into docs/), and the typed SPA client (web/src/api/schema.gen.ts).
+# The spec is the seam every downstream client is generated from. Run after any
+# API change; the results are committed and reviewed like code.
 gen:
 	go run ./cmd/openapigen
 	go run ./cmd/cligen
+	go run ./cmd/docsgen
 	cd web && npm install && npm run gen:api
 
 # Regenerate just the typed SPA client from the committed OpenAPI. Requires node.
@@ -116,6 +117,12 @@ up:
 # (docker compose down -v) to wipe it and re-mint a token on the next `make dev`.
 down:
 	docker compose down
+
+# Capture the docs screenshots against the real console (dev stack + Playwright),
+# writing PNGs into docs/src/assets/screenshots/. Commit the regenerated images.
+# Needs the Playwright browser once: (cd web && npx playwright install chromium).
+docs-shots:
+	bash docs/screenshots/capture.sh
 
 # Full stack for a browser session: Postgres + the server with the console
 # embedded. Creates (idempotently) a dev owner with password "dev", also mints a

@@ -218,6 +218,8 @@ func registerRoutes(api huma.API, gw storage.Gateway, o options) {
 	registerSystemRoutes(api, a, gw)
 	registerComponentRoutes(api, a, gw)
 	registerSecretRoutes(api, a, gw)
+	registerVariableRoutes(api, a, gw)
+	registerTagRoutes(api, a, gw)
 	registerPrincipalRoutes(api, a, gw)
 	registerPrincipalGroupRoutes(api, a, gw)
 	registerImpersonationRoutes(api, a, gw)

@@ -16,6 +16,21 @@ import (
 // the runtime here means regenerating the commands never regenerates the
 // transport or the flag contract.
 
+// jsonOrString coerces a non-scalar body flag's string into the value the API
+// expects: it parses the input as JSON so `--value 30` sends the number 30,
+// `--value true` the boolean, and `--fields '{"k":"v"}'` the object. A string
+// that is not valid JSON (a bare `HDMI1`) falls back to itself, so the common
+// case needs no quoting; a string that looks like JSON (`30`, `true`) is quoted
+// to force a string (`--value '"30"'`). The generator emits this only for object,
+// array, and untyped `any` body fields; plain scalars pass through unchanged.
+func jsonOrString(s string) any {
+	var v any
+	if json.Unmarshal([]byte(s), &v) == nil {
+		return v
+	}
+	return s
+}
+
 // runAPICommand issues one API call for a generated command, prints the JSON
 // response to stdout (pretty-printed when it parses), and maps a non-2xx status
 // to a non-zero exit by returning an error after showing the server's message.

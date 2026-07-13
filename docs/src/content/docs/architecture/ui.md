@@ -19,7 +19,7 @@ the renderer library, and composable dashboards below remain the intended **read
 analytical and dashboard surfaces (alarms, datapoint history, the cascade view, fleet
 dashboards), which are not built yet. The realized inventory shell and its primitives are in the
 [design system](/contributing/design-system/); how to operate it is the
-[console guide](/guides/console/), and the per-slice breakdown is on
+[operator guide](/guides/operator/), and the per-slice breakdown is on
 [implementation status](/architecture/status/).
 :::
 

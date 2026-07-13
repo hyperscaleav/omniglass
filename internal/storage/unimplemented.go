@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/scope"
@@ -229,6 +230,45 @@ func (UnimplementedGateway) CopySecret(context.Context, string, string, scope.Se
 	return nil, nil
 }
 func (UnimplementedGateway) ResolveSecrets(context.Context, string, scope.Set) ([]ResolvedSecret, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) ListVariables(context.Context, scope.Set) ([]Variable, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) CreateVariable(context.Context, string, VariableSpec, scope.Set) (*Variable, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) UpdateVariable(context.Context, string, string, json.RawMessage, scope.Set, scope.Set) (*Variable, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteVariable(context.Context, string, string, scope.Set, scope.Set) error {
+	return nil
+}
+func (UnimplementedGateway) ResolveVariables(context.Context, string, scope.Set) ([]ResolvedVariable, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) ListTags(context.Context) ([]Tag, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) CreateTag(context.Context, string, TagSpec, scope.Set) (*Tag, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) UpdateTag(context.Context, string, string, TagSpec, scope.Set) (*Tag, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteTag(context.Context, string, string, scope.Set) error {
+	return nil
+}
+func (UnimplementedGateway) SetTagBinding(context.Context, string, string, string, *string, string, scope.Set, scope.Set) (*TagBinding, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteTagBinding(context.Context, string, string, string, *string, scope.Set, scope.Set) error {
+	return nil
+}
+func (UnimplementedGateway) ListEntityTags(context.Context, string, *string, scope.Set) ([]TagBinding, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) ResolveTags(context.Context, string, scope.Set) ([]ResolvedTag, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) Close() {}
