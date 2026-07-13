@@ -148,6 +148,13 @@ func (UnimplementedGateway) UpsertLocationType(context.Context, LocationType) er
 func (UnimplementedGateway) ListLocationTypes(context.Context) ([]LocationType, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) CreateLocationType(context.Context, string, LocationType) (*LocationType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) UpdateLocationType(context.Context, string, string, LocationTypePatch) (*LocationType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteLocationType(context.Context, string, string) error { return nil }
 func (UnimplementedGateway) InScopeIDs(context.Context, string, []string, scope.Set) (map[string]bool, error) {
 	return nil, nil
 }

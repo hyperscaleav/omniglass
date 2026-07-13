@@ -186,6 +186,12 @@ type Gateway interface {
 	UpsertLocationType(ctx context.Context, lt LocationType) error
 	// ListLocationTypes returns every location type, ranked.
 	ListLocationTypes(ctx context.Context) ([]LocationType, error)
+	// The location_type registry CRUD (capability-only, unscoped). Create writes a
+	// custom (official=false) row; update/delete refuse official rows and delete
+	// refuses a row still referenced by a location.
+	CreateLocationType(ctx context.Context, actorID string, lt LocationType) (*LocationType, error)
+	UpdateLocationType(ctx context.Context, actorID, id string, patch LocationTypePatch) (*LocationType, error)
+	DeleteLocationType(ctx context.Context, actorID, id string) error
 
 	// InScopeIDs reports which of the candidate row ids of a tree resource
 	// (location/system/component) are inside a resolved scope, applying the same
