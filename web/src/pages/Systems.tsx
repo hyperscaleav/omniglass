@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { useNavigate, useParams } from "@solidjs/router";
 import TreeList, { type ListConfig, type ListCtx, type ListNode, type PageDescriptor } from "../components/TreeList";
 import TreeSelect from "../components/TreeSelect";
+import TagPills from "../components/TagPills";
 import {
   type System,
   SYSTEMS_KEY,
@@ -25,7 +26,7 @@ import { DrawerFooter } from "../components/Drawer";
 // names/types/placement only (no health yet). Cross-links navigate: a component
 // row opens that component's full page, and "Components" deep-links the Components
 // page filtered to this system.
-type SysNode = ListNode & { type: string; locationName: string; raw: System };
+type SysNode = ListNode & { type: string; locationName: string; tags: Record<string, string>; raw: System };
 
 // The static config (matrix-tested in pages/descriptors.test.ts).
 export const systemsDescriptor: PageDescriptor = {
@@ -35,9 +36,10 @@ export const systemsDescriptor: PageDescriptor = {
     type: { label: "Type", width: 170 },
     location: { label: "Location", width: 190 },
     components: { label: "Components", width: 130 },
+    tags: { label: "Tags", width: 280 },
   },
-  columnKeys: ["type", "location", "components"],
-  defaultCols: ["type", "location", "components"],
+  columnKeys: ["type", "location", "components", "tags"],
+  defaultCols: ["type", "location", "components", "tags"],
 };
 
 export default function Systems() {
@@ -74,6 +76,7 @@ export default function Systems() {
         actions: s.actions,
         type: s.system_type,
         locationName: s.location_id ? label(lm.get(s.location_id) ?? { name: s.location_id }) : "",
+        tags: s.effective_tags ?? {},
         raw: s,
       });
     }
@@ -266,6 +269,7 @@ export default function Systems() {
       if (key === "type") return <span class="badge badge-soft badge-neutral badge-sm">{n.type}</span>;
       if (key === "location") return <span class="text-base-content/70">{n.locationName || "—"}</span>;
       if (key === "components") return <span class="tnum text-base-content/60">{(compsBySystem().get(n.raw.id) ?? []).length}</span>;
+      if (key === "tags") return <TagPills tags={n.tags} />;
       return null;
     },
     filterKeys: [
@@ -277,6 +281,7 @@ export default function Systems() {
       if (key === "type") return n.type.toLowerCase();
       if (key === "location") return n.locationName.toLowerCase();
       if (key === "components") return -(compsBySystem().get(n.raw.id) ?? []).length;
+      if (key === "tags") return Object.keys(n.tags).sort().join(",");
       return n.display.toLowerCase();
     },
     onOpenNode: (n) => navigate(`/systems/${encodeURIComponent(n.id)}`),
