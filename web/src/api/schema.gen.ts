@@ -1532,6 +1532,10 @@ export interface components {
             actions?: string[] | null;
             component_type: string;
             display_name?: string;
+            /** @description The resolved effective tags (key -> winning value) that cascade onto this component; for the Tags column. Provenance is in the effective-tags detail view. */
+            effective_tags?: {
+                [key: string]: string;
+            };
             id: string;
             location_id?: string;
             name: string;
@@ -2073,6 +2077,10 @@ export interface components {
             /** @description The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces. */
             actions?: string[] | null;
             display_name?: string;
+            /** @description The resolved effective tags (key -> winning value) that cascade onto this location (global and its location tree); for the Tags column. */
+            effective_tags?: {
+                [key: string]: string;
+            };
             id: string;
             location_type: string;
             name: string;
@@ -2380,6 +2388,10 @@ export interface components {
             /** @description The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces. */
             actions?: string[] | null;
             display_name?: string;
+            /** @description The resolved effective tags (key -> winning value) that cascade onto this system (global, its location, its system tree); for the Tags column. */
+            effective_tags?: {
+                [key: string]: string;
+            };
             id: string;
             location_id?: string;
             name: string;
