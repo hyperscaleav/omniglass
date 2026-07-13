@@ -65,11 +65,15 @@ no running server needed):
 # token expires after --ttl (default 90 days, hard maximum 365 days).
 omniglass bootstrap ops --password 'set-a-strong-one' --email ops@example.com --display-name "Ops Lead"
 
-# Reprint a fresh bearer token for an existing user (direct-DB, owner lane). Every credential
-# is time-bounded: the token expires after --ttl (default 90 days, hard maximum 365 days; a
-# --ttl above the cap is an error). A web-login session cookie has its own, shorter fixed lifetime.
-omniglass token ops
-omniglass token ops --ttl 720h   # a 30-day token
+# Mint a fresh bearer token for an existing user (direct-DB, owner lane). A --description
+# (required) names what the token is for. Every credential is time-bounded: the token expires
+# after --ttl (default 90 days, hard maximum 365 days; a --ttl above the cap is an error). A
+# web-login session cookie has its own, shorter fixed lifetime.
+omniglass token ops --description 'ci pipeline'
+omniglass token ops --description 'nightly backup' --ttl 720h   # a 30-day token
+
+# A signed-in user can mint its own token over the API (the console Create token action), which
+# returns the secret once: omniglass auth create-token --description 'my laptop cli'.
 
 # Set or rotate a user's password (direct-DB, owner lane; also policy-exempt as the recovery path).
 # A break-glass reset also revokes the user's live SESSIONS, so a stolen login stops at once; API

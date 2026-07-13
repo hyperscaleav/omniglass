@@ -311,6 +311,58 @@ components:
         - name
         - location_type
       type: object
+    CreateMeTokenInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateMeTokenInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        description:
+          description: What the token is for (required)
+          maxLength: 200
+          minLength: 1
+          type: string
+        ttl_days:
+          description: Days until the token expires (default 90, maximum 365)
+          format: int64
+          maximum: 365
+          minimum: 1
+          type: integer
+      required:
+        - description
+      type: object
+    CreateMeTokenOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateMeTokenOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        description:
+          description: What the token is for
+          type: string
+        expires_at:
+          description: When the token expires (RFC 3339)
+          type: string
+        prefix:
+          description: The non-secret ogp locator for the new token
+          type: string
+        token:
+          description: "The bearer token, shown once. Store it now: it cannot be retrieved again."
+          type: string
+      required:
+        - token
+        - prefix
+        - description
+        - expires_at
+      type: object
     CreatePrincipalInputBody:
       additionalProperties: false
       properties:
@@ -1651,12 +1703,18 @@ components:
     SessionBody:
       additionalProperties: false
       properties:
+        client_ip:
+          description: The IP address the credential was created from
+          type: string
         created_at:
           description: When the credential was issued (RFC 3339)
           type: string
         current:
           description: True for the credential that authenticated this request; revoking it signs out the current session
           type: boolean
+        description:
+          description: What a token is for (a token carries a description; a session does not)
+          type: string
         expires_at:
           description: When the credential expires (RFC 3339); every credential is now time-bounded
           type: string
@@ -1668,8 +1726,14 @@ components:
             - session
             - token
           type: string
+        last_used_at:
+          description: When the credential last authenticated a request (RFC 3339), throttled to the minute
+          type: string
         prefix:
           description: The non-secret ogp locator, so a credential is recognizable without exposing the token
+          type: string
+        user_agent:
+          description: The User-Agent that created the credential, so the console can show a device label
           type: string
       required:
         - id
@@ -2255,6 +2319,30 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Revoke all of your own sessions or tokens
+  /auth/me/tokens:
+    post:
+      description: Mints a CLI/API token for the caller and returns it once (store it now; it cannot be retrieved again). A description is required (what the token is for); an optional ttl_days bounds its lifetime (default 90, maximum 365). Requires authentication; self-scoped (always issued for you). The token is stamped with the device and address that created it.
+      operationId: create-auth-me-token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMeTokenInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateMeTokenOutputBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Create one of your own API tokens
   /auth/me:changePassword:
     post:
       description: Verifies the current password and sets a new one. Requires authentication; self-scoped.

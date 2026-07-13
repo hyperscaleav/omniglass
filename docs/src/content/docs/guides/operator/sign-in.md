@@ -43,14 +43,19 @@ only your own account, whatever your role.
   these on every request; the console only mirrors them.
 - **Sessions** and **API tokens.** Two sections listing every credential you hold: a **session** is a
   device you signed in from, a **token** one you minted for the CLI or API, both time-bounded and
-  showing an expiry. The one you are using is marked **This session**. The secret is never shown, only
-  its `ogp_` locator. **Revoke** any you do not recognize (revoking the one you are using is **Sign
-  out**), or use **Revoke all** on either section to end every session or every token at once, keeping
-  the one you are on.
+  showing an expiry. Each row shows a **device** (parsed from the browser that created it), the
+  **address** it came from, and when it was **last active**; a token also shows its **description**. The
+  one you are using is marked **This session**. The secret is never shown, only its `ogp_` locator.
+  **Revoke** any you do not recognize (revoking the one you are using is **Sign out**), or use
+  **Revoke all** on either section to end every session or every token at once, keeping the one you are
+  on. **Create token** on the API tokens section mints you a new token: give it a **description** (what
+  it is for, required) and an optional lifetime in days (default 90, maximum 365). The token is shown
+  **once**, so copy it then; it cannot be retrieved again.
 
 From the CLI the same actions are `omniglass auth update-profile`, `omniglass auth change-password`,
-`omniglass me setAvatar` / `omniglass me removeAvatar` for the picture, and
-`omniglass session list` / `session revoke <id>` / `session revoke-all` for your sessions (see
+`omniglass me setAvatar` / `omniglass me removeAvatar` for the picture,
+`omniglass session list` / `session revoke <id>` / `session revoke-all` for your sessions, and
+`omniglass auth create-token --description <what-for>` to mint one for yourself (see
 [the CLI guide](/guides/cli/)).
 
 ## After an administrator resets your password

@@ -59,7 +59,7 @@ func TestSetPasswordBreakGlassLockout(t *testing.T) {
 	}
 	addSession := func() {
 		_, h, p, _ := auth.NewBearerToken()
-		if ok, err := gw.IssueBearerCredential(ctx, "root", h, p, "session", &future); err != nil || !ok {
+		if ok, err := gw.IssueBearerCredential(ctx, storage.BearerIssue{Username: "root", SecretHash: h, Prefix: p, Purpose: "session", ExpiresAt: &future}); err != nil || !ok {
 			t.Fatalf("add session: ok=%v err=%v", ok, err)
 		}
 	}
