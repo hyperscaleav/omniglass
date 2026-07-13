@@ -1399,6 +1399,7 @@ func generatedCommands() []*cobra.Command {
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
+			var fAdminSensitive string
 			var fFields string
 			var fName string
 			var fOwner string
@@ -1413,6 +1414,9 @@ func generatedCommands() []*cobra.Command {
 				RunE: func(cmd *cobra.Command, args []string) error {
 					path := fmt.Sprintf("/api/v1/secrets")
 					body := map[string]any{}
+					if cmd.Flags().Changed("admin-sensitive") {
+						body["admin_sensitive"] = jsonOrString(fAdminSensitive)
+					}
 					if cmd.Flags().Changed("fields") {
 						body["fields"] = jsonOrString(fFields)
 					}
@@ -1431,6 +1435,7 @@ func generatedCommands() []*cobra.Command {
 					return runAPICommand(cmd, "POST", path, body)
 				},
 			}
+			cmd.Flags().StringVar(&fAdminSensitive, "admin-sensitive", "", "Admin-only visibility; omit to use the type default. Setting true requires the admin tier")
 			cmd.Flags().StringVar(&fFields, "fields", "", "The operator field map, validated against the type shape")
 			_ = cmd.MarkFlagRequired("fields")
 			cmd.Flags().StringVar(&fName, "name", "", "The cascade key; unique per owner")
@@ -1459,8 +1464,8 @@ func generatedCommands() []*cobra.Command {
 		parent.AddCommand(func() *cobra.Command {
 			cmd := &cobra.Command{
 				Use:     "list",
-				Short:   "List secrets (admin directory)",
-				Long:    "Lists every secret with masked fields. Requires an all-scope read; the scoped, per-component view is the effective-secrets route. Gated by secret:read.",
+				Short:   "List secrets",
+				Long:    "Lists the secrets the caller may see, with masked fields, filtered to the read scope; admin-sensitive secrets appear only to the admin tier. Gated by secret:read, which the viewer floor does not carry (secret is a sensitive resource).",
 				Example: "  omniglass secret list",
 				Args:    cobra.ExactArgs(0),
 				RunE: func(cmd *cobra.Command, args []string) error {
@@ -1474,7 +1479,7 @@ func generatedCommands() []*cobra.Command {
 			cmd := &cobra.Command{
 				Use:     "reveal <id>",
 				Short:   "Reveal a secret's plaintext",
-				Long:    "Decrypts and returns a secret's field values, auditing the decrypt. Sensitive: gated by secret:reveal, which the viewer read floor does not carry, so only admin (secret:*) and owner may reveal.",
+				Long:    "Decrypts and returns a secret's field values, auditing the decrypt. Gated by secret:reveal at the caller's scope; an admin-sensitive secret additionally needs the admin tier (secret:reveal:admin), so a scoped operator reveals device secrets but never a platform credential.",
 				Example: "  omniglass secret reveal <id>",
 				Args:    cobra.ExactArgs(1),
 				RunE: func(cmd *cobra.Command, args []string) error {

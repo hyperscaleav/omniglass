@@ -16,7 +16,8 @@ roles:
     description: >-
       Day-to-day operations: acknowledge, snooze, and resolve alarms, and create
       or edit components, interfaces, tasks, rules, config, secrets, and variables.
-      Inherits Viewer.
+      Sees and reveals the device secrets in its scope (never the admin-sensitive
+      platform credentials). Inherits Viewer.
     inherits: ["viewer"]
     permissions:
       - "component:create,update"
@@ -24,7 +25,7 @@ roles:
       - "task:create,update"
       - "rule:create,update"
       - "config:create,update"
-      - "secret:create,update"
+      - "secret:read,reveal,create,update"
       - "variable:create,update"
       - "alarm:ack,snooze,resolve"
   - id: deploy
@@ -39,6 +40,7 @@ roles:
       - "location:create,update"
       - "system:create,update"
       - "component:create,update"
+      - "secret:read,reveal,create,update"
   - id: admin
     display_name: Administrator
     description: >-
@@ -61,7 +63,11 @@ roles:
       - "principal:read:admin"
       - "principal:purge:admin"
       - "credential:*"
-      - "secret:*"
+      # secret:> (not secret:*) so admin reaches the admin-sensitive tier
+      # (secret:reveal:admin etc.) a two-token wildcard cannot; an admin-sensitive
+      # secret is thus admin/owner-only, while operators hold the two-token actions
+      # on the non-sensitive ones.
+      - "secret:>"
       - "variable:*"
       - "principal_grant:*"
       - "principal_group:*"

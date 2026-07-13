@@ -11,7 +11,9 @@ sidebar:
 Two members are built. The **`secret`** member ([ADR-0017](/architecture/decisions/#adr-0017-credential-is-renamed-secret-the-cascade-is-the-reuse-mechanism),
 [#155](https://github.com/hyperscaleav/omniglass/issues/155)): the typed encrypted-at-rest cell owned on the
 exclusive arc and resolved down the cascade, the `secret_type` shape registry, envelope AES-256-GCM crypto behind a
-pluggable KEK provider, the masked-with-audited-decrypt read path, and the operator surfaces. The **`variable`**
+pluggable KEK provider, the masked-with-audited-decrypt read path, the two-axis visibility (placement scope plus the
+per-secret `admin_sensitive` flag, with a scope-filtered directory, [ADR-0025](/architecture/decisions/#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier)),
+and the operator surfaces. The **`variable`**
 member ([#183](https://github.com/hyperscaleav/omniglass/issues/183)): the typed **plaintext** cell on the same
 exclusive arc, resolved down the same cascade, with a Variables directory and a per-component effective-variables
 panel. Each member's section below marks what is built versus deferred; the
@@ -130,15 +132,21 @@ A **secret** is an access secret: a typed value, encrypted at rest, owned on the
 (`global | location | system | component`) and resolved most-specific-wins down the cascade like config
 and variables, but sealed so its value never sits in the clear. Its first slice is **built**
 ([ADR-0017](/architecture/decisions/#adr-0017-credential-is-renamed-secret-the-cascade-is-the-reuse-mechanism)):
-the typed cell, the crypto, the cascade resolver, and the operator surfaces. Sensitivity is not a flag
-any value carries; a secret is its own primitive because it is stored encrypted and read back only
-through a masked, audited path.
+the typed cell, the crypto, the cascade resolver, and the operator surfaces. A **sensitivity ladder** is
+not a flag any value carries; a secret is its own primitive because it is stored encrypted and read back
+only through a masked, audited path. (Within the secret primitive, a **binary** `admin_sensitive` flag
+does split admin-only platform credentials from operator-visible device secrets, described below; that is
+a visibility tier, not an arbitrary sensitivity level bolted onto every value.)
 
 **Shape is a `secret_type` registry.** A secret has a structured **`secret_type`** shape: a per-field
 list of `{name, type, secret, origin}`, so one field is secret (an `snmp-community` string, a password)
 while another is plaintext (a username), and `origin` marks whether the operator sets a field or the
-lifecycle fills it. The ship-with types are `snmp-community` and `basic-auth`; an `official` boolean
-marks shipped-canonical versus org-local, exactly as the datapoint and role registries do.
+lifecycle fills it. The type also carries a **`default_admin_sensitive`** boolean that seeds the create
+form's `admin_sensitive` default (see the two-axis visibility below): a device type (`snmp-community`,
+`basic-auth`) defaults operational, a platform-integration type (`oauth2-client`) defaults
+admin-sensitive. The ship-with types are `snmp-community`, `basic-auth`, and `oauth2-client`; an
+`official` boolean marks shipped-canonical versus org-local, exactly as the datapoint and role
+registries do.
 
 **Envelope-encrypted at rest.** Crypto is **envelope AES-256-GCM** behind a pluggable **KEK provider**:
 the key comes from the env (`OMNIGLASS_SECRET_KEY`), a file (`OMNIGLASS_SECRET_KEY_FILE`), or a warned
@@ -157,10 +165,29 @@ slice.)
 **Masked everywhere except an audited decrypt.** A secret's value is masked (`••••••`) in every read:
 the directory, the per-component effective-secrets view, the type list. Reading the plaintext is a
 separate, privileged action: `secret:reveal` gates the decrypt (both an on-screen **reveal** and a
-clipboard **copy**, recorded under distinct `reveal` and `copy` verbs), it is **not** covered by the
-`*:read` floor (so only admin, `secret:*`, and owner may decrypt), and **every decrypt writes an
-[audit](/architecture/audit/) row**. Sealing and editing a secret (`secret:create,update`) is open to
-**operators**; delete stays admin-and-owner.
+clipboard **copy**, recorded under distinct `reveal` and `copy` verbs), and **every decrypt writes an
+[audit](/architecture/audit/) row**.
+
+**Two axes decide who reaches a secret** ([ADR-0025](/architecture/decisions/#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier)).
+**Placement scope** (where the secret attaches on the exclusive arc) gives locality: a Singapore-scoped
+field tech creates and reveals device secrets under Singapore and cannot reach one attached at global.
+A per-secret **`admin_sensitive` flag** gives same-scope sensitivity: when set, every action on that
+secret is lifted to the **`:admin` tier**, so a platform credential (a Zoom client secret) stays
+admin/owner-only even at the same scope as an operational device secret an operator sees. `secret` is
+also a **sensitive resource** kept off the bare `*:read` floor, so a `viewer` (only `*:read`) reads no
+secrets at all, while an `operator`/`deploy` holds an explicit scoped `secret:read,reveal,create,update`
+and works the operational secrets in its subtree. Concretely:
+
+- The `/secrets` **directory is scope-filtered** (no longer all-scope-only) and **hides admin-sensitive
+  rows** from a caller without the admin tier, so a platform credential's existence and field names never
+  appear to an operator.
+- **Reveal, update, and delete** of an admin-sensitive secret without the admin tier is a **non-disclosing
+  404** (identical to an out-of-read-scope row), never a 403, so existence does not leak.
+- **Creating** a secret marked `admin_sensitive` needs `secret:create:admin`, so an operator can mint only
+  operational secrets (nor pick a type that defaults admin-sensitive).
+- Sealing and editing an **operational** secret (`secret:create,update`) and revealing it
+  (`secret:reveal`) are open to **operators** in scope; **delete** stays admin-and-owner. `admin` holds
+  `secret:>` (reaching the `:admin` tier a two-token `secret:*` cannot); `owner`'s `>` covers everything.
 
 **Lifecycle is a later slice.** The first slice is the typed encrypted cell and its cascade; the
 lifecycle a plain config never carries (refresh, rotation, expiry) is **deferred**, each behavior a
@@ -327,7 +354,7 @@ exclusive-arc scope either way.
 | Table | Key columns | Notes |
 |---|---|---|
 | `secret_type` | id, **official**, schema (per-field `{name, type, secret, origin}`) | **Built.** The secret **shape** registry (`snmp-community`, `basic-auth` seeded); `official` marks shipped-canonical versus org-local, like the datapoint and role registries |
-| `secret` | (name, **owner arc**), secret_type, **value** (secret fields as `{ciphertext, nonce, wrapped_dek, key_id}` envelopes, non-secret fields plaintext) | **Built.** The encrypted cell and the `$sec:` cascade key; scope is the exclusive arc (global/location/system/component). Read masked; decrypted only through the audited `:reveal` / `:copy` path |
+| `secret` | (name, **owner arc**), secret_type, **`admin_sensitive`**, **value** (secret fields as `{ciphertext, nonce, wrapped_dek, key_id}` envelopes, non-secret fields plaintext) | **Built.** The encrypted cell and the `$sec:` cascade key; scope is the exclusive arc (global/location/system/component). Read masked through a **scope-filtered** directory; decrypted only through the audited `:reveal` / `:copy` path. Visibility is placement scope plus the per-secret `admin_sensitive` flag (admin-only when set); `secret` is off the `*:read` floor ([ADR-0025](/architecture/decisions/#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier)) |
 | `variable` | (name, **owner arc**), **value_type** (`string`/`int`/`float`/`bool`/`json`), **value** (jsonb) | **Built.** The plaintext variable cell and the `$var:` cascade key; scope is the exclusive arc. Typed inline (no `variable_type` registry: the value is validated against `value_type` in the app), no observed side. The **config** cell (declared/observed/reconcile) is a separate, deferred member |
 | `tag` | name, applies_to, propagates | **Built.** The **tenant-wide governed key vocabulary**; minting a key needs `tag:create` ([identity and access](/architecture/identity-access/)). No `_type`, no namespace; values bind via `tag_binding`. See [tags](/architecture/tags/) |
 | `tag_binding` | (tag, **owner arc**), value | **Built.** The `key: value` binding: **union on key, override on value** down the [cascade](/architecture/cascade/), owned on the exclusive arc (`global / location / system / component`); setting a value is the owner's own `update` write. Binding via groups and a `template` default are deferred |

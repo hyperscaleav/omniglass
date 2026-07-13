@@ -104,8 +104,23 @@ func TestSeedRolesIdempotent(t *testing.T) {
 	if err := conn.QueryRow(ctx, `select count(*) from secret_type where official`).Scan(&secTypeCount); err != nil {
 		t.Fatalf("count secret_types: %v", err)
 	}
-	if secTypeCount != 2 {
-		t.Errorf("official secret_types = %d, want 2", secTypeCount)
+	if secTypeCount != 3 {
+		t.Errorf("official secret_types = %d, want 3", secTypeCount)
+	}
+	// The type default seeds the create form: a device type is operational, the
+	// OAuth2 integration type is admin-sensitive.
+	var snmpDefault, oauthDefault bool
+	if err := conn.QueryRow(ctx, `select default_admin_sensitive from secret_type where id = 'snmp-community'`).Scan(&snmpDefault); err != nil {
+		t.Fatalf("read snmp-community default_admin_sensitive: %v", err)
+	}
+	if err := conn.QueryRow(ctx, `select default_admin_sensitive from secret_type where id = 'oauth2-client'`).Scan(&oauthDefault); err != nil {
+		t.Fatalf("read oauth2-client default_admin_sensitive: %v", err)
+	}
+	if snmpDefault {
+		t.Error("snmp-community default_admin_sensitive = true, want false (operational device secret)")
+	}
+	if !oauthDefault {
+		t.Error("oauth2-client default_admin_sensitive = false, want true (platform credential)")
 	}
 	var community string
 	if err := conn.QueryRow(ctx, `select schema->0->>'name' from secret_type where id = 'snmp-community'`).Scan(&community); err != nil {

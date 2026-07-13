@@ -84,6 +84,38 @@ describe("filterNav", () => {
     expect(adm).toContain("Roles");
     expect(adm).toContain("Groups");
   });
+
+  // Secrets is a sensitive resource: the server takes secret off the *:read floor,
+  // so a viewer whose only grant is *:read does not read secrets and must not see
+  // the tab, while an operator holding a literal secret:read (and owner's `>`) does.
+  it("hides Secrets from a *:read viewer, keeps it for an explicit secret:read and owner", () => {
+    expect(section("Settings", ["*:read"])).not.toContain("Secrets");
+    expect(section("Settings", ["*:*"])).not.toContain("Secrets");
+    expect(section("Settings", ["secret:read"])).toContain("Secrets");
+    expect(section("Settings", ["secret:read,reveal,create,update"])).toContain("Secrets");
+    expect(section("Settings", [">"])).toContain("Secrets");
+  });
+});
+
+// can mirrors the server's Allows, including the sensitive-resource set: a bare `*`
+// does not reach a sensitive resource in either the direct match or the :read floor,
+// but a literal grant, a resource wildcard, and owner's `>` do. Mirrors
+// internal/rbac/rbac_test.go so the console hides exactly what the server denies.
+describe("can (sensitive resources)", () => {
+  const me = (permissions: string[]): Me => ({ principal: { id: "p", kind: "human" }, permissions, grants: [] });
+  it("keeps secret off the bare * wildcard but honors literal, resource-wildcard, and owner grants", () => {
+    expect(can(me(["*:read"]), "secret", "read")).toBe(false);
+    expect(can(me(["*:*"]), "secret", "read")).toBe(false);
+    expect(can(me(["secret:read"]), "secret", "read")).toBe(true);
+    expect(can(me(["secret:reveal"]), "secret", "read")).toBe(true); // the :read floor
+    expect(can(me(["secret:*"]), "secret", "read")).toBe(true);
+    expect(can(me([">"]), "secret", "read")).toBe(true);
+    // A non-sensitive resource still floors on *:read.
+    expect(can(me(["*:read"]), "variable", "read")).toBe(true);
+    // A 2-token secret:* cannot reach the admin tier; secret:> does.
+    expect(can(me(["secret:*"]), "secret", "reveal", "admin")).toBe(false);
+    expect(can(me(["secret:>"]), "secret", "reveal", "admin")).toBe(true);
+  });
 });
 
 // routeTokens is the route guard's half of the same map that hides the sidebar

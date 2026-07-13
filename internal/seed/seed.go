@@ -67,9 +67,10 @@ type componentTypesDoc struct {
 
 type secretTypesDoc struct {
 	SecretTypes []struct {
-		ID          string `yaml:"id"`
-		DisplayName string `yaml:"display_name"`
-		Fields      []struct {
+		ID                    string `yaml:"id"`
+		DisplayName           string `yaml:"display_name"`
+		DefaultAdminSensitive bool   `yaml:"default_admin_sensitive"`
+		Fields                []struct {
 			Name   string `yaml:"name"`
 			Type   string `yaml:"type"`
 			Secret bool   `yaml:"secret"`
@@ -108,10 +109,11 @@ func seedSecretTypes(ctx context.Context, gw storage.Gateway) error {
 			fields[i] = secret.Field{Name: f.Name, Type: f.Type, Secret: f.Secret, Origin: secret.Origin(f.Origin)}
 		}
 		if err := gw.UpsertSecretType(ctx, storage.SecretType{
-			ID:          st.ID,
-			Official:    true,
-			DisplayName: st.DisplayName,
-			Fields:      fields,
+			ID:                    st.ID,
+			Official:              true,
+			DisplayName:           st.DisplayName,
+			DefaultAdminSensitive: st.DefaultAdminSensitive,
+			Fields:                fields,
 		}); err != nil {
 			return err
 		}

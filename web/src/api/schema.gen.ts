@@ -1148,8 +1148,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List secrets (admin directory)
-         * @description Lists every secret with masked fields. Requires an all-scope read; the scoped, per-component view is the effective-secrets route. Gated by secret:read.
+         * List secrets
+         * @description Lists the secrets the caller may see, with masked fields, filtered to the read scope; admin-sensitive secrets appear only to the admin tier. Gated by secret:read, which the viewer floor does not carry (secret is a sensitive resource).
          */
         get: operations["list-secrets"];
         put?: never;
@@ -1219,7 +1219,7 @@ export interface paths {
         put?: never;
         /**
          * Reveal a secret's plaintext
-         * @description Decrypts and returns a secret's field values, auditing the decrypt. Sensitive: gated by secret:reveal, which the viewer read floor does not carry, so only admin (secret:*) and owner may reveal.
+         * @description Decrypts and returns a secret's field values, auditing the decrypt. Gated by secret:reveal at the caller's scope; an admin-sensitive secret additionally needs the admin tier (secret:reveal:admin), so a scoped operator reveals device secrets but never a platform credential.
          */
         post: operations["reveal-secret"];
         delete?: never;
@@ -1725,6 +1725,8 @@ export interface components {
              * @example /api/v1/schemas/CreateSecretInputBody.json
              */
             readonly $schema?: string;
+            /** @description Admin-only visibility; omit to use the type default. Setting true requires the admin tier */
+            admin_sensitive?: boolean;
             /** @description The operator field map, validated against the type shape */
             fields: {
                 [key: string]: string;
@@ -2385,6 +2387,8 @@ export interface components {
              * @example /api/v1/schemas/SecretBody.json
              */
             readonly $schema?: string;
+            /** @description When true, only the admin tier may see or reveal this secret, regardless of placement */
+            admin_sensitive: boolean;
             fields: components["schemas"]["SecretFieldBody"][] | null;
             id: string;
             name: string;
@@ -2400,6 +2404,8 @@ export interface components {
             value: string;
         };
         SecretTypeBody: {
+            /** @description The admin_sensitive value the create form seeds for this type */
+            default_admin_sensitive: boolean;
             display_name: string;
             fields: components["schemas"]["SecretTypeFieldBody"][] | null;
             id: string;

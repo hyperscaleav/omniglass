@@ -1289,6 +1289,7 @@ Seals a secret at an owner scope (a global secret needs an all-scoped grant). Fi
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
+| `--admin-sensitive` | string | (none) | Admin-only visibility; omit to use the type default. Setting true requires the admin tier |
 | `--fields` | string | (none) | The operator field map, validated against the type shape |
 | `--name` | string | (none) | The cascade key; unique per owner |
 | `--owner` | string | (none) | The owning entity's name; omit for a global secret |
@@ -1319,13 +1320,13 @@ omniglass secret delete <id>
 
 ### `omniglass secret list`
 
-List secrets (admin directory)
+List secrets
 
 ```
 omniglass secret list
 ```
 
-Lists every secret with masked fields. Requires an all-scope read; the scoped, per-component view is the effective-secrets route. Gated by secret:read.
+Lists the secrets the caller may see, with masked fields, filtered to the read scope; admin-sensitive secrets appear only to the admin tier. Gated by secret:read, which the viewer floor does not carry (secret is a sensitive resource).
 
 Example:
 
@@ -1341,7 +1342,7 @@ Reveal a secret's plaintext
 omniglass secret reveal <id>
 ```
 
-Decrypts and returns a secret's field values, auditing the decrypt. Sensitive: gated by secret:reveal, which the viewer read floor does not carry, so only admin (secret:*) and owner may reveal.
+Decrypts and returns a secret's field values, auditing the decrypt. Gated by secret:reveal at the caller's scope; an admin-sensitive secret additionally needs the admin tier (secret:reveal:admin), so a scoped operator reveals device secrets but never a platform credential.
 
 Example:
 
@@ -1683,6 +1684,7 @@ Adds a key to the governed vocabulary. The name is normalized (a lowercase ident
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
+| `--allowed-values` | string | (none) | The value enum a bound value must belong to; omit for free text |
 | `--applies-to` | string | (none) | Entity kinds this key may bind to (component, system, location); omit for universal |
 | `--name` | string | (none) | The normalized key: a lowercase identifier, unique tenant-wide |
 | `--propagates` | string | (none) | Whether bindings cascade to descendants; defaults true |
@@ -1757,6 +1759,7 @@ Replaces a key's governance fields (applies_to, propagates); the name is fixed. 
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
+| `--allowed-values` | string | (none) | The value enum a bound value must belong to; omit for free text |
 | `--applies-to` | string | (none) | Entity kinds this key may bind to; omit for universal |
 | `--propagates` | string | (none) | Whether bindings cascade to descendants; defaults true |
 
@@ -1764,6 +1767,22 @@ Example:
 
 ```sh
 omniglass tag update <name>
+```
+
+### `omniglass tag values`
+
+List the distinct values bound for a key
+
+```
+omniglass tag values <name>
+```
+
+Returns the distinct values already bound for a key across the estate, for value autocomplete on a free-text key (an enum key carries its allowed set on the key itself). Rides the tag:read floor.
+
+Example:
+
+```sh
+omniglass tag values <name>
 ```
 
 ## `omniglass token`
