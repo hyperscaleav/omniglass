@@ -271,4 +271,7 @@ func (UnimplementedGateway) ListEntityTags(context.Context, string, *string, sco
 func (UnimplementedGateway) ResolveTags(context.Context, string, scope.Set) ([]ResolvedTag, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) EffectiveTags(context.Context, string, []string) (map[string]map[string]string, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) Close() {}

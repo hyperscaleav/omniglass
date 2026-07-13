@@ -137,6 +137,11 @@ components:
           type: string
         display_name:
           type: string
+        effective_tags:
+          additionalProperties:
+            type: string
+          description: The resolved effective tags (key -> winning value) that cascade onto this component; for the Tags column. Provenance is in the effective-tags detail view.
+          type: object
         id:
           type: string
         location_id:
@@ -1171,6 +1176,11 @@ components:
             - "null"
         display_name:
           type: string
+        effective_tags:
+          additionalProperties:
+            type: string
+          description: The resolved effective tags (key -> winning value) that cascade onto this location (global and its location tree); for the Tags column.
+          type: object
         id:
           type: string
         location_type:
@@ -1801,6 +1811,11 @@ components:
             - "null"
         display_name:
           type: string
+        effective_tags:
+          additionalProperties:
+            type: string
+          description: The resolved effective tags (key -> winning value) that cascade onto this system (global, its location, its system tree); for the Tags column.
+          type: object
         id:
           type: string
         location_id:

@@ -12,12 +12,13 @@ import (
 // locationBody is the wire shape of a location: name-addressable, classified by
 // location_type, optionally nested under a parent (by id).
 type locationBody struct {
-	ID           string   `json:"id"`
-	Name         string   `json:"name"`
-	DisplayName  string   `json:"display_name,omitempty"`
-	LocationType string   `json:"location_type"`
-	ParentID     *string  `json:"parent_id,omitempty"`
-	Actions      []string `json:"actions,omitempty" doc:"The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces."`
+	ID            string            `json:"id"`
+	Name          string            `json:"name"`
+	DisplayName   string            `json:"display_name,omitempty"`
+	LocationType  string            `json:"location_type"`
+	ParentID      *string           `json:"parent_id,omitempty"`
+	Actions       []string          `json:"actions,omitempty" doc:"The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces."`
+	EffectiveTags map[string]string `json:"effective_tags,omitempty" doc:"The resolved effective tags (key -> winning value) that cascade onto this location (global and its location tree); for the Tags column."`
 }
 
 func toLocationBody(l *storage.Location) locationBody {
@@ -97,6 +98,10 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		for i := range locs {
 			ids[i] = locs[i].ID
 		}
+		effTags, err := gw.EffectiveTags(ctx, "location", ids)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("list locations")
+		}
 		acts, err := a.rowActions(ctx, gw, "location", ids)
 		if err != nil {
 			return nil, huma.Error500InternalServerError("list locations")
@@ -106,6 +111,7 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		for i := range locs {
 			b := toLocationBody(&locs[i])
 			b.Actions = acts[locs[i].ID]
+			b.EffectiveTags = effTags[locs[i].ID]
 			out.Body.Locations = append(out.Body.Locations, b)
 		}
 		return out, nil

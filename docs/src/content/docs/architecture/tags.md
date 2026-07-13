@@ -83,6 +83,15 @@ A non-propagating key is admitted into the resolve only from the target entity i
 leak downward. The `GET /components/{name}/effective-tags` route returns the resolved set (winner plus shadowed
 candidates); `GET /components/{name}/tags` returns only the bindings set **directly** on the component.
 
+**Systems and locations resolve too.** A component walks the full arc, but every entity has an effective set. A
+**location** resolves `global` plus its own location tree. A **system** resolves `global`, its own system tree, and
+**the location it is placed at** (its `location_id` tree): a system in a PCI building surfaces `compliance: pci`, the
+same way a component picks up its own location's tags. This is the read behind the directory **Tags column**: the list
+routes (`GET /components`, `/systems`, `/locations`) each carry an **`effective_tags`** map (key to winning value,
+winners only) per row, resolved for the whole page in **one batched query** (a `Gateway.EffectiveTags` per kind, no
+per-row fetch). Provenance (which scope a value came from) stays in the per-entity effective-tags detail view, not the
+column.
+
 :::caution[Open question]
 Value-domain governance. Key normalization is settled (the governed registry plus the `tag:create` gate and the
 lowercase-identifier rule). The open part is the **value** side: whether a key may **constrain** its values (an enum or
