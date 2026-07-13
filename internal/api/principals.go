@@ -145,8 +145,8 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Method:      http.MethodGet,
 		Path:        "/principals",
 		Summary:     "List principals",
-		Description: "Lists all principals (humans and service accounts) with their grants. Gated by principal:read, which confers access only at all-scope.",
-		Middlewares: huma.Middlewares{a.authn, a.require("principal", "read")},
+		Description: "Lists all principals (humans and service accounts) with their grants. Gated by principal:read:admin.",
+		Middlewares: huma.Middlewares{a.authn, a.require("principal", "read", "admin")},
 	}, func(ctx context.Context, in *listPrincipalsInput) (*listPrincipalsOutput, error) {
 		prs, err := gw.ListPrincipals(ctx, a.scopeFor(ctx, "principal", "read"), in.IncludeArchived)
 		if err != nil {
@@ -168,8 +168,8 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Method:      http.MethodGet,
 		Path:        "/principals/{id}",
 		Summary:     "Get a principal",
-		Description: "Fetches one principal by id with its profile and grants. Gated by principal:read (all-scope).",
-		Middlewares: huma.Middlewares{a.authn, a.require("principal", "read")},
+		Description: "Fetches one principal by id with its profile and grants. Gated by principal:read:admin.",
+		Middlewares: huma.Middlewares{a.authn, a.require("principal", "read", "admin")},
 	}, func(ctx context.Context, in *principalPathInput) (*principalOutput, error) {
 		id, rerr := a.resolvePrincipalRef(ctx, in.ID)
 		if rerr != nil {
@@ -499,8 +499,8 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Method:      http.MethodGet,
 		Path:        "/principals/{id}/avatar",
 		Summary:     "Get a principal's profile picture",
-		Description: "Returns the principal's profile picture as a base64-encoded JPEG. Gated by principal:read (all-scope). A principal without a picture is a 404.",
-		Middlewares: huma.Middlewares{a.authn, a.require("principal", "read")},
+		Description: "Returns the principal's profile picture as a base64-encoded JPEG. Gated by principal:read:admin. A principal without a picture is a 404.",
+		Middlewares: huma.Middlewares{a.authn, a.require("principal", "read", "admin")},
 	}, func(ctx context.Context, in *avatarPathInput) (*avatarOutput, error) {
 		id, rerr := a.resolvePrincipalRef(ctx, in.ID)
 		if rerr != nil {

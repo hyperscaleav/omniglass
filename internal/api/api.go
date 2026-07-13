@@ -181,8 +181,8 @@ func registerRoutes(api huma.API, gw storage.Gateway, o options) {
 		Method:      http.MethodGet,
 		Path:        "/roles",
 		Summary:     "List roles",
-		Description: "Lists the roles with their metadata and effective (flattened) permissions. Gated by the role:read capability.",
-		Middlewares: huma.Middlewares{a.authn, a.require("role", "read")},
+		Description: "Lists the roles with their metadata and effective (flattened) permissions. Gated by the role:read:admin capability.",
+		Middlewares: huma.Middlewares{a.authn, a.require("role", "read", "admin")},
 	}, a.rolesHandler(gw))
 
 	registerLocationRoutes(api, a, gw)

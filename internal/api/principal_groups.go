@@ -104,8 +104,8 @@ func registerPrincipalGroupRoutes(api huma.API, a *authenticator, gw storage.Gat
 		Method:      http.MethodGet,
 		Path:        "/principal-groups",
 		Summary:     "List principal groups",
-		Description: "Every principal group. Gated by principal_group:read (all-scope).",
-		Middlewares: huma.Middlewares{a.authn, a.require("principal_group", "read")},
+		Description: "Every principal group. Gated by principal_group:read:admin.",
+		Middlewares: huma.Middlewares{a.authn, a.require("principal_group", "read", "admin")},
 	}, func(ctx context.Context, _ *struct{}) (*listGroupsOutput, error) {
 		groups, err := gw.ListGroups(ctx, a.scopeFor(ctx, "principal_group", "read"))
 		if err != nil {
@@ -124,8 +124,8 @@ func registerPrincipalGroupRoutes(api huma.API, a *authenticator, gw storage.Gat
 		Method:      http.MethodGet,
 		Path:        "/principal-groups/{id}",
 		Summary:     "Get a principal group",
-		Description: "One principal group by id. Gated by principal_group:read (all-scope).",
-		Middlewares: huma.Middlewares{a.authn, a.require("principal_group", "read")},
+		Description: "One principal group by id. Gated by principal_group:read:admin.",
+		Middlewares: huma.Middlewares{a.authn, a.require("principal_group", "read", "admin")},
 	}, func(ctx context.Context, in *groupPathInput) (*groupOutput, error) {
 		g, err := gw.GetGroup(ctx, in.ID, a.scopeFor(ctx, "principal_group", "read"))
 		if err != nil {
@@ -189,8 +189,8 @@ func registerPrincipalGroupRoutes(api huma.API, a *authenticator, gw storage.Gat
 		Method:      http.MethodGet,
 		Path:        "/principal-groups/{id}/members",
 		Summary:     "List a group's members",
-		Description: "The principals in a group. Gated by principal_group:read (all-scope).",
-		Middlewares: huma.Middlewares{a.authn, a.require("principal_group", "read")},
+		Description: "The principals in a group. Gated by principal_group:read:admin.",
+		Middlewares: huma.Middlewares{a.authn, a.require("principal_group", "read", "admin")},
 	}, func(ctx context.Context, in *groupPathInput) (*listMembersOutput, error) {
 		members, err := gw.ListGroupMembers(ctx, in.ID, a.scopeFor(ctx, "principal_group", "read"))
 		if err != nil {
@@ -239,8 +239,8 @@ func registerPrincipalGroupRoutes(api huma.API, a *authenticator, gw storage.Gat
 		Method:      http.MethodGet,
 		Path:        "/principal-groups/{id}/grants",
 		Summary:     "List a group's grants",
-		Description: "The role x scope grants a group confers on its members. Gated by principal_group:read (all-scope).",
-		Middlewares: huma.Middlewares{a.authn, a.require("principal_group", "read")},
+		Description: "The role x scope grants a group confers on its members. Gated by principal_group:read:admin.",
+		Middlewares: huma.Middlewares{a.authn, a.require("principal_group", "read", "admin")},
 	}, func(ctx context.Context, in *groupPathInput) (*listGroupGrantsOutput, error) {
 		grants, err := gw.ListGroupGrants(ctx, in.ID, a.scopeFor(ctx, "principal_group", "read"))
 		if err != nil {
