@@ -291,7 +291,7 @@ function ValueDomainEditor(p: { isEnum: boolean; values: string[]; onIsEnum: (b:
           <div class="flex flex-wrap items-center gap-1.5">
             <For each={p.values} fallback={<span class="text-[11px] text-base-content/40">No values yet. Add the allowed values below.</span>}>
               {(v) => (
-                <span class="badge badge-soft badge-neutral gap-1 font-data">
+                <span class="badge badge-ghost gap-1 font-data">
                   {v}
                   <button type="button" class="inline-flex opacity-60 hover:opacity-100" aria-label={`Remove ${v}`} onClick={() => p.onValues(p.values.filter((x) => x !== v))}>
                     <X size={11} />
