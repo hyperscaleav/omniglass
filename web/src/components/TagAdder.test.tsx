@@ -5,9 +5,9 @@ import TagAdder from "./TagAdder";
 import { TAGS_KEY, entityTagsKey, type Tag, type TagBinding, type EntityKind } from "../lib/tags";
 
 const registry: Tag[] = [
-  { id: "environment", name: "environment", applies_to: [], propagates: true },
-  { id: "category", name: "category", applies_to: ["component"], propagates: true },
-  { id: "rack_position", name: "rack_position", applies_to: ["location"], propagates: true },
+  { id: "environment", name: "environment", applies_to: [], propagates: true, allowed_values: [] },
+  { id: "category", name: "category", applies_to: ["component"], propagates: true, allowed_values: [] },
+  { id: "rack_position", name: "rack_position", applies_to: ["location"], propagates: true, allowed_values: [] },
 ];
 
 function mount(opts: { kind?: EntityKind; canUpdate?: boolean; canCreateKey?: boolean; bindings?: TagBinding[] } = {}) {

@@ -49,3 +49,28 @@ export function canCoin(all: Tag[], query: string, mayCreate: boolean): boolean 
 export function valueValid(value: string): boolean {
   return value.trim() !== "";
 }
+
+// isEnumKey reports whether a key constrains its values to a declared set. An
+// enum key shows a strict dropdown; a free key shows suggestions with free text.
+export function isEnumKey(tag: Tag): boolean {
+  return tag.allowed_values.length > 0;
+}
+
+// valueOptions returns the values to offer in the value stage: for an enum key
+// its declared allowed set (in declared order); for a free key the distinct
+// values already in use (as returned, already sorted). Both filtered by the
+// query as a case-insensitive substring.
+export function valueOptions(tag: Tag, distinct: string[], query: string): string[] {
+  const src = isEnumKey(tag) ? tag.allowed_values : distinct;
+  const q = query.trim().toLowerCase();
+  return src.filter((v) => q === "" || v.toLowerCase().includes(q));
+}
+
+// valueAllowed reports whether a value may be bound for a key: a member of the
+// enum for an enum key, or any non-empty value for a free key. Mirrors the
+// server gate so the add control never offers or accepts a value the write
+// rejects.
+export function valueAllowed(tag: Tag, value: string): boolean {
+  if (!isEnumKey(tag)) return valueValid(value);
+  return tag.allowed_values.includes(value);
+}

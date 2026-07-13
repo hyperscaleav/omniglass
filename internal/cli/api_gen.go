@@ -1803,6 +1803,7 @@ func generatedCommands() []*cobra.Command {
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
+			var fAllowedValues string
 			var fAppliesTo string
 			var fName string
 			var fPropagates string
@@ -1815,6 +1816,9 @@ func generatedCommands() []*cobra.Command {
 				RunE: func(cmd *cobra.Command, args []string) error {
 					path := fmt.Sprintf("/api/v1/tags")
 					body := map[string]any{}
+					if cmd.Flags().Changed("allowed-values") {
+						body["allowed_values"] = jsonOrString(fAllowedValues)
+					}
 					if cmd.Flags().Changed("applies-to") {
 						body["applies_to"] = jsonOrString(fAppliesTo)
 					}
@@ -1827,6 +1831,7 @@ func generatedCommands() []*cobra.Command {
 					return runAPICommand(cmd, "POST", path, body)
 				},
 			}
+			cmd.Flags().StringVar(&fAllowedValues, "allowed-values", "", "The value enum a bound value must belong to; omit for free text")
 			cmd.Flags().StringVar(&fAppliesTo, "applies-to", "", "Entity kinds this key may bind to (component, system, location); omit for universal")
 			cmd.Flags().StringVar(&fName, "name", "", "The normalized key: a lowercase identifier, unique tenant-wide")
 			_ = cmd.MarkFlagRequired("name")
@@ -1883,6 +1888,7 @@ func generatedCommands() []*cobra.Command {
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
+			var fAllowedValues string
 			var fAppliesTo string
 			var fPropagates string
 			cmd := &cobra.Command{
@@ -1894,6 +1900,9 @@ func generatedCommands() []*cobra.Command {
 				RunE: func(cmd *cobra.Command, args []string) error {
 					path := fmt.Sprintf("/api/v1/tags/%s", url.PathEscape(args[0]))
 					body := map[string]any{}
+					if cmd.Flags().Changed("allowed-values") {
+						body["allowed_values"] = jsonOrString(fAllowedValues)
+					}
 					if cmd.Flags().Changed("applies-to") {
 						body["applies_to"] = jsonOrString(fAppliesTo)
 					}
@@ -1903,8 +1912,23 @@ func generatedCommands() []*cobra.Command {
 					return runAPICommand(cmd, "PATCH", path, body)
 				},
 			}
+			cmd.Flags().StringVar(&fAllowedValues, "allowed-values", "", "The value enum a bound value must belong to; omit for free text")
 			cmd.Flags().StringVar(&fAppliesTo, "applies-to", "", "Entity kinds this key may bind to; omit for universal")
 			cmd.Flags().StringVar(&fPropagates, "propagates", "", "Whether bindings cascade to descendants; defaults true")
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "values <name>",
+				Short:   "List the distinct values bound for a key",
+				Long:    "Returns the distinct values already bound for a key across the estate, for value autocomplete on a free-text key (an enum key carries its allowed set on the key itself). Rides the tag:read floor.",
+				Example: "  omniglass tag values <name>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/tags/%s:values", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
 			return cmd
 		}())
 		roots = append(roots, parent)
