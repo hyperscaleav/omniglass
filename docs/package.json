@@ -13,7 +13,8 @@
     "@astrojs/mdx": "^5.0.0",
     "@astrojs/sitemap": "^3.2.1",
     "@astrojs/starlight": "^0.38.2",
-    "astro": "^6.1.0"
+    "astro": "^6.1.0",
+    "starlight-openapi": "^0.26.0"
   },
   "devDependencies": {
     "astro-d2": "^0.11.0"

@@ -28,13 +28,14 @@ image:
 
 # Regenerate the derived artifacts from the Huma API (the source of truth): the
 # OpenAPI 3.1 document (server-less, into api/openapi.{json,yaml}), the cobra
-# command tree (internal/cli/api_gen.go), and the typed SPA client
-# (web/src/api/schema.gen.ts). The spec is the seam every downstream client is
-# generated from. Run after any API change; the results are committed and
-# reviewed like code.
+# command tree (internal/cli/api_gen.go), the CLI reference page (from that
+# command tree, into docs/), and the typed SPA client (web/src/api/schema.gen.ts).
+# The spec is the seam every downstream client is generated from. Run after any
+# API change; the results are committed and reviewed like code.
 gen:
 	go run ./cmd/openapigen
 	go run ./cmd/cligen
+	go run ./cmd/docsgen
 	cd web && npm install && npm run gen:api
 
 # Regenerate just the typed SPA client from the committed OpenAPI. Requires node.
