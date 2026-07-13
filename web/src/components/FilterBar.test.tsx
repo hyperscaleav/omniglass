@@ -50,6 +50,21 @@ describe("FilterBar", () => {
     expect(onChips).toHaveBeenCalledWith([]);
   });
 
+  it("groups the tag facets under one top-level 'tag' entry, not each key", () => {
+    const { getByRole, getAllByRole } = render(() => <FilterBar keys={withTag} rows={[]} chips={[]} onChips={vi.fn()} />);
+    fireEvent.focus(getByRole("combobox"));
+    const labels = getAllByRole("option").map((o) => o.textContent ?? "");
+    expect(labels.some((l) => l.startsWith("tag:"))).toBe(true);
+    expect(labels.every((l) => !l.startsWith("env"))).toBe(true);
+  });
+
+  it("discloses the tag keys once the tag group is chosen", () => {
+    const { getByRole, getAllByRole } = render(() => <FilterBar keys={withTag} rows={[]} chips={[]} onChips={vi.fn()} />);
+    fireEvent.input(getByRole("combobox"), { target: { value: "tag:" } });
+    const labels = getAllByRole("option").map((o) => o.textContent ?? "");
+    expect(labels.some((l) => l.startsWith("env:"))).toBe(true);
+  });
+
   it("commits a value-less exists chip from the presence token", () => {
     const onChips = vi.fn();
     const { getByRole } = render(() => <FilterBar keys={withTag} rows={[]} chips={[]} onChips={onChips} />);

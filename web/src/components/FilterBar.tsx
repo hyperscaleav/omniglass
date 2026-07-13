@@ -10,6 +10,13 @@ import Button from "./Button";
 // map onto a standard listbox), with role/aria hand-set; Kobalte is used for the
 // modal widgets (Drawer/CommandPalette) where it fits cleanly.
 //
+// The tag facets (FilterKey.presence) are not promoted to the top-level field
+// list, which would crowd it and mix a field's match hint (substring/exact) with
+// a field kind (tag). Instead one "tag" entry stands for all of them: picking it
+// discloses the tag keys, and choosing a key rewrites the input to that key so the
+// op/value stages proceed unchanged. Typing a tag key directly (environment:...)
+// still works, so the guided path adds a step without removing the fast one.
+//
 // trailing flows the action rail into the same wrap row; bare drops the card
 // chrome; clearable shows Clear at the line end when chips exist.
 type Suggestion =
@@ -18,6 +25,9 @@ type Suggestion =
   | { kind: "value"; value: string; hint: string };
 
 const GLYPH_RE = /^(!=|>=|<=|[~=≠^$>≥<≤])/;
+// The synthetic field that groups the tag facets under one top-level entry.
+const TAG_GROUP = "tag";
+const isTag = <T,>(k: FilterKey<T>): boolean => k.presence === true;
 
 export default function FilterBar<T>(props: {
   keys: FilterKey<T>[];
@@ -41,15 +51,31 @@ export default function FilterBar<T>(props: {
   const suggestions = createMemo<Suggestion[]>(() => {
     const t = text();
     const colon = t.indexOf(":");
+    const tagKeys = props.keys.filter(isTag);
     if (colon < 0) {
       const frag = t.trim().toLowerCase();
-      return props.keys
-        .filter((k) => k.key.toLowerCase().includes(frag))
-        .map((k) => ({ kind: "key", label: `${k.key}:`, hint: k.hint ?? "" }) as Suggestion);
+      const sugs: Suggestion[] = props.keys
+        .filter((k) => !isTag(k) && k.key.toLowerCase().includes(frag))
+        .map((k) => ({ kind: "key", label: `${k.key}:`, hint: k.hint ?? "" }));
+      // One "tag" entry stands in for every tag facet; selecting it lists the keys.
+      if (tagKeys.length && TAG_GROUP.includes(frag)) sugs.push({ kind: "key", label: `${TAG_GROUP}:`, hint: "tag key" });
+      return sugs;
     }
-    const spec = keyOf(t.slice(0, colon));
-    if (!spec) return [];
+    const head = t.slice(0, colon);
     const rest = t.slice(colon + 1);
+    // The tag group discloses its keys; each rewrites the input to that key, so
+    // the following op/value stages are identical to any other field.
+    if (head === TAG_GROUP) {
+      const frag = rest.trim().toLowerCase();
+      return tagKeys
+        .filter((k) => k.key.toLowerCase().includes(frag))
+        .map((k) => {
+          const n = k.values ? k.values(props.rows).length : 0;
+          return { kind: "key", label: `${k.key}:`, hint: n ? `${n} value${n > 1 ? "s" : ""}` : "" } as Suggestion;
+        });
+    }
+    const spec = keyOf(head);
+    if (!spec) return [];
     const m = rest.match(GLYPH_RE);
     const frag = (m ? rest.slice(m[0].length) : rest).trim().toLowerCase();
     const all = spec.values ? spec.values(props.rows) : [];
