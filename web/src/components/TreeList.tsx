@@ -549,7 +549,7 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
             <colgroup>
               <col />
               <For each={visible()}>{(k) => <col style={{ width: `${cfg.columns[k].width}px` }} />}</For>
-              <col style={{ width: "104px" }} />
+              <col style={{ width: "150px" }} />
             </colgroup>
             <thead>
               <tr>
