@@ -170,7 +170,7 @@ viewer  <-  operator  <-  admin  <-  owner
 | `admin` | operator + delete on managed resources + manage IAM (principals, credentials, grants, custom roles) + curate registries (`<registry>:create`). IAM management is meaningful only from an `@ all` grant (a scoped `admin @ subtree` keeps the operator powers within its subtree but gets no IAM); registry curation is a plain capability, so a custom role can carry `<registry>:create` alone for a non-admin curator. Deliberately **not** the superuser: it cannot grant a role above its own tier ([ADR-0013](/architecture/decisions/#adr-0013-a-grant-cannot-confer-capabilities-the-granter-lacks)), so it cannot make itself owner, and it cannot delete `official` roles. |
 | `owner` | The break-glass superuser (`>`, the tail wildcard, covering every capability at every tier, including admin-sensitive ones and future resources). The unkillable role: at least one active `owner@all` grant must exist at all times (enforced by DB trigger), and an owner account cannot be impersonated. The bootstrap creates the first owner. |
 
-The console **Roles view** (`GET /roles`, gated `role:read`) lists these read-only with each role's display name, description, inheritance, and **effective permissions**, so an operator sees exactly what a role grants before assigning it. Custom-role editing is a later slice.
+The console **Roles view** (`GET /roles`, gated `role:read:admin`) lists these read-only with each role's display name, description, inheritance, and **effective permissions**, so an operator sees exactly what a role grants before assigning it. Custom-role editing is a later slice.
 
 ### Custom roles
 
@@ -459,7 +459,7 @@ re-encodes as JPEG at quality 82. A bad or oversize image is a **422**. The one 
 `has_avatar` flag and the console knows whether to render an image or fall back to initials without paying for
 the payload per row.
 
-The **read side is a JSON endpoint** (`GET /principals/{id}/avatar` gated `principal:read`,
+The **read side is a JSON endpoint** (`GET /principals/{id}/avatar` gated `principal:read:admin`,
 `GET /auth/me/avatar` on the self lane) returning `{ image_base64 }`, which the console renders as a `data:`
 URL; a principal without a picture is a **404**. It is deliberately JSON and **not** a raw `image/jpeg`
 handler ([ADR-0018](/architecture/decisions/#adr-0018-the-avatar-read-endpoint-is-json-not-raw-image-bytes)):
