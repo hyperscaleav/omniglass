@@ -125,7 +125,7 @@ export default function Systems() {
           </div>
         </Show>
         <div class="grid grid-cols-2 gap-5">
-          {ctx.fact("Type", <span class="badge badge-soft badge-neutral badge-sm">{n.type}</span>)}
+          {ctx.fact("Type", <span class="badge badge-ghost badge-sm">{n.type}</span>)}
           {ctx.fact("Location", <span>{n.locationName || "—"}</span>)}
           {ctx.fact("Technical name", <span class="font-data text-sm">{n.raw.name}</span>)}
           {ctx.fact("Parent", parent ? <button class="link text-sm" onClick={() => ctx.go(parent)}>{parent.display}</button> : <span class="text-base-content/50">Root</span>)}
@@ -138,7 +138,7 @@ export default function Systems() {
                 {(c, i) => (
                   <button class="flex w-full items-center gap-2.5 px-3 py-2 text-left hover:bg-base-content/5" classList={{ "border-t border-base-300": i() > 0 }} onClick={() => ctx.go(c)}>
                     <span class="flex-1 truncate text-sm">{c.display}</span>
-                    <span class="badge badge-soft badge-neutral badge-sm text-[10px]">{c.type}</span>
+                    <span class="badge badge-ghost badge-sm text-[10px]">{c.type}</span>
                     <ChevronRight size={14} />
                   </button>
                 )}
@@ -157,7 +157,7 @@ export default function Systems() {
                 {(c, i) => (
                   <button class="flex w-full items-center gap-2.5 px-3 py-2 text-left hover:bg-base-content/5" classList={{ "border-t border-base-300": i() > 0 }} onClick={() => navigate(`/components/${encodeURIComponent(c.name)}`)}>
                     <span class="flex-1 truncate text-sm">{c.display_name || c.name}</span>
-                    <span class="badge badge-soft badge-neutral badge-sm text-[10px]">{c.component_type}</span>
+                    <span class="badge badge-ghost badge-sm text-[10px]">{c.component_type}</span>
                     <ChevronRight size={14} />
                   </button>
                 )}
@@ -266,7 +266,7 @@ export default function Systems() {
     filterPlaceholder: "Filter by name, type, location…",
     nameWeight: () => 500,
     cellFor: (key, n) => {
-      if (key === "type") return <span class="badge badge-soft badge-neutral badge-sm">{n.type}</span>;
+      if (key === "type") return <span class="badge badge-ghost badge-sm">{n.type}</span>;
       if (key === "location") return <span class="text-base-content/70">{n.locationName || "—"}</span>;
       if (key === "components") return <span class="tnum text-base-content/60">{(compsBySystem().get(n.raw.id) ?? []).length}</span>;
       if (key === "tags") return <TagPills tags={n.tags} />;
