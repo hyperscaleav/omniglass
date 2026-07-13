@@ -55,6 +55,8 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0018](#adr-0018-the-avatar-read-endpoint-is-json-not-raw-image-bytes) | 2026-07-10 | Accepted | A profile picture is read through a JSON `image_base64` endpoint the console renders as a data URL, not a raw `image/jpeg` handler, so every route stays under the Huma authz middleware |
 | [ADR-0019](#adr-0019-every-credential-is-time-bounded-token-purpose-not-expiry-shape) | 2026-07-11 | Accepted | Every credential is time-bounded (reverses tokens-never-expire): session 12h, token / bootstrap 90d default with a `--ttl` capped at 365d; a `credential.purpose` column, not the expiry shape, tells session from token |
 | [ADR-0020](#adr-0020-variable-slice-1-types-inline-and-mirrors-the-secret-arc) | 2026-07-11 | Accepted | The variable member ships plaintext, typed inline against a `value_type` enum (no `variable_type` registry), on the secret owner arc; template scope, groups, the `$var:` consumer deferred |
+| [ADR-0021](#adr-0021-tag-slice-1-a-governed-key-registry-with-entity-update-gated-bindings) | 2026-07-12 | Accepted | The tag primitive ships its first slice (governed key registry, per-entity bindings, cascade); minting a key is admin `tag:create`, setting a value is the entity's own `update` |
+| [ADR-0022](#adr-0022-effective-tags-resolve-onto-systems-and-locations-a-placed-system-inherits-its-location) | 2026-07-13 | Accepted | Directory rows carry batch-resolved effective tags; effective resolution extends to systems and locations, and a placed system inherits its location's tags |
 
 ## Entries
 
@@ -497,3 +499,30 @@ below from the project's history. From here it grows one slice at a time.
   [#190](https://github.com/hyperscaleav/omniglass/issues/190), and binding onto a file
   [#191](https://github.com/hyperscaleav/omniglass/issues/191); groups and template scope ride
   [#184](https://github.com/hyperscaleav/omniglass/issues/184).
+
+### ADR-0022: effective tags resolve onto systems and locations; a placed system inherits its location
+
+- **Date:** 2026-07-13 | **Status:** Accepted | **Pages:** [tags](/architecture/tags/)
+- **Decision:** The directory **Tags column** shows a row's **effective** (resolved-cascade) tags, not its direct
+  bindings, so the list routes (`GET /components`, `/systems`, `/locations`) carry an **`effective_tags`** map (key to
+  winning value, winners only) per row, resolved for the whole page in **one batched query per kind**
+  (`Gateway.EffectiveTags(kind, ownerIDs)`, three per-kind recursive-CTE resolvers that thread a target id through the
+  ancestor chains and rank per `(target, key)`). This required **defining effective tags for systems and locations**,
+  which previously only components resolved: a **location** resolves `global` plus its own location tree; a **system**
+  resolves `global`, its own system tree, **and the location it is placed at** (its `location_id` tree). A placed
+  system therefore inherits its location's tags (a system in a PCI building surfaces `compliance: pci`), consistent
+  with how a component picks up its own `location_id`. A component is unchanged (the full four-band arc). The resolver
+  is **scopeless by contract**: the list query has already filtered the ids to the caller's read scope, so the batch
+  adds no per-id check, matching the existing `rowActions` batch. Winners only in the column; provenance (which scope a
+  value came from) stays in the per-entity effective-tags detail view.
+- **Context:** The tag-apply UI needs each directory row to show what tags actually apply to it. The cheaper option was
+  to embed a row's **direct** bindings (a flat, non-recursive `where owner_id = any($1)` lookup); the architect chose
+  **effective** so the column reflects inherited values, not just locally-set ones. That choice moved real work to the
+  backend (a batched recursive cascade versus a flat index scan) and forced the systems-and-locations effective
+  definition, whose one genuine call was whether a **system inherits its location**: yes, because a system carries a
+  `location_id` exactly as a component does, so treating it as placement-that-inherits is the consistent reading. The
+  added cost is a small bounded per-row recursion over the shallow estate trees, one round-trip, and is capped by the
+  directory page size. This is the first (backend) slice of the tag-apply UI; the Tags column, the type-to-add editor,
+  and tag search consume it in later slices.
+- **Closes:** issue [#201](https://github.com/hyperscaleav/omniglass/issues/201) (batch effective-tags resolver);
+  part of [#189](https://github.com/hyperscaleav/omniglass/issues/189).

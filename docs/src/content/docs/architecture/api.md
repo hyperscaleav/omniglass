@@ -232,6 +232,11 @@ owning entity's own write. The key vocabulary and an entity's tags read on the v
   overriding most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves
   only from a binding on the component itself (`component:read`; the component must be in the caller's
   component read-scope).
+- The directory list routes (`GET /components`, `/systems`, `/locations`) each carry an **`effective_tags`**
+  map (`{key: winning_value}`, winners only) on every row, resolved for the whole page in one batched query.
+  It feeds the Tags column. A component resolves the full arc; a location resolves global plus its location
+  tree; a system resolves global, its system tree, and the location it is placed at. Provenance lives in the
+  per-entity effective-tags detail, not the row.
 
 A `tagBinding` body is `{key, value, owner_kind, owner_id?, owner_name?}`.
 
