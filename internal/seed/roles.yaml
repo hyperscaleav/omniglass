@@ -53,16 +53,21 @@ roles:
       - "system:create,update,delete"
       - "location:create,update,delete"
       - "principal:*"
-      # purge (the irreversible hard delete) is admin-sensitive: a three-token
-      # permission that principal:* (two tokens) structurally cannot reach, so only
-      # admin (via this explicit grant) and owner (via >) can purge.
+      # read (the Users directory) and purge (the irreversible hard delete) are
+      # admin-sensitive: three-token permissions that principal:* (two tokens)
+      # structurally cannot reach, so only admin (via these explicit grants) and
+      # owner (via >) get the directory and the hard delete. Roles and groups gate
+      # their directory the same way.
+      - "principal:read:admin"
       - "principal:purge:admin"
       - "credential:*"
       - "secret:*"
       - "variable:*"
       - "principal_grant:*"
       - "principal_group:*"
+      - "principal_group:read:admin"
       - "role:*"
+      - "role:read:admin"
       - "audit:read:admin"
       - "datapoint_type:create"
       - "tag:*"

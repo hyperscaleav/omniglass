@@ -20,7 +20,7 @@ model underneath is [identity and access](/architecture/identity-access/).
 
 ## Roles
 
-**Settings > Roles** (with `role:read`) is the catalog of the built-in roles on the same list surface as Users
+**Settings > Roles** (with `role:read:admin`) is the catalog of the built-in roles on the same list surface as Users
 and Groups: a directory row per role (its id, whether it is **official**, what it inherits, and how many
 permissions it confers), ordered least to most powerful (viewer, operator, deploy, admin, owner). Open a row for
 its read-only **blade**: the description and its **effective permissions**, the full set it confers once
@@ -31,7 +31,7 @@ creation and editing are coming; today the built-in roles are read-only.
 
 ## Groups
 
-**Settings > Groups** (with `principal_group:read`) is the admin surface for **user groups**: a group holds
+**Settings > Groups** (with `principal_group:read:admin`) is the admin surface for **user groups**: a group holds
 `role @ scope` grants, and every member **inherits** them, so you assign access to a team once instead of per
 user. Pick a row to open the group's **blade**: its **members** (add any principal, remove one, or open a member to
 stack that user's blade over the group) and its **grants**, built with the same grant builder the user detail uses. A grant added to the group takes effect for every member

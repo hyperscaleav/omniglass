@@ -55,8 +55,8 @@ func TestDisableRevokesLiveSessionAPI(t *testing.T) {
 
 	subjID := meID(t, c, subjTok)
 
-	// The live token works: a viewer@all lists the directory.
-	if code, _ := c.send(subjTok, "GET", "/principals", nil); code != http.StatusOK {
+	// The live token works: a viewer@all reads an in-scope resource.
+	if code, _ := c.send(subjTok, "GET", "/locations", nil); code != http.StatusOK {
 		t.Fatalf("live token before disable: want 200, got %d", code)
 	}
 	// Disable the subject with a different admin's token.
@@ -65,14 +65,14 @@ func TestDisableRevokesLiveSessionAPI(t *testing.T) {
 	}
 	// The very next request on the same live token is rejected (401), not served
 	// from a cached session.
-	if code, _ := c.send(subjTok, "GET", "/principals", nil); code != http.StatusUnauthorized {
+	if code, _ := c.send(subjTok, "GET", "/locations", nil); code != http.StatusUnauthorized {
 		t.Fatalf("disabled token next request: want 401, got %d", code)
 	}
 	// Re-enabling restores the same token immediately.
 	if code, _ := c.send(ownerTok, "POST", "/principals/"+subjID+":enable", nil); code != http.StatusNoContent {
 		t.Fatalf("enable: want 204, got %d", code)
 	}
-	if code, _ := c.send(subjTok, "GET", "/principals", nil); code != http.StatusOK {
+	if code, _ := c.send(subjTok, "GET", "/locations", nil); code != http.StatusOK {
 		t.Fatalf("re-enabled token: want 200, got %d", code)
 	}
 }

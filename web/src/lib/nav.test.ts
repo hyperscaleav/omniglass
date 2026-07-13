@@ -67,9 +67,22 @@ describe("filterNav", () => {
   // an explicit `audit:read:admin` (admin) and `>` (owner) do.
   it("gates Audit on the admin tier, matching the server's audit:read:admin route", () => {
     expect(section("Settings", ["*:read"])).not.toContain("Audit");
-    expect(section("Settings", ["*:read"])).toContain("Users"); // a normal 2-token read still shows
     expect(section("Settings", ["audit:read:admin"])).toContain("Audit");
     expect(section("Settings", [">"])).toContain("Audit");
+  });
+
+  // The Users, Roles, and Groups directories are admin-tier reads
+  // (<resource>:read:admin), matching the server routes: a viewer's *:read cannot
+  // reach them, while admin's explicit read:admin grants (and owner's >) do.
+  it("hides Users, Roles, and Groups from a *:read principal, keeps them for admin", () => {
+    const floor = section("Settings", ["*:read"]);
+    expect(floor).not.toContain("Users");
+    expect(floor).not.toContain("Roles");
+    expect(floor).not.toContain("Groups");
+    const adm = section("Settings", ["principal:read:admin", "role:read:admin", "principal_group:read:admin"]);
+    expect(adm).toContain("Users");
+    expect(adm).toContain("Roles");
+    expect(adm).toContain("Groups");
   });
 });
 
@@ -81,9 +94,9 @@ describe("routeTokens", () => {
     expect(routeTokens("/web/locations")).toEqual(["location", "read"]);
     expect(routeTokens("/web/components")).toEqual(["component", "read"]);
     expect(routeTokens("/web/systems")).toEqual(["system", "read"]);
-    expect(routeTokens("/web/users")).toEqual(["principal", "read"]);
-    expect(routeTokens("/web/roles")).toEqual(["role", "read"]);
-    expect(routeTokens("/web/groups")).toEqual(["principal_group", "read"]);
+    expect(routeTokens("/web/users")).toEqual(["principal", "read", "admin"]);
+    expect(routeTokens("/web/roles")).toEqual(["role", "read", "admin"]);
+    expect(routeTokens("/web/groups")).toEqual(["principal_group", "read", "admin"]);
     expect(routeTokens("/web/secrets")).toEqual(["secret", "read"]);
     expect(routeTokens("/web/audit")).toEqual(["audit", "read", "admin"]); // the admin tier
   });

@@ -13,7 +13,7 @@ The dividing line is the [two authorization layers](/architecture/identity-acces
 enforced in the app on every request: a `<resource>:<action>` **permission** checked on every
 route, and an ABAC **scope** injected by the Storage Gateway on every applicable query. An
 administrator is simply a principal whose grants carry the admin-tier permissions (`principal:*`,
-`role:read`, `audit:read`, `secret:*`, and so on); the surfaces below render and refuse exactly
+`role:read:admin`, `audit:read:admin`, `secret:*`, and so on); the surfaces below render and refuse exactly
 along those grants, so what an administrator sees is what they are allowed to change.
 
 ## Where the admin surfaces live

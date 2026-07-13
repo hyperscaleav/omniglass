@@ -156,7 +156,7 @@ Get a principal's profile picture
 omniglass avatar list <id>
 ```
 
-Returns the principal's profile picture as a base64-encoded JPEG. Gated by principal:read (all-scope). A principal without a picture is a 404.
+Returns the principal's profile picture as a base64-encoded JPEG. Gated by principal:read:admin. A principal without a picture is a 404.
 
 Example:
 
@@ -484,7 +484,7 @@ List a group's grants
 omniglass grant list <id>
 ```
 
-The role x scope grants a group confers on its members. Gated by principal_group:read (all-scope).
+The role x scope grants a group confers on its members. Gated by principal_group:read:admin.
 
 Example:
 
@@ -830,7 +830,7 @@ List a group's members
 omniglass member list <id>
 ```
 
-The principals in a group. Gated by principal_group:read (all-scope).
+The principals in a group. Gated by principal_group:read:admin.
 
 Example:
 
@@ -929,7 +929,7 @@ Get a principal
 omniglass principal get <id>
 ```
 
-Fetches one principal by id with its profile and grants. Gated by principal:read (all-scope).
+Fetches one principal by id with its profile and grants. Gated by principal:read:admin.
 
 Example:
 
@@ -966,7 +966,7 @@ List principals
 omniglass principal list [flags]
 ```
 
-Lists all principals (humans and service accounts) with their grants. Gated by principal:read, which confers access only at all-scope.
+Lists all principals (humans and service accounts) with their grants. Gated by principal:read:admin.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -1191,7 +1191,7 @@ Get a principal group
 omniglass principal-group get <id>
 ```
 
-One principal group by id. Gated by principal_group:read (all-scope).
+One principal group by id. Gated by principal_group:read:admin.
 
 Example:
 
@@ -1207,7 +1207,7 @@ List principal groups
 omniglass principal-group list
 ```
 
-Every principal group. Gated by principal_group:read (all-scope).
+Every principal group. Gated by principal_group:read:admin.
 
 Example:
 
@@ -1249,7 +1249,7 @@ List roles
 omniglass role list
 ```
 
-Lists the roles with their metadata and effective (flattened) permissions. Gated by the role:read capability.
+Lists the roles with their metadata and effective (flattened) permissions. Gated by the role:read:admin capability.
 
 Example:
 

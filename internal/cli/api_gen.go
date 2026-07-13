@@ -190,7 +190,7 @@ func generatedCommands() []*cobra.Command {
 			cmd := &cobra.Command{
 				Use:     "list <id>",
 				Short:   "Get a principal's profile picture",
-				Long:    "Returns the principal's profile picture as a base64-encoded JPEG. Gated by principal:read (all-scope). A principal without a picture is a 404.",
+				Long:    "Returns the principal's profile picture as a base64-encoded JPEG. Gated by principal:read:admin. A principal without a picture is a 404.",
 				Example: "  omniglass avatar list <id>",
 				Args:    cobra.ExactArgs(1),
 				RunE: func(cmd *cobra.Command, args []string) error {
@@ -559,7 +559,7 @@ func generatedCommands() []*cobra.Command {
 			cmd := &cobra.Command{
 				Use:     "list <id>",
 				Short:   "List a group's grants",
-				Long:    "The role x scope grants a group confers on its members. Gated by principal_group:read (all-scope).",
+				Long:    "The role x scope grants a group confers on its members. Gated by principal_group:read:admin.",
 				Example: "  omniglass grant list <id>",
 				Args:    cobra.ExactArgs(1),
 				RunE: func(cmd *cobra.Command, args []string) error {
@@ -920,7 +920,7 @@ func generatedCommands() []*cobra.Command {
 			cmd := &cobra.Command{
 				Use:     "list <id>",
 				Short:   "List a group's members",
-				Long:    "The principals in a group. Gated by principal_group:read (all-scope).",
+				Long:    "The principals in a group. Gated by principal_group:read:admin.",
 				Example: "  omniglass member list <id>",
 				Args:    cobra.ExactArgs(1),
 				RunE: func(cmd *cobra.Command, args []string) error {
@@ -1019,7 +1019,7 @@ func generatedCommands() []*cobra.Command {
 			cmd := &cobra.Command{
 				Use:     "get <id>",
 				Short:   "Get a principal",
-				Long:    "Fetches one principal by id with its profile and grants. Gated by principal:read (all-scope).",
+				Long:    "Fetches one principal by id with its profile and grants. Gated by principal:read:admin.",
 				Example: "  omniglass principal get <id>",
 				Args:    cobra.ExactArgs(1),
 				RunE: func(cmd *cobra.Command, args []string) error {
@@ -1061,7 +1061,7 @@ func generatedCommands() []*cobra.Command {
 			cmd := &cobra.Command{
 				Use:     "list",
 				Short:   "List principals",
-				Long:    "Lists all principals (humans and service accounts) with their grants. Gated by principal:read, which confers access only at all-scope.",
+				Long:    "Lists all principals (humans and service accounts) with their grants. Gated by principal:read:admin.",
 				Example: "  omniglass principal list",
 				Args:    cobra.ExactArgs(0),
 				RunE: func(cmd *cobra.Command, args []string) error {
@@ -1302,7 +1302,7 @@ func generatedCommands() []*cobra.Command {
 			cmd := &cobra.Command{
 				Use:     "get <id>",
 				Short:   "Get a principal group",
-				Long:    "One principal group by id. Gated by principal_group:read (all-scope).",
+				Long:    "One principal group by id. Gated by principal_group:read:admin.",
 				Example: "  omniglass principal-group get <id>",
 				Args:    cobra.ExactArgs(1),
 				RunE: func(cmd *cobra.Command, args []string) error {
@@ -1316,7 +1316,7 @@ func generatedCommands() []*cobra.Command {
 			cmd := &cobra.Command{
 				Use:     "list",
 				Short:   "List principal groups",
-				Long:    "Every principal group. Gated by principal_group:read (all-scope).",
+				Long:    "Every principal group. Gated by principal_group:read:admin.",
 				Example: "  omniglass principal-group list",
 				Args:    cobra.ExactArgs(0),
 				RunE: func(cmd *cobra.Command, args []string) error {
@@ -1367,7 +1367,7 @@ func generatedCommands() []*cobra.Command {
 			cmd := &cobra.Command{
 				Use:     "list",
 				Short:   "List roles",
-				Long:    "Lists the roles with their metadata and effective (flattened) permissions. Gated by the role:read capability.",
+				Long:    "Lists the roles with their metadata and effective (flattened) permissions. Gated by the role:read:admin capability.",
 				Example: "  omniglass role list",
 				Args:    cobra.ExactArgs(0),
 				RunE: func(cmd *cobra.Command, args []string) error {

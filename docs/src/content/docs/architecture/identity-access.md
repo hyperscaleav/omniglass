@@ -191,13 +191,13 @@ viewer  <-  operator  <-  admin  <-  owner
 
 | role | what it can do |
 |---|---|
-| `viewer` | Read every operator-facing resource within scope. |
+| `viewer` | Read every operator-facing resource within scope. The IAM directories (`principal`, `role`, `principal_group`) are **not** operator-facing: their reads are admin-tier (`<resource>:read:admin`), so `viewer`'s `*:read` does not reach the Users, Roles, or Groups pages ([ADR-0023](/architecture/decisions/#adr-0023-the-iam-directory-reads-principal-role-principal_group-are-admin-tier)). |
 | `operator` | viewer + create/update on components, interfaces, tasks, rules, config, secrets; ack/snooze/resolve alarms. Secret **delete** and the **reveal/copy** decrypt stay off the role (admin `secret:*` and owner only). |
 | `deploy` | viewer + create/update on locations, systems, and components (the integrator / field-tech role, typically granted with the `subtree_excl_root` operator to build out a subtree without editing its root). No delete. |
 | `admin` | operator + delete on managed resources + manage IAM (principals, credentials, grants, custom roles) + curate registries (`<registry>:create`). IAM management is meaningful only from an `@ all` grant (a scoped `admin @ subtree` keeps the operator powers within its subtree but gets no IAM); registry curation is a plain capability, so a custom role can carry `<registry>:create` alone for a non-admin curator. Deliberately **not** the superuser: it cannot grant a role above its own tier ([ADR-0013](/architecture/decisions/#adr-0013-a-grant-cannot-confer-capabilities-the-granter-lacks)), so it cannot make itself owner, and it cannot delete `official` roles. |
 | `owner` | The break-glass superuser (`>`, the tail wildcard, covering every capability at every tier, including admin-sensitive ones and future resources). The unkillable role: at least one active `owner@all` grant must exist at all times (enforced by DB trigger), and an owner account cannot be impersonated. The bootstrap creates the first owner. |
 
-The console **Roles view** (`GET /roles`, gated `role:read`) lists these read-only with each role's display name, description, inheritance, and **effective permissions**, so an operator sees exactly what a role grants before assigning it. Custom-role editing is a later slice.
+The console **Roles view** (`GET /roles`, gated `role:read:admin`) lists these read-only with each role's display name, description, inheritance, and **effective permissions**, so an operator sees exactly what a role grants before assigning it. Custom-role editing is a later slice.
 
 ### Custom roles
 
@@ -222,7 +222,7 @@ audit:read:admin              <- an admin-sensitive permission (three tokens)
 >                             <- everything, at every tier (the owner superuser)
 ```
 
-A normal permission is `resource:action` (two tokens); an **admin-sensitive** one carries a third `admin` token (`audit:read:admin`). Because `*` matches exactly one token, a two-token pattern like `*:read` (viewer) or `*:*` or `principal:*` **structurally cannot** match a three-token `:admin` permission: admin-sensitivity is a **deeper token**, not a special case in the matcher. The whole-estate superuser is `>` (owner); `<resource>:>` grants everything under one resource including its admin tier. Actions are HTTP-aligned: `read` (GET), `create` (POST), `update` (PATCH/PUT), `delete` (DELETE), plus resource-specific verbs (`ack`, `snooze`, `resolve` for alarms; future kinds add their own). The aggregate `write` does not exist as an alias.
+A normal permission is `resource:action` (two tokens); an **admin-sensitive** one carries a third `admin` token (`audit:read:admin`). Because `*` matches exactly one token, a two-token pattern like `*:read` (viewer) or `*:*` or `principal:*` **structurally cannot** match a three-token `:admin` permission: admin-sensitivity is a **deeper token**, not a special case in the matcher. The IAM directory reads (`principal:read:admin`, `role:read:admin`, `principal_group:read:admin`) use this to keep the Users, Roles, and Groups pages off the `viewer` floor, alongside `audit:read:admin` and `principal:purge:admin`; `admin` carries each explicitly, since its `principal:*` (two tokens) cannot reach them. The whole-estate superuser is `>` (owner); `<resource>:>` grants everything under one resource including its admin tier. Actions are HTTP-aligned: `read` (GET), `create` (POST), `update` (PATCH/PUT), `delete` (DELETE), plus resource-specific verbs (`ack`, `snooze`, `resolve` for alarms; future kinds add their own). The aggregate `write` does not exist as an alias.
 
 Inheritance composes permissions **by union**:
 
@@ -488,7 +488,7 @@ re-encodes as JPEG at quality 82. A bad or oversize image is a **422**. The one 
 `has_avatar` flag and the console knows whether to render an image or fall back to initials without paying for
 the payload per row.
 
-The **read side is a JSON endpoint** (`GET /principals/{id}/avatar` gated `principal:read`,
+The **read side is a JSON endpoint** (`GET /principals/{id}/avatar` gated `principal:read:admin`,
 `GET /auth/me/avatar` on the self lane) returning `{ image_base64 }`, which the console renders as a `data:`
 URL; a principal without a picture is a **404**. It is deliberately JSON and **not** a raw `image/jpeg`
 handler ([ADR-0018](/architecture/decisions/#adr-0018-the-avatar-read-endpoint-is-json-not-raw-image-bytes)):

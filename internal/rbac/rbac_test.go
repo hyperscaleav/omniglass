@@ -51,6 +51,12 @@ func TestTopicPatternMatching(t *testing.T) {
 		{"viewer *:read misses audit:read:admin", []string{"*:read"}, []string{"audit", "read", "admin"}, false},
 		{"*:* misses audit:read:admin", []string{"*:*"}, []string{"audit", "read", "admin"}, false},
 		{"principal:* misses principal:delete:admin", []string{"principal:*"}, []string{"principal", "delete", "admin"}, false},
+		// The IAM directory reads sit at the admin tier: viewer's *:read and a
+		// 2-token resource wildcard cannot reach them, which is why admin carries an
+		// explicit <resource>:read:admin grant alongside its wildcard.
+		{"*:read misses principal:read:admin", []string{"*:read"}, []string{"principal", "read", "admin"}, false},
+		{"principal:* misses principal:read:admin", []string{"principal:*"}, []string{"principal", "read", "admin"}, false},
+		{"explicit principal:read:admin reaches it", []string{"principal:read:admin"}, []string{"principal", "read", "admin"}, true},
 		// The tail wildcard and explicit grants do reach it.
 		{"owner > reaches audit:read:admin", []string{">"}, []string{"audit", "read", "admin"}, true},
 		{"audit:> reaches audit:read:admin", []string{"audit:>"}, []string{"audit", "read", "admin"}, true},

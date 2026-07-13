@@ -57,6 +57,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0020](#adr-0020-variable-slice-1-types-inline-and-mirrors-the-secret-arc) | 2026-07-11 | Accepted | The variable member ships plaintext, typed inline against a `value_type` enum (no `variable_type` registry), on the secret owner arc; template scope, groups, the `$var:` consumer deferred |
 | [ADR-0021](#adr-0021-tag-slice-1-a-governed-key-registry-with-entity-update-gated-bindings) | 2026-07-12 | Accepted | The tag primitive ships its first slice (governed key registry, per-entity bindings, cascade); minting a key is admin `tag:create`, setting a value is the entity's own `update` |
 | [ADR-0022](#adr-0022-effective-tags-resolve-onto-systems-and-locations-a-placed-system-inherits-its-location) | 2026-07-13 | Accepted | Directory rows carry batch-resolved effective tags; effective resolution extends to systems and locations, and a placed system inherits its location's tags |
+| [ADR-0023](#adr-0023-the-iam-directory-reads-principal-role-principal_group-are-admin-tier) | 2026-07-13 | Accepted | The IAM directory reads (principal, role, principal_group) move to the admin tier (`<resource>:read:admin`), so viewer's `*:read` floor no longer reaches Users, Roles, and Groups |
 
 ## Entries
 
@@ -526,3 +527,24 @@ below from the project's history. From here it grows one slice at a time.
   and tag search consume it in later slices.
 - **Closes:** issue [#201](https://github.com/hyperscaleav/omniglass/issues/201) (batch effective-tags resolver);
   part of [#189](https://github.com/hyperscaleav/omniglass/issues/189).
+
+### ADR-0023: the IAM directory reads (principal, role, principal_group) are admin-tier
+
+- **Date:** 2026-07-13 | **Status:** Accepted | **Pages:** [identity and access](/architecture/identity-access/)
+- **Decision:** The **read** (list and get) of `principal`, `role`, and `principal_group` moves from a two-token
+  `<resource>:read` to the admin-sensitive **`<resource>:read:admin`**, so the `viewer` read floor (`*:read`) no
+  longer reaches the Users, Roles, and Groups directories. `admin` carries an explicit `principal:read:admin`,
+  `role:read:admin`, and `principal_group:read:admin` alongside its `<resource>:*` wildcards, the same shape as the
+  existing `principal:purge:admin`; `owner`'s `>` is unaffected. Create, update, and the lifecycle verbs stay
+  two-token: they were never reachable by a non-admin, so only the directory read needed promoting. The console
+  gates the three Settings tabs on the same three-token permission and the route guard reads it from the shared nav
+  map, so the sidebar and the server never diverge.
+- **Context:** `deploy` (an integrator or field tech) inherits `viewer`, whose `*:read` is a single-token resource
+  wildcard. Because `*` matches exactly one token, `*:read` matched `principal:read`/`role:read`/`principal_group:read`,
+  and the read floor shares that reach, so a field tech could enumerate every user, role, and group over the API (a
+  real 200, not just a visible menu). Promoting the directory reads reuses
+  [ADR-0015](/architecture/decisions/#adr-0015-permissions-are-topic-patterns-single-token-and-tail-wildcards)'s
+  deeper-token rule rather than adding a matcher special case: admin-sensitivity is a third token `*` cannot reach.
+  Secrets are a separate concern (an operator legitimately reads device secrets in scope), handled by a forthcoming
+  slice that combines placement scope with a per-secret admin-sensitive flag; this ADR is the IAM directories only.
+- **Closes:** issue [#197](https://github.com/hyperscaleav/omniglass/issues/197).
