@@ -424,7 +424,7 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
           }
         }}
       >
-        <td>
+        <td class="min-w-52">
           <span class="inline-flex w-full items-center gap-1.5" style={{ "padding-left": isTree() ? `${p.row.depth * 20}px` : "0" }}>
             <Show when={isTree()}>
               <span class="inline-flex w-4 flex-none justify-center text-base-content/40">

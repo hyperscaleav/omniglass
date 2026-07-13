@@ -116,6 +116,12 @@
   background: color-mix(in oklch, var(--tag-seed) 15%, transparent);
   border-color: color-mix(in oklch, var(--tag-seed) 45%, transparent);
 }
+/* the right-edge fade on a one-line tag row that overflows its column, the
+   ellipsis cue for the hover-to-reveal tooltip. Applied only when clipped. */
+.tag-fade {
+  -webkit-mask-image: linear-gradient(to right, #000 82%, transparent);
+  mask-image: linear-gradient(to right, #000 82%, transparent);
+}
 
 /* neutral chip, fixed once for the whole app. daisyUI 5's badge-ghost resolves
    to bg-base-200, which on our card surfaces is nearly the surrounding color, so

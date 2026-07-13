@@ -605,7 +605,9 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   curated, yellow-green-pruned 12-hue ramp) maps a key to a stable hue, so the same key is the same color
   everywhere; a shared `TagPills` component crosses only that hue into a new unlayered `.tag-pill` CSS recipe
   (text and outline are the seed, the fill is the seed at 15% via `color-mix`), with lightness and chroma in
-  per-theme tokens so one hue reads correctly and stays contrast-safe in both themes. The column registers in each
+  per-theme tokens so one hue reads correctly and stays contrast-safe in both themes. The chips stay on one
+  line, fading at the edge when they overflow, and a portaled hover tooltip reveals the full wrapped set (a `wrap`
+  prop on `TagPills` is the seam for a future per-table wrap toggle). The column registers in each
   page descriptor, so the columns menu shows, hides, and reorders it, and it sorts by key set. A stored per-key
   color override is a later slice; the type-to-add editor and tag search follow ([#189](https://github.com/hyperscaleav/omniglass/issues/189)).
   Proven by a `tagHue` determinism unit test (stable, in-ramp, spread) and a `TagPills` render test (sorted

@@ -47,7 +47,7 @@ export const locationsDescriptor: PageDescriptor = {
     type: { label: "Type", width: 120 },
     parent: { label: "Parent", width: 190 },
     tech: { label: "Technical name", width: 200 },
-    tags: { label: "Tags", width: 280 },
+    tags: { label: "Tags", width: 340 },
   },
   columnKeys: ["type", "parent", "tech", "tags"],
   defaultCols: ["type", "parent", "tags"],

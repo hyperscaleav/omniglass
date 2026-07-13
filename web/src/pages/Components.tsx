@@ -45,7 +45,7 @@ export const componentsDescriptor: PageDescriptor = {
     type: { label: "Type", width: 170 },
     system: { label: "System", width: 190 },
     location: { label: "Location", width: 190 },
-    tags: { label: "Tags", width: 280 },
+    tags: { label: "Tags", width: 340 },
   },
   columnKeys: ["type", "system", "location", "tags"],
   defaultCols: ["type", "system", "location", "tags"],

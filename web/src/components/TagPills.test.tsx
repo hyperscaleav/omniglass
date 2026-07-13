@@ -30,4 +30,11 @@ describe("TagPills", () => {
     expect(container.querySelector(".tag-pill")).toBeNull();
     expect(container.textContent).toContain("—");
   });
+
+  it("wrap mode lays every chip out inline without the one-line tooltip trigger", () => {
+    const { container } = render(() => <TagPills wrap tags={{ a: "1", b: "2", c: "3" }} />);
+    expect(container.querySelectorAll(".tag-pill").length).toBe(3);
+    // no clipped one-line row in wrap mode
+    expect(container.querySelector(".tag-fade")).toBeNull();
+  });
 });
