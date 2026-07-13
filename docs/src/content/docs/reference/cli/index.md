@@ -135,7 +135,7 @@ Get a principal's profile picture
 omniglass avatar list <id>
 ```
 
-Returns the principal's profile picture as a base64-encoded JPEG. Gated by principal:read (all-scope). A principal without a picture is a 404.
+Returns the principal's profile picture as a base64-encoded JPEG. Gated by principal:read:admin. A principal without a picture is a 404.
 
 Example:
 
@@ -234,6 +234,63 @@ Example:
 omniglass component list
 ```
 
+### `omniglass component listTags`
+
+List tags on a component
+
+```
+omniglass component listTags <name>
+```
+
+Lists the tags bound directly on a component (not the resolved cascade). Gated by component:read.
+
+Example:
+
+```sh
+omniglass component listTags <name>
+```
+
+### `omniglass component removeTag`
+
+Remove a tag value from a component
+
+```
+omniglass component removeTag <name> [flags]
+```
+
+Removes a key's value from a component. Gated by component:update.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--key` | string | (none) | The tag key to remove |
+
+Example:
+
+```sh
+omniglass component removeTag <name> --key key
+```
+
+### `omniglass component setTag`
+
+Set a tag value on a component
+
+```
+omniglass component setTag <name> [flags]
+```
+
+Binds a value for a key on a component. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by component:update.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--key` | string | (none) | The tag key (must exist and apply to this kind) |
+| `--value` | string | (none) | The bound value |
+
+Example:
+
+```sh
+omniglass component setTag <name> --key key --value value
+```
+
 ### `omniglass component update`
 
 Update a component
@@ -273,6 +330,26 @@ Example:
 
 ```sh
 omniglass effective-secret list <name>
+```
+
+## `omniglass effective-tag`
+
+Commands for the effective-tag resource
+
+### `omniglass effective-tag list`
+
+Effective tags for a component
+
+```
+omniglass effective-tag list <name>
+```
+
+Resolves the tags that cascade onto a component (global -> location -> system -> component): keys union, values override most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves only from a binding on the component itself. Gated by component:read; the component must be in the caller's component read scope.
+
+Example:
+
+```sh
+omniglass effective-tag list <name>
 ```
 
 ## `omniglass effective-variable`
@@ -385,7 +462,7 @@ List a group's grants
 omniglass grant list <id>
 ```
 
-The role x scope grants a group confers on its members. Gated by principal_group:read (all-scope).
+The role x scope grants a group confers on its members. Gated by principal_group:read:admin.
 
 Example:
 
@@ -482,6 +559,63 @@ Example:
 
 ```sh
 omniglass location list
+```
+
+### `omniglass location listTags`
+
+List tags on a location
+
+```
+omniglass location listTags <name>
+```
+
+Lists the tags bound directly on a location (not the resolved cascade). Gated by location:read.
+
+Example:
+
+```sh
+omniglass location listTags <name>
+```
+
+### `omniglass location removeTag`
+
+Remove a tag value from a location
+
+```
+omniglass location removeTag <name> [flags]
+```
+
+Removes a key's value from a location. Gated by location:update.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--key` | string | (none) | The tag key to remove |
+
+Example:
+
+```sh
+omniglass location removeTag <name> --key key
+```
+
+### `omniglass location setTag`
+
+Set a tag value on a location
+
+```
+omniglass location setTag <name> [flags]
+```
+
+Binds a value for a key on a location. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by location:update.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--key` | string | (none) | The tag key (must exist and apply to this kind) |
+| `--value` | string | (none) | The bound value |
+
+Example:
+
+```sh
+omniglass location setTag <name> --key key --value value
 ```
 
 ### `omniglass location update`
@@ -674,7 +808,7 @@ List a group's members
 omniglass member list <id>
 ```
 
-The principals in a group. Gated by principal_group:read (all-scope).
+The principals in a group. Gated by principal_group:read:admin.
 
 Example:
 
@@ -773,7 +907,7 @@ Get a principal
 omniglass principal get <id>
 ```
 
-Fetches one principal by id with its profile and grants. Gated by principal:read (all-scope).
+Fetches one principal by id with its profile and grants. Gated by principal:read:admin.
 
 Example:
 
@@ -810,7 +944,7 @@ List principals
 omniglass principal list [flags]
 ```
 
-Lists all principals (humans and service accounts) with their grants. Gated by principal:read, which confers access only at all-scope.
+Lists all principals (humans and service accounts) with their grants. Gated by principal:read:admin.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -983,7 +1117,7 @@ Get a principal group
 omniglass principal-group get <id>
 ```
 
-One principal group by id. Gated by principal_group:read (all-scope).
+One principal group by id. Gated by principal_group:read:admin.
 
 Example:
 
@@ -999,7 +1133,7 @@ List principal groups
 omniglass principal-group list
 ```
 
-Every principal group. Gated by principal_group:read (all-scope).
+Every principal group. Gated by principal_group:read:admin.
 
 Example:
 
@@ -1041,7 +1175,7 @@ List roles
 omniglass role list
 ```
 
-Lists the roles with their metadata and effective (flattened) permissions. Gated by the role:read capability.
+Lists the roles with their metadata and effective (flattened) permissions. Gated by the role:read:admin capability.
 
 Example:
 
@@ -1305,6 +1439,63 @@ Example:
 omniglass system list
 ```
 
+### `omniglass system listTags`
+
+List tags on a system
+
+```
+omniglass system listTags <name>
+```
+
+Lists the tags bound directly on a system (not the resolved cascade). Gated by system:read.
+
+Example:
+
+```sh
+omniglass system listTags <name>
+```
+
+### `omniglass system removeTag`
+
+Remove a tag value from a system
+
+```
+omniglass system removeTag <name> [flags]
+```
+
+Removes a key's value from a system. Gated by system:update.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--key` | string | (none) | The tag key to remove |
+
+Example:
+
+```sh
+omniglass system removeTag <name> --key key
+```
+
+### `omniglass system setTag`
+
+Set a tag value on a system
+
+```
+omniglass system setTag <name> [flags]
+```
+
+Binds a value for a key on a system. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by system:update.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--key` | string | (none) | The tag key (must exist and apply to this kind) |
+| `--value` | string | (none) | The bound value |
+
+Example:
+
+```sh
+omniglass system setTag <name> --key key --value value
+```
+
 ### `omniglass system update`
 
 Update a system
@@ -1324,6 +1515,121 @@ Example:
 
 ```sh
 omniglass system update <name>
+```
+
+## `omniglass tag`
+
+Commands for the tag resource
+
+### `omniglass tag clearGlobal`
+
+Clear a global tag value
+
+```
+omniglass tag clearGlobal <name>
+```
+
+Removes the global binding for a key. Gated by tag:update (all-scope).
+
+Example:
+
+```sh
+omniglass tag clearGlobal <name>
+```
+
+### `omniglass tag create`
+
+Mint a tag key
+
+```
+omniglass tag create [flags]
+```
+
+Adds a key to the governed vocabulary. The name is normalized (a lowercase identifier). Gated by tag:create (all-scope, an admin action).
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--applies-to` | string | (none) | Entity kinds this key may bind to (component, system, location); omit for universal |
+| `--name` | string | (none) | The normalized key: a lowercase identifier, unique tenant-wide |
+| `--propagates` | string | (none) | Whether bindings cascade to descendants; defaults true |
+
+Example:
+
+```sh
+omniglass tag create --name name
+```
+
+### `omniglass tag delete`
+
+Delete a tag key
+
+```
+omniglass tag delete <name>
+```
+
+Removes a key from the vocabulary, cascading its bindings. Gated by tag:delete (all-scope).
+
+Example:
+
+```sh
+omniglass tag delete <name>
+```
+
+### `omniglass tag list`
+
+List tag keys
+
+```
+omniglass tag list
+```
+
+Lists the governed key vocabulary. Rides the tag:read floor.
+
+Example:
+
+```sh
+omniglass tag list
+```
+
+### `omniglass tag setGlobal`
+
+Set a global tag value
+
+```
+omniglass tag setGlobal <name> [flags]
+```
+
+Binds a tenant-wide default value for a key at the global scope. Gated by tag:update (all-scope).
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--value` | string | (none) | The bound value |
+
+Example:
+
+```sh
+omniglass tag setGlobal <name> --value value
+```
+
+### `omniglass tag update`
+
+Update a tag key
+
+```
+omniglass tag update <name> [flags]
+```
+
+Replaces a key's governance fields (applies_to, propagates); the name is fixed. Gated by tag:update (all-scope).
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--applies-to` | string | (none) | Entity kinds this key may bind to; omit for universal |
+| `--propagates` | string | (none) | Whether bindings cascade to descendants; defaults true |
+
+Example:
+
+```sh
+omniglass tag update <name>
 ```
 
 ## `omniglass token`

@@ -541,7 +541,7 @@ export interface paths {
         };
         /**
          * List principal groups
-         * @description Every principal group. Gated by principal_group:read (all-scope).
+         * @description Every principal group. Gated by principal_group:read:admin.
          */
         get: operations["list-groups"];
         put?: never;
@@ -565,7 +565,7 @@ export interface paths {
         };
         /**
          * Get a principal group
-         * @description One principal group by id. Gated by principal_group:read (all-scope).
+         * @description One principal group by id. Gated by principal_group:read:admin.
          */
         get: operations["get-group"];
         put?: never;
@@ -593,7 +593,7 @@ export interface paths {
         };
         /**
          * List a group's grants
-         * @description The role x scope grants a group confers on its members. Gated by principal_group:read (all-scope).
+         * @description The role x scope grants a group confers on its members. Gated by principal_group:read:admin.
          */
         get: operations["list-group-grants"];
         put?: never;
@@ -637,7 +637,7 @@ export interface paths {
         };
         /**
          * List a group's members
-         * @description The principals in a group. Gated by principal_group:read (all-scope).
+         * @description The principals in a group. Gated by principal_group:read:admin.
          */
         get: operations["list-group-members"];
         put?: never;
@@ -681,7 +681,7 @@ export interface paths {
         };
         /**
          * List principals
-         * @description Lists all principals (humans and service accounts) with their grants. Gated by principal:read, which confers access only at all-scope.
+         * @description Lists all principals (humans and service accounts) with their grants. Gated by principal:read:admin.
          */
         get: operations["list-principals"];
         put?: never;
@@ -705,7 +705,7 @@ export interface paths {
         };
         /**
          * Get a principal
-         * @description Fetches one principal by id with its profile and grants. Gated by principal:read (all-scope).
+         * @description Fetches one principal by id with its profile and grants. Gated by principal:read:admin.
          */
         get: operations["get-principal"];
         put?: never;
@@ -729,7 +729,7 @@ export interface paths {
         };
         /**
          * Get a principal's profile picture
-         * @description Returns the principal's profile picture as a base64-encoded JPEG. Gated by principal:read (all-scope). A principal without a picture is a 404.
+         * @description Returns the principal's profile picture as a base64-encoded JPEG. Gated by principal:read:admin. A principal without a picture is a 404.
          */
         get: operations["get-principal-avatar"];
         put?: never;
@@ -969,7 +969,7 @@ export interface paths {
         };
         /**
          * List roles
-         * @description Lists the roles with their metadata and effective (flattened) permissions. Gated by the role:read capability.
+         * @description Lists the roles with their metadata and effective (flattened) permissions. Gated by the role:read:admin capability.
          */
         get: operations["list-roles"];
         put?: never;

@@ -2653,7 +2653,7 @@ paths:
       summary: Set a tag value on a location
   /principal-groups:
     get:
-      description: Every principal group. Gated by principal_group:read (all-scope).
+      description: Every principal group. Gated by principal_group:read:admin.
       operationId: list-groups
       responses:
         "200":
@@ -2715,7 +2715,7 @@ paths:
           description: Error
       summary: Delete a principal group
     get:
-      description: One principal group by id. Gated by principal_group:read (all-scope).
+      description: One principal group by id. Gated by principal_group:read:admin.
       operationId: get-group
       parameters:
         - description: The group's id (uuid)
@@ -2772,7 +2772,7 @@ paths:
       summary: Update a principal group
   /principal-groups/{id}/grants:
     get:
-      description: The role x scope grants a group confers on its members. Gated by principal_group:read (all-scope).
+      description: The role x scope grants a group confers on its members. Gated by principal_group:read:admin.
       operationId: list-group-grants
       parameters:
         - description: The group's id (uuid)
@@ -2858,7 +2858,7 @@ paths:
       summary: Revoke a group grant
   /principal-groups/{id}/members:
     get:
-      description: The principals in a group. Gated by principal_group:read (all-scope).
+      description: The principals in a group. Gated by principal_group:read:admin.
       operationId: list-group-members
       parameters:
         - description: The group's id (uuid)
@@ -2940,7 +2940,7 @@ paths:
       summary: Remove a member from a group
   /principals:
     get:
-      description: Lists all principals (humans and service accounts) with their grants. Gated by principal:read, which confers access only at all-scope.
+      description: Lists all principals (humans and service accounts) with their grants. Gated by principal:read:admin.
       operationId: list-principals
       parameters:
         - description: Optionally filter by principal kind
@@ -2999,7 +2999,7 @@ paths:
       summary: Create a human principal
   /principals/{id}:
     get:
-      description: Fetches one principal by id with its profile and grants. Gated by principal:read (all-scope).
+      description: Fetches one principal by id with its profile and grants. Gated by principal:read:admin.
       operationId: get-principal
       parameters:
         - description: The principal, addressed by its uuid or a human username
@@ -3056,7 +3056,7 @@ paths:
       summary: Update a principal
   /principals/{id}/avatar:
     get:
-      description: Returns the principal's profile picture as a base64-encoded JPEG. Gated by principal:read (all-scope). A principal without a picture is a 404.
+      description: Returns the principal's profile picture as a base64-encoded JPEG. Gated by principal:read:admin. A principal without a picture is a 404.
       operationId: get-principal-avatar
       parameters:
         - description: The principal, addressed by its uuid or a human username
@@ -3381,7 +3381,7 @@ paths:
       summary: Set a principal's profile picture
   /roles:
     get:
-      description: Lists the roles with their metadata and effective (flattened) permissions. Gated by the role:read capability.
+      description: Lists the roles with their metadata and effective (flattened) permissions. Gated by the role:read:admin capability.
       operationId: list-roles
       responses:
         "200":
