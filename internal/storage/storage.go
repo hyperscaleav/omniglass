@@ -224,6 +224,9 @@ type Gateway interface {
 	// The component tier: a type registry and scoped CRUD, on the same helpers.
 	UpsertComponentType(ctx context.Context, ct ComponentType) error
 	ListComponentTypes(ctx context.Context) ([]ComponentType, error)
+	CreateComponentType(ctx context.Context, actorID string, ct ComponentType) (*ComponentType, error)
+	UpdateComponentType(ctx context.Context, actorID, id string, patch ComponentTypePatch) (*ComponentType, error)
+	DeleteComponentType(ctx context.Context, actorID, id string) error
 	ListComponents(ctx context.Context, read scope.Set) ([]Component, error)
 	GetComponent(ctx context.Context, name string, read scope.Set) (*Component, error)
 	CreateComponent(ctx context.Context, actorID string, spec ComponentSpec, create scope.Set) (*Component, error)

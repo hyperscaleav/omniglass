@@ -203,6 +203,13 @@ func (UnimplementedGateway) UpsertComponentType(context.Context, ComponentType) 
 func (UnimplementedGateway) ListComponentTypes(context.Context) ([]ComponentType, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) CreateComponentType(context.Context, string, ComponentType) (*ComponentType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) UpdateComponentType(context.Context, string, string, ComponentTypePatch) (*ComponentType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteComponentType(context.Context, string, string) error { return nil }
 func (UnimplementedGateway) ListComponents(context.Context, scope.Set) ([]Component, error) {
 	return nil, nil
 }
