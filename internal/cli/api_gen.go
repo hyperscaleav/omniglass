@@ -387,6 +387,98 @@ func generatedCommands() []*cobra.Command {
 	}
 	{
 		parent := &cobra.Command{
+			Use:   "component-type",
+			Short: "Commands for the component-type resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			var fDisplayName string
+			var fId string
+			var fRank string
+			cmd := &cobra.Command{
+				Use:     "create",
+				Short:   "Create a component type",
+				Long:    "Creates a custom (non-official) component_type. Gated by type:create.",
+				Example: "  omniglass component-type create --display-name display_name --id id",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/component-types")
+					body := map[string]any{}
+					if cmd.Flags().Changed("display-name") {
+						body["display_name"] = fDisplayName
+					}
+					if cmd.Flags().Changed("id") {
+						body["id"] = fId
+					}
+					if cmd.Flags().Changed("rank") {
+						body["rank"] = jsonOrString(fRank)
+					}
+					return runAPICommand(cmd, "POST", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
+			_ = cmd.MarkFlagRequired("display-name")
+			cmd.Flags().StringVar(&fId, "id", "", "Globally unique type id")
+			_ = cmd.MarkFlagRequired("id")
+			cmd.Flags().StringVar(&fRank, "rank", "", "Ordering rank; lower sorts first")
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "delete <id>",
+				Short:   "Delete a component type",
+				Long:    "Deletes a custom component_type, refused if official (422) or referenced by a component (409). Gated by type:delete.",
+				Example: "  omniglass component-type delete <id>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/component-types/%s", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "DELETE", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "list",
+				Short:   "List component types",
+				Long:    "Lists the component_type registry, ordered by rank. Populates the type picker on the component form. Gated by type:read.",
+				Example: "  omniglass component-type list",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/component-types")
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			var fDisplayName string
+			var fRank string
+			cmd := &cobra.Command{
+				Use:     "update <id>",
+				Short:   "Update a component type",
+				Long:    "Patches a custom component_type's display_name or rank. Official types are read-only (422). Gated by type:update.",
+				Example: "  omniglass component-type update <id>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/component-types/%s", url.PathEscape(args[0]))
+					body := map[string]any{}
+					if cmd.Flags().Changed("display-name") {
+						body["display_name"] = fDisplayName
+					}
+					if cmd.Flags().Changed("rank") {
+						body["rank"] = jsonOrString(fRank)
+					}
+					return runAPICommand(cmd, "PATCH", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
+			cmd.Flags().StringVar(&fRank, "rank", "", "")
+			return cmd
+		}())
+		roots = append(roots, parent)
+	}
+	{
+		parent := &cobra.Command{
 			Use:   "effective-secret",
 			Short: "Commands for the effective-secret resource",
 		}
@@ -750,10 +842,61 @@ func generatedCommands() []*cobra.Command {
 			Short: "Commands for the location-type resource",
 		}
 		parent.AddCommand(func() *cobra.Command {
+			var fDisplayName string
+			var fIcon string
+			var fId string
+			var fRank string
+			cmd := &cobra.Command{
+				Use:     "create",
+				Short:   "Create a location type",
+				Long:    "Creates a custom (non-official) location_type. Gated by type:create.",
+				Example: "  omniglass location-type create --display-name display_name --id id",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/location-types")
+					body := map[string]any{}
+					if cmd.Flags().Changed("display-name") {
+						body["display_name"] = fDisplayName
+					}
+					if cmd.Flags().Changed("icon") {
+						body["icon"] = fIcon
+					}
+					if cmd.Flags().Changed("id") {
+						body["id"] = fId
+					}
+					if cmd.Flags().Changed("rank") {
+						body["rank"] = jsonOrString(fRank)
+					}
+					return runAPICommand(cmd, "POST", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
+			_ = cmd.MarkFlagRequired("display-name")
+			cmd.Flags().StringVar(&fIcon, "icon", "", "A glyph key; the console falls back to map-pin when empty")
+			cmd.Flags().StringVar(&fId, "id", "", "Globally unique type id (kebab, e.g. wing)")
+			_ = cmd.MarkFlagRequired("id")
+			cmd.Flags().StringVar(&fRank, "rank", "", "Ordering rank; lower sorts first")
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "delete <id>",
+				Short:   "Delete a location type",
+				Long:    "Deletes a custom location_type, refused if official (422) or still referenced by a location (409). Gated by type:delete.",
+				Example: "  omniglass location-type delete <id>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/location-types/%s", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "DELETE", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
 			cmd := &cobra.Command{
 				Use:     "list",
 				Short:   "List location types",
-				Long:    "Lists the location_type registry (the shape-definers a location is classified by), ordered by rank. Populates the type picker on the location form. Gated by location:read.",
+				Long:    "Lists the location_type registry (the shape-definers a location is classified by), ordered by rank. Populates the type picker on the location form. Gated by type:read.",
 				Example: "  omniglass location-type list",
 				Args:    cobra.ExactArgs(0),
 				RunE: func(cmd *cobra.Command, args []string) error {
@@ -761,6 +904,36 @@ func generatedCommands() []*cobra.Command {
 					return runAPICommand(cmd, "GET", path, nil)
 				},
 			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			var fDisplayName string
+			var fIcon string
+			var fRank string
+			cmd := &cobra.Command{
+				Use:     "update <id>",
+				Short:   "Update a location type",
+				Long:    "Patches a custom location_type's display_name, rank, or icon. Official types are read-only (422). Gated by type:update.",
+				Example: "  omniglass location-type update <id>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/location-types/%s", url.PathEscape(args[0]))
+					body := map[string]any{}
+					if cmd.Flags().Changed("display-name") {
+						body["display_name"] = fDisplayName
+					}
+					if cmd.Flags().Changed("icon") {
+						body["icon"] = fIcon
+					}
+					if cmd.Flags().Changed("rank") {
+						body["rank"] = jsonOrString(fRank)
+					}
+					return runAPICommand(cmd, "PATCH", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
+			cmd.Flags().StringVar(&fIcon, "icon", "", "")
+			cmd.Flags().StringVar(&fRank, "rank", "", "")
 			return cmd
 		}())
 		roots = append(roots, parent)
@@ -1779,6 +1952,98 @@ func generatedCommands() []*cobra.Command {
 			}
 			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
 			cmd.Flags().StringVar(&fSystemType, "system-type", "", "")
+			return cmd
+		}())
+		roots = append(roots, parent)
+	}
+	{
+		parent := &cobra.Command{
+			Use:   "system-type",
+			Short: "Commands for the system-type resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			var fDisplayName string
+			var fId string
+			var fRank string
+			cmd := &cobra.Command{
+				Use:     "create",
+				Short:   "Create a system type",
+				Long:    "Creates a custom (non-official) system_type. Gated by type:create.",
+				Example: "  omniglass system-type create --display-name display_name --id id",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/system-types")
+					body := map[string]any{}
+					if cmd.Flags().Changed("display-name") {
+						body["display_name"] = fDisplayName
+					}
+					if cmd.Flags().Changed("id") {
+						body["id"] = fId
+					}
+					if cmd.Flags().Changed("rank") {
+						body["rank"] = jsonOrString(fRank)
+					}
+					return runAPICommand(cmd, "POST", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
+			_ = cmd.MarkFlagRequired("display-name")
+			cmd.Flags().StringVar(&fId, "id", "", "Globally unique type id")
+			_ = cmd.MarkFlagRequired("id")
+			cmd.Flags().StringVar(&fRank, "rank", "", "Ordering rank; lower sorts first")
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "delete <id>",
+				Short:   "Delete a system type",
+				Long:    "Deletes a custom system_type, refused if official (422) or referenced by a system (409). Gated by type:delete.",
+				Example: "  omniglass system-type delete <id>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/system-types/%s", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "DELETE", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "list",
+				Short:   "List system types",
+				Long:    "Lists the system_type registry, ordered by rank. Populates the type picker on the system form. Gated by type:read.",
+				Example: "  omniglass system-type list",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/system-types")
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			var fDisplayName string
+			var fRank string
+			cmd := &cobra.Command{
+				Use:     "update <id>",
+				Short:   "Update a system type",
+				Long:    "Patches a custom system_type's display_name or rank. Official types are read-only (422). Gated by type:update.",
+				Example: "  omniglass system-type update <id>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/system-types/%s", url.PathEscape(args[0]))
+					body := map[string]any{}
+					if cmd.Flags().Changed("display-name") {
+						body["display_name"] = fDisplayName
+					}
+					if cmd.Flags().Changed("rank") {
+						body["rank"] = jsonOrString(fRank)
+					}
+					return runAPICommand(cmd, "PATCH", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
+			cmd.Flags().StringVar(&fRank, "rank", "", "")
 			return cmd
 		}())
 		roots = append(roots, parent)
