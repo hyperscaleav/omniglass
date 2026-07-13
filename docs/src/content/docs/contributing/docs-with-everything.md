@@ -61,6 +61,38 @@ Forward-looking intent that is not yet a slice lives in a GitHub epic and is ind
 keeps the published design describing what exists: a built capability never sits behind a `Design` badge,
 and a divergence is never silent.
 
+## Screenshots are generated, not pasted
+
+Screenshots embedded on a docs page are a **generated resource**, treated like the OpenAPI
+spec or the CLI reference, never a static image dropped in by hand. A page declares what it
+needs in `screenshots` frontmatter (the shot's `id`, the console `path`, its `alt`, and any
+interaction `steps`), and embeds it in the prose with a directive:
+
+```markdown
+---
+title: Secrets
+screenshots:
+  - id: secrets
+    path: /web/secrets
+    alt: "The Secrets directory: type badges, owner scope, and masked field previews."
+---
+
+::screenshot{#secrets}
+```
+
+That frontmatter is the **single source**: `make docs-shots` reads it from every page, drives
+the real console (the same binary an operator runs, never a mock), and writes
+`public/screenshots/<id>.png`; the directive renders the figure from the same entry. So the
+capture list and the embed cannot drift, a `#id` with no frontmatter entry (or no captured
+image) **fails the build**, and adding a screenshot is a frontmatter edit, not a code change.
+
+Because the images track the live UI, they are refreshed like any generated artifact: a change
+to an operator surface **re-runs `make docs-shots` and commits the new PNGs**, and
+`make docs-shots-check` recaptures against the real console and fails if a shot drifts beyond a
+small tolerance, the visual sibling of the `make gen` drift check. (Tolerance rather than an
+exact hash because the dev seed's random UUIDs move a fraction of a percent of pixels between
+captures; a real UI change moves far more.)
+
 ## Style
 
 - No em dashes. Use commas, colons, periods, or parentheses.

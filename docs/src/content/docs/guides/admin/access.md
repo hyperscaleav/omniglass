@@ -1,6 +1,15 @@
 ---
 title: Roles, groups, and grants
 description: "Giving a user access: the built-in roles, user groups as shared grant anchors, and the grant builder that assigns a role at a scope."
+screenshots:
+  - id: grant-builder
+    path: /web/users
+    alt: "A user's edit blade with the grant builder: a role @ scope chip and the field to stage another."
+    steps:
+      - action: click
+        selector: "text=Operator"
+      - action: click
+        selector: "role=button[name=/edit/i]"
 ---
 
 Access is a **grant**: a role at a scope. You assign a grant to a [user](/guides/admin/users/)
@@ -44,7 +53,11 @@ member and grant subcommands (see the [CLI reference](/reference/cli/)).
 
 Users and Groups share one control for assigning access. With `principal_grant:create` / `:delete`, the
 detail panel's **grant builder** stages a set of changes and applies them only on **Save**, so there are no
-accidental edits. Type a role, then Tab
+accidental edits.
+
+::screenshot{#grant-builder}
+
+Type a role, then Tab
 or Enter to the scope kind, then (for a non-`all` scope) the specific location, system, or
 component from an indented tree, then the **operator** that says how that entity matches the tree:
 each commit becomes a `role @ operator scope` chip. The operator is one of **at or under** (`≥`,

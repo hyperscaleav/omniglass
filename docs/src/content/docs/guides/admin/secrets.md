@@ -1,6 +1,10 @@
 ---
 title: Secrets
 description: "Encrypted-at-rest credentials owned at one scope and resolved down the cascade: the directory, create, reveal, rotate, and the effective view on a component."
+screenshots:
+  - id: secrets
+    path: /web/secrets
+    alt: "The Secrets directory: type badges, owner scope, and masked field previews, never a plaintext value."
 ---
 
 A **secret** is an encrypted-at-rest value (an SNMP community, a set of basic-auth
@@ -14,7 +18,7 @@ a typed, encrypted-at-rest value owned at one scope and resolved down the cascad
 name, a **type badge**, an owner label, and a **masked** field preview (`••••••`, never a value). The
 same chip filter as the inventory narrows the list.
 
-![The Secrets directory: type badges, owner scope, and masked field previews, never a plaintext value.](../../../../assets/screenshots/secrets.png)
+::screenshot{#secrets}
 
 - **New secret** (with `secret:create`) opens a create **drawer**: pick a **type** (the shape,
   `snmp-community` or `basic-auth`), an **owner scope** (global, location, system, or component), then

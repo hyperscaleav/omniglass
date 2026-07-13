@@ -119,10 +119,29 @@ down:
 	docker compose down
 
 # Capture the docs screenshots against the real console (dev stack + Playwright),
-# writing PNGs into docs/src/assets/screenshots/. Commit the regenerated images.
+# writing PNGs into docs/public/screenshots/ from each page's `screenshots`
+# frontmatter. Commit the regenerated images like any other generated resource.
 # Needs the Playwright browser once: (cd web && npx playwright install chromium).
 docs-shots:
 	bash docs/screenshots/capture.sh
+
+# Freshness gate for the screenshots, the visual sibling of `make gen`: recapture
+# into a temp dir and fail if any shot differs from the committed image by more
+# than a small tolerance, so a UI change that was not re-captured cannot merge.
+# Tolerance (not byte equality) because the dev seed's random UUIDs make a fresh
+# capture differ from the committed one by a fraction of a percent of pixels.
+# The temp dir is repo-relative so it lands inside the capture container's mount.
+docs-shots-check:
+	@tmp=.docs-shots-tmp; mkdir -p $$tmp; \
+	  DOCS_SHOTS_OUT=$$tmp bash docs/screenshots/capture.sh && \
+	  node web/e2e/docs-shots-diff.mjs $$tmp docs/public/screenshots; \
+	  rc=$$?; rm -f $$tmp/*.png; rmdir $$tmp 2>/dev/null || true; exit $$rc
+
+# Structural gate for the screenshots (no browser, fully deterministic): every
+# `screenshots` frontmatter entry has a committed PNG, every PNG is declared, and
+# ids are unique. Fast enough to run on every PR (see .github/workflows/docs-shots.yml).
+docs-shots-verify:
+	node web/e2e/docs-shots-verify.mjs
 
 # Full stack for a browser session: Postgres + the server with the console
 # embedded. Creates (idempotently) a dev owner with password "dev", also mints a
