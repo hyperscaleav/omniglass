@@ -1289,6 +1289,7 @@ Seals a secret at an owner scope (a global secret needs an all-scoped grant). Fi
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
+| `--admin-sensitive` | string | (none) | Admin-only visibility; omit to use the type default. Setting true requires the admin tier |
 | `--fields` | string | (none) | The operator field map, validated against the type shape |
 | `--name` | string | (none) | The cascade key; unique per owner |
 | `--owner` | string | (none) | The owning entity's name; omit for a global secret |
@@ -1319,13 +1320,13 @@ omniglass secret delete <id>
 
 ### `omniglass secret list`
 
-List secrets (admin directory)
+List secrets
 
 ```
 omniglass secret list
 ```
 
-Lists every secret with masked fields. Requires an all-scope read; the scoped, per-component view is the effective-secrets route. Gated by secret:read.
+Lists the secrets the caller may see, with masked fields, filtered to the read scope; admin-sensitive secrets appear only to the admin tier. Gated by secret:read, which the viewer floor does not carry (secret is a sensitive resource).
 
 Example:
 
@@ -1341,7 +1342,7 @@ Reveal a secret's plaintext
 omniglass secret reveal <id>
 ```
 
-Decrypts and returns a secret's field values, auditing the decrypt. Sensitive: gated by secret:reveal, which the viewer read floor does not carry, so only admin (secret:*) and owner may reveal.
+Decrypts and returns a secret's field values, auditing the decrypt. Gated by secret:reveal at the caller's scope; an admin-sensitive secret additionally needs the admin tier (secret:reveal:admin), so a scoped operator reveals device secrets but never a platform credential.
 
 Example:
 
