@@ -7,19 +7,20 @@ sidebar:
     variant: note
 ---
 
-:::note[Partial: the registry, the bindings, the cascade, and the console key directory are built; the per-entity binding editor and the cascade extensions are deferred]
+:::note[Partial: the registry, the bindings, the cascade, the console key directory, the per-entity binding editor, value-domain enums, and the directory Tags column and tag filter are built; the cascade provenance panel and the cross-primitive cascade extensions are deferred]
 The first slice ([ADR-0021](/architecture/decisions/#adr-0021-tag-slice-1-a-governed-key-registry-with-entity-update-gated-bindings)) is
 **built**: the governed **`tag`** key registry, the per-entity **`tag_binding`** cell on the exclusive arc, and the
-union-on-key / override-on-value **cascade** resolver, over the API and the generated CLI. The **console Tags
-directory** (mint, edit governance fields, delete a key) is built too
-([#189](https://github.com/hyperscaleav/omniglass/issues/189)). Deferred to later slices: the per-entity **binding
-editor** and the **effective-tags** cascade panel on an entity's detail (the rest of
-[#189](https://github.com/hyperscaleav/omniglass/issues/189)), binding through [groups](/architecture/groups/) and a
-`template`-scoped default (the shared-resolver work in [#184](https://github.com/hyperscaleav/omniglass/issues/184)),
-value-domain governance (an open question below, [#190](https://github.com/hyperscaleav/omniglass/issues/190)), and
-binding onto a [file](/architecture/files/) ([#191](https://github.com/hyperscaleav/omniglass/issues/191)). Those
-divergences are logged in the
-[decision log](/architecture/decisions/).
+union-on-key / override-on-value **cascade** resolver, over the API and the generated CLI. On top of it, the **console
+Tags directory** (mint, edit governance fields, delete a key), the per-entity **binding editor** (apply and remove
+values from an entity's detail blade), **value-domain enums** that constrain a key's values ([#190](https://github.com/hyperscaleav/omniglass/issues/190)),
+and the directory **Tags column** with per-key **tag filtering** (narrow a directory by any tag's effective value,
+plus **is set** / **is absent**) are built too ([#189](https://github.com/hyperscaleav/omniglass/issues/189),
+[#226](https://github.com/hyperscaleav/omniglass/issues/226)). Deferred to later slices: the winner-plus-shadowed
+**cascade provenance** panel on an entity's detail (the rest of [#189](https://github.com/hyperscaleav/omniglass/issues/189)),
+binding through [groups](/architecture/groups/) and a `template`-scoped default (the shared-resolver work in
+[#184](https://github.com/hyperscaleav/omniglass/issues/184)), binding onto a [file](/architecture/files/)
+([#191](https://github.com/hyperscaleav/omniglass/issues/191)), and a stored per-key color override. Those divergences
+are logged in the [decision log](/architecture/decisions/).
 :::
 
 A **tag** is an operator **`key: value`** label attached to an entity to organize, filter, and scope by dimensions
