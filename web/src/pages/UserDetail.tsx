@@ -47,6 +47,11 @@ export function UserDetail(props: { id: string }) {
   const canSetAvatar = () => can(me.data, "principal", "set-avatar");
   const canRevokeSession = () => can(me.data, "principal", "revoke-session");
   const revokeAllSessions = useRevokeAllPrincipalSessions(props.id);
+  // An owner's credentials cannot be revoked by anyone (the takeover guard, server-side).
+  // Detect it from the target's grants so the console hides the revoke affordances rather
+  // than offering an action that would 403: an admin can see an owner's sessions, not end
+  // them. The capability-escalation half of the guard is rarer and still errors gracefully.
+  const isOwnerTarget = () => (p()?.grants ?? []).some((g) => g.role === "owner");
   // The admin reset-password panel (toggled from the kebab): its own new-password
   // field, a server-policy error routed inline, and a "set" confirmation.
   const [resetting, setResetting] = createSignal(false);
@@ -154,8 +159,9 @@ export function UserDetail(props: { id: string }) {
         items.push({ label: "Act as", icon: <Mask size={15} />, onClick: () => doImpersonate(pr, "act_as") });
       }
       // Bulk session/token revoke, alongside the per-row Revoke in the Sessions section
-      // and gated by the same capability: end every session or every token at once.
-      if (canRevokeSession()) {
+      // and gated by the same capability: end every session or every token at once. Hidden
+      // on an owner target, whose credentials the takeover guard makes un-revocable.
+      if (canRevokeSession() && !isOwnerTarget()) {
         items.push({ label: "Revoke all sessions", icon: <LogOut size={15} />, tone: "danger", onClick: () => doRevokeAll("session") });
         items.push({ label: "Revoke all tokens", icon: <Trash size={15} />, tone: "danger", onClick: () => doRevokeAll("token") });
       }
@@ -436,7 +442,7 @@ export function UserDetail(props: { id: string }) {
               affordance is hidden from an operator (a UI hint; the server is the
               authority, and it bounds every revoke to this principal). */}
           <Show when={canRevokeSession()}>
-            <SessionsSection id={pr().id} />
+            <SessionsSection id={pr().id} revocable={!isOwnerTarget()} />
           </Show>
         </div>
       )}
@@ -449,8 +455,10 @@ export function UserDetail(props: { id: string }) {
 // self-service Profile card; the server bounds every read and revoke to this
 // principal and never returns the secret. current is always false here (there is no
 // "this request's own session" when viewing another principal), so every row reads
-// as "Revoke". Rendered only when the caller holds principal:revoke-session.
-function SessionsSection(props: { id: string }) {
+// as "Revoke". Rendered only when the caller holds principal:revoke-session. When the
+// target is not revocable (an owner, per the takeover guard), the list stays read-only:
+// the caller can see where the account is signed in but not end any of it.
+function SessionsSection(props: { id: string; revocable: boolean }) {
   const sessions = usePrincipalSessions(props.id);
   const revokeSession = useRevokePrincipalSession(props.id);
   const [revoking, setRevoking] = createSignal<string | null>(null);
@@ -476,13 +484,16 @@ function SessionsSection(props: { id: string }) {
       <Show when={err()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
       </Show>
+      <Show when={!props.revocable}>
+        <p class="text-xs text-base-content/40">An owner's sessions and tokens cannot be revoked. You can see where the account is signed in, but not end it.</p>
+      </Show>
       <div class="flex flex-col gap-2">
         <div class="eyebrow">Sessions</div>
         <p class="text-xs text-base-content/50">
           Where this account is signed in. Revoke a <span class="font-data text-base-content/70">session</span> to sign
           it out at once. The credential secret is never shown, only its <span class="font-data text-base-content/70">ogp_</span> locator.
         </p>
-        <SessionsList sessions={sessionRows()} revoking={revoking()} onRevoke={revoke} emptyLabel="No active sessions." />
+        <SessionsList sessions={sessionRows()} revoking={revoking()} onRevoke={props.revocable ? revoke : undefined} emptyLabel="No active sessions." />
       </div>
       <div class="flex flex-col gap-2">
         <div class="eyebrow">API tokens</div>
@@ -490,7 +501,7 @@ function SessionsSection(props: { id: string }) {
           Tokens this account minted for the CLI or API. Revoke any that should no longer work. The token secret is never
           shown, only its <span class="font-data text-base-content/70">ogp_</span> locator.
         </p>
-        <SessionsList sessions={tokenRows()} revoking={revoking()} onRevoke={revoke} emptyLabel="No API tokens." />
+        <SessionsList sessions={tokenRows()} revoking={revoking()} onRevoke={props.revocable ? revoke : undefined} emptyLabel="No API tokens." />
       </div>
     </div>
   );

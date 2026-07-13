@@ -10,11 +10,12 @@ import type { Session } from "../lib/sessions";
 // behind both the Sessions and the API tokens sections of the profile: the two differ
 // only in which credentials they pass and their empty-state label. Every credential is
 // time-bounded now, so a row always shows an expiry. The current credential is flagged
-// and its revoke reads as a sign-out.
+// and its revoke reads as a sign-out. onRevoke is optional: without it the list is
+// read-only (an admin can see, but not end, an owner's credentials).
 export default function SessionsList(props: {
   sessions: Session[];
-  revoking: string | null;
-  onRevoke: (s: Session) => void;
+  revoking?: string | null;
+  onRevoke?: (s: Session) => void;
   emptyLabel: string;
 }) {
   return (
@@ -32,11 +33,13 @@ export default function SessionsList(props: {
                 Started {rel(s.created_at)}{s.expires_at ? ` · expires ${fmtTime(s.expires_at)}` : ""}
               </div>
             </div>
-            <Show
-              when={s.current}
-              fallback={<Button intent="danger" size="xs" icon={Trash} loading={props.revoking === s.id} onClick={() => props.onRevoke(s)}>Revoke</Button>}
-            >
-              <Button intent="danger" size="xs" icon={LogOut} loading={props.revoking === s.id} onClick={() => props.onRevoke(s)}>Sign out</Button>
+            <Show when={props.onRevoke}>
+              <Show
+                when={s.current}
+                fallback={<Button intent="danger" size="xs" icon={Trash} loading={props.revoking === s.id} onClick={() => props.onRevoke!(s)}>Revoke</Button>}
+              >
+                <Button intent="danger" size="xs" icon={LogOut} loading={props.revoking === s.id} onClick={() => props.onRevoke!(s)}>Sign out</Button>
+              </Show>
             </Show>
           </li>
         )}
