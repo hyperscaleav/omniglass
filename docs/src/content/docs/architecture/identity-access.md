@@ -102,7 +102,11 @@ Where the build currently differs from the present-tense design below (each logg
   **direct-DB break-glass lanes** (`bootstrap` and `set-password`) are deliberately **exempt**: they
   already require database access (fully trusted) and are the recovery path, so the policy never
   blocks initial setup or a lockout recovery. A breached-password check (HIBP k-anonymity) is a
-  planned enhancement over the embedded list.
+  planned enhancement over the embedded list. Because break-glass is a **lockout**, `set-password`
+  also revokes the target's live **sessions** (a stolen login stops at once), and revokes its API
+  **tokens** too with `--revoke-tokens`. This is the only in-product way to fully cut off a
+  compromised **owner**: the API reset and revoke are all 403 on an owner target (the takeover
+  guard, owner-to-owner included), so an owner can only be recovered from the direct-DB lane.
 - **The `iam` command namespace is not built.** Owner creation is `omniglass bootstrap <username>
   [--password <pw>]` ([Bootstrap](#bootstrap)), not the `og iam create-owner` path; the broader `iam`
   admin CLI is deferred with the admin user surface.

@@ -69,7 +69,10 @@ omniglass token ops
 omniglass token ops --ttl 720h   # a 30-day token
 
 # Set or rotate a user's password (direct-DB, owner lane; also policy-exempt as the recovery path).
+# A break-glass reset also revokes the user's live SESSIONS, so a stolen login stops at once; API
+# tokens are kept unless --revoke-tokens is given (a full lockout of a compromised account).
 omniglass set-password ops 'set-a-strong-one'
+omniglass set-password ops 'set-a-strong-one' --revoke-tokens   # full lockout: sessions and tokens
 
 # Seed a dev database with an example estate (locations, users, grants). Idempotent and
 # dev-only; `make dev` runs it for you, so a fresh console is populated instead of empty.
