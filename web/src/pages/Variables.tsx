@@ -43,7 +43,7 @@ function ownerLabel(v: Variable): string {
 const columns: FlatColumn<Variable>[] = [
   { key: "name", label: "Name", sortVal: (v) => v.name, cell: (v) => <span class="font-data font-semibold">{v.name}</span> },
   { key: "type", label: "Type", width: "120px", sortVal: (v) => v.value_type, cell: (v) => <span class="badge badge-ghost badge-sm">{v.value_type}</span> },
-  { key: "owner", label: "Owner", width: "220px", sortVal: (v) => v.owner_kind, cell: (v) => <span class="text-base-content/70">{ownerLabel(v)}</span> },
+  { key: "owner", label: "Scope", width: "220px", sortVal: (v) => v.owner_kind, cell: (v) => <span class="text-base-content/70">{ownerLabel(v)}</span> },
   { key: "value", label: "Value", cell: (v) => <span class="font-data text-xs text-base-content/60">{displayValue(v.value)}</span> },
 ];
 
@@ -62,10 +62,10 @@ export default function Variables() {
         error: () => variables.error,
         filterKeys: [
           { key: "name", type: "string", hint: "substring", get: (v) => `${v.name} ${v.value_type}`, values: () => [] },
-          { key: "owner", type: "string", hint: "exact", get: (v) => v.owner_kind, values: (rs) => [...new Set(rs.map((r) => r.owner_kind))].sort() },
+          { key: "scope", type: "string", hint: "exact", get: (v) => v.owner_kind, values: (rs) => [...new Set(rs.map((r) => r.owner_kind))].sort() },
           { key: "type", type: "string", hint: "exact", get: (v) => v.value_type, values: (rs) => [...new Set(rs.map((r) => r.value_type))].sort() },
         ],
-        filterPlaceholder: "filter variables by name, type, owner…",
+        filterPlaceholder: "filter variables by name, type, scope…",
         columns,
         empty: "No variables yet.",
         rowId: (v) => v.id,
@@ -162,7 +162,7 @@ function VariableBladeBody(p: { id: string }): JSX.Element {
           </Show>
           <div class="grid grid-cols-2 gap-3 text-sm">
             <Fact label="Type"><span class="badge badge-ghost badge-sm">{v().value_type}</span></Fact>
-            <Fact label="Owner"><span>{ownerLabel(v())}</span></Fact>
+            <Fact label="Scope"><span>{ownerLabel(v())}</span></Fact>
           </div>
           <div class="flex flex-col gap-1.5">
             <span class="eyebrow">Value</span>
@@ -294,14 +294,14 @@ function CreateVariableForm(p: { onCreated: () => void }): JSX.Element {
             <For each={VALUE_TYPES}>{(t) => <option value={t}>{t}</option>}</For>
           </select>
         </Field>
-        <Field label="Owner scope">
+        <Field label="Scope">
           <select class="select select-bordered w-full" value={ownerKind()} onChange={(e) => { setOwnerKind(e.currentTarget.value as OwnerKind); setOwner(""); }}>
             <For each={OWNER_KINDS}>{(k) => <option value={k}>{k.charAt(0).toUpperCase() + k.slice(1)}</option>}</For>
           </select>
         </Field>
       </div>
       <Show when={ownerKind() !== "global"}>
-        <Field label="Owner">
+        <Field label={ownerKind().charAt(0).toUpperCase() + ownerKind().slice(1)}>
           <TreeSelect items={ownerTree()} value={owner()} onChange={setOwner} rootLabel="Choose…" />
         </Field>
       </Show>

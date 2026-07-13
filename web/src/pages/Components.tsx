@@ -2,6 +2,7 @@ import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { useNavigate, useParams, useSearchParams } from "@solidjs/router";
 import TreeList, { type ListConfig, type ListCtx, type ListNode, type PageDescriptor } from "../components/TreeList";
+import TreeSelect from "../components/TreeSelect";
 import {
   type Component as Comp,
   COMPONENTS_KEY,
@@ -249,25 +250,31 @@ export default function Components() {
           <div class="grid grid-cols-2 gap-3">
             {p.ctx.field(
               "System",
-              <select class="select select-bordered w-full" value={system()} onChange={(e) => setSystem(e.currentTarget.value)}>
-                <option value="">None</option>
-                <For each={systems.data}>{(s) => <option value={s.name}>{label(s)}</option>}</For>
-              </select>,
+              <TreeSelect
+                items={(systems.data ?? []).map((s) => ({ id: s.id, value: s.name, label: label(s), parentId: s.parent_id }))}
+                value={system()}
+                onChange={setSystem}
+                rootLabel="None"
+              />,
             )}
             {p.ctx.field(
               "Location",
-              <select class="select select-bordered w-full" value={location()} onChange={(e) => setLocation(e.currentTarget.value)}>
-                <option value="">None</option>
-                <For each={locations.data}>{(l) => <option value={l.name}>{label(l)}</option>}</For>
-              </select>,
+              <TreeSelect
+                items={(locations.data ?? []).map((l) => ({ id: l.id, value: l.name, label: label(l), parentId: l.parent_id }))}
+                value={location()}
+                onChange={setLocation}
+                rootLabel="None"
+              />,
             )}
           </div>
           {p.ctx.field(
             "Parent component",
-            <select class="select select-bordered w-full" value={parent()} onChange={(e) => setParent(e.currentTarget.value)}>
-              <option value="">Root (no parent)</option>
-              <For each={components.data}>{(c) => <option value={c.name}>{c.display_name || c.name}</option>}</For>
-            </select>,
+            <TreeSelect
+              items={(components.data ?? []).map((c) => ({ id: c.id, value: c.name, label: label(c), parentId: c.parent_id }))}
+              value={parent()}
+              onChange={setParent}
+              rootLabel="Root (no parent)"
+            />,
             "Omit for a root component.",
           )}
         </Show>

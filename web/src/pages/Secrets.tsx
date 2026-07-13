@@ -57,7 +57,7 @@ function fieldsPreview(s: Secret): JSX.Element {
 const columns: FlatColumn<Secret>[] = [
   { key: "name", label: "Name", sortVal: (s) => s.name, cell: (s) => <span class="font-data font-semibold">{s.name}</span> },
   { key: "type", label: "Type", width: "170px", sortVal: (s) => s.secret_type, cell: (s) => <span class="badge badge-ghost badge-sm">{s.secret_type}</span> },
-  { key: "owner", label: "Owner", width: "220px", sortVal: (s) => s.owner_kind, cell: (s) => <span class="text-base-content/70">{ownerLabel(s)}</span> },
+  { key: "owner", label: "Scope", width: "220px", sortVal: (s) => s.owner_kind, cell: (s) => <span class="text-base-content/70">{ownerLabel(s)}</span> },
   { key: "fields", label: "Fields", cell: (s) => fieldsPreview(s) },
 ];
 
@@ -76,10 +76,10 @@ export default function Secrets() {
         error: () => secrets.error,
         filterKeys: [
           { key: "name", type: "string", hint: "substring", get: (s) => `${s.name} ${s.secret_type}`, values: () => [] },
-          { key: "owner", type: "string", hint: "exact", get: (s) => s.owner_kind, values: (rs) => [...new Set(rs.map((r) => r.owner_kind))].sort() },
+          { key: "scope", type: "string", hint: "exact", get: (s) => s.owner_kind, values: (rs) => [...new Set(rs.map((r) => r.owner_kind))].sort() },
           { key: "type", type: "string", hint: "exact", get: (s) => s.secret_type, values: (rs) => [...new Set(rs.map((r) => r.secret_type))].sort() },
         ],
-        filterPlaceholder: "filter secrets by name, type, owner…",
+        filterPlaceholder: "filter secrets by name, type, scope…",
         columns,
         empty: "No secrets yet.",
         rowId: (s) => s.id,
@@ -180,7 +180,7 @@ function SecretBladeBody(p: { id: string }): JSX.Element {
           </Show>
           <div class="grid grid-cols-2 gap-3 text-sm">
             <Fact label="Type"><span class="badge badge-ghost badge-sm">{s().secret_type}</span></Fact>
-            <Fact label="Owner"><span>{ownerLabel(s())}</span></Fact>
+            <Fact label="Scope"><span>{ownerLabel(s())}</span></Fact>
           </div>
           <div class="flex flex-col gap-1.5">
             <span class="eyebrow">Fields</span>
@@ -220,7 +220,7 @@ function Fact(p: { label: string; children: JSX.Element }): JSX.Element {
   );
 }
 
-// CreateSecretForm: pick a type and an owner scope, then fill the type's operator
+// CreateSecretForm: pick a type and a scope, then fill the type's operator
 // fields. Secret fields use a password input; the values are sealed server-side.
 function CreateSecretForm(p: { onCreated: () => void }): JSX.Element {
   const qc = useQueryClient();
@@ -289,13 +289,13 @@ function CreateSecretForm(p: { onCreated: () => void }): JSX.Element {
         </select>
       </Field>
       <div class="grid grid-cols-2 gap-3">
-        <Field label="Owner scope">
+        <Field label="Scope">
           <select class="select select-bordered w-full" value={ownerKind()} onChange={(e) => { setOwnerKind(e.currentTarget.value as OwnerKind); setOwner(""); }}>
             <For each={OWNER_KINDS}>{(k) => <option value={k}>{k.charAt(0).toUpperCase() + k.slice(1)}</option>}</For>
           </select>
         </Field>
         <Show when={ownerKind() !== "global"}>
-          <Field label="Owner">
+          <Field label={ownerKind().charAt(0).toUpperCase() + ownerKind().slice(1)}>
             <TreeSelect items={ownerTree()} value={owner()} onChange={setOwner} rootLabel="Choose…" />
           </Field>
         </Show>
