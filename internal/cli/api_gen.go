@@ -1399,6 +1399,7 @@ func generatedCommands() []*cobra.Command {
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
+			var fAdminSensitive string
 			var fFields string
 			var fName string
 			var fOwner string
@@ -1413,6 +1414,9 @@ func generatedCommands() []*cobra.Command {
 				RunE: func(cmd *cobra.Command, args []string) error {
 					path := fmt.Sprintf("/api/v1/secrets")
 					body := map[string]any{}
+					if cmd.Flags().Changed("admin-sensitive") {
+						body["admin_sensitive"] = jsonOrString(fAdminSensitive)
+					}
 					if cmd.Flags().Changed("fields") {
 						body["fields"] = jsonOrString(fFields)
 					}
@@ -1431,6 +1435,7 @@ func generatedCommands() []*cobra.Command {
 					return runAPICommand(cmd, "POST", path, body)
 				},
 			}
+			cmd.Flags().StringVar(&fAdminSensitive, "admin-sensitive", "", "Admin-only visibility; omit to use the type default. Setting true requires the admin tier")
 			cmd.Flags().StringVar(&fFields, "fields", "", "The operator field map, validated against the type shape")
 			_ = cmd.MarkFlagRequired("fields")
 			cmd.Flags().StringVar(&fName, "name", "", "The cascade key; unique per owner")
@@ -1459,8 +1464,8 @@ func generatedCommands() []*cobra.Command {
 		parent.AddCommand(func() *cobra.Command {
 			cmd := &cobra.Command{
 				Use:     "list",
-				Short:   "List secrets (admin directory)",
-				Long:    "Lists every secret with masked fields. Requires an all-scope read; the scoped, per-component view is the effective-secrets route. Gated by secret:read.",
+				Short:   "List secrets",
+				Long:    "Lists the secrets the caller may see, with masked fields, filtered to the read scope; admin-sensitive secrets appear only to the admin tier. Gated by secret:read, which the viewer floor does not carry (secret is a sensitive resource).",
 				Example: "  omniglass secret list",
 				Args:    cobra.ExactArgs(0),
 				RunE: func(cmd *cobra.Command, args []string) error {
@@ -1474,7 +1479,7 @@ func generatedCommands() []*cobra.Command {
 			cmd := &cobra.Command{
 				Use:     "reveal <id>",
 				Short:   "Reveal a secret's plaintext",
-				Long:    "Decrypts and returns a secret's field values, auditing the decrypt. Sensitive: gated by secret:reveal, which the viewer read floor does not carry, so only admin (secret:*) and owner may reveal.",
+				Long:    "Decrypts and returns a secret's field values, auditing the decrypt. Gated by secret:reveal at the caller's scope; an admin-sensitive secret additionally needs the admin tier (secret:reveal:admin), so a scoped operator reveals device secrets but never a platform credential.",
 				Example: "  omniglass secret reveal <id>",
 				Args:    cobra.ExactArgs(1),
 				RunE: func(cmd *cobra.Command, args []string) error {
@@ -1803,6 +1808,7 @@ func generatedCommands() []*cobra.Command {
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
+			var fAllowedValues string
 			var fAppliesTo string
 			var fName string
 			var fPropagates string
@@ -1815,6 +1821,9 @@ func generatedCommands() []*cobra.Command {
 				RunE: func(cmd *cobra.Command, args []string) error {
 					path := fmt.Sprintf("/api/v1/tags")
 					body := map[string]any{}
+					if cmd.Flags().Changed("allowed-values") {
+						body["allowed_values"] = jsonOrString(fAllowedValues)
+					}
 					if cmd.Flags().Changed("applies-to") {
 						body["applies_to"] = jsonOrString(fAppliesTo)
 					}
@@ -1827,6 +1836,7 @@ func generatedCommands() []*cobra.Command {
 					return runAPICommand(cmd, "POST", path, body)
 				},
 			}
+			cmd.Flags().StringVar(&fAllowedValues, "allowed-values", "", "The value enum a bound value must belong to; omit for free text")
 			cmd.Flags().StringVar(&fAppliesTo, "applies-to", "", "Entity kinds this key may bind to (component, system, location); omit for universal")
 			cmd.Flags().StringVar(&fName, "name", "", "The normalized key: a lowercase identifier, unique tenant-wide")
 			_ = cmd.MarkFlagRequired("name")
@@ -1883,6 +1893,7 @@ func generatedCommands() []*cobra.Command {
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
+			var fAllowedValues string
 			var fAppliesTo string
 			var fPropagates string
 			cmd := &cobra.Command{
@@ -1894,6 +1905,9 @@ func generatedCommands() []*cobra.Command {
 				RunE: func(cmd *cobra.Command, args []string) error {
 					path := fmt.Sprintf("/api/v1/tags/%s", url.PathEscape(args[0]))
 					body := map[string]any{}
+					if cmd.Flags().Changed("allowed-values") {
+						body["allowed_values"] = jsonOrString(fAllowedValues)
+					}
 					if cmd.Flags().Changed("applies-to") {
 						body["applies_to"] = jsonOrString(fAppliesTo)
 					}
@@ -1903,8 +1917,23 @@ func generatedCommands() []*cobra.Command {
 					return runAPICommand(cmd, "PATCH", path, body)
 				},
 			}
+			cmd.Flags().StringVar(&fAllowedValues, "allowed-values", "", "The value enum a bound value must belong to; omit for free text")
 			cmd.Flags().StringVar(&fAppliesTo, "applies-to", "", "Entity kinds this key may bind to; omit for universal")
 			cmd.Flags().StringVar(&fPropagates, "propagates", "", "Whether bindings cascade to descendants; defaults true")
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "values <name>",
+				Short:   "List the distinct values bound for a key",
+				Long:    "Returns the distinct values already bound for a key across the estate, for value autocomplete on a free-text key (an enum key carries its allowed set on the key itself). Rides the tag:read floor.",
+				Example: "  omniglass tag values <name>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/tags/%s:values", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
 			return cmd
 		}())
 		roots = append(roots, parent)

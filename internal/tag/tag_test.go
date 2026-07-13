@@ -114,3 +114,37 @@ func TestAppliesToKind(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateAllowedValues(t *testing.T) {
+	cases := []struct {
+		name   string
+		values []string
+		ok     bool
+	}{
+		{"empty is free text", nil, true},
+		{"a valid enum", []string{"prod", "staging", "dev"}, true},
+		{"duplicate", []string{"prod", "prod"}, false},
+		{"blank member", []string{"prod", "  "}, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			err := ValidateAllowedValues(c.values)
+			if c.ok != (err == nil) {
+				t.Fatalf("ValidateAllowedValues(%v) = %v, want ok=%v", c.values, err, c.ok)
+			}
+		})
+	}
+}
+
+func TestValueAllowed(t *testing.T) {
+	enum := []string{"prod", "staging", "dev"}
+	if !ValueAllowed(nil, "anything") {
+		t.Error("empty allowed set should admit any value")
+	}
+	if !ValueAllowed(enum, "prod") {
+		t.Error("a member should be allowed")
+	}
+	if ValueAllowed(enum, "qa") {
+		t.Error("a non-member should be rejected")
+	}
+}

@@ -211,25 +211,25 @@ func (UnimplementedGateway) ListSecretTypes(context.Context) ([]SecretType, erro
 func (UnimplementedGateway) GetSecretType(context.Context, string) (*SecretType, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) ListSecrets(context.Context, scope.Set) ([]Secret, error) {
+func (UnimplementedGateway) ListSecrets(context.Context, scope.Set, bool) ([]Secret, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) CreateSecret(context.Context, string, SecretSpec, scope.Set) (*Secret, error) {
+func (UnimplementedGateway) CreateSecret(context.Context, string, SecretSpec, scope.Set, bool) (*Secret, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) UpdateSecret(context.Context, string, string, map[string]string, scope.Set, scope.Set) (*Secret, error) {
+func (UnimplementedGateway) UpdateSecret(context.Context, string, string, map[string]string, scope.Set, scope.Set, bool) (*Secret, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) DeleteSecret(context.Context, string, string, scope.Set, scope.Set) error {
+func (UnimplementedGateway) DeleteSecret(context.Context, string, string, scope.Set, scope.Set, bool) error {
 	return nil
 }
-func (UnimplementedGateway) RevealSecret(context.Context, string, string, scope.Set, scope.Set) (map[string]string, error) {
+func (UnimplementedGateway) RevealSecret(context.Context, string, string, scope.Set, scope.Set, bool) (map[string]string, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) CopySecret(context.Context, string, string, scope.Set, scope.Set) (map[string]string, error) {
+func (UnimplementedGateway) CopySecret(context.Context, string, string, scope.Set, scope.Set, bool) (map[string]string, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) ResolveSecrets(context.Context, string, scope.Set) ([]ResolvedSecret, error) {
+func (UnimplementedGateway) ResolveSecrets(context.Context, string, scope.Set, bool) ([]ResolvedSecret, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) ListVariables(context.Context, scope.Set) ([]Variable, error) {
@@ -248,6 +248,9 @@ func (UnimplementedGateway) ResolveVariables(context.Context, string, scope.Set)
 	return nil, nil
 }
 func (UnimplementedGateway) ListTags(context.Context) ([]Tag, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DistinctTagValues(context.Context, string) ([]string, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) CreateTag(context.Context, string, TagSpec, scope.Set) (*Tag, error) {

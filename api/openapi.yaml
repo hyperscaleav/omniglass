@@ -409,6 +409,9 @@ components:
           format: uri
           readOnly: true
           type: string
+        admin_sensitive:
+          description: Admin-only visibility; omit to use the type default. Setting true requires the admin tier
+          type: boolean
         fields:
           additionalProperties:
             type: string
@@ -479,6 +482,13 @@ components:
           format: uri
           readOnly: true
           type: string
+        allowed_values:
+          description: The value enum a bound value must belong to; omit for free text
+          items:
+            type: string
+          type:
+            - array
+            - "null"
         applies_to:
           description: Entity kinds this key may bind to (component, system, location); omit for universal
           items:
@@ -1631,6 +1641,9 @@ components:
           format: uri
           readOnly: true
           type: string
+        admin_sensitive:
+          description: When true, only the admin tier may see or reveal this secret, regardless of placement
+          type: boolean
         fields:
           items:
             $ref: "#/components/schemas/SecretFieldBody"
@@ -1654,6 +1667,7 @@ components:
         - name
         - secret_type
         - owner_kind
+        - admin_sensitive
         - fields
       type: object
     SecretFieldBody:
@@ -1674,6 +1688,9 @@ components:
     SecretTypeBody:
       additionalProperties: false
       properties:
+        default_admin_sensitive:
+          description: The admin_sensitive value the create form seeds for this type
+          type: boolean
         display_name:
           type: string
         fields:
@@ -1690,6 +1707,7 @@ components:
         - id
         - display_name
         - official
+        - default_admin_sensitive
         - fields
       type: object
     SecretTypeFieldBody:
@@ -1866,6 +1884,13 @@ components:
           format: uri
           readOnly: true
           type: string
+        allowed_values:
+          description: The value enum a bound value must belong to; empty means free text
+          items:
+            type: string
+          type:
+            - array
+            - "null"
         applies_to:
           description: Entity kinds this key may bind to; empty means universal
           items:
@@ -1885,6 +1910,26 @@ components:
         - name
         - applies_to
         - propagates
+        - allowed_values
+      type: object
+    TagValuesOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/TagValuesOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        values:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+      required:
+        - values
       type: object
     UpdateComponentInputBody:
       additionalProperties: false
@@ -2024,6 +2069,13 @@ components:
           format: uri
           readOnly: true
           type: string
+        allowed_values:
+          description: The value enum a bound value must belong to; omit for free text
+          items:
+            type: string
+          type:
+            - array
+            - "null"
         applies_to:
           description: Entity kinds this key may bind to; omit for universal
           items:
@@ -3877,7 +3929,7 @@ paths:
       summary: List secret types
   /secrets:
     get:
-      description: Lists every secret with masked fields. Requires an all-scope read; the scoped, per-component view is the effective-secrets route. Gated by secret:read.
+      description: Lists the secrets the caller may see, with masked fields, filtered to the read scope; admin-sensitive secrets appear only to the admin tier. Gated by secret:read, which the viewer floor does not carry (secret is a sensitive resource).
       operationId: list-secrets
       responses:
         "200":
@@ -3892,7 +3944,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
-      summary: List secrets (admin directory)
+      summary: List secrets
     post:
       description: Seals a secret at an owner scope (a global secret needs an all-scoped grant). Fields are validated and encrypted against the type shape. Gated by secret:create.
       operationId: create-secret
@@ -3997,7 +4049,7 @@ paths:
       summary: Decrypt a secret for clipboard copy
   /secrets/{id}:reveal:
     post:
-      description: "Decrypts and returns a secret's field values, auditing the decrypt. Sensitive: gated by secret:reveal, which the viewer read floor does not carry, so only admin (secret:*) and owner may reveal."
+      description: Decrypts and returns a secret's field values, auditing the decrypt. Gated by secret:reveal at the caller's scope; an admin-sensitive secret additionally needs the admin tier (secret:reveal:admin), so a scoped operator reveals device secrets but never a platform credential.
       operationId: reveal-secret
       parameters:
         - description: The secret's id
@@ -4372,6 +4424,32 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Set a global tag value
+  /tags/{name}:values:
+    get:
+      description: Returns the distinct values already bound for a key across the estate, for value autocomplete on a free-text key (an enum key carries its allowed set on the key itself). Rides the tag:read floor.
+      operationId: list-tag-values
+      parameters:
+        - description: The tag key
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The tag key
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TagValuesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List the distinct values bound for a key
   /variables:
     get:
       description: Lists every variable. Requires an all-scope read; the scoped, per-component view is the effective-variables route. Gated by variable:read.

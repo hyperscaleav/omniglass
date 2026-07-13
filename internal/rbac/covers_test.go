@@ -57,4 +57,19 @@ func TestCovers(t *testing.T) {
 	if set("location:read").Covers(viewer) {
 		t.Error("location:read must not cover *:read")
 	}
+	// secret is sensitive: a bare `*` wildcard neither grants nor covers a secret
+	// read, so a granter holding only `*:read` cannot confer secret access it does
+	// not itself have. A literal secret grant and owner's `>` do cover it.
+	if viewer.Covers(set("secret:read")) {
+		t.Error("*:read must not cover secret:read (sensitive resource)")
+	}
+	if set("*:*").Covers(set("secret:read")) {
+		t.Error("*:* must not cover secret:read (sensitive resource)")
+	}
+	if !set("secret:read").Covers(set("secret:read")) {
+		t.Error("literal secret:read should cover secret:read")
+	}
+	if !set(">").Covers(set("secret:reveal")) {
+		t.Error("owner > should cover secret:reveal")
+	}
 }

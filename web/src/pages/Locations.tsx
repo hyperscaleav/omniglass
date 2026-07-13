@@ -5,6 +5,7 @@ import TreeList, { type ListConfig, type ListCtx, type ListNode, type PageDescri
 import Donut from "../components/Donut";
 import TreeSelect from "../components/TreeSelect";
 import TagPills from "../components/TagPills";
+import TagAdder from "../components/TagAdder";
 import {
   type Location,
   LOCATIONS_KEY,
@@ -212,6 +213,7 @@ export default function Locations() {
           {ctx.fact("Parent", parent ? <button class="link text-sm" onClick={() => ctx.go(parent)}>{parent.display}</button> : <span class="text-base-content/50">Root</span>)}
           {ctx.fact("Contains", <span class="tnum text-sm">{kids.length}</span>)}
         </div>
+        <TagAdder kind="location" name={n.raw.name} canUpdate={can(me.data, "location", "update")} canCreateKey={can(me.data, "tag", "create")} />
         <Show when={kids.length}>
           <div class="flex flex-col gap-1.5">
             <span class="eyebrow">Contains</span>
