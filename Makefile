@@ -1,7 +1,7 @@
 # Local dev loop + the build/run flow for the single binary. Production deploy
 # is BYO Postgres; tests use ephemeral testcontainer Postgres.
 
-.PHONY: build build-web web image gen gen-web test test-short test-e2e clean-testcontainers tidy up down dev release-plan release-apply release-snapshot
+.PHONY: build build-web web image gen gen-web test test-web test-short test-e2e clean-testcontainers tidy up down dev release-plan release-apply release-snapshot
 
 # Build the single binary (no console embedded; serves the build-the-console
 # placeholder under /web).
@@ -44,9 +44,16 @@ gen-web:
 	cd web && npm install && npm run gen:api
 
 # Full gate: every test, including the testcontainer-backed integration and
-# end-to-end tests (real Postgres). Green before commit and before merge.
-test:
+# end-to-end tests (real Postgres) plus the SPA (vitest). Green before commit and
+# before merge.
+test: test-web
 	go test ./...
+
+# The SPA unit + theming-ban tests (vitest). Part of the local gate so web-only
+# regressions (an illegible badge class, a broken page descriptor) are caught
+# before merge, not just by the Go suite.
+test-web:
+	cd web && npm install && npm run test
 
 # Fast iteration: unit/pure tests only. -short skips anything that needs a
 # Postgres container or builds the binary.
