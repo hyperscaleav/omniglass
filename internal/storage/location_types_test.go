@@ -21,7 +21,7 @@ func TestLocationTypeCRUD(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	// Create a custom type; it is official=false and appears in the list.
+	// Create a custom type; it is official=false.
 	lt, err := gw.CreateLocationType(ctx, "", storage.LocationType{ID: "wing", DisplayName: "Wing", Rank: 15, Icon: "layers"})
 	if err != nil {
 		t.Fatalf("create: %v", err)
