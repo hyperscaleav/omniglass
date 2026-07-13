@@ -89,12 +89,13 @@ describe("filterNav", () => {
   // Secrets is a sensitive resource: the server takes secret off the *:read floor,
   // so a viewer whose only grant is *:read does not read secrets and must not see
   // the tab, while an operator holding a literal secret:read (and owner's `>`) does.
+  // Secrets now lives under Inventory (the Values band), not the old Settings group.
   it("hides Secrets from a *:read viewer, keeps it for an explicit secret:read and owner", () => {
-    expect(section("Settings", ["*:read"])).not.toContain("Secrets");
-    expect(section("Settings", ["*:*"])).not.toContain("Secrets");
-    expect(section("Settings", ["secret:read"])).toContain("Secrets");
-    expect(section("Settings", ["secret:read,reveal,create,update"])).toContain("Secrets");
-    expect(section("Settings", [">"])).toContain("Secrets");
+    expect(section("Inventory", ["*:read"])).not.toContain("Secrets");
+    expect(section("Inventory", ["*:*"])).not.toContain("Secrets");
+    expect(section("Inventory", ["secret:read"])).toContain("Secrets");
+    expect(section("Inventory", ["secret:read,reveal,create,update"])).toContain("Secrets");
+    expect(section("Inventory", [">"])).toContain("Secrets");
   });
 });
 
