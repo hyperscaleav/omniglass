@@ -7,6 +7,11 @@ import { defineConfig } from 'astro/config';
 
 export default defineConfig({
   site: 'https://docs.omniglass.hyperscaleav.com',
+  // The monolithic "the console" guide was split into per-flow operator pages.
+  // Keep its old URL alive for external links and bookmarks.
+  redirects: {
+    '/guides/console/': '/guides/operator/',
+  },
   integrations: [
     // Diagrams are authored in D2 and rendered to inline SVG. ELK layout; dark theme
     // 200, light theme 0; inline so the SVG embeds in the page and the brand tokens in
@@ -109,7 +114,9 @@ export default defineConfig({
           label: 'Operator guide',
           items: [
             { label: 'Overview', slug: 'guides/operator' },
-            { label: 'The console', slug: 'guides/console' },
+            { label: 'Sign in and your profile', slug: 'guides/operator/sign-in' },
+            { label: 'Find things in your estate', slug: 'guides/operator/inventory' },
+            { label: 'Work with an entity', slug: 'guides/operator/entities' },
             { label: 'The CLI', slug: 'guides/cli' },
           ],
         },
@@ -117,9 +124,11 @@ export default defineConfig({
           label: 'Admin guide',
           items: [
             { label: 'Overview', slug: 'guides/admin' },
-            { label: 'Users, roles, and groups', slug: 'guides/admin/identity' },
+            { label: 'Manage users', slug: 'guides/admin/users' },
+            { label: 'Roles, groups, and grants', slug: 'guides/admin/access' },
             { label: 'The audit trail', slug: 'guides/admin/audit' },
-            { label: 'Secrets and variables', slug: 'guides/admin/config' },
+            { label: 'Secrets', slug: 'guides/admin/secrets' },
+            { label: 'Variables', slug: 'guides/admin/variables' },
           ],
         },
         {
