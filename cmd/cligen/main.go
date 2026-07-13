@@ -165,6 +165,9 @@ var nameOverride = map[string]([]string){
 	"list-principal-sessions":       {"principal", "sessions"},
 	"revoke-principal-session":      {"principal", "revoke-session"},
 	"revoke-all-principal-sessions": {"principal", "revoke-all-sessions"},
+	// The self-service bulk revoke shares the sessions collection with `session list` /
+	// `session revoke`; name it `session revoke-all` explicitly.
+	"revoke-all-auth-me-sessions": {"session", "revoke-all"},
 }
 
 func buildCommands(doc spec, base string) []command {

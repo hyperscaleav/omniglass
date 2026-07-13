@@ -5,8 +5,8 @@ import Drawer, { DrawerFooter } from "../components/Drawer";
 import SessionsList from "../components/SessionsList";
 import { passwordError, isPasswordPolicyMessage } from "../lib/validate";
 import { useMe, useUpdateProfile, useChangePassword, setMyAvatar, removeMyAvatar, fetchMyAvatar } from "../lib/auth";
-import { useSessions, useRevokeSession, type Session } from "../lib/sessions";
-import { Key, Save, X } from "../components/icons";
+import { useSessions, useRevokeSession, useRevokeAllSelfSessions, type Session } from "../lib/sessions";
+import { Key, LogOut, Save, Trash, X } from "../components/icons";
 
 // Profile is the signed-in operator's own account surface: edit your display name
 // and email, change your password, and (pedagogically) see the identity model you
@@ -18,6 +18,7 @@ export default function Profile() {
   const changePassword = useChangePassword();
   const sessions = useSessions();
   const revokeSession = useRevokeSession();
+  const revokeAllSelf = useRevokeAllSelfSessions();
 
   // Sessions and API tokens are both bearer credentials, split by their kind so each
   // renders in its own section: a session is a web login, a token one you minted for
@@ -34,6 +35,17 @@ export default function Profile() {
     // /auth/me invalidation, so no page-level note is needed. Only a failure surfaces.
     if (!r.ok) setProfileMsg({ tone: "error", text: r.message });
     setRevoking(null);
+  }
+  // Bulk-revoke all of your own sessions or tokens. The server keeps the credential you
+  // are on, so this never signs you out. Confirmed, since it ends everything of that kind.
+  const [revokingAll, setRevokingAll] = createSignal<"session" | "token" | null>(null);
+  async function revokeAll(purpose: "session" | "token") {
+    const noun = purpose === "session" ? "other sessions" : "API tokens";
+    if (!window.confirm(`Revoke all your ${noun}? You stay signed in on this one.`)) return;
+    setRevokingAll(purpose);
+    const r = await revokeAllSelf(purpose);
+    if (!r.ok) setProfileMsg({ tone: "error", text: r.message });
+    setRevokingAll(null);
   }
 
   // Seed the editable field once, when /auth/me first resolves, so later keystrokes
@@ -243,7 +255,12 @@ export default function Profile() {
         {/* Sessions: the browsers and devices the caller is signed in from, each revocable. */}
         <div class="card border border-base-300 bg-base-200">
           <div class="card-body gap-3">
-            <h2 class="card-title text-base">Sessions</h2>
+            <div class="flex items-center justify-between gap-2">
+              <h2 class="card-title text-base">Sessions</h2>
+              <Show when={sessionRows().length > 1}>
+                <Button intent="danger" size="xs" icon={LogOut} loading={revokingAll() === "session"} onClick={() => revokeAll("session")}>Revoke all</Button>
+              </Show>
+            </div>
             <p class="text-xs text-base-content/50">
               Devices and browsers you are signed in from. Each <span class="font-data text-base-content/70">session</span>
               {" "}expires on its own; revoke anything you do not recognize, and revoking the one you are using signs you out.
@@ -259,7 +276,12 @@ export default function Profile() {
         {/* API tokens: credentials the caller minted for the CLI or API, each revocable. */}
         <div class="card border border-base-300 bg-base-200">
           <div class="card-body gap-3">
-            <h2 class="card-title text-base">API tokens</h2>
+            <div class="flex items-center justify-between gap-2">
+              <h2 class="card-title text-base">API tokens</h2>
+              <Show when={tokenRows().length > 0}>
+                <Button intent="danger" size="xs" icon={Trash} loading={revokingAll() === "token"} onClick={() => revokeAll("token")}>Revoke all</Button>
+              </Show>
+            </div>
             <p class="text-xs text-base-content/50">
               Tokens you minted for the CLI or API. Each <span class="font-data text-base-content/70">token</span> is
               time-bounded and expires on its own; revoke any you no longer use. The token secret is never shown here, only

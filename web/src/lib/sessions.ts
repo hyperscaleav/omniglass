@@ -48,6 +48,22 @@ export function useRevokeSession() {
   };
 }
 
+// useRevokeAllSelfSessions bulk-revokes all of the caller's own sessions OR all its
+// tokens (by purpose), then invalidates the list. The server always keeps the credential
+// making the request, so this never signs the caller out; the two purposes never cross.
+// Returns the count ended so the caller can report it.
+export function useRevokeAllSelfSessions() {
+  const qc = useQueryClient();
+  return async (purpose: "session" | "token"): Promise<{ ok: true; revoked: number } | { ok: false; message: string }> => {
+    const { data, error } = await api.POST("/auth/me/sessions:revokeAll", { body: { purpose } });
+    if (error) {
+      return { ok: false, message: purpose === "session" ? "Could not revoke your sessions." : "Could not revoke your tokens." };
+    }
+    await qc.invalidateQueries({ queryKey: SESSIONS_KEY });
+    return { ok: true, revoked: data?.revoked ?? 0 };
+  };
+}
+
 // The admin session surface (issue #172, slice 2): view and revoke ANOTHER
 // principal's sessions from the Users blade. Gated by principal:revoke-session; the
 // server bounds every read and revoke to the target principal and never leaks the

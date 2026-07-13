@@ -1142,6 +1142,42 @@ components:
       required:
         - fields
       type: object
+    RevokeAllMeSessionsInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/RevokeAllMeSessionsInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        purpose:
+          description: "Which of your own credentials to revoke: all your web-login sessions, or all your CLI/API tokens"
+          enum:
+            - session
+            - token
+          type: string
+      required:
+        - purpose
+      type: object
+    RevokeAllMeSessionsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/RevokeAllMeSessionsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        revoked:
+          description: How many credentials were revoked
+          format: int64
+          type: integer
+      required:
+        - revoked
+      type: object
     RevokeAllPrincipalSessionsInputBody:
       additionalProperties: false
       properties:
@@ -1783,6 +1819,30 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Internal Server Error
       summary: Revoke one of your own sessions
+  /auth/me/sessions:revokeAll:
+    post:
+      description: Revokes every one of the caller's own web-login sessions, or every one of its CLI/API tokens (chosen by purpose), returning how many were ended. Requires authentication; self-scoped. Always keeps the credential that made this request, so you are never signed out of the one you are on; sessions and tokens never cross.
+      operationId: revoke-all-auth-me-sessions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RevokeAllMeSessionsInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RevokeAllMeSessionsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Revoke all of your own sessions or tokens
   /auth/me:changePassword:
     post:
       description: Verifies the current password and sets a new one. Requires authentication; self-scoped.

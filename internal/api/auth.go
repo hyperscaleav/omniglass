@@ -517,13 +517,14 @@ func (a *authenticator) changePasswordHandler(ctx context.Context, in *changePas
 	if _, err := a.gw.SetPassword(ctx, pr.Human.Username, encoded); err != nil {
 		return nil, huma.Error500InternalServerError("change password")
 	}
-	// Force logout of the caller's other sessions and tokens, keeping the current one
-	// so the change does not sign the caller out of the session they just used.
+	// Force logout of the caller's other SESSIONS, keeping the current one so the change
+	// does not sign the caller out of the session they just used. Tokens are left intact:
+	// a token is its own bearer secret, not tied to the password (issue #194).
 	keep := [][]byte{}
 	if h, ok := sessionHashFrom(ctx); ok {
 		keep = append(keep, h)
 	}
-	if _, err := a.gw.RevokePrincipalBearers(ctx, pr.ID, keep); err != nil {
+	if _, err := a.gw.RevokeBearersByPurposeExcept(ctx, pr.ID, "session", keep); err != nil {
 		return nil, huma.Error500InternalServerError("change password")
 	}
 	return nil, nil
@@ -626,6 +627,43 @@ func (a *authenticator) revokeMeSessionHandler(ctx context.Context, in *revokeMe
 		return nil, huma.Error404NotFound("no such session")
 	}
 	return nil, nil
+}
+
+// revokeAllMeSessionsInput is the body of POST /auth/me/sessions:revokeAll: which of
+// the caller's own credentials to end, all sessions or all tokens.
+type revokeAllMeSessionsInput struct {
+	Body struct {
+		Purpose string `json:"purpose" enum:"session,token" doc:"Which of your own credentials to revoke: all your web-login sessions, or all your CLI/API tokens"`
+	}
+}
+
+// revokeAllMeSessionsOutput reports how many of the caller's credentials were revoked.
+type revokeAllMeSessionsOutput struct {
+	Body struct {
+		Revoked int `json:"revoked" doc:"How many credentials were revoked"`
+	}
+}
+
+// revokeAllMeSessionsHandler bulk-revokes all of the caller's own sessions or all its
+// tokens by purpose. Self-scoped and authn-only: it always keeps the credential that
+// authenticated this request (whatever its purpose), so a user ending all their sessions
+// or tokens is never signed out of the one they are on. Tokens and sessions never cross.
+func (a *authenticator) revokeAllMeSessionsHandler(ctx context.Context, in *revokeAllMeSessionsInput) (*revokeAllMeSessionsOutput, error) {
+	pr, ok := principalFrom(ctx)
+	if !ok {
+		return nil, huma.Error401Unauthorized("unauthenticated")
+	}
+	keep := [][]byte{}
+	if h, ok := sessionHashFrom(ctx); ok {
+		keep = append(keep, h)
+	}
+	n, err := a.gw.RevokeBearersByPurposeExcept(ctx, pr.ID, in.Body.Purpose, keep)
+	if err != nil {
+		return nil, huma.Error500InternalServerError("revoke sessions")
+	}
+	out := &revokeAllMeSessionsOutput{}
+	out.Body.Revoked = n
+	return out, nil
 }
 
 // setAvatarMeInput is the body of POST /api/v1/auth/me:setAvatar: the image to

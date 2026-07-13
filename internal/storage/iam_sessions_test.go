@@ -211,6 +211,80 @@ func TestRevokeBearersByPurpose(t *testing.T) {
 	}
 }
 
+// TestRevokeBearersByPurposeExcept proves the keep-current variant: it deletes every
+// bearer of one purpose EXCEPT the credentials whose secret_hash is in keep, scoped to
+// the principal, and returns the count. This backs "revoke my other sessions" on a
+// password change and the self-service "revoke all sessions" (keep the one you are on),
+// while leaving tokens untouched (issues #173, #195).
+func TestRevokeBearersByPurposeExcept(t *testing.T) {
+	gw := storagetest.NewDB(t)
+	ctx := context.Background()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	// Bootstrap an owner (its bootstrap bearer is a token), then two sessions + one token.
+	_, bh, bp, _ := auth.NewBearerToken()
+	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: bh, Prefix: bp}); err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+	pid, err := gw.ResolvePrincipalRef(ctx, "root")
+	if err != nil {
+		t.Fatalf("resolve root: %v", err)
+	}
+	future := time.Now().Add(12 * time.Hour)
+	_, keepH, keepP, _ := auth.NewBearerToken() // the "current" session, to keep
+	if ok, err := gw.IssueBearerCredential(ctx, "root", keepH, keepP, "session", &future); err != nil || !ok {
+		t.Fatalf("issue keep session: ok=%v err=%v", ok, err)
+	}
+	_, otherH, _, _ := auth.NewBearerToken() // another session, to revoke
+	if ok, err := gw.IssueBearerCredential(ctx, "root", otherH, "og", "session", &future); err != nil || !ok {
+		t.Fatalf("issue other session: ok=%v err=%v", ok, err)
+	}
+
+	// Revoke sessions EXCEPT the current one: the other session goes (count 1), the
+	// kept session and both tokens (bootstrap + none here) survive.
+	n, err := gw.RevokeBearersByPurposeExcept(ctx, pid, "session", [][]byte{keepH})
+	if err != nil {
+		t.Fatalf("revoke except: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("revoked %d, want 1 (the non-kept session)", n)
+	}
+	creds, err := gw.ListBearerCredentials(ctx, pid, keepH)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	// Two survive: the kept session and the bootstrap token.
+	var keptSession, keptToken bool
+	for _, c := range creds {
+		if c.Prefix == keepP && c.Purpose == "session" {
+			keptSession = true
+		}
+		if c.Purpose == "token" {
+			keptToken = true
+		}
+	}
+	if !keptSession {
+		t.Errorf("the current session must be kept: %+v", creds)
+	}
+	if !keptToken {
+		t.Errorf("tokens must survive a session-only revoke: %+v", creds)
+	}
+	if len(creds) != 2 {
+		t.Fatalf("want 2 survivors (kept session + bootstrap token), got %d: %+v", len(creds), creds)
+	}
+
+	// Empty keep behaves like the plain bulk revoke (delete all of the purpose): the
+	// kept session now goes too, and RevokeBearersByPurpose is the nil-keep alias.
+	if n, err := gw.RevokeBearersByPurpose(ctx, pid, "session"); err != nil || n != 1 {
+		t.Fatalf("plain purpose revoke = (%d, %v), want (1, nil)", n, err)
+	}
+	if after, err := gw.ListBearerCredentials(ctx, pid, bh); err != nil || len(after) != 1 {
+		t.Fatalf("only the bootstrap token should remain, got %d (err %v)", len(after), err)
+	}
+}
+
 // TestListBearerCredentialsPurposeAndLiveFilter proves the list carries each
 // credential's purpose (session vs token, the discriminator now that both kinds
 // carry an expiry) and returns only LIVE rows: a credential whose expires_at has

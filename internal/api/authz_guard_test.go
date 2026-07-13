@@ -32,6 +32,7 @@ var ungated = map[string]bool{
 	"POST /auth/me:removeAvatar":         true, // authn-only, self-scoped: clears only the caller's own profile picture
 	"GET /auth/me/sessions":              true, // authn-only, self-scoped: lists only the caller's own sessions
 	"POST /auth/me/sessions/{id}:revoke": true, // authn-only, self-scoped: revokes only the caller's own (a foreign id is a 404)
+	"POST /auth/me/sessions:revokeAll":   true, // authn-only, self-scoped: bulk-revokes only the caller's own, keeping the current one
 
 }
 

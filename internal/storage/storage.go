@@ -144,10 +144,6 @@ type Gateway interface {
 	// applies the same all-scope invariant as the rest of the directory (a non-all
 	// scope is ErrPrincipalForbidden), then delegates to GetHumanAvatar.
 	GetPrincipalAvatar(ctx context.Context, id string, action scope.Set) (string, bool, error)
-	// RevokePrincipalBearers deletes a principal's bearer credentials (sessions and
-	// tokens) except any sha256 hash in keep (empty revokes all); the force-logout on a
-	// self-service password change keeps the caller's own session. Returns the count.
-	RevokePrincipalBearers(ctx context.Context, principalID string, keep [][]byte) (int, error)
 	// RevokeBearer deletes the bearer credential with the given sha256 hash
 	// (session logout). A no-op if none matches.
 	RevokeBearer(ctx context.Context, hash []byte) error
@@ -167,6 +163,11 @@ type Gateway interface {
 	// returns the count deleted. It backs the admin "revoke all sessions" / "revoke
 	// all tokens" blade actions: end all of one kind at once without touching the other.
 	RevokeBearersByPurpose(ctx context.Context, principalID, purpose string) (int, error)
+	// RevokeBearersByPurposeExcept is RevokeBearersByPurpose keeping any credential
+	// whose sha256 secret hash is in keep (empty keep is the plain bulk revoke). It backs
+	// "revoke my OTHER sessions" on a password change and the self-service "revoke all
+	// sessions" that keeps the session the caller is on, tokens untouched.
+	RevokeBearersByPurposeExcept(ctx context.Context, principalID, purpose string, keep [][]byte) (int, error)
 	// AnyHuman reports whether any human principal exists (drives the login
 	// screen's bootstrap hint).
 	AnyHuman(ctx context.Context) (bool, error)

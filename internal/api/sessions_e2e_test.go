@@ -227,3 +227,145 @@ func TestSelfServiceSessions(t *testing.T) {
 		t.Fatalf("after revoking the current session it should sign out: want 401, got %d", code)
 	}
 }
+
+// TestSelfServiceRevokeAll drives the self-service bulk revoke against the real binary
+// (issue #195): a signed-in user ends ALL of their own sessions or ALL their tokens by
+// purpose, always keeping the credential making the request (never a self-logout), and
+// the two purposes never cross. Skipped under -short.
+func TestSelfServiceRevokeAll(t *testing.T) {
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	pwHash, err := auth.HashPassword("orange-boat-42x")
+	if err != nil {
+		t.Fatalf("hash: %v", err)
+	}
+	_, bh, bp, _ := auth.NewBearerToken()
+	future := time.Now().Add(auth.DefaultTokenLifetime)
+	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "ops", SecretHash: bh, Prefix: bp, PasswordHash: pwHash, ExpiresAt: &future}); err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+	// A second token beyond the bootstrap one, so a token revoke ends more than one.
+	_, th, tp, _ := auth.NewBearerToken()
+	if ok, err := gw.IssueBearerCredential(ctx, "ops", th, tp, "token", &future); err != nil || !ok {
+		t.Fatalf("mint token: ok=%v err=%v", ok, err)
+	}
+
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+	base := srv.URL
+
+	login := func() string {
+		t.Helper()
+		b, _ := json.Marshal(map[string]string{"username": "ops", "password": "orange-boat-42x"})
+		resp, err := http.Post(base+"/api/v1/auth/login", "application/json", bytes.NewReader(b))
+		if err != nil || resp.StatusCode != http.StatusNoContent {
+			t.Fatalf("login: err %v status %v", err, resp.StatusCode)
+		}
+		defer resp.Body.Close()
+		for _, c := range resp.Cookies() {
+			if c.Name == "og_session" {
+				return c.Value
+			}
+		}
+		t.Fatalf("login: no cookie")
+		return ""
+	}
+	meStatus := func(cookie string) int {
+		req, _ := http.NewRequest("GET", base+"/api/v1/auth/me", nil)
+		req.AddCookie(&http.Cookie{Name: "og_session", Value: cookie})
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("me: %v", err)
+		}
+		resp.Body.Close()
+		return resp.StatusCode
+	}
+	kinds := func(cookie string) (sessions, tokens int) {
+		req, _ := http.NewRequest("GET", base+"/api/v1/auth/me/sessions", nil)
+		req.AddCookie(&http.Cookie{Name: "og_session", Value: cookie})
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("list: %v", err)
+		}
+		defer resp.Body.Close()
+		var body struct {
+			Sessions []sessionRow `json:"sessions"`
+		}
+		_ = json.NewDecoder(resp.Body).Decode(&body)
+		for _, r := range body.Sessions {
+			if r.Kind == "session" {
+				sessions++
+			} else {
+				tokens++
+			}
+		}
+		return
+	}
+	revokeAll := func(cookie, purpose string) (int, int) {
+		t.Helper()
+		b, _ := json.Marshal(map[string]string{"purpose": purpose})
+		req, _ := http.NewRequest("POST", base+"/api/v1/auth/me/sessions:revokeAll", bytes.NewReader(b))
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(&http.Cookie{Name: "og_session", Value: cookie})
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("revokeAll: %v", err)
+		}
+		defer resp.Body.Close()
+		revoked := -1
+		if resp.StatusCode == http.StatusOK {
+			var out struct {
+				Revoked int `json:"revoked"`
+			}
+			_ = json.NewDecoder(resp.Body).Decode(&out)
+			revoked = out.Revoked
+		}
+		return resp.StatusCode, revoked
+	}
+
+	cookieA := login()
+	cookieB := login()
+	// Precondition: ops now has 2 sessions and 2 tokens (bootstrap + minted).
+	if s, tk := kinds(cookieA); s != 2 || tk != 2 {
+		t.Fatalf("precondition: want 2 sessions + 2 tokens, got %d + %d", s, tk)
+	}
+
+	// A bad purpose is a 422.
+	if code, _ := revokeAll(cookieA, "banana"); code != http.StatusUnprocessableEntity {
+		t.Fatalf("bad purpose: want 422, got %d", code)
+	}
+
+	// Revoke all sessions from cookieA: the OTHER session (cookieB) dies, cookieA (the
+	// current one) is kept, and both tokens survive. Count is 1 (only the non-current).
+	if code, n := revokeAll(cookieA, "session"); code != http.StatusOK || n != 1 {
+		t.Fatalf("revoke all sessions: want (200, 1), got (%d, %d)", code, n)
+	}
+	if meStatus(cookieB) != http.StatusUnauthorized {
+		t.Fatalf("the other session should be signed out")
+	}
+	if meStatus(cookieA) != http.StatusOK {
+		t.Fatalf("the current session must be kept")
+	}
+	if s, tk := kinds(cookieA); s != 1 || tk != 2 {
+		t.Fatalf("after session revoke-all: want 1 session (current) + 2 tokens, got %d + %d", s, tk)
+	}
+
+	// Revoke all tokens: both tokens go, the current session stays. Count 2.
+	if code, n := revokeAll(cookieA, "token"); code != http.StatusOK || n != 2 {
+		t.Fatalf("revoke all tokens: want (200, 2), got (%d, %d)", code, n)
+	}
+	if meStatus(cookieA) != http.StatusOK {
+		t.Fatalf("revoking tokens must not sign out the current session")
+	}
+	if s, tk := kinds(cookieA); s != 1 || tk != 0 {
+		t.Fatalf("after token revoke-all: want 1 session + 0 tokens, got %d + %d", s, tk)
+	}
+}

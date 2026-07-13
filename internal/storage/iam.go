@@ -461,9 +461,10 @@ func (p *PG) SetPrincipalPassword(ctx context.Context, actorID, id, encoded stri
 		id, []byte(encoded)); err != nil {
 		return fmt.Errorf("storage: reset password: %w", err)
 	}
-	// Force logout: drop every bearer credential (sessions and tokens) for the target,
-	// so a reset immediately invalidates any live access.
-	if _, err := tx.Exec(ctx, `delete from credential where principal_id = $1 and kind = 'bearer'`, id); err != nil {
+	// Force logout: drop every SESSION for the target so a reset immediately signs it
+	// out everywhere. API tokens are left intact: a token is its own bearer secret, not
+	// tied to the password, and has its own revoke surface (issue #194).
+	if _, err := tx.Exec(ctx, `delete from credential where principal_id = $1 and kind = 'bearer' and purpose = 'session'`, id); err != nil {
 		return fmt.Errorf("storage: revoke sessions on reset: %w", err)
 	}
 	// Force a change on next login: the admin knows the value they just set, so the
@@ -593,27 +594,6 @@ func (p *PG) GetPrincipalAvatar(ctx context.Context, id string, action scope.Set
 		return "", false, ErrPrincipalForbidden
 	}
 	return p.GetHumanAvatar(ctx, id)
-}
-
-// RevokePrincipalBearers deletes every bearer credential (sessions and tokens) for a
-// principal, except any whose sha256 hash is in keep. It backs the force-logout on a
-// self-service password change: pass the caller's current session hash in keep so the
-// change signs out their OTHER sessions and tokens but not the one making the request.
-// An empty keep revokes them all. Returns the number revoked.
-func (p *PG) RevokePrincipalBearers(ctx context.Context, principalID string, keep [][]byte) (int, error) {
-	var tag pgconn.CommandTag
-	var err error
-	if len(keep) == 0 {
-		tag, err = p.pool.Exec(ctx, `delete from credential where principal_id = $1 and kind = 'bearer'`, principalID)
-	} else {
-		tag, err = p.pool.Exec(ctx,
-			`delete from credential where principal_id = $1 and kind = 'bearer' and secret_hash <> all($2::bytea[])`,
-			principalID, keep)
-	}
-	if err != nil {
-		return 0, fmt.Errorf("storage: revoke bearers: %w", err)
-	}
-	return int(tag.RowsAffected()), nil
 }
 
 // HumanProfilePatch carries the editable self-profile fields. A nil pointer
@@ -758,9 +738,25 @@ func (p *PG) RevokeBearerByID(ctx context.Context, principalID, credentialID str
 // Purpose is the authoritative discriminator (both kinds carry an expiry now), so a
 // caller ending all sessions never touches a token, and vice versa.
 func (p *PG) RevokeBearersByPurpose(ctx context.Context, principalID, purpose string) (int, error) {
-	tag, err := p.pool.Exec(ctx,
-		`delete from credential where principal_id = $1 and kind = 'bearer' and purpose = $2`,
-		principalID, purpose)
+	return p.RevokeBearersByPurposeExcept(ctx, principalID, purpose, nil)
+}
+
+// RevokeBearersByPurposeExcept deletes bearers of one purpose except any whose
+// secret_hash is in keep, scoped to the principal, returning the count. An empty keep
+// deletes all of the purpose (the plain bulk revoke); a non-empty keep preserves the
+// caller's current session while ending its others, tokens untouched.
+func (p *PG) RevokeBearersByPurposeExcept(ctx context.Context, principalID, purpose string, keep [][]byte) (int, error) {
+	var tag pgconn.CommandTag
+	var err error
+	if len(keep) == 0 {
+		tag, err = p.pool.Exec(ctx,
+			`delete from credential where principal_id = $1 and kind = 'bearer' and purpose = $2`,
+			principalID, purpose)
+	} else {
+		tag, err = p.pool.Exec(ctx,
+			`delete from credential where principal_id = $1 and kind = 'bearer' and purpose = $2 and secret_hash <> all($3::bytea[])`,
+			principalID, purpose, keep)
+	}
 	if err != nil {
 		return 0, fmt.Errorf("storage: revoke bearers by purpose: %w", err)
 	}

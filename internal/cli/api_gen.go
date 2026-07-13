@@ -1369,6 +1369,27 @@ func generatedCommands() []*cobra.Command {
 			}
 			return cmd
 		}())
+		parent.AddCommand(func() *cobra.Command {
+			var fPurpose string
+			cmd := &cobra.Command{
+				Use:     "revoke-all",
+				Short:   "Revoke all of your own sessions or tokens",
+				Long:    "Revokes every one of the caller's own web-login sessions, or every one of its CLI/API tokens (chosen by purpose), returning how many were ended. Requires authentication; self-scoped. Always keeps the credential that made this request, so you are never signed out of the one you are on; sessions and tokens never cross.",
+				Example: "  omniglass session revoke-all --purpose purpose",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/auth/me/sessions:revokeAll")
+					body := map[string]any{}
+					if cmd.Flags().Changed("purpose") {
+						body["purpose"] = fPurpose
+					}
+					return runAPICommand(cmd, "POST", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fPurpose, "purpose", "", "Which of your own credentials to revoke: all your web-login sessions, or all your CLI/API tokens")
+			_ = cmd.MarkFlagRequired("purpose")
+			return cmd
+		}())
 		roots = append(roots, parent)
 	}
 	{

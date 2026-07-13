@@ -168,6 +168,15 @@ func registerRoutes(api huma.API, gw storage.Gateway, o options) {
 	}, a.revokeMeSessionHandler)
 
 	huma.Register(api, huma.Operation{
+		OperationID: "revoke-all-auth-me-sessions",
+		Method:      http.MethodPost,
+		Path:        "/auth/me/sessions:revokeAll",
+		Summary:     "Revoke all of your own sessions or tokens",
+		Description: "Revokes every one of the caller's own web-login sessions, or every one of its CLI/API tokens (chosen by purpose), returning how many were ended. Requires authentication; self-scoped. Always keeps the credential that made this request, so you are never signed out of the one you are on; sessions and tokens never cross.",
+		Middlewares: huma.Middlewares{a.authn},
+	}, a.revokeAllMeSessionsHandler)
+
+	huma.Register(api, huma.Operation{
 		OperationID:   "set-auth-me-avatar",
 		Method:        http.MethodPost,
 		Path:          "/auth/me:setAvatar",

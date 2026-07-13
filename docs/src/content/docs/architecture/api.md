@@ -35,8 +35,9 @@ Everything lives under `/api/v1`. The path shape is derivable, not special-cased
   `/alarms/{id}:ack`, `/components/{name}:apply`, `/views/{id}:run`. The verb
   is also the **permission**: `:ack` is gated by `alarm:ack`, so the route and the
   [authorization](/architecture/identity-access/) check share one vocabulary. The **self-scoped**
-  `/auth/me` family is the exception: `/auth/me:changePassword` and `/auth/me/sessions/{id}:revoke`
-  are **authn-only** (they resolve the target from the session, never a path id, so they carry no
+  `/auth/me` family is the exception: `/auth/me:changePassword`, `/auth/me/sessions/{id}:revoke`, and
+  the bulk `/auth/me/sessions:revokeAll` (a `{ purpose }` body, keeping the current credential) are
+  **authn-only** (they resolve the target from the session, never a path id, so they carry no
   capability and a credential id that is not the caller's own is a 404, not a cross-principal action).
   The **admin** counterparts on `/principals/{id}` do carry a capability and a scoped path id:
   `GET /principals/{id}/sessions` and `POST /principals/{id}/sessions/{sid}:revoke` (both gated by

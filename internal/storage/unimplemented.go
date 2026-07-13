@@ -122,9 +122,6 @@ func (UnimplementedGateway) GetHumanAvatar(context.Context, string) (string, boo
 func (UnimplementedGateway) GetPrincipalAvatar(context.Context, string, scope.Set) (string, bool, error) {
 	return "", false, nil
 }
-func (UnimplementedGateway) RevokePrincipalBearers(context.Context, string, [][]byte) (int, error) {
-	return 0, nil
-}
 func (UnimplementedGateway) RevokeBearer(context.Context, []byte) error { return nil }
 func (UnimplementedGateway) ListBearerCredentials(context.Context, string, []byte) ([]BearerCredential, error) {
 	return nil, nil
@@ -133,6 +130,9 @@ func (UnimplementedGateway) RevokeBearerByID(context.Context, string, string) (b
 	return false, nil
 }
 func (UnimplementedGateway) RevokeBearersByPurpose(context.Context, string, string) (int, error) {
+	return 0, nil
+}
+func (UnimplementedGateway) RevokeBearersByPurposeExcept(context.Context, string, string, [][]byte) (int, error) {
 	return 0, nil
 }
 func (UnimplementedGateway) AnyHuman(context.Context) (bool, error)    { return false, nil }

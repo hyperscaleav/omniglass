@@ -37,19 +37,22 @@ only your own account, whatever your role.
 - **Change password.** Enter your current password and a new one. The new password must meet the
   **policy** (at least 12 characters, not a common password, and not containing your username); the
   field validates as you type, and **Generate** fills a strong random one you can **Copy**. A wrong
-  current password is refused. Changing it **signs out your other sessions and tokens** (the one you
-  are using stays), so the change takes effect everywhere at once.
+  current password is refused. Changing it **signs out your other sessions** (the one you are using
+  stays, and your API tokens are left intact, a token not being tied to your password), so the change
+  takes effect on your logins at once.
 - **Access.** A read-only view of the identity model you operate under: your principal, the
   roles granted to you, and the flattened permissions those roles carry. The server enforces
   these on every request; the console only mirrors them.
-- **Sessions.** Every credential you hold, listed with its `ogp_` locator and when it was issued.
-  A device you signed in from is a **session** (it carries an expiry); a credential you minted for the
-  CLI or API is a **token** (it does not expire). The one you are using is marked **This session**. The
-  token secret is never shown, only its non-secret locator. **Revoke** any you do not recognize; revoking
-  the one you are using is **Sign out** and ends it immediately.
+- **Sessions** and **API tokens.** Every credential you hold, split into two sections and listed with its
+  `ogp_` locator and when it was issued. A device you signed in from is a **session**; a credential you
+  minted for the CLI or API is a **token**; both are time-bounded and show an expiry. The one you are using
+  is marked **This session**. The secret is never shown, only its non-secret locator. **Revoke** any you do
+  not recognize (revoking the one you are using is **Sign out**), or use **Revoke all** on either section to
+  end every session or every token at once, keeping the one you are on.
 
 From the CLI the same actions are `omniglass auth update-profile`, `omniglass auth change-password`,
-and `omniglass session list` / `omniglass session revoke <id>` for sessions, and
+and `omniglass session list` / `omniglass session revoke <id>` / `omniglass session revoke-all` for
+sessions, and
 `omniglass me setAvatar` / `omniglass me removeAvatar` for the picture (see
 [the CLI guide](/guides/cli/)).
 
