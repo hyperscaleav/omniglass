@@ -11,10 +11,12 @@ sidebar:
 The first slice ([ADR-0021](/architecture/decisions/#adr-0021-tag-slice-1-a-governed-key-registry-with-entity-update-gated-bindings)) is
 **built**: the governed **`tag`** key registry, the per-entity **`tag_binding`** cell on the exclusive arc, and the
 union-on-key / override-on-value **cascade** resolver, over the API and the generated CLI. Deferred to later slices:
-the operator console surface (a Tags directory and a per-entity tag editor), binding through
-[groups](/architecture/groups/) and a `template`-scoped default (the shared-resolver work in
-[#184](https://github.com/hyperscaleav/omniglass/issues/184)), value-domain governance (an open question below), and
-binding onto a [file](/architecture/files/). Those divergences are logged in the
+the operator console surface (a Tags directory and a per-entity tag editor,
+[#189](https://github.com/hyperscaleav/omniglass/issues/189)), binding through [groups](/architecture/groups/) and a
+`template`-scoped default (the shared-resolver work in [#184](https://github.com/hyperscaleav/omniglass/issues/184)),
+value-domain governance (an open question below, [#190](https://github.com/hyperscaleav/omniglass/issues/190)), and
+binding onto a [file](/architecture/files/) ([#191](https://github.com/hyperscaleav/omniglass/issues/191)). Those
+divergences are logged in the
 [decision log](/architecture/decisions/).
 :::
 

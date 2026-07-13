@@ -468,4 +468,8 @@ below from the project's history. From here it grows one slice at a time.
   resolvers; the combinator and the two-permission split are what make it its own primitive. This diverges from the
   variables page's single-table sketch (the binding is its own `tag_binding` cell) and its "bindable via groups"
   note (deferred); the variables page's tag section now frames the shared cascade and points at the tags page.
-- **Closes:** the tag slice-1 issue (registry, bindings, and cascade).
+- **Closes:** issue [#188](https://github.com/hyperscaleav/omniglass/issues/188) (tag slice 1). The deferrals are
+  filed: the console surface [#189](https://github.com/hyperscaleav/omniglass/issues/189), value-domain governance
+  [#190](https://github.com/hyperscaleav/omniglass/issues/190), and binding onto a file
+  [#191](https://github.com/hyperscaleav/omniglass/issues/191); groups and template scope ride
+  [#184](https://github.com/hyperscaleav/omniglass/issues/184).

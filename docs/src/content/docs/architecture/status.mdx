@@ -607,11 +607,14 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   friends), so an operator tags what it may already edit with no new grant; a global binding is `tag:update`. A key
   carries **`applies_to`** (an entity-kind allow-list, checked on bind) and **`propagates`** (cascade inheritance
   versus a flat per-entity set, the shape a [file](/architecture/files/) reuses). `GET|POST /tags`,
-  `PATCH|DELETE /tags/{name}`, `PUT|DELETE /tags/{name}/binding` (the global value), `GET|PUT|DELETE
-  /{components,systems,locations}/{name}/tags[/{key}]`, and `GET /components/{name}/effective-tags` (the per-component
-  cascade). Deferred (ADR-0021): the console surface (a Tags directory and per-entity editor), binding via
+  `PATCH|DELETE /tags/{name}`, `POST /tags/{name}:setGlobal|:clearGlobal` (the global value), and per-entity custom
+  methods `GET /{components,systems,locations}/{name}:listTags` and `POST .../{name}:setTag|:removeTag` (bindings are
+  entity custom methods, like the principal lifecycle, so the generated CLI stays collision-free), plus
+  `GET /components/{name}/effective-tags` (the per-component cascade). Deferred (ADR-0021): the console surface (a Tags
+  directory and per-entity editor, [#189](https://github.com/hyperscaleav/omniglass/issues/189)), binding via
   [groups](/architecture/groups/) and a `template` default ([#184](https://github.com/hyperscaleav/omniglass/issues/184)),
-  value-domain governance, and binding onto a file. Proven by a pure `internal/tag` validation unit test (key
+  value-domain governance ([#190](https://github.com/hyperscaleav/omniglass/issues/190)), and binding onto a file
+  ([#191](https://github.com/hyperscaleav/omniglass/issues/191)). Proven by a pure `internal/tag` validation unit test (key
   normalization, value bounds, the applies_to allow-list), a storage integration test (the registry CRUD and all-scope
   gate, the applies_to and value gates, the binding upsert and the owner-update scope split, the full union-on-key /
   override-on-value cascade incl. the non-propagating flat case, and the delete-key cascade to bindings), and an HTTP
