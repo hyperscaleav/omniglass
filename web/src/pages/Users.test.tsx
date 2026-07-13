@@ -187,6 +187,41 @@ describe("Users page", () => {
     expect(within(blade).queryByText("Purge")).toBeNull();
   });
 
+  it("offers bulk Revoke all sessions / tokens in the kebab and posts to :revokeAll with the purpose", async () => {
+    const calls: { url: string; method: string; body: unknown }[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : (input as Request).url;
+      const method = (typeof input === "string" || input instanceof URL ? init?.method : (input as Request).method) ?? "GET";
+      if (url.includes(":revokeAll")) {
+        const raw = typeof input === "string" || input instanceof URL ? (init?.body as string | undefined) : await (input as Request).clone().text();
+        calls.push({ url, method, body: raw ? JSON.parse(raw) : null });
+        return new Response(JSON.stringify({ revoked: 2 }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      // The Sessions section's per-principal list fetch: no rows needed here.
+      return new Response(JSON.stringify({ sessions: [] }), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    mount();
+    fireEvent.click(screen.getByText("Alice Ng"));
+    const blade = await waitFor(() => {
+      const el = document.querySelector("aside[data-blade]");
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    // `>` grants principal:revoke-session, so both bulk actions are in the kebab.
+    fireEvent.click(within(blade).getByLabelText("More actions"));
+    expect(within(blade).getByText("Revoke all sessions")).toBeTruthy();
+    expect(within(blade).getByText("Revoke all tokens")).toBeTruthy();
+
+    // Clicking one confirms, then posts to :revokeAll with the chosen purpose.
+    fireEvent.click(within(blade).getByText("Revoke all tokens"));
+    await waitFor(() => expect(calls.length).toBe(1));
+    expect(calls[0].url).toContain("/principals/u-alice/sessions:revokeAll");
+    expect(calls[0].method).toBe("POST");
+    expect(calls[0].body).toEqual({ purpose: "token" });
+  });
+
   it("an archived user (via Show archived) offers Restore in the slot and Purge in the kebab", async () => {
     const dana: Principal = { id: "u-dana", kind: "human", active: false, archived_at: "2026-01-01T00:00:00Z", human: { username: "dana", display_name: "Dana Vale" }, grants: [] };
     const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });

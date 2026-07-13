@@ -2,11 +2,11 @@ import { type JSX, For, Show, createEffect, createMemo, createResource, createSi
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import GrantBuilder from "../components/GrantBuilder";
 import { Fact, RelatedList } from "../components/DetailShell";
-import { Ban, Eye, Key, Mask, Trash, X } from "../components/icons";
+import { Ban, Eye, Key, LogOut, Mask, Trash, X } from "../components/icons";
 import PasswordField from "../components/PasswordField";
 import Button from "../components/Button";
 import SessionsList from "../components/SessionsList";
-import { usePrincipalSessions, useRevokePrincipalSession, type Session } from "../lib/sessions";
+import { usePrincipalSessions, useRevokePrincipalSession, useRevokeAllPrincipalSessions, type Session } from "../lib/sessions";
 import { useBlades, useBladeEdit } from "../lib/blades";
 import type { BladeDef } from "../lib/blades";
 import type { TreeNode } from "../lib/treeselect";
@@ -46,6 +46,7 @@ export function UserDetail(props: { id: string }) {
   const canResetPassword = () => can(me.data, "principal", "reset-password");
   const canSetAvatar = () => can(me.data, "principal", "set-avatar");
   const canRevokeSession = () => can(me.data, "principal", "revoke-session");
+  const revokeAllSessions = useRevokeAllPrincipalSessions(props.id);
   // The admin reset-password panel (toggled from the kebab): its own new-password
   // field, a server-policy error routed inline, and a "set" confirmation.
   const [resetting, setResetting] = createSignal(false);
@@ -152,6 +153,12 @@ export function UserDetail(props: { id: string }) {
         items.push({ label: "View as", icon: <Eye size={15} />, onClick: () => doImpersonate(pr, "view_as") });
         items.push({ label: "Act as", icon: <Mask size={15} />, onClick: () => doImpersonate(pr, "act_as") });
       }
+      // Bulk session/token revoke, alongside the per-row Revoke in the Sessions section
+      // and gated by the same capability: end every session or every token at once.
+      if (canRevokeSession()) {
+        items.push({ label: "Revoke all sessions", icon: <LogOut size={15} />, tone: "danger", onClick: () => doRevokeAll("session") });
+        items.push({ label: "Revoke all tokens", icon: <Trash size={15} />, tone: "danger", onClick: () => doRevokeAll("token") });
+      }
       return items;
     },
     save: async () => {
@@ -245,6 +252,17 @@ export function UserDetail(props: { id: string }) {
   async function doImpersonate(pr: Principal, mode: "view_as" | "act_as") {
     setActErr(null);
     const r = await impersonate(qc, pr.id, principalName(pr), mode);
+    if (!r.ok) setActErr(r.message);
+  }
+
+  // Bulk-revoke every one of the target's sessions or tokens from the kebab. Confirmed
+  // (it signs the user out of all of that kind at once), scoped to purpose so one never
+  // touches the other, then the Sessions section refetches from the invalidated query.
+  async function doRevokeAll(purpose: "session" | "token") {
+    const noun = purpose === "session" ? "sessions" : "API tokens";
+    if (!confirm(`Revoke all ${noun} for this user? They are signed out of every ${purpose} at once.`)) return;
+    setActErr(null);
+    const r = await revokeAllSessions(purpose);
     if (!r.ok) setActErr(r.message);
   }
 

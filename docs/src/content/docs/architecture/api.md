@@ -41,7 +41,8 @@ Everything lives under `/api/v1`. The path shape is derivable, not special-cased
   The **admin** counterparts on `/principals/{id}` do carry a capability and a scoped path id:
   `GET /principals/{id}/sessions` and `POST /principals/{id}/sessions/{sid}:revoke` (both gated by
   `principal:revoke-session`) let an administrator list and end **another** principal's sessions, the revoke
-  bounded to that target and behind the owner takeover guard.
+  bounded to that target and behind the owner takeover guard. `POST /principals/{id}/sessions:revokeAll` (a
+  `{ purpose }` body, same gate and guard) bulk-ends all of one kind at once, returning the count.
 - **Singular kind sub-segments** for the typed families: `/rules/calc`, `/datapoints/metric`,
   `/types/component`.
 - **A principal is addressable by uuid or username.** Every `/principals/{id}` route (read, update,

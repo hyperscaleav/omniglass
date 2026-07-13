@@ -121,6 +121,96 @@ func TestListAndRevokeBearerCredentials(t *testing.T) {
 	}
 }
 
+// TestRevokeBearersByPurpose proves the purpose-filtered bulk revoke: it deletes
+// every bearer of one purpose for a principal (all its sessions, or all its tokens),
+// leaves the other purpose untouched, returns the count deleted, and is scoped to the
+// owning principal so it never reaches another's credentials. This backs the admin
+// "revoke all sessions" / "revoke all tokens" blade actions (issue #172).
+func TestRevokeBearersByPurpose(t *testing.T) {
+	gw := storagetest.NewDB(t)
+	ctx := context.Background()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	// Bootstrap an owner (its bootstrap bearer is a token), then give the same
+	// principal two sessions and one more token.
+	_, bh, bp, _ := auth.NewBearerToken()
+	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: bh, Prefix: bp}); err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+	pid, err := gw.ResolvePrincipalRef(ctx, "root")
+	if err != nil {
+		t.Fatalf("resolve root: %v", err)
+	}
+	future := time.Now().Add(12 * time.Hour)
+	for _, p := range []string{"session", "session"} {
+		_, h, pf, _ := auth.NewBearerToken()
+		if ok, err := gw.IssueBearerCredential(ctx, "root", h, pf, p, &future); err != nil || !ok {
+			t.Fatalf("issue %s: ok=%v err=%v", p, ok, err)
+		}
+	}
+	_, th, tp, _ := auth.NewBearerToken()
+	if ok, err := gw.IssueBearerCredential(ctx, "root", th, tp, "token", &future); err != nil || !ok {
+		t.Fatalf("issue token: ok=%v err=%v", ok, err)
+	}
+	_ = tp
+
+	// A second principal with its own session: it must survive root's bulk revoke.
+	mallory, err := gw.CreateHumanPrincipal(ctx, pid, storage.HumanSpec{Username: "mallory"}, scope.Set{All: true})
+	if err != nil {
+		t.Fatalf("create mallory: %v", err)
+	}
+	_, mh, mp, _ := auth.NewBearerToken()
+	if ok, err := gw.IssueBearerCredential(ctx, "mallory", mh, mp, "session", &future); err != nil || !ok {
+		t.Fatalf("issue mallory session: ok=%v err=%v", ok, err)
+	}
+
+	// Revoke all of root's SESSIONS: both sessions go, the two tokens (bootstrap +
+	// issued) remain, and the count is 2.
+	n, err := gw.RevokeBearersByPurpose(ctx, pid, "session")
+	if err != nil {
+		t.Fatalf("revoke sessions: %v", err)
+	}
+	if n != 2 {
+		t.Fatalf("revoked %d sessions, want 2", n)
+	}
+	creds, err := gw.ListBearerCredentials(ctx, pid, bh)
+	if err != nil {
+		t.Fatalf("list after session revoke: %v", err)
+	}
+	if len(creds) != 2 {
+		t.Fatalf("after revoking sessions root should keep 2 tokens, got %d: %+v", len(creds), creds)
+	}
+	for _, c := range creds {
+		if c.Purpose != "token" {
+			t.Errorf("a non-token survived the session revoke: %+v", c)
+		}
+	}
+
+	// Mallory's session is untouched: the revoke is scoped to the owning principal.
+	if mc, err := gw.ListBearerCredentials(ctx, mallory.ID, mh); err != nil || len(mc) != 1 {
+		t.Fatalf("mallory should still have 1 session, got %d (err %v)", len(mc), err)
+	}
+
+	// Revoke all of root's TOKENS: both remaining tokens go, count 2, none left.
+	n, err = gw.RevokeBearersByPurpose(ctx, pid, "token")
+	if err != nil {
+		t.Fatalf("revoke tokens: %v", err)
+	}
+	if n != 2 {
+		t.Fatalf("revoked %d tokens, want 2", n)
+	}
+	if after, err := gw.ListBearerCredentials(ctx, pid, bh); err != nil || len(after) != 0 {
+		t.Fatalf("after revoking tokens root should have 0 bearers, got %d (err %v)", len(after), err)
+	}
+
+	// Revoking again is a clean zero, not an error.
+	if n, err := gw.RevokeBearersByPurpose(ctx, pid, "session"); err != nil || n != 0 {
+		t.Fatalf("re-revoke = (%d, %v), want (0, nil)", n, err)
+	}
+}
+
 // TestListBearerCredentialsPurposeAndLiveFilter proves the list carries each
 // credential's purpose (session vs token, the discriminator now that both kinds
 // carry an expiry) and returns only LIVE rows: a credential whose expires_at has

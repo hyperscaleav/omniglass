@@ -753,6 +753,20 @@ func (p *PG) RevokeBearerByID(ctx context.Context, principalID, credentialID str
 	return tag.RowsAffected() > 0, nil
 }
 
+// RevokeBearersByPurpose deletes every bearer credential of one purpose ('session'
+// or 'token') for a principal, scoped to the owning principal, and returns the count.
+// Purpose is the authoritative discriminator (both kinds carry an expiry now), so a
+// caller ending all sessions never touches a token, and vice versa.
+func (p *PG) RevokeBearersByPurpose(ctx context.Context, principalID, purpose string) (int, error) {
+	tag, err := p.pool.Exec(ctx,
+		`delete from credential where principal_id = $1 and kind = 'bearer' and purpose = $2`,
+		principalID, purpose)
+	if err != nil {
+		return 0, fmt.Errorf("storage: revoke bearers by purpose: %w", err)
+	}
+	return int(tag.RowsAffected()), nil
+}
+
 // ErrPrincipalForbidden is returned by the principal directory methods when the
 // caller's resolved scope is not all-scope. A principal is not a scope-tree
 // entity, so a location or system grant confers no principal access; only an

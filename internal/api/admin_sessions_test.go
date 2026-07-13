@@ -7,8 +7,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/api"
+	"github.com/hyperscaleav/omniglass/internal/auth"
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
@@ -194,5 +196,174 @@ func TestAdminSessionsAPI(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("no revoke_session audit event attributed to the admin (%s) in %+v", adminID, auditDoc.Events)
+	}
+}
+
+// TestAdminRevokeAllAPI drives the admin bulk-revoke surface against the real binary
+// (issue #172): an admin ends ALL of a target's sessions or ALL its tokens in one
+// action, filtered by purpose so one never touches the other, returning the count.
+// It is gated by principal:revoke-session (operator 403), guarded by the shared
+// takeover guard (an owner's credentials cannot be bulk-revoked by a lesser admin),
+// and audited with the admin as actor. Skipped under -short.
+func TestAdminRevokeAllAPI(t *testing.T) {
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+	base := srv.URL
+	c := &apiClient{t: t, ctx: ctx, base: base}
+
+	ownerTok := bootstrapOwnerTok(t, ctx, gw)
+	ownerID := meID(t, c, ownerTok)
+	adminTok := principalWithGrants(t, ctx, dsn, "admin-all", []grant{{role: "admin", scopeKind: "all"}})
+	adminID := meID(t, c, adminTok)
+	opTok := principalWithGrants(t, ctx, dsn, "op-all", []grant{{role: "operator", scopeKind: "all"}})
+
+	// Alice, created by the owner, given two login sessions (via /auth/login) and two
+	// API tokens (minted directly, the CLI lane). She then holds 2 sessions + 2 tokens.
+	var created struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/principals", map[string]string{"username": "alice", "password": "orange-boat-42x"}, http.StatusCreated), &created); err != nil {
+		t.Fatalf("create alice: %v", err)
+	}
+	aliceID := created.ID
+	loginCookie := func() string {
+		t.Helper()
+		b, _ := json.Marshal(map[string]string{"username": "alice", "password": "orange-boat-42x"})
+		resp, err := http.Post(base+"/api/v1/auth/login", "application/json", bytes.NewReader(b))
+		if err != nil || resp.StatusCode != http.StatusNoContent {
+			t.Fatalf("login alice: err %v status %v", err, resp.StatusCode)
+		}
+		defer resp.Body.Close()
+		for _, ck := range resp.Cookies() {
+			if ck.Name == "og_session" {
+				return ck.Value
+			}
+		}
+		t.Fatalf("login alice: no cookie")
+		return ""
+	}
+	cookieA := loginCookie()
+	cookieB := loginCookie()
+	future := time.Now().Add(90 * 24 * time.Hour)
+	for i := 0; i < 2; i++ {
+		_, h, pfx, _ := auth.NewBearerToken()
+		if ok, err := gw.IssueBearerCredential(ctx, "alice", h, pfx, "token", &future); err != nil || !ok {
+			t.Fatalf("mint alice token: ok=%v err=%v", ok, err)
+		}
+	}
+	meStatus := func(cookie string) int {
+		t.Helper()
+		req, _ := http.NewRequest(http.MethodGet, base+"/api/v1/auth/me", nil)
+		req.AddCookie(&http.Cookie{Name: "og_session", Value: cookie})
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("me: %v", err)
+		}
+		resp.Body.Close()
+		return resp.StatusCode
+	}
+	revokeAll := func(tok, principalID, purpose string) (int, int) {
+		t.Helper()
+		code, body := c.send(tok, http.MethodPost, "/principals/"+principalID+"/sessions:revokeAll", map[string]string{"purpose": purpose})
+		revoked := -1
+		if code == http.StatusOK {
+			var out struct {
+				Revoked int `json:"revoked"`
+			}
+			if err := json.Unmarshal(body, &out); err != nil {
+				t.Fatalf("decode revokeAll: %v (%s)", err, body)
+			}
+			revoked = out.Revoked
+		}
+		return code, revoked
+	}
+	listKinds := func(principalID string) (sessions, tokens int) {
+		t.Helper()
+		var out struct {
+			Sessions []sessionRow `json:"sessions"`
+		}
+		if err := json.Unmarshal(c.do(adminTok, http.MethodGet, "/principals/"+principalID+"/sessions", nil, http.StatusOK), &out); err != nil {
+			t.Fatalf("list: %v", err)
+		}
+		for _, s := range out.Sessions {
+			if s.Kind == "session" {
+				sessions++
+			} else {
+				tokens++
+			}
+		}
+		return
+	}
+
+	// Precondition: alice holds 2 sessions + 2 tokens, and both cookies authenticate.
+	if s, tk := listKinds(aliceID); s != 2 || tk != 2 {
+		t.Fatalf("alice precondition: want 2 sessions + 2 tokens, got %d + %d", s, tk)
+	}
+
+	// An operator lacks principal:revoke-session: bulk revoke is 403.
+	if code, _ := revokeAll(opTok, aliceID, "session"); code != http.StatusForbidden {
+		t.Fatalf("operator bulk revoke: want 403, got %d", code)
+	}
+
+	// The takeover guard: an owner's credentials cannot be bulk-revoked by a lesser admin.
+	if code, _ := revokeAll(adminTok, ownerID, "token"); code != http.StatusForbidden {
+		t.Fatalf("bulk-revoking an owner's tokens as a lesser admin: want 403, got %d", code)
+	}
+
+	// A bad purpose is a 422 (the enum is enforced), and revokes nothing.
+	if code, _ := revokeAll(adminTok, aliceID, "banana"); code != http.StatusUnprocessableEntity {
+		t.Fatalf("bulk revoke with a bad purpose: want 422, got %d", code)
+	}
+
+	// Revoke all of alice's SESSIONS: count 2, both cookies stop authenticating, her
+	// two tokens survive (the purpose filter never crosses).
+	if code, n := revokeAll(adminTok, aliceID, "session"); code != http.StatusOK || n != 2 {
+		t.Fatalf("revoke all sessions: want (200, 2), got (%d, %d)", code, n)
+	}
+	if meStatus(cookieA) != http.StatusUnauthorized || meStatus(cookieB) != http.StatusUnauthorized {
+		t.Fatalf("both sessions should stop authenticating after revoke-all")
+	}
+	if s, tk := listKinds(aliceID); s != 0 || tk != 2 {
+		t.Fatalf("after session revoke-all: want 0 sessions + 2 tokens, got %d + %d", s, tk)
+	}
+
+	// Revoke all of alice's TOKENS: count 2, nothing left.
+	if code, n := revokeAll(adminTok, aliceID, "token"); code != http.StatusOK || n != 2 {
+		t.Fatalf("revoke all tokens: want (200, 2), got (%d, %d)", code, n)
+	}
+	if s, tk := listKinds(aliceID); s != 0 || tk != 0 {
+		t.Fatalf("after token revoke-all: want 0 + 0, got %d + %d", s, tk)
+	}
+
+	// A second bulk revoke is a clean (200, 0), not an error.
+	if code, n := revokeAll(adminTok, aliceID, "session"); code != http.StatusOK || n != 0 {
+		t.Fatalf("idempotent bulk revoke: want (200, 0), got (%d, %d)", code, n)
+	}
+
+	// The bulk revoke is audited with the acting admin as actor.
+	var auditDoc struct {
+		Events []auditEvent `json:"events"`
+	}
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/audit-log?verb=revoke_session", nil, http.StatusOK), &auditDoc); err != nil {
+		t.Fatalf("decode audit-log: %v", err)
+	}
+	found := false
+	for _, e := range auditDoc.Events {
+		if e.Verb == "revoke_session" && e.Actor == adminID {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("no revoke_session audit event attributed to the admin (%s)", adminID)
 	}
 }

@@ -162,6 +162,11 @@ type Gateway interface {
 	// matched (wrong/already-revoked id, another principal's credential, or a
 	// malformed id).
 	RevokeBearerByID(ctx context.Context, principalID, credentialID string) (bool, error)
+	// RevokeBearersByPurpose deletes every one of a principal's bearer credentials of
+	// the given purpose ('session' or 'token'), scoped to the owning principal, and
+	// returns the count deleted. It backs the admin "revoke all sessions" / "revoke
+	// all tokens" blade actions: end all of one kind at once without touching the other.
+	RevokeBearersByPurpose(ctx context.Context, principalID, purpose string) (int, error)
 	// AnyHuman reports whether any human principal exists (drives the login
 	// screen's bootstrap hint).
 	AnyHuman(ctx context.Context) (bool, error)

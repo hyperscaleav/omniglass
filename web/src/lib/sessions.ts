@@ -85,3 +85,19 @@ export function useRevokePrincipalSession(id: string) {
     return { ok: true };
   };
 }
+
+// useRevokeAllPrincipalSessions bulk-revokes every one of a target's sessions OR every
+// one of its tokens (by purpose) in a single admin action, then invalidates that
+// principal's session list. Returns the count ended so the caller can report it. The
+// server bounds the revoke to the target and never crosses purpose.
+export function useRevokeAllPrincipalSessions(id: string) {
+  const qc = useQueryClient();
+  return async (purpose: "session" | "token"): Promise<{ ok: true; revoked: number } | { ok: false; message: string }> => {
+    const { data, error } = await api.POST("/principals/{id}/sessions:revokeAll", { params: { path: { id } }, body: { purpose } });
+    if (error) {
+      return { ok: false, message: purpose === "session" ? "Could not revoke the sessions." : "Could not revoke the tokens." };
+    }
+    await qc.invalidateQueries({ queryKey: principalSessionsKey(id) });
+    return { ok: true, revoked: data?.revoked ?? 0 };
+  };
+}

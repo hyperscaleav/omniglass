@@ -149,6 +149,22 @@ type revokePrincipalSessionInput struct {
 	SID string `path:"sid" doc:"The credential id to revoke (from the principal's session list)"`
 }
 
+// revokeAllPrincipalSessionsInput bulk-revokes one purpose of a target's credentials
+// (all sessions, or all tokens), chosen by the body's purpose enum.
+type revokeAllPrincipalSessionsInput struct {
+	ID   string `path:"id" doc:"The principal, addressed by its uuid or a human username"`
+	Body struct {
+		Purpose string `json:"purpose" enum:"session,token" doc:"Which credentials to revoke: all of the principal's web-login sessions, or all its CLI/API tokens"`
+	}
+}
+
+// revokeAllPrincipalSessionsOutput reports how many credentials the bulk revoke ended.
+type revokeAllPrincipalSessionsOutput struct {
+	Body struct {
+		Revoked int `json:"revoked" doc:"How many credentials were revoked"`
+	}
+}
+
 // registerPrincipalRoutes wires the admin principal directory: list, get, and
 // create a human. Each is gated by a principal capability, which resolves to an
 // all-scope grant only (a principal is not a scope-tree entity), so the gateway
@@ -609,6 +625,51 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 			return nil, huma.Error500InternalServerError("revoke session")
 		}
 		return nil, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "revoke-all-principal-sessions",
+		Method:      http.MethodPost,
+		Path:        "/principals/{id}/sessions:revokeAll",
+		Summary:     "Revoke all of a principal's sessions or tokens",
+		Description: "Revokes every one of another principal's web-login sessions, or every one of its CLI/API tokens (chosen by purpose), in a single administrator action, returning how many were ended. Gated by principal:revoke-session (all-scope). Bounded to the target and never crosses purpose (revoking sessions leaves tokens, and vice versa). Refused (403) on an owner (the takeover guard shared with impersonation and the password reset) or when it would exceed the caller's own capabilities. Audited with the administrator as the actor.",
+		Errors:      []int{http.StatusForbidden, http.StatusNotFound},
+		Middlewares: huma.Middlewares{a.authn, a.require("principal", "revoke-session")},
+	}, func(ctx context.Context, in *revokeAllPrincipalSessionsInput) (*revokeAllPrincipalSessionsOutput, error) {
+		id, rerr := a.resolvePrincipalRef(ctx, in.ID)
+		if rerr != nil {
+			return nil, rerr
+		}
+		in.ID = id
+		// Same guards as the single revoke: fetch the target (unknown id 404, non-all
+		// scope 403), then the takeover guard (an owner's credentials are un-revocable by
+		// a lesser admin, and the caller's capabilities must cover the target's).
+		target, err := gw.GetPrincipal(ctx, in.ID, a.scopeFor(ctx, "principal", "revoke-session"))
+		if err != nil {
+			return nil, mapPrincipalErr(err)
+		}
+		switch err := a.checkTakeoverGuard(ctx, target); {
+		case errors.Is(err, errOwnerTarget):
+			return nil, huma.Error403Forbidden("an owner's sessions cannot be revoked")
+		case errors.Is(err, errCapabilityEscalation):
+			return nil, huma.Error403Forbidden("cannot revoke the sessions of a principal whose capabilities exceed yours")
+		case err != nil:
+			return nil, huma.Error500InternalServerError("revoke sessions")
+		}
+		n, err := gw.RevokeBearersByPurpose(ctx, in.ID, in.Body.Purpose)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("revoke sessions")
+		}
+		// Audit only a revoke that actually ended something (a zero-count bulk revoke is
+		// a no-op), attributed to the acting admin (real actor rides context).
+		if n > 0 {
+			if err := gw.WriteAuthEvent(ctx, actorID(ctx), "revoke_session"); err != nil {
+				return nil, huma.Error500InternalServerError("revoke sessions")
+			}
+		}
+		out := &revokeAllPrincipalSessionsOutput{}
+		out.Body.Revoked = n
+		return out, nil
 	})
 }
 

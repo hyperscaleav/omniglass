@@ -133,12 +133,14 @@ location-scoped admin cannot list users.
   is never shown. **Revoke** any of them to sign that credential out at once, so a lost laptop or a leaked
   token can be cut off without resetting the whole account. The revoke is audited with **you** as the actor.
   As with the password reset, an **owner's** sessions cannot be revoked by a lesser admin (you can see them,
-  not end them), and the affordance is hidden entirely unless you hold the capability.
+  not end them), and the affordance is hidden entirely unless you hold the capability. The blade's **...**
+  action-rail menu also offers **Revoke all sessions** and **Revoke all tokens** (each confirmed) to end every
+  session or every token at once, without touching the other kind.
 
 From the CLI the same surface is `omniglass principal list` / `get` / `create` / `update` /
 `disable` / `enable` / `archive` / `restore` / `purge`, `omniglass grant create <id>` /
 `grant delete <id> <grantId>`, and `omniglass principal sessions <id>` /
-`principal revoke-session <id> <sid>`.
+`principal revoke-session <id> <sid>` / `principal revoke-all-sessions <id>`.
 
 In the grant builder itself, hovering a role in the picker shows its description and the permissions it
 grants, so you can see what you are assigning before you stage it.

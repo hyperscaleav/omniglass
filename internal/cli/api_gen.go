@@ -955,6 +955,27 @@ func generatedCommands() []*cobra.Command {
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
+			var fPurpose string
+			cmd := &cobra.Command{
+				Use:     "revoke-all-sessions <id>",
+				Short:   "Revoke all of a principal's sessions or tokens",
+				Long:    "Revokes every one of another principal's web-login sessions, or every one of its CLI/API tokens (chosen by purpose), in a single administrator action, returning how many were ended. Gated by principal:revoke-session (all-scope). Bounded to the target and never crosses purpose (revoking sessions leaves tokens, and vice versa). Refused (403) on an owner (the takeover guard shared with impersonation and the password reset) or when it would exceed the caller's own capabilities. Audited with the administrator as the actor.",
+				Example: "  omniglass principal revoke-all-sessions <id> --purpose purpose",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/principals/%s/sessions:revokeAll", url.PathEscape(args[0]))
+					body := map[string]any{}
+					if cmd.Flags().Changed("purpose") {
+						body["purpose"] = fPurpose
+					}
+					return runAPICommand(cmd, "POST", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fPurpose, "purpose", "", "Which credentials to revoke: all of the principal's web-login sessions, or all its CLI/API tokens")
+			_ = cmd.MarkFlagRequired("purpose")
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
 			cmd := &cobra.Command{
 				Use:     "revoke-session <id> <sid>",
 				Short:   "Revoke a principal's session",

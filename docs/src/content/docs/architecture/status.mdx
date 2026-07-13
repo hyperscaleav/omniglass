@@ -712,10 +712,16 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   password reset (an owner's sessions cannot be revoked by a lesser admin, nor a principal whose
   capabilities exceed the caller's), and is **audited with the acting admin as the actor**. The console's
   **Users** blade gains **Sessions** and **API tokens** sections (a shared `SessionsList` now backs both
-  them and the self-service Profile card), hidden unless the caller holds the capability, with a **Revoke** per row. The
-  generated CLI gains `omniglass principal sessions <id>` / `principal revoke-session <id> <sid>` (the
-  cligen `nameOverride` seam groups them under `principal` so they do not collide with the self-service
-  `session` commands, which share the leaf noun). Proven by a real-binary API test: an admin lists a target's
-  sessions and revokes one so it stops authenticating, an operator is 403, revoking an **owner's** session
-  as a lesser admin is 403 (the takeover guard), a `sid` that is not the target's (or an unknown principal)
-  is a 404, the secret never appears, and the revoke is audited with the admin as actor.
+  them and the self-service Profile card), hidden unless the caller holds the capability, with a **Revoke** per row.
+  The blade's action-rail kebab also offers **Revoke all sessions** and **Revoke all tokens** (each confirmed),
+  bulk-ending one purpose at a time through a new `POST /principals/{id}/sessions:revokeAll` backed by a
+  purpose-filtered `RevokeBearersByPurpose` (revoking sessions never touches tokens), returning the count and under
+  the same gate, takeover guard, and audit as the single revoke. The generated CLI gains
+  `omniglass principal sessions <id>` / `principal revoke-session <id> <sid>` /
+  `principal revoke-all-sessions <id>` (the cligen `nameOverride` seam groups them under `principal` so they do
+  not collide with the self-service `session` commands, which share the leaf noun). Proven by real-binary API
+  tests: an admin lists a target's sessions and revokes one so it stops authenticating, bulk-revokes all sessions
+  (both cookies stop authenticating, the tokens survive) then all tokens, an operator is 403, revoking an
+  **owner's** session or bulk-revoking its tokens as a lesser admin is 403 (the takeover guard), a `sid` that is
+  not the target's (or an unknown principal) is a 404, a bad purpose is a 422, the secret never appears, and the
+  revoke is audited with the admin as actor.

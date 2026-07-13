@@ -162,8 +162,9 @@ var nameOverride = map[string]([]string){
 	// `list` / `revoke` commands. Group the admin pair under the `principal`
 	// resource instead (alongside reset-password and impersonate), keeping the
 	// self-service pair as the plain `session list` / `session revoke`.
-	"list-principal-sessions":  {"principal", "sessions"},
-	"revoke-principal-session": {"principal", "revoke-session"},
+	"list-principal-sessions":       {"principal", "sessions"},
+	"revoke-principal-session":      {"principal", "revoke-session"},
+	"revoke-all-principal-sessions": {"principal", "revoke-all-sessions"},
 }
 
 func buildCommands(doc spec, base string) []command {
