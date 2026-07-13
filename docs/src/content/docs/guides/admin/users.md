@@ -10,9 +10,10 @@ builder](/guides/admin/access/#the-grant-builder) on the next page. The model un
 [identity and access](/architecture/identity-access/).
 
 Every row leads with the principal's avatar, its uploaded picture when it has one and its
-initials otherwise. You see the directory only if you hold `principal:read`, and because a
-principal is not part of any location or system tree, that grant must be **all-scope**: a
-location-scoped admin cannot list users.
+initials otherwise. You see the directory only if you hold `principal:read:admin`, the
+admin-tier read that a plain `*:read` cannot reach, so a viewer or field tech cannot enumerate
+users. Because a principal is not part of any location or system tree, that grant is inherently
+**all-scope**: a location-scoped admin cannot list users.
 
 ![The Users directory: each principal with its avatar, kind badge, and grant count, plus New user and Show archived.](../../../../assets/screenshots/users.png)
 
