@@ -156,6 +156,7 @@ omniglass bootstrap <username> [flags]
 | `--display-name` | string | (none) | owner display name (optional) |
 | `--email` | string | (none) | owner email (optional) |
 | `--password` | string | (none) | owner password, so the owner can sign in to the console (optional) |
+| `--ttl` | duration | `2160h0m0s` | how long the bootstrap token is valid before it expires (max 365 days) |
 
 ## `omniglass component`
 
@@ -1025,6 +1026,58 @@ Example:
 omniglass principal restore <id>
 ```
 
+### `omniglass principal revoke-all-sessions`
+
+Revoke all of a principal's sessions or tokens
+
+```
+omniglass principal revoke-all-sessions <id> [flags]
+```
+
+Revokes every one of another principal's web-login sessions, or every one of its CLI/API tokens (chosen by purpose), in a single administrator action, returning how many were ended. Gated by principal:revoke-session (all-scope). Bounded to the target and never crosses purpose (revoking sessions leaves tokens, and vice versa). Refused (403) on an owner (the takeover guard shared with impersonation and the password reset) or when it would exceed the caller's own capabilities. Audited with the administrator as the actor.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--purpose` | string | (none) | Which credentials to revoke: all of the principal's web-login sessions, or all its CLI/API tokens |
+
+Example:
+
+```sh
+omniglass principal revoke-all-sessions <id> --purpose purpose
+```
+
+### `omniglass principal revoke-session`
+
+Revoke a principal's session
+
+```
+omniglass principal revoke-session <id> <sid>
+```
+
+Revokes one of another principal's sessions or tokens by id (an administrator action; the target is immediately signed out of that credential). Gated by principal:revoke-session (all-scope). Bounded to the target, so a credential id that is not theirs is a non-disclosing 404, never a cross-principal revoke. Refused (403) on an owner (an owner's sessions cannot be revoked by anyone, the takeover guard shared with impersonation and password reset) or when it would exceed the caller's own capabilities. Audited with the administrator as the actor.
+
+Example:
+
+```sh
+omniglass principal revoke-session <id> <sid>
+```
+
+### `omniglass principal sessions`
+
+List a principal's sessions
+
+```
+omniglass principal sessions <id>
+```
+
+Lists another principal's active bearer credentials (login sessions and API tokens) with their non-secret metadata, newest first, so an administrator can see where an account is signed in and revoke a session that should not be. Gated by principal:revoke-session (all-scope). The token secret is never returned, and current is always false (there is no "this request's own session" when viewing another principal).
+
+Example:
+
+```sh
+omniglass principal sessions <id>
+```
+
 ### `omniglass principal setAvatar`
 
 Set a principal's profile picture
@@ -1333,15 +1386,75 @@ Run the control-plane server (HTTP API)
 omniglass server
 ```
 
+## `omniglass session`
+
+Commands for the session resource
+
+### `omniglass session list`
+
+List your own sessions and tokens
+
+```
+omniglass session list
+```
+
+Lists the caller's own active bearer credentials (time-bounded web-login sessions and CLI/API tokens) with their non-secret metadata; the current one is flagged. Requires authentication; self-scoped (never another principal's). The token secret is never returned.
+
+Example:
+
+```sh
+omniglass session list
+```
+
+### `omniglass session revoke`
+
+Revoke one of your own sessions
+
+```
+omniglass session revoke <id>
+```
+
+Revokes one of the caller's own sessions or tokens by id (from the session list); revoking the current one signs it out. Requires authentication; self-scoped, so a credential id that is not yours is a 404.
+
+Example:
+
+```sh
+omniglass session revoke <id>
+```
+
+### `omniglass session revoke-all`
+
+Revoke all of your own sessions or tokens
+
+```
+omniglass session revoke-all [flags]
+```
+
+Revokes every one of the caller's own web-login sessions, or every one of its CLI/API tokens (chosen by purpose), returning how many were ended. Requires authentication; self-scoped. Always keeps the credential that made this request, so you are never signed out of the one you are on; sessions and tokens never cross.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--purpose` | string | (none) | Which of your own credentials to revoke: all your web-login sessions, or all your CLI/API tokens |
+
+Example:
+
+```sh
+omniglass session revoke-all --purpose purpose
+```
+
 ## `omniglass set-password`
 
-Set or rotate a user's console password (direct DB)
+Set or rotate a user's console password, revoking their sessions (direct DB)
 
 ```
-omniglass set-password <username> <password>
+omniglass set-password <username> <password> [flags]
 ```
 
-Installs or replaces a human's password credential (argon2id), addressed by username. The same trusted direct-DB lane as bootstrap and token: dev setup, break-glass, or a password reset before the admin UI lands.
+Installs or replaces a human's password credential (argon2id), addressed by username, and revokes the user's live SESSIONS so a break-glass reset locks out any stolen login at once. API tokens are a separate bearer secret, not tied to the password, and are kept unless --revoke-tokens is given (a full lockout of a compromised account). The same trusted direct-DB lane as bootstrap and token: dev setup, break-glass, or a password reset before the admin UI lands.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--revoke-tokens` | bool | `false` | also revoke the user's API tokens (a full lockout of a compromised account) |
 
 ## `omniglass statu`
 
@@ -1637,10 +1750,14 @@ omniglass tag update <name>
 Mint an additional bearer token for an existing principal (direct DB)
 
 ```
-omniglass token <username>
+omniglass token <username> [flags]
 ```
 
-Issues a new bearer credential for an existing principal, addressed by username, and prints the token once. The same trusted direct-DB lane as bootstrap: token reissue, break-glass, or a fresh login token for `make dev` when the owner already exists.
+Issues a new bearer credential for an existing principal, addressed by username, and prints the token once. The same trusted direct-DB lane as bootstrap: token reissue, break-glass, or a fresh login token for `make dev` when the owner already exists. The token expires after --ttl (default 90 days, hard maximum 365 days); every credential is time-bounded.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--ttl` | duration | `2160h0m0s` | how long the token is valid before it expires (max 365 days) |
 
 ## `omniglass variable`
 

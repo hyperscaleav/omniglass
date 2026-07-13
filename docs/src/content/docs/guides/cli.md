@@ -61,15 +61,21 @@ no running server needed):
 ```sh
 # Mints a bearer credential (the token is printed once) and, with --password, a password
 # credential (argon2id) so the owner can sign in to the console. This is a trusted direct-DB
-# lane, so it is exempt from the password policy (unlike the console/API paths).
+# lane, so it is exempt from the password policy (unlike the console/API paths). The bootstrap
+# token expires after --ttl (default 90 days, hard maximum 365 days).
 omniglass bootstrap ops --password 'set-a-strong-one' --email ops@example.com --display-name "Ops Lead"
 
-# Reprint a fresh bearer token for an existing user (direct-DB, owner lane). A CLI
-# token does not expire (unlike a web-login session cookie, which has a fixed lifetime).
+# Reprint a fresh bearer token for an existing user (direct-DB, owner lane). Every credential
+# is time-bounded: the token expires after --ttl (default 90 days, hard maximum 365 days; a
+# --ttl above the cap is an error). A web-login session cookie has its own, shorter fixed lifetime.
 omniglass token ops
+omniglass token ops --ttl 720h   # a 30-day token
 
 # Set or rotate a user's password (direct-DB, owner lane; also policy-exempt as the recovery path).
+# A break-glass reset also revokes the user's live SESSIONS, so a stolen login stops at once; API
+# tokens are kept unless --revoke-tokens is given (a full lockout of a compromised account).
 omniglass set-password ops 'set-a-strong-one'
+omniglass set-password ops 'set-a-strong-one' --revoke-tokens   # full lockout: sessions and tokens
 ```
 
 Once a server is running, a signed-in principal manages **its own** account through the

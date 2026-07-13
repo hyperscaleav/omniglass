@@ -39,8 +39,9 @@ type Gateway interface {
 	BootstrapOwner(ctx context.Context, spec OwnerSpec) (created bool, err error)
 	// IssueBearerCredential mints an additional bearer credential for an existing
 	// principal by human username (token reissue / break-glass / dev login).
-	// Returns false if no such username.
-	IssueBearerCredential(ctx context.Context, username string, hash []byte, prefix string, expiresAt *time.Time) (bool, error)
+	// purpose is 'session' (a web login) or 'token' (a CLI/API credential); expiresAt
+	// bounds the credential's lifetime. Returns false if no such username.
+	IssueBearerCredential(ctx context.Context, username string, hash []byte, prefix, purpose string, expiresAt *time.Time) (bool, error)
 	// AuthenticateBearer resolves a bearer credential by its sha256 hash to the
 	// principal, its kind profile, and its grants. Returns ErrCredentialNotFound
 	// if no credential matches.
@@ -144,13 +145,30 @@ type Gateway interface {
 	// applies the same all-scope invariant as the rest of the directory (a non-all
 	// scope is ErrPrincipalForbidden), then delegates to GetHumanAvatar.
 	GetPrincipalAvatar(ctx context.Context, id string, action scope.Set) (string, bool, error)
-	// RevokePrincipalBearers deletes a principal's bearer credentials (sessions and
-	// tokens) except any sha256 hash in keep (empty revokes all); the force-logout on a
-	// self-service password change keeps the caller's own session. Returns the count.
-	RevokePrincipalBearers(ctx context.Context, principalID string, keep [][]byte) (int, error)
 	// RevokeBearer deletes the bearer credential with the given sha256 hash
 	// (session logout). A no-op if none matches.
 	RevokeBearer(ctx context.Context, hash []byte) error
+	// ListBearerCredentials returns a principal's own bearer credentials (login
+	// sessions and API tokens) with their non-secret metadata (id, prefix,
+	// created_at, expires_at), newest first; the secret hash is never returned.
+	// currentHash (the sha256 of the request's own token) is compared only in SQL to
+	// flag the current credential. It backs a signed-in user viewing their sessions.
+	ListBearerCredentials(ctx context.Context, principalID string, currentHash []byte) ([]BearerCredential, error)
+	// RevokeBearerByID deletes one bearer credential by id, scoped to the owning
+	// principal (so a caller revokes only their own). Returns false when nothing
+	// matched (wrong/already-revoked id, another principal's credential, or a
+	// malformed id).
+	RevokeBearerByID(ctx context.Context, principalID, credentialID string) (bool, error)
+	// RevokeBearersByPurpose deletes every one of a principal's bearer credentials of
+	// the given purpose ('session' or 'token'), scoped to the owning principal, and
+	// returns the count deleted. It backs the admin "revoke all sessions" / "revoke
+	// all tokens" blade actions: end all of one kind at once without touching the other.
+	RevokeBearersByPurpose(ctx context.Context, principalID, purpose string) (int, error)
+	// RevokeBearersByPurposeExcept is RevokeBearersByPurpose keeping any credential
+	// whose sha256 secret hash is in keep (empty keep is the plain bulk revoke). It backs
+	// "revoke my OTHER sessions" on a password change and the self-service "revoke all
+	// sessions" that keeps the session the caller is on, tokens untouched.
+	RevokeBearersByPurposeExcept(ctx context.Context, principalID, purpose string, keep [][]byte) (int, error)
 	// AnyHuman reports whether any human principal exists (drives the login
 	// screen's bootstrap hint).
 	AnyHuman(ctx context.Context) (bool, error)

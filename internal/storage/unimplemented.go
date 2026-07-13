@@ -19,7 +19,7 @@ func (UnimplementedGateway) UpsertRole(context.Context, Role) error { return nil
 func (UnimplementedGateway) BootstrapOwner(context.Context, OwnerSpec) (bool, error) {
 	return false, nil
 }
-func (UnimplementedGateway) IssueBearerCredential(context.Context, string, []byte, string, *time.Time) (bool, error) {
+func (UnimplementedGateway) IssueBearerCredential(context.Context, string, []byte, string, string, *time.Time) (bool, error) {
 	return false, nil
 }
 func (UnimplementedGateway) AuthenticateBearer(context.Context, []byte) (*Principal, error) {
@@ -123,11 +123,20 @@ func (UnimplementedGateway) GetHumanAvatar(context.Context, string) (string, boo
 func (UnimplementedGateway) GetPrincipalAvatar(context.Context, string, scope.Set) (string, bool, error) {
 	return "", false, nil
 }
-func (UnimplementedGateway) RevokePrincipalBearers(context.Context, string, [][]byte) (int, error) {
+func (UnimplementedGateway) RevokeBearer(context.Context, []byte) error { return nil }
+func (UnimplementedGateway) ListBearerCredentials(context.Context, string, []byte) ([]BearerCredential, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) RevokeBearerByID(context.Context, string, string) (bool, error) {
+	return false, nil
+}
+func (UnimplementedGateway) RevokeBearersByPurpose(context.Context, string, string) (int, error) {
 	return 0, nil
 }
-func (UnimplementedGateway) RevokeBearer(context.Context, []byte) error { return nil }
-func (UnimplementedGateway) AnyHuman(context.Context) (bool, error)     { return false, nil }
+func (UnimplementedGateway) RevokeBearersByPurposeExcept(context.Context, string, string, [][]byte) (int, error) {
+	return 0, nil
+}
+func (UnimplementedGateway) AnyHuman(context.Context) (bool, error)    { return false, nil }
 func (UnimplementedGateway) ListRoles(context.Context) ([]Role, error) { return nil, nil }
 func (UnimplementedGateway) ListAuditLog(context.Context, AuditFilter) ([]AuditEntry, error) {
 	return nil, nil

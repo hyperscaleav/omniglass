@@ -49,8 +49,8 @@ users. Because a principal is not part of any location or system tree, that gran
 - With `principal:reset-password`, the kebab on **another user's** blade holds **Reset password**: it
   opens an inline panel with a password field (the same **Generate** and inline policy check as the New
   user form) and sets a new password for that user without their current one. The reset **immediately
-  signs the user out of every session and token**, so it doubles as a way to cut off a compromised or
-  departing account. The set password stays copyable so you can hand it over; the user changes it after
+  signs the user out of every session** (its API tokens are kept, a token not being tied to the
+  password), so it cuts off a compromised or departing account's logins at once. The set password stays copyable so you can hand it over; the user changes it after
   signing in. The reset is audited with **you** as the actor. It is refused on your **own** account (change your own password from **Your
   profile**, which verifies your current one) and on an **owner** (owners cannot be reset by anyone).
   This is a console path for what the CLI does with `omniglass set-password`; unlike that trusted
@@ -61,6 +61,15 @@ users. Because a principal is not part of any location or system tree, that gran
   **you** as the actor. Without the capability the panel does not render, though the user's picture still
   shows in the blade header and the directory. This is a console path for `omniglass principal setAvatar
   <id>` / `removeAvatar <id>` on the CLI.
+- With `principal:revoke-session`, another user's blade gains **Sessions** and **API tokens** sections:
+  every credential the account holds, listed with its `ogp_` locator and expiry. **Revoke** any one, or
+  use **Revoke all sessions** / **Revoke all tokens** in the blade's kebab, to cut off a lost laptop or
+  a leaked token without resetting the account. The revoke is audited with **you** as the actor. As with
+  the password reset, an **owner's** credentials cannot be revoked by anyone: their list renders
+  read-only (you can see where the account is signed in, not end it), and the affordance is hidden
+  unless you hold the capability.
 
 From the CLI the same surface is `omniglass principal list` / `get` / `create` / `update` /
-`disable` / `enable` / `archive` / `restore` / `purge` (see the [CLI reference](/reference/cli/)).
+`disable` / `enable` / `archive` / `restore` / `purge`, plus `principal sessions <id>` /
+`principal revoke-session <id> <sid>` / `principal revoke-all-sessions <id>` (see the
+[CLI reference](/reference/cli/)).

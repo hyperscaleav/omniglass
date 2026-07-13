@@ -702,6 +702,74 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   (self set + read + remove, garbage 422, the admin permission 403 without `principal:set-avatar` and success
   with), plus web tests for both surfaces. Deferred: the top-nav avatar, non-human avatars, multiple sizes /
   srcset, and external (Gravatar) sources.
+
+- **Identity: view and revoke your own sessions (slice 1 of 2).** A signed-in user can now see and end
+  their own sign-ins and API tokens. Two gateway primitives land on the existing `credential` table (no
+  migration; `created_at` and `expires_at` already exist): `ListBearerCredentials` returns each of a
+  principal's bearer credentials with only non-secret metadata (id, `ogp_` prefix, created, expiry) and
+  never selects the raw `secret_hash` into a returned field (the request's own `sha256(token)` is compared
+  in SQL to flag the `current` one, so the hash never leaves the database), and `RevokeBearerByID` deletes
+  one **scoped to the owning principal** so a caller can only revoke their own. Over the API, `GET
+  /auth/me/sessions` lists them (labelled `session` or `token` by the credential's `purpose`, the
+  current one flagged) and `POST /auth/me/sessions/{id}:revoke` ends one (204); both are authn-only and
+  self-scoped, so a credential id belonging to another principal is a non-disclosing 404, and revoking the
+  current credential signs it out. The console's **Your profile** gains a **Sessions** card listing each
+  credential with a **Revoke** action (**Sign out** on the current one), through the generated typed client
+  and TanStack Query. The generated CLI gains `omniglass session list` / `session revoke <id>`. Proven by a
+  storage test (list returns both with metadata and no secret and the current flag, revoke by id scoped to
+  the principal, a cross-principal or malformed id is a no-op) and a real-binary API test (the current
+  session is flagged, a second session is revoked and stops authenticating, another principal's id is a
+  404, and revoking the current one signs out). The **admin** surface (an operator revoking another
+  principal's sessions) is slice 2.
+
+- **Identity: every credential is time-bounded, and sessions split from API tokens.** Building on the slice
+  above, the tokens-never-expire behavior is reversed ([ADR-0019](/architecture/decisions/#adr-0019-every-credential-is-time-bounded-token-purpose-not-expiry-shape)):
+  a web-login **session** keeps its 12h absolute lifetime, while a CLI/API **token** (`omniglass token`) and
+  the **bootstrap token** (`omniglass bootstrap`) now get a **90-day default** expiry with a `--ttl` override
+  hard-capped at **365 days** (a `--ttl` above the cap is a clean error, before any DB work), so no eternal
+  secret sits in the field. Because both kinds now carry an expiry, a new **`credential.purpose`** column
+  (`session` / `token`), not the nullable `expires_at`, is the discriminator; a migration adds it and
+  backfills existing bearers (expiry set to `session`, else `token`). `IssueBearerCredential` and
+  `BootstrapOwner` take the purpose and expiry; `ListBearerCredentials` returns the purpose and now filters
+  to **live** rows only (`expires_at is null or expires_at > now()`, mirroring `AuthenticateBearer`), so a
+  dead credential is never listed. The console's **Your profile** splits the one list into a **Sessions**
+  section and an **API tokens** section, both rendering a shared `SessionsList` primitive, and a token now
+  shows its expiry. Enforcement stays **lazy** (an expired row is refused at auth, no background sweep).
+  Proven by a storage test (the list carries the right purpose and excludes an expired row), an updated
+  real-binary API test (session vs token asserted via purpose, the minted token carries a future expiry), and
+  a CLI unit test (a `--ttl` above the 365-day cap errors for both `token` and `bootstrap`). Deferred: a
+  sliding idle timeout, a housekeeping sweep of long-expired rows, and nearing-expiry notifications.
+
+- **Identity: an admin can view and revoke a user's sessions (slice 2 of 2).** An administrator can now
+  see and end **another** principal's sign-ins and API tokens, so a lost laptop or a leaked token is cut
+  off without resetting the account. No new storage: it reuses slice 1's `ListBearerCredentials` (passing a
+  nil `currentHash`, so no row is ever flagged `current` when viewing someone else) and the
+  principal-scoped `RevokeBearerByID`. A new **`principal:revoke-session`** capability (a normal two-token
+  permission, held by `admin` and `owner` through their `principal:*` / `>` wildcards, kept separable for a
+  future help-desk role) gates both `GET /principals/{id}/sessions` and
+  `POST /principals/{id}/sessions/{sid}:revoke`. The revoke is bounded to the target (a `sid` that is not
+  theirs is a non-disclosing 404), sits behind the same **takeover guard** as impersonation and the
+  password reset (an owner's sessions cannot be revoked by a lesser admin, nor a principal whose
+  capabilities exceed the caller's), and is **audited with the acting admin as the actor**. The console's
+  **Users** blade gains **Sessions** and **API tokens** sections (a shared `SessionsList` now backs both
+  them and the self-service Profile card), hidden unless the caller holds the capability, with a **Revoke** per row.
+  The blade's action-rail kebab also offers **Revoke all sessions** and **Revoke all tokens** (each confirmed),
+  bulk-ending one purpose at a time through a new `POST /principals/{id}/sessions:revokeAll` backed by a
+  purpose-filtered `RevokeBearersByPurpose` (revoking sessions never touches tokens), returning the count and under
+  the same gate, takeover guard, and audit as the single revoke. The generated CLI gains
+  `omniglass principal sessions <id>` / `principal revoke-session <id> <sid>` /
+  `principal revoke-all-sessions <id>` (the cligen `nameOverride` seam groups them under `principal` so they do
+  not collide with the self-service `session` commands, which share the leaf noun). Proven by real-binary API
+  tests: an admin lists a target's sessions and revokes one so it stops authenticating, bulk-revokes all sessions
+  (both cookies stop authenticating, the tokens survive) then all tokens, an operator is 403, revoking an
+  **owner's** session or bulk-revoking its tokens as a lesser admin is 403 (the takeover guard), a `sid` that is
+  not the target's (or an unknown principal) is a 404, a bad purpose is a 422, the secret never appears, and the
+  revoke is audited with the admin as actor.
+
+- **Identity: a password change keeps API tokens, and self-service bulk revoke.** Two refinements to the
+  session/token model. First, a password change now revokes **sessions only, never tokens** ([#194](https://github.com/hyperscaleav/omniglass/issues/194)): a token is its own bearer secret, not tied to the password, and has its own revoke surface, so both the admin reset (`SetPrincipalPassword`, now `purpose = 'session'`) and the self-service change (`RevokeBearersByPurposeExcept(pr, "session", keep)`, keeping the current session) leave the target's tokens intact. Second, the self-service **Profile** gains **Revoke all** on each of its Sessions and API tokens sections ([#195](https://github.com/hyperscaleav/omniglass/issues/195)), through a new authn-only, self-scoped `POST /auth/me/sessions:revokeAll` (a `{ purpose }` body) that ends all of one kind at once but **always keeps the credential making the request**, so a user is never signed out of the one they are on; the generated CLI gains `omniglass session revoke-all`. Both are built on one shared primitive, `RevokeBearersByPurposeExcept` (the plain `RevokeBearersByPurpose` becomes its nil-keep case, and the now-unused `RevokePrincipalBearers` is retired). The admin blade also stops offering revoke on an **owner** target (whom the takeover guard makes un-revocable): its session/token list renders read-only, with a line explaining an owner can be seen but not ended. Proven by a storage test (the keep-current filter revokes the others and keeps the current + the tokens), an updated real-binary API test (a password change and an admin reset both leave the token authenticating while the sessions die), a new self-service bulk-revoke API test (all sessions except current, then all tokens, a bad purpose 422), and web tests (the Profile Revoke all posts the purpose, and an owner target hides every revoke).
+
+- **Identity: break-glass `set-password` locks out live sessions.** The direct-DB `omniglass set-password <user> <pw>` (the trusted recovery lane, and the **only** way to touch a compromised **owner**, whose credentials the API guards leave un-revocable) previously rotated only the password, so a stolen session cookie or API token kept working after the reset ([#198](https://github.com/hyperscaleav/omniglass/issues/198)). It now also revokes the target's live **sessions** (a break-glass is a lockout), and revokes its API **tokens** too with `--revoke-tokens` (kept by default, matching the password-change-keeps-tokens rule; a full compromise wants the flag). It reuses the `RevokeBearersByPurpose` primitive after `SetPassword`, resolving the principal by username; no API or console change (break-glass stays behind Postgres access). Proven by a real-Postgres CLI test: a live session stops authenticating after the reset, the token survives without the flag and is revoked with it, and the new password authenticates while the old one does not.
 - **Identity: the Users, Roles, and Groups directories move to the admin tier.** The directory reads of
   `principal` (list, get, and the profile-picture route), `role`, and `principal_group` are promoted from a
   two-token `<resource>:read` to the admin-sensitive **`<resource>:read:admin`**, so the `viewer` read floor
