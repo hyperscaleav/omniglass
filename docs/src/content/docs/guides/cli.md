@@ -9,6 +9,9 @@ from the API: a new route is a new command on the next regeneration. A small set
 commands (the run modes and the trusted bootstrap) are hand-written and compose with the
 generated tree on the same root.
 
+This page is the mental model and the setup. For the exhaustive, generated list of every
+command, its flags, and an example, see the **[CLI reference](/reference/cli/)**.
+
 ## Running the full stack locally
 
 `make dev` brings up the whole stack for a browser session: a dev Postgres (docker
@@ -67,78 +70,13 @@ omniglass token ops
 
 # Set or rotate a user's password (direct-DB, owner lane; also policy-exempt as the recovery path).
 omniglass set-password ops 'set-a-strong-one'
-
-# Seed a dev database with an example estate (locations, users, grants). Idempotent and
-# dev-only; `make dev` runs it for you, so a fresh console is populated instead of empty.
-# Never for production: these are operator rows, not ship-with reference data.
-omniglass seed-dev
 ```
 
 Once a server is running, a signed-in principal manages **its own** account through the
-generated self-scoped commands (each edits only the caller's own profile):
-
-```sh
-omniglass auth me                                    # your principal, permissions, and grants
-omniglass auth update-profile --display-name "Ops Lead"
-omniglass auth change-password --current-password 'orange-boat-42x' --new-password 'purple-canyon-7'
-omniglass me setAvatar --image-base64 "$(base64 -w0 me.jpg)"   # set your profile picture
-omniglass me removeAvatar                            # clear it, falling back to initials
-omniglass avatar list                                # read your picture back as { image_base64 }
-```
-
-`--image-base64` takes a plain base64 string, not a file path (base64-encode the image
-yourself, as the `$(base64 …)` above does); the server accepts JPEG, PNG, or WebP and
-normalizes it to a 256x256 JPEG. An administrator manages **any** principal's picture with
-`omniglass principal setAvatar <id> --image-base64 …` and `omniglass principal removeAvatar <id>`
-(gated by `principal:set-avatar`), reading one back with `omniglass avatar list <id>` (gated by
-`principal:read`). A principal with no picture is a 404.
-
-## Secrets
-
-The [secret](/architecture/variables/) commands are generated like every other resource. `secret`
-covers the encrypted values, `secret-type` lists the shape registry, and `effective-secret` reads the
-masked cascade onto one component. Output is masked JSON, the same as the console; plaintext lives
-behind `reveal`, which the server audits and which only admin and owner may call.
-
-```sh
-omniglass secret-type list                          # the shape registry (snmp-community, basic-auth)
-omniglass secret list                               # the all-scope admin directory (masked fields)
-omniglass secret create --name core-snmp --secret-type snmp-community \
-  --owner-kind location --owner hq --fields '{"community":"public"}'
-omniglass secret update <id> --fields '{"community":"s3cret"}'   # an omitted field keeps its value
-omniglass secret reveal <id>                        # audited plaintext decrypt (secret:reveal)
-omniglass secret delete <id>
-
-omniglass effective-secret list <component>         # the masked cascade resolved onto a component
-```
-
-`--owner-kind` is one of `global | location | system | component`; `--owner` names the owning entity
-and is omitted for a `global` secret (which needs an all-scope grant). Field maps pass as a JSON object
-to `--fields`, validated against the type's shape.
-
-## Variables
-
-The [variable](/architecture/variables/) commands are generated the same way. `variable` covers the
-plaintext values and `effective-variable` reads the cascade onto one component. There is no reveal:
-the value is shown in the clear.
-
-```sh
-omniglass variable list                             # the all-scope admin directory
-omniglass variable create --name poll_interval --value-type int \
-  --owner-kind system --owner east-auditorium-av --value 30
-omniglass variable create --name retry --value-type json --owner-kind global \
-  --value '{"retries":3,"backoff":"1s"}'
-omniglass variable update <id> --value 60           # validated against the fixed value_type
-omniglass variable delete <id>
-
-omniglass effective-variable list <component>       # the cascade resolved onto a component
-```
-
-`--value-type` is one of `string | int | float | bool | json`. `--value` is **parsed as JSON**, so a
-bare `30`, `true`, or `{"k":"v"}` sends the number, the boolean, or the object; a bare word like `HDMI1`
-falls back to a string, so the common case needs no quoting. A string value that would otherwise parse
-as JSON (`30`, `true`) is quoted to force a string: `--value '"30"'`. (`secret create --fields` parses
-the same way.)
+generated self-scoped commands (`omniglass auth me`, `auth update-profile`,
+`auth change-password`, `me setAvatar` / `removeAvatar`); an administrator manages other
+principals, roles, groups, secrets, and variables through the resource commands, all covered
+in the [admin guide](/guides/admin/) and listed in full in the [CLI reference](/reference/cli/).
 
 ## Tags
 
