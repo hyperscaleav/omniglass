@@ -1,5 +1,5 @@
 import { For, Show, createMemo, createSignal, createUniqueId, type JSX } from "solid-js";
-import { OP, opsFor, tokenToChip, chipGlyph, type FilterKey, type Chip, type OpKey } from "../lib/predicate";
+import { OP, opsFor, tokenToChip, chipGlyph, valueless, type FilterKey, type Chip, type OpKey } from "../lib/predicate";
 import { Search, X } from "./icons";
 import Button from "./Button";
 
@@ -57,7 +57,7 @@ export default function FilterBar<T>(props: {
       .filter((v) => v.toLowerCase().includes(frag))
       .map((v) => ({ kind: "value", value: v, hint: spec.valueLabel ? spec.valueLabel(v) : "" }));
     if (m) return valSugs;
-    const opSugs: Suggestion[] = opsFor(spec.type)
+    const opSugs: Suggestion[] = opsFor(spec.type, spec.presence)
       .filter((op) => frag === "" || op.includes(frag) || OP[op].label.includes(frag))
       .map((op) => ({ kind: "op", op, glyph: OP[op].glyph, label: OP[op].label }));
     return [...opSugs, ...valSugs];
@@ -87,6 +87,13 @@ export default function FilterBar<T>(props: {
     }
     const key = t.slice(0, colon);
     if (s.kind === "op") {
+      // A value-less presence operator (exists / absent) has no value stage, so
+      // selecting it commits the chip immediately.
+      if (valueless(s.op)) {
+        commit(`${key}:${OP[s.op].token}`);
+        inputRef?.focus();
+        return;
+      }
       setText(`${key}:${OP[s.op].token}`);
       setSel(-1);
       setOpen(true);
@@ -128,14 +135,16 @@ export default function FilterBar<T>(props: {
   const cycleOp = (i: number) => {
     const c = props.chips[i];
     const spec = keyOf(c.key);
-    const list = opsFor(spec ? spec.type : "string");
+    // Cycle only among operators of the same value-ness, so a value chip never
+    // lands on a value-less operator (or the reverse) and end up mismatched.
+    const list = opsFor(spec ? spec.type : "string", spec?.presence).filter((o) => valueless(o) === valueless(c.op));
     const next = list[(list.indexOf(c.op) + 1) % list.length];
     props.onChips(props.chips.map((x, j) => (j === i ? { ...x, op: next } : x)));
   };
   const reEdit = (i: number) => {
     const c = props.chips[i];
     props.onChips(props.chips.filter((_, j) => j !== i));
-    setText(`${c.key}:${OP[c.op].token}${c.values[0]}`);
+    setText(`${c.key}:${OP[c.op].token}${c.values[0] ?? ""}`);
     setOpen(true);
     inputRef?.focus();
   };
@@ -154,7 +163,9 @@ export default function FilterBar<T>(props: {
               <button class="font-data font-semibold text-primary" title="cycle operator" onClick={() => cycleOp(i())}>
                 {chipGlyph(c.op)}
               </button>
-              <button class="font-data font-medium" onClick={() => reEdit(i())}>{c.values.join("|")}</button>
+              <Show when={c.values.length}>
+                <button class="font-data font-medium" onClick={() => reEdit(i())}>{c.values.join("|")}</button>
+              </Show>
               <button class="ml-px inline-flex text-base-content/40" aria-label="remove" onClick={() => props.onChips(props.chips.filter((_, j) => j !== i()))}>
                 <X size={13} />
               </button>

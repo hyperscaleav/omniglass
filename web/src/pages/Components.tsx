@@ -20,6 +20,7 @@ import Button from "../components/Button";
 import { DrawerFooter } from "../components/Drawer";
 import EffectiveSecrets, { secretCascadeBlade, cascadeBladeId } from "../components/EffectiveSecrets";
 import TagPills from "../components/TagPills";
+import { tagFilterKeys } from "../lib/predicate";
 import TagAdder from "../components/TagAdder";
 import EffectiveVariables, { variableCascadeBlade, varCascadeBladeId } from "../components/EffectiveVariables";
 
@@ -67,6 +68,14 @@ export default function Components() {
   const label = (x: { name: string; display_name?: string }) => x.display_name || x.name;
   const sysById = createMemo(() => new Map((systems.data ?? []).map((s) => [s.id, s] as const)));
   const locById = createMemo(() => new Map((locations.data ?? []).map((l) => [l.id, l] as const)));
+
+  // One filter facet per tag key present across the components, derived from
+  // their effective tags, so the bar can filter by any tag like any other field.
+  const tagFacets = createMemo(() => {
+    const keys = new Set<string>();
+    for (const c of components.data ?? []) for (const k of Object.keys(c.effective_tags ?? {})) keys.add(k);
+    return tagFilterKeys<CompNode>([...keys].sort(), new Set(["name", "type", "system", "location"]));
+  });
 
   // Build the forest from the flat component list by parent_id. Roots are the
   // components with no parent (or a parent outside the caller's scope).
@@ -308,11 +317,12 @@ export default function Components() {
       if (key === "tags") return <TagPills tags={n.tags} />;
       return null;
     },
-    filterKeys: [
+    filterKeys: () => [
       { key: "name", type: "string", hint: "substring", get: (n) => `${n.display} ${n.raw.name}`, values: () => [] },
       { key: "type", type: "string", hint: "exact", get: (n) => n.type, values: (rows) => [...new Set(rows.map((r) => r.type))].sort() },
       { key: "system", type: "string", hint: "exact", get: (n) => n.systemAddr, values: (rows) => [...new Set(rows.map((r) => r.systemAddr).filter(Boolean))].sort(), valueLabel: (v) => (systems.data ?? []).find((s) => s.name === v)?.display_name ?? v },
       { key: "location", type: "string", hint: "exact", get: (n) => n.locationName, values: (rows) => [...new Set(rows.map((r) => r.locationName).filter(Boolean))].sort() },
+      ...tagFacets(),
     ],
     sortVal: (n, key) => {
       if (key === "type") return n.type.toLowerCase();

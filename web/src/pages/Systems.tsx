@@ -5,6 +5,7 @@ import TreeList, { type ListConfig, type ListCtx, type ListNode, type PageDescri
 import TreeSelect from "../components/TreeSelect";
 import TagPills from "../components/TagPills";
 import TagAdder from "../components/TagAdder";
+import { tagFilterKeys } from "../lib/predicate";
 import {
   type System,
   SYSTEMS_KEY,
@@ -63,6 +64,14 @@ export default function Systems() {
       m.get(c.system_id)!.push(c);
     }
     return m;
+  });
+
+  // One filter facet per tag key present across the systems, derived from their
+  // effective tags, so the bar can filter by any tag like any other field.
+  const tagFacets = createMemo(() => {
+    const keys = new Set<string>();
+    for (const s of systems.data ?? []) for (const k of Object.keys(s.effective_tags ?? {})) keys.add(k);
+    return tagFilterKeys<SysNode>([...keys].sort(), new Set(["name", "type", "location"]));
   });
 
   const nodes = createMemo<SysNode[]>(() => {
@@ -274,10 +283,11 @@ export default function Systems() {
       if (key === "tags") return <TagPills tags={n.tags} />;
       return null;
     },
-    filterKeys: [
+    filterKeys: () => [
       { key: "name", type: "string", hint: "substring", get: (n) => `${n.display} ${n.raw.name}`, values: () => [] },
       { key: "type", type: "string", hint: "exact", get: (n) => n.type, values: (rows) => [...new Set(rows.map((r) => r.type))].sort() },
       { key: "location", type: "string", hint: "exact", get: (n) => n.locationName, values: (rows) => [...new Set(rows.map((r) => r.locationName).filter(Boolean))].sort() },
+      ...tagFacets(),
     ],
     sortVal: (n, key) => {
       if (key === "type") return n.type.toLowerCase();

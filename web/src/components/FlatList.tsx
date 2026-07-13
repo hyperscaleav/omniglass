@@ -5,7 +5,7 @@ import BladeStack from "./BladeStack";
 import { type BladeController, type BladeDef, BladesContext, createBladeController } from "../lib/blades";
 import { ChevronDown, ChevronRight, Plus } from "./icons";
 import Button from "./Button";
-import type { Chip, FilterKey } from "../lib/predicate";
+import { resolveFilterKeys, type Chip, type FilterKeys } from "../lib/predicate";
 
 // FlatList is the body for a flat (non-tree) list surface: a sortable table over
 // the ListShell-filtered rows, with an optional row -> side Drawer detail, an
@@ -33,7 +33,7 @@ export type FlatConfig<T> = {
   rows: Accessor<T[]>;
   loading?: Accessor<boolean>;
   error?: Accessor<unknown>;
-  filterKeys: FilterKey<T>[];
+  filterKeys: FilterKeys<T>;
   filterPlaceholder?: string;
   initialChips?: Chip[];
   columns: FlatColumn<T>[];
@@ -138,7 +138,7 @@ export default function FlatList<T>(props: { config: FlatConfig<T> }) {
   return (
     <BladesContext.Provider value={blades}>
       <ListShell
-        filterKeys={cfg.filterKeys}
+        filterKeys={resolveFilterKeys(cfg.filterKeys)}
         rows={cfg.rows()}
         placeholder={cfg.filterPlaceholder}
         initialChips={cfg.initialChips}
