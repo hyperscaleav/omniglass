@@ -148,6 +148,35 @@ func registerRoutes(api huma.API, gw storage.Gateway, o options) {
 	}, a.changePasswordHandler)
 
 	huma.Register(api, huma.Operation{
+		OperationID: "list-auth-me-sessions",
+		Method:      http.MethodGet,
+		Path:        "/auth/me/sessions",
+		Summary:     "List your own sessions and tokens",
+		Description: "Lists the caller's own active bearer credentials (time-bounded web-login sessions and CLI/API tokens) with their non-secret metadata; the current one is flagged. Requires authentication; self-scoped (never another principal's). The token secret is never returned.",
+		Middlewares: huma.Middlewares{a.authn},
+	}, a.listMeSessionsHandler)
+
+	huma.Register(api, huma.Operation{
+		OperationID:   "revoke-auth-me-session",
+		Method:        http.MethodPost,
+		Path:          "/auth/me/sessions/{id}:revoke",
+		Summary:       "Revoke one of your own sessions",
+		Description:   "Revokes one of the caller's own sessions or tokens by id (from the session list); revoking the current one signs it out. Requires authentication; self-scoped, so a credential id that is not yours is a 404.",
+		DefaultStatus: http.StatusNoContent,
+		Errors:        []int{http.StatusNotFound},
+		Middlewares:   huma.Middlewares{a.authn},
+	}, a.revokeMeSessionHandler)
+
+	huma.Register(api, huma.Operation{
+		OperationID: "revoke-all-auth-me-sessions",
+		Method:      http.MethodPost,
+		Path:        "/auth/me/sessions:revokeAll",
+		Summary:     "Revoke all of your own sessions or tokens",
+		Description: "Revokes every one of the caller's own web-login sessions, or every one of its CLI/API tokens (chosen by purpose), returning how many were ended. Requires authentication; self-scoped. Always keeps the credential that made this request, so you are never signed out of the one you are on; sessions and tokens never cross.",
+		Middlewares: huma.Middlewares{a.authn},
+	}, a.revokeAllMeSessionsHandler)
+
+	huma.Register(api, huma.Operation{
 		OperationID:   "set-auth-me-avatar",
 		Method:        http.MethodPost,
 		Path:          "/auth/me:setAvatar",

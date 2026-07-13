@@ -35,14 +35,22 @@ only your own account, whatever your role.
 - **Change password.** Enter your current password and a new one. The new password must meet the
   **policy** (at least 12 characters, not a common password, and not containing your username); the
   field validates as you type, and **Generate** fills a strong random one you can **Copy**. A wrong
-  current password is refused. Changing it **signs out your other sessions and tokens** (the one you
-  are using stays), so the change takes effect everywhere at once.
+  current password is refused. Changing it **signs out your other sessions** (the one you are using
+  stays, and your API tokens are kept, a token not being tied to your password), so the change takes
+  effect on your logins at once.
 - **Access.** A read-only view of the identity model you operate under: your principal, the
   roles granted to you, and the flattened permissions those roles carry. The server enforces
   these on every request; the console only mirrors them.
+- **Sessions** and **API tokens.** Two sections listing every credential you hold: a **session** is a
+  device you signed in from, a **token** one you minted for the CLI or API, both time-bounded and
+  showing an expiry. The one you are using is marked **This session**. The secret is never shown, only
+  its `ogp_` locator. **Revoke** any you do not recognize (revoking the one you are using is **Sign
+  out**), or use **Revoke all** on either section to end every session or every token at once, keeping
+  the one you are on.
 
 From the CLI the same actions are `omniglass auth update-profile`, `omniglass auth change-password`,
-and `omniglass me setAvatar` / `omniglass me removeAvatar` for the picture (see
+`omniglass me setAvatar` / `omniglass me removeAvatar` for the picture, and
+`omniglass session list` / `session revoke <id>` / `session revoke-all` for your sessions (see
 [the CLI guide](/guides/cli/)).
 
 ## After an administrator resets your password

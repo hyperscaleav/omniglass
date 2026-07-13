@@ -40,7 +40,7 @@ func TestDisablePrincipal(t *testing.T) {
 	}
 	// Give alice a bearer so we can prove the bearer path is refused too.
 	_, bh, bp, _ := auth.NewBearerToken()
-	if ok, err := gw.IssueBearerCredential(ctx, "alice", bh, bp, nil); err != nil || !ok {
+	if ok, err := gw.IssueBearerCredential(ctx, "alice", bh, bp, "token", nil); err != nil || !ok {
 		t.Fatalf("issue bearer: ok=%v err=%v", ok, err)
 	}
 

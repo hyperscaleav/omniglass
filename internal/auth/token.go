@@ -9,11 +9,22 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"time"
 )
 
 // TokenScheme is the non-secret prefix marking an Omniglass bearer token, so a
 // leaked token is detectable by secret scanners.
 const TokenScheme = "ogp"
+
+// DefaultTokenLifetime and MaxTokenLifetime bound a CLI/API token's expiry (issue
+// #172): no bearer is issued without an expiry, so a leaked token is not valid
+// forever. A CLI-minted token (and the bootstrap token) defaults to 90 days; the
+// operator may shorten or lengthen it with --ttl up to the hard 365-day cap, above
+// which the CLI errors. A web-login session has its own, shorter fixed lifetime.
+const (
+	DefaultTokenLifetime = 90 * 24 * time.Hour
+	MaxTokenLifetime     = 365 * 24 * time.Hour
+)
 
 // NewBearerToken mints a bearer token of the form ogp_<locator>_<secret>. It
 // returns the cleartext (shown once), its sha256 hash (stored), and the

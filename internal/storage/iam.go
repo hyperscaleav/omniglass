@@ -65,6 +65,10 @@ type OwnerSpec struct {
 	// PasswordHash, when set, installs an argon2id password credential (PHC
 	// encoded) so the owner can log in with a username and password. Optional.
 	PasswordHash string
+	// ExpiresAt bounds the bootstrap bearer token's lifetime (a CLI/API token, so it
+	// gets the token default of 90 days). Nil leaves it unbounded, so a call site that
+	// has not opted into an expiry still compiles; the bootstrap CLI always sets it.
+	ExpiresAt *time.Time
 }
 
 // BootstrapOwner creates the first owner in one transaction, idempotent per
@@ -98,8 +102,8 @@ func (p *PG) BootstrapOwner(ctx context.Context, spec OwnerSpec) (created bool, 
 		return false, fmt.Errorf("storage: bootstrap human: %w", err)
 	}
 	if _, err := tx.Exec(ctx,
-		`insert into credential (principal_id, kind, secret_hash, prefix) values ($1, 'bearer', $2, $3)`,
-		pid, spec.SecretHash, spec.Prefix); err != nil {
+		`insert into credential (principal_id, kind, secret_hash, prefix, purpose, expires_at) values ($1, 'bearer', $2, $3, 'token', $4)`,
+		pid, spec.SecretHash, spec.Prefix, spec.ExpiresAt); err != nil {
 		return false, fmt.Errorf("storage: bootstrap credential: %w", err)
 	}
 	if spec.PasswordHash != "" {
@@ -124,10 +128,12 @@ func (p *PG) BootstrapOwner(ctx context.Context, spec OwnerSpec) (created bool, 
 // principal addressed by its human username, returning false if no such
 // username exists. The caller generates and hashes the token and shows the
 // cleartext once; this is the same trusted direct-DB lane as BootstrapOwner
-// (token reissue, break-glass, and the `make dev` login). expiresAt, when non-nil,
-// bounds the credential's lifetime (a session cookie set at login); a nil expiry
-// never expires (an API token minted from the CLI).
-func (p *PG) IssueBearerCredential(ctx context.Context, username string, hash []byte, prefix string, expiresAt *time.Time) (bool, error) {
+// (token reissue, break-glass, and the `make dev` login). purpose is 'session' (a
+// web login) or 'token' (a CLI/API credential), the discriminator between the two
+// kinds of bearer, and expiresAt bounds the credential's lifetime: every credential
+// is time-bounded now (a session for 12h, a token for 90 days by default), so a
+// leaked bearer is never valid forever.
+func (p *PG) IssueBearerCredential(ctx context.Context, username string, hash []byte, prefix, purpose string, expiresAt *time.Time) (bool, error) {
 	var pid string
 	err := p.pool.QueryRow(ctx, `select principal_id from human where username = $1`, username).Scan(&pid)
 	switch {
@@ -137,8 +143,8 @@ func (p *PG) IssueBearerCredential(ctx context.Context, username string, hash []
 		return false, fmt.Errorf("storage: lookup human %q: %w", username, err)
 	}
 	if _, err := p.pool.Exec(ctx,
-		`insert into credential (principal_id, kind, secret_hash, prefix, expires_at) values ($1, 'bearer', $2, $3, $4)`,
-		pid, hash, prefix, expiresAt); err != nil {
+		`insert into credential (principal_id, kind, secret_hash, prefix, purpose, expires_at) values ($1, 'bearer', $2, $3, $4, $5)`,
+		pid, hash, prefix, purpose, expiresAt); err != nil {
 		return false, fmt.Errorf("storage: issue credential: %w", err)
 	}
 	return true, nil
@@ -159,17 +165,17 @@ var ErrCredentialNotFound = errors.New("storage: credential not found")
 
 // Principal is an authenticated identity with its kind profile and grants.
 type Principal struct {
-	ID      string
-	Kind    string
-	Active  bool
+	ID     string
+	Kind   string
+	Active bool
 	// ArchivedAt marks a soft delete (the principal lifecycle, issue #143): a
 	// non-nil value means the account is archived (hidden, cannot authenticate,
 	// reversible until purged). Nil means live. Distinct from Active, which is the
 	// reversible disable (suspend) toggle.
 	ArchivedAt *time.Time
-	Human         *HumanProfile
-	Service       *ServiceProfile
-	Grants        []Grant
+	Human      *HumanProfile
+	Service    *ServiceProfile
+	Grants     []Grant
 	// Groups are the principal groups this principal belongs to (id + label), so the
 	// admin directory can show membership without a per-row fetch. The grants those
 	// groups confer already ride Grants (tagged with GroupID); this names them.
@@ -455,9 +461,10 @@ func (p *PG) SetPrincipalPassword(ctx context.Context, actorID, id, encoded stri
 		id, []byte(encoded)); err != nil {
 		return fmt.Errorf("storage: reset password: %w", err)
 	}
-	// Force logout: drop every bearer credential (sessions and tokens) for the target,
-	// so a reset immediately invalidates any live access.
-	if _, err := tx.Exec(ctx, `delete from credential where principal_id = $1 and kind = 'bearer'`, id); err != nil {
+	// Force logout: drop every SESSION for the target so a reset immediately signs it
+	// out everywhere. API tokens are left intact: a token is its own bearer secret, not
+	// tied to the password, and has its own revoke surface (issue #194).
+	if _, err := tx.Exec(ctx, `delete from credential where principal_id = $1 and kind = 'bearer' and purpose = 'session'`, id); err != nil {
 		return fmt.Errorf("storage: revoke sessions on reset: %w", err)
 	}
 	// Force a change on next login: the admin knows the value they just set, so the
@@ -589,27 +596,6 @@ func (p *PG) GetPrincipalAvatar(ctx context.Context, id string, action scope.Set
 	return p.GetHumanAvatar(ctx, id)
 }
 
-// RevokePrincipalBearers deletes every bearer credential (sessions and tokens) for a
-// principal, except any whose sha256 hash is in keep. It backs the force-logout on a
-// self-service password change: pass the caller's current session hash in keep so the
-// change signs out their OTHER sessions and tokens but not the one making the request.
-// An empty keep revokes them all. Returns the number revoked.
-func (p *PG) RevokePrincipalBearers(ctx context.Context, principalID string, keep [][]byte) (int, error) {
-	var tag pgconn.CommandTag
-	var err error
-	if len(keep) == 0 {
-		tag, err = p.pool.Exec(ctx, `delete from credential where principal_id = $1 and kind = 'bearer'`, principalID)
-	} else {
-		tag, err = p.pool.Exec(ctx,
-			`delete from credential where principal_id = $1 and kind = 'bearer' and secret_hash <> all($2::bytea[])`,
-			principalID, keep)
-	}
-	if err != nil {
-		return 0, fmt.Errorf("storage: revoke bearers: %w", err)
-	}
-	return int(tag.RowsAffected()), nil
-}
-
 // HumanProfilePatch carries the editable self-profile fields. A nil pointer
 // leaves the column unchanged; a non-nil pointer sets it, with an empty string
 // clearing the nullable column to NULL.
@@ -680,6 +666,101 @@ func (p *PG) RevokeBearer(ctx context.Context, hash []byte) error {
 		return fmt.Errorf("storage: revoke bearer: %w", err)
 	}
 	return nil
+}
+
+// BearerCredential is one of a principal's live bearer credentials (a login
+// session or an API token), carrying only its non-secret metadata. The secret hash
+// is never returned: this is the shape the self-service session list exposes.
+// Purpose is 'session' (a web login) or 'token' (a CLI/API credential), the
+// discriminator between the two, since both now carry an ExpiresAt. Current is true
+// for the one credential that authenticated the request doing the listing (so the
+// console can label it and treat its revoke as a self sign-out).
+type BearerCredential struct {
+	ID        string
+	Prefix    string
+	Purpose   string
+	CreatedAt time.Time
+	ExpiresAt *time.Time
+	Current   bool
+}
+
+// ListBearerCredentials returns the principal's own LIVE bearer credentials, newest
+// first, with their id, prefix, purpose, created_at, and expires_at. The raw
+// secret_hash is never returned: currentHash (the sha256 of the token that
+// authenticated this request) is only compared in SQL to compute the Current flag,
+// so the hash bytes never leave the database. Only live credentials are returned (an
+// unexpired or legacy-null expires_at), mirroring AuthenticateBearer's own filter, so
+// a signed-in user never sees a dead row that would authenticate nothing. Backs the
+// self-service session list (issue #172).
+func (p *PG) ListBearerCredentials(ctx context.Context, principalID string, currentHash []byte) ([]BearerCredential, error) {
+	rows, err := p.pool.Query(ctx, `
+		select id, prefix, coalesce(purpose, ''), created_at, expires_at, coalesce(secret_hash = $2, false) as current
+		from credential
+		where principal_id = $1 and kind = 'bearer' and (expires_at is null or expires_at > now())
+		order by created_at desc`, principalID, currentHash)
+	if err != nil {
+		return nil, fmt.Errorf("storage: list bearer credentials: %w", err)
+	}
+	defer rows.Close()
+	var out []BearerCredential
+	for rows.Next() {
+		var c BearerCredential
+		if err := rows.Scan(&c.ID, &c.Prefix, &c.Purpose, &c.CreatedAt, &c.ExpiresAt, &c.Current); err != nil {
+			return nil, fmt.Errorf("storage: scan bearer credential: %w", err)
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
+// RevokeBearerByID deletes one bearer credential by id, scoped to the owning
+// principal so a caller can only revoke their own (a session or token belonging to
+// another principal is untouched). Returns false when nothing matched: a wrong or
+// already-revoked id, a credential owned by a different principal, or a malformed id
+// (which the API maps to a 404, never a 500). This backs self-service revoke (#172).
+func (p *PG) RevokeBearerByID(ctx context.Context, principalID, credentialID string) (bool, error) {
+	tag, err := p.pool.Exec(ctx,
+		`delete from credential where id = $1 and principal_id = $2 and kind = 'bearer'`,
+		credentialID, principalID)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "22P02" {
+			// A malformed uuid (id or principal id) matches no row: not found, not a 500.
+			return false, nil
+		}
+		return false, fmt.Errorf("storage: revoke bearer by id: %w", err)
+	}
+	return tag.RowsAffected() > 0, nil
+}
+
+// RevokeBearersByPurpose deletes every bearer credential of one purpose ('session'
+// or 'token') for a principal, scoped to the owning principal, and returns the count.
+// Purpose is the authoritative discriminator (both kinds carry an expiry now), so a
+// caller ending all sessions never touches a token, and vice versa.
+func (p *PG) RevokeBearersByPurpose(ctx context.Context, principalID, purpose string) (int, error) {
+	return p.RevokeBearersByPurposeExcept(ctx, principalID, purpose, nil)
+}
+
+// RevokeBearersByPurposeExcept deletes bearers of one purpose except any whose
+// secret_hash is in keep, scoped to the principal, returning the count. An empty keep
+// deletes all of the purpose (the plain bulk revoke); a non-empty keep preserves the
+// caller's current session while ending its others, tokens untouched.
+func (p *PG) RevokeBearersByPurposeExcept(ctx context.Context, principalID, purpose string, keep [][]byte) (int, error) {
+	var tag pgconn.CommandTag
+	var err error
+	if len(keep) == 0 {
+		tag, err = p.pool.Exec(ctx,
+			`delete from credential where principal_id = $1 and kind = 'bearer' and purpose = $2`,
+			principalID, purpose)
+	} else {
+		tag, err = p.pool.Exec(ctx,
+			`delete from credential where principal_id = $1 and kind = 'bearer' and purpose = $2 and secret_hash <> all($3::bytea[])`,
+			principalID, purpose, keep)
+	}
+	if err != nil {
+		return 0, fmt.Errorf("storage: revoke bearers by purpose: %w", err)
+	}
+	return int(tag.RowsAffected()), nil
 }
 
 // ErrPrincipalForbidden is returned by the principal directory methods when the

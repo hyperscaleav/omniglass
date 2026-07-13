@@ -34,11 +34,20 @@ Everything lives under `/api/v1`. The path shape is derivable, not special-cased
 - **Custom methods carry a colon**, `:verb` not `/verb`, for anything that is not CRUD:
   `/alarms/{id}:ack`, `/components/{name}:apply`, `/views/{id}:run`. The verb
   is also the **permission**: `:ack` is gated by `alarm:ack`, so the route and the
-  [authorization](/architecture/identity-access/) check share one vocabulary.
+  [authorization](/architecture/identity-access/) check share one vocabulary. The **self-scoped**
+  `/auth/me` family is the exception: `/auth/me:changePassword`, `/auth/me/sessions/{id}:revoke`, and
+  the bulk `/auth/me/sessions:revokeAll` (a `{ purpose }` body, keeping the current credential) are
+  **authn-only** (they resolve the target from the session, never a path id, so they carry no
+  capability and a credential id that is not the caller's own is a 404, not a cross-principal action).
+  The **admin** counterparts on `/principals/{id}` do carry a capability and a scoped path id:
+  `GET /principals/{id}/sessions` and `POST /principals/{id}/sessions/{sid}:revoke` (both gated by
+  `principal:revoke-session`) let an administrator list and end **another** principal's sessions, the revoke
+  bounded to that target and behind the owner takeover guard. `POST /principals/{id}/sessions:revokeAll` (a
+  `{ purpose }` body, same gate and guard) bulk-ends all of one kind at once, returning the count.
 - **Singular kind sub-segments** for the typed families: `/rules/calc`, `/datapoints/metric`,
   `/types/component`.
 - **A principal is addressable by uuid or username.** Every `/principals/{id}` route (read, update,
-  grants, the lifecycle verbs, reset, impersonate) accepts either the principal's uuid or a human's
+  grants, the lifecycle verbs, reset, sessions, impersonate) accepts either the principal's uuid or a human's
   current username, resolved server-side (a value that parses as a uuid is used directly; otherwise it
   is a username lookup, and an unknown one is a 404). The uuid is still the stable identity (a username
   is mutable and nothing keys on it), so a username is a convenience address resolved at call time.

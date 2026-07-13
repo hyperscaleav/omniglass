@@ -42,7 +42,7 @@ func TestMustChangePasswordFlag(t *testing.T) {
 	flag := func(label string) bool {
 		t.Helper()
 		_, bh, bp, _ := auth.NewBearerToken()
-		if ok, err := gw.IssueBearerCredential(ctx, "alice", bh, bp, nil); err != nil || !ok {
+		if ok, err := gw.IssueBearerCredential(ctx, "alice", bh, bp, "token", nil); err != nil || !ok {
 			t.Fatalf("%s: issue bearer: ok=%v err=%v", label, ok, err)
 		}
 		pr, err := gw.AuthenticateBearer(ctx, bh)

@@ -187,6 +187,75 @@ describe("Users page", () => {
     expect(within(blade).queryByText("Purge")).toBeNull();
   });
 
+  it("offers bulk Revoke all sessions / tokens in the kebab and posts to :revokeAll with the purpose", async () => {
+    const calls: { url: string; method: string; body: unknown }[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : (input as Request).url;
+      const method = (typeof input === "string" || input instanceof URL ? init?.method : (input as Request).method) ?? "GET";
+      if (url.includes(":revokeAll")) {
+        const raw = typeof input === "string" || input instanceof URL ? (init?.body as string | undefined) : await (input as Request).clone().text();
+        calls.push({ url, method, body: raw ? JSON.parse(raw) : null });
+        return new Response(JSON.stringify({ revoked: 2 }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      // The Sessions section's per-principal list fetch: no rows needed here.
+      return new Response(JSON.stringify({ sessions: [] }), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    mount();
+    fireEvent.click(screen.getByText("Alice Ng"));
+    const blade = await waitFor(() => {
+      const el = document.querySelector("aside[data-blade]");
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    // `>` grants principal:revoke-session, so both bulk actions are in the kebab.
+    fireEvent.click(within(blade).getByLabelText("More actions"));
+    expect(within(blade).getByText("Revoke all sessions")).toBeTruthy();
+    expect(within(blade).getByText("Revoke all tokens")).toBeTruthy();
+
+    // Clicking one confirms, then posts to :revokeAll with the chosen purpose.
+    fireEvent.click(within(blade).getByText("Revoke all tokens"));
+    await waitFor(() => expect(calls.length).toBe(1));
+    expect(calls[0].url).toContain("/principals/u-alice/sessions:revokeAll");
+    expect(calls[0].method).toBe("POST");
+    expect(calls[0].body).toEqual({ purpose: "token" });
+  });
+
+  it("hides the revoke affordances on an owner target (see, not end) and says why", async () => {
+    const owner: Principal = { id: "u-own", kind: "human", active: true, human: { username: "founder", display_name: "Fay Ounder" }, grants: [{ id: "g0", role: "owner", scope_kind: "all" }], groups: [] };
+    // The owner's session list loads (an admin can see it); no revoke should be offered.
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
+      new Response(JSON.stringify({ sessions: [{ id: "s1", kind: "session", prefix: "abc123", created_at: "2026-07-13T00:00:00Z", expires_at: "2026-07-13T12:00:00Z", current: false }] }), { status: 200, headers: { "Content-Type": "application/json" } }),
+    );
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    qc.setQueryData([...PRINCIPALS_KEY, false], [owner]);
+    qc.setQueryData([...PRINCIPALS_KEY, owner.id], owner);
+    qc.setQueryData([...ME_KEY], me);
+    qc.setQueryData([...ROLES_KEY], []);
+    qc.setQueryData(["locations"], []);
+    qc.setQueryData(["systems"], []);
+    qc.setQueryData(["components"], []);
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <Router><Route path="*" component={() => <Users />} /></Router>
+      </QueryClientProvider>
+    ));
+    fireEvent.click(screen.getByText("Fay Ounder"));
+    const blade = await waitFor(() => {
+      const el = document.querySelector("aside[data-blade]");
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    // The section explains the owner is see-only, the loaded session row carries no
+    // Revoke button, and the kebab offers no bulk revoke-all.
+    await within(blade).findByText(/cannot be revoked/i);
+    expect(within(blade).queryByText("Revoke")).toBeNull();
+    fireEvent.click(within(blade).getByLabelText("More actions"));
+    expect(within(blade).queryByText("Revoke all sessions")).toBeNull();
+    expect(within(blade).queryByText("Revoke all tokens")).toBeNull();
+  });
+
   it("an archived user (via Show archived) offers Restore in the slot and Purge in the kebab", async () => {
     const dana: Principal = { id: "u-dana", kind: "human", active: false, archived_at: "2026-01-01T00:00:00Z", human: { username: "dana", display_name: "Dana Vale" }, grants: [] };
     const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });

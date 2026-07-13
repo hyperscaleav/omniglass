@@ -238,8 +238,8 @@ func bearerToken(header string) (string, bool) {
 
 // sessionCookieLifetime is the absolute lifetime of a login session: the bearer
 // credential and the cookie both expire after it, so a stolen session cookie is not
-// valid forever. Fixed for this slice (a sliding idle timeout is a later refinement);
-// API tokens minted from the CLI do not expire.
+// valid forever. Fixed for this slice (a sliding idle timeout is a later refinement).
+// A CLI/API token (omniglass token) has its own, much longer default (auth.DefaultTokenLifetime).
 const sessionCookieLifetime = 12 * time.Hour
 
 // sessionCookieName is the httpOnly cookie carrying a human's session bearer
@@ -348,7 +348,7 @@ func (a *authenticator) loginHandler(ctx context.Context, in *loginInput) (*sess
 		return nil, huma.Error500InternalServerError("login failed")
 	}
 	expiresAt := time.Now().Add(sessionCookieLifetime)
-	if _, err := a.gw.IssueBearerCredential(ctx, pr.Human.Username, hash, prefix, &expiresAt); err != nil {
+	if _, err := a.gw.IssueBearerCredential(ctx, pr.Human.Username, hash, prefix, "session", &expiresAt); err != nil {
 		return nil, huma.Error500InternalServerError("login failed")
 	}
 	if err := a.gw.WriteAuthEvent(ctx, pr.ID, "login"); err != nil {
@@ -517,16 +517,153 @@ func (a *authenticator) changePasswordHandler(ctx context.Context, in *changePas
 	if _, err := a.gw.SetPassword(ctx, pr.Human.Username, encoded); err != nil {
 		return nil, huma.Error500InternalServerError("change password")
 	}
-	// Force logout of the caller's other sessions and tokens, keeping the current one
-	// so the change does not sign the caller out of the session they just used.
+	// Force logout of the caller's other SESSIONS, keeping the current one so the change
+	// does not sign the caller out of the session they just used. Tokens are left intact:
+	// a token is its own bearer secret, not tied to the password (issue #194).
 	keep := [][]byte{}
 	if h, ok := sessionHashFrom(ctx); ok {
 		keep = append(keep, h)
 	}
-	if _, err := a.gw.RevokePrincipalBearers(ctx, pr.ID, keep); err != nil {
+	if _, err := a.gw.RevokeBearersByPurposeExcept(ctx, pr.ID, "session", keep); err != nil {
 		return nil, huma.Error500InternalServerError("change password")
 	}
 	return nil, nil
+}
+
+// sessionBody is one of the caller's own bearer credentials in the self-service
+// session list. It carries only non-secret metadata: the secret hash is never
+// returned. Kind is the credential's purpose: a web-login "session" or a CLI/API
+// "token"; both now carry an expiry, so the discriminator is the stored purpose, not
+// whether expires_at is set. Current marks the credential that authenticated this very
+// request, so the console can mark it and read its revoke as a sign-out.
+type sessionBody struct {
+	ID        string  `json:"id"`
+	Kind      string  `json:"kind" enum:"session,token" doc:"session for a web login, token for a CLI/API credential (omniglass token)"`
+	Prefix    string  `json:"prefix" doc:"The non-secret ogp locator, so a credential is recognizable without exposing the token"`
+	CreatedAt string  `json:"created_at" doc:"When the credential was issued (RFC 3339)"`
+	ExpiresAt *string `json:"expires_at,omitempty" doc:"When the credential expires (RFC 3339); every credential is now time-bounded"`
+	Current   bool    `json:"current" doc:"True for the credential that authenticated this request; revoking it signs out the current session"`
+}
+
+// listMeSessionsOutput is the body of GET /api/v1/auth/me/sessions.
+type listMeSessionsOutput struct {
+	Body struct {
+		Sessions []sessionBody `json:"sessions"`
+	}
+}
+
+// toSessionBodies renders stored bearer credentials as the session wire shape,
+// newest first, never leaking the secret. The kind is the stored purpose (a web-login
+// "session" or a CLI/API "token"); both now carry an expiry, so a legacy row with no
+// purpose falls back to its expiry shape. Shared by the self-service list and the admin
+// per-principal list, so both expose the same shape.
+func toSessionBodies(creds []storage.BearerCredential) []sessionBody {
+	out := make([]sessionBody, 0, len(creds))
+	for _, c := range creds {
+		// The kind is the stored purpose (session vs token); a legacy row with no
+		// purpose falls back to its expiry shape (a session had one, a token did not).
+		kind := c.Purpose
+		if kind == "" {
+			kind = "token"
+			if c.ExpiresAt != nil {
+				kind = "session"
+			}
+		}
+		s := sessionBody{
+			ID:        c.ID,
+			Kind:      kind,
+			Prefix:    c.Prefix,
+			CreatedAt: c.CreatedAt.Format(time.RFC3339),
+			Current:   c.Current,
+		}
+		if c.ExpiresAt != nil {
+			exp := c.ExpiresAt.Format(time.RFC3339)
+			s.ExpiresAt = &exp
+		}
+		out = append(out, s)
+	}
+	return out
+}
+
+// listMeSessionsHandler returns the caller's own active bearer credentials (login
+// sessions and API tokens) with their non-secret metadata, newest first. Self-scoped
+// and authn-only: it lists only the principal resolved from the request, never
+// another. The current credential is flagged so the console can mark it.
+func (a *authenticator) listMeSessionsHandler(ctx context.Context, _ *struct{}) (*listMeSessionsOutput, error) {
+	pr, ok := principalFrom(ctx)
+	if !ok {
+		return nil, huma.Error401Unauthorized("unauthenticated")
+	}
+	currentHash, _ := sessionHashFrom(ctx)
+	creds, err := a.gw.ListBearerCredentials(ctx, pr.ID, currentHash)
+	if err != nil {
+		return nil, huma.Error500InternalServerError("list sessions")
+	}
+	out := &listMeSessionsOutput{}
+	out.Body.Sessions = toSessionBodies(creds)
+	return out, nil
+}
+
+// revokeMeSessionInput is the path input of POST /auth/me/sessions/{id}:revoke.
+type revokeMeSessionInput struct {
+	ID string `path:"id" doc:"The credential id to revoke (from the session list)"`
+}
+
+// revokeMeSessionHandler revokes one of the caller's own bearer credentials by id.
+// Self-scoped and authn-only: the revoke is bounded to the caller's principal, so a
+// credential id that is not theirs (or does not exist) is a non-disclosing 404, never
+// a cross-principal revoke. Revoking the current credential is permitted (it is a
+// logout of this session).
+func (a *authenticator) revokeMeSessionHandler(ctx context.Context, in *revokeMeSessionInput) (*struct{}, error) {
+	pr, ok := principalFrom(ctx)
+	if !ok {
+		return nil, huma.Error401Unauthorized("unauthenticated")
+	}
+	revoked, err := a.gw.RevokeBearerByID(ctx, pr.ID, in.ID)
+	if err != nil {
+		return nil, huma.Error500InternalServerError("revoke session")
+	}
+	if !revoked {
+		return nil, huma.Error404NotFound("no such session")
+	}
+	return nil, nil
+}
+
+// revokeAllMeSessionsInput is the body of POST /auth/me/sessions:revokeAll: which of
+// the caller's own credentials to end, all sessions or all tokens.
+type revokeAllMeSessionsInput struct {
+	Body struct {
+		Purpose string `json:"purpose" enum:"session,token" doc:"Which of your own credentials to revoke: all your web-login sessions, or all your CLI/API tokens"`
+	}
+}
+
+// revokeAllMeSessionsOutput reports how many of the caller's credentials were revoked.
+type revokeAllMeSessionsOutput struct {
+	Body struct {
+		Revoked int `json:"revoked" doc:"How many credentials were revoked"`
+	}
+}
+
+// revokeAllMeSessionsHandler bulk-revokes all of the caller's own sessions or all its
+// tokens by purpose. Self-scoped and authn-only: it always keeps the credential that
+// authenticated this request (whatever its purpose), so a user ending all their sessions
+// or tokens is never signed out of the one they are on. Tokens and sessions never cross.
+func (a *authenticator) revokeAllMeSessionsHandler(ctx context.Context, in *revokeAllMeSessionsInput) (*revokeAllMeSessionsOutput, error) {
+	pr, ok := principalFrom(ctx)
+	if !ok {
+		return nil, huma.Error401Unauthorized("unauthenticated")
+	}
+	keep := [][]byte{}
+	if h, ok := sessionHashFrom(ctx); ok {
+		keep = append(keep, h)
+	}
+	n, err := a.gw.RevokeBearersByPurposeExcept(ctx, pr.ID, in.Body.Purpose, keep)
+	if err != nil {
+		return nil, huma.Error500InternalServerError("revoke sessions")
+	}
+	out := &revokeAllMeSessionsOutput{}
+	out.Body.Revoked = n
+	return out, nil
 }
 
 // setAvatarMeInput is the body of POST /api/v1/auth/me:setAvatar: the image to

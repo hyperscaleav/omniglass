@@ -156,6 +156,7 @@ omniglass bootstrap <username> [flags]
 | `--display-name` | string | (none) | owner display name (optional) |
 | `--email` | string | (none) | owner email (optional) |
 | `--password` | string | (none) | owner password, so the owner can sign in to the console (optional) |
+| `--ttl` | duration | `2160h0m0s` | how long the bootstrap token is valid before it expires (max 365 days) |
 
 ## `omniglass component`
 
@@ -234,6 +235,63 @@ Example:
 omniglass component list
 ```
 
+### `omniglass component listTags`
+
+List tags on a component
+
+```
+omniglass component listTags <name>
+```
+
+Lists the tags bound directly on a component (not the resolved cascade). Gated by component:read.
+
+Example:
+
+```sh
+omniglass component listTags <name>
+```
+
+### `omniglass component removeTag`
+
+Remove a tag value from a component
+
+```
+omniglass component removeTag <name> [flags]
+```
+
+Removes a key's value from a component. Gated by component:update.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--key` | string | (none) | The tag key to remove |
+
+Example:
+
+```sh
+omniglass component removeTag <name> --key key
+```
+
+### `omniglass component setTag`
+
+Set a tag value on a component
+
+```
+omniglass component setTag <name> [flags]
+```
+
+Binds a value for a key on a component. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by component:update.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--key` | string | (none) | The tag key (must exist and apply to this kind) |
+| `--value` | string | (none) | The bound value |
+
+Example:
+
+```sh
+omniglass component setTag <name> --key key --value value
+```
+
 ### `omniglass component update`
 
 Update a component
@@ -273,6 +331,26 @@ Example:
 
 ```sh
 omniglass effective-secret list <name>
+```
+
+## `omniglass effective-tag`
+
+Commands for the effective-tag resource
+
+### `omniglass effective-tag list`
+
+Effective tags for a component
+
+```
+omniglass effective-tag list <name>
+```
+
+Resolves the tags that cascade onto a component (global -> location -> system -> component): keys union, values override most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves only from a binding on the component itself. Gated by component:read; the component must be in the caller's component read scope.
+
+Example:
+
+```sh
+omniglass effective-tag list <name>
 ```
 
 ## `omniglass effective-variable`
@@ -482,6 +560,63 @@ Example:
 
 ```sh
 omniglass location list
+```
+
+### `omniglass location listTags`
+
+List tags on a location
+
+```
+omniglass location listTags <name>
+```
+
+Lists the tags bound directly on a location (not the resolved cascade). Gated by location:read.
+
+Example:
+
+```sh
+omniglass location listTags <name>
+```
+
+### `omniglass location removeTag`
+
+Remove a tag value from a location
+
+```
+omniglass location removeTag <name> [flags]
+```
+
+Removes a key's value from a location. Gated by location:update.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--key` | string | (none) | The tag key to remove |
+
+Example:
+
+```sh
+omniglass location removeTag <name> --key key
+```
+
+### `omniglass location setTag`
+
+Set a tag value on a location
+
+```
+omniglass location setTag <name> [flags]
+```
+
+Binds a value for a key on a location. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by location:update.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--key` | string | (none) | The tag key (must exist and apply to this kind) |
+| `--value` | string | (none) | The bound value |
+
+Example:
+
+```sh
+omniglass location setTag <name> --key key --value value
 ```
 
 ### `omniglass location update`
@@ -891,6 +1026,58 @@ Example:
 omniglass principal restore <id>
 ```
 
+### `omniglass principal revoke-all-sessions`
+
+Revoke all of a principal's sessions or tokens
+
+```
+omniglass principal revoke-all-sessions <id> [flags]
+```
+
+Revokes every one of another principal's web-login sessions, or every one of its CLI/API tokens (chosen by purpose), in a single administrator action, returning how many were ended. Gated by principal:revoke-session (all-scope). Bounded to the target and never crosses purpose (revoking sessions leaves tokens, and vice versa). Refused (403) on an owner (the takeover guard shared with impersonation and the password reset) or when it would exceed the caller's own capabilities. Audited with the administrator as the actor.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--purpose` | string | (none) | Which credentials to revoke: all of the principal's web-login sessions, or all its CLI/API tokens |
+
+Example:
+
+```sh
+omniglass principal revoke-all-sessions <id> --purpose purpose
+```
+
+### `omniglass principal revoke-session`
+
+Revoke a principal's session
+
+```
+omniglass principal revoke-session <id> <sid>
+```
+
+Revokes one of another principal's sessions or tokens by id (an administrator action; the target is immediately signed out of that credential). Gated by principal:revoke-session (all-scope). Bounded to the target, so a credential id that is not theirs is a non-disclosing 404, never a cross-principal revoke. Refused (403) on an owner (an owner's sessions cannot be revoked by anyone, the takeover guard shared with impersonation and password reset) or when it would exceed the caller's own capabilities. Audited with the administrator as the actor.
+
+Example:
+
+```sh
+omniglass principal revoke-session <id> <sid>
+```
+
+### `omniglass principal sessions`
+
+List a principal's sessions
+
+```
+omniglass principal sessions <id>
+```
+
+Lists another principal's active bearer credentials (login sessions and API tokens) with their non-secret metadata, newest first, so an administrator can see where an account is signed in and revoke a session that should not be. Gated by principal:revoke-session (all-scope). The token secret is never returned, and current is always false (there is no "this request's own session" when viewing another principal).
+
+Example:
+
+```sh
+omniglass principal sessions <id>
+```
+
 ### `omniglass principal setAvatar`
 
 Set a principal's profile picture
@@ -1199,15 +1386,75 @@ Run the control-plane server (HTTP API)
 omniglass server
 ```
 
+## `omniglass session`
+
+Commands for the session resource
+
+### `omniglass session list`
+
+List your own sessions and tokens
+
+```
+omniglass session list
+```
+
+Lists the caller's own active bearer credentials (time-bounded web-login sessions and CLI/API tokens) with their non-secret metadata; the current one is flagged. Requires authentication; self-scoped (never another principal's). The token secret is never returned.
+
+Example:
+
+```sh
+omniglass session list
+```
+
+### `omniglass session revoke`
+
+Revoke one of your own sessions
+
+```
+omniglass session revoke <id>
+```
+
+Revokes one of the caller's own sessions or tokens by id (from the session list); revoking the current one signs it out. Requires authentication; self-scoped, so a credential id that is not yours is a 404.
+
+Example:
+
+```sh
+omniglass session revoke <id>
+```
+
+### `omniglass session revoke-all`
+
+Revoke all of your own sessions or tokens
+
+```
+omniglass session revoke-all [flags]
+```
+
+Revokes every one of the caller's own web-login sessions, or every one of its CLI/API tokens (chosen by purpose), returning how many were ended. Requires authentication; self-scoped. Always keeps the credential that made this request, so you are never signed out of the one you are on; sessions and tokens never cross.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--purpose` | string | (none) | Which of your own credentials to revoke: all your web-login sessions, or all your CLI/API tokens |
+
+Example:
+
+```sh
+omniglass session revoke-all --purpose purpose
+```
+
 ## `omniglass set-password`
 
-Set or rotate a user's console password (direct DB)
+Set or rotate a user's console password, revoking their sessions (direct DB)
 
 ```
-omniglass set-password <username> <password>
+omniglass set-password <username> <password> [flags]
 ```
 
-Installs or replaces a human's password credential (argon2id), addressed by username. The same trusted direct-DB lane as bootstrap and token: dev setup, break-glass, or a password reset before the admin UI lands.
+Installs or replaces a human's password credential (argon2id), addressed by username, and revokes the user's live SESSIONS so a break-glass reset locks out any stolen login at once. API tokens are a separate bearer secret, not tied to the password, and are kept unless --revoke-tokens is given (a full lockout of a compromised account). The same trusted direct-DB lane as bootstrap and token: dev setup, break-glass, or a password reset before the admin UI lands.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--revoke-tokens` | bool | `false` | also revoke the user's API tokens (a full lockout of a compromised account) |
 
 ## `omniglass statu`
 
@@ -1305,6 +1552,63 @@ Example:
 omniglass system list
 ```
 
+### `omniglass system listTags`
+
+List tags on a system
+
+```
+omniglass system listTags <name>
+```
+
+Lists the tags bound directly on a system (not the resolved cascade). Gated by system:read.
+
+Example:
+
+```sh
+omniglass system listTags <name>
+```
+
+### `omniglass system removeTag`
+
+Remove a tag value from a system
+
+```
+omniglass system removeTag <name> [flags]
+```
+
+Removes a key's value from a system. Gated by system:update.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--key` | string | (none) | The tag key to remove |
+
+Example:
+
+```sh
+omniglass system removeTag <name> --key key
+```
+
+### `omniglass system setTag`
+
+Set a tag value on a system
+
+```
+omniglass system setTag <name> [flags]
+```
+
+Binds a value for a key on a system. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by system:update.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--key` | string | (none) | The tag key (must exist and apply to this kind) |
+| `--value` | string | (none) | The bound value |
+
+Example:
+
+```sh
+omniglass system setTag <name> --key key --value value
+```
+
 ### `omniglass system update`
 
 Update a system
@@ -1326,15 +1630,134 @@ Example:
 omniglass system update <name>
 ```
 
+## `omniglass tag`
+
+Commands for the tag resource
+
+### `omniglass tag clearGlobal`
+
+Clear a global tag value
+
+```
+omniglass tag clearGlobal <name>
+```
+
+Removes the global binding for a key. Gated by tag:update (all-scope).
+
+Example:
+
+```sh
+omniglass tag clearGlobal <name>
+```
+
+### `omniglass tag create`
+
+Mint a tag key
+
+```
+omniglass tag create [flags]
+```
+
+Adds a key to the governed vocabulary. The name is normalized (a lowercase identifier). Gated by tag:create (all-scope, an admin action).
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--applies-to` | string | (none) | Entity kinds this key may bind to (component, system, location); omit for universal |
+| `--name` | string | (none) | The normalized key: a lowercase identifier, unique tenant-wide |
+| `--propagates` | string | (none) | Whether bindings cascade to descendants; defaults true |
+
+Example:
+
+```sh
+omniglass tag create --name name
+```
+
+### `omniglass tag delete`
+
+Delete a tag key
+
+```
+omniglass tag delete <name>
+```
+
+Removes a key from the vocabulary, cascading its bindings. Gated by tag:delete (all-scope).
+
+Example:
+
+```sh
+omniglass tag delete <name>
+```
+
+### `omniglass tag list`
+
+List tag keys
+
+```
+omniglass tag list
+```
+
+Lists the governed key vocabulary. Rides the tag:read floor.
+
+Example:
+
+```sh
+omniglass tag list
+```
+
+### `omniglass tag setGlobal`
+
+Set a global tag value
+
+```
+omniglass tag setGlobal <name> [flags]
+```
+
+Binds a tenant-wide default value for a key at the global scope. Gated by tag:update (all-scope).
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--value` | string | (none) | The bound value |
+
+Example:
+
+```sh
+omniglass tag setGlobal <name> --value value
+```
+
+### `omniglass tag update`
+
+Update a tag key
+
+```
+omniglass tag update <name> [flags]
+```
+
+Replaces a key's governance fields (applies_to, propagates); the name is fixed. Gated by tag:update (all-scope).
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--applies-to` | string | (none) | Entity kinds this key may bind to; omit for universal |
+| `--propagates` | string | (none) | Whether bindings cascade to descendants; defaults true |
+
+Example:
+
+```sh
+omniglass tag update <name>
+```
+
 ## `omniglass token`
 
 Mint an additional bearer token for an existing principal (direct DB)
 
 ```
-omniglass token <username>
+omniglass token <username> [flags]
 ```
 
-Issues a new bearer credential for an existing principal, addressed by username, and prints the token once. The same trusted direct-DB lane as bootstrap: token reissue, break-glass, or a fresh login token for `make dev` when the owner already exists.
+Issues a new bearer credential for an existing principal, addressed by username, and prints the token once. The same trusted direct-DB lane as bootstrap: token reissue, break-glass, or a fresh login token for `make dev` when the owner already exists. The token expires after --ttl (default 90 days, hard maximum 365 days); every credential is time-bounded.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--ttl` | duration | `2160h0m0s` | how long the token is valid before it expires (max 365 days) |
 
 ## `omniglass variable`
 
