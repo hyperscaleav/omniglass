@@ -53,7 +53,7 @@ const ProtectedShell: ParentComponent = (props) => (
 const STUBS = [
   "/dashboards", "/alarms", "/interfaces", "/nodes", "/tasks",
   "/templates", "/types", "/rules", "/explore", "/learn",
-  "/config",
+  "/config", "/settings",
 ];
 
 render(
