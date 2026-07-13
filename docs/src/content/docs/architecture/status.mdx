@@ -864,3 +864,17 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   matcher and covers cases, and the nav/`can()` web tests (Secrets hidden from `*:read`, shown to an explicit
   `secret:read`). The move of Secrets, Variables, and Config into Catalog is a separate branch
   ([ADR-0025](/architecture/decisions/#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier)).
+- **Console: nav IA rework, estate values move into Inventory and Settings becomes Admin.** The
+  sidebar's `nav.ts` gains a `section` field (a band label a child carries, rendered as a daisyUI
+  `menu-title` header by `Sidebar`'s `Group`), so Inventory now carries two bands: **Entities**
+  (Components, Systems, Locations, Interfaces, Nodes, Tasks) and **Values** (Variables, Secrets,
+  Config), the estate-attached values that used to sit under Settings. The Settings group is renamed
+  **Admin** (Users, Roles, Groups, Audit) and gains an ungated **soon** Settings leaf reserving the
+  platform-preferences page (severity scales, schedules, retention, defaults)
+  ([#222](https://github.com/hyperscaleav/omniglass/issues/222)). Routes stay flat and unchanged
+  (`/secrets`, `/variables`, `/config`, the new `/settings` stub), so only the grouping and labels
+  move; this supersedes the earlier same-day plan to move those values into Catalog
+  ([decision log](/architecture/decisions/)). Proven by `nav.test.ts` (the Inventory band order and
+  section labels, Admin's renamed label and its soon-stub surviving for both an owner and a bare
+  `*:read` viewer, the moved entries keeping their existing gates) and a `Sidebar.test.tsx` render
+  test (the Entities and Values band headers actually render in the expanded submenu).

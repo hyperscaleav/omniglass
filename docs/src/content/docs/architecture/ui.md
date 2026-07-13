@@ -139,10 +139,20 @@ The IA has two layers, deliberately decoupled:
    stable however the menu is later reorganized. There are no taxonomy-nested routes and no redirects
    to maintain.
 2. **The sidebar groups those flat routes into clusters for browsing**: Home, Dashboards, Alarms,
-   Inventory (systems, components, locations, interfaces, nodes, tasks), Catalog (templates, types,
-   tags, rules), Explore, Settings (config, secrets, identity, audit). Grouping is pure
+   Inventory (an **Entities** band: systems, components, locations, interfaces, nodes, tasks; and a
+   **Values** band beside it: variables, secrets, config), Catalog (templates, types, tags, rules),
+   Explore, Admin (users, roles, groups, audit, and a soon Settings leaf). Grouping is pure
    presentation: a cluster is not a destination and carries no route of its own. It can be
    rearranged, and is user-customizable, without touching a single route.
+
+Variables, secrets, and config are values an operator sets on estate entities, so the Values band
+sits in Inventory beside the entity directories, not in Admin. **Config is the CI store**: operator-set
+desired component and system configuration, optionally observed back from the device to detect drift
+and reconcile ([config, secrets, and variables](/architecture/variables/)), distinct from platform
+Settings (preferences: severity scales, schedules, retention, defaults) and from Variables (free
+interpolated values with no observed side). Admin is the renamed Settings group: it holds the
+platform-administration surfaces (Users, Roles, Groups, Audit) plus the Settings leaf itself, dimmed
+**soon** until the platform-preferences page ships.
 
 **Home is distinct from Dashboards.** Dashboards monitor the *fleet* (datapoint views over the
 inventory). Home monitors the *monitor*: the operator and admin situation room for config lifecycle
