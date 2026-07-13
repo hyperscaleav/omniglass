@@ -12,7 +12,7 @@ value (a macro), owned at one scope and resolved down the [cascade](/architectur
 same way, but shown in the clear because it is not sensitive. The model underneath is [config
 and credentials](/architecture/variables/).
 
-**Settings > Variables** (with `variable:read`) is the directory of every
+**Inventory > Variables** (with `variable:read`) is the directory of every
 [variable](/architecture/variables/). Each row shows its name, a **type badge** (`string`,
 `int`, `float`, `bool`, `json`), a **scope** label (Global, or the location / system / component it
 attaches to), and the **value in the clear** (no mask, no reveal).
