@@ -160,10 +160,6 @@ function TypeBladeBody(p: { id: string }): JSX.Element {
   const locationTypeOptions = () => (allTypes.data ?? []).filter((t) => t.kind === "location");
   const [allowedParents, setAllowedParents] = createSignal<string[]>([]);
 
-  function toggleParent(parentId: string) {
-    setAllowedParents((cur) => (cur.includes(parentId) ? cur.filter((x) => x !== parentId) : [...cur, parentId]));
-  }
-
   createEffect(on(edit.editing, (editing) => {
     if (!editing) return;
     const r = row();
@@ -261,21 +257,7 @@ function TypeBladeBody(p: { id: string }): JSX.Element {
                   </Show>
                 }
               >
-                <div class="flex flex-col gap-1.5 rounded-box border border-base-300 p-2.5">
-                  <label class="flex items-center gap-2 text-sm">
-                    <input type="checkbox" class="checkbox checkbox-sm" checked={allowedParents().includes(ROOT_PLACEMENT)} onChange={() => toggleParent(ROOT_PLACEMENT)} />
-                    <span>Root (no parent)</span>
-                  </label>
-                  <For each={locationTypeOptions()}>
-                    {(t) => (
-                      <label class="flex items-center gap-2 text-sm">
-                        <input type="checkbox" class="checkbox checkbox-sm" checked={allowedParents().includes(t.id)} onChange={() => toggleParent(t.id)} />
-                        <span>{t.display_name}</span>
-                        <span class="font-data text-xs text-base-content/40">{t.id}</span>
-                      </label>
-                    )}
-                  </For>
-                </div>
+                <AllowedParentsPicker options={locationTypeOptions()} value={allowedParents()} onChange={setAllowedParents} />
               </Show>
               <span class="text-[11px] text-base-content/40">Empty allows any parent (or root). A non-empty set is enforced on create and move.</span>
             </div>
@@ -333,10 +315,6 @@ export function CreateTypeForm(p: { kind: TypeKind; onCreated: (id: string) => v
   const [busy, setBusy] = createSignal(false);
   const [formErr, setFormErr] = createSignal<string | null>(null);
 
-  function toggleParent(parentId: string) {
-    setAllowedParents((cur) => (cur.includes(parentId) ? cur.filter((x) => x !== parentId) : [...cur, parentId]));
-  }
-
   async function submit(e: Event) {
     e.preventDefault();
     setBusy(true);
@@ -377,28 +355,50 @@ export function CreateTypeForm(p: { kind: TypeKind; onCreated: (id: string) => v
         </Field>
       </Show>
       <Show when={p.kind === "location"}>
-        <Field label="Allowed parents" hint="Where a location of this type may be placed. Leave every box unchecked to allow any parent (unconstrained).">
-          <div class="flex flex-col gap-1.5 rounded-box border border-base-300 p-2.5">
-            <label class="flex items-center gap-2 text-sm">
-              <input type="checkbox" class="checkbox checkbox-sm" checked={allowedParents().includes(ROOT_PLACEMENT)} onChange={() => toggleParent(ROOT_PLACEMENT)} />
-              <span>Root (no parent)</span>
-            </label>
-            <For each={locationTypeOptions()}>
-              {(t) => (
-                <label class="flex items-center gap-2 text-sm">
-                  <input type="checkbox" class="checkbox checkbox-sm" checked={allowedParents().includes(t.id)} onChange={() => toggleParent(t.id)} />
-                  <span>{t.display_name}</span>
-                  <span class="font-data text-xs text-base-content/40">{t.id}</span>
-                </label>
-              )}
-            </For>
-          </div>
-        </Field>
+        {/* Not wrapped in Field: Field's root is a <label>, and a picker of one
+            <label> per checkbox nested inside it is invalid HTML that makes a
+            for-less outer label forward a click on the heading or hint straight
+            to the first checkbox. The heading and hint render as plain text
+            instead. */}
+        <div class="flex flex-col gap-1.5">
+          <span class="eyebrow">Allowed parents</span>
+          <AllowedParentsPicker options={locationTypeOptions()} value={allowedParents()} onChange={setAllowedParents} />
+          <span class="text-[11px] text-base-content/40">Where a location of this type may be placed. Leave every box unchecked to allow any parent (unconstrained).</span>
+        </div>
       </Show>
       <DrawerFooter>
         <Button type="submit" intent="action" icon={Plus} disabled={busy() || !id().trim() || !displayName().trim()}>Create type</Button>
       </DrawerFooter>
     </form>
+  );
+}
+
+// AllowedParentsPicker: a checkbox per location type plus a Root option, the set
+// of types a location of this kind may be placed under. No box checked means
+// unconstrained (any parent, or root). Mirrors Tags.tsx's AppliesToPicker;
+// shared by the create form and the edit blade so the markup and toggle logic
+// exist once. Each option is its own <label> (not nested inside another one),
+// so a click on it only ever toggles that option's own checkbox.
+function AllowedParentsPicker(p: { options: TypeRow[]; value: string[]; onChange: (v: string[]) => void }): JSX.Element {
+  function toggle(id: string) {
+    p.onChange(p.value.includes(id) ? p.value.filter((x) => x !== id) : [...p.value, id]);
+  }
+  return (
+    <div class="flex flex-col gap-1.5 rounded-box border border-base-300 p-2.5">
+      <label class="flex items-center gap-2 text-sm">
+        <input type="checkbox" class="checkbox checkbox-sm" checked={p.value.includes(ROOT_PLACEMENT)} onChange={() => toggle(ROOT_PLACEMENT)} />
+        <span>Root (no parent)</span>
+      </label>
+      <For each={p.options}>
+        {(t) => (
+          <label class="flex items-center gap-2 text-sm">
+            <input type="checkbox" class="checkbox checkbox-sm" checked={p.value.includes(t.id)} onChange={() => toggle(t.id)} />
+            <span>{t.display_name}</span>
+            <span class="font-data text-xs text-base-content/40">{t.id}</span>
+          </label>
+        )}
+      </For>
+    </div>
   );
 }
 
