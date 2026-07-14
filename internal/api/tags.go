@@ -11,10 +11,11 @@ import (
 
 // tagBody is the wire shape of a key in the governed vocabulary.
 type tagBody struct {
-	ID         string   `json:"id"`
-	Name       string   `json:"name"`
-	AppliesTo  []string `json:"applies_to" doc:"Entity kinds this key may bind to; empty means universal"`
-	Propagates bool     `json:"propagates" doc:"Whether a bound value cascades to descendants"`
+	ID            string   `json:"id"`
+	Name          string   `json:"name"`
+	AppliesTo     []string `json:"applies_to" doc:"Entity kinds this key may bind to; empty means universal"`
+	Propagates    bool     `json:"propagates" doc:"Whether a bound value cascades to descendants"`
+	AllowedValues []string `json:"allowed_values" doc:"The value enum a bound value must belong to; empty means free text"`
 }
 
 // tagBindingBody is the wire shape of one bound value.
@@ -41,7 +42,7 @@ type resolvedTagBody struct {
 }
 
 func toTagBody(t *storage.Tag) tagBody {
-	return tagBody{ID: t.ID, Name: t.Name, AppliesTo: t.AppliesTo, Propagates: t.Propagates}
+	return tagBody{ID: t.ID, Name: t.Name, AppliesTo: t.AppliesTo, Propagates: t.Propagates, AllowedValues: t.AllowedValues}
 }
 
 func toTagBindingBody(b *storage.TagBinding) tagBindingBody {
@@ -61,19 +62,27 @@ type tagOutput struct {
 	Body tagBody
 }
 
+type tagValuesOutput struct {
+	Body struct {
+		Values []string `json:"values"`
+	}
+}
+
 type createTagInput struct {
 	Body struct {
-		Name       string   `json:"name" minLength:"1" doc:"The normalized key: a lowercase identifier, unique tenant-wide"`
-		AppliesTo  []string `json:"applies_to,omitempty" doc:"Entity kinds this key may bind to (component, system, location); omit for universal"`
-		Propagates *bool    `json:"propagates,omitempty" doc:"Whether bindings cascade to descendants; defaults true"`
+		Name          string   `json:"name" minLength:"1" doc:"The normalized key: a lowercase identifier, unique tenant-wide"`
+		AppliesTo     []string `json:"applies_to,omitempty" doc:"Entity kinds this key may bind to (component, system, location); omit for universal"`
+		Propagates    *bool    `json:"propagates,omitempty" doc:"Whether bindings cascade to descendants; defaults true"`
+		AllowedValues []string `json:"allowed_values,omitempty" doc:"The value enum a bound value must belong to; omit for free text"`
 	}
 }
 
 type updateTagInput struct {
 	Name string `path:"name" doc:"The tag key"`
 	Body struct {
-		AppliesTo  []string `json:"applies_to,omitempty" doc:"Entity kinds this key may bind to; omit for universal"`
-		Propagates *bool    `json:"propagates,omitempty" doc:"Whether bindings cascade to descendants; defaults true"`
+		AppliesTo     []string `json:"applies_to,omitempty" doc:"Entity kinds this key may bind to; omit for universal"`
+		Propagates    *bool    `json:"propagates,omitempty" doc:"Whether bindings cascade to descendants; defaults true"`
+		AllowedValues []string `json:"allowed_values,omitempty" doc:"The value enum a bound value must belong to; omit for free text"`
 	}
 }
 
@@ -135,6 +144,23 @@ func registerTagRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	})
 
 	huma.Register(api, huma.Operation{
+		OperationID: "list-tag-values",
+		Method:      http.MethodGet,
+		Path:        "/tags/{name}:values",
+		Summary:     "List the distinct values bound for a key",
+		Description: "Returns the distinct values already bound for a key across the estate, for value autocomplete on a free-text key (an enum key carries its allowed set on the key itself). Rides the tag:read floor.",
+		Middlewares: huma.Middlewares{a.authn, a.require("tag", "read")},
+	}, func(ctx context.Context, in *tagNameInput) (*tagValuesOutput, error) {
+		vals, err := gw.DistinctTagValues(ctx, in.Name)
+		if err != nil {
+			return nil, mapTagErr(err)
+		}
+		out := &tagValuesOutput{}
+		out.Body.Values = vals
+		return out, nil
+	})
+
+	huma.Register(api, huma.Operation{
 		OperationID:   "create-tag",
 		Method:        http.MethodPost,
 		Path:          "/tags",
@@ -144,9 +170,10 @@ func registerTagRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Middlewares:   huma.Middlewares{a.authn, a.require("tag", "create")},
 	}, func(ctx context.Context, in *createTagInput) (*tagOutput, error) {
 		t, err := gw.CreateTag(ctx, actorID(ctx), storage.TagSpec{
-			Name:       in.Body.Name,
-			AppliesTo:  in.Body.AppliesTo,
-			Propagates: propagatesOr(in.Body.Propagates),
+			Name:          in.Body.Name,
+			AppliesTo:     in.Body.AppliesTo,
+			Propagates:    propagatesOr(in.Body.Propagates),
+			AllowedValues: in.Body.AllowedValues,
 		}, a.scopeFor(ctx, "tag", "create"))
 		if err != nil {
 			return nil, mapTagErr(err)
@@ -163,8 +190,9 @@ func registerTagRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Middlewares: huma.Middlewares{a.authn, a.require("tag", "update")},
 	}, func(ctx context.Context, in *updateTagInput) (*tagOutput, error) {
 		t, err := gw.UpdateTag(ctx, actorID(ctx), in.Name, storage.TagSpec{
-			AppliesTo:  in.Body.AppliesTo,
-			Propagates: propagatesOr(in.Body.Propagates),
+			AppliesTo:     in.Body.AppliesTo,
+			Propagates:    propagatesOr(in.Body.Propagates),
+			AllowedValues: in.Body.AllowedValues,
 		}, a.scopeFor(ctx, "tag", "update"))
 		if err != nil {
 			return nil, mapTagErr(err)
@@ -378,6 +406,8 @@ func mapTagErr(err error) error {
 		return huma.Error422UnprocessableEntity(err.Error())
 	case errors.Is(err, storage.ErrTagValueInvalid):
 		return huma.Error422UnprocessableEntity(err.Error())
+	case errors.Is(err, storage.ErrTagValueNotAllowed):
+		return huma.Error422UnprocessableEntity("value is not in this key's allowed set")
 	case errors.Is(err, storage.ErrTagKindNotAllowed):
 		return huma.Error422UnprocessableEntity("this tag key does not apply to this entity kind")
 	default:

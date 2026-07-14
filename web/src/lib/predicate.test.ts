@@ -84,3 +84,73 @@ describe("matchOp + tokenToChip", () => {
     expect(tokenToChip("name:", keys, "name")).toBeNull();
   });
 });
+
+import { opsFor, valueless, tagFilterKeys, tagKeysOf } from "./predicate";
+
+type Tagged = { name: string; tags: Record<string, string> };
+const tagged: Tagged[] = [
+  { name: "codec-1", tags: { environment: "prod", vendor: "cisco" } },
+  { name: "codec-2", tags: { environment: "staging" } },
+  { name: "display-1", tags: {} },
+];
+
+describe("presence operators (exists / absent)", () => {
+  it("opsFor offers exists/absent only for a presence-capable key", () => {
+    expect(opsFor("string")).not.toContain("exists");
+    expect(opsFor("string", true)).toContain("exists");
+    expect(opsFor("string", true)).toContain("absent");
+  });
+
+  it("matchOp exists is true for a set value, false for empty", () => {
+    expect(matchOp("exists", "prod", "")).toBe(true);
+    expect(matchOp("exists", "", "")).toBe(false);
+    expect(matchOp("absent", "", "")).toBe(true);
+    expect(matchOp("absent", "prod", "")).toBe(false);
+  });
+
+  it("valueless flags the presence operators", () => {
+    expect(valueless("exists")).toBe(true);
+    expect(valueless("absent")).toBe(true);
+    expect(valueless("eq")).toBe(false);
+  });
+});
+
+describe("tag facets", () => {
+  const tagKeys = tagFilterKeys<Tagged>(tagKeysOf(tagged), new Set(["name"]));
+  const withStatic = [{ key: "name", type: "string" as const, get: (r: Tagged) => r.name }, ...tagKeys];
+  const apply = (chips: Chip[]) => tagged.filter(buildPredicate(withStatic, chips));
+
+  it("derives one facet per tag key present on the rows, sorted", () => {
+    expect(tagKeys.map((k) => k.key)).toEqual(["environment", "vendor"]);
+  });
+
+  it("excludes a tag key that collides with a static facet", () => {
+    const keys = tagFilterKeys<Tagged>(["name", "environment"], new Set(["name"]));
+    expect(keys.map((k) => k.key)).toEqual(["environment"]);
+  });
+
+  it("filters rows by a tag value (eq)", () => {
+    expect(apply([{ key: "environment", op: "eq", values: ["prod"] }]).map((r) => r.name)).toEqual(["codec-1"]);
+  });
+
+  it("filters by tag presence (exists) and absence (absent)", () => {
+    expect(apply([{ key: "vendor", op: "exists", values: [] }]).map((r) => r.name)).toEqual(["codec-1"]);
+    expect(apply([{ key: "environment", op: "absent", values: [] }]).map((r) => r.name)).toEqual(["display-1"]);
+  });
+
+  it("autocompletes the distinct values in use for a key", () => {
+    const env = tagKeys.find((k) => k.key === "environment")!;
+    expect(env.values!(tagged)).toEqual(["prod", "staging"]);
+  });
+
+  it("tokenToChip parses value-less presence tokens on a presence key", () => {
+    expect(tokenToChip("environment:?", withStatic, "name")).toEqual({ key: "environment", op: "exists", values: [] });
+    expect(tokenToChip("vendor:!?", withStatic, "name")).toEqual({ key: "vendor", op: "absent", values: [] });
+  });
+
+  it("does not treat a presence token as value-less on a non-presence key", () => {
+    // "name:?" on the non-presence name key parses "?" as a literal value, not exists.
+    const c = tokenToChip("name:?", withStatic, "name");
+    expect(c).toEqual({ key: "name", op: "contains", values: ["?"] });
+  });
+});

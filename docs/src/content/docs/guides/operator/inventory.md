@@ -24,6 +24,11 @@ then a value; each commit becomes a chip:
 - Click a chip's operator to cycle it; click its value to re-edit; the **x** removes it.
   Clicking an active summary facet (below) toggles the same chip.
 - A summary widget or a count card is just a one-click shortcut to a filter chip.
+- Filter by a [tag](/architecture/tags/) through the **tag** field: choose `tag`, then the tag
+  key, then a value, to match its **effective** value (a component matches on a tag it inherits
+  from its system or location, not only one set on it directly). Two operators, **is set** and
+  **is absent**, take no value and find the rows that carry the tag at all or lack it entirely.
+  Every tag in use is reachable this way, so the list tracks whatever your estate is tagged with.
 
 This is a page-local filter, distinct from the global **⌘K** jump that moves you between
 sections ([getting around](/guides/operator/#getting-around)).

@@ -2,7 +2,7 @@ import { type Accessor, type Component, type JSX, For, Show, createEffect, creat
 import { Dynamic } from "solid-js/web";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
-import { facetActive as facetActiveFn, toggleFacet as toggleFacetFn, type Chip, type FilterKey } from "../lib/predicate";
+import { facetActive as facetActiveFn, toggleFacet as toggleFacetFn, resolveFilterKeys, type Chip, type FilterKeys } from "../lib/predicate";
 import {
   buildIndex, pathOf as pathOfModel, flattenRows, treeRows, parsePref, toggleItem, moveItem, allExpanded as allExpandedModel,
   type Crumb, type Row, type SortState,
@@ -107,7 +107,7 @@ export interface ListConfig<N extends ListNode> {
   columnKeys: string[];
   defaultCols: string[];
   cellFor: (key: string, n: N, ctx: ListCtx<N>) => JSX.Element;
-  filterKeys: FilterKey<N>[];
+  filterKeys: FilterKeys<N>;
   sortVal: (n: N, key: string) => string | number;
   nameWeight?: (n: N) => number;
   // Optional leading glyph rendered immediately before a node's name in the tree,
@@ -223,7 +223,7 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
   // forest descending into expanded containers. Both derivations are pure.
   const rows = createMemo<Row<N>[]>(() =>
     flatten()
-      ? flattenRows(index(), cfg.filterKeys, chips(), sort(), cfg.sortVal)
+      ? flattenRows(index(), resolveFilterKeys(cfg.filterKeys), chips(), sort(), cfg.sortVal)
       : treeRows(cfg.nodes(), expanded()),
   );
 
@@ -536,7 +536,7 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
           tree body owns its own chips (controlled), since it filters tree-aware
           via flattenRows rather than the shell's flat predicate. */}
       <ListShell
-        filterKeys={cfg.filterKeys}
+        filterKeys={resolveFilterKeys(cfg.filterKeys)}
         rows={index().all}
         chips={chips}
         onChips={setChips}

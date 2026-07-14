@@ -5,6 +5,8 @@ import TreeList, { type ListConfig, type ListCtx, type ListNode, type PageDescri
 import Donut from "../components/Donut";
 import TreeSelect from "../components/TreeSelect";
 import TagPills from "../components/TagPills";
+import { tagFilterKeys } from "../lib/predicate";
+import TagAdder from "../components/TagAdder";
 import {
   type Location,
   LOCATIONS_KEY,
@@ -95,6 +97,14 @@ export default function Locations() {
     return c;
   });
   const total = () => Object.values(counts()).reduce((a, b) => a + b, 0);
+
+  // One filter facet per tag key present across the locations, derived from their
+  // effective tags, so the bar can filter by any tag like any other field.
+  const tagFacets = createMemo(() => {
+    const keys = new Set<string>();
+    for (const l of locations.data ?? []) for (const k of Object.keys(l.effective_tags ?? {})) keys.add(k);
+    return tagFilterKeys<LocNode>([...keys].sort(), new Set(["name", "type"]));
+  });
   const segs = () => ORDER.map((t) => ({ key: t, label: TYPE_PLURAL[t] ?? t, value: counts()[t] ?? 0, color: TYPE_COLOR[t] ?? "var(--color-base-content)" }));
 
   // Raised-card surface (base-200, the same chip/card treatment as the prototype),
@@ -212,6 +222,7 @@ export default function Locations() {
           {ctx.fact("Parent", parent ? <button class="link text-sm" onClick={() => ctx.go(parent)}>{parent.display}</button> : <span class="text-base-content/50">Root</span>)}
           {ctx.fact("Contains", <span class="tnum text-sm">{kids.length}</span>)}
         </div>
+        <TagAdder kind="location" name={n.raw.name} canUpdate={can(me.data, "location", "update")} canCreateKey={can(me.data, "tag", "create")} />
         <Show when={kids.length}>
           <div class="flex flex-col gap-1.5">
             <span class="eyebrow">Contains</span>
@@ -339,9 +350,10 @@ export default function Locations() {
       if (key === "tags") return <TagPills tags={n.tags} />;
       return null;
     },
-    filterKeys: [
+    filterKeys: () => [
       { key: "name", type: "string", hint: "substring", get: (n) => `${n.display} ${n.raw.name}`, values: () => [] },
       { key: "type", type: "string", hint: "exact", get: (n) => n.type, values: (rows) => [...new Set(rows.map((r) => r.type))].sort() },
+      ...tagFacets(),
     ],
     sortVal: (n, key) => {
       if (key === "type") return TYPE_RANK[n.type] ?? 9;

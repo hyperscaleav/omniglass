@@ -240,13 +240,19 @@ type Gateway interface {
 	UpsertSecretType(ctx context.Context, st SecretType) error
 	ListSecretTypes(ctx context.Context) ([]SecretType, error)
 	GetSecretType(ctx context.Context, id string) (*SecretType, error)
-	ListSecrets(ctx context.Context, read scope.Set) ([]Secret, error)
-	CreateSecret(ctx context.Context, actorID string, spec SecretSpec, create scope.Set) (*Secret, error)
-	UpdateSecret(ctx context.Context, actorID, id string, fields map[string]string, read, action scope.Set) (*Secret, error)
-	DeleteSecret(ctx context.Context, actorID, id string, read, action scope.Set) error
-	RevealSecret(ctx context.Context, actorID, id string, read, action scope.Set) (map[string]string, error)
-	CopySecret(ctx context.Context, actorID, id string, read, action scope.Set) (map[string]string, error)
-	ResolveSecrets(ctx context.Context, componentID string, read scope.Set) ([]ResolvedSecret, error)
+	// canAdmin reports whether the caller holds the secret action at the :admin
+	// tier (e.g. secret:reveal:admin), which admin/owner reach via secret:> / >.
+	// It gates admin-sensitive secrets: those are hidden from a lister/resolver
+	// without it, refused to a revealer/updater/deleter without it (non-disclosing),
+	// and cannot be created by a caller without it. Placement scope still fences
+	// where; canAdmin fences the sensitivity tier.
+	ListSecrets(ctx context.Context, read scope.Set, canAdmin bool) ([]Secret, error)
+	CreateSecret(ctx context.Context, actorID string, spec SecretSpec, create scope.Set, canAdmin bool) (*Secret, error)
+	UpdateSecret(ctx context.Context, actorID, id string, fields map[string]string, read, action scope.Set, canAdmin bool) (*Secret, error)
+	DeleteSecret(ctx context.Context, actorID, id string, read, action scope.Set, canAdmin bool) error
+	RevealSecret(ctx context.Context, actorID, id string, read, action scope.Set, canAdmin bool) (map[string]string, error)
+	CopySecret(ctx context.Context, actorID, id string, read, action scope.Set, canAdmin bool) (map[string]string, error)
+	ResolveSecrets(ctx context.Context, componentID string, read scope.Set, canAdmin bool) ([]ResolvedSecret, error)
 
 	// The variable tier: a typed, cascade-resolved plaintext value (a macro),
 	// owned on the same exclusive arc as a secret but shown in the clear (no
@@ -264,6 +270,7 @@ type Gateway interface {
 	// owner's read/action scopes. ResolveTags is the per-component effective-tags
 	// view (union on key, override on value) down the structural cascade.
 	ListTags(ctx context.Context) ([]Tag, error)
+	DistinctTagValues(ctx context.Context, key string) ([]string, error)
 	CreateTag(ctx context.Context, actorID string, spec TagSpec, create scope.Set) (*Tag, error)
 	UpdateTag(ctx context.Context, actorID, name string, spec TagSpec, action scope.Set) (*Tag, error)
 	DeleteTag(ctx context.Context, actorID, name string, action scope.Set) error

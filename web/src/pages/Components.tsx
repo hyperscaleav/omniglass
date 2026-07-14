@@ -2,6 +2,7 @@ import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { useNavigate, useParams, useSearchParams } from "@solidjs/router";
 import TreeList, { type ListConfig, type ListCtx, type ListNode, type PageDescriptor } from "../components/TreeList";
+import TreeSelect from "../components/TreeSelect";
 import {
   type Component as Comp,
   COMPONENTS_KEY,
@@ -19,6 +20,8 @@ import Button from "../components/Button";
 import { DrawerFooter } from "../components/Drawer";
 import EffectiveSecrets, { secretCascadeBlade, cascadeBladeId } from "../components/EffectiveSecrets";
 import TagPills from "../components/TagPills";
+import { tagFilterKeys } from "../lib/predicate";
+import TagAdder from "../components/TagAdder";
 import EffectiveVariables, { variableCascadeBlade, varCascadeBladeId } from "../components/EffectiveVariables";
 
 // Components: the device inventory, the first page built on the generic TreeList.
@@ -65,6 +68,14 @@ export default function Components() {
   const label = (x: { name: string; display_name?: string }) => x.display_name || x.name;
   const sysById = createMemo(() => new Map((systems.data ?? []).map((s) => [s.id, s] as const)));
   const locById = createMemo(() => new Map((locations.data ?? []).map((l) => [l.id, l] as const)));
+
+  // One filter facet per tag key present across the components, derived from
+  // their effective tags, so the bar can filter by any tag like any other field.
+  const tagFacets = createMemo(() => {
+    const keys = new Set<string>();
+    for (const c of components.data ?? []) for (const k of Object.keys(c.effective_tags ?? {})) keys.add(k);
+    return tagFilterKeys<CompNode>([...keys].sort(), new Set(["name", "type", "system", "location"]));
+  });
 
   // Build the forest from the flat component list by parent_id. Roots are the
   // components with no parent (or a parent outside the caller's scope).
@@ -168,6 +179,7 @@ export default function Components() {
             onOpen={(variableName) => ctx.openBlade({ kind: "variable-cascade", id: varCascadeBladeId(n.raw.name, variableName) })}
           />
         </Show>
+        <TagAdder kind="component" name={n.raw.name} canUpdate={can(me.data, "component", "update")} canCreateKey={can(me.data, "tag", "create")} />
         <Show when={ctx.full}>
           <div class="flex items-center gap-2 border-t border-base-300 pt-4">
             <Show when={can(me.data, "component", "delete")}>
@@ -249,25 +261,31 @@ export default function Components() {
           <div class="grid grid-cols-2 gap-3">
             {p.ctx.field(
               "System",
-              <select class="select select-bordered w-full" value={system()} onChange={(e) => setSystem(e.currentTarget.value)}>
-                <option value="">None</option>
-                <For each={systems.data}>{(s) => <option value={s.name}>{label(s)}</option>}</For>
-              </select>,
+              <TreeSelect
+                items={(systems.data ?? []).map((s) => ({ id: s.id, value: s.name, label: label(s), parentId: s.parent_id }))}
+                value={system()}
+                onChange={setSystem}
+                rootLabel="None"
+              />,
             )}
             {p.ctx.field(
               "Location",
-              <select class="select select-bordered w-full" value={location()} onChange={(e) => setLocation(e.currentTarget.value)}>
-                <option value="">None</option>
-                <For each={locations.data}>{(l) => <option value={l.name}>{label(l)}</option>}</For>
-              </select>,
+              <TreeSelect
+                items={(locations.data ?? []).map((l) => ({ id: l.id, value: l.name, label: label(l), parentId: l.parent_id }))}
+                value={location()}
+                onChange={setLocation}
+                rootLabel="None"
+              />,
             )}
           </div>
           {p.ctx.field(
             "Parent component",
-            <select class="select select-bordered w-full" value={parent()} onChange={(e) => setParent(e.currentTarget.value)}>
-              <option value="">Root (no parent)</option>
-              <For each={components.data}>{(c) => <option value={c.name}>{c.display_name || c.name}</option>}</For>
-            </select>,
+            <TreeSelect
+              items={(components.data ?? []).map((c) => ({ id: c.id, value: c.name, label: label(c), parentId: c.parent_id }))}
+              value={parent()}
+              onChange={setParent}
+              rootLabel="Root (no parent)"
+            />,
             "Omit for a root component.",
           )}
         </Show>
@@ -299,11 +317,12 @@ export default function Components() {
       if (key === "tags") return <TagPills tags={n.tags} />;
       return null;
     },
-    filterKeys: [
+    filterKeys: () => [
       { key: "name", type: "string", hint: "substring", get: (n) => `${n.display} ${n.raw.name}`, values: () => [] },
       { key: "type", type: "string", hint: "exact", get: (n) => n.type, values: (rows) => [...new Set(rows.map((r) => r.type))].sort() },
       { key: "system", type: "string", hint: "exact", get: (n) => n.systemAddr, values: (rows) => [...new Set(rows.map((r) => r.systemAddr).filter(Boolean))].sort(), valueLabel: (v) => (systems.data ?? []).find((s) => s.name === v)?.display_name ?? v },
       { key: "location", type: "string", hint: "exact", get: (n) => n.locationName, values: (rows) => [...new Set(rows.map((r) => r.locationName).filter(Boolean))].sort() },
+      ...tagFacets(),
     ],
     sortVal: (n, key) => {
       if (key === "type") return n.type.toLowerCase();

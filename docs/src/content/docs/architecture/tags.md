@@ -7,19 +7,20 @@ sidebar:
     variant: note
 ---
 
-:::note[Partial: the registry, the bindings, the cascade, and the console key directory are built; the per-entity binding editor and the cascade extensions are deferred]
+:::note[Partial: the registry, the bindings, the cascade, the console key directory, the per-entity binding editor, value-domain enums, and the directory Tags column and tag filter are built; the cascade provenance panel and the cross-primitive cascade extensions are deferred]
 The first slice ([ADR-0021](/architecture/decisions/#adr-0021-tag-slice-1-a-governed-key-registry-with-entity-update-gated-bindings)) is
 **built**: the governed **`tag`** key registry, the per-entity **`tag_binding`** cell on the exclusive arc, and the
-union-on-key / override-on-value **cascade** resolver, over the API and the generated CLI. The **console Tags
-directory** (mint, edit governance fields, delete a key) is built too
-([#189](https://github.com/hyperscaleav/omniglass/issues/189)). Deferred to later slices: the per-entity **binding
-editor** and the **effective-tags** cascade panel on an entity's detail (the rest of
-[#189](https://github.com/hyperscaleav/omniglass/issues/189)), binding through [groups](/architecture/groups/) and a
-`template`-scoped default (the shared-resolver work in [#184](https://github.com/hyperscaleav/omniglass/issues/184)),
-value-domain governance (an open question below, [#190](https://github.com/hyperscaleav/omniglass/issues/190)), and
-binding onto a [file](/architecture/files/) ([#191](https://github.com/hyperscaleav/omniglass/issues/191)). Those
-divergences are logged in the
-[decision log](/architecture/decisions/).
+union-on-key / override-on-value **cascade** resolver, over the API and the generated CLI. On top of it, the **console
+Tags directory** (mint, edit governance fields, delete a key), the per-entity **binding editor** (apply and remove
+values from an entity's detail blade), **value-domain enums** that constrain a key's values ([#190](https://github.com/hyperscaleav/omniglass/issues/190)),
+and the directory **Tags column** with per-key **tag filtering** (narrow a directory by any tag's effective value,
+plus **is set** / **is absent**) are built too ([#189](https://github.com/hyperscaleav/omniglass/issues/189),
+[#226](https://github.com/hyperscaleav/omniglass/issues/226)). Deferred to later slices: the winner-plus-shadowed
+**cascade provenance** panel on an entity's detail (the rest of [#189](https://github.com/hyperscaleav/omniglass/issues/189)),
+binding through [groups](/architecture/groups/) and a `template`-scoped default (the shared-resolver work in
+[#184](https://github.com/hyperscaleav/omniglass/issues/184)), binding onto a [file](/architecture/files/)
+([#191](https://github.com/hyperscaleav/omniglass/issues/191)), and a stored per-key color override. Those divergences
+are logged in the [decision log](/architecture/decisions/).
 :::
 
 A **tag** is an operator **`key: value`** label attached to an entity to organize, filter, and scope by dimensions
@@ -94,13 +95,19 @@ winners only) per row, resolved for the whole page in **one batched query** (a `
 per-row fetch). Provenance (which scope a value came from) stays in the per-entity effective-tags detail view, not the
 column.
 
+**A key may constrain its values to an enum.** A key carries an **`allowed_values`** set: empty (the default)
+leaves it free text, and a non-empty set is the enum a bound value must belong to, so `environment` can be
+declared as one of `prod`, `staging`, `dev`. The binding write enforces membership (a value outside a key's
+allowed set is a 422), and the add control renders a strict dropdown for an enum key. A **free** key instead
+autocompletes the **distinct values already in use** for it (a `GET /tags/{name}:values` read), so an operator
+reaches for `prod` instead of retyping it, without the key having to declare the set up front
+([ADR-0024](/architecture/decisions/#adr-0024-a-tag-key-may-constrain-its-values-to-an-enum)).
+
 :::caution[Open question]
-Value-domain governance. Key normalization is settled (the governed registry plus the `tag:create` gate and the
-lowercase-identifier rule). The open part is the **value** side: whether a key may **constrain** its values (an enum or
-`value_type`, so `environment` accepts only its allowed set, validated and autocompleted like a
-[`datapoint_type`](/architecture/datapoints/) domain), and whether it may **normalize** them on input (lowercase,
-trim, fold synonyms) so `Prod`, `prod `, and `PROD` resolve to one value. Slice 1 ships free-text values; how much
-governance a key places on its values is deferred.
+The rest of value-domain governance. Beyond the string enum, whether a key may carry a typed **`value_type`**
+(int, bool, date, validated like a [`datapoint_type`](/architecture/datapoints/) domain) and whether it may
+**normalize** values on input (lowercase, trim, fold synonyms, so `Prod`, `prod `, and `PROD` resolve to one
+value) stay open. The enum is the first, most-asked-for slice; the rest is deferred.
 :::
 
 ## Storage
@@ -110,5 +117,5 @@ The key vocabulary and the value cell; the physical layout (the owner arc, the c
 
 | Table | Key columns | Notes |
 |---|---|---|
-| `tag` | name, applies_to, propagates | **Built.** The tenant-wide governed key vocabulary; minting a key needs `tag:create`. `applies_to` narrows a key to entity kinds (empty = universal); `propagates` toggles cascade versus flat per-entity binding |
+| `tag` | name, applies_to, propagates, allowed_values | **Built.** The tenant-wide governed key vocabulary; minting a key needs `tag:create`. `applies_to` narrows a key to entity kinds (empty = universal); `propagates` toggles cascade versus flat per-entity binding; `allowed_values` is the value enum (empty = free text), enforced on the binding write |
 | `tag_binding` | (tag_id, **owner arc**), value | **Built.** The `key: value` binding at one owner on the exclusive arc (`global / location / system / component`); resolves **union on key, override on value** down the [cascade](/architecture/cascade/). Setting a value is the owner's own `update` write |
