@@ -50,6 +50,7 @@ export const navItems: NavItem[] = [
       // gates on `node:read` with ABAC scope, like the other Inventory directories.
       // The tasks a node runs are a panel on the node, not a separate nav entry.
       { label: "Nodes", path: "/nodes", hint: "Collection daemons: their health, enrollment, and the collection tasks assigned to each." },
+      { label: "Files", path: "/files", live: true, resource: "file", hint: "Firmware images, config dumps, runbooks, and captures kept with the estate, deduplicated and searchable." },
     ],
   },
   {

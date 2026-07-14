@@ -415,6 +415,97 @@ Example:
 omniglass effective-variable list <name>
 ```
 
+## `omniglass file`
+
+Commands for the file resource
+
+### `omniglass file create`
+
+Create a file from an upload
+
+```
+omniglass file create [flags]
+```
+
+Stores the uploaded bytes as a content-addressed blob (identical bytes dedup to one blob) and writes the file handle pointing at it. Gated by file:create; a sensitive file additionally needs the admin tier (file:create:admin).
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--content` | string | (none) | The file bytes, base64-encoded |
+| `--content-type` | string | (none) | The MIME type used to serve the file |
+| `--name` | string | (none) | The file's display name (a label, no path separators) |
+| `--sensitive` | string | (none) | Admin-only visibility; defaults false. Setting true requires the admin tier |
+
+Example:
+
+```sh
+omniglass file create --content content --content-type content_type --name name
+```
+
+### `omniglass file delete`
+
+Delete a file
+
+```
+omniglass file delete <id>
+```
+
+Removes a file handle. The underlying blob is left in place (garbage collection is a later slice). A sensitive file is a non-disclosing 404 without the admin tier. Gated by file:delete.
+
+Example:
+
+```sh
+omniglass file delete <id>
+```
+
+### `omniglass file download`
+
+Download a file's bytes
+
+```
+omniglass file download <id>
+```
+
+Returns a file's bytes (base64-encoded) read from the blob it points at, the hash verified on read. A sensitive file is a non-disclosing 404 without the admin tier. Gated by file:read.
+
+Example:
+
+```sh
+omniglass file download <id>
+```
+
+### `omniglass file get`
+
+Get a file's metadata
+
+```
+omniglass file get <id>
+```
+
+Returns one file handle's searchable metadata (no bytes). A sensitive file is a non-disclosing 404 without the admin tier. Gated by file:read.
+
+Example:
+
+```sh
+omniglass file get <id>
+```
+
+### `omniglass file list`
+
+List files
+
+```
+omniglass file list
+```
+
+Lists the file handles the caller may see (searchable metadata, no bytes). Sensitive files appear only to the admin tier. Gated by file:read.
+
+Example:
+
+```sh
+omniglass file list
+```
+
 ## `omniglass grant`
 
 Commands for the grant resource

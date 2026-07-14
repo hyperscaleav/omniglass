@@ -307,4 +307,15 @@ func (UnimplementedGateway) ResolveTags(context.Context, string, scope.Set) ([]R
 func (UnimplementedGateway) EffectiveTags(context.Context, string, []string) (map[string]map[string]string, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) Close() {}
+func (UnimplementedGateway) ListFiles(context.Context, bool) ([]File, error) { return nil, nil }
+func (UnimplementedGateway) GetFile(context.Context, string, bool) (*File, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) CreateFile(context.Context, string, FileSpec, bool) (*File, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DownloadFile(context.Context, string, bool) (*File, []byte, error) {
+	return nil, nil, nil
+}
+func (UnimplementedGateway) DeleteFile(context.Context, string, string, bool) error { return nil }
+func (UnimplementedGateway) Close()                                                 {}

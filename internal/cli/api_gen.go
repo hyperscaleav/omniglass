@@ -476,6 +476,107 @@ func generatedCommands() []*cobra.Command {
 	}
 	{
 		parent := &cobra.Command{
+			Use:   "file",
+			Short: "Commands for the file resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			var fContent string
+			var fContentType string
+			var fName string
+			var fSensitive string
+			cmd := &cobra.Command{
+				Use:     "create",
+				Short:   "Create a file from an upload",
+				Long:    "Stores the uploaded bytes as a content-addressed blob (identical bytes dedup to one blob) and writes the file handle pointing at it. Gated by file:create; a sensitive file additionally needs the admin tier (file:create:admin).",
+				Example: "  omniglass file create --content content --content-type content_type --name name",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/files")
+					body := map[string]any{}
+					if cmd.Flags().Changed("content") {
+						body["content"] = fContent
+					}
+					if cmd.Flags().Changed("content-type") {
+						body["content_type"] = fContentType
+					}
+					if cmd.Flags().Changed("name") {
+						body["name"] = fName
+					}
+					if cmd.Flags().Changed("sensitive") {
+						body["sensitive"] = jsonOrString(fSensitive)
+					}
+					return runAPICommand(cmd, "POST", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fContent, "content", "", "The file bytes, base64-encoded")
+			_ = cmd.MarkFlagRequired("content")
+			cmd.Flags().StringVar(&fContentType, "content-type", "", "The MIME type used to serve the file")
+			_ = cmd.MarkFlagRequired("content-type")
+			cmd.Flags().StringVar(&fName, "name", "", "The file's display name (a label, no path separators)")
+			_ = cmd.MarkFlagRequired("name")
+			cmd.Flags().StringVar(&fSensitive, "sensitive", "", "Admin-only visibility; defaults false. Setting true requires the admin tier")
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "delete <id>",
+				Short:   "Delete a file",
+				Long:    "Removes a file handle. The underlying blob is left in place (garbage collection is a later slice). A sensitive file is a non-disclosing 404 without the admin tier. Gated by file:delete.",
+				Example: "  omniglass file delete <id>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/files/%s", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "DELETE", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "download <id>",
+				Short:   "Download a file's bytes",
+				Long:    "Returns a file's bytes (base64-encoded) read from the blob it points at, the hash verified on read. A sensitive file is a non-disclosing 404 without the admin tier. Gated by file:read.",
+				Example: "  omniglass file download <id>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/files/%s:download", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "get <id>",
+				Short:   "Get a file's metadata",
+				Long:    "Returns one file handle's searchable metadata (no bytes). A sensitive file is a non-disclosing 404 without the admin tier. Gated by file:read.",
+				Example: "  omniglass file get <id>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/files/%s", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "list",
+				Short:   "List files",
+				Long:    "Lists the file handles the caller may see (searchable metadata, no bytes). Sensitive files appear only to the admin tier. Gated by file:read.",
+				Example: "  omniglass file list",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/files")
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		roots = append(roots, parent)
+	}
+	{
+		parent := &cobra.Command{
 			Use:   "grant",
 			Short: "Commands for the grant resource",
 		}

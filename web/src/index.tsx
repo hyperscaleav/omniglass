@@ -22,6 +22,7 @@ import Secrets from "./pages/Secrets";
 import Variables from "./pages/Variables";
 import Tags from "./pages/Tags";
 import Types from "./pages/Types";
+import Files from "./pages/Files";
 import Audit from "./pages/Audit";
 import SectionStub from "./pages/SectionStub";
 import NotFound from "./pages/NotFound";
@@ -72,6 +73,10 @@ render(
           <Route path="/systems/:name" component={Systems} />
           <Route path="/components" component={Components} />
           <Route path="/components/:name" component={Components} />
+          {/* Files are a flat, tenant-wide list addressed by id (names are not
+              unique across files); the :id route is the addressable full-page detail. */}
+          <Route path="/files" component={Files} />
+          <Route path="/files/:id" component={Files} />
           <Route path="/profile" component={Profile} />
           <Route path="/users" component={Users} />
           <Route path="/roles" component={Roles} />
