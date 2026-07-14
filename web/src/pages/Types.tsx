@@ -251,7 +251,11 @@ function TypeBladeBody(p: { id: string }): JSX.Element {
                   >
                     <div class="flex flex-wrap gap-1.5">
                       <For each={r().allowed_parent_types}>
-                        {(pid) => <span class="badge badge-outline badge-sm">{pid === ROOT_PLACEMENT ? "Root" : pid}</span>}
+                        {(pid) => (
+                          <span class="badge badge-outline badge-sm">
+                            {pid === ROOT_PLACEMENT ? "Root" : locationTypeOptions().find((t) => t.id === pid)?.display_name ?? pid}
+                          </span>
+                        )}
                       </For>
                     </div>
                   </Show>

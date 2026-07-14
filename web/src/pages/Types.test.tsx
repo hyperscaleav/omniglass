@@ -153,6 +153,22 @@ describe("Types page", () => {
     expect((sent as { allowed_parent_types: string[] }).allowed_parent_types).toHaveLength(2);
   });
 
+  it("read-only blade shows allowed parents by display name, with the root sentinel labeled", async () => {
+    mount();
+    fireEvent.click(screen.getByText("wing"));
+    const blade = await waitFor(() => {
+      const el = asides()[0];
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    // Read-only (no Edit): wing's set is [campus, root]. The chip resolves the
+    // type id to its display name (Campus, not the raw "campus"), and the sentinel
+    // renders as "Root", so the two read consistently.
+    expect(within(blade).getByText("Campus")).toBeTruthy();
+    expect(within(blade).getByText("Root")).toBeTruthy();
+    expect(within(blade).queryByText("campus")).toBeNull();
+  });
+
   it("edit blade on a non-location kind does not show the allowed-parents editor", async () => {
     mount();
     fireEvent.click(screen.getByRole("tab", { name: "System" }));
