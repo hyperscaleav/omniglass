@@ -234,7 +234,7 @@ export default function Systems() {
                       label="Check name"
                       title="Check availability"
                       class="join-item"
-                      disabled={checking() || !name().trim()}
+                      disabled={checking() || !name().trim() || name().trim() === n().raw.name}
                       onClick={() => void runCheck()}
                     />
                   </div>

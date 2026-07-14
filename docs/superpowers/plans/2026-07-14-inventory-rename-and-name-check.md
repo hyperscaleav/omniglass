@@ -1,4 +1,4 @@
-# Inventory technical-name rename + inline name check — Implementation Plan
+# Inventory technical-name rename + inline name check: implementation plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -6,7 +6,7 @@
 
 **Architecture:** `name` is a mutable `unique` column; `id uuid` is the identity and every FK/binding references it, so a rename is a one-column `UPDATE` with no cascade. A shared `ValidateEntityName` slug validator (server source of truth, mirrored client-side) gates both create and rename. A collection-level, scope-blind `POST /<entity>:checkName` powers the advisory inline check; Save stays enabled and the global unique constraint (409) is the real gate. Systems is the validated reference; Components and Locations mirror it.
 
-**Tech Stack:** Go + Huma v2 (API), pgx + PostgreSQL (storage, dbmate migrations — none needed here), testcontainers-go (integration), SolidJS + daisyUI + openapi-fetch typed client (UI), vitest + @solidjs/testing-library (web tests). Codegen: `make gen` (OpenAPI → typed client + cobra CLI).
+**Tech Stack:** Go + Huma v2 (API), pgx + PostgreSQL (storage, dbmate migrations, none needed here), testcontainers-go (integration), SolidJS + daisyUI + openapi-fetch typed client (UI), vitest + @solidjs/testing-library (web tests). Codegen: `make gen` (OpenAPI → typed client + cobra CLI).
 
 ## Global Constraints
 
@@ -24,17 +24,17 @@
 
 ## File structure
 
-- `internal/storage/names.go` — **create.** The shared `ValidateEntityName` + `ErrInvalidName`.
-- `internal/storage/names_test.go` — **create.** Validator table test.
-- `internal/storage/systems.go` / `components.go` / `locations.go` — **modify.** `Name *string` on each patch; validate in Create + Update; `set name`; add `SystemNameTaken` / `ComponentNameTaken` / `LocationNameTaken`.
-- `internal/storage/*_rename_test.go` — **create** per entity. Rename round-trip integration tests.
-- `internal/api/systems.go` / `components.go` / `locations.go` — **modify.** `Name *string` (pattern) on update input; pattern on create input; `check-*-name` operation; `ErrInvalidName` in the `map*Err`.
-- `internal/api/*_test.go` — **modify/create.** Rename + checkName API tests.
-- `web/src/lib/systems.ts` / `components.ts` / `locations.ts` — **modify.** `name?` on the `Update*` type; add `check*Name`.
-- `web/src/pages/Systems.tsx` / `Components.tsx` / `Locations.tsx` — **modify.** Unlock the Technical-name input in edit; inline check button + status; navigate-on-rename.
-- `web/src/pages/*.test.tsx` — **modify.** Inline-check states, navigate-on-rename, view stays read-only.
-- `docs/src/content/docs/architecture/status.mdx` — **modify.** Build-progress entry.
-- `docs/src/content/docs/guides/operator/entities.md` — **modify.** Rename + check paragraph.
+- `internal/storage/names.go`, **create.** The shared `ValidateEntityName` + `ErrInvalidName`.
+- `internal/storage/names_test.go`, **create.** Validator table test.
+- `internal/storage/systems.go` / `components.go` / `locations.go`, **modify.** `Name *string` on each patch; validate in Create + Update; `set name`; add `SystemNameTaken` / `ComponentNameTaken` / `LocationNameTaken`.
+- `internal/storage/*_rename_test.go`, **create** per entity. Rename round-trip integration tests.
+- `internal/api/systems.go` / `components.go` / `locations.go`, **modify.** `Name *string` (pattern) on update input; pattern on create input; `check-*-name` operation; `ErrInvalidName` in the `map*Err`.
+- `internal/api/*_test.go`, **modify/create.** Rename + checkName API tests.
+- `web/src/lib/systems.ts` / `components.ts` / `locations.ts`, **modify.** `name?` on the `Update*` type; add `check*Name`.
+- `web/src/pages/Systems.tsx` / `Components.tsx` / `Locations.tsx`, **modify.** Unlock the Technical-name input in edit; inline check button + status; navigate-on-rename.
+- `web/src/pages/*.test.tsx`, **modify.** Inline-check states, navigate-on-rename, view stays read-only.
+- `docs/src/content/docs/architecture/status.mdx`, **modify.** Build-progress entry.
+- `docs/src/content/docs/guides/operator/entities.md`, **modify.** Rename + check paragraph.
 
 ---
 
@@ -124,7 +124,7 @@ git commit -m "feat: add shared entity-name slug validator"
 
 ---
 
-## Task 2: Systems storage — rename + NameTaken + create tightening
+## Task 2: Systems storage, rename + NameTaken + create tightening
 
 **Files:**
 - Modify: `internal/storage/systems.go` (`SystemPatch` ~line 61; `CreateSystem` insert ~line 245; `UpdateSystem` SQL ~line 275; add `SystemNameTaken`)
@@ -217,7 +217,7 @@ func TestRenameSystem(t *testing.T) {
 Run: `go test ./internal/storage/ -run TestRenameSystem`
 Expected: FAIL (`SystemPatch` has no field `Name`; no method `SystemNameTaken`).
 
-- [ ] **Step 3: Implement — patch field, validation, SQL, NameTaken**
+- [ ] **Step 3: Implement, patch field, validation, SQL, NameTaken**
 
 In `internal/storage/systems.go`, add `Name` to the patch:
 
@@ -303,7 +303,7 @@ git commit -m "feat: rename systems by technical name, scope-blind name check"
 
 ---
 
-## Task 3: Systems API — Name on update input, checkName op, error map
+## Task 3: Systems API, Name on update input, checkName op, error map
 
 **Files:**
 - Modify: `internal/api/systems.go` (`createSystemInput` ~line 83; `updateSystemInput` ~line 93; update-system handler ~line 258; `mapSystemErr` ~line 288; add the checkName op + its I/O structs)
@@ -315,7 +315,7 @@ git commit -m "feat: rename systems by technical name, scope-blind name check"
 
 - [ ] **Step 1: Write the failing API test**
 
-Add to `internal/api/systems_test.go` (mirror the existing request helpers in that file — `newTestAPI`, an all-scoped token, a `do`/`request` helper):
+Add to `internal/api/systems_test.go` (mirror the existing request helpers in that file, `newTestAPI`, an all-scoped token, a `do`/`request` helper):
 
 ```go
 func TestSystemRenameAndCheckName(t *testing.T) {
@@ -357,7 +357,7 @@ func TestSystemRenameAndCheckName(t *testing.T) {
 Run: `go test ./internal/api/ -run TestSystemRenameAndCheckName`
 Expected: FAIL (no `:checkName` route; PATCH ignores `name`).
 
-- [ ] **Step 3: Implement — input field, checkName op, error map**
+- [ ] **Step 3: Implement, input field, checkName op, error map**
 
 Add the pattern to `createSystemInput.Body.Name`:
 
@@ -443,7 +443,7 @@ Add `ErrInvalidName` to `mapSystemErr`:
 		return huma.Error422UnprocessableEntity("invalid name")
 ```
 
-(The `checkNameInput`/`checkNameOutput` structs are shared across the three entities; define them once here and reuse in components/locations, or keep per-file — pick one and keep it consistent. If shared, name them `checkNameInput`/`checkNameOutput` in one file and do not redeclare.)
+(The `checkNameInput`/`checkNameOutput` structs are shared across the three entities; define them once here and reuse in components/locations, or keep per-file, pick one and keep it consistent. If shared, name them `checkNameInput`/`checkNameOutput` in one file and do not redeclare.)
 
 - [ ] **Step 4: Run tests to verify they pass**
 
@@ -633,14 +633,14 @@ git commit -m "feat: rename a system from the detail with an inline name check"
 - Test: `internal/api/components_test.go`
 - Modify: `web/src/lib/components.ts`, `web/src/pages/Components.tsx`, `web/src/pages/Components.test.tsx`
 
-Apply the exact same changes as Tasks 2-4, substituting `Component`/`component`/`COMPONENTS_KEY`/`updateComponent`/`checkComponentName`. Preserve the Components page's `EffectiveSecrets`/`EffectiveVariables` panels and its `ID` fact — only the Technical-name field, edit signals, seed effect, and bound save change.
+Apply the exact same changes as Tasks 2-4, substituting `Component`/`component`/`COMPONENTS_KEY`/`updateComponent`/`checkComponentName`. Preserve the Components page's `EffectiveSecrets`/`EffectiveVariables` panels and its `ID` fact, only the Technical-name field, edit signals, seed effect, and bound save change.
 
-- [ ] **Step 1: Storage rename test (mirror Task 2 Step 1) for components** — write `internal/storage/components_rename_test.go` (rename a component that owns a tag/variable/secret binding; assert the binding's `component_id` UUID FK survives and the old name frees).
-- [ ] **Step 2: Run it — FAIL** (`ComponentPatch` has no `Name`). `go test ./internal/storage/ -run TestRenameComponent`
+- [ ] **Step 1: Storage rename test (mirror Task 2 Step 1) for components**, write `internal/storage/components_rename_test.go` (rename a component that owns a tag/variable/secret binding; assert the binding's `component_id` UUID FK survives and the old name frees).
+- [ ] **Step 2: Run it, FAIL** (`ComponentPatch` has no `Name`). `go test ./internal/storage/ -run TestRenameComponent`
 - [ ] **Step 3: Implement `ComponentPatch.Name`, validation in `CreateComponent`+`UpdateComponent`, `set name`, `ComponentNameTaken` + interface + unimplemented** (mirror Task 2 Step 3).
-- [ ] **Step 4: Run — PASS.** `go test ./internal/storage/`
-- [ ] **Step 5: API test (mirror Task 3 Step 1) for components — FAIL, then implement `Name` on `updateComponentInput`, create pattern, `check-component-name` op, `ErrInvalidName` in `mapComponentErr` — PASS.** `go test ./internal/api/`
-- [ ] **Step 6: `make gen`, then `web/src/lib/components.ts` (`UpdateComponent.name?`, `checkComponentName`) and `Components.tsx` (mirror Task 4 Step 5, keeping the Effective panels), and `Components.test.tsx` — PASS + tsc.** `cd web && npx vitest run src/pages/Components.test.tsx && npx tsc --noEmit`
+- [ ] **Step 4: Run, PASS.** `go test ./internal/storage/`
+- [ ] **Step 5: API test (mirror Task 3 Step 1) for components, FAIL, then implement `Name` on `updateComponentInput`, create pattern, `check-component-name` op, `ErrInvalidName` in `mapComponentErr`, PASS.** `go test ./internal/api/`
+- [ ] **Step 6: `make gen`, then `web/src/lib/components.ts` (`UpdateComponent.name?`, `checkComponentName`) and `Components.tsx` (mirror Task 4 Step 5, keeping the Effective panels), and `Components.test.tsx`, PASS + tsc.** `cd web && npx vitest run src/pages/Components.test.tsx && npx tsc --noEmit`
 - [ ] **Step 7: Commit**
 
 ```bash
@@ -659,12 +659,12 @@ git commit -m "feat: rename a component from the detail with an inline name chec
 - Test: `internal/api/locations_test.go`
 - Modify: `web/src/lib/locations.ts`, `web/src/pages/Locations.tsx`, `web/src/pages/Locations.test.tsx`
 
-Apply the same changes as Tasks 2-4, substituting `Location`/`location`/`LOCATIONS_KEY`/`updateLocation`/`checkLocationName`. Keep the Locations page's `<select>` for `location_type` and its `leadIcon` + "Contains" fact — only the Technical-name field, edit signals, seed effect, and bound save change.
+Apply the same changes as Tasks 2-4, substituting `Location`/`location`/`LOCATIONS_KEY`/`updateLocation`/`checkLocationName`. Keep the Locations page's `<select>` for `location_type` and its `leadIcon` + "Contains" fact, only the Technical-name field, edit signals, seed effect, and bound save change.
 
-- [ ] **Step 1: Storage rename test for locations — FAIL** (rename a location that has a system/component placed in it; assert the placement's `location_id` UUID FK survives and the old name frees). `go test ./internal/storage/ -run TestRenameLocation`
-- [ ] **Step 2: Implement `LocationPatch.Name`, validation in create+update, `set name`, `LocationNameTaken` + interface + unimplemented — PASS.** `go test ./internal/storage/`
-- [ ] **Step 3: API test for locations — FAIL, then implement `Name` on `updateLocationInput`, create pattern, `check-location-name` op, `ErrInvalidName` in `mapLocationErr` — PASS.** `go test ./internal/api/`
-- [ ] **Step 4: `make gen`, then `web/src/lib/locations.ts` and `Locations.tsx` (mirror Task 4 Step 5, keeping the `<select>` and the fact) and `Locations.test.tsx` — PASS + tsc.** `cd web && npx vitest run src/pages/Locations.test.tsx && npx tsc --noEmit`
+- [ ] **Step 1: Storage rename test for locations, FAIL** (rename a location that has a system/component placed in it; assert the placement's `location_id` UUID FK survives and the old name frees). `go test ./internal/storage/ -run TestRenameLocation`
+- [ ] **Step 2: Implement `LocationPatch.Name`, validation in create+update, `set name`, `LocationNameTaken` + interface + unimplemented, PASS.** `go test ./internal/storage/`
+- [ ] **Step 3: API test for locations, FAIL, then implement `Name` on `updateLocationInput`, create pattern, `check-location-name` op, `ErrInvalidName` in `mapLocationErr`, PASS.** `go test ./internal/api/`
+- [ ] **Step 4: `make gen`, then `web/src/lib/locations.ts` and `Locations.tsx` (mirror Task 4 Step 5, keeping the `<select>` and the fact) and `Locations.test.tsx`, PASS + tsc.** `cd web && npx vitest run src/pages/Locations.test.tsx && npx tsc --noEmit`
 - [ ] **Step 5: Commit**
 
 ```bash
@@ -681,12 +681,12 @@ git commit -m "feat: rename a location from the detail with an inline name check
 - Modify: `docs/src/content/docs/guides/operator/entities.md` (rename + check paragraph)
 - Modify: `docs/src/content/docs/architecture/decisions.md` (only if the build diverged from the spec)
 
-- [ ] **Step 1: status.mdx** — add a build-progress note: technical-name rename landed for components/systems/locations with a collection-level scope-blind `:checkName` and an advisory inline check; the slug rule now gates create too. Advance any affected page's status floor if warranted.
-- [ ] **Step 2: entities.md** — document: in edit mode the technical name is editable; the check button reports valid/available; Save renames and the URL follows; the old name stops resolving; the name rule is lowercase letters, digits, hyphens.
-- [ ] **Step 3: decision log** — add a row only if the build diverged from `docs/superpowers/specs/2026-07-14-inventory-rename-design.md`. If it matched, no ADR needed (the spec is the record).
+- [ ] **Step 1: status.mdx**, add a build-progress note: technical-name rename landed for components/systems/locations with a collection-level scope-blind `:checkName` and an advisory inline check; the slug rule now gates create too. Advance any affected page's status floor if warranted.
+- [ ] **Step 2: entities.md**, document: in edit mode the technical name is editable; the check button reports valid/available; Save renames and the URL follows; the old name stops resolving; the name rule is lowercase letters, digits, hyphens.
+- [ ] **Step 3: decision log**, add a row only if the build diverged from `docs/superpowers/specs/2026-07-14-inventory-rename-design.md`. If it matched, no ADR needed (the spec is the record).
 - [ ] **Step 4: Full gate.** Run: `make test` (paste the output into the PR). Expected: all Go packages + web green.
-- [ ] **Step 5: `make gen` drift check.** Run: `make gen` then `git status` — expected: clean (no drift).
-- [ ] **Step 6: `/ship-slice`** — run it. It performs the em-dash + attribution scan, the reviewer pass, docs-with-everything, and requires **live screenshots** of the three edit surfaces (editable name + check button showing Available / Taken / bad-format, and a completed rename landing at the new URL). Its ship-review becomes the PR body.
+- [ ] **Step 5: `make gen` drift check.** Run: `make gen` then `git status`, expected: clean (no drift).
+- [ ] **Step 6: `/ship-slice`**, run it. It performs the em-dash + attribution scan, the reviewer pass, docs-with-everything, and requires **live screenshots** of the three edit surfaces (editable name + check button showing Available / Taken / bad-format, and a completed rename landing at the new URL). Its ship-review becomes the PR body.
 - [ ] **Step 7: Commit docs + open the PR**
 
 ```bash

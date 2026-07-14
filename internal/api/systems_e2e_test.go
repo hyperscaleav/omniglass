@@ -162,4 +162,63 @@ func TestSystemRenameAndCheckName(t *testing.T) {
 
 	// Bad format via PATCH -> 422 (Huma pattern rejects at the edge).
 	c.do(ownerTok, http.MethodPatch, "/systems/av-two", map[string]any{"name": "Bad Name"}, http.StatusUnprocessableEntity)
+
+	// Create-tightening: a bad name is rejected at create too, not just rename.
+	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{"name": "Bad Name", "system_type": "meeting-room"}, http.StatusUnprocessableEntity)
+}
+
+// checkName is scope-blind: a caller with system:update scoped to one subtree
+// still sees a name taken in a subtree it cannot read, so its rename never
+// false-positives "available" only to 409 at Save on the global unique
+// constraint. Skipped under -short.
+func TestSystemCheckNameScopeBlind(t *testing.T) {
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	ownerTok, hash, prefix, err := auth.NewBearerToken()
+	if err != nil {
+		t.Fatalf("mint owner: %v", err)
+	}
+	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: hash, Prefix: prefix}); err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+
+	// Two systems in separate scopes.
+	var av struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/systems", map[string]any{"name": "scope-av", "system_type": "meeting-room"}, http.StatusCreated), &av); err != nil {
+		t.Fatalf("decode create: %v", err)
+	}
+	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{"name": "scope-lab", "system_type": "meeting-room"}, http.StatusCreated)
+
+	// A deploy principal (system:update) scoped ONLY to scope-av.
+	deployTok := setupScopedViewer(t, ctx, dsn, "deploy-av", "deploy", "system", av.ID)
+	// It cannot read scope-lab (out of scope -> non-disclosing 404).
+	c.do(deployTok, http.MethodGet, "/systems/scope-lab", nil, http.StatusNotFound)
+
+	// But checkName reports scope-lab taken (scope-blind), never available.
+	out := c.do(deployTok, http.MethodPost, "/systems:checkName", map[string]any{"name": "scope-lab"}, http.StatusOK)
+	var nc struct {
+		Valid     bool `json:"valid"`
+		Available bool `json:"available"`
+	}
+	if err := json.Unmarshal(out, &nc); err != nil {
+		t.Fatalf("decode checkName: %v", err)
+	}
+	if !nc.Valid || nc.Available {
+		t.Fatalf("scope-blind checkName(scope-lab) = %+v, want valid=true available=false (name exists out-of-scope)", nc)
+	}
 }
