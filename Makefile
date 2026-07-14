@@ -46,8 +46,17 @@ gen-web:
 # Full gate: every test, including the testcontainer-backed integration and
 # end-to-end tests (real Postgres) plus the SPA (vitest). Green before commit and
 # before merge.
+#
+# TEST_PARALLEL caps how many package test binaries run at once (go test -p). It
+# bounds both concurrent linking and, because each container-backed package spins
+# its own ephemeral Postgres, the number of live testcontainers. The Go default
+# (GOMAXPROCS, e.g. 16) lets every container-backed package start a Postgres at
+# once alongside up to that many link jobs, which saturates memory on smaller
+# machines (notably WSL2). 4 keeps a healthy machine near full speed while
+# leaving headroom; override for a beefier box: make test TEST_PARALLEL=8.
+TEST_PARALLEL ?= 4
 test: test-web
-	go test ./...
+	go test -p $(TEST_PARALLEL) ./...
 
 # The SPA unit + theming-ban tests (vitest). Part of the local gate so web-only
 # regressions (an illegible badge class, a broken page descriptor) are caught

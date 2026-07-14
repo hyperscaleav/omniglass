@@ -7,7 +7,7 @@ screenshots:
     alt: "The Users directory: each principal with its avatar, kind badge, and grant count, plus New user and Show archived."
 ---
 
-**Settings, Users** is the admin directory of every principal, humans and service accounts,
+**Admin > Users** is the admin directory of every principal, humans and service accounts,
 each with the roles granted to it. This page is the account lifecycle: creating, editing,
 disabling, and removing a user. Giving a user access, a role at a scope, is the [grant
 builder](/guides/admin/access/#the-grant-builder) on the next page. The model underneath is

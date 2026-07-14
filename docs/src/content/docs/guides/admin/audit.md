@@ -12,7 +12,7 @@ screenshots:
       - "text=/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}/"
 ---
 
-**Settings > Audit** (with `audit:read`, so **administrators and owners** only) is the read-only audit trail:
+**Admin > Audit** (with `audit:read`, so **administrators and owners** only) is the read-only audit trail:
 every privileged action and every sign-in, newest first, each with when it happened, who did it, the action,
 and the resource. An action taken while impersonating shows the **real administrator** as the actor, with an
 `as <account>` tag naming the principal whose identity they assumed (for example `admin as bob`), so

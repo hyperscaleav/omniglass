@@ -898,5 +898,37 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   follow-up). Proven by a storage round-trip per registry (create, duplicate id 409, update, official read-only,
   in-use delete refused) and a real-binary API test per registry (the CRUD lifecycle, 422 official, 409 in-use,
   auto-discovered 403 without `type:*` by the route-gating guard). The generated CLI and web client ship in the
-  same slice (`make gen`). Deferred: the Types catalog console page (kind facet, CRUD drawer over the three
-  writable kinds plus a read-only view of `secret_type`) is a follow-up slice.
+  same slice (`make gen`). Deferred: the Types catalog console page (segmented tab per kind, CRUD drawer
+  over the three writable kinds plus a read-only view of `secret_type`) is a follow-up slice.
+- **Console: nav IA rework, estate values get their own group and Settings becomes Admin.** The
+  sidebar's `nav.ts` gains a new **Values** top-level group (Variables, Secrets, Config), the
+  estate-attached values that used to sit under Settings, standing beside **Inventory** (Components,
+  Systems, Locations, and **Nodes**, the collection daemons) rather than nested inside it. Interfaces
+  and Tasks are dropped from the nav: an interface is a panel on a component and a task is a panel on
+  a node, both future work, not directories of their own. The Settings group is renamed **Admin**
+  (Users, Roles, Groups, Audit) and gains an ungated **soon** Settings leaf reserving the
+  platform-preferences page (severity scales, schedules, retention, defaults)
+  ([#222](https://github.com/hyperscaleav/omniglass/issues/222)). Routes stay flat and unchanged
+  (`/secrets`, `/variables`, `/config`, `/nodes`, the new `/settings` stub), so only the grouping and
+  labels move; this supersedes the earlier same-day plan to move those values into Catalog
+  ([decision log](/architecture/decisions/)). Proven by `nav.test.ts` (the Inventory and Values group
+  order and labels, Admin's renamed label and its soon-stub surviving for both an owner and a bare
+  `*:read` viewer, the moved entries keeping their existing gates) and a `Sidebar.test.tsx` render
+  test (the Inventory and Values groups actually render in the expanded submenu).
+- **Console: the Types catalog page.** The UI follow-up to the type registry CRUD API above:
+  **[Catalog > Types](/guides/admin/types/)** (`/types`) is a **segmented tab control** over all four
+  classifier registries (`location_type`, `system_type`, `component_type`, `secret_type`), the first catalog
+  page to span several registries in one page rather than a directory per primitive. Each tab (Location,
+  System, Component, Secret) renders its own `FlatList` directory scoped to that kind's rows, so the tab is
+  the facet: no cross-kind table and no kind filter to type in. Name and official/custom still narrow the
+  active tab, and rows are addressed `<kind>:<id>` on the shared blade stack since an id is unique only
+  within its own kind. The create drawer opens scoped to the active tab when it is a writable kind (location,
+  system, component); an **official** (seed-owned) row and every row on the Secret tab render with neither
+  Edit nor Delete, the Secret tab instead showing each row's declared fields (name, scalar type, secrecy,
+  origin) read-only, with a note that the fields-schema editor is a follow-up. The page reuses the shell
+  built for the identity surfaces (`FlatList`, `BladeStack`, the blade edit contract) rather than a bespoke
+  layout, so a fifth classifier registry is a `TYPE_KINDS` entry and a route, not a new page shape. Proven by
+  a web data-layer unit suite (`lib/types.ts`): the four-registry aggregation tags each row's kind, a
+  location row carries its icon and a secret row its fields, and create/update/delete each refuse the
+  `secret` kind without a network call. Deferred: the `secret_type` fields-schema editor (noted above) and a
+  page-level component test of the blade CRUD flow.
