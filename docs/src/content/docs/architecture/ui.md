@@ -102,9 +102,9 @@ Which high-frequency surfaces move from polling to the SSE relay, and what laten
 
 CRUD forms over the typed resource API, one per primitive (components, templates, types, tags,
 rules, config, groups, schedules, severity levels, and the IAM resources). **Types** is the
-first of these to read as one directory across several registries rather than one per primitive:
-a kind facet over the location, system, component, and secret type registries, CRUD on the three
-writable kinds, and a read-only view of the fourth ([implementation
+first of these to span several registries rather than one per primitive: a segmented tab per
+kind (location, system, component, secret), each tab its own directory over that registry, CRUD
+on the three writable kinds, and a read-only view of the fourth ([implementation
 status](/architecture/status/#build-progress)). Editing a setting is editing
 **[config](/architecture/variables/)**, an audited mutation, not a separate prop store
 ([audit](/architecture/audit/)). The standout is the **rule-authoring
