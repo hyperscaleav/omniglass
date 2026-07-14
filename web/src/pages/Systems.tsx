@@ -230,6 +230,7 @@ export default function Systems() {
                     />
                     <Button
                       square
+                      size="md"
                       icon={Search}
                       label="Check name"
                       title="Check availability"

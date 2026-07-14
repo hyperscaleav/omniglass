@@ -241,6 +241,7 @@ export default function Components() {
                     />
                     <Button
                       square
+                      size="md"
                       icon={Search}
                       label="Check name"
                       title="Check availability"
