@@ -41,7 +41,14 @@ var scopedEntities = []scopedEntity{
 }
 
 func (e scopedEntity) createBody(name, parent string) map[string]any {
-	b := map[string]any{"name": name, e.typeField: e.typeValue}
+	// location alone is placement-constrained (allowed_parent_types): a child
+	// needs a type compatible with a campus parent, since only the tree shape
+	// matters to this matrix, not the real-world type semantics.
+	typeValue := e.typeValue
+	if e.resource == "location" && parent != "" {
+		typeValue = "building"
+	}
+	b := map[string]any{"name": name, e.typeField: typeValue}
 	if parent != "" {
 		b["parent"] = parent
 	}
