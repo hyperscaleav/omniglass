@@ -25,6 +25,11 @@ export type LocationType = {
   // icon; resolveIcon falls back to map-pin for an unknown key.
   icon: string;
   official: boolean;
+  // The placement constraint: a set of location_type ids and/or the reserved
+  // "root" sentinel (lib/types.ts's ROOT_PLACEMENT) this type may be placed
+  // under. Empty means unconstrained. Drives the reparent picker's candidate
+  // filter on the location detail form.
+  allowed_parent_types: string[];
 };
 
 export const LOCATION_TYPES_KEY = ["types", "location"] as const;
@@ -63,6 +68,10 @@ export async function createLocation(body: CreateLocation): Promise<Location> {
 export type UpdateLocation = {
   display_name?: string;
   location_type?: string;
+  // Re-parents the location (a tree move) to this location name. Omit to leave
+  // the parent unchanged; moving to root (no parent) is not supported this
+  // slice (mirrors storage.LocationPatch.ParentName).
+  parent?: string;
 };
 
 export async function updateLocation(name: string, body: UpdateLocation): Promise<Location> {

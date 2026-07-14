@@ -1,4 +1,4 @@
-import { For, Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
+import { For, Show, createEffect, createMemo, createSignal, createUniqueId, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { useNavigate, useParams } from "@solidjs/router";
 import TreeList, { type ListConfig, type ListCtx, type ListNode, type PageDescriptor, type Widget } from "../components/TreeList";
@@ -22,6 +22,8 @@ import { describeError } from "../lib/format";
 import { openInEdit, consumePendingEdit } from "../lib/pendingedit";
 import { ChevronRight, Pencil, Plus, Save, X, resolveIcon } from "../components/icons";
 import Button from "../components/Button";
+import InfoTip from "../components/InfoTip";
+import { ROOT_PLACEMENT } from "../lib/types";
 
 // Locations: the place tree on the generic TreeList (campuses, buildings, floors,
 // rooms). The same config-driven shell every inventory page uses: embedded filter,
@@ -215,13 +217,46 @@ export default function Locations() {
     const kids = () => n().children;
     const canUpdate = () => can(me.data, "location", "update");
 
+    // The reparent picker's candidate list, narrowed to the location's own
+    // (stored, not live-edited) type's allowed_parent_types; empty means
+    // unconstrained. Filtering on the stored type rather than the in-progress
+    // `type()` edit avoids a picker that silently invalidates itself if the
+    // operator changes Location type and Parent in the same edit; a mismatch
+    // between the two is still caught server-side (validatePlacement uses the
+    // final, possibly-also-patched type) and surfaces through saveErr below,
+    // exactly like every other placement violation this slice.
+    const allowedParentTypes = () => locationTypes.data?.find((t) => t.id === n().raw.location_type)?.allowed_parent_types ?? [];
+    const parentCandidates = createMemo(() => {
+      const allowed = allowedParentTypes();
+      const pool = allowed.length === 0 ? (locations.data ?? []) : (locations.data ?? []).filter((l) => allowed.includes(l.location_type));
+      return pool.map((l) => ({ id: l.id, value: l.name, label: l.display_name || l.name, parentId: l.parent_id, rank: TYPE_RANK[l.location_type] ?? 9 }));
+    });
+    const parentTypeLabel = (id: string) => (id === ROOT_PLACEMENT ? "Root" : locationTypes.data?.find((t) => t.id === id)?.display_name ?? id);
+    const parentHint = () =>
+      allowedParentTypes().length
+        ? `Restricted to: ${allowedParentTypes().map(parentTypeLabel).join(", ")}. Moving back to root is not supported here.`
+        : "Any location may be the parent (unconstrained). Moving back to root is not supported here.";
+
     const [display, setDisplay] = createSignal(n().raw.display_name ?? "");
     const [type, setType] = createSignal(n().raw.location_type ?? "");
     const [saveErr, setSaveErr] = createSignal<string | null>(null);
+    // The reparent picker: parentName is the field's live value, seeded from the
+    // current parent's name each time edit begins; initialParentName is the same
+    // seed, kept static for the whole edit session so save() can tell "the
+    // operator actually changed this" from "unchanged, omit from the patch."
+    const [parentName, setParentName] = createSignal("");
+    const [initialParentName, setInitialParentName] = createSignal("");
+    const parentFieldId = createUniqueId();
     // Seed the inputs from the node each time edit begins (this also reverts a Cancel,
     // since Cancel exits edit and the next begin re-seeds).
     createEffect(on(editing, (isEditing) => {
-      if (isEditing) { setDisplay(n().raw.display_name ?? ""); setType(n().raw.location_type ?? ""); }
+      if (isEditing) {
+        setDisplay(n().raw.display_name ?? "");
+        setType(n().raw.location_type ?? "");
+        const seed = parent()?.raw.name ?? "";
+        setParentName(seed);
+        setInitialParentName(seed);
+      }
     }));
     // Consume a pending "open in edit" handoff (from create or the row pencil) once
     // the node has resolved.
@@ -232,7 +267,12 @@ export default function Locations() {
       save: async () => {
         setSaveErr(null);
         try {
-          await updateLocation(n().raw.name, { display_name: display() || undefined, location_type: type() || undefined });
+          const movedParent = parentName() !== initialParentName() ? parentName() : undefined;
+          await updateLocation(n().raw.name, {
+            display_name: display() || undefined,
+            location_type: type() || undefined,
+            ...(movedParent ? { parent: movedParent } : {}),
+          });
           await qc.invalidateQueries({ queryKey: LOCATIONS_KEY });
         } catch (e) {
           setSaveErr(describeError(e));
@@ -290,7 +330,25 @@ export default function Locations() {
         <div class="flex flex-col gap-1.5">
           <span class="eyebrow">Placement</span>
           <div class="grid grid-cols-2 gap-5">
-            {ctx.fact("Parent", parent() ? <button class="link text-sm" onClick={() => ctx.go(parent()!)}>{parent()!.display}</button> : <span class="text-base-content/50">Root</span>)}
+            <Show
+              when={editing()}
+              fallback={ctx.fact("Parent", parent() ? <button class="link text-sm" onClick={() => ctx.go(parent()!)}>{parent()!.display}</button> : <span class="text-base-content/50">Root</span>)}
+            >
+              <div class="flex flex-col gap-1.5">
+                <span class="flex items-center gap-1.5">
+                  <label class="eyebrow" for={parentFieldId}>Parent</label>
+                  <InfoTip text={parentHint()} label="Parent" />
+                </span>
+                <TreeSelect
+                  id={parentFieldId}
+                  items={parentCandidates()}
+                  value={parentName()}
+                  onChange={setParentName}
+                  excludeSubtreeOf={n().raw.id}
+                  rootLabel={parent() ? undefined : "Root (current)"}
+                />
+              </div>
+            </Show>
             {ctx.fact("Contains", <span class="tnum text-sm">{kids().length}</span>)}
           </div>
         </div>
