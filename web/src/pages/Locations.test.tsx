@@ -21,14 +21,15 @@ const types: LocationType[] = [
   { id: "building", display_name: "Building", icon: "building", official: true, allowed_parent_types: ["root", "campus"] },
 ];
 
-function mount(path: string) {
+function mount(path: string, extraLocations: Location[] = []) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
-  qc.setQueryData([...LOCATIONS_KEY], [hq, lab, hqB1]);
+  qc.setQueryData([...LOCATIONS_KEY], [hq, lab, hqB1, ...extraLocations]);
   qc.setQueryData([...LOCATION_TYPES_KEY], types);
   qc.setQueryData([...ME_KEY], me);
   qc.setQueryData([...TAGS_KEY], []);
   qc.setQueryData([...entityTagsKey("location", "hq")], []);
   qc.setQueryData([...entityTagsKey("location", "hq-b1")], []);
+  for (const l of extraLocations) qc.setQueryData([...entityTagsKey("location", l.name)], []);
   window.history.pushState({}, "", path);
   return render(() => (
     <QueryClientProvider client={qc}>
@@ -102,6 +103,39 @@ describe("Locations create-as-route", () => {
     expect(select.value).toBe("hq");
     fireEvent.change(select, { target: { value: "lab" } });
     expect(select.value).toBe("lab");
+  });
+
+  it("offers a real non-root parent for a currently-root location and sends the move on save", async () => {
+    // b2 is a building sitting at root (no parent_id), same as hq-b1 started life
+    // per the motivating scenario: an operator creates a building at root, later
+    // adds a campus, then moves the building under it. building's allowed_parent_types
+    // is [root, campus], so the real campus HQ must be offered as a candidate even
+    // though b2 is currently root, not filtered out just because there is no current
+    // parent to compare against.
+    const b2: Location = { id: "l-b2", name: "b2", display_name: "B2", location_type: "building", effective_tags: {} };
+    mount("/locations/b2", [b2]);
+    await waitFor(() => expect(screen.getByText("Technical name")).toBeTruthy());
+    fireEvent.click(screen.getByText("Edit"));
+    const select = (await screen.findByLabelText("Parent")) as HTMLSelectElement;
+    const optionLabels = Array.from(select.options).map((o) => o.textContent?.trim());
+    expect(optionLabels).toContain("HQ");
+    expect(optionLabels).toContain("Root (current)");
+    fireEvent.change(select, { target: { value: "hq" } });
+    expect(select.value).toBe("hq");
+    let captured: unknown;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      const method = req.method;
+      const url = req.url;
+      if (method === "PATCH" && url.includes("/locations/b2")) {
+        captured = JSON.parse(await req.clone().text());
+        return new Response(JSON.stringify({ ...b2, parent_id: "l-hq" }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      throw new Error(`unexpected fetch in this test: ${method} ${url}`);
+    });
+    fireEvent.click(screen.getByText("Save changes"));
+    await waitFor(() => expect(captured).toBeTruthy());
+    expect((captured as { parent?: string }).parent).toBe("hq");
   });
 
   it("saving a rejected move surfaces the 422 through the existing inline alert and stays in edit mode", async () => {
