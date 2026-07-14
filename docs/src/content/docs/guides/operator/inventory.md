@@ -56,20 +56,5 @@ sections ([getting around](/guides/operator/#getting-around)).
 Everything on these pages is already filtered to [your scope](/guides/operator/#what-you-see-is-your-scope):
 you are searching within the subtree your grants reach, not the whole estate.
 
-## Files
-
-**Files** (under Inventory) is the fourth directory, and it uses the same filter, columns, and list
-controls, so it feels the same to browse. It is where you keep the **opaque bytes** that go with an
-estate, a firmware image, a config dump, a runbook, a packet capture, each as a searchable **file**
-handle over a deduplicated, content-addressed store ([files and blobs](/architecture/files/)). Two
-things differ from the estate pages:
-
-- It is **flat**, not a tree, and tenant-wide rather than scoped to a subtree, so there is no summary
-  board and no parent.
-- You **upload** rather than fill a form: **New file** opens a drawer with a file picker (the name and
-  content type default from the file you choose), and each row's detail offers **Download** and
-  **Delete**. Identical bytes uploaded twice are stored once.
-
-A file can be marked **Sensitive** (shown by a badge). A sensitive file, a competitive quote or a
-config with internal detail, is visible only to the admin tier; ordinary files are shared with anyone
-who can read files. Marking one sensitive, and seeing one, needs that tier.
+The **[Files](/guides/admin/files/)** directory (under Values) uses these same filter, column, and list
+controls, but it holds uploaded content, not the estate, so it is covered separately.

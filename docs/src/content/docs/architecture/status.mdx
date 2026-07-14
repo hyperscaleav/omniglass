@@ -973,7 +973,7 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   and a non-disclosing 404 to a non-admin reader, admin-only to create), defaulting **off** and leaving `file`
   off the sensitive-resource set so the viewer floor reads ordinary files. Files carry **no placement scope** (a
   file is tenant-wide; its 1:many locality is a future attachment, not an owner arc). The generated CLI (a `file`
-  command group) and typed client follow from the Huma structs, and the **Files directory** ships under Inventory
+  command group) and typed client follow from the Huma structs, and the **Files directory** ships under Values
   (upload, download, delete, a sensitive badge). Proven by the pure blob and file-validation unit tests, the
   **pgblobs testcontainer** round-trip and dedup gate (the capability-wrapping close), the gateway integration
   tests (round-trip, dedup, delete-leaves-blob, the sensitive gate), and a real-binary API e2e (upload to
