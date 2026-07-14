@@ -1417,7 +1417,7 @@ export interface paths {
         };
         /**
          * List component types
-         * @description Lists the component_type registry, ordered by rank. Populates the type picker on the component form. Gated by type:read.
+         * @description Lists the component_type registry, ordered alphabetically by display name. Populates the type picker on the component form. Gated by type:read.
          */
         get: operations["list-component-types"];
         put?: never;
@@ -1451,7 +1451,7 @@ export interface paths {
         head?: never;
         /**
          * Update a component type
-         * @description Patches a custom component_type's display_name or rank. Official types are read-only (422). Gated by type:update.
+         * @description Patches a custom component_type's display_name. Official types are read-only (422). Gated by type:update.
          */
         patch: operations["update-component-type"];
         trace?: never;
@@ -1465,7 +1465,7 @@ export interface paths {
         };
         /**
          * List location types
-         * @description Lists the location_type registry (the shape-definers a location is classified by), ordered by rank. Populates the type picker on the location form. Gated by type:read.
+         * @description Lists the location_type registry (the shape-definers a location is classified by), ordered alphabetically by display name. Populates the type picker on the location form. Gated by type:read.
          */
         get: operations["list-location-types"];
         put?: never;
@@ -1499,7 +1499,7 @@ export interface paths {
         head?: never;
         /**
          * Update a location type
-         * @description Patches a custom location_type's display_name, rank, or icon. Official types are read-only (422). Gated by type:update.
+         * @description Patches a custom location_type's display_name or icon. Official types are read-only (422). Gated by type:update.
          */
         patch: operations["update-location-type"];
         trace?: never;
@@ -1533,7 +1533,7 @@ export interface paths {
         };
         /**
          * List system types
-         * @description Lists the system_type registry, ordered by rank. Populates the type picker on the system form. Gated by type:read.
+         * @description Lists the system_type registry, ordered alphabetically by display name. Populates the type picker on the system form. Gated by type:read.
          */
         get: operations["list-system-types"];
         put?: never;
@@ -1567,7 +1567,7 @@ export interface paths {
         head?: never;
         /**
          * Update a system type
-         * @description Patches a custom system_type's display_name or rank. Official types are read-only (422). Gated by type:update.
+         * @description Patches a custom system_type's display_name. Official types are read-only (422). Gated by type:update.
          */
         patch: operations["update-system-type"];
         trace?: never;
@@ -1716,8 +1716,6 @@ export interface components {
             display_name: string;
             id: string;
             official: boolean;
-            /** Format: int64 */
-            rank: number;
         };
         CreateComponentInputBody: {
             /**
@@ -1748,11 +1746,6 @@ export interface components {
             display_name: string;
             /** @description Globally unique type id */
             id: string;
-            /**
-             * Format: int64
-             * @description Ordering rank; lower sorts first
-             */
-            rank?: number;
         };
         CreateGrantInputBody: {
             /**
@@ -1837,11 +1830,6 @@ export interface components {
             icon?: string;
             /** @description Globally unique type id (kebab, e.g. wing) */
             id: string;
-            /**
-             * Format: int64
-             * @description Ordering rank; lower sorts first
-             */
-            rank?: number;
         };
         CreateMeTokenInputBody: {
             /**
@@ -1941,11 +1929,6 @@ export interface components {
             display_name: string;
             /** @description Globally unique type id */
             id: string;
-            /**
-             * Format: int64
-             * @description Ordering rank; lower sorts first
-             */
-            rank?: number;
         };
         CreateTagInputBody: {
             /**
@@ -2377,8 +2360,6 @@ export interface components {
             icon: string;
             id: string;
             official: boolean;
-            /** Format: int64 */
-            rank: number;
         };
         LoginInputBody: {
             /**
@@ -2706,8 +2687,6 @@ export interface components {
             display_name: string;
             id: string;
             official: boolean;
-            /** Format: int64 */
-            rank: number;
         };
         TagBindingBody: {
             /**
@@ -2765,8 +2744,6 @@ export interface components {
              */
             readonly $schema?: string;
             display_name?: string;
-            /** Format: int64 */
-            rank?: number;
         };
         UpdateGroupInputBody: {
             /**
@@ -2801,8 +2778,6 @@ export interface components {
             readonly $schema?: string;
             display_name?: string;
             icon?: string;
-            /** Format: int64 */
-            rank?: number;
         };
         UpdateMeInputBody: {
             /**
@@ -2858,8 +2833,6 @@ export interface components {
              */
             readonly $schema?: string;
             display_name?: string;
-            /** Format: int64 */
-            rank?: number;
         };
         UpdateTagInputBody: {
             /**
