@@ -217,6 +217,7 @@ export default function Locations() {
 
     const [display, setDisplay] = createSignal(n().raw.display_name ?? "");
     const [type, setType] = createSignal(n().raw.location_type ?? "");
+    const [saveErr, setSaveErr] = createSignal<string | null>(null);
     // Seed the inputs from the node each time edit begins (this also reverts a Cancel,
     // since Cancel exits edit and the next begin re-seeds).
     createEffect(on(editing, (isEditing) => {
@@ -224,13 +225,19 @@ export default function Locations() {
     }));
     // Consume a pending "open in edit" handoff (from create or the row pencil) once
     // the node has resolved.
-    createEffect(on(() => n().raw.name, (name) => { if (name && consumePendingEdit(name)) edit?.begin(); }));
+    createEffect(on(() => n().raw.name, (name) => { if (name && consumePendingEdit(name) && canUpdate()) edit?.begin(); }));
 
     edit?.bind({
       editable: canUpdate,
       save: async () => {
-        await updateLocation(n().raw.name, { display_name: display() || undefined, location_type: type() || undefined });
-        await qc.invalidateQueries({ queryKey: LOCATIONS_KEY });
+        setSaveErr(null);
+        try {
+          await updateLocation(n().raw.name, { display_name: display() || undefined, location_type: type() || undefined });
+          await qc.invalidateQueries({ queryKey: LOCATIONS_KEY });
+        } catch (e) {
+          setSaveErr(describeError(e));
+          throw e; // keep the slot in edit mode so the operator can retry
+        }
       },
       destructive: () =>
         can(me.data, "location", "delete")
@@ -240,6 +247,7 @@ export default function Locations() {
 
     return (
       <div class="flex flex-col gap-5">
+        <Show when={saveErr()}><div role="alert" class="alert alert-error alert-soft text-sm"><span>{saveErr()}</span></div></Show>
         <Show when={!ctx.full && path().length}>
           <div class="flex flex-wrap items-center gap-1 text-[11.5px]">
             <For each={path()}>
@@ -328,7 +336,7 @@ export default function Locations() {
             >
               <span class="flex-1" />
               <Button icon={X} onClick={() => edit!.cancel()}>Cancel</Button>
-              <Button type="button" intent="action" icon={Save} disabled={edit!.saving()} onClick={() => edit!.save()}>Save changes</Button>
+              <Button type="button" intent="action" icon={Save} disabled={edit!.saving()} onClick={() => { void edit!.save().catch(() => {}); }}>Save changes</Button>
             </Show>
           </div>
         </Show>

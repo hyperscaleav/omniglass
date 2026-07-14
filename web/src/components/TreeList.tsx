@@ -636,7 +636,14 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
         </Show>
         <h1 class="text-2xl font-semibold tracking-tight">{props2.node.display}</h1>
       </div>
-      <div class="card border border-base-300 bg-base-200 og-pad">{cfg.renderDetail(props2.node, { ...ctxFull, edit })}</div>
+      <div class="card border border-base-300 bg-base-200 og-pad">
+        {/* Wrap in a Show so the detail body mounts once per full-page visit and is not
+            re-executed (which would discard unsaved edit-mode input state) when a
+            background list refetch swaps props2.node for a fresh object; Show dedupes on
+            truthiness, so the callback runs once while the node stays present. The detail
+            re-reads live data through ctx.byId. Mirrors the blade path (EntityBladeBody). */}
+        <Show when={props2.node}>{(node) => cfg.renderDetail(node(), { ...ctxFull, edit })}</Show>
+      </div>
     </section>
     );
   };
