@@ -52,9 +52,9 @@ const ProtectedShell: ParentComponent = (props) => (
 
 // Stubbed sections: backends not built yet. The design draws them as stubs too.
 const STUBS = [
-  "/dashboards", "/alarms", "/interfaces", "/nodes", "/tasks",
+  "/dashboards", "/alarms", "/nodes",
   "/templates", "/rules", "/explore", "/learn",
-  "/config",
+  "/config", "/settings",
 ];
 
 render(

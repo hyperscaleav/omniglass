@@ -28,7 +28,7 @@ There are two ways to operate, and they are the same API with the same checks be
 ## Getting around
 
 - The **sidebar** is the information architecture: sections grouped into Inventory, Catalog,
-  and Settings. A live section is full strength; a section whose backend has not landed yet
+  and Admin. A live section is full strength; a section whose backend has not landed yet
   is dimmed with a **soon** tag (still clickable, with a short note on what it will do).
 - The **top bar** shows the current section, a **Search (⌘K)** button, and the light/dark
   toggle.
