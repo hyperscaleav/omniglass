@@ -460,6 +460,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/components:checkName": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check a component technical name
+         * @description Reports whether a proposed technical name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by component:update.
+         */
+        post: operations["check-component-name"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/files": {
         parameters: {
             query?: never;
@@ -654,6 +674,26 @@ export interface paths {
          * @description Binds a value for a key on a location. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by location:update.
          */
         post: operations["set-location-tag"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/locations:checkName": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check a location technical name
+         * @description Reports whether a proposed technical name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by location:update.
+         */
+        post: operations["check-location-name"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1368,6 +1408,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/systems:checkName": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check a system technical name
+         * @description Reports whether a proposed technical name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by system:update.
+         */
+        post: operations["check-system-name"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/tags": {
         parameters: {
             query?: never;
@@ -1753,6 +1813,30 @@ export interface components {
             /** @description The new password (at least 12 characters, not a common password, not containing the username) */
             new_password: string;
         };
+        CheckNameInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CheckNameInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The proposed technical name to check */
+            name: string;
+        };
+        CheckNameOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CheckNameOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Whether the name is free (scope-blind, matches the global unique constraint) */
+            available: boolean;
+            /** @description Human explanation when not valid or not available */
+            reason?: string;
+            /** @description Whether the name matches the slug rule */
+            valid: boolean;
+        };
         ComponentBody: {
             /**
              * Format: uri
@@ -1797,7 +1881,7 @@ export interface components {
             display_name?: string;
             /** @description Location name this component is placed at */
             location?: string;
-            /** @description Globally unique name (the address) */
+            /** @description Globally unique name (the address; lowercase letters, digits, hyphens) */
             name: string;
             /** @description Parent component name; omit for a root component */
             parent?: string;
@@ -1897,7 +1981,7 @@ export interface components {
             display_name?: string;
             /** @description A location_type id (campus, building, ...) */
             location_type: string;
-            /** @description Globally unique name (the address) */
+            /** @description Globally unique name (the address; lowercase letters, digits, hyphens) */
             name: string;
             /** @description Parent location name; omit for a root location */
             parent?: string;
@@ -1996,7 +2080,7 @@ export interface components {
             display_name?: string;
             /** @description Location name this system is placed at */
             location?: string;
-            /** @description Globally unique name (the address) */
+            /** @description Globally unique name (the address; lowercase letters, digits, hyphens) */
             name: string;
             /** @description Parent system name; omit for a root system */
             parent?: string;
@@ -2858,6 +2942,8 @@ export interface components {
             readonly $schema?: string;
             component_type?: string;
             display_name?: string;
+            /** @description A new globally unique technical name (rename) */
+            name?: string;
         };
         UpdateComponentTypeInputBody: {
             /**
@@ -2891,6 +2977,8 @@ export interface components {
             readonly $schema?: string;
             display_name?: string;
             location_type?: string;
+            /** @description A new globally unique technical name (rename) */
+            name?: string;
         };
         UpdateLocationTypeInputBody: {
             /**
@@ -2946,6 +3034,8 @@ export interface components {
              */
             readonly $schema?: string;
             display_name?: string;
+            /** @description A new globally unique technical name (rename) */
+            name?: string;
             system_type?: string;
         };
         UpdateSystemTypeInputBody: {
@@ -3878,6 +3968,39 @@ export interface operations {
             };
         };
     };
+    "check-component-name": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CheckNameInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckNameOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "list-files": {
         parameters: {
             query?: never;
@@ -4311,6 +4434,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TagBindingBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "check-location-name": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CheckNameInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckNameOutputBody"];
                 };
             };
             /** @description Error */
@@ -5878,6 +6034,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TagBindingBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "check-system-name": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CheckNameInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckNameOutputBody"];
                 };
             };
             /** @description Error */

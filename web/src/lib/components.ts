@@ -46,6 +46,7 @@ export async function createComponent(body: CreateComponent): Promise<Component>
 }
 
 export type UpdateComponent = {
+  name?: string;
   display_name?: string;
   component_type?: string;
 };
@@ -54,6 +55,14 @@ export async function updateComponent(name: string, body: UpdateComponent): Prom
   const { data, error } = await api.PATCH("/components/{name}", { params: { path: { name } }, body });
   if (error) throw error;
   return data as Component;
+}
+
+export type NameCheck = { valid: boolean; available: boolean; reason?: string };
+
+export async function checkComponentName(name: string): Promise<NameCheck> {
+  const { data, error } = await api.POST("/components:checkName", { body: { name } });
+  if (error) throw error;
+  return data as NameCheck;
 }
 
 export async function deleteComponent(name: string): Promise<void> {

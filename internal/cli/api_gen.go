@@ -208,6 +208,27 @@ func generatedCommands() []*cobra.Command {
 			Short: "Commands for the component resource",
 		}
 		parent.AddCommand(func() *cobra.Command {
+			var fName string
+			cmd := &cobra.Command{
+				Use:     "checkName",
+				Short:   "Check a component technical name",
+				Long:    "Reports whether a proposed technical name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by component:update.",
+				Example: "  omniglass component checkName --name name",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/components:checkName")
+					body := map[string]any{}
+					if cmd.Flags().Changed("name") {
+						body["name"] = fName
+					}
+					return runAPICommand(cmd, "POST", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fName, "name", "", "The proposed technical name to check")
+			_ = cmd.MarkFlagRequired("name")
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
 			var fComponentType string
 			var fDisplayName string
 			var fLocation string
@@ -248,7 +269,7 @@ func generatedCommands() []*cobra.Command {
 			_ = cmd.MarkFlagRequired("component-type")
 			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
 			cmd.Flags().StringVar(&fLocation, "location", "", "Location name this component is placed at")
-			cmd.Flags().StringVar(&fName, "name", "", "Globally unique name (the address)")
+			cmd.Flags().StringVar(&fName, "name", "", "Globally unique name (the address; lowercase letters, digits, hyphens)")
 			_ = cmd.MarkFlagRequired("name")
 			cmd.Flags().StringVar(&fParent, "parent", "", "Parent component name; omit for a root component")
 			cmd.Flags().StringVar(&fSystem, "system", "", "Primary system name this component belongs to")
@@ -361,6 +382,7 @@ func generatedCommands() []*cobra.Command {
 		parent.AddCommand(func() *cobra.Command {
 			var fComponentType string
 			var fDisplayName string
+			var fName string
 			cmd := &cobra.Command{
 				Use:     "update <name>",
 				Short:   "Update a component",
@@ -376,11 +398,15 @@ func generatedCommands() []*cobra.Command {
 					if cmd.Flags().Changed("display-name") {
 						body["display_name"] = fDisplayName
 					}
+					if cmd.Flags().Changed("name") {
+						body["name"] = fName
+					}
 					return runAPICommand(cmd, "PATCH", path, body)
 				},
 			}
 			cmd.Flags().StringVar(&fComponentType, "component-type", "", "")
 			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
+			cmd.Flags().StringVar(&fName, "name", "", "A new globally unique technical name (rename)")
 			return cmd
 		}())
 		roots = append(roots, parent)
@@ -678,6 +704,27 @@ func generatedCommands() []*cobra.Command {
 			Short: "Commands for the location resource",
 		}
 		parent.AddCommand(func() *cobra.Command {
+			var fName string
+			cmd := &cobra.Command{
+				Use:     "checkName",
+				Short:   "Check a location technical name",
+				Long:    "Reports whether a proposed technical name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by location:update.",
+				Example: "  omniglass location checkName --name name",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/locations:checkName")
+					body := map[string]any{}
+					if cmd.Flags().Changed("name") {
+						body["name"] = fName
+					}
+					return runAPICommand(cmd, "POST", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fName, "name", "", "The proposed technical name to check")
+			_ = cmd.MarkFlagRequired("name")
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
 			var fDisplayName string
 			var fLocationType string
 			var fName string
@@ -709,7 +756,7 @@ func generatedCommands() []*cobra.Command {
 			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
 			cmd.Flags().StringVar(&fLocationType, "location-type", "", "A location_type id (campus, building, ...)")
 			_ = cmd.MarkFlagRequired("location-type")
-			cmd.Flags().StringVar(&fName, "name", "", "Globally unique name (the address)")
+			cmd.Flags().StringVar(&fName, "name", "", "Globally unique name (the address; lowercase letters, digits, hyphens)")
 			_ = cmd.MarkFlagRequired("name")
 			cmd.Flags().StringVar(&fParent, "parent", "", "Parent location name; omit for a root location")
 			return cmd
@@ -821,6 +868,7 @@ func generatedCommands() []*cobra.Command {
 		parent.AddCommand(func() *cobra.Command {
 			var fDisplayName string
 			var fLocationType string
+			var fName string
 			cmd := &cobra.Command{
 				Use:     "update <name>",
 				Short:   "Update a location",
@@ -836,11 +884,15 @@ func generatedCommands() []*cobra.Command {
 					if cmd.Flags().Changed("location-type") {
 						body["location_type"] = fLocationType
 					}
+					if cmd.Flags().Changed("name") {
+						body["name"] = fName
+					}
 					return runAPICommand(cmd, "PATCH", path, body)
 				},
 			}
 			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
 			cmd.Flags().StringVar(&fLocationType, "location-type", "", "")
+			cmd.Flags().StringVar(&fName, "name", "", "A new globally unique technical name (rename)")
 			return cmd
 		}())
 		roots = append(roots, parent)
@@ -1675,6 +1727,27 @@ func generatedCommands() []*cobra.Command {
 			Short: "Commands for the system resource",
 		}
 		parent.AddCommand(func() *cobra.Command {
+			var fName string
+			cmd := &cobra.Command{
+				Use:     "checkName",
+				Short:   "Check a system technical name",
+				Long:    "Reports whether a proposed technical name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by system:update.",
+				Example: "  omniglass system checkName --name name",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/systems:checkName")
+					body := map[string]any{}
+					if cmd.Flags().Changed("name") {
+						body["name"] = fName
+					}
+					return runAPICommand(cmd, "POST", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fName, "name", "", "The proposed technical name to check")
+			_ = cmd.MarkFlagRequired("name")
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
 			var fDisplayName string
 			var fLocation string
 			var fName string
@@ -1709,7 +1782,7 @@ func generatedCommands() []*cobra.Command {
 			}
 			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
 			cmd.Flags().StringVar(&fLocation, "location", "", "Location name this system is placed at")
-			cmd.Flags().StringVar(&fName, "name", "", "Globally unique name (the address)")
+			cmd.Flags().StringVar(&fName, "name", "", "Globally unique name (the address; lowercase letters, digits, hyphens)")
 			_ = cmd.MarkFlagRequired("name")
 			cmd.Flags().StringVar(&fParent, "parent", "", "Parent system name; omit for a root system")
 			cmd.Flags().StringVar(&fSystemType, "system-type", "", "A system_type id")
@@ -1822,6 +1895,7 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			var fDisplayName string
+			var fName string
 			var fSystemType string
 			cmd := &cobra.Command{
 				Use:     "update <name>",
@@ -1835,6 +1909,9 @@ func generatedCommands() []*cobra.Command {
 					if cmd.Flags().Changed("display-name") {
 						body["display_name"] = fDisplayName
 					}
+					if cmd.Flags().Changed("name") {
+						body["name"] = fName
+					}
 					if cmd.Flags().Changed("system-type") {
 						body["system_type"] = fSystemType
 					}
@@ -1842,6 +1919,7 @@ func generatedCommands() []*cobra.Command {
 				},
 			}
 			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
+			cmd.Flags().StringVar(&fName, "name", "", "A new globally unique technical name (rename)")
 			cmd.Flags().StringVar(&fSystemType, "system-type", "", "")
 			return cmd
 		}())

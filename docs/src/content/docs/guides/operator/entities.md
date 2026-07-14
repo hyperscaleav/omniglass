@@ -43,12 +43,16 @@ user's is **Disable / Enable**), each behind a confirm. Secondary actions like *
 ## Create, edit, delete
 
 - **New** opens a **draft** at the entity's own `/create` address (a form for name, type,
-  placement, and where applicable a parent). The name is the entity's permanent address.
-  **Create** commits it and drops you straight into the new entity's detail in **edit mode**,
-  so you can tag it and finish configuring in place instead of hunting for it back in the list.
-  Bindings like tags need the entity to exist, so they unlock the moment it is created.
+  placement, and where applicable a parent). The name is the entity's address: lowercase
+  letters, digits, and hyphens (it can be changed later, see Edit). **Create** commits it and
+  drops you straight into the new entity's detail in **edit mode**, so you can tag it and finish
+  configuring in place instead of hunting for it back in the list. Bindings like tags need the
+  entity to exist, so they unlock the moment it is created.
 - **Edit** (the pencil on a row, or the button in the detail) flips that same detail into edit
-  mode: the fields become inputs and the tag editor goes live, while the address and placement
-  stay fixed. **Save** commits the field changes, **Cancel** discards them. In **view** the
-  detail is read-only, so tags and other bindings are shown but not editable until you enter edit.
+  mode: the fields become inputs and the tag editor goes live. The **technical name** (the
+  address) is editable here too, with an inline **Check** button that reports whether a proposed
+  name is a valid slug and still free before you save; renaming changes the entity's URL, and
+  existing links to the old name stop resolving. Placement stays fixed. **Save** commits the
+  changes, **Cancel** discards them. In **view** the detail is read-only, so tags and other
+  bindings are shown but not editable until you enter edit.
 - **Delete** removes it, with a confirm. These actions appear only if your grants allow them.

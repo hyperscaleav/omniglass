@@ -116,6 +116,45 @@ components:
         - current_password
         - new_password
       type: object
+    CheckNameInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CheckNameInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        name:
+          description: The proposed technical name to check
+          type: string
+      required:
+        - name
+      type: object
+    CheckNameOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CheckNameOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        available:
+          description: Whether the name is free (scope-blind, matches the global unique constraint)
+          type: boolean
+        reason:
+          description: Human explanation when not valid or not available
+          type: string
+        valid:
+          description: Whether the name matches the slug rule
+          type: boolean
+      required:
+        - valid
+        - available
+      type: object
     ComponentBody:
       additionalProperties: false
       properties:
@@ -198,8 +237,10 @@ components:
           description: Location name this component is placed at
           type: string
         name:
-          description: Globally unique name (the address)
+          description: Globally unique name (the address; lowercase letters, digits, hyphens)
+          maxLength: 100
           minLength: 1
+          pattern: ^[a-z0-9][a-z0-9-]*$
           type: string
         parent:
           description: Parent component name; omit for a root component
@@ -377,8 +418,10 @@ components:
           minLength: 1
           type: string
         name:
-          description: Globally unique name (the address)
+          description: Globally unique name (the address; lowercase letters, digits, hyphens)
+          maxLength: 100
           minLength: 1
+          pattern: ^[a-z0-9][a-z0-9-]*$
           type: string
         parent:
           description: Parent location name; omit for a root location
@@ -553,8 +596,10 @@ components:
           description: Location name this system is placed at
           type: string
         name:
-          description: Globally unique name (the address)
+          description: Globally unique name (the address; lowercase letters, digits, hyphens)
+          maxLength: 100
           minLength: 1
+          pattern: ^[a-z0-9][a-z0-9-]*$
           type: string
         parent:
           description: Parent system name; omit for a root system
@@ -2200,6 +2245,12 @@ components:
           type: string
         display_name:
           type: string
+        name:
+          description: A new globally unique technical name (rename)
+          maxLength: 100
+          minLength: 1
+          pattern: ^[a-z0-9][a-z0-9-]*$
+          type: string
       type: object
     UpdateComponentTypeInputBody:
       additionalProperties: false
@@ -2252,6 +2303,12 @@ components:
         display_name:
           type: string
         location_type:
+          type: string
+        name:
+          description: A new globally unique technical name (rename)
+          maxLength: 100
+          minLength: 1
+          pattern: ^[a-z0-9][a-z0-9-]*$
           type: string
       type: object
     UpdateLocationTypeInputBody:
@@ -2338,6 +2395,12 @@ components:
           readOnly: true
           type: string
         display_name:
+          type: string
+        name:
+          description: A new globally unique technical name (rename)
+          maxLength: 100
+          minLength: 1
+          pattern: ^[a-z0-9][a-z0-9-]*$
           type: string
         system_type:
           type: string
@@ -3079,6 +3142,30 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Set a tag value on a component
+  /components:checkName:
+    post:
+      description: Reports whether a proposed technical name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by component:update.
+      operationId: check-component-name
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CheckNameInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckNameOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Check a component technical name
   /files:
     get:
       description: Lists the file handles the caller may see (searchable metadata, no bytes). Sensitive files appear only to the admin tier. Gated by file:read.
@@ -3414,6 +3501,30 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Set a tag value on a location
+  /locations:checkName:
+    post:
+      description: Reports whether a proposed technical name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by location:update.
+      operationId: check-location-name
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CheckNameInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckNameOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Check a location technical name
   /principal-groups:
     get:
       description: Every principal group. Gated by principal_group:read:admin.
@@ -4650,6 +4761,30 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Set a tag value on a system
+  /systems:checkName:
+    post:
+      description: Reports whether a proposed technical name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by system:update.
+      operationId: check-system-name
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CheckNameInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckNameOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Check a system technical name
   /tags:
     get:
       description: Lists the governed key vocabulary. Rides the tag:read floor.

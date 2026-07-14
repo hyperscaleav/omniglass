@@ -44,7 +44,7 @@ type componentPathInput struct {
 
 type createComponentInput struct {
 	Body struct {
-		Name          string  `json:"name" minLength:"1" doc:"Globally unique name (the address)"`
+		Name          string  `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"Globally unique name (the address; lowercase letters, digits, hyphens)"`
 		DisplayName   string  `json:"display_name,omitempty"`
 		ComponentType string  `json:"component_type" minLength:"1" doc:"A component_type id"`
 		Parent        *string `json:"parent,omitempty" doc:"Parent component name; omit for a root component"`
@@ -56,6 +56,7 @@ type createComponentInput struct {
 type updateComponentInput struct {
 	Name string `path:"name"`
 	Body struct {
+		Name          *string `json:"name,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"A new globally unique technical name (rename)"`
 		DisplayName   *string `json:"display_name,omitempty"`
 		ComponentType *string `json:"component_type,omitempty"`
 	}
@@ -254,6 +255,7 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Middlewares: huma.Middlewares{a.authn, a.require("component", "update")},
 	}, func(ctx context.Context, in *updateComponentInput) (*componentOutput, error) {
 		c, err := gw.UpdateComponent(ctx, actorID(ctx), in.Name, storage.ComponentPatch{
+			Name:          in.Body.Name,
 			DisplayName:   in.Body.DisplayName,
 			ComponentType: in.Body.ComponentType,
 		}, a.scopeFor(ctx, "component", "read"), a.scopeFor(ctx, "component", "update"))
@@ -261,6 +263,32 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 			return nil, mapComponentErr(err)
 		}
 		return &componentOutput{Body: toComponentBody(c)}, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "check-component-name",
+		Method:      http.MethodPost,
+		Path:        "/components:checkName",
+		Summary:     "Check a component technical name",
+		Description: "Reports whether a proposed technical name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by component:update.",
+		Middlewares: huma.Middlewares{a.authn, a.require("component", "update")},
+	}, func(ctx context.Context, in *checkNameInput) (*checkNameOutput, error) {
+		out := &checkNameOutput{}
+		if err := storage.ValidateEntityName(in.Body.Name); err != nil {
+			out.Body.Valid = false
+			out.Body.Reason = "Use lowercase letters, digits, and hyphens."
+			return out, nil
+		}
+		out.Body.Valid = true
+		taken, err := gw.ComponentNameTaken(ctx, in.Body.Name)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("check component name")
+		}
+		out.Body.Available = !taken
+		if taken {
+			out.Body.Reason = "That name is already taken."
+		}
+		return out, nil
 	})
 
 	huma.Register(api, huma.Operation{
@@ -290,6 +318,8 @@ func mapComponentErr(err error) error {
 		return huma.Error409Conflict("component has child components")
 	case errors.Is(err, storage.ErrComponentExists):
 		return huma.Error409Conflict("component name already exists")
+	case errors.Is(err, storage.ErrInvalidName):
+		return huma.Error422UnprocessableEntity("invalid name")
 	case errors.Is(err, storage.ErrParentComponentNotFound):
 		return huma.Error422UnprocessableEntity("parent component not found")
 	case errors.Is(err, storage.ErrUnknownComponentType):

@@ -46,6 +46,14 @@ Everything lives under `/api/v1`. The path shape is derivable, not special-cased
   `{ purpose }` body, same gate and guard) bulk-ends all of one kind at once, returning the count.
 - **Singular kind sub-segments** for the typed families: `/rules/calc`, `/datapoints/metric`,
   `/types/component`.
+- **Collection-level custom methods** carry the colon on the collection, not a member:
+  `POST /systems:checkName` (also `/components:checkName`, `/locations:checkName`) is an advisory
+  precheck for a technical-name rename, returning `{ valid, available, reason }`. It is gated by
+  `<entity>:update` like a rename, but its availability answer is deliberately **scope-blind**: the
+  `name` uniqueness constraint is global, so a scope-filtered answer would report a name held outside
+  the caller's scope as free and then 409 at save. This is a bounded, documented exception to the
+  ABAC-scope-on-every-query rule (it discloses only that a technical name is taken somewhere, nothing
+  more), not a license to skip scope elsewhere.
 - **A principal is addressable by uuid or username.** Every `/principals/{id}` route (read, update,
   grants, the lifecycle verbs, reset, sessions, impersonate) accepts either the principal's uuid or a human's
   current username, resolved server-side (a value that parses as a uuid is used directly; otherwise it
