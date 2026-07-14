@@ -3,6 +3,7 @@ import type { PageDescriptor } from "../components/TreeList";
 import { componentsDescriptor } from "./Components";
 import { systemsDescriptor } from "./Systems";
 import { locationsDescriptor } from "./Locations";
+import { filesDescriptor } from "./Files";
 
 // The page-config conformance matrix: the analogue of the backend's
 // TestAuthzConformance. Every inventory page exports a PageDescriptor and is added
@@ -13,6 +14,7 @@ const registry: { name: string; d: PageDescriptor }[] = [
   { name: "components", d: componentsDescriptor },
   { name: "systems", d: systemsDescriptor },
   { name: "locations", d: locationsDescriptor },
+  { name: "files", d: filesDescriptor },
 ];
 
 describe("page descriptor matrix", () => {

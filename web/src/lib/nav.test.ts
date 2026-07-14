@@ -37,10 +37,10 @@ describe("filterNav", () => {
     expect(out[0].children!.map((c) => c.label)).toEqual(["Systems"]);
   });
 
-  it("orders the inventory section Components, Systems, Locations, Nodes", () => {
+  it("orders the inventory section Components, Systems, Locations, Nodes, Files", () => {
     const inv = navItems.find((i) => i.label === "Inventory");
     expect(inv?.children?.map((c) => c.label)).toEqual([
-      "Components", "Systems", "Locations", "Nodes",
+      "Components", "Systems", "Locations", "Nodes", "Files",
     ]);
   });
 
@@ -155,7 +155,7 @@ describe("routeTokens", () => {
 
 describe("nav IA rework", () => {
   it("puts the estate entities under Inventory and the operator-set values under Values", () => {
-    expect(section("Inventory", [">"])).toEqual(["Components", "Systems", "Locations", "Nodes"]);
+    expect(section("Inventory", [">"])).toEqual(["Components", "Systems", "Locations", "Nodes", "Files"]);
     expect(section("Values", [">"])).toEqual(["Variables", "Secrets", "Config"]);
   });
 

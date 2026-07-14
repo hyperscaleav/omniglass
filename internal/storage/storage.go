@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/hyperscaleav/omniglass/internal/blob"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/secret"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -283,6 +284,18 @@ type Gateway interface {
 	// caller passes ids already in the read scope (the rowActions batch contract).
 	EffectiveTags(ctx context.Context, kind string, ownerIDs []string) (map[string]map[string]string, error)
 
+	// The file tier: a searchable metadata handle over the content-addressed blob
+	// store. A file has no estate placement (tenant-wide), so these methods take no
+	// scope; canAdmin gates the per-file sensitive flag (the :admin tier), mirroring
+	// the secret sensitivity axis. CreateFile stores the upload as a deduplicated
+	// blob and points the handle at it; DeleteFile drops the handle but leaves the
+	// blob (GC is a later slice).
+	ListFiles(ctx context.Context, canAdmin bool) ([]File, error)
+	GetFile(ctx context.Context, id string, canAdmin bool) (*File, error)
+	CreateFile(ctx context.Context, actorID string, spec FileSpec, canAdmin bool) (*File, error)
+	DownloadFile(ctx context.Context, id string, canAdmin bool) (*File, []byte, error)
+	DeleteFile(ctx context.Context, actorID, id string, canAdmin bool) error
+
 	// Close releases the underlying connection pool. Idempotent at the pool
 	// level; call once on shutdown.
 	Close()
@@ -292,6 +305,7 @@ type Gateway interface {
 type PG struct {
 	pool   *pgxpool.Pool
 	secret secret.Provider
+	blob   blob.Store
 }
 
 // Option configures a PG at construction. The secret provider is optional so
@@ -307,6 +321,13 @@ func WithSecretProvider(prov secret.Provider) Option {
 	return func(p *PG) { p.secret = prov }
 }
 
+// WithBlobStore overrides the default pgblobs backend the file bytes are stored
+// behind (an S3-compatible or disk backend implementing the same blob.Store).
+// Unset, the gateway uses the pgblobs backend over its own pool.
+func WithBlobStore(store blob.Store) Option {
+	return func(p *PG) { p.blob = store }
+}
+
 // NewPG opens a pgx pool against dsn and verifies connectivity once before
 // returning, so a bad DSN or an unreachable database fails fast at boot rather
 // than on the first query.
@@ -319,7 +340,7 @@ func NewPG(ctx context.Context, dsn string, opts ...Option) (*PG, error) {
 		pool.Close()
 		return nil, fmt.Errorf("storage: ping: %w", err)
 	}
-	p := &PG{pool: pool}
+	p := &PG{pool: pool, blob: NewPGBlobStore(pool)}
 	for _, opt := range opts {
 		opt(p)
 	}
