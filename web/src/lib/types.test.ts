@@ -50,7 +50,7 @@ describe("types data layer", () => {
     expect(rows).toHaveLength(4);
 
     const location = rows.find((r) => r.kind === "location");
-    expect(location).toMatchObject({ kind: "location", id: "campus", icon: "building" });
+    expect(location).toMatchObject({ kind: "location", id: "campus", icon: "building", allowed_parent_types: [] });
 
     const system = rows.find((r) => r.kind === "system");
     expect(system).toMatchObject({ kind: "system", id: "kiosk" });
@@ -75,6 +75,16 @@ describe("types data layer", () => {
     expect(req.url).toContain("/api/v1/types/location");
     const sent = await req.json();
     expect(sent).toMatchObject({ id: "wing", display_name: "Wing", icon: "map-pin" });
+  });
+
+  it("creates a location type with allowed_parent_types", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonResponse({ id: "wing", display_name: "Wing", icon: "map-pin", official: false, allowed_parent_types: ["campus"] }, 201),
+    );
+    await createType("location", { id: "wing", display_name: "Wing", icon: "map-pin", allowed_parent_types: ["campus"] });
+    const req = fetchMock.mock.calls[0][0] as Request;
+    const sent = await req.json();
+    expect(sent).toMatchObject({ allowed_parent_types: ["campus"] });
   });
 
   it("rejects creating a secret type without calling fetch", async () => {

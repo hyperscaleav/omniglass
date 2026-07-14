@@ -14,14 +14,20 @@ export const TYPE_KINDS: TypeKind[] = ["location", "system", "component", "secre
 // Only these three are operator-writable; secret_type is read-only this slice.
 export const WRITABLE_KINDS: TypeKind[] = ["location", "system", "component"];
 
-// A normalized registry row across all four kinds. icon is present only on
-// location; fields only on secret (read-only display).
+// ROOT_PLACEMENT is the reserved allowed_parent_types member meaning "may sit
+// at the top, no parent" (mirrors storage.RootPlacement). CreateLocationType
+// refuses this id, so a real type can never collide with it.
+export const ROOT_PLACEMENT = "root";
+
+// A normalized registry row across all four kinds. icon and allowed_parent_types
+// are present only on location; fields only on secret (read-only display).
 export type TypeRow = {
   kind: TypeKind;
   id: string;
   display_name: string;
   official: boolean;
   icon?: string;
+  allowed_parent_types?: string[];
   fields?: SecretTypeField[];
 };
 
@@ -46,6 +52,7 @@ export async function listTypes(): Promise<TypeRow[]> {
     display_name: t.display_name,
     official: t.official,
     icon: t.icon,
+    allowed_parent_types: t.allowed_parent_types ?? [],
   }));
 
   const systemRows: TypeRow[] = (systemRes.data?.system_types ?? []).map((t) => ({
@@ -77,6 +84,7 @@ export type CreateType = {
   id: string;
   display_name: string;
   icon?: string;
+  allowed_parent_types?: string[];
 };
 
 export async function createType(kind: TypeKind, body: CreateType): Promise<void> {
@@ -104,6 +112,7 @@ export async function createType(kind: TypeKind, body: CreateType): Promise<void
 export type UpdateType = {
   display_name?: string;
   icon?: string;
+  allowed_parent_types?: string[];
 };
 
 export async function updateType(kind: TypeKind, id: string, body: UpdateType): Promise<void> {
