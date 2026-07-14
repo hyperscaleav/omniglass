@@ -5,10 +5,12 @@ import TreeList, { type ListConfig, type ListCtx, type ListNode, type PageDescri
 import TreeSelect from "../components/TreeSelect";
 import {
   type Component as Comp,
+  type NameCheck,
   COMPONENTS_KEY,
   listComponents,
   createComponent,
   updateComponent,
+  checkComponentName,
   deleteComponent,
 } from "../lib/components";
 import { SYSTEMS_KEY, listSystems } from "../lib/systems";
@@ -16,7 +18,7 @@ import { LOCATIONS_KEY, listLocations } from "../lib/locations";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { openInEdit, consumePendingEdit } from "../lib/pendingedit";
-import { ChevronRight, Pencil, Plus, Save, X } from "../components/icons";
+import { ChevronRight, Pencil, Plus, Save, Search, X } from "../components/icons";
 import Button from "../components/Button";
 import EffectiveSecrets, { secretCascadeBlade, cascadeBladeId } from "../components/EffectiveSecrets";
 import TagPills from "../components/TagPills";
@@ -145,11 +147,20 @@ export default function Components() {
 
     const [display, setDisplay] = createSignal(n().raw.display_name ?? "");
     const [type, setType] = createSignal(n().raw.component_type ?? "");
+    const [name, setName] = createSignal(n().raw.name);
+    const [nameCheck, setNameCheck] = createSignal<NameCheck | null>(null);
+    const [checking, setChecking] = createSignal(false);
     const [saveErr, setSaveErr] = createSignal<string | null>(null);
+    async function runCheck() {
+      setChecking(true);
+      try { setNameCheck(await checkComponentName(name().trim())); }
+      catch { setNameCheck(null); }
+      finally { setChecking(false); }
+    }
     // Seed the inputs from the node each time edit begins (this also reverts a Cancel,
     // since Cancel exits edit and the next begin re-seeds).
     createEffect(on(editing, (isEditing) => {
-      if (isEditing) { setDisplay(n().raw.display_name ?? ""); setType(n().raw.component_type ?? ""); }
+      if (isEditing) { setDisplay(n().raw.display_name ?? ""); setType(n().raw.component_type ?? ""); setName(n().raw.name); setNameCheck(null); }
     }));
     // Consume a pending "open in edit" handoff (from create or the row pencil) once
     // the node has resolved.
@@ -159,9 +170,15 @@ export default function Components() {
       editable: canUpdate,
       save: async () => {
         setSaveErr(null);
+        const renamed = name().trim() !== n().raw.name;
         try {
-          await updateComponent(n().raw.name, { display_name: display() || undefined, component_type: type() || undefined });
+          await updateComponent(n().raw.name, {
+            name: renamed ? name().trim() : undefined,
+            display_name: display() || undefined,
+            component_type: type() || undefined,
+          });
           await qc.invalidateQueries({ queryKey: COMPONENTS_KEY });
+          if (renamed) navigate(`/components/${encodeURIComponent(name().trim())}`);
         } catch (e) {
           setSaveErr(describeError(e));
           throw e; // keep the slot in edit mode so the operator can retry
@@ -213,7 +230,38 @@ export default function Components() {
                 </>,
                 "A component_type id.",
               )}
-              {ctx.field("Technical name", <input class="input input-bordered w-full font-data" value={n().raw.name} disabled />, "The address is fixed after creation.")}
+              {ctx.field(
+                "Technical name",
+                <>
+                  <div class="join w-full">
+                    <input
+                      class="input input-bordered join-item w-full font-data"
+                      value={name()}
+                      onInput={(e) => { setName(e.currentTarget.value); setNameCheck(null); }}
+                    />
+                    <Button
+                      square
+                      icon={Search}
+                      label="Check name"
+                      title="Check availability"
+                      class="join-item"
+                      disabled={checking() || !name().trim() || name().trim() === n().raw.name}
+                      onClick={() => void runCheck()}
+                    />
+                  </div>
+                  <Show when={nameCheck()}>
+                    {(c) => (
+                      <span
+                        class="text-[11px]"
+                        classList={{ "text-success": c().valid && c().available, "text-error": !c().valid || !c().available }}
+                      >
+                        {!c().valid ? (c().reason ?? "Use lowercase, digits, hyphens.") : c().available ? "Available" : (c().reason ?? "Taken")}
+                      </span>
+                    )}
+                  </Show>
+                </>,
+                "Renaming changes the address; existing links to the old name stop resolving.",
+              )}
             </div>
           </Show>
         </div>

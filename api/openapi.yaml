@@ -237,8 +237,10 @@ components:
           description: Location name this component is placed at
           type: string
         name:
-          description: Globally unique name (the address)
+          description: Globally unique name (the address; lowercase letters, digits, hyphens)
+          maxLength: 100
           minLength: 1
+          pattern: ^[a-z0-9][a-z0-9-]*$
           type: string
         parent:
           description: Parent component name; omit for a root component
@@ -2135,6 +2137,12 @@ components:
           type: string
         display_name:
           type: string
+        name:
+          description: A new globally unique technical name (rename)
+          maxLength: 100
+          minLength: 1
+          pattern: ^[a-z0-9][a-z0-9-]*$
+          type: string
       type: object
     UpdateComponentTypeInputBody:
       additionalProperties: false
@@ -3020,6 +3028,30 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Set a tag value on a component
+  /components:checkName:
+    post:
+      description: Reports whether a proposed technical name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by component:update.
+      operationId: check-component-name
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CheckNameInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckNameOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Check a component technical name
   /healthz:
     get:
       description: Reports process health and the database leg, pinged through the Storage Gateway.

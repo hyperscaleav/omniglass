@@ -183,6 +183,26 @@ omniglass bootstrap <username> [flags]
 
 Commands for the component resource
 
+### `omniglass component checkName`
+
+Check a component technical name
+
+```
+omniglass component checkName [flags]
+```
+
+Reports whether a proposed technical name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by component:update.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--name` | string | (none) | The proposed technical name to check |
+
+Example:
+
+```sh
+omniglass component checkName --name name
+```
+
 ### `omniglass component create`
 
 Create a component
@@ -198,7 +218,7 @@ Creates a component, optionally under a parent (a root needs an all-scoped grant
 | `--component-type` | string | (none) | A component_type id |
 | `--display-name` | string | (none) |  |
 | `--location` | string | (none) | Location name this component is placed at |
-| `--name` | string | (none) | Globally unique name (the address) |
+| `--name` | string | (none) | Globally unique name (the address; lowercase letters, digits, hyphens) |
 | `--parent` | string | (none) | Parent component name; omit for a root component |
 | `--system` | string | (none) | Primary system name this component belongs to |
 
@@ -327,6 +347,7 @@ Patches a component's display_name or component_type. Gated by component:update;
 |---|---|---|---|
 | `--component-type` | string | (none) |  |
 | `--display-name` | string | (none) |  |
+| `--name` | string | (none) | A new globally unique technical name (rename) |
 
 Example:
 

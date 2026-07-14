@@ -225,6 +225,9 @@ func (UnimplementedGateway) CreateComponent(context.Context, string, ComponentSp
 func (UnimplementedGateway) UpdateComponent(context.Context, string, string, ComponentPatch, scope.Set, scope.Set) (*Component, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) ComponentNameTaken(context.Context, string) (bool, error) {
+	return false, nil
+}
 func (UnimplementedGateway) DeleteComponent(context.Context, string, string, scope.Set, scope.Set) error {
 	return nil
 }

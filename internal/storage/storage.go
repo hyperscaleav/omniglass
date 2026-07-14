@@ -232,6 +232,7 @@ type Gateway interface {
 	GetComponent(ctx context.Context, name string, read scope.Set) (*Component, error)
 	CreateComponent(ctx context.Context, actorID string, spec ComponentSpec, create scope.Set) (*Component, error)
 	UpdateComponent(ctx context.Context, actorID, name string, patch ComponentPatch, read, action scope.Set) (*Component, error)
+	ComponentNameTaken(ctx context.Context, name string) (bool, error)
 	DeleteComponent(ctx context.Context, actorID, name string, read, action scope.Set) error
 
 	// The secret tier: a shape registry, scoped CRUD, an audited reveal, and the
