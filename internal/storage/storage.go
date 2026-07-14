@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/hyperscaleav/omniglass/internal/blob"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/secret"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -292,6 +293,7 @@ type Gateway interface {
 type PG struct {
 	pool   *pgxpool.Pool
 	secret secret.Provider
+	blob   blob.Store
 }
 
 // Option configures a PG at construction. The secret provider is optional so
@@ -307,6 +309,13 @@ func WithSecretProvider(prov secret.Provider) Option {
 	return func(p *PG) { p.secret = prov }
 }
 
+// WithBlobStore overrides the default pgblobs backend the file bytes are stored
+// behind (an S3-compatible or disk backend implementing the same blob.Store).
+// Unset, the gateway uses the pgblobs backend over its own pool.
+func WithBlobStore(store blob.Store) Option {
+	return func(p *PG) { p.blob = store }
+}
+
 // NewPG opens a pgx pool against dsn and verifies connectivity once before
 // returning, so a bad DSN or an unreachable database fails fast at boot rather
 // than on the first query.
@@ -319,7 +328,7 @@ func NewPG(ctx context.Context, dsn string, opts ...Option) (*PG, error) {
 		pool.Close()
 		return nil, fmt.Errorf("storage: ping: %w", err)
 	}
-	p := &PG{pool: pool}
+	p := &PG{pool: pool, blob: NewPGBlobStore(pool)}
 	for _, opt := range opts {
 		opt(p)
 	}
