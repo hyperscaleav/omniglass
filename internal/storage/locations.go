@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/scope"
@@ -33,6 +34,55 @@ var (
 // refuses it (ErrReservedTypeID), so a real type can never collide with the
 // sentinel.
 const RootPlacement = "root"
+
+// PlacementError is a location placement violation: childType (a location_type
+// id) may not be placed under a parent of ParentType (a location_type id, or
+// "" for a root placement, no parent). It wraps ErrPlacementNotAllowed via
+// Unwrap, so errors.Is still matches generically; errors.As extracts the two
+// type names for the API's 422 message.
+type PlacementError struct {
+	ChildType  string
+	ParentType string // "" for a rejected root placement
+}
+
+func (e *PlacementError) Error() string {
+	if e.ParentType == "" {
+		return fmt.Sprintf("%s is not allowed at root", e.ChildType)
+	}
+	return fmt.Sprintf("%s is not allowed under %s", e.ChildType, e.ParentType)
+}
+
+func (e *PlacementError) Unwrap() error { return ErrPlacementNotAllowed }
+
+// validatePlacement enforces a location_type's allowed_parent_types against a
+// candidate placement: parentType is the parent location's type, or nil for a
+// root placement (no parent). An empty (or unset) allowed set is
+// unconstrained. CreateLocation and the reparent path in UpdateLocation both
+// call this before writing. A childType that does not exist in the registry is
+// left to the insert's FK check (ErrUnknownType), not this validator.
+func (p *PG) validatePlacement(ctx context.Context, q querier, childType string, parentType *string) error {
+	var allowed []string
+	err := q.QueryRow(ctx, `select allowed_parent_types from location_type where id = $1`, childType).Scan(&allowed)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("storage: load allowed_parent_types for %q: %w", childType, err)
+	}
+	if len(allowed) == 0 {
+		return nil
+	}
+	if parentType == nil {
+		if slices.Contains(allowed, RootPlacement) {
+			return nil
+		}
+		return &PlacementError{ChildType: childType}
+	}
+	if slices.Contains(allowed, *parentType) {
+		return nil
+	}
+	return &PlacementError{ChildType: childType, ParentType: *parentType}
+}
 
 // Location is a place in the estate tree: name-addressable (name is globally
 // unique), classified by location_type, and nested under an optional parent.
@@ -249,6 +299,8 @@ func (p *PG) GetLocation(ctx context.Context, name string, read scope.Set) (*Loc
 // row in the same transaction. A root location (no parent) requires an all create
 // scope; a child requires the parent to be within the create scope. The new
 // row's owner is itself, so create scope is evaluated on the parent's placement.
+// The child type's allowed_parent_types is enforced against the resolved parent
+// (or root) before the insert.
 func (p *PG) CreateLocation(ctx context.Context, actorID string, spec LocationSpec, create scope.Set) (*Location, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -257,6 +309,7 @@ func (p *PG) CreateLocation(ctx context.Context, actorID string, spec LocationSp
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	var parentID *string
+	var parentType *string
 	if spec.ParentName == nil {
 		// A root location is only placeable by an all-scoped create grant.
 		if !create.All {
@@ -277,6 +330,11 @@ func (p *PG) CreateLocation(ctx context.Context, actorID string, spec LocationSp
 			return nil, ErrLocationForbidden
 		}
 		parentID = &parent.ID
+		parentType = &parent.LocationType
+	}
+
+	if err := p.validatePlacement(ctx, tx, spec.LocationType, parentType); err != nil {
+		return nil, err
 	}
 
 	l, err := scanLocation(tx.QueryRow(ctx, `
