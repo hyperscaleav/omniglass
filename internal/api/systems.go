@@ -38,11 +38,11 @@ type systemOutput struct {
 	Body systemBody
 }
 
-// systemTypeBody is the wire shape of a system_type registry row.
+// systemTypeBody is the wire shape of a system_type registry row. The registry
+// lists alphabetically by display_name.
 type systemTypeBody struct {
 	ID          string `json:"id"`
 	DisplayName string `json:"display_name"`
-	Rank        int    `json:"rank"`
 	Official    bool   `json:"official"`
 }
 
@@ -60,7 +60,6 @@ type createSystemTypeInput struct {
 	Body struct {
 		ID          string `json:"id" minLength:"1" doc:"Globally unique type id"`
 		DisplayName string `json:"display_name" minLength:"1"`
-		Rank        int    `json:"rank,omitempty" doc:"Ordering rank; lower sorts first"`
 	}
 }
 
@@ -68,7 +67,6 @@ type updateSystemTypeInput struct {
 	ID   string `path:"id"`
 	Body struct {
 		DisplayName *string `json:"display_name,omitempty"`
-		Rank        *int    `json:"rank,omitempty"`
 	}
 }
 
@@ -142,7 +140,7 @@ func registerSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodGet,
 		Path:        "/types/system",
 		Summary:     "List system types",
-		Description: "Lists the system_type registry, ordered by rank. Populates the type picker on the system form. Gated by type:read.",
+		Description: "Lists the system_type registry, ordered alphabetically by display name. Populates the type picker on the system form. Gated by type:read.",
 		Middlewares: huma.Middlewares{a.authn, a.require("type", "read")},
 	}, func(ctx context.Context, _ *struct{}) (*listSystemTypesOutput, error) {
 		types, err := gw.ListSystemTypes(ctx)
@@ -153,7 +151,7 @@ func registerSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		out.Body.SystemTypes = make([]systemTypeBody, 0, len(types))
 		for i := range types {
 			out.Body.SystemTypes = append(out.Body.SystemTypes, systemTypeBody{
-				ID: types[i].ID, DisplayName: types[i].DisplayName, Rank: types[i].Rank, Official: types[i].Official,
+				ID: types[i].ID, DisplayName: types[i].DisplayName, Official: types[i].Official,
 			})
 		}
 		return out, nil
@@ -169,12 +167,12 @@ func registerSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Middlewares:   huma.Middlewares{a.authn, a.require("type", "create")},
 	}, func(ctx context.Context, in *createSystemTypeInput) (*systemTypeOutput, error) {
 		st, err := gw.CreateSystemType(ctx, actorID(ctx), storage.SystemType{
-			ID: in.Body.ID, DisplayName: in.Body.DisplayName, Rank: in.Body.Rank,
+			ID: in.Body.ID, DisplayName: in.Body.DisplayName,
 		})
 		if err != nil {
 			return nil, mapTypeErr(err, "system_type")
 		}
-		return &systemTypeOutput{Body: systemTypeBody{ID: st.ID, DisplayName: st.DisplayName, Rank: st.Rank, Official: st.Official}}, nil
+		return &systemTypeOutput{Body: systemTypeBody{ID: st.ID, DisplayName: st.DisplayName, Official: st.Official}}, nil
 	})
 
 	huma.Register(api, huma.Operation{
@@ -182,16 +180,16 @@ func registerSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodPatch,
 		Path:        "/types/system/{id}",
 		Summary:     "Update a system type",
-		Description: "Patches a custom system_type's display_name or rank. Official types are read-only (422). Gated by type:update.",
+		Description: "Patches a custom system_type's display_name. Official types are read-only (422). Gated by type:update.",
 		Middlewares: huma.Middlewares{a.authn, a.require("type", "update")},
 	}, func(ctx context.Context, in *updateSystemTypeInput) (*systemTypeOutput, error) {
 		st, err := gw.UpdateSystemType(ctx, actorID(ctx), in.ID, storage.SystemTypePatch{
-			DisplayName: in.Body.DisplayName, Rank: in.Body.Rank,
+			DisplayName: in.Body.DisplayName,
 		})
 		if err != nil {
 			return nil, mapTypeErr(err, "system_type")
 		}
-		return &systemTypeOutput{Body: systemTypeBody{ID: st.ID, DisplayName: st.DisplayName, Rank: st.Rank, Official: st.Official}}, nil
+		return &systemTypeOutput{Body: systemTypeBody{ID: st.ID, DisplayName: st.DisplayName, Official: st.Official}}, nil
 	})
 
 	huma.Register(api, huma.Operation{
