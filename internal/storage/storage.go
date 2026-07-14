@@ -284,6 +284,18 @@ type Gateway interface {
 	// caller passes ids already in the read scope (the rowActions batch contract).
 	EffectiveTags(ctx context.Context, kind string, ownerIDs []string) (map[string]map[string]string, error)
 
+	// The file tier: a searchable metadata handle over the content-addressed blob
+	// store. A file has no estate placement (tenant-wide), so these methods take no
+	// scope; canAdmin gates the per-file sensitive flag (the :admin tier), mirroring
+	// the secret sensitivity axis. CreateFile stores the upload as a deduplicated
+	// blob and points the handle at it; DeleteFile drops the handle but leaves the
+	// blob (GC is a later slice).
+	ListFiles(ctx context.Context, canAdmin bool) ([]File, error)
+	GetFile(ctx context.Context, id string, canAdmin bool) (*File, error)
+	CreateFile(ctx context.Context, actorID string, spec FileSpec, canAdmin bool) (*File, error)
+	DownloadFile(ctx context.Context, id string, canAdmin bool) (*File, []byte, error)
+	DeleteFile(ctx context.Context, actorID, id string, canAdmin bool) error
+
 	// Close releases the underlying connection pool. Idempotent at the pool
 	// level; call once on shutdown.
 	Close()
