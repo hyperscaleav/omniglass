@@ -460,6 +460,94 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/components:checkName": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check a component technical name
+         * @description Reports whether a proposed technical name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by component:update.
+         */
+        post: operations["check-component-name"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List files
+         * @description Lists the file handles the caller may see (searchable metadata, no bytes). Sensitive files appear only to the admin tier. Gated by file:read.
+         */
+        get: operations["list-files"];
+        put?: never;
+        /**
+         * Create a file from an upload
+         * @description Stores the uploaded bytes as a content-addressed blob (identical bytes dedup to one blob) and writes the file handle pointing at it. Gated by file:create; a sensitive file additionally needs the admin tier (file:create:admin).
+         */
+        post: operations["create-file"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/files/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a file's metadata
+         * @description Returns one file handle's searchable metadata (no bytes). A sensitive file is a non-disclosing 404 without the admin tier. Gated by file:read.
+         */
+        get: operations["get-file"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a file
+         * @description Removes a file handle. The underlying blob is left in place (garbage collection is a later slice). A sensitive file is a non-disclosing 404 without the admin tier. Gated by file:delete.
+         */
+        delete: operations["delete-file"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/files/{id}:download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download a file's bytes
+         * @description Returns a file's bytes (base64-encoded) read from the blob it points at, the hash verified on read. A sensitive file is a non-disclosing 404 without the admin tier. Gated by file:read.
+         */
+        get: operations["download-file"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/healthz": {
         parameters: {
             query?: never;
@@ -586,6 +674,26 @@ export interface paths {
          * @description Binds a value for a key on a location. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by location:update.
          */
         post: operations["set-location-tag"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/locations:checkName": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check a location technical name
+         * @description Reports whether a proposed technical name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by location:update.
+         */
+        post: operations["check-location-name"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1300,6 +1408,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/systems:checkName": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check a system technical name
+         * @description Reports whether a proposed technical name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by system:update.
+         */
+        post: operations["check-system-name"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/tags": {
         parameters: {
             query?: never;
@@ -1685,6 +1813,30 @@ export interface components {
             /** @description The new password (at least 12 characters, not a common password, not containing the username) */
             new_password: string;
         };
+        CheckNameInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CheckNameInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The proposed technical name to check */
+            name: string;
+        };
+        CheckNameOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CheckNameOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Whether the name is free (scope-blind, matches the global unique constraint) */
+            available: boolean;
+            /** @description Human explanation when not valid or not available */
+            reason?: string;
+            /** @description Whether the name matches the slug rule */
+            valid: boolean;
+        };
         ComponentBody: {
             /**
              * Format: uri
@@ -1729,7 +1881,7 @@ export interface components {
             display_name?: string;
             /** @description Location name this component is placed at */
             location?: string;
-            /** @description Globally unique name (the address) */
+            /** @description Globally unique name (the address; lowercase letters, digits, hyphens) */
             name: string;
             /** @description Parent component name; omit for a root component */
             parent?: string;
@@ -1746,6 +1898,22 @@ export interface components {
             display_name: string;
             /** @description Globally unique type id */
             id: string;
+        };
+        CreateFileInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateFileInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The file bytes, base64-encoded */
+            content: string;
+            /** @description The MIME type used to serve the file */
+            content_type: string;
+            /** @description The file's display name (a label, no path separators) */
+            name: string;
+            /** @description Admin-only visibility; defaults false. Setting true requires the admin tier */
+            sensitive?: boolean;
         };
         CreateGrantInputBody: {
             /**
@@ -1813,7 +1981,7 @@ export interface components {
             display_name?: string;
             /** @description A location_type id (campus, building, ...) */
             location_type: string;
-            /** @description Globally unique name (the address) */
+            /** @description Globally unique name (the address; lowercase letters, digits, hyphens) */
             name: string;
             /** @description Parent location name; omit for a root location */
             parent?: string;
@@ -1914,7 +2082,7 @@ export interface components {
             display_name?: string;
             /** @description Location name this system is placed at */
             location?: string;
-            /** @description Globally unique name (the address) */
+            /** @description Globally unique name (the address; lowercase letters, digits, hyphens) */
             name: string;
             /** @description Parent system name; omit for a root system */
             parent?: string;
@@ -1971,6 +2139,18 @@ export interface components {
              * @enum {string}
              */
             value_type: "string" | "int" | "float" | "bool" | "json";
+        };
+        DownloadFileOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/DownloadFileOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The file bytes, base64-encoded */
+            content: string;
+            content_type: string;
+            name: string;
         };
         EffectiveSecretsOutputBody: {
             /**
@@ -2076,6 +2256,24 @@ export interface components {
              * @example https://example.com/errors/example
              */
             type: string;
+        };
+        FileBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/FileBody.json
+             */
+            readonly $schema?: string;
+            content_type: string;
+            created_at: string;
+            id: string;
+            name: string;
+            /** @description When true, only the admin tier may see or download this file */
+            sensitive: boolean;
+            /** @description The content hash of the blob this handle points at */
+            sha256: string;
+            /** Format: int64 */
+            size: number;
         };
         GlobalBindingInputBody: {
             /**
@@ -2205,6 +2403,15 @@ export interface components {
              */
             readonly $schema?: string;
             components: components["schemas"]["ComponentBody"][] | null;
+        };
+        ListFilesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListFilesOutputBody.json
+             */
+            readonly $schema?: string;
+            files: components["schemas"]["FileBody"][] | null;
         };
         ListGroupGrantsOutputBody: {
             /**
@@ -2738,6 +2945,8 @@ export interface components {
             readonly $schema?: string;
             component_type?: string;
             display_name?: string;
+            /** @description A new globally unique technical name (rename) */
+            name?: string;
         };
         UpdateComponentTypeInputBody: {
             /**
@@ -2771,6 +2980,8 @@ export interface components {
             readonly $schema?: string;
             display_name?: string;
             location_type?: string;
+            /** @description A new globally unique technical name (rename) */
+            name?: string;
             /** @description Re-parents the location (a tree move) to this location name, cycle-guarded and placement-validated. Moving to root is not supported via update this slice. */
             parent?: string;
         };
@@ -2830,6 +3041,8 @@ export interface components {
              */
             readonly $schema?: string;
             display_name?: string;
+            /** @description A new globally unique technical name (rename) */
+            name?: string;
             system_type?: string;
         };
         UpdateSystemTypeInputBody: {
@@ -3762,6 +3975,195 @@ export interface operations {
             };
         };
     };
+    "check-component-name": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CheckNameInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckNameOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListFilesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateFileInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The file's id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The file's id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "download-file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The file's id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DownloadFileOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "get-healthz": {
         parameters: {
             query?: never;
@@ -4039,6 +4441,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TagBindingBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "check-location-name": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CheckNameInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckNameOutputBody"];
                 };
             };
             /** @description Error */
@@ -5606,6 +6041,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TagBindingBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "check-system-name": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CheckNameInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckNameOutputBody"];
                 };
             };
             /** @description Error */

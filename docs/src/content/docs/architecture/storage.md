@@ -264,6 +264,11 @@ application read and write goes through the Gateway, the physical backend is swa
   store** (Parquet on S3-compatible, or an embedded columnar engine) behind the same gateway, so
   historical queries fan across hot and cold with no model change. The cold tier is partitioned by
   `ts`.
+- **blobs**: opaque bytes (a firmware image, a config dump, a capture, and later a large `log_datapoint`
+  body or a `collection.failed` raw payload) live in the content-addressed [blob store](/architecture/files/),
+  a `blob.Store` seam behind the same gateway. The default **pgblobs** backend holds bytes inline in Postgres;
+  an S3-compatible or disk backend swaps in with no model change, since a row references a blob by its `sha256`,
+  never inline bytes.
 
 :::caution[Open question]
 Which cold engine backs the tier, what triggers tier-out (age versus a partition-detach hook), how

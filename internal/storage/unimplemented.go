@@ -170,6 +170,9 @@ func (UnimplementedGateway) CreateLocation(context.Context, string, LocationSpec
 func (UnimplementedGateway) UpdateLocation(context.Context, string, string, LocationPatch, scope.Set, scope.Set) (*Location, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) LocationNameTaken(context.Context, string) (bool, error) {
+	return false, nil
+}
 func (UnimplementedGateway) DeleteLocation(context.Context, string, string, scope.Set, scope.Set) error {
 	return nil
 }
@@ -196,6 +199,9 @@ func (UnimplementedGateway) CreateSystem(context.Context, string, SystemSpec, sc
 func (UnimplementedGateway) UpdateSystem(context.Context, string, string, SystemPatch, scope.Set, scope.Set) (*System, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) SystemNameTaken(context.Context, string) (bool, error) {
+	return false, nil
+}
 func (UnimplementedGateway) DeleteSystem(context.Context, string, string, scope.Set, scope.Set) error {
 	return nil
 }
@@ -221,6 +227,9 @@ func (UnimplementedGateway) CreateComponent(context.Context, string, ComponentSp
 }
 func (UnimplementedGateway) UpdateComponent(context.Context, string, string, ComponentPatch, scope.Set, scope.Set) (*Component, error) {
 	return nil, nil
+}
+func (UnimplementedGateway) ComponentNameTaken(context.Context, string) (bool, error) {
+	return false, nil
 }
 func (UnimplementedGateway) DeleteComponent(context.Context, string, string, scope.Set, scope.Set) error {
 	return nil
@@ -298,4 +307,15 @@ func (UnimplementedGateway) ResolveTags(context.Context, string, scope.Set) ([]R
 func (UnimplementedGateway) EffectiveTags(context.Context, string, []string) (map[string]map[string]string, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) Close() {}
+func (UnimplementedGateway) ListFiles(context.Context, bool) ([]File, error) { return nil, nil }
+func (UnimplementedGateway) GetFile(context.Context, string, bool) (*File, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) CreateFile(context.Context, string, FileSpec, bool) (*File, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DownloadFile(context.Context, string, bool) (*File, []byte, error) {
+	return nil, nil, nil
+}
+func (UnimplementedGateway) DeleteFile(context.Context, string, string, bool) error { return nil }
+func (UnimplementedGateway) Close()                                                 {}

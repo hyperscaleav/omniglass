@@ -66,6 +66,7 @@ export async function createLocation(body: CreateLocation): Promise<Location> {
 }
 
 export type UpdateLocation = {
+  name?: string;
   display_name?: string;
   location_type?: string;
   // Re-parents the location (a tree move) to this location name. Omit to leave
@@ -78,6 +79,14 @@ export async function updateLocation(name: string, body: UpdateLocation): Promis
   const { data, error } = await api.PATCH("/locations/{name}", { params: { path: { name } }, body });
   if (error) throw error;
   return data as Location;
+}
+
+export type NameCheck = { valid: boolean; available: boolean; reason?: string };
+
+export async function checkLocationName(name: string): Promise<NameCheck> {
+  const { data, error } = await api.POST("/locations:checkName", { body: { name } });
+  if (error) throw error;
+  return data as NameCheck;
 }
 
 export async function deleteLocation(name: string): Promise<void> {

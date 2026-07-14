@@ -183,6 +183,26 @@ omniglass bootstrap <username> [flags]
 
 Commands for the component resource
 
+### `omniglass component checkName`
+
+Check a component technical name
+
+```
+omniglass component checkName [flags]
+```
+
+Reports whether a proposed technical name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by component:update.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--name` | string | (none) | The proposed technical name to check |
+
+Example:
+
+```sh
+omniglass component checkName --name name
+```
+
 ### `omniglass component create`
 
 Create a component
@@ -198,7 +218,7 @@ Creates a component, optionally under a parent (a root needs an all-scoped grant
 | `--component-type` | string | (none) | A component_type id |
 | `--display-name` | string | (none) |  |
 | `--location` | string | (none) | Location name this component is placed at |
-| `--name` | string | (none) | Globally unique name (the address) |
+| `--name` | string | (none) | Globally unique name (the address; lowercase letters, digits, hyphens) |
 | `--parent` | string | (none) | Parent component name; omit for a root component |
 | `--system` | string | (none) | Primary system name this component belongs to |
 
@@ -327,6 +347,7 @@ Patches a component's display_name or component_type. Gated by component:update;
 |---|---|---|---|
 | `--component-type` | string | (none) |  |
 | `--display-name` | string | (none) |  |
+| `--name` | string | (none) | A new globally unique technical name (rename) |
 
 Example:
 
@@ -392,6 +413,97 @@ Example:
 
 ```sh
 omniglass effective-variable list <name>
+```
+
+## `omniglass file`
+
+Commands for the file resource
+
+### `omniglass file create`
+
+Create a file from an upload
+
+```
+omniglass file create [flags]
+```
+
+Stores the uploaded bytes as a content-addressed blob (identical bytes dedup to one blob) and writes the file handle pointing at it. Gated by file:create; a sensitive file additionally needs the admin tier (file:create:admin).
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--content` | string | (none) | The file bytes, base64-encoded |
+| `--content-type` | string | (none) | The MIME type used to serve the file |
+| `--name` | string | (none) | The file's display name (a label, no path separators) |
+| `--sensitive` | string | (none) | Admin-only visibility; defaults false. Setting true requires the admin tier |
+
+Example:
+
+```sh
+omniglass file create --content content --content-type content_type --name name
+```
+
+### `omniglass file delete`
+
+Delete a file
+
+```
+omniglass file delete <id>
+```
+
+Removes a file handle. The underlying blob is left in place (garbage collection is a later slice). A sensitive file is a non-disclosing 404 without the admin tier. Gated by file:delete.
+
+Example:
+
+```sh
+omniglass file delete <id>
+```
+
+### `omniglass file download`
+
+Download a file's bytes
+
+```
+omniglass file download <id>
+```
+
+Returns a file's bytes (base64-encoded) read from the blob it points at, the hash verified on read. A sensitive file is a non-disclosing 404 without the admin tier. Gated by file:read.
+
+Example:
+
+```sh
+omniglass file download <id>
+```
+
+### `omniglass file get`
+
+Get a file's metadata
+
+```
+omniglass file get <id>
+```
+
+Returns one file handle's searchable metadata (no bytes). A sensitive file is a non-disclosing 404 without the admin tier. Gated by file:read.
+
+Example:
+
+```sh
+omniglass file get <id>
+```
+
+### `omniglass file list`
+
+List files
+
+```
+omniglass file list
+```
+
+Lists the file handles the caller may see (searchable metadata, no bytes). Sensitive files appear only to the admin tier. Gated by file:read.
+
+Example:
+
+```sh
+omniglass file list
 ```
 
 ## `omniglass grant`
@@ -512,6 +624,26 @@ omniglass healthz
 
 Commands for the location resource
 
+### `omniglass location checkName`
+
+Check a location technical name
+
+```
+omniglass location checkName [flags]
+```
+
+Reports whether a proposed technical name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by location:update.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--name` | string | (none) | The proposed technical name to check |
+
+Example:
+
+```sh
+omniglass location checkName --name name
+```
+
 ### `omniglass location create`
 
 Create a location
@@ -526,7 +658,7 @@ Creates a location, optionally under a parent (a root needs an all-scoped grant)
 |---|---|---|---|
 | `--display-name` | string | (none) |  |
 | `--location-type` | string | (none) | A location_type id (campus, building, ...) |
-| `--name` | string | (none) | Globally unique name (the address) |
+| `--name` | string | (none) | Globally unique name (the address; lowercase letters, digits, hyphens) |
 | `--parent` | string | (none) | Parent location name; omit for a root location |
 
 Example:
@@ -654,6 +786,7 @@ Patches a location's display_name, location_type, or parent (a move). Gated by l
 |---|---|---|---|
 | `--display-name` | string | (none) |  |
 | `--location-type` | string | (none) |  |
+| `--name` | string | (none) | A new globally unique technical name (rename) |
 | `--parent` | string | (none) | Re-parents the location (a tree move) to this location name, cycle-guarded and placement-validated. Moving to root is not supported via update this slice. |
 
 Example:
@@ -1463,6 +1596,26 @@ omniglass statu list
 
 Commands for the system resource
 
+### `omniglass system checkName`
+
+Check a system technical name
+
+```
+omniglass system checkName [flags]
+```
+
+Reports whether a proposed technical name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by system:update.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--name` | string | (none) | The proposed technical name to check |
+
+Example:
+
+```sh
+omniglass system checkName --name name
+```
+
 ### `omniglass system create`
 
 Create a system
@@ -1477,7 +1630,7 @@ Creates a system, optionally under a parent (a root needs an all-scoped grant) a
 |---|---|---|---|
 | `--display-name` | string | (none) |  |
 | `--location` | string | (none) | Location name this system is placed at |
-| `--name` | string | (none) | Globally unique name (the address) |
+| `--name` | string | (none) | Globally unique name (the address; lowercase letters, digits, hyphens) |
 | `--parent` | string | (none) | Parent system name; omit for a root system |
 | `--system-type` | string | (none) | A system_type id |
 
@@ -1605,6 +1758,7 @@ Patches a system's display_name or system_type. Gated by system:update; read and
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--display-name` | string | (none) |  |
+| `--name` | string | (none) | A new globally unique technical name (rename) |
 | `--system-type` | string | (none) |  |
 
 Example:

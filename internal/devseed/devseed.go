@@ -33,6 +33,17 @@ type Doc struct {
 	Variables   []Variable   `yaml:"variables"`
 	Tags        []Tag        `yaml:"tags"`
 	TagBindings []TagBinding `yaml:"tag_bindings"`
+	Files       []File       `yaml:"files"`
+}
+
+// File is one example file handle over the blob store: its bytes ride inline in
+// the fixture (Content), hashed and deduplicated on create. Sensitive seeds a
+// flagged file (admin-tier only) so the directory shows both kinds.
+type File struct {
+	Name        string `yaml:"name"`
+	ContentType string `yaml:"content_type"`
+	Content     string `yaml:"content"`
+	Sensitive   bool   `yaml:"sensitive"`
 }
 
 // Tag is one example key in the governed vocabulary, optionally with a global
@@ -211,6 +222,30 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 		loc := b.Location
 		if _, err := gw.SetTagBinding(ctx, actorID, b.Key, "location", &loc, b.Value, all, all); err != nil {
 			return fmt.Errorf("devseed: bind tag %q at %q: %w", b.Key, b.Location, err)
+		}
+	}
+
+	// Files: a few example handles so the Files directory comes up populated.
+	// A file handle has no natural unique key (the id is a uuid; the name is not
+	// unique), so a plain re-create would duplicate rows; skip a fixture whose
+	// name is already present to keep the seed idempotent. canAdmin is true here
+	// (the seed runs at system scope) so a sensitive fixture can be created.
+	existingFiles, err := gw.ListFiles(ctx, true)
+	if err != nil {
+		return fmt.Errorf("devseed: list files: %w", err)
+	}
+	haveFile := make(map[string]bool, len(existingFiles))
+	for _, f := range existingFiles {
+		haveFile[f.Name] = true
+	}
+	for _, f := range doc.Files {
+		if haveFile[f.Name] {
+			continue
+		}
+		if _, err := gw.CreateFile(ctx, actorID, storage.FileSpec{
+			Name: f.Name, ContentType: f.ContentType, Data: []byte(f.Content), Sensitive: f.Sensitive,
+		}, true); err != nil {
+			return fmt.Errorf("devseed: create file %q: %w", f.Name, err)
 		}
 	}
 	return nil

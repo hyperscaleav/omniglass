@@ -134,3 +134,26 @@ tag_bindings:
   - key: environment
     location: hq-west
     value: staging
+
+# Files: a few example handles over the content-addressed blob store, so the
+# Files directory comes up populated with both ordinary (shared) files and a
+# sensitive one (admin-tier only). Bytes ride inline here; the server hashes and
+# deduplicates them on create.
+files:
+  - name: boardroom-recovery-runbook.md
+    content_type: text/markdown
+    content: |
+      # Boardroom Recovery
+      1. Power-cycle the codec
+      2. Verify SIP registration
+      3. Check the DSP presets
+  - name: dsp-preset-export.json
+    content_type: application/json
+    content: '{"preset":"conference","gain":-6,"aec":true}'
+  - name: codec-firmware-2.1.4.txt
+    content_type: text/plain
+    content: "placeholder firmware notes for the Cisco codec, release 2.1.4"
+  - name: integrator-quote-confidential.txt
+    content_type: text/plain
+    content: "CONFIDENTIAL competitive bid, integrator A"
+    sensitive: true

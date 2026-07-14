@@ -55,3 +55,6 @@ sections ([getting around](/guides/operator/#getting-around)).
 
 Everything on these pages is already filtered to [your scope](/guides/operator/#what-you-see-is-your-scope):
 you are searching within the subtree your grants reach, not the whole estate.
+
+The **[Files](/guides/admin/files/)** directory (under Values) uses these same filter, column, and list
+controls, but it holds uploaded content, not the estate, so it is covered separately.

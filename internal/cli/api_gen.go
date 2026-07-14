@@ -208,6 +208,27 @@ func generatedCommands() []*cobra.Command {
 			Short: "Commands for the component resource",
 		}
 		parent.AddCommand(func() *cobra.Command {
+			var fName string
+			cmd := &cobra.Command{
+				Use:     "checkName",
+				Short:   "Check a component technical name",
+				Long:    "Reports whether a proposed technical name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by component:update.",
+				Example: "  omniglass component checkName --name name",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/components:checkName")
+					body := map[string]any{}
+					if cmd.Flags().Changed("name") {
+						body["name"] = fName
+					}
+					return runAPICommand(cmd, "POST", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fName, "name", "", "The proposed technical name to check")
+			_ = cmd.MarkFlagRequired("name")
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
 			var fComponentType string
 			var fDisplayName string
 			var fLocation string
@@ -248,7 +269,7 @@ func generatedCommands() []*cobra.Command {
 			_ = cmd.MarkFlagRequired("component-type")
 			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
 			cmd.Flags().StringVar(&fLocation, "location", "", "Location name this component is placed at")
-			cmd.Flags().StringVar(&fName, "name", "", "Globally unique name (the address)")
+			cmd.Flags().StringVar(&fName, "name", "", "Globally unique name (the address; lowercase letters, digits, hyphens)")
 			_ = cmd.MarkFlagRequired("name")
 			cmd.Flags().StringVar(&fParent, "parent", "", "Parent component name; omit for a root component")
 			cmd.Flags().StringVar(&fSystem, "system", "", "Primary system name this component belongs to")
@@ -361,6 +382,7 @@ func generatedCommands() []*cobra.Command {
 		parent.AddCommand(func() *cobra.Command {
 			var fComponentType string
 			var fDisplayName string
+			var fName string
 			cmd := &cobra.Command{
 				Use:     "update <name>",
 				Short:   "Update a component",
@@ -376,11 +398,15 @@ func generatedCommands() []*cobra.Command {
 					if cmd.Flags().Changed("display-name") {
 						body["display_name"] = fDisplayName
 					}
+					if cmd.Flags().Changed("name") {
+						body["name"] = fName
+					}
 					return runAPICommand(cmd, "PATCH", path, body)
 				},
 			}
 			cmd.Flags().StringVar(&fComponentType, "component-type", "", "")
 			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
+			cmd.Flags().StringVar(&fName, "name", "", "A new globally unique technical name (rename)")
 			return cmd
 		}())
 		roots = append(roots, parent)
@@ -441,6 +467,107 @@ func generatedCommands() []*cobra.Command {
 				Args:    cobra.ExactArgs(1),
 				RunE: func(cmd *cobra.Command, args []string) error {
 					path := fmt.Sprintf("/api/v1/components/%s/effective-variables", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		roots = append(roots, parent)
+	}
+	{
+		parent := &cobra.Command{
+			Use:   "file",
+			Short: "Commands for the file resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			var fContent string
+			var fContentType string
+			var fName string
+			var fSensitive string
+			cmd := &cobra.Command{
+				Use:     "create",
+				Short:   "Create a file from an upload",
+				Long:    "Stores the uploaded bytes as a content-addressed blob (identical bytes dedup to one blob) and writes the file handle pointing at it. Gated by file:create; a sensitive file additionally needs the admin tier (file:create:admin).",
+				Example: "  omniglass file create --content content --content-type content_type --name name",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/files")
+					body := map[string]any{}
+					if cmd.Flags().Changed("content") {
+						body["content"] = fContent
+					}
+					if cmd.Flags().Changed("content-type") {
+						body["content_type"] = fContentType
+					}
+					if cmd.Flags().Changed("name") {
+						body["name"] = fName
+					}
+					if cmd.Flags().Changed("sensitive") {
+						body["sensitive"] = jsonOrString(fSensitive)
+					}
+					return runAPICommand(cmd, "POST", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fContent, "content", "", "The file bytes, base64-encoded")
+			_ = cmd.MarkFlagRequired("content")
+			cmd.Flags().StringVar(&fContentType, "content-type", "", "The MIME type used to serve the file")
+			_ = cmd.MarkFlagRequired("content-type")
+			cmd.Flags().StringVar(&fName, "name", "", "The file's display name (a label, no path separators)")
+			_ = cmd.MarkFlagRequired("name")
+			cmd.Flags().StringVar(&fSensitive, "sensitive", "", "Admin-only visibility; defaults false. Setting true requires the admin tier")
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "delete <id>",
+				Short:   "Delete a file",
+				Long:    "Removes a file handle. The underlying blob is left in place (garbage collection is a later slice). A sensitive file is a non-disclosing 404 without the admin tier. Gated by file:delete.",
+				Example: "  omniglass file delete <id>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/files/%s", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "DELETE", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "download <id>",
+				Short:   "Download a file's bytes",
+				Long:    "Returns a file's bytes (base64-encoded) read from the blob it points at, the hash verified on read. A sensitive file is a non-disclosing 404 without the admin tier. Gated by file:read.",
+				Example: "  omniglass file download <id>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/files/%s:download", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "get <id>",
+				Short:   "Get a file's metadata",
+				Long:    "Returns one file handle's searchable metadata (no bytes). A sensitive file is a non-disclosing 404 without the admin tier. Gated by file:read.",
+				Example: "  omniglass file get <id>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/files/%s", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "list",
+				Short:   "List files",
+				Long:    "Lists the file handles the caller may see (searchable metadata, no bytes). Sensitive files appear only to the admin tier. Gated by file:read.",
+				Example: "  omniglass file list",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/files")
 					return runAPICommand(cmd, "GET", path, nil)
 				},
 			}
@@ -577,6 +704,27 @@ func generatedCommands() []*cobra.Command {
 			Short: "Commands for the location resource",
 		}
 		parent.AddCommand(func() *cobra.Command {
+			var fName string
+			cmd := &cobra.Command{
+				Use:     "checkName",
+				Short:   "Check a location technical name",
+				Long:    "Reports whether a proposed technical name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by location:update.",
+				Example: "  omniglass location checkName --name name",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/locations:checkName")
+					body := map[string]any{}
+					if cmd.Flags().Changed("name") {
+						body["name"] = fName
+					}
+					return runAPICommand(cmd, "POST", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fName, "name", "", "The proposed technical name to check")
+			_ = cmd.MarkFlagRequired("name")
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
 			var fDisplayName string
 			var fLocationType string
 			var fName string
@@ -608,7 +756,7 @@ func generatedCommands() []*cobra.Command {
 			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
 			cmd.Flags().StringVar(&fLocationType, "location-type", "", "A location_type id (campus, building, ...)")
 			_ = cmd.MarkFlagRequired("location-type")
-			cmd.Flags().StringVar(&fName, "name", "", "Globally unique name (the address)")
+			cmd.Flags().StringVar(&fName, "name", "", "Globally unique name (the address; lowercase letters, digits, hyphens)")
 			_ = cmd.MarkFlagRequired("name")
 			cmd.Flags().StringVar(&fParent, "parent", "", "Parent location name; omit for a root location")
 			return cmd
@@ -720,6 +868,7 @@ func generatedCommands() []*cobra.Command {
 		parent.AddCommand(func() *cobra.Command {
 			var fDisplayName string
 			var fLocationType string
+			var fName string
 			var fParent string
 			cmd := &cobra.Command{
 				Use:     "update <name>",
@@ -736,6 +885,9 @@ func generatedCommands() []*cobra.Command {
 					if cmd.Flags().Changed("location-type") {
 						body["location_type"] = fLocationType
 					}
+					if cmd.Flags().Changed("name") {
+						body["name"] = fName
+					}
 					if cmd.Flags().Changed("parent") {
 						body["parent"] = fParent
 					}
@@ -744,6 +896,7 @@ func generatedCommands() []*cobra.Command {
 			}
 			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
 			cmd.Flags().StringVar(&fLocationType, "location-type", "", "")
+			cmd.Flags().StringVar(&fName, "name", "", "A new globally unique technical name (rename)")
 			cmd.Flags().StringVar(&fParent, "parent", "", "Re-parents the location (a tree move) to this location name, cycle-guarded and placement-validated. Moving to root is not supported via update this slice.")
 			return cmd
 		}())
@@ -1579,6 +1732,27 @@ func generatedCommands() []*cobra.Command {
 			Short: "Commands for the system resource",
 		}
 		parent.AddCommand(func() *cobra.Command {
+			var fName string
+			cmd := &cobra.Command{
+				Use:     "checkName",
+				Short:   "Check a system technical name",
+				Long:    "Reports whether a proposed technical name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by system:update.",
+				Example: "  omniglass system checkName --name name",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/systems:checkName")
+					body := map[string]any{}
+					if cmd.Flags().Changed("name") {
+						body["name"] = fName
+					}
+					return runAPICommand(cmd, "POST", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fName, "name", "", "The proposed technical name to check")
+			_ = cmd.MarkFlagRequired("name")
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
 			var fDisplayName string
 			var fLocation string
 			var fName string
@@ -1613,7 +1787,7 @@ func generatedCommands() []*cobra.Command {
 			}
 			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
 			cmd.Flags().StringVar(&fLocation, "location", "", "Location name this system is placed at")
-			cmd.Flags().StringVar(&fName, "name", "", "Globally unique name (the address)")
+			cmd.Flags().StringVar(&fName, "name", "", "Globally unique name (the address; lowercase letters, digits, hyphens)")
 			_ = cmd.MarkFlagRequired("name")
 			cmd.Flags().StringVar(&fParent, "parent", "", "Parent system name; omit for a root system")
 			cmd.Flags().StringVar(&fSystemType, "system-type", "", "A system_type id")
@@ -1726,6 +1900,7 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			var fDisplayName string
+			var fName string
 			var fSystemType string
 			cmd := &cobra.Command{
 				Use:     "update <name>",
@@ -1739,6 +1914,9 @@ func generatedCommands() []*cobra.Command {
 					if cmd.Flags().Changed("display-name") {
 						body["display_name"] = fDisplayName
 					}
+					if cmd.Flags().Changed("name") {
+						body["name"] = fName
+					}
 					if cmd.Flags().Changed("system-type") {
 						body["system_type"] = fSystemType
 					}
@@ -1746,6 +1924,7 @@ func generatedCommands() []*cobra.Command {
 				},
 			}
 			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
+			cmd.Flags().StringVar(&fName, "name", "", "A new globally unique technical name (rename)")
 			cmd.Flags().StringVar(&fSystemType, "system-type", "", "")
 			return cmd
 		}())

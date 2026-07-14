@@ -53,11 +53,15 @@ export const navItems: NavItem[] = [
     ],
   },
   {
-    label: "Values", icon: Icons.Sliders, hint: "Operator-set values resolved down the scope cascade: interpolation variables, encrypted secrets, and reconciled component config.",
+    label: "Values", icon: Icons.Sliders, hint: "Operator-set values and content: interpolation variables, encrypted secrets, and reconciled component config, each resolved down the scope cascade, plus the files kept with the estate.",
     children: [
       { label: "Variables", path: "/variables", live: true, resource: "variable", hint: "Free interpolated values (macros), resolved down the scope cascade." },
       { label: "Secrets", path: "/secrets", live: true, resource: "secret", hint: "Shared device and platform credentials, resolved down the scope cascade." },
       { label: "Config", path: "/config", hint: "Reconciled component and system configuration: desired values operators set, optionally observed back from the device to detect drift and reconcile." },
+      // Files are operator-uploaded content, not a cascaded value: a flat, tenant-wide
+      // store of opaque bytes kept beside the estate. It sits in Values as the
+      // non-cascading member (deliberately off the exclusive arc).
+      { label: "Files", path: "/files", live: true, resource: "file", hint: "Firmware images, config dumps, runbooks, and captures kept with the estate, deduplicated and searchable." },
     ],
   },
   {

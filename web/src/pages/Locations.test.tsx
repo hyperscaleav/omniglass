@@ -158,4 +158,22 @@ describe("Locations create-as-route", () => {
     // Still in edit mode: the picker (not the read-only fact) is still on screen.
     expect(screen.getByLabelText("Parent")).toBeTruthy();
   });
+
+  it("edit mode exposes an editable technical name with a check button", async () => {
+    mount("/locations/hq");
+    await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
+    fireEvent.click(screen.getByText("Edit"));
+    // The technical name becomes an editable input seeded from the row.
+    const nameInput = (await screen.findByDisplayValue("hq")) as HTMLInputElement;
+    expect(nameInput.disabled).toBe(false);
+    // An inline check button sits beside it.
+    expect(screen.getByLabelText("Check name")).toBeTruthy();
+  });
+
+  it("a fresh detail view keeps the technical name read-only", async () => {
+    mount("/locations/hq");
+    await waitFor(() => expect(screen.getByText("Technical name")).toBeTruthy());
+    // No check button until edit begins: the name is a read-only fact.
+    expect(screen.queryByLabelText("Check name")).toBeNull();
+  });
 });

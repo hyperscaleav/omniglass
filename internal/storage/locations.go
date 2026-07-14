@@ -124,12 +124,12 @@ type LocationSpec struct {
 	ParentName   *string
 }
 
-// LocationPatch is the update input: nil fields are left unchanged. Renaming
-// is deferred to a later slice. ParentName, when set, re-parents the location
-// (a tree move) to the named parent, cycle-guarded and placement-validated
-// exactly like create; a move to root (no parent) is not supported via patch
-// this slice.
+// LocationPatch is the update input: nil fields are left unchanged. Name, when
+// set, renames the location. ParentName, when set, re-parents the location (a
+// tree move) to the named parent, cycle-guarded and placement-validated exactly
+// like create; a move to root (no parent) is not supported via patch this slice.
 type LocationPatch struct {
+	Name         *string
 	DisplayName  *string
 	LocationType *string
 	ParentName   *string
@@ -331,6 +331,10 @@ func (p *PG) CreateLocation(ctx context.Context, actorID string, spec LocationSp
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	if err := ValidateEntityName(spec.Name); err != nil {
+		return nil, err
+	}
+
 	var parentID *string
 	var parentType *string
 	if spec.ParentName == nil {
@@ -394,6 +398,11 @@ func (p *PG) UpdateLocation(ctx context.Context, actorID, name string, patch Loc
 	if err != nil {
 		return nil, err
 	}
+	if patch.Name != nil {
+		if err := ValidateEntityName(*patch.Name); err != nil {
+			return nil, err
+		}
+	}
 
 	parentID := before.ParentID
 	if patch.ParentName != nil {
@@ -435,13 +444,14 @@ func (p *PG) UpdateLocation(ctx context.Context, actorID, name string, patch Loc
 
 	after, err := scanLocation(tx.QueryRow(ctx, `
 		update location set
-			display_name  = coalesce($2, display_name),
-			location_type = coalesce($3, location_type),
-			parent_id     = $4,
+			name          = coalesce($2, name),
+			display_name  = coalesce($3, display_name),
+			location_type = coalesce($4, location_type),
+			parent_id     = $5,
 			updated_at    = now()
 		where id = $1
 		returning `+locationCols,
-		before.ID, patch.DisplayName, patch.LocationType, parentID))
+		before.ID, patch.Name, patch.DisplayName, patch.LocationType, parentID))
 	if err != nil {
 		return nil, mapLocationWriteErr(err)
 	}
@@ -472,6 +482,18 @@ func (p *PG) resolveForAction(ctx context.Context, q querier, name string, read,
 // reused by the system/component located-at resolution.
 func (p *PG) locationByName(ctx context.Context, q querier, name string) (*Location, error) {
 	return scopedByName(ctx, q, locationConfig, name)
+}
+
+// LocationNameTaken reports whether a location with this name exists. Scope-blind
+// by design: the name unique constraint is global, so availability must be a
+// global fact to match it (a scope-aware answer would false-positive on a name
+// held outside the caller's scope). Gated at the API by location:update.
+func (p *PG) LocationNameTaken(ctx context.Context, name string) (bool, error) {
+	var exists bool
+	if err := p.pool.QueryRow(ctx, `select exists(select 1 from location where name = $1)`, name).Scan(&exists); err != nil {
+		return false, fmt.Errorf("storage: location name taken: %w", err)
+	}
+	return exists, nil
 }
 
 // inScope reports whether a target location falls within a resolved scope,

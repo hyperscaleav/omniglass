@@ -58,6 +58,7 @@ type ComponentSpec struct {
 // ComponentPatch is the update input: nil fields unchanged. Reparent, rebind,
 // and relocate are deferred.
 type ComponentPatch struct {
+	Name          *string
 	DisplayName   *string
 	ComponentType *string
 }
@@ -195,6 +196,19 @@ func (p *PG) DeleteComponent(ctx context.Context, actorID, name string, read, ac
 	return scopedDelete(ctx, p, componentConfig, actorID, name, read, action)
 }
 
+// ComponentNameTaken reports whether a component with this name exists.
+// Scope-blind by design: the name unique constraint is global, so availability
+// must be a global fact to match it (a scope-aware answer would false-positive
+// on a name held outside the caller's scope). Gated at the API by
+// component:update.
+func (p *PG) ComponentNameTaken(ctx context.Context, name string) (bool, error) {
+	var exists bool
+	if err := p.pool.QueryRow(ctx, `select exists(select 1 from component where name = $1)`, name).Scan(&exists); err != nil {
+		return false, fmt.Errorf("storage: component name taken: %w", err)
+	}
+	return exists, nil
+}
+
 // CreateComponent inserts a component under an optional parent, bound to an
 // optional system and location, writing the audit row in the same transaction.
 // A root component requires an all create scope; a child requires the parent in
@@ -205,6 +219,10 @@ func (p *PG) CreateComponent(ctx context.Context, actorID string, spec Component
 		return nil, fmt.Errorf("storage: begin create component: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+
+	if err := ValidateEntityName(spec.Name); err != nil {
+		return nil, err
+	}
 
 	var parentID *string
 	if spec.ParentName == nil {
@@ -275,14 +293,20 @@ func (p *PG) UpdateComponent(ctx context.Context, actorID, name string, patch Co
 	if err != nil {
 		return nil, err
 	}
+	if patch.Name != nil {
+		if err := ValidateEntityName(*patch.Name); err != nil {
+			return nil, err
+		}
+	}
 	after, err := scanComponent(tx.QueryRow(ctx, `
 		update component set
-			display_name   = coalesce($2, display_name),
-			component_type = coalesce($3, component_type),
+			name           = coalesce($2, name),
+			display_name   = coalesce($3, display_name),
+			component_type = coalesce($4, component_type),
 			updated_at     = now()
 		where id = $1
 		returning `+componentCols,
-		before.ID, patch.DisplayName, patch.ComponentType))
+		before.ID, patch.Name, patch.DisplayName, patch.ComponentType))
 	if err != nil {
 		return nil, mapComponentWriteErr(err)
 	}

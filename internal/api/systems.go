@@ -80,7 +80,7 @@ type systemPathInput struct {
 
 type createSystemInput struct {
 	Body struct {
-		Name        string  `json:"name" minLength:"1" doc:"Globally unique name (the address)"`
+		Name        string  `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"Globally unique name (the address; lowercase letters, digits, hyphens)"`
 		DisplayName string  `json:"display_name,omitempty"`
 		SystemType  string  `json:"system_type" minLength:"1" doc:"A system_type id"`
 		Parent      *string `json:"parent,omitempty" doc:"Parent system name; omit for a root system"`
@@ -91,8 +91,28 @@ type createSystemInput struct {
 type updateSystemInput struct {
 	Name string `path:"name"`
 	Body struct {
+		Name        *string `json:"name,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"A new globally unique technical name (rename)"`
 		DisplayName *string `json:"display_name,omitempty"`
 		SystemType  *string `json:"system_type,omitempty"`
+	}
+}
+
+// checkNameInput is the request for the collection-level :checkName advisory.
+// Shared across the systems/components/locations name checks; declared once here.
+type checkNameInput struct {
+	Body struct {
+		Name string `json:"name" doc:"The proposed technical name to check"`
+	}
+}
+
+// checkNameOutput is the advisory verdict: whether the proposed name is a valid
+// slug and whether it is currently free. Availability is scope-blind to match
+// the global unique constraint. Shared across the three entity name checks.
+type checkNameOutput struct {
+	Body struct {
+		Valid     bool   `json:"valid" doc:"Whether the name matches the slug rule"`
+		Available bool   `json:"available" doc:"Whether the name is free (scope-blind, matches the global unique constraint)"`
+		Reason    string `json:"reason,omitempty" doc:"Human explanation when not valid or not available"`
 	}
 }
 
@@ -253,6 +273,7 @@ func registerSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Middlewares: huma.Middlewares{a.authn, a.require("system", "update")},
 	}, func(ctx context.Context, in *updateSystemInput) (*systemOutput, error) {
 		s, err := gw.UpdateSystem(ctx, actorID(ctx), in.Name, storage.SystemPatch{
+			Name:        in.Body.Name,
 			DisplayName: in.Body.DisplayName,
 			SystemType:  in.Body.SystemType,
 		}, a.scopeFor(ctx, "system", "read"), a.scopeFor(ctx, "system", "update"))
@@ -260,6 +281,32 @@ func registerSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 			return nil, mapSystemErr(err)
 		}
 		return &systemOutput{Body: toSystemBody(s)}, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "check-system-name",
+		Method:      http.MethodPost,
+		Path:        "/systems:checkName",
+		Summary:     "Check a system technical name",
+		Description: "Reports whether a proposed technical name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by system:update.",
+		Middlewares: huma.Middlewares{a.authn, a.require("system", "update")},
+	}, func(ctx context.Context, in *checkNameInput) (*checkNameOutput, error) {
+		out := &checkNameOutput{}
+		if err := storage.ValidateEntityName(in.Body.Name); err != nil {
+			out.Body.Valid = false
+			out.Body.Reason = "Use lowercase letters, digits, and hyphens."
+			return out, nil
+		}
+		out.Body.Valid = true
+		taken, err := gw.SystemNameTaken(ctx, in.Body.Name)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("check system name")
+		}
+		out.Body.Available = !taken
+		if taken {
+			out.Body.Reason = "That name is already taken."
+		}
+		return out, nil
 	})
 
 	huma.Register(api, huma.Operation{
@@ -291,6 +338,8 @@ func mapSystemErr(err error) error {
 		return huma.Error409Conflict("system has child systems")
 	case errors.Is(err, storage.ErrSystemExists):
 		return huma.Error409Conflict("system name already exists")
+	case errors.Is(err, storage.ErrInvalidName):
+		return huma.Error422UnprocessableEntity("invalid name")
 	case errors.Is(err, storage.ErrParentSystemNotFound):
 		return huma.Error422UnprocessableEntity("parent system not found")
 	case errors.Is(err, storage.ErrUnknownSystemType):

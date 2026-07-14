@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { render, screen, waitFor } from "@solidjs/testing-library";
+import { render, screen, waitFor, fireEvent } from "@solidjs/testing-library";
 import { Router, Route } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import Systems from "./Systems";
@@ -58,5 +58,23 @@ describe("Systems create-as-route", () => {
     expect(screen.queryByPlaceholderText(/Add a tag/)).toBeNull();
     // The view footer offers Edit (which would flip the accordion to edit mode).
     expect(screen.getByText("Edit")).toBeTruthy();
+  });
+
+  it("edit mode exposes an editable technical name with a check button", async () => {
+    mount("/systems/boardroom");
+    await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
+    fireEvent.click(screen.getByText("Edit"));
+    // The technical name becomes an editable input seeded from the row.
+    const nameInput = (await screen.findByDisplayValue("boardroom")) as HTMLInputElement;
+    expect(nameInput.disabled).toBe(false);
+    // An inline check button sits beside it.
+    expect(screen.getByLabelText("Check name")).toBeTruthy();
+  });
+
+  it("a fresh detail view keeps the technical name read-only", async () => {
+    mount("/systems/boardroom");
+    await waitFor(() => expect(screen.getByText("Technical name")).toBeTruthy());
+    // No check button until edit begins: the name is a read-only fact.
+    expect(screen.queryByLabelText("Check name")).toBeNull();
   });
 });
