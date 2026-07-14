@@ -1,34 +1,25 @@
 # The official component types, seeded idempotently at boot. A component is a
-# device or element in a system; the type classifies it. Ranks spaced by 10.
-# Starter set, operator-extensible later; tune freely.
+# device or element in a system; the type classifies it. The registry lists
+# alphabetically by display_name. Starter set, operator-extensible later; tune
+# freely.
 component_types:
   - id: display
     display_name: Display
-    rank: 10
   - id: camera
     display_name: Camera
-    rank: 20
   - id: microphone
     display_name: Microphone
-    rank: 30
   - id: speaker
     display_name: Speaker
-    rank: 40
   - id: codec
     display_name: Codec
-    rank: 50
   - id: control-processor
     display_name: Control Processor
-    rank: 60
   - id: touch-panel
     display_name: Touch Panel
-    rank: 70
   - id: switcher
     display_name: Switcher
-    rank: 80
   - id: amplifier
     display_name: Amplifier
-    rank: 90
   - id: sensor
     display_name: Sensor
-    rank: 100

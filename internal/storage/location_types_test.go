@@ -35,7 +35,7 @@ func TestLocationTypeCRUD(t *testing.T) {
 		t.Fatalf("dup create err = %v, want ErrTypeExists", err)
 	}
 
-	// Update mutates display_name; rank/icon unchanged when omitted.
+	// Update mutates display_name; icon unchanged when omitted.
 	name := "West Wing"
 	if _, err := gw.UpdateLocationType(ctx, "", "wing", storage.LocationTypePatch{DisplayName: &name}); err != nil {
 		t.Fatalf("update: %v", err)

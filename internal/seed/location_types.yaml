@@ -1,24 +1,19 @@
 # The official location types, seeded idempotently at boot (ON CONFLICT DO
-# UPDATE). rank orders the types and gives a soft hierarchy signal; ranks are
-# spaced by 10 so a new type (a wing, a zone) can slot between without a
-# renumber. rank does NOT constrain nesting: the location tree stays free-form.
+# UPDATE). The registry lists alphabetically by display_name; that ordering
+# does NOT constrain nesting: the location tree stays free-form.
 # icon is a glyph key the console resolves to an SVG and renders as the leading
 # glyph on every location of this type; an unknown key falls back to map-pin.
 # Operator-defined types via the namespace shadow are a later slice.
 location_types:
   - id: campus
     display_name: Campus
-    rank: 10
     icon: landmark
   - id: building
     display_name: Building
-    rank: 20
     icon: building
   - id: floor
     display_name: Floor
-    rank: 30
     icon: layers
   - id: room
     display_name: Room
-    rank: 40
     icon: door-open
