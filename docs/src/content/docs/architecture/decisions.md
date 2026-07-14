@@ -647,6 +647,7 @@ below from the project's history. From here it grows one slice at a time.
   is deliberate until the platform-settings backend ships and the leaf is gated on `setting:read:admin`. Design:
   `docs/superpowers/specs/2026-07-13-operator-console-nav-ia-design.md`.
 - **Closes:** issue [#222](https://github.com/hyperscaleav/omniglass/issues/222).
+- **Update (2026-07-14):** **Files** joins the **Values** group. The files slice ([ADR-0029](#adr-0029-files-slice-1-a-content-addressed-blob-store-and-a-tenant-wide-file-handle)) first shipped the Files directory under Inventory, but a file is not part of the monitored estate (no health, not polled): it is operator-uploaded **content**. So the Values group broadens from "operator-set values resolved down the cascade" to **operator-set values and content**, with the (deliberately non-cascading, flat) file as its content member alongside the cascaded variables, secrets, and config ([#249](https://github.com/hyperscaleav/omniglass/issues/249)).
 ### ADR-0027: create is a route; inventory create and edit unify on the detail accordion
 
 - **Date:** 2026-07-14 | **Status:** Accepted | **Pages:** [design system](/contributing/design-system/), [core entities](/architecture/core-entities/)
@@ -699,7 +700,8 @@ below from the project's history. From here it grows one slice at a time.
   Gateway primitive (a `blob.Store` seam, default **pgblobs** backend holding bytes inline, keyed by the sha256
   of the bytes, dedup via `on conflict do nothing`, integrity-verified on read), and a **`file`** handle,
   searchable metadata (name, content_type, size, sha256, sensitive) that points at a blob by hash, with CRUD
-  over the API, the generated CLI, and the typed client, plus the Files directory under Inventory. Four calls
+  over the API, the generated CLI, and the typed client, plus the Files directory (under Values; see the
+  [ADR-0026 update](#adr-0026-console-nav-ia-estate-values-get-their-own-top-level-group-the-settings-group-becomes-admin)). Four calls
   shape it. **(1) No placement arc on a file.** A file is tenant-wide, not on the exclusive arc a secret sits on,
   because a file relates **1:many** (to entities and types) rather than 1:1; that locality is a future
   many-to-many **attachment**, not an owner column, so the gateway injects no ABAC tree scope on a file query.

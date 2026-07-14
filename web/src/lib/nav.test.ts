@@ -37,10 +37,10 @@ describe("filterNav", () => {
     expect(out[0].children!.map((c) => c.label)).toEqual(["Systems"]);
   });
 
-  it("orders the inventory section Components, Systems, Locations, Nodes, Files", () => {
+  it("orders the inventory section Components, Systems, Locations, Nodes", () => {
     const inv = navItems.find((i) => i.label === "Inventory");
     expect(inv?.children?.map((c) => c.label)).toEqual([
-      "Components", "Systems", "Locations", "Nodes", "Files",
+      "Components", "Systems", "Locations", "Nodes",
     ]);
   });
 
@@ -155,8 +155,8 @@ describe("routeTokens", () => {
 
 describe("nav IA rework", () => {
   it("puts the estate entities under Inventory and the operator-set values under Values", () => {
-    expect(section("Inventory", [">"])).toEqual(["Components", "Systems", "Locations", "Nodes", "Files"]);
-    expect(section("Values", [">"])).toEqual(["Variables", "Secrets", "Config"]);
+    expect(section("Inventory", [">"])).toEqual(["Components", "Systems", "Locations", "Nodes"]);
+    expect(section("Values", [">"])).toEqual(["Variables", "Secrets", "Config", "Files"]);
   });
 
   it("renames the Settings group to Admin and drops the Settings label", () => {

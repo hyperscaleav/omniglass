@@ -14,7 +14,7 @@ import { TAGS_KEY, entityTagsKey } from "../lib/tags";
 // grants every permission.
 const me: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
 const loc: Location = { id: "l-1", name: "hq", display_name: "HQ", location_type: "building", effective_tags: {} };
-const types: LocationType[] = [{ id: "building", display_name: "Building", rank: 1, icon: "building", official: true }];
+const types: LocationType[] = [{ id: "building", display_name: "Building", icon: "building", official: true }];
 
 function mount(path: string) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
