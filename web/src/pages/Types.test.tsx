@@ -71,4 +71,18 @@ describe("Types page", () => {
     mount(viewer);
     expect(screen.queryByText("New type")).toBeNull();
   });
+
+  it("shows the allowed-parents editor on the location create form, with a Root option", async () => {
+    mount();
+    fireEvent.click(screen.getByText("New type"));
+    expect(await screen.findByText("Allowed parents")).toBeTruthy();
+    expect(screen.getByText("Root (no parent)")).toBeTruthy();
+  });
+
+  it("does not show the allowed-parents editor on a non-location create form", async () => {
+    mount();
+    fireEvent.click(screen.getByRole("tab", { name: "System" }));
+    fireEvent.click(await screen.findByText("New type"));
+    expect(screen.queryByText("Allowed parents")).toBeNull();
+  });
 });
