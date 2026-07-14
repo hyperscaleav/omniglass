@@ -84,6 +84,25 @@ func (p *PG) validatePlacement(ctx context.Context, q querier, childType string,
 	return &PlacementError{ChildType: childType, ParentType: *parentType}
 }
 
+// locationIsDescendant reports whether candidateID is targetID or a descendant
+// of it (self-inclusive): the cycle guard for a reparent, which must not move a
+// location under itself or one of its own children.
+func (p *PG) locationIsDescendant(ctx context.Context, q querier, targetID, candidateID string) (bool, error) {
+	var ok bool
+	err := q.QueryRow(ctx, `
+		with recursive sub(id) as (
+			select id from location where id = $1
+			union all
+			select l.id from location l join sub on l.parent_id = sub.id
+		) cycle id set is_cycle using path
+		select exists(select 1 from sub where id = $2)`,
+		targetID, candidateID).Scan(&ok)
+	if err != nil {
+		return false, fmt.Errorf("storage: descendant check: %w", err)
+	}
+	return ok, nil
+}
+
 // Location is a place in the estate tree: name-addressable (name is globally
 // unique), classified by location_type, and nested under an optional parent.
 type Location struct {
@@ -105,11 +124,15 @@ type LocationSpec struct {
 	ParentName   *string
 }
 
-// LocationPatch is the update input: nil fields are left unchanged. Renaming and
-// reparenting (a tree move) are deferred to a later slice.
+// LocationPatch is the update input: nil fields are left unchanged. Renaming
+// is deferred to a later slice. ParentName, when set, re-parents the location
+// (a tree move) to the named parent, cycle-guarded and placement-validated
+// exactly like create; a move to root (no parent) is not supported via patch
+// this slice.
 type LocationPatch struct {
 	DisplayName  *string
 	LocationType *string
+	ParentName   *string
 }
 
 // LocationType is a registry row classifying a location: a stable id, the
@@ -356,8 +379,10 @@ func (p *PG) CreateLocation(ctx context.Context, actorID string, spec LocationSp
 
 // UpdateLocation applies a patch to a location addressed by name, enforcing the
 // three-way split: outside read scope is ErrLocationNotFound (404), readable but
-// outside the action scope is ErrLocationForbidden (403). The old and new shapes
-// are audited in the same transaction.
+// outside the action scope is ErrLocationForbidden (403). When ParentName is
+// set, the move is cycle-guarded (ErrLocationCycle) and placement-validated
+// against the resolved (possibly also-patched) location_type, exactly like
+// create. The old and new shapes are audited in the same transaction.
 func (p *PG) UpdateLocation(ctx context.Context, actorID, name string, patch LocationPatch, read, action scope.Set) (*Location, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -370,14 +395,53 @@ func (p *PG) UpdateLocation(ctx context.Context, actorID, name string, patch Loc
 		return nil, err
 	}
 
+	parentID := before.ParentID
+	if patch.ParentName != nil {
+		newParent, err := p.locationByName(ctx, tx, *patch.ParentName)
+		if errors.Is(err, ErrLocationNotFound) {
+			return nil, ErrParentNotFound
+		} else if err != nil {
+			return nil, err
+		}
+		in, err := p.inScope(ctx, tx, newParent.ID, action)
+		if err != nil {
+			return nil, err
+		}
+		if !in {
+			return nil, ErrLocationForbidden
+		}
+		finalType := before.LocationType
+		if patch.LocationType != nil {
+			finalType = *patch.LocationType
+		}
+		// Placement is checked before the cycle guard: a rejected placement
+		// (a type mismatch) is reported as PlacementError even when the target
+		// parent also happens to be a descendant, so the caller sees the more
+		// specific, actionable reason. The cycle guard remains the last-resort
+		// structural check, catching moves an unconstrained (or otherwise
+		// type-compatible) placement would otherwise let through.
+		if err := p.validatePlacement(ctx, tx, finalType, &newParent.LocationType); err != nil {
+			return nil, err
+		}
+		desc, err := p.locationIsDescendant(ctx, tx, before.ID, newParent.ID)
+		if err != nil {
+			return nil, err
+		}
+		if desc {
+			return nil, ErrLocationCycle
+		}
+		parentID = &newParent.ID
+	}
+
 	after, err := scanLocation(tx.QueryRow(ctx, `
 		update location set
 			display_name  = coalesce($2, display_name),
 			location_type = coalesce($3, location_type),
+			parent_id     = $4,
 			updated_at    = now()
 		where id = $1
 		returning `+locationCols,
-		before.ID, patch.DisplayName, patch.LocationType))
+		before.ID, patch.DisplayName, patch.LocationType, parentID))
 	if err != nil {
 		return nil, mapLocationWriteErr(err)
 	}
