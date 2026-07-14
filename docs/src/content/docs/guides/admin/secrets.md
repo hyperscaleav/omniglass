@@ -13,7 +13,7 @@ so the most-specific owner wins onto a component. Its plaintext sibling is a
 [variable](/guides/admin/variables/). The model underneath is [config and
 credentials](/architecture/variables/).
 
-**Inventory > Secrets** (with `secret:read`) is the directory of every [secret](/architecture/variables/)
+**Values > Secrets** (with `secret:read`) is the directory of every [secret](/architecture/variables/)
 you may see: a typed, encrypted-at-rest value owned at one scope and resolved down the cascade. Each row
 shows its name, a **type badge**, a **scope** label (Global, or the location / system / component it
 attaches to), and a **masked** field preview (`••••••`, never a value). The same chip filter as the
