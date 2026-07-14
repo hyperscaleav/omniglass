@@ -1300,6 +1300,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/systems:checkName": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check a system technical name
+         * @description Reports whether a proposed technical name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by system:update.
+         */
+        post: operations["check-system-name"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/tags": {
         parameters: {
             query?: never;
@@ -1685,6 +1705,30 @@ export interface components {
             /** @description The new password (at least 12 characters, not a common password, not containing the username) */
             new_password: string;
         };
+        CheckNameInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CheckNameInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The proposed technical name to check */
+            name: string;
+        };
+        CheckNameOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CheckNameOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Whether the name is free (scope-blind, matches the global unique constraint) */
+            available: boolean;
+            /** @description Human explanation when not valid or not available */
+            reason?: string;
+            /** @description Whether the name matches the slug rule */
+            valid: boolean;
+        };
         ComponentBody: {
             /**
              * Format: uri
@@ -1912,7 +1956,7 @@ export interface components {
             display_name?: string;
             /** @description Location name this system is placed at */
             location?: string;
-            /** @description Globally unique name (the address) */
+            /** @description Globally unique name (the address; lowercase letters, digits, hyphens) */
             name: string;
             /** @description Parent system name; omit for a root system */
             parent?: string;
@@ -2823,6 +2867,8 @@ export interface components {
              */
             readonly $schema?: string;
             display_name?: string;
+            /** @description A new globally unique technical name (rename) */
+            name?: string;
             system_type?: string;
         };
         UpdateSystemTypeInputBody: {
@@ -5599,6 +5645,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TagBindingBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "check-system-name": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CheckNameInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckNameOutputBody"];
                 };
             };
             /** @description Error */

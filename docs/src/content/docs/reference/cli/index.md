@@ -1462,6 +1462,26 @@ omniglass statu list
 
 Commands for the system resource
 
+### `omniglass system checkName`
+
+Check a system technical name
+
+```
+omniglass system checkName [flags]
+```
+
+Reports whether a proposed technical name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by system:update.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--name` | string | (none) | The proposed technical name to check |
+
+Example:
+
+```sh
+omniglass system checkName --name name
+```
+
 ### `omniglass system create`
 
 Create a system
@@ -1476,7 +1496,7 @@ Creates a system, optionally under a parent (a root needs an all-scoped grant) a
 |---|---|---|---|
 | `--display-name` | string | (none) |  |
 | `--location` | string | (none) | Location name this system is placed at |
-| `--name` | string | (none) | Globally unique name (the address) |
+| `--name` | string | (none) | Globally unique name (the address; lowercase letters, digits, hyphens) |
 | `--parent` | string | (none) | Parent system name; omit for a root system |
 | `--system-type` | string | (none) | A system_type id |
 
@@ -1604,6 +1624,7 @@ Patches a system's display_name or system_type. Gated by system:update; read and
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--display-name` | string | (none) |  |
+| `--name` | string | (none) | A new globally unique technical name (rename) |
 | `--system-type` | string | (none) |  |
 
 Example:
