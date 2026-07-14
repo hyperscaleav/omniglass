@@ -240,6 +240,32 @@ owning entity's own write. The key vocabulary and an entity's tags read on the v
 
 A `tagBinding` body is `{key, value, owner_kind, owner_id?, owner_name?}`.
 
+## Files: content-addressed bytes behind a handle
+
+A **file** is a searchable handle over a content-addressed [blob](/architecture/files/): the metadata is
+tenant-wide (no placement arc), so unlike a secret these routes take **no scope**, only the
+`file:<action>` permission plus the per-file `sensitive` tier. Reading rides the **viewer floor**
+(`file:read`, which `*:read` carries, since a file is not a sensitive *resource*); a **sensitive** file is
+instead fenced to the `:admin` tier (`file:read:admin`), hidden from a lister without it and a
+**non-disclosing 404** to a reader without it, exactly the [secret sensitivity rule](/architecture/decisions/#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier).
+The bytes ride **base64 in JSON** on both create and download (the [avatar precedent](/architecture/decisions/#adr-0018-the-avatar-read-endpoint-is-json-not-raw-image-bytes)),
+so the whole surface stays under the authz middleware and generates a uniform client.
+
+- `GET /files` is the directory (`{files: [file]}`), sensitive files omitted below the admin tier
+  (`file:read`).
+- `POST /files` creates one from an upload `{name, content_type, content (base64), sensitive?}` (201,
+  `file:create`): the server hashes the bytes, **deduplicates** the blob, and writes the handle. A
+  `sensitive: true` file additionally needs the admin tier.
+- `GET /files/{id}` returns one handle's metadata (`file:read`); a sensitive file is a non-disclosing 404
+  without the admin tier.
+- `GET /files/{id}:download` returns `{name, content_type, content (base64)}`, the blob read back and its
+  hash verified (`file:read`).
+- `DELETE /files/{id}` removes the handle (204, `file:delete`); the blob is left in place (garbage
+  collection is a later slice).
+
+A `file` body is `{id, name, content_type, size, sha256, sensitive, created_at}`; the `sha256` is the
+content address of the blob it points at, so two handles over identical bytes share one blob.
+
 ## Reads beyond one resource are views
 
 A single resource reads through its typed `GET`. Anything richer, a dashboard, an explorer, the cascade
