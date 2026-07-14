@@ -94,6 +94,78 @@ func (p *PG) ListComponentTypes(ctx context.Context) ([]ComponentType, error) {
 	return out, rows.Err()
 }
 
+// ComponentTypePatch carries the mutable fields of a component_type update; a nil
+// field is left unchanged.
+type ComponentTypePatch struct {
+	DisplayName *string
+	Rank        *int
+}
+
+// CreateComponentType inserts a custom (official=false) component_type and audits
+// it. A duplicate id is ErrTypeExists.
+func (p *PG) CreateComponentType(ctx context.Context, actorID string, ct ComponentType) (*ComponentType, error) {
+	ct.Official = false
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("storage: begin create component_type: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	if _, err := tx.Exec(ctx,
+		`insert into component_type (id, official, display_name, rank) values ($1, false, $2, $3)`,
+		ct.ID, ct.DisplayName, ct.Rank); err != nil {
+		if isUniqueViolation(err) {
+			return nil, ErrTypeExists
+		}
+		return nil, fmt.Errorf("storage: insert component_type %q: %w", ct.ID, err)
+	}
+	if err := writeAuditRes(ctx, tx, actorID, "create", "component_type", ct.ID, nil, ct); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("storage: commit create component_type: %w", err)
+	}
+	return &ct, nil
+}
+
+// UpdateComponentType patches a custom component_type (nil fields unchanged) and
+// audits it. Official rows are read-only; an unknown id is ErrTypeNotFound.
+func (p *PG) UpdateComponentType(ctx context.Context, actorID, id string, patch ComponentTypePatch) (*ComponentType, error) {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("storage: begin update component_type: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	if err := guardTypeMutable(ctx, tx, "component_type", id); err != nil {
+		return nil, err
+	}
+	var ct ComponentType
+	if err := tx.QueryRow(ctx, `
+		update component_type set
+			display_name = coalesce($2, display_name),
+			rank         = coalesce($3, rank)
+		where id = $1
+		returning id, official, display_name, rank`,
+		id, patch.DisplayName, patch.Rank).
+		Scan(&ct.ID, &ct.Official, &ct.DisplayName, &ct.Rank); err != nil {
+		return nil, fmt.Errorf("storage: update component_type %q: %w", id, err)
+	}
+	if err := writeAuditRes(ctx, tx, actorID, "update", "component_type", id, nil, ct); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("storage: commit update component_type: %w", err)
+	}
+	return &ct, nil
+}
+
+// DeleteComponentType removes a custom component_type, refusing an official row
+// and a row still referenced by a component.
+func (p *PG) DeleteComponentType(ctx context.Context, actorID, id string) error {
+	return deleteTypeRow(ctx, p, "component_type", "component_type", typeRef{table: "component", col: "component_type"}, actorID, id)
+}
+
 // --- component CRUD (read/delete via the generic helpers) --------------------
 
 const componentCols = `id, name, coalesce(display_name, ''), component_type, parent_id, system_id, location_id, created_at, updated_at`

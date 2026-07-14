@@ -148,6 +148,13 @@ func (UnimplementedGateway) UpsertLocationType(context.Context, LocationType) er
 func (UnimplementedGateway) ListLocationTypes(context.Context) ([]LocationType, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) CreateLocationType(context.Context, string, LocationType) (*LocationType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) UpdateLocationType(context.Context, string, string, LocationTypePatch) (*LocationType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteLocationType(context.Context, string, string) error { return nil }
 func (UnimplementedGateway) InScopeIDs(context.Context, string, []string, scope.Set) (map[string]bool, error) {
 	return nil, nil
 }
@@ -170,6 +177,13 @@ func (UnimplementedGateway) UpsertSystemType(context.Context, SystemType) error 
 func (UnimplementedGateway) ListSystemTypes(context.Context) ([]SystemType, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) CreateSystemType(context.Context, string, SystemType) (*SystemType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) UpdateSystemType(context.Context, string, string, SystemTypePatch) (*SystemType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteSystemType(context.Context, string, string) error { return nil }
 func (UnimplementedGateway) ListSystems(context.Context, scope.Set) ([]System, error) {
 	return nil, nil
 }
@@ -189,6 +203,13 @@ func (UnimplementedGateway) UpsertComponentType(context.Context, ComponentType) 
 func (UnimplementedGateway) ListComponentTypes(context.Context) ([]ComponentType, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) CreateComponentType(context.Context, string, ComponentType) (*ComponentType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) UpdateComponentType(context.Context, string, string, ComponentTypePatch) (*ComponentType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteComponentType(context.Context, string, string) error { return nil }
 func (UnimplementedGateway) ListComponents(context.Context, scope.Set) ([]Component, error) {
 	return nil, nil
 }

@@ -76,6 +76,7 @@ roles:
       - "role:read:admin"
       - "audit:read:admin"
       - "datapoint_type:create"
+      - "type:create,update,delete"
       - "tag:*"
       - "unit:create"
       - "event_type:create"

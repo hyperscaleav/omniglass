@@ -157,6 +157,31 @@ components:
         - name
         - component_type
       type: object
+    ComponentTypeBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ComponentTypeBody.json
+          format: uri
+          readOnly: true
+          type: string
+        display_name:
+          type: string
+        id:
+          type: string
+        official:
+          type: boolean
+        rank:
+          format: int64
+          type: integer
+      required:
+        - id
+        - display_name
+        - rank
+        - official
+      type: object
     CreateComponentInputBody:
       additionalProperties: false
       properties:
@@ -189,6 +214,31 @@ components:
       required:
         - name
         - component_type
+      type: object
+    CreateComponentTypeInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateComponentTypeInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        display_name:
+          minLength: 1
+          type: string
+        id:
+          description: Globally unique type id
+          minLength: 1
+          type: string
+        rank:
+          description: Ordering rank; lower sorts first
+          format: int64
+          type: integer
+      required:
+        - id
+        - display_name
       type: object
     CreateGrantInputBody:
       additionalProperties: false
@@ -315,6 +365,34 @@ components:
       required:
         - name
         - location_type
+      type: object
+    CreateLocationTypeInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateLocationTypeInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        display_name:
+          minLength: 1
+          type: string
+        icon:
+          description: A glyph key; the console falls back to map-pin when empty
+          type: string
+        id:
+          description: Globally unique type id (kebab, e.g. wing)
+          minLength: 1
+          type: string
+        rank:
+          description: Ordering rank; lower sorts first
+          format: int64
+          type: integer
+      required:
+        - id
+        - display_name
       type: object
     CreateMeTokenInputBody:
       additionalProperties: false
@@ -471,6 +549,31 @@ components:
       required:
         - name
         - system_type
+      type: object
+    CreateSystemTypeInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateSystemTypeInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        display_name:
+          minLength: 1
+          type: string
+        id:
+          description: Globally unique type id
+          minLength: 1
+          type: string
+        rank:
+          description: Ordering rank; lower sorts first
+          format: int64
+          type: integer
+      required:
+        - id
+        - display_name
       type: object
     CreateTagInputBody:
       additionalProperties: false
@@ -901,6 +1004,25 @@ components:
         - target_id
         - expires_at
       type: object
+    ListComponentTypesOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListComponentTypesOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        component_types:
+          items:
+            $ref: "#/components/schemas/ComponentTypeBody"
+          type:
+            - array
+            - "null"
+      required:
+        - component_types
+      type: object
     ListComponentsOutputBody:
       additionalProperties: false
       properties:
@@ -1110,6 +1232,25 @@ components:
       required:
         - secrets
       type: object
+    ListSystemTypesOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListSystemTypesOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        system_types:
+          items:
+            $ref: "#/components/schemas/SystemTypeBody"
+          type:
+            - array
+            - "null"
+      required:
+        - system_types
+      type: object
     ListSystemsOutputBody:
       additionalProperties: false
       properties:
@@ -1207,6 +1348,13 @@ components:
     LocationTypeBody:
       additionalProperties: false
       properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/LocationTypeBody.json
+          format: uri
+          readOnly: true
+          type: string
         display_name:
           type: string
         icon:
@@ -1849,6 +1997,31 @@ components:
         - name
         - system_type
       type: object
+    SystemTypeBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/SystemTypeBody.json
+          format: uri
+          readOnly: true
+          type: string
+        display_name:
+          type: string
+        id:
+          type: string
+        official:
+          type: boolean
+        rank:
+          format: int64
+          type: integer
+      required:
+        - id
+        - display_name
+        - rank
+        - official
+      type: object
     TagBindingBody:
       additionalProperties: false
       properties:
@@ -1946,6 +2119,22 @@ components:
         display_name:
           type: string
       type: object
+    UpdateComponentTypeInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/UpdateComponentTypeInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        display_name:
+          type: string
+        rank:
+          format: int64
+          type: integer
+      type: object
     UpdateGroupInputBody:
       additionalProperties: false
       properties:
@@ -1985,6 +2174,24 @@ components:
           type: string
         location_type:
           type: string
+      type: object
+    UpdateLocationTypeInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/UpdateLocationTypeInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        display_name:
+          type: string
+        icon:
+          type: string
+        rank:
+          format: int64
+          type: integer
       type: object
     UpdateMeInputBody:
       additionalProperties: false
@@ -2058,6 +2265,22 @@ components:
           type: string
         system_type:
           type: string
+      type: object
+    UpdateSystemTypeInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/UpdateSystemTypeInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        display_name:
+          type: string
+        rank:
+          format: int64
+          type: integer
       type: object
     UpdateTagInputBody:
       additionalProperties: false
@@ -2801,24 +3024,6 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Liveness and database-reachability probe
-  /location-types:
-    get:
-      description: Lists the location_type registry (the shape-definers a location is classified by), ordered by rank. Populates the type picker on the location form. Gated by location:read.
-      operationId: list-location-types
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ListLocationTypesOutputBody"
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: List location types
   /locations:
     get:
       description: Lists the locations the caller may read, each filtered to its scope subtree. Gated by location:read.
@@ -3909,24 +4114,6 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List roles
-  /secret-types:
-    get:
-      description: Lists the secret_type shapes a secret can take, for the create form. Gated by secret:read.
-      operationId: list-secret-types
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ListSecretTypesOutputBody"
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: List secret types
   /secrets:
     get:
       description: Lists the secrets the caller may see, with masked fields, filtered to the read scope; admin-sensitive secrets appear only to the admin tier. Gated by secret:read, which the viewer floor does not carry (secret is a sensitive resource).
@@ -4450,6 +4637,300 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List the distinct values bound for a key
+  /types/component:
+    get:
+      description: Lists the component_type registry, ordered by rank. Populates the type picker on the component form. Gated by type:read.
+      operationId: list-component-types
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListComponentTypesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List component types
+    post:
+      description: Creates a custom (non-official) component_type. Gated by type:create.
+      operationId: create-component-type
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateComponentTypeInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComponentTypeBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Create a component type
+  /types/component/{id}:
+    delete:
+      description: Deletes a custom component_type, refused if official (422) or referenced by a component (409). Gated by type:delete.
+      operationId: delete-component-type
+      parameters:
+        - description: The component_type id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The component_type id
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Delete a component type
+    patch:
+      description: Patches a custom component_type's display_name or rank. Official types are read-only (422). Gated by type:update.
+      operationId: update-component-type
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateComponentTypeInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComponentTypeBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Update a component type
+  /types/location:
+    get:
+      description: Lists the location_type registry (the shape-definers a location is classified by), ordered by rank. Populates the type picker on the location form. Gated by type:read.
+      operationId: list-location-types
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListLocationTypesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List location types
+    post:
+      description: Creates a custom (non-official) location_type. Gated by type:create.
+      operationId: create-location-type
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateLocationTypeInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocationTypeBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Create a location type
+  /types/location/{id}:
+    delete:
+      description: Deletes a custom location_type, refused if official (422) or still referenced by a location (409). Gated by type:delete.
+      operationId: delete-location-type
+      parameters:
+        - description: The location_type id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The location_type id
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Delete a location type
+    patch:
+      description: Patches a custom location_type's display_name, rank, or icon. Official types are read-only (422). Gated by type:update.
+      operationId: update-location-type
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateLocationTypeInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocationTypeBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Update a location type
+  /types/secret:
+    get:
+      description: Lists the secret_type shapes a secret can take, for the create form. Gated by secret:read.
+      operationId: list-secret-types
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListSecretTypesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List secret types
+  /types/system:
+    get:
+      description: Lists the system_type registry, ordered by rank. Populates the type picker on the system form. Gated by type:read.
+      operationId: list-system-types
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListSystemTypesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List system types
+    post:
+      description: Creates a custom (non-official) system_type. Gated by type:create.
+      operationId: create-system-type
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSystemTypeInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemTypeBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Create a system type
+  /types/system/{id}:
+    delete:
+      description: Deletes a custom system_type, refused if official (422) or referenced by a system (409). Gated by type:delete.
+      operationId: delete-system-type
+      parameters:
+        - description: The system_type id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The system_type id
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Delete a system type
+    patch:
+      description: Patches a custom system_type's display_name or rank. Official types are read-only (422). Gated by type:update.
+      operationId: update-system-type
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSystemTypeInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemTypeBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Update a system type
   /variables:
     get:
       description: Lists every variable. Requires an all-scope read; the scoped, per-component view is the effective-variables route. Gated by variable:read.

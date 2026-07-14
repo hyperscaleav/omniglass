@@ -661,26 +661,6 @@ Example:
 omniglass location update <name>
 ```
 
-## `omniglass location-type`
-
-Commands for the location-type resource
-
-### `omniglass location-type list`
-
-List location types
-
-```
-omniglass location-type list
-```
-
-Lists the location_type registry (the shape-definers a location is classified by), ordered by rank. Populates the type picker on the location form. Gated by location:read.
-
-Example:
-
-```sh
-omniglass location-type list
-```
-
 ## `omniglass login`
 
 Commands for the login resource
@@ -1370,26 +1350,6 @@ Example:
 omniglass secret update <id> --fields fields
 ```
 
-## `omniglass secret-type`
-
-Commands for the secret-type resource
-
-### `omniglass secret-type list`
-
-List secret types
-
-```
-omniglass secret-type list
-```
-
-Lists the secret_type shapes a secret can take, for the create form. Gated by secret:read.
-
-Example:
-
-```sh
-omniglass secret-type list
-```
-
 ## `omniglass seed-dev`
 
 Seed a dev database with example locations, users, and grants (idempotent; never for production)
@@ -1799,6 +1759,253 @@ Issues a new bearer credential for an existing principal, addressed by username,
 |---|---|---|---|
 | `--description` | string | (none) | what the token is for (required) |
 | `--ttl` | duration | `2160h0m0s` | how long the token is valid before it expires (max 365 days) |
+
+## `omniglass type`
+
+Commands for the type resource
+
+### `omniglass type create`
+
+Create a component type
+
+```
+omniglass type create [flags]
+```
+
+Creates a custom (non-official) component_type. Gated by type:create.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--display-name` | string | (none) |  |
+| `--id` | string | (none) | Globally unique type id |
+| `--rank` | string | (none) | Ordering rank; lower sorts first |
+
+Example:
+
+```sh
+omniglass type component create --display-name display_name --id id
+```
+
+### `omniglass type create`
+
+Create a system type
+
+```
+omniglass type create [flags]
+```
+
+Creates a custom (non-official) system_type. Gated by type:create.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--display-name` | string | (none) |  |
+| `--id` | string | (none) | Globally unique type id |
+| `--rank` | string | (none) | Ordering rank; lower sorts first |
+
+Example:
+
+```sh
+omniglass type system create --display-name display_name --id id
+```
+
+### `omniglass type create`
+
+Create a location type
+
+```
+omniglass type create [flags]
+```
+
+Creates a custom (non-official) location_type. Gated by type:create.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--display-name` | string | (none) |  |
+| `--icon` | string | (none) | A glyph key; the console falls back to map-pin when empty |
+| `--id` | string | (none) | Globally unique type id (kebab, e.g. wing) |
+| `--rank` | string | (none) | Ordering rank; lower sorts first |
+
+Example:
+
+```sh
+omniglass type location create --display-name display_name --id id
+```
+
+### `omniglass type delete`
+
+Delete a component type
+
+```
+omniglass type delete <id>
+```
+
+Deletes a custom component_type, refused if official (422) or referenced by a component (409). Gated by type:delete.
+
+Example:
+
+```sh
+omniglass type component delete <id>
+```
+
+### `omniglass type delete`
+
+Delete a system type
+
+```
+omniglass type delete <id>
+```
+
+Deletes a custom system_type, refused if official (422) or referenced by a system (409). Gated by type:delete.
+
+Example:
+
+```sh
+omniglass type system delete <id>
+```
+
+### `omniglass type delete`
+
+Delete a location type
+
+```
+omniglass type delete <id>
+```
+
+Deletes a custom location_type, refused if official (422) or still referenced by a location (409). Gated by type:delete.
+
+Example:
+
+```sh
+omniglass type location delete <id>
+```
+
+### `omniglass type list`
+
+List location types
+
+```
+omniglass type list
+```
+
+Lists the location_type registry (the shape-definers a location is classified by), ordered by rank. Populates the type picker on the location form. Gated by type:read.
+
+Example:
+
+```sh
+omniglass type location list
+```
+
+### `omniglass type list`
+
+List secret types
+
+```
+omniglass type list
+```
+
+Lists the secret_type shapes a secret can take, for the create form. Gated by secret:read.
+
+Example:
+
+```sh
+omniglass type secret list
+```
+
+### `omniglass type list`
+
+List component types
+
+```
+omniglass type list
+```
+
+Lists the component_type registry, ordered by rank. Populates the type picker on the component form. Gated by type:read.
+
+Example:
+
+```sh
+omniglass type component list
+```
+
+### `omniglass type list`
+
+List system types
+
+```
+omniglass type list
+```
+
+Lists the system_type registry, ordered by rank. Populates the type picker on the system form. Gated by type:read.
+
+Example:
+
+```sh
+omniglass type system list
+```
+
+### `omniglass type update`
+
+Update a location type
+
+```
+omniglass type update <id> [flags]
+```
+
+Patches a custom location_type's display_name, rank, or icon. Official types are read-only (422). Gated by type:update.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--display-name` | string | (none) |  |
+| `--icon` | string | (none) |  |
+| `--rank` | string | (none) |  |
+
+Example:
+
+```sh
+omniglass type location update <id>
+```
+
+### `omniglass type update`
+
+Update a component type
+
+```
+omniglass type update <id> [flags]
+```
+
+Patches a custom component_type's display_name or rank. Official types are read-only (422). Gated by type:update.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--display-name` | string | (none) |  |
+| `--rank` | string | (none) |  |
+
+Example:
+
+```sh
+omniglass type component update <id>
+```
+
+### `omniglass type update`
+
+Update a system type
+
+```
+omniglass type update <id> [flags]
+```
+
+Patches a custom system_type's display_name or rank. Official types are read-only (422). Gated by type:update.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--display-name` | string | (none) |  |
+| `--rank` | string | (none) |  |
+
+Example:
+
+```sh
+omniglass type system update <id>
+```
 
 ## `omniglass variable`
 

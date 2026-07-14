@@ -1,5 +1,5 @@
 import { For, Show, createMemo, createSignal, createUniqueId, type JSX } from "solid-js";
-import { OP, opsFor, tokenToChip, chipGlyph, type FilterKey, type Chip, type OpKey } from "../lib/predicate";
+import { OP, opsFor, tokenToChip, chipGlyph, valueless, type FilterKey, type Chip, type OpKey } from "../lib/predicate";
 import { Search, X } from "./icons";
 import Button from "./Button";
 
@@ -10,6 +10,13 @@ import Button from "./Button";
 // map onto a standard listbox), with role/aria hand-set; Kobalte is used for the
 // modal widgets (Drawer/CommandPalette) where it fits cleanly.
 //
+// The tag facets (FilterKey.presence) are not promoted to the top-level field
+// list, which would crowd it and mix a field's match hint (substring/exact) with
+// a field kind (tag). Instead one "tag" entry stands for all of them: picking it
+// discloses the tag keys, and choosing a key rewrites the input to that key so the
+// op/value stages proceed unchanged. Typing a tag key directly (environment:...)
+// still works, so the guided path adds a step without removing the fast one.
+//
 // trailing flows the action rail into the same wrap row; bare drops the card
 // chrome; clearable shows Clear at the line end when chips exist.
 type Suggestion =
@@ -18,6 +25,9 @@ type Suggestion =
   | { kind: "value"; value: string; hint: string };
 
 const GLYPH_RE = /^(!=|>=|<=|[~=≠^$>≥<≤])/;
+// The synthetic field that groups the tag facets under one top-level entry.
+const TAG_GROUP = "tag";
+const isTag = <T,>(k: FilterKey<T>): boolean => k.presence === true;
 
 export default function FilterBar<T>(props: {
   keys: FilterKey<T>[];
@@ -41,15 +51,31 @@ export default function FilterBar<T>(props: {
   const suggestions = createMemo<Suggestion[]>(() => {
     const t = text();
     const colon = t.indexOf(":");
+    const tagKeys = props.keys.filter(isTag);
     if (colon < 0) {
       const frag = t.trim().toLowerCase();
-      return props.keys
-        .filter((k) => k.key.toLowerCase().includes(frag))
-        .map((k) => ({ kind: "key", label: `${k.key}:`, hint: k.hint ?? "" }) as Suggestion);
+      const sugs: Suggestion[] = props.keys
+        .filter((k) => !isTag(k) && k.key.toLowerCase().includes(frag))
+        .map((k) => ({ kind: "key", label: `${k.key}:`, hint: k.hint ?? "" }));
+      // One "tag" entry stands in for every tag facet; selecting it lists the keys.
+      if (tagKeys.length && TAG_GROUP.includes(frag)) sugs.push({ kind: "key", label: `${TAG_GROUP}:`, hint: "tag key" });
+      return sugs;
     }
-    const spec = keyOf(t.slice(0, colon));
-    if (!spec) return [];
+    const head = t.slice(0, colon);
     const rest = t.slice(colon + 1);
+    // The tag group discloses its keys; each rewrites the input to that key, so
+    // the following op/value stages are identical to any other field.
+    if (head === TAG_GROUP) {
+      const frag = rest.trim().toLowerCase();
+      return tagKeys
+        .filter((k) => k.key.toLowerCase().includes(frag))
+        .map((k) => {
+          const n = k.values ? k.values(props.rows).length : 0;
+          return { kind: "key", label: `${k.key}:`, hint: n ? `${n} value${n > 1 ? "s" : ""}` : "" } as Suggestion;
+        });
+    }
+    const spec = keyOf(head);
+    if (!spec) return [];
     const m = rest.match(GLYPH_RE);
     const frag = (m ? rest.slice(m[0].length) : rest).trim().toLowerCase();
     const all = spec.values ? spec.values(props.rows) : [];
@@ -57,7 +83,7 @@ export default function FilterBar<T>(props: {
       .filter((v) => v.toLowerCase().includes(frag))
       .map((v) => ({ kind: "value", value: v, hint: spec.valueLabel ? spec.valueLabel(v) : "" }));
     if (m) return valSugs;
-    const opSugs: Suggestion[] = opsFor(spec.type)
+    const opSugs: Suggestion[] = opsFor(spec.type, spec.presence)
       .filter((op) => frag === "" || op.includes(frag) || OP[op].label.includes(frag))
       .map((op) => ({ kind: "op", op, glyph: OP[op].glyph, label: OP[op].label }));
     return [...opSugs, ...valSugs];
@@ -87,6 +113,13 @@ export default function FilterBar<T>(props: {
     }
     const key = t.slice(0, colon);
     if (s.kind === "op") {
+      // A value-less presence operator (exists / absent) has no value stage, so
+      // selecting it commits the chip immediately.
+      if (valueless(s.op)) {
+        commit(`${key}:${OP[s.op].token}`);
+        inputRef?.focus();
+        return;
+      }
       setText(`${key}:${OP[s.op].token}`);
       setSel(-1);
       setOpen(true);
@@ -128,14 +161,16 @@ export default function FilterBar<T>(props: {
   const cycleOp = (i: number) => {
     const c = props.chips[i];
     const spec = keyOf(c.key);
-    const list = opsFor(spec ? spec.type : "string");
+    // Cycle only among operators of the same value-ness, so a value chip never
+    // lands on a value-less operator (or the reverse) and end up mismatched.
+    const list = opsFor(spec ? spec.type : "string", spec?.presence).filter((o) => valueless(o) === valueless(c.op));
     const next = list[(list.indexOf(c.op) + 1) % list.length];
     props.onChips(props.chips.map((x, j) => (j === i ? { ...x, op: next } : x)));
   };
   const reEdit = (i: number) => {
     const c = props.chips[i];
     props.onChips(props.chips.filter((_, j) => j !== i));
-    setText(`${c.key}:${OP[c.op].token}${c.values[0]}`);
+    setText(`${c.key}:${OP[c.op].token}${c.values[0] ?? ""}`);
     setOpen(true);
     inputRef?.focus();
   };
@@ -154,7 +189,9 @@ export default function FilterBar<T>(props: {
               <button class="font-data font-semibold text-primary" title="cycle operator" onClick={() => cycleOp(i())}>
                 {chipGlyph(c.op)}
               </button>
-              <button class="font-data font-medium" onClick={() => reEdit(i())}>{c.values.join("|")}</button>
+              <Show when={c.values.length}>
+                <button class="font-data font-medium" onClick={() => reEdit(i())}>{c.values.join("|")}</button>
+              </Show>
               <button class="ml-px inline-flex text-base-content/40" aria-label="remove" onClick={() => props.onChips(props.chips.filter((_, j) => j !== i()))}>
                 <X size={13} />
               </button>

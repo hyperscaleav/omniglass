@@ -11,6 +11,9 @@ const keys: FilterKey<Row>[] = [
   { key: "name", type: "string", hint: "substring", get: (r) => r.name },
   { key: "type", type: "string", hint: "exact", get: (r) => r.type, values: () => ["codec", "display"] },
 ];
+// A presence-capable facet (a tag key): it offers the value-less exists / absent
+// operators alongside the ordinary value operators.
+const withTag: FilterKey<Row>[] = [...keys, { key: "env", type: "string", hint: "tag", presence: true, get: () => "", values: () => ["prod"] }];
 
 describe("FilterBar", () => {
   it("commits a typed key:value as a chip with the key's operator", () => {
@@ -45,5 +48,45 @@ describe("FilterBar", () => {
     const { getByLabelText } = render(() => <FilterBar keys={keys} rows={[]} chips={chips} onChips={onChips} />);
     fireEvent.click(getByLabelText("remove"));
     expect(onChips).toHaveBeenCalledWith([]);
+  });
+
+  it("groups the tag facets under one top-level 'tag' entry, not each key", () => {
+    const { getByRole, getAllByRole } = render(() => <FilterBar keys={withTag} rows={[]} chips={[]} onChips={vi.fn()} />);
+    fireEvent.focus(getByRole("combobox"));
+    const labels = getAllByRole("option").map((o) => o.textContent ?? "");
+    expect(labels.some((l) => l.startsWith("tag:"))).toBe(true);
+    expect(labels.every((l) => !l.startsWith("env"))).toBe(true);
+  });
+
+  it("discloses the tag keys once the tag group is chosen", () => {
+    const { getByRole, getAllByRole } = render(() => <FilterBar keys={withTag} rows={[]} chips={[]} onChips={vi.fn()} />);
+    fireEvent.input(getByRole("combobox"), { target: { value: "tag:" } });
+    const labels = getAllByRole("option").map((o) => o.textContent ?? "");
+    expect(labels.some((l) => l.startsWith("env:"))).toBe(true);
+  });
+
+  it("commits a value-less exists chip from the presence token", () => {
+    const onChips = vi.fn();
+    const { getByRole } = render(() => <FilterBar keys={withTag} rows={[]} chips={[]} onChips={onChips} />);
+    const input = getByRole("combobox") as HTMLInputElement;
+    fireEvent.input(input, { target: { value: "env:?" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onChips).toHaveBeenCalledWith([{ key: "env", op: "exists", values: [] }]);
+  });
+
+  it("commits a value-less absent chip from the presence token", () => {
+    const onChips = vi.fn();
+    const { getByRole } = render(() => <FilterBar keys={withTag} rows={[]} chips={[]} onChips={onChips} />);
+    const input = getByRole("combobox") as HTMLInputElement;
+    fireEvent.input(input, { target: { value: "env:!?" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onChips).toHaveBeenCalledWith([{ key: "env", op: "absent", values: [] }]);
+  });
+
+  it("renders a value-less chip with no value button", () => {
+    const chips: Chip[] = [{ key: "env", op: "exists", values: [] }];
+    const { container } = render(() => <FilterBar keys={withTag} rows={[]} chips={chips} onChips={vi.fn()} />);
+    // The only buttons on a presence chip are the operator glyph and remove (no value).
+    expect(container.querySelectorAll(".font-medium").length).toBe(0);
   });
 });
