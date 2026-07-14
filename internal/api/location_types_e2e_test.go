@@ -14,9 +14,10 @@ import (
 )
 
 // TestLocationTypesAPI drives the location_type registry read endpoint: an owner
-// lists the seeded official types in rank order, each with its display_name, so a
-// form can populate a type picker (value = id, label = display_name). The 403 for
-// a principal without type:read is covered generically by TestEveryRouteIsGated.
+// lists the seeded official types in alphabetical order (by display_name), each
+// with its display_name, so a form can populate a type picker (value = id, label
+// = display_name). The 403 for a principal without type:read is covered
+// generically by TestEveryRouteIsGated.
 func TestLocationTypesAPI(t *testing.T) {
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
@@ -39,7 +40,6 @@ func TestLocationTypesAPI(t *testing.T) {
 		LocationTypes []struct {
 			ID          string `json:"id"`
 			DisplayName string `json:"display_name"`
-			Rank        int    `json:"rank"`
 			Icon        string `json:"icon"`
 			Official    bool   `json:"official"`
 		} `json:"location_types"`
@@ -48,8 +48,9 @@ func TestLocationTypesAPI(t *testing.T) {
 		t.Fatalf("decode: %v", err)
 	}
 
-	// The four seeded official types, in rank order, each labelled and official.
-	want := []string{"campus", "building", "floor", "room"}
+	// The four seeded official types, in alphabetical order by display_name
+	// (Building, Campus, Floor, Room), each labelled and official.
+	want := []string{"building", "campus", "floor", "room"}
 	gotIDs := make([]string, len(body.LocationTypes))
 	for i, lt := range body.LocationTypes {
 		gotIDs[i] = lt.ID
@@ -96,7 +97,7 @@ func TestLocationTypeCRUDAPI(t *testing.T) {
 
 	// Create a custom type (201), then it appears in the list.
 	c.do(ownerTok, http.MethodPost, "/types/location",
-		map[string]any{"id": "wing", "display_name": "Wing", "rank": 15, "icon": "layers"}, http.StatusCreated)
+		map[string]any{"id": "wing", "display_name": "Wing", "icon": "layers"}, http.StatusCreated)
 
 	// Update it (200).
 	c.do(ownerTok, http.MethodPatch, "/types/location/wing",

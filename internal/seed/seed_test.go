@@ -52,8 +52,9 @@ func TestSeedRolesIdempotent(t *testing.T) {
 		t.Errorf("owner permissions = %v, want [>] (the superuser tail wildcard)", ownerPerms)
 	}
 
-	// The four official location types seed alongside the roles, ranked and
-	// idempotent (the second Run above must not have duplicated them).
+	// The four official location types seed alongside the roles, in
+	// alphabetical order by display_name, and idempotently (the second Run
+	// above must not have duplicated them).
 	var typeCount int
 	if err := conn.QueryRow(ctx, `select count(*) from location_type where official`).Scan(&typeCount); err != nil {
 		t.Fatalf("count location_types: %v", err)
@@ -62,11 +63,11 @@ func TestSeedRolesIdempotent(t *testing.T) {
 		t.Errorf("official location_types = %d, want 4", typeCount)
 	}
 	var topType string
-	if err := conn.QueryRow(ctx, `select id from location_type order by rank, id limit 1`).Scan(&topType); err != nil {
+	if err := conn.QueryRow(ctx, `select id from location_type order by display_name, id limit 1`).Scan(&topType); err != nil {
 		t.Fatalf("read top location_type: %v", err)
 	}
-	if topType != "campus" {
-		t.Errorf("lowest-rank location_type = %q, want campus", topType)
+	if topType != "building" {
+		t.Errorf("first-alphabetically location_type = %q, want building", topType)
 	}
 	// Each shipped type seeds its glyph key, and re-running Run keeps it (the icon
 	// is part of the idempotent upsert, not just the initial insert).

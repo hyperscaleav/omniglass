@@ -27,7 +27,7 @@ describe("locations data layer", () => {
 
   it("lists location types and unwraps the registry envelope", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ location_types: [{ id: "campus", display_name: "Campus", rank: 10, official: true }] }),
+      jsonResponse({ location_types: [{ id: "campus", display_name: "Campus", official: true }] }),
     );
     const types = await listLocationTypes();
     expect(types).toHaveLength(1);

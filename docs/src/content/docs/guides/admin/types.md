@@ -7,8 +7,7 @@ description: "The Types catalog: a segmented tab per kind across the location, s
 **segmented tab control** over the four classifier registries that shape the estate:
 **Location**, **System**, **Component**, and **Secret**, one tab per `location_type`,
 `system_type`, `component_type`, and `secret_type`. Each tab is that registry's own directory:
-a table of its rows, each showing **id**, **display name**, **rank** (its sort order within
-the kind), and **origin** (**official**, seed-owned, or **custom**); the Location tab's rows
+a table of its rows, sorted alphabetically by display name, each showing **id**, **display name**, and **origin** (**official**, seed-owned, or **custom**); the Location tab's rows
 also carry an **icon** glyph key.
 
 - Switch tabs to move between registries; **name** matches an id or display name within the
@@ -16,10 +15,10 @@ also carry an **icon** glyph key.
 - **New type** (with `type:create`, an admin permission) opens a create **drawer** scoped to
   the active tab when it is a writable kind (location, system, or component; the Secret tab has
   no write routes this slice): name its **id** (a kebab identifier, unique within that kind,
-  e.g. `wing`), give it a **display name** and a **rank** (lower sorts first), and, on the
+  e.g. `wing`), give it a **display name**, and, on the
   Location tab, an **icon** glyph key (defaults to `map-pin`).
 - Pick a row to open its **detail blade**. The footer **Edit** pencil (with `type:update`) edits
-  the display name, rank, and, on a location type, the icon; the kind and id are fixed.
+  the display name and, on a location type, the icon; the kind and id are fixed.
   **Delete** (with `type:delete`) removes the row, behind a confirm.
 - An **official** (seed-owned) row is always read-only: no Edit, no Delete, and the blade marks
   it "Seed-owned, read-only." It is part of the baseline every estate ships with (for example

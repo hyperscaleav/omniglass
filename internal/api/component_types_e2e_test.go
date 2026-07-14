@@ -47,7 +47,7 @@ func TestComponentTypesAPI(t *testing.T) {
 
 	// CRUD a custom type; in-use delete refused.
 	c.do(ownerTok, http.MethodPost, "/types/component",
-		map[string]any{"id": "relay", "display_name": "Relay", "rank": 15}, http.StatusCreated)
+		map[string]any{"id": "relay", "display_name": "Relay"}, http.StatusCreated)
 	// Duplicate id is a 409, exercising the shared mapTypeErr ErrTypeExists branch.
 	c.do(ownerTok, http.MethodPost, "/types/component",
 		map[string]any{"id": "relay", "display_name": "Dup"}, http.StatusConflict)

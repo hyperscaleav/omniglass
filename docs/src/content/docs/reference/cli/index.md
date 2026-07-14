@@ -1778,7 +1778,6 @@ Creates a custom (non-official) component_type. Gated by type:create.
 |---|---|---|---|
 | `--display-name` | string | (none) |  |
 | `--id` | string | (none) | Globally unique type id |
-| `--rank` | string | (none) | Ordering rank; lower sorts first |
 
 Example:
 
@@ -1800,7 +1799,6 @@ Creates a custom (non-official) system_type. Gated by type:create.
 |---|---|---|---|
 | `--display-name` | string | (none) |  |
 | `--id` | string | (none) | Globally unique type id |
-| `--rank` | string | (none) | Ordering rank; lower sorts first |
 
 Example:
 
@@ -1823,7 +1821,6 @@ Creates a custom (non-official) location_type. Gated by type:create.
 | `--display-name` | string | (none) |  |
 | `--icon` | string | (none) | A glyph key; the console falls back to map-pin when empty |
 | `--id` | string | (none) | Globally unique type id (kebab, e.g. wing) |
-| `--rank` | string | (none) | Ordering rank; lower sorts first |
 
 Example:
 
@@ -1887,7 +1884,7 @@ List location types
 omniglass type list
 ```
 
-Lists the location_type registry (the shape-definers a location is classified by), ordered by rank. Populates the type picker on the location form. Gated by type:read.
+Lists the location_type registry (the shape-definers a location is classified by), ordered alphabetically by display name. Populates the type picker on the location form. Gated by type:read.
 
 Example:
 
@@ -1919,7 +1916,7 @@ List component types
 omniglass type list
 ```
 
-Lists the component_type registry, ordered by rank. Populates the type picker on the component form. Gated by type:read.
+Lists the component_type registry, ordered alphabetically by display name. Populates the type picker on the component form. Gated by type:read.
 
 Example:
 
@@ -1935,7 +1932,7 @@ List system types
 omniglass type list
 ```
 
-Lists the system_type registry, ordered by rank. Populates the type picker on the system form. Gated by type:read.
+Lists the system_type registry, ordered alphabetically by display name. Populates the type picker on the system form. Gated by type:read.
 
 Example:
 
@@ -1951,13 +1948,12 @@ Update a location type
 omniglass type update <id> [flags]
 ```
 
-Patches a custom location_type's display_name, rank, or icon. Official types are read-only (422). Gated by type:update.
+Patches a custom location_type's display_name or icon. Official types are read-only (422). Gated by type:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--display-name` | string | (none) |  |
 | `--icon` | string | (none) |  |
-| `--rank` | string | (none) |  |
 
 Example:
 
@@ -1973,12 +1969,11 @@ Update a component type
 omniglass type update <id> [flags]
 ```
 
-Patches a custom component_type's display_name or rank. Official types are read-only (422). Gated by type:update.
+Patches a custom component_type's display_name. Official types are read-only (422). Gated by type:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--display-name` | string | (none) |  |
-| `--rank` | string | (none) |  |
 
 Example:
 
@@ -1994,12 +1989,11 @@ Update a system type
 omniglass type update <id> [flags]
 ```
 
-Patches a custom system_type's display_name or rank. Official types are read-only (422). Gated by type:update.
+Patches a custom system_type's display_name. Official types are read-only (422). Gated by type:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--display-name` | string | (none) |  |
-| `--rank` | string | (none) |  |
 
 Example:
 

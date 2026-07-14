@@ -14,14 +14,13 @@ export const TYPE_KINDS: TypeKind[] = ["location", "system", "component", "secre
 // Only these three are operator-writable; secret_type is read-only this slice.
 export const WRITABLE_KINDS: TypeKind[] = ["location", "system", "component"];
 
-// A normalized registry row across all four kinds. rank is absent on secret;
-// icon is present only on location; fields only on secret (read-only display).
+// A normalized registry row across all four kinds. icon is present only on
+// location; fields only on secret (read-only display).
 export type TypeRow = {
   kind: TypeKind;
   id: string;
   display_name: string;
   official: boolean;
-  rank?: number;
   icon?: string;
   fields?: SecretTypeField[];
 };
@@ -46,7 +45,6 @@ export async function listTypes(): Promise<TypeRow[]> {
     id: t.id,
     display_name: t.display_name,
     official: t.official,
-    rank: t.rank,
     icon: t.icon,
   }));
 
@@ -55,7 +53,6 @@ export async function listTypes(): Promise<TypeRow[]> {
     id: t.id,
     display_name: t.display_name,
     official: t.official,
-    rank: t.rank,
   }));
 
   const componentRows: TypeRow[] = (componentRes.data?.component_types ?? []).map((t) => ({
@@ -63,7 +60,6 @@ export async function listTypes(): Promise<TypeRow[]> {
     id: t.id,
     display_name: t.display_name,
     official: t.official,
-    rank: t.rank,
   }));
 
   const secretRows: TypeRow[] = (secretRes.data?.secret_types ?? []).map((t) => ({
@@ -80,7 +76,6 @@ export async function listTypes(): Promise<TypeRow[]> {
 export type CreateType = {
   id: string;
   display_name: string;
-  rank?: number;
   icon?: string;
 };
 
@@ -108,7 +103,6 @@ export async function createType(kind: TypeKind, body: CreateType): Promise<void
 
 export type UpdateType = {
   display_name?: string;
-  rank?: number;
   icon?: string;
 };
 

@@ -62,6 +62,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0025](#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier) | 2026-07-13 | Accepted | `secret` leaves the bare `*` wildcard's reach (direct match and read floor); a per-secret `admin_sensitive` flag flips a secret to the `:admin` tier, so operators read operational device secrets in scope while platform credentials stay admin/owner-only at the same scope |
 | [ADR-0026](#adr-0026-console-nav-ia-estate-values-get-their-own-top-level-group-the-settings-group-becomes-admin) | 2026-07-13 | Accepted | Console nav IA: Variables, Secrets, and Config get their own top-level Values group; Inventory holds the estate entities including Nodes; Interfaces and Tasks become facet panels; the Settings group is renamed Admin |
 | [ADR-0027](#adr-0027-create-is-a-route-inventory-create-and-edit-unify-on-the-detail-accordion) | 2026-07-14 | Accepted | Inventory create/edit unify on the detail accordion: `New` routes to `/<entity>/create` (a draft) and Save hands off to `/<entity>/<id>` in edit; view is read-only, edit is the sole writer; the create/edit Drawer is retired |
+| [ADR-0028](#adr-0028-rank-retired-from-the-type-registries-sort-is-alphabetical) | 2026-07-14 | Accepted | `rank` is dropped from `location_type`, `system_type`, and `component_type`; the three list operations sort by `display_name, id` instead |
 
 ## Entries
 
@@ -645,7 +646,6 @@ below from the project's history. From here it grows one slice at a time.
   is deliberate until the platform-settings backend ships and the leaf is gated on `setting:read:admin`. Design:
   `docs/superpowers/specs/2026-07-13-operator-console-nav-ia-design.md`.
 - **Closes:** issue [#222](https://github.com/hyperscaleav/omniglass/issues/222).
-
 ### ADR-0027: create is a route; inventory create and edit unify on the detail accordion
 
 - **Date:** 2026-07-14 | **Status:** Accepted | **Pages:** [design system](/contributing/design-system/), [core entities](/architecture/core-entities/)
@@ -670,3 +670,23 @@ below from the project's history. From here it grows one slice at a time.
   immediate per-binding write, so Cancel does not roll a tag back, and the tag control sits apart from the Save/Cancel
   form. Slice 2 (a shared cross-page form shell) and slice 3 (moving Users onto it) are deferred.
 - **Closes:** issue [#231](https://github.com/hyperscaleav/omniglass/issues/231).
+
+### ADR-0028: `rank` retired from the type registries; sort is alphabetical
+
+- **Date:** 2026-07-14 | **Status:** Accepted | **Pages:** [core-entities](/architecture/core-entities/), [Types guide](/guides/admin/types/)
+- **Decision:** `rank` is dropped from `location_type`, `system_type`, and `component_type`: the
+  column (a new idempotent migration), the three API bodies and create/update inputs, the
+  boot-seed YAMLs, the generated client and CLI, and the Types catalog page (no Rank column, no
+  Rank field on create or edit). `ListLocationTypes`, `ListSystemTypes`, and `ListComponentTypes`
+  now order by `display_name, id` instead.
+- **Context:** `rank` was sort-only from the start (the location_type seed comment already said
+  so: "rank does NOT constrain nesting"), never an enforcement mechanism. The upcoming
+  `allowed_parent_types` placement constraint on `location_type` needed a clean field to
+  introduce without a stale, unused ordering column sitting beside it, so retiring `rank` is the
+  mechanical precursor to that slice rather than part of it: this PR only removes the field and
+  switches the sort, `allowed_parent_types` is a separate slice. Alphabetical is the obvious
+  default with no enforcement semantics to preserve; an operator who wants a specific browse
+  order can still rely on the id or display name they chose.
+- **Closes:** part of issue [#239](https://github.com/hyperscaleav/omniglass/issues/239) (the
+  `allowed_parent_types` half continues in a follow-up PR against the same issue). Design:
+  `docs/superpowers/specs/2026-07-14-type-placement-constraints-design.md`.

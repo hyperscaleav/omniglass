@@ -54,15 +54,14 @@ type LocationPatch struct {
 }
 
 // LocationType is a registry row classifying a location: a stable id, the
-// official flag, a display_name, a rank (ordering plus a soft hierarchy signal,
-// not a nesting constraint), and an icon (a glyph key the console renders as the
-// leading glyph on every location of this type). It is the only shape-definer
-// for a location, which has no template.
+// official flag, a display_name, and an icon (a glyph key the console renders as
+// the leading glyph on every location of this type). It is the only
+// shape-definer for a location, which has no template. The registry lists
+// alphabetically by display_name; there is no ordering field.
 type LocationType struct {
 	ID          string
 	Official    bool
 	DisplayName string
-	Rank        int
 	Icon        string
 }
 
@@ -70,25 +69,24 @@ type LocationType struct {
 // phase's write. Idempotent: re-seeding the same id updates it in place.
 func (p *PG) UpsertLocationType(ctx context.Context, lt LocationType) error {
 	_, err := p.pool.Exec(ctx, `
-		insert into location_type (id, official, display_name, rank, icon)
-		values ($1, $2, $3, $4, $5)
+		insert into location_type (id, official, display_name, icon)
+		values ($1, $2, $3, $4)
 		on conflict (id) do update
 			set official     = excluded.official,
 			    display_name = excluded.display_name,
-			    rank         = excluded.rank,
 			    icon         = excluded.icon`,
-		lt.ID, lt.Official, lt.DisplayName, lt.Rank, lt.Icon)
+		lt.ID, lt.Official, lt.DisplayName, lt.Icon)
 	if err != nil {
 		return fmt.Errorf("storage: upsert location_type %q: %w", lt.ID, err)
 	}
 	return nil
 }
 
-// ListLocationTypes returns every location type, ordered by rank then id, for
-// the registry view and validation.
+// ListLocationTypes returns every location type, ordered alphabetically by
+// display_name then id, for the registry view and validation.
 func (p *PG) ListLocationTypes(ctx context.Context) ([]LocationType, error) {
 	rows, err := p.pool.Query(ctx,
-		`select id, official, display_name, rank, icon from location_type order by rank, id`)
+		`select id, official, display_name, icon from location_type order by display_name, id`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list location_types: %w", err)
 	}
@@ -96,7 +94,7 @@ func (p *PG) ListLocationTypes(ctx context.Context) ([]LocationType, error) {
 	var out []LocationType
 	for rows.Next() {
 		var lt LocationType
-		if err := rows.Scan(&lt.ID, &lt.Official, &lt.DisplayName, &lt.Rank, &lt.Icon); err != nil {
+		if err := rows.Scan(&lt.ID, &lt.Official, &lt.DisplayName, &lt.Icon); err != nil {
 			return nil, fmt.Errorf("storage: scan location_type: %w", err)
 		}
 		out = append(out, lt)
@@ -108,7 +106,6 @@ func (p *PG) ListLocationTypes(ctx context.Context) ([]LocationType, error) {
 // field is left unchanged.
 type LocationTypePatch struct {
 	DisplayName *string
-	Rank        *int
 	Icon        *string
 }
 
@@ -123,8 +120,8 @@ func (p *PG) CreateLocationType(ctx context.Context, actorID string, lt Location
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	if _, err := tx.Exec(ctx,
-		`insert into location_type (id, official, display_name, rank, icon) values ($1, false, $2, $3, $4)`,
-		lt.ID, lt.DisplayName, lt.Rank, lt.Icon); err != nil {
+		`insert into location_type (id, official, display_name, icon) values ($1, false, $2, $3)`,
+		lt.ID, lt.DisplayName, lt.Icon); err != nil {
 		if isUniqueViolation(err) {
 			return nil, ErrTypeExists
 		}
@@ -139,7 +136,7 @@ func (p *PG) CreateLocationType(ctx context.Context, actorID string, lt Location
 	return &lt, nil
 }
 
-// UpdateLocationType patches a custom location_type's display_name, rank, or icon
+// UpdateLocationType patches a custom location_type's display_name or icon
 // (nil fields unchanged) and audits it. Official rows are read-only (ErrTypeOfficial);
 // an unknown id is ErrTypeNotFound.
 func (p *PG) UpdateLocationType(ctx context.Context, actorID, id string, patch LocationTypePatch) (*LocationType, error) {
@@ -156,12 +153,11 @@ func (p *PG) UpdateLocationType(ctx context.Context, actorID, id string, patch L
 	if err := tx.QueryRow(ctx, `
 		update location_type set
 			display_name = coalesce($2, display_name),
-			rank         = coalesce($3, rank),
-			icon         = coalesce($4, icon)
+			icon         = coalesce($3, icon)
 		where id = $1
-		returning id, official, display_name, rank, icon`,
-		id, patch.DisplayName, patch.Rank, patch.Icon).
-		Scan(&lt.ID, &lt.Official, &lt.DisplayName, &lt.Rank, &lt.Icon); err != nil {
+		returning id, official, display_name, icon`,
+		id, patch.DisplayName, patch.Icon).
+		Scan(&lt.ID, &lt.Official, &lt.DisplayName, &lt.Icon); err != nil {
 		return nil, fmt.Errorf("storage: update location_type %q: %w", id, err)
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "update", "location_type", id, nil, lt); err != nil {

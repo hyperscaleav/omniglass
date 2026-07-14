@@ -173,13 +173,9 @@ components:
           type: string
         official:
           type: boolean
-        rank:
-          format: int64
-          type: integer
       required:
         - id
         - display_name
-        - rank
         - official
       type: object
     CreateComponentInputBody:
@@ -232,10 +228,6 @@ components:
           description: Globally unique type id
           minLength: 1
           type: string
-        rank:
-          description: Ordering rank; lower sorts first
-          format: int64
-          type: integer
       required:
         - id
         - display_name
@@ -386,10 +378,6 @@ components:
           description: Globally unique type id (kebab, e.g. wing)
           minLength: 1
           type: string
-        rank:
-          description: Ordering rank; lower sorts first
-          format: int64
-          type: integer
       required:
         - id
         - display_name
@@ -567,10 +555,6 @@ components:
           description: Globally unique type id
           minLength: 1
           type: string
-        rank:
-          description: Ordering rank; lower sorts first
-          format: int64
-          type: integer
       required:
         - id
         - display_name
@@ -1363,13 +1347,9 @@ components:
           type: string
         official:
           type: boolean
-        rank:
-          format: int64
-          type: integer
       required:
         - id
         - display_name
-        - rank
         - icon
         - official
       type: object
@@ -2013,13 +1993,9 @@ components:
           type: string
         official:
           type: boolean
-        rank:
-          format: int64
-          type: integer
       required:
         - id
         - display_name
-        - rank
         - official
       type: object
     TagBindingBody:
@@ -2131,9 +2107,6 @@ components:
           type: string
         display_name:
           type: string
-        rank:
-          format: int64
-          type: integer
       type: object
     UpdateGroupInputBody:
       additionalProperties: false
@@ -2189,9 +2162,6 @@ components:
           type: string
         icon:
           type: string
-        rank:
-          format: int64
-          type: integer
       type: object
     UpdateMeInputBody:
       additionalProperties: false
@@ -2278,9 +2248,6 @@ components:
           type: string
         display_name:
           type: string
-        rank:
-          format: int64
-          type: integer
       type: object
     UpdateTagInputBody:
       additionalProperties: false
@@ -4639,7 +4606,7 @@ paths:
       summary: List the distinct values bound for a key
   /types/component:
     get:
-      description: Lists the component_type registry, ordered by rank. Populates the type picker on the component form. Gated by type:read.
+      description: Lists the component_type registry, ordered alphabetically by display name. Populates the type picker on the component form. Gated by type:read.
       operationId: list-component-types
       responses:
         "200":
@@ -4701,7 +4668,7 @@ paths:
           description: Error
       summary: Delete a component type
     patch:
-      description: Patches a custom component_type's display_name or rank. Official types are read-only (422). Gated by type:update.
+      description: Patches a custom component_type's display_name. Official types are read-only (422). Gated by type:update.
       operationId: update-component-type
       parameters:
         - in: path
@@ -4731,7 +4698,7 @@ paths:
       summary: Update a component type
   /types/location:
     get:
-      description: Lists the location_type registry (the shape-definers a location is classified by), ordered by rank. Populates the type picker on the location form. Gated by type:read.
+      description: Lists the location_type registry (the shape-definers a location is classified by), ordered alphabetically by display name. Populates the type picker on the location form. Gated by type:read.
       operationId: list-location-types
       responses:
         "200":
@@ -4793,7 +4760,7 @@ paths:
           description: Error
       summary: Delete a location type
     patch:
-      description: Patches a custom location_type's display_name, rank, or icon. Official types are read-only (422). Gated by type:update.
+      description: Patches a custom location_type's display_name or icon. Official types are read-only (422). Gated by type:update.
       operationId: update-location-type
       parameters:
         - in: path
@@ -4841,7 +4808,7 @@ paths:
       summary: List secret types
   /types/system:
     get:
-      description: Lists the system_type registry, ordered by rank. Populates the type picker on the system form. Gated by type:read.
+      description: Lists the system_type registry, ordered alphabetically by display name. Populates the type picker on the system form. Gated by type:read.
       operationId: list-system-types
       responses:
         "200":
@@ -4903,7 +4870,7 @@ paths:
           description: Error
       summary: Delete a system type
     patch:
-      description: Patches a custom system_type's display_name or rank. Official types are read-only (422). Gated by type:update.
+      description: Patches a custom system_type's display_name. Official types are read-only (422). Gated by type:update.
       operationId: update-system-type
       parameters:
         - in: path

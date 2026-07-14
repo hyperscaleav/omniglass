@@ -21,7 +21,7 @@ func TestSystemTypeCRUD(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	st, err := gw.CreateSystemType(ctx, "", storage.SystemType{ID: "kiosk", DisplayName: "Kiosk", Rank: 15})
+	st, err := gw.CreateSystemType(ctx, "", storage.SystemType{ID: "kiosk", DisplayName: "Kiosk"})
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}

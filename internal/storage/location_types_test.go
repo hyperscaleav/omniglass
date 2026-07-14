@@ -22,7 +22,7 @@ func TestLocationTypeCRUD(t *testing.T) {
 	}
 
 	// Create a custom type; it is official=false.
-	lt, err := gw.CreateLocationType(ctx, "", storage.LocationType{ID: "wing", DisplayName: "Wing", Rank: 15, Icon: "layers"})
+	lt, err := gw.CreateLocationType(ctx, "", storage.LocationType{ID: "wing", DisplayName: "Wing", Icon: "layers"})
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -35,7 +35,7 @@ func TestLocationTypeCRUD(t *testing.T) {
 		t.Fatalf("dup create err = %v, want ErrTypeExists", err)
 	}
 
-	// Update mutates display_name; rank/icon unchanged when omitted.
+	// Update mutates display_name; icon unchanged when omitted.
 	name := "West Wing"
 	if _, err := gw.UpdateLocationType(ctx, "", "wing", storage.LocationTypePatch{DisplayName: &name}); err != nil {
 		t.Fatalf("update: %v", err)

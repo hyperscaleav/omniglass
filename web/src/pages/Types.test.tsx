@@ -13,9 +13,9 @@ import { ME_KEY, type Me } from "../lib/auth";
 // only when the caller holds type:create. Data is seeded into the query cache
 // so no server is needed.
 const seed: TypeRow[] = [
-  { kind: "location", id: "campus", display_name: "Campus", official: true, rank: 10, icon: "map-pin" },
-  { kind: "system", id: "kiosk", display_name: "Kiosk", official: false, rank: 20 },
-  { kind: "component", id: "display", display_name: "Display", official: true, rank: 5 },
+  { kind: "location", id: "campus", display_name: "Campus", official: true, icon: "map-pin" },
+  { kind: "system", id: "kiosk", display_name: "Kiosk", official: false },
+  { kind: "component", id: "display", display_name: "Display", official: true },
   { kind: "secret", id: "oauth2-client", display_name: "OAuth2 Client", official: false, fields: [] },
 ];
 
