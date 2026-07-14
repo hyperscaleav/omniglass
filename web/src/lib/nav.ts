@@ -54,7 +54,7 @@ export const navItems: NavItem[] = [
     label: "Catalog", icon: Icons.Layers, hint: "The authored model: templates, types, tags, and rules.",
     children: [
       { label: "Templates", path: "/templates", hint: "Author device shapes: component and system templates, versioned." },
-      { label: "Types", path: "/types", hint: "Component, system, location, interface, datapoint, and event type registries." },
+      { label: "Types", path: "/types", live: true, resource: "type", hint: "Component, system, location, interface, datapoint, and event type registries." },
       { label: "Tags", path: "/tags", live: true, resource: "tag", hint: "The governed tag key vocabulary applied across the inventory." },
       { label: "Rules", path: "/rules", hint: "Transform, calc, and event rules, with CEL and blast-radius preview." },
     ],
