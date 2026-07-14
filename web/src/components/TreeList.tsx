@@ -128,7 +128,23 @@ export interface ListConfig<N extends ListNode> {
   // ctx.openBlade), keyed by kind, alongside the page's own entity blade. Used by
   // Components to open a secret's cascade as a nested blade.
   extraBlades?: Record<string, BladeDef>;
-  FormBody: Component<{ form: FormState<N>; close: () => void; ctx: ListCtx<N> }>;
+  // The create/edit Drawer body. Optional: a page on the create-as-route model omits
+  // it (create is renderCreate at /<entity>/create, edit is inline on the detail
+  // accordion), so the Drawer never opens. Pages still on the drawer model provide it.
+  FormBody?: Component<{ form: FormState<N>; close: () => void; ctx: ListCtx<N> }>;
+  // The draft-create surface, rendered full-page when the focus id is the reserved
+  // "create" (from /<entity>/create). It owns the draft fields and, on Save, navigates
+  // to /<entity>/<newId>. When set, `New` should route here via onNew.
+  renderCreate?: (ctx: ListCtx<N>) => JSX.Element;
+  // What the `New <entity>` button (and a row's Add-child) does. Defaults to opening
+  // the create Drawer; a create-as-route page overrides it to navigate to
+  // /<entity>/create.
+  onNew?: () => void;
+  // What a row's Edit pencil does. Defaults to opening the edit Drawer; a
+  // create-as-route page overrides it to open the node's detail in edit (navigate +
+  // a pending-edit handoff). The blade / full-page pencils drive the edit slot
+  // directly, so this is only the list-row affordance.
+  onEdit?: (n: N) => void;
   onOpenNode?: (n: N) => void;
   onBack?: () => void;
   onDelete?: (n: N, ctx: ListCtx<N>) => void;
@@ -389,7 +405,7 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
       <ColumnMenu columns={cfg.columns} columnKeys={cfg.columnKeys} cols={cols} onToggle={toggleCol} onMove={moveCol} />
       <span class="mx-1 h-5 w-px flex-none bg-base-300" />
       <Show when={allow("create")}>
-        <Button intent="action" icon={Plus} onClick={() => ctxFull.openCreate(null)}>New {cfg.entity.name}</Button>
+        <Button intent="action" icon={Plus} onClick={() => (cfg.onNew ? cfg.onNew() : ctxFull.openCreate(null))}>New {cfg.entity.name}</Button>
       </Show>
     </>
   );
@@ -471,10 +487,10 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
           <div class="flex justify-end gap-0.5 opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100">
             <Button square size="xs" icon={Maximize} title="Open full page" onClick={(e) => { e.stopPropagation(); openFull(n); }} />
             <Show when={cfg.canAddChild?.(n) && rowAllow(n, "create")}>
-              <Button square size="xs" icon={Plus} title="Add child" onClick={(e) => { e.stopPropagation(); ctxFull.openCreate(n); }} />
+              <Button square size="xs" icon={Plus} title="Add child" onClick={(e) => { e.stopPropagation(); if (cfg.onNew) cfg.onNew(); else ctxFull.openCreate(n); }} />
             </Show>
             <Show when={rowAllow(n, "update")}>
-              <Button square size="xs" icon={Pencil} title="Edit" onClick={(e) => { e.stopPropagation(); ctxFull.openEdit(n); }} />
+              <Button square size="xs" icon={Pencil} title="Edit" onClick={(e) => { e.stopPropagation(); if (cfg.onEdit) cfg.onEdit(n); else ctxFull.openEdit(n); }} />
             </Show>
             <Show when={rowAllow(n, "delete") && cfg.onDelete}>
               <Button square size="xs" intent="danger" icon={Trash} title="Delete" onClick={(e) => { e.stopPropagation(); cfg.onDelete!(n, ctxFull); }} />
@@ -625,6 +641,11 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
     );
   };
 
+  // The reserved focus id "create" (from /<entity>/create) shows the draft-create
+  // surface full-page instead of the list. renderDetail resolves a real id; renderCreate
+  // owns a not-yet-saved draft and, on Save, navigates to /<entity>/<newId>.
+  const isCreate = () => cfg.focus?.() === "create" && !!cfg.renderCreate;
+
   return (
     <>
       <Show when={cfg.error?.()}>
@@ -632,14 +653,24 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
           <span>Could not load {cfg.entity.plural.toLowerCase()}: {describeError(cfg.error?.())}</span>
         </div>
       </Show>
-      <Show when={fullPage()} fallback={<ListBody />}>
-        {(n) => <FullPage node={n()} />}
+      <Show
+        when={isCreate()}
+        fallback={
+          <Show when={fullPage()} fallback={<ListBody />}>
+            {(n) => <FullPage node={n()} />}
+          </Show>
+        }
+      >
+        <section class="fade-in flex max-w-3xl flex-col gap-4">
+          <Button class="flex-none self-start" onClick={back}>{"←"} {cfg.entity.plural}</Button>
+          <div class="card border border-base-300 bg-base-200 og-pad">{cfg.renderCreate!(ctxFull)}</div>
+        </section>
       </Show>
       <BladeStack controller={blades} registry={bladeRegistry} />
-      <Show when={form()}>
-        {(f) => (
-          <Drawer open={true} onClose={() => setForm(null)} title={f().mode === "edit" ? `Edit ${cfg.entity.name}` : `New ${cfg.entity.name}`}>
-            <Dynamic component={cfg.FormBody} form={f()} close={() => setForm(null)} ctx={ctxFull} />
+      <Show when={form() && cfg.FormBody}>
+        {(FB) => (
+          <Drawer open={true} onClose={() => setForm(null)} title={form()!.mode === "edit" ? `Edit ${cfg.entity.name}` : `New ${cfg.entity.name}`}>
+            <Dynamic component={FB()} form={form()!} close={() => setForm(null)} ctx={ctxFull} />
           </Drawer>
         )}
       </Show>
