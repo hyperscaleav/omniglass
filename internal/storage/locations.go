@@ -104,6 +104,81 @@ func (p *PG) ListLocationTypes(ctx context.Context) ([]LocationType, error) {
 	return out, rows.Err()
 }
 
+// LocationTypePatch carries the mutable fields of a location_type update; a nil
+// field is left unchanged.
+type LocationTypePatch struct {
+	DisplayName *string
+	Rank        *int
+	Icon        *string
+}
+
+// CreateLocationType inserts a custom (official=false) location_type and audits
+// it. A duplicate id (including a seed-owned official id) is ErrTypeExists.
+func (p *PG) CreateLocationType(ctx context.Context, actorID string, lt LocationType) (*LocationType, error) {
+	lt.Official = false
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("storage: begin create location_type: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	if _, err := tx.Exec(ctx,
+		`insert into location_type (id, official, display_name, rank, icon) values ($1, false, $2, $3, $4)`,
+		lt.ID, lt.DisplayName, lt.Rank, lt.Icon); err != nil {
+		if isUniqueViolation(err) {
+			return nil, ErrTypeExists
+		}
+		return nil, fmt.Errorf("storage: insert location_type %q: %w", lt.ID, err)
+	}
+	if err := writeAuditRes(ctx, tx, actorID, "create", "location_type", lt.ID, nil, lt); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("storage: commit create location_type: %w", err)
+	}
+	return &lt, nil
+}
+
+// UpdateLocationType patches a custom location_type's display_name, rank, or icon
+// (nil fields unchanged) and audits it. Official rows are read-only (ErrTypeOfficial);
+// an unknown id is ErrTypeNotFound.
+func (p *PG) UpdateLocationType(ctx context.Context, actorID, id string, patch LocationTypePatch) (*LocationType, error) {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("storage: begin update location_type: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	if err := guardTypeMutable(ctx, tx, "location_type", id); err != nil {
+		return nil, err
+	}
+	var lt LocationType
+	if err := tx.QueryRow(ctx, `
+		update location_type set
+			display_name = coalesce($2, display_name),
+			rank         = coalesce($3, rank),
+			icon         = coalesce($4, icon)
+		where id = $1
+		returning id, official, display_name, rank, icon`,
+		id, patch.DisplayName, patch.Rank, patch.Icon).
+		Scan(&lt.ID, &lt.Official, &lt.DisplayName, &lt.Rank, &lt.Icon); err != nil {
+		return nil, fmt.Errorf("storage: update location_type %q: %w", id, err)
+	}
+	if err := writeAuditRes(ctx, tx, actorID, "update", "location_type", id, nil, lt); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("storage: commit update location_type: %w", err)
+	}
+	return &lt, nil
+}
+
+// DeleteLocationType removes a custom location_type, refusing an official row and
+// a row still referenced by a location.
+func (p *PG) DeleteLocationType(ctx context.Context, actorID, id string) error {
+	return deleteTypeRow(ctx, p, "location_type", "location_type", typeRef{table: "location", col: "location_type"}, actorID, id)
+}
+
 // locationCols is the column list every location read scans, in struct order.
 const locationCols = `id, name, coalesce(display_name, ''), location_type, parent_id, created_at, updated_at`
 

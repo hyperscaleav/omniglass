@@ -61,6 +61,44 @@ type updateComponentInput struct {
 	}
 }
 
+// componentTypeBody is the wire shape of a component_type registry row.
+type componentTypeBody struct {
+	ID          string `json:"id"`
+	DisplayName string `json:"display_name"`
+	Rank        int    `json:"rank"`
+	Official    bool   `json:"official"`
+}
+
+type listComponentTypesOutput struct {
+	Body struct {
+		ComponentTypes []componentTypeBody `json:"component_types"`
+	}
+}
+
+type componentTypePathInput struct {
+	ID string `path:"id" doc:"The component_type id"`
+}
+
+type createComponentTypeInput struct {
+	Body struct {
+		ID          string `json:"id" minLength:"1" doc:"Globally unique type id"`
+		DisplayName string `json:"display_name" minLength:"1"`
+		Rank        int    `json:"rank,omitempty" doc:"Ordering rank; lower sorts first"`
+	}
+}
+
+type updateComponentTypeInput struct {
+	ID   string `path:"id"`
+	Body struct {
+		DisplayName *string `json:"display_name,omitempty"`
+		Rank        *int    `json:"rank,omitempty"`
+	}
+}
+
+type componentTypeOutput struct {
+	Body componentTypeBody
+}
+
 // registerComponentRoutes wires the component CRUD surface, on the same pattern
 // as locations and systems.
 func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
@@ -97,6 +135,78 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 			out.Body.Components = append(out.Body.Components, b)
 		}
 		return out, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "list-component-types",
+		Method:      http.MethodGet,
+		Path:        "/types/component",
+		Summary:     "List component types",
+		Description: "Lists the component_type registry, ordered by rank. Populates the type picker on the component form. Gated by type:read.",
+		Middlewares: huma.Middlewares{a.authn, a.require("type", "read")},
+	}, func(ctx context.Context, _ *struct{}) (*listComponentTypesOutput, error) {
+		types, err := gw.ListComponentTypes(ctx)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("list component types")
+		}
+		out := &listComponentTypesOutput{}
+		out.Body.ComponentTypes = make([]componentTypeBody, 0, len(types))
+		for i := range types {
+			out.Body.ComponentTypes = append(out.Body.ComponentTypes, componentTypeBody{
+				ID: types[i].ID, DisplayName: types[i].DisplayName, Rank: types[i].Rank, Official: types[i].Official,
+			})
+		}
+		return out, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID:   "create-component-type",
+		Method:        http.MethodPost,
+		Path:          "/types/component",
+		DefaultStatus: http.StatusCreated,
+		Summary:       "Create a component type",
+		Description:   "Creates a custom (non-official) component_type. Gated by type:create.",
+		Middlewares:   huma.Middlewares{a.authn, a.require("type", "create")},
+	}, func(ctx context.Context, in *createComponentTypeInput) (*componentTypeOutput, error) {
+		ct, err := gw.CreateComponentType(ctx, actorID(ctx), storage.ComponentType{
+			ID: in.Body.ID, DisplayName: in.Body.DisplayName, Rank: in.Body.Rank,
+		})
+		if err != nil {
+			return nil, mapTypeErr(err, "component_type")
+		}
+		return &componentTypeOutput{Body: componentTypeBody{ID: ct.ID, DisplayName: ct.DisplayName, Rank: ct.Rank, Official: ct.Official}}, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "update-component-type",
+		Method:      http.MethodPatch,
+		Path:        "/types/component/{id}",
+		Summary:     "Update a component type",
+		Description: "Patches a custom component_type's display_name or rank. Official types are read-only (422). Gated by type:update.",
+		Middlewares: huma.Middlewares{a.authn, a.require("type", "update")},
+	}, func(ctx context.Context, in *updateComponentTypeInput) (*componentTypeOutput, error) {
+		ct, err := gw.UpdateComponentType(ctx, actorID(ctx), in.ID, storage.ComponentTypePatch{
+			DisplayName: in.Body.DisplayName, Rank: in.Body.Rank,
+		})
+		if err != nil {
+			return nil, mapTypeErr(err, "component_type")
+		}
+		return &componentTypeOutput{Body: componentTypeBody{ID: ct.ID, DisplayName: ct.DisplayName, Rank: ct.Rank, Official: ct.Official}}, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID:   "delete-component-type",
+		Method:        http.MethodDelete,
+		Path:          "/types/component/{id}",
+		DefaultStatus: http.StatusNoContent,
+		Summary:       "Delete a component type",
+		Description:   "Deletes a custom component_type, refused if official (422) or referenced by a component (409). Gated by type:delete.",
+		Middlewares:   huma.Middlewares{a.authn, a.require("type", "delete")},
+	}, func(ctx context.Context, in *componentTypePathInput) (*struct{}, error) {
+		if err := gw.DeleteComponentType(ctx, actorID(ctx), in.ID); err != nil {
+			return nil, mapTypeErr(err, "component_type")
+		}
+		return nil, nil
 	})
 
 	huma.Register(api, huma.Operation{

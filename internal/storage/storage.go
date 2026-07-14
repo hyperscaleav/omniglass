@@ -186,6 +186,12 @@ type Gateway interface {
 	UpsertLocationType(ctx context.Context, lt LocationType) error
 	// ListLocationTypes returns every location type, ranked.
 	ListLocationTypes(ctx context.Context) ([]LocationType, error)
+	// The location_type registry CRUD (capability-only, unscoped). Create writes a
+	// custom (official=false) row; update/delete refuse official rows and delete
+	// refuses a row still referenced by a location.
+	CreateLocationType(ctx context.Context, actorID string, lt LocationType) (*LocationType, error)
+	UpdateLocationType(ctx context.Context, actorID, id string, patch LocationTypePatch) (*LocationType, error)
+	DeleteLocationType(ctx context.Context, actorID, id string) error
 
 	// InScopeIDs reports which of the candidate row ids of a tree resource
 	// (location/system/component) are inside a resolved scope, applying the same
@@ -206,6 +212,9 @@ type Gateway interface {
 	// The system tier: a type registry and scoped CRUD, mirroring locations.
 	UpsertSystemType(ctx context.Context, st SystemType) error
 	ListSystemTypes(ctx context.Context) ([]SystemType, error)
+	CreateSystemType(ctx context.Context, actorID string, st SystemType) (*SystemType, error)
+	UpdateSystemType(ctx context.Context, actorID, id string, patch SystemTypePatch) (*SystemType, error)
+	DeleteSystemType(ctx context.Context, actorID, id string) error
 	ListSystems(ctx context.Context, read scope.Set) ([]System, error)
 	GetSystem(ctx context.Context, name string, read scope.Set) (*System, error)
 	CreateSystem(ctx context.Context, actorID string, spec SystemSpec, create scope.Set) (*System, error)
@@ -215,6 +224,9 @@ type Gateway interface {
 	// The component tier: a type registry and scoped CRUD, on the same helpers.
 	UpsertComponentType(ctx context.Context, ct ComponentType) error
 	ListComponentTypes(ctx context.Context) ([]ComponentType, error)
+	CreateComponentType(ctx context.Context, actorID string, ct ComponentType) (*ComponentType, error)
+	UpdateComponentType(ctx context.Context, actorID, id string, patch ComponentTypePatch) (*ComponentType, error)
+	DeleteComponentType(ctx context.Context, actorID, id string) error
 	ListComponents(ctx context.Context, read scope.Set) ([]Component, error)
 	GetComponent(ctx context.Context, name string, read scope.Set) (*Component, error)
 	CreateComponent(ctx context.Context, actorID string, spec ComponentSpec, create scope.Set) (*Component, error)

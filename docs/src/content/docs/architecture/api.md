@@ -160,7 +160,7 @@ gates on **`secret:reveal`**, a permission the `*:read` floor does **not** carry
 everything" grant sees only masks and **only admin (`secret:*`) and owner (`>`) reveal**. Every
 `:reveal` writes an [audit](/architecture/audit/) row (verb `reveal`) in the same call.
 
-- `GET /secret-types` lists the shape registry, each `{id, display_name, official, fields:[{name, type,
+- `GET /types/secret` lists the shape registry, each `{id, display_name, official, fields:[{name, type,
   secret, origin}]}` (`secret:read`).
 - `GET /secrets` is the **all-scope admin directory** (`{secrets: [secret]}`); like the principal
   directory it needs an all-scope grant, and a non-all scope is a 403 (`secret:read`).

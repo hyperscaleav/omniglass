@@ -69,9 +69,9 @@ func TestSecretAPI(t *testing.T) {
 	json.Unmarshal(compRaw, &comp)
 
 	// The create form's shape list.
-	types := c.do(ownerTok, http.MethodGet, "/secret-types", nil, http.StatusOK)
+	types := c.do(ownerTok, http.MethodGet, "/types/secret", nil, http.StatusOK)
 	if !bytes.Contains(types, []byte("snmp-community")) {
-		t.Fatalf("secret-types missing snmp-community: %s", types)
+		t.Fatalf("secret types missing snmp-community: %s", types)
 	}
 
 	// Seal "poll" at global, room, and the component; distinct values.
