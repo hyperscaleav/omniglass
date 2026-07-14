@@ -37,7 +37,11 @@ Three nouns describe what you operate, plus the edge process that collects for t
   lists so a location is classified by a known type rather than a free-typed string. Each type also
   carries an `icon` (a glyph key like `building` or `landmark`) that the console renders as the
   leading glyph on every location of that type, so a campus reads differently from a building at a
-  glance in the tree; an unknown key falls back to `map-pin`.
+  glance in the tree; an unknown key falls back to `map-pin`. Each type also carries
+  `allowed_parent_types` (a set of `location_type` ids and/or the reserved `root` sentinel), the
+  placement constraint: empty means unconstrained, a non-empty set is enforced on create and move,
+  and the four official types ship it seeded (`campus={root}`, `building={root,campus}`,
+  `floor={building,campus}`, `room={floor,building,campus}`).
 - A **node** is the edge process (`omniglass --mode node`) that pulls work, reaches components over
   interfaces, and ships results ([nodes](/architecture/nodes/)). It is structural because it is a
   first-class **owner**: a node owns its own self-health telemetry and can carry a node-owned alarm.

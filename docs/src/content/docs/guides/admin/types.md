@@ -16,10 +16,14 @@ also carry an **icon** glyph key.
   the active tab when it is a writable kind (location, system, or component; the Secret tab has
   no write routes this slice): name its **id** (a kebab identifier, unique within that kind,
   e.g. `wing`), give it a **display name**, and, on the
-  Location tab, an **icon** glyph key (defaults to `map-pin`).
+  Location tab, an **icon** glyph key (defaults to `map-pin`) and its **allowed parents**: a
+  checkbox list of the other location types plus a **Root** option, the set of parent types (or
+  the top of the tree) a location of this type may be placed under. Leave every box unchecked for
+  **unconstrained** (any parent, or root), the default; `root` is a reserved id no real type may
+  take.
 - Pick a row to open its **detail blade**. The footer **Edit** pencil (with `type:update`) edits
-  the display name and, on a location type, the icon; the kind and id are fixed.
-  **Delete** (with `type:delete`) removes the row, behind a confirm.
+  the display name and, on a location type, the icon and allowed parents; the kind and id are
+  fixed. **Delete** (with `type:delete`) removes the row, behind a confirm.
 - An **official** (seed-owned) row is always read-only: no Edit, no Delete, and the blade marks
   it "Seed-owned, read-only." It is part of the baseline every estate ships with (for example
   `campus` / `building` / `floor` / `room` for locations), so the shared vocabulary cannot drift
@@ -31,6 +35,10 @@ also carry an **icon** glyph key.
 - **Delete** is refused (409) while a location, system, or component still uses that type:
   reclassify or remove the referencing rows first. An official type cannot be deleted at all
   (422).
+- A non-empty **allowed parents** set is enforced when a location is created or moved: an
+  out-of-order placement (for example a floor under a room) is refused with a message naming
+  both types. An empty set never blocks a placement. Existing locations are grandfathered: adding
+  or tightening a set does not touch a placement already made, only a later move.
 
 Minting a type is admin-gated; *using* one, classifying a location, system, or component by
 picking it on that entity's own create or edit form, is the ordinary entity write, gated by that
