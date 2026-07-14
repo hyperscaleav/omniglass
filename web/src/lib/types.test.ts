@@ -85,7 +85,7 @@ describe("types data layer", () => {
 
   it("updates a system type by id", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ id: "kiosk", display_name: "Kiosk v2", rank: 20, official: true }),
+      jsonResponse({ id: "kiosk", display_name: "Kiosk v2", official: true }),
     );
     await updateType("system", "kiosk", { display_name: "Kiosk v2" });
     const req = fetchMock.mock.calls[0][0] as Request;
