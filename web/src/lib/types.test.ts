@@ -105,6 +105,27 @@ describe("types data layer", () => {
     expect(sent).toMatchObject({ display_name: "Kiosk v2" });
   });
 
+  it("sends an explicit empty allowed_parent_types to clear a location type's constraint", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonResponse({ id: "wing", display_name: "Wing", official: false, allowed_parent_types: [] }),
+    );
+    await updateType("location", "wing", { allowed_parent_types: [] });
+    const req = fetchMock.mock.calls[0][0] as Request;
+    const sent = await req.json();
+    expect(sent).toHaveProperty("allowed_parent_types");
+    expect(sent.allowed_parent_types).toEqual([]);
+  });
+
+  it("omits allowed_parent_types entirely when not touching a location type's constraint", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonResponse({ id: "wing", display_name: "X", official: false, allowed_parent_types: ["campus"] }),
+    );
+    await updateType("location", "wing", { display_name: "X" });
+    const req = fetchMock.mock.calls[0][0] as Request;
+    const sent = await req.json();
+    expect(sent).not.toHaveProperty("allowed_parent_types");
+  });
+
   it("rejects updating a secret type without calling fetch", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch");
     await expect(updateType("secret", "credentials", { display_name: "X" })).rejects.toThrow(/read-only/);
