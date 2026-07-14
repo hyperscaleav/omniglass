@@ -44,7 +44,6 @@ type locationTypesDoc struct {
 	LocationTypes []struct {
 		ID          string `yaml:"id"`
 		DisplayName string `yaml:"display_name"`
-		Rank        int    `yaml:"rank"`
 		Icon        string `yaml:"icon"`
 	} `yaml:"location_types"`
 }
@@ -53,7 +52,6 @@ type systemTypesDoc struct {
 	SystemTypes []struct {
 		ID          string `yaml:"id"`
 		DisplayName string `yaml:"display_name"`
-		Rank        int    `yaml:"rank"`
 	} `yaml:"system_types"`
 }
 
@@ -61,7 +59,6 @@ type componentTypesDoc struct {
 	ComponentTypes []struct {
 		ID          string `yaml:"id"`
 		DisplayName string `yaml:"display_name"`
-		Rank        int    `yaml:"rank"`
 	} `yaml:"component_types"`
 }
 
@@ -131,7 +128,6 @@ func seedComponentTypes(ctx context.Context, gw storage.Gateway) error {
 			ID:          ct.ID,
 			Official:    true,
 			DisplayName: ct.DisplayName,
-			Rank:        ct.Rank,
 		}); err != nil {
 			return err
 		}
@@ -149,7 +145,6 @@ func seedSystemTypes(ctx context.Context, gw storage.Gateway) error {
 			ID:          st.ID,
 			Official:    true,
 			DisplayName: st.DisplayName,
-			Rank:        st.Rank,
 		}); err != nil {
 			return err
 		}
@@ -187,7 +182,6 @@ func seedLocationTypes(ctx context.Context, gw storage.Gateway) error {
 			ID:          lt.ID,
 			Official:    true,
 			DisplayName: lt.DisplayName,
-			Rank:        lt.Rank,
 			Icon:        lt.Icon,
 		}); err != nil {
 			return err

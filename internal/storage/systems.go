@@ -22,13 +22,13 @@ var (
 	ErrUnknownSystemType    = errors.New("storage: unknown system_type")
 )
 
-// SystemType is a registry row classifying a system (id, official, display_name,
-// rank), the shape-definer, mirroring location_type.
+// SystemType is a registry row classifying a system (id, official, display_name),
+// the shape-definer, mirroring location_type. The registry lists alphabetically
+// by display_name; there is no ordering field.
 type SystemType struct {
 	ID          string
 	Official    bool
 	DisplayName string
-	Rank        int
 }
 
 // System is a composition of components (the service tree): name-addressable,
@@ -67,11 +67,11 @@ type SystemPatch struct {
 
 func (p *PG) UpsertSystemType(ctx context.Context, st SystemType) error {
 	_, err := p.pool.Exec(ctx, `
-		insert into system_type (id, official, display_name, rank)
-		values ($1, $2, $3, $4)
+		insert into system_type (id, official, display_name)
+		values ($1, $2, $3)
 		on conflict (id) do update
-			set official = excluded.official, display_name = excluded.display_name, rank = excluded.rank`,
-		st.ID, st.Official, st.DisplayName, st.Rank)
+			set official = excluded.official, display_name = excluded.display_name`,
+		st.ID, st.Official, st.DisplayName)
 	if err != nil {
 		return fmt.Errorf("storage: upsert system_type %q: %w", st.ID, err)
 	}
@@ -79,7 +79,7 @@ func (p *PG) UpsertSystemType(ctx context.Context, st SystemType) error {
 }
 
 func (p *PG) ListSystemTypes(ctx context.Context) ([]SystemType, error) {
-	rows, err := p.pool.Query(ctx, `select id, official, display_name, rank from system_type order by rank, id`)
+	rows, err := p.pool.Query(ctx, `select id, official, display_name from system_type order by display_name, id`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list system_types: %w", err)
 	}
@@ -87,7 +87,7 @@ func (p *PG) ListSystemTypes(ctx context.Context) ([]SystemType, error) {
 	var out []SystemType
 	for rows.Next() {
 		var st SystemType
-		if err := rows.Scan(&st.ID, &st.Official, &st.DisplayName, &st.Rank); err != nil {
+		if err := rows.Scan(&st.ID, &st.Official, &st.DisplayName); err != nil {
 			return nil, fmt.Errorf("storage: scan system_type: %w", err)
 		}
 		out = append(out, st)
@@ -99,7 +99,6 @@ func (p *PG) ListSystemTypes(ctx context.Context) ([]SystemType, error) {
 // is left unchanged.
 type SystemTypePatch struct {
 	DisplayName *string
-	Rank        *int
 }
 
 // CreateSystemType inserts a custom (official=false) system_type and audits it. A
@@ -113,8 +112,8 @@ func (p *PG) CreateSystemType(ctx context.Context, actorID string, st SystemType
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	if _, err := tx.Exec(ctx,
-		`insert into system_type (id, official, display_name, rank) values ($1, false, $2, $3)`,
-		st.ID, st.DisplayName, st.Rank); err != nil {
+		`insert into system_type (id, official, display_name) values ($1, false, $2)`,
+		st.ID, st.DisplayName); err != nil {
 		if isUniqueViolation(err) {
 			return nil, ErrTypeExists
 		}
@@ -129,8 +128,8 @@ func (p *PG) CreateSystemType(ctx context.Context, actorID string, st SystemType
 	return &st, nil
 }
 
-// UpdateSystemType patches a custom system_type (nil fields unchanged) and audits
-// it. Official rows are read-only; an unknown id is ErrTypeNotFound.
+// UpdateSystemType patches a custom system_type's display_name (nil unchanged)
+// and audits it. Official rows are read-only; an unknown id is ErrTypeNotFound.
 func (p *PG) UpdateSystemType(ctx context.Context, actorID, id string, patch SystemTypePatch) (*SystemType, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -144,12 +143,11 @@ func (p *PG) UpdateSystemType(ctx context.Context, actorID, id string, patch Sys
 	var st SystemType
 	if err := tx.QueryRow(ctx, `
 		update system_type set
-			display_name = coalesce($2, display_name),
-			rank         = coalesce($3, rank)
+			display_name = coalesce($2, display_name)
 		where id = $1
-		returning id, official, display_name, rank`,
-		id, patch.DisplayName, patch.Rank).
-		Scan(&st.ID, &st.Official, &st.DisplayName, &st.Rank); err != nil {
+		returning id, official, display_name`,
+		id, patch.DisplayName).
+		Scan(&st.ID, &st.Official, &st.DisplayName); err != nil {
 		return nil, fmt.Errorf("storage: update system_type %q: %w", id, err)
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "update", "system_type", id, nil, st); err != nil {

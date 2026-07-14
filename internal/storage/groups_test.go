@@ -41,7 +41,7 @@ func TestGroupGrantsInheritScopeAndPerms(t *testing.T) {
 	defer gw.Close()
 
 	// seed.Run seeds the official roles (viewer = *:read, owner = >) and the four
-	// location types with their ranks, so the tree below is valid.
+	// location types, so the tree below is valid.
 	if err := seed.Run(ctx, gw); err != nil {
 		t.Fatalf("seed: %v", err)
 	}

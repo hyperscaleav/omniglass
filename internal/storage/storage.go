@@ -184,7 +184,7 @@ type Gateway interface {
 	// UpsertLocationType installs or updates an official location type by id, the
 	// boot-seed phase's write. Idempotent.
 	UpsertLocationType(ctx context.Context, lt LocationType) error
-	// ListLocationTypes returns every location type, ranked.
+	// ListLocationTypes returns every location type, alphabetically by display_name.
 	ListLocationTypes(ctx context.Context) ([]LocationType, error)
 	// The location_type registry CRUD (capability-only, unscoped). Create writes a
 	// custom (official=false) row; update/delete refuse official rows and delete

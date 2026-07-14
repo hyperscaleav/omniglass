@@ -21,7 +21,7 @@ func TestComponentTypeCRUD(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	ct, err := gw.CreateComponentType(ctx, "", storage.ComponentType{ID: "relay", DisplayName: "Relay", Rank: 15})
+	ct, err := gw.CreateComponentType(ctx, "", storage.ComponentType{ID: "relay", DisplayName: "Relay"})
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}

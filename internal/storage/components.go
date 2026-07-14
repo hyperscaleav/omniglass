@@ -21,12 +21,12 @@ var (
 	ErrUnknownComponentType    = errors.New("storage: unknown component_type")
 )
 
-// ComponentType is a registry row classifying a component.
+// ComponentType is a registry row classifying a component. The registry lists
+// alphabetically by display_name; there is no ordering field.
 type ComponentType struct {
 	ID          string
 	Official    bool
 	DisplayName string
-	Rank        int
 }
 
 // Component is a leaf of the estate: name-addressable, classified by
@@ -66,11 +66,11 @@ type ComponentPatch struct {
 
 func (p *PG) UpsertComponentType(ctx context.Context, ct ComponentType) error {
 	_, err := p.pool.Exec(ctx, `
-		insert into component_type (id, official, display_name, rank)
-		values ($1, $2, $3, $4)
+		insert into component_type (id, official, display_name)
+		values ($1, $2, $3)
 		on conflict (id) do update
-			set official = excluded.official, display_name = excluded.display_name, rank = excluded.rank`,
-		ct.ID, ct.Official, ct.DisplayName, ct.Rank)
+			set official = excluded.official, display_name = excluded.display_name`,
+		ct.ID, ct.Official, ct.DisplayName)
 	if err != nil {
 		return fmt.Errorf("storage: upsert component_type %q: %w", ct.ID, err)
 	}
@@ -78,7 +78,7 @@ func (p *PG) UpsertComponentType(ctx context.Context, ct ComponentType) error {
 }
 
 func (p *PG) ListComponentTypes(ctx context.Context) ([]ComponentType, error) {
-	rows, err := p.pool.Query(ctx, `select id, official, display_name, rank from component_type order by rank, id`)
+	rows, err := p.pool.Query(ctx, `select id, official, display_name from component_type order by display_name, id`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list component_types: %w", err)
 	}
@@ -86,7 +86,7 @@ func (p *PG) ListComponentTypes(ctx context.Context) ([]ComponentType, error) {
 	var out []ComponentType
 	for rows.Next() {
 		var ct ComponentType
-		if err := rows.Scan(&ct.ID, &ct.Official, &ct.DisplayName, &ct.Rank); err != nil {
+		if err := rows.Scan(&ct.ID, &ct.Official, &ct.DisplayName); err != nil {
 			return nil, fmt.Errorf("storage: scan component_type: %w", err)
 		}
 		out = append(out, ct)
@@ -98,7 +98,6 @@ func (p *PG) ListComponentTypes(ctx context.Context) ([]ComponentType, error) {
 // field is left unchanged.
 type ComponentTypePatch struct {
 	DisplayName *string
-	Rank        *int
 }
 
 // CreateComponentType inserts a custom (official=false) component_type and audits
@@ -112,8 +111,8 @@ func (p *PG) CreateComponentType(ctx context.Context, actorID string, ct Compone
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	if _, err := tx.Exec(ctx,
-		`insert into component_type (id, official, display_name, rank) values ($1, false, $2, $3)`,
-		ct.ID, ct.DisplayName, ct.Rank); err != nil {
+		`insert into component_type (id, official, display_name) values ($1, false, $2)`,
+		ct.ID, ct.DisplayName); err != nil {
 		if isUniqueViolation(err) {
 			return nil, ErrTypeExists
 		}
@@ -128,8 +127,9 @@ func (p *PG) CreateComponentType(ctx context.Context, actorID string, ct Compone
 	return &ct, nil
 }
 
-// UpdateComponentType patches a custom component_type (nil fields unchanged) and
-// audits it. Official rows are read-only; an unknown id is ErrTypeNotFound.
+// UpdateComponentType patches a custom component_type's display_name (nil
+// unchanged) and audits it. Official rows are read-only; an unknown id is
+// ErrTypeNotFound.
 func (p *PG) UpdateComponentType(ctx context.Context, actorID, id string, patch ComponentTypePatch) (*ComponentType, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -143,12 +143,11 @@ func (p *PG) UpdateComponentType(ctx context.Context, actorID, id string, patch 
 	var ct ComponentType
 	if err := tx.QueryRow(ctx, `
 		update component_type set
-			display_name = coalesce($2, display_name),
-			rank         = coalesce($3, rank)
+			display_name = coalesce($2, display_name)
 		where id = $1
-		returning id, official, display_name, rank`,
-		id, patch.DisplayName, patch.Rank).
-		Scan(&ct.ID, &ct.Official, &ct.DisplayName, &ct.Rank); err != nil {
+		returning id, official, display_name`,
+		id, patch.DisplayName).
+		Scan(&ct.ID, &ct.Official, &ct.DisplayName); err != nil {
 		return nil, fmt.Errorf("storage: update component_type %q: %w", id, err)
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "update", "component_type", id, nil, ct); err != nil {
