@@ -900,3 +900,18 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   auto-discovered 403 without `type:*` by the route-gating guard). The generated CLI and web client ship in the
   same slice (`make gen`). Deferred: the Types catalog console page (kind facet, CRUD drawer over the three
   writable kinds plus a read-only view of `secret_type`) is a follow-up slice.
+- **Console: the Types catalog page.** The UI follow-up to the type registry CRUD API above:
+  **[Catalog > Types](/guides/admin/types/)** (`/types`) is one `FlatList` directory over all four classifier
+  registries (`location_type`, `system_type`, `component_type`, `secret_type`), the first catalog page to
+  share one table across kinds rather than a directory per registry. A **kind** facet (plus name and
+  official/custom) narrows it, and rows are addressed `<kind>:<id>` since an id is unique only within its own
+  kind. The create drawer and the detail-blade Edit/Delete wire to the three writable kinds (location,
+  system, component); an **official** (seed-owned) row and every **secret** row render with neither, the
+  secret row instead showing its declared fields (name, scalar type, secrecy, origin) read-only, with a note
+  that the fields-schema editor is a follow-up. The page reuses the shell built for the identity surfaces
+  (`FlatList`, `BladeStack`, the blade edit contract) rather than a bespoke layout, so a fifth classifier
+  registry is a `TYPE_KINDS` entry and a route, not a new page shape. Proven by a web data-layer unit suite
+  (`lib/types.ts`): the four-registry aggregation tags each row's kind, a location row carries its icon and a
+  secret row its fields, and create/update/delete each refuse the `secret` kind without a network call.
+  Deferred: the `secret_type` fields-schema editor (noted above) and a page-level component test of the
+  blade CRUD flow.
