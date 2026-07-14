@@ -612,6 +612,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/locations:checkName": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check a location technical name
+         * @description Reports whether a proposed technical name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by location:update.
+         */
+        post: operations["check-location-name"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/principal-groups": {
         parameters: {
             query?: never;
@@ -1877,7 +1897,7 @@ export interface components {
             display_name?: string;
             /** @description A location_type id (campus, building, ...) */
             location_type: string;
-            /** @description Globally unique name (the address) */
+            /** @description Globally unique name (the address; lowercase letters, digits, hyphens) */
             name: string;
             /** @description Parent location name; omit for a root location */
             parent?: string;
@@ -2834,6 +2854,8 @@ export interface components {
             readonly $schema?: string;
             display_name?: string;
             location_type?: string;
+            /** @description A new globally unique technical name (rename) */
+            name?: string;
         };
         UpdateLocationTypeInputBody: {
             /**
@@ -4133,6 +4155,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TagBindingBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "check-location-name": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CheckNameInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckNameOutputBody"];
                 };
             };
             /** @description Error */

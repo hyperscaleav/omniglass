@@ -207,6 +207,7 @@ type Gateway interface {
 	GetLocation(ctx context.Context, name string, read scope.Set) (*Location, error)
 	CreateLocation(ctx context.Context, actorID string, spec LocationSpec, create scope.Set) (*Location, error)
 	UpdateLocation(ctx context.Context, actorID, name string, patch LocationPatch, read, action scope.Set) (*Location, error)
+	LocationNameTaken(ctx context.Context, name string) (bool, error)
 	DeleteLocation(ctx context.Context, actorID, name string, read, action scope.Set) error
 
 	// The system tier: a type registry and scoped CRUD, mirroring locations.

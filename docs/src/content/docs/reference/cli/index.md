@@ -533,6 +533,26 @@ omniglass healthz
 
 Commands for the location resource
 
+### `omniglass location checkName`
+
+Check a location technical name
+
+```
+omniglass location checkName [flags]
+```
+
+Reports whether a proposed technical name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by location:update.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--name` | string | (none) | The proposed technical name to check |
+
+Example:
+
+```sh
+omniglass location checkName --name name
+```
+
 ### `omniglass location create`
 
 Create a location
@@ -547,7 +567,7 @@ Creates a location, optionally under a parent (a root needs an all-scoped grant)
 |---|---|---|---|
 | `--display-name` | string | (none) |  |
 | `--location-type` | string | (none) | A location_type id (campus, building, ...) |
-| `--name` | string | (none) | Globally unique name (the address) |
+| `--name` | string | (none) | Globally unique name (the address; lowercase letters, digits, hyphens) |
 | `--parent` | string | (none) | Parent location name; omit for a root location |
 
 Example:
@@ -675,6 +695,7 @@ Patches a location's display_name or location_type. Gated by location:update; th
 |---|---|---|---|
 | `--display-name` | string | (none) |  |
 | `--location-type` | string | (none) |  |
+| `--name` | string | (none) | A new globally unique technical name (rename) |
 
 Example:
 

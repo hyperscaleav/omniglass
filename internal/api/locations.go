@@ -85,7 +85,7 @@ type locationPathInput struct {
 
 type createLocationInput struct {
 	Body struct {
-		Name         string  `json:"name" minLength:"1" doc:"Globally unique name (the address)"`
+		Name         string  `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"Globally unique name (the address; lowercase letters, digits, hyphens)"`
 		DisplayName  string  `json:"display_name,omitempty"`
 		LocationType string  `json:"location_type" minLength:"1" doc:"A location_type id (campus, building, ...)"`
 		Parent       *string `json:"parent,omitempty" doc:"Parent location name; omit for a root location"`
@@ -95,6 +95,7 @@ type createLocationInput struct {
 type updateLocationInput struct {
 	Name string `path:"name"`
 	Body struct {
+		Name         *string `json:"name,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"A new globally unique technical name (rename)"`
 		DisplayName  *string `json:"display_name,omitempty"`
 		LocationType *string `json:"location_type,omitempty"`
 	}
@@ -257,6 +258,7 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Middlewares: huma.Middlewares{a.authn, a.require("location", "update")},
 	}, func(ctx context.Context, in *updateLocationInput) (*locationOutput, error) {
 		l, err := gw.UpdateLocation(ctx, actorID(ctx), in.Name, storage.LocationPatch{
+			Name:         in.Body.Name,
 			DisplayName:  in.Body.DisplayName,
 			LocationType: in.Body.LocationType,
 		}, a.scopeFor(ctx, "location", "read"), a.scopeFor(ctx, "location", "update"))
@@ -264,6 +266,32 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 			return nil, mapLocationErr(err)
 		}
 		return &locationOutput{Body: toLocationBody(l)}, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "check-location-name",
+		Method:      http.MethodPost,
+		Path:        "/locations:checkName",
+		Summary:     "Check a location technical name",
+		Description: "Reports whether a proposed technical name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by location:update.",
+		Middlewares: huma.Middlewares{a.authn, a.require("location", "update")},
+	}, func(ctx context.Context, in *checkNameInput) (*checkNameOutput, error) {
+		out := &checkNameOutput{}
+		if err := storage.ValidateEntityName(in.Body.Name); err != nil {
+			out.Body.Valid = false
+			out.Body.Reason = "Use lowercase letters, digits, and hyphens."
+			return out, nil
+		}
+		out.Body.Valid = true
+		taken, err := gw.LocationNameTaken(ctx, in.Body.Name)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("check location name")
+		}
+		out.Body.Available = !taken
+		if taken {
+			out.Body.Reason = "That name is already taken."
+		}
+		return out, nil
 	})
 
 	huma.Register(api, huma.Operation{
@@ -305,6 +333,8 @@ func mapLocationErr(err error) error {
 		return huma.Error409Conflict("location has child locations")
 	case errors.Is(err, storage.ErrLocationExists):
 		return huma.Error409Conflict("location name already exists")
+	case errors.Is(err, storage.ErrInvalidName):
+		return huma.Error422UnprocessableEntity("invalid name")
 	case errors.Is(err, storage.ErrParentNotFound):
 		return huma.Error422UnprocessableEntity("parent location not found")
 	case errors.Is(err, storage.ErrUnknownType):

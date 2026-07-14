@@ -170,6 +170,9 @@ func (UnimplementedGateway) CreateLocation(context.Context, string, LocationSpec
 func (UnimplementedGateway) UpdateLocation(context.Context, string, string, LocationPatch, scope.Set, scope.Set) (*Location, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) LocationNameTaken(context.Context, string) (bool, error) {
+	return false, nil
+}
 func (UnimplementedGateway) DeleteLocation(context.Context, string, string, scope.Set, scope.Set) error {
 	return nil
 }
