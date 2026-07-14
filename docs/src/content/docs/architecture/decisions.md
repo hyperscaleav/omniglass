@@ -63,6 +63,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0026](#adr-0026-console-nav-ia-estate-values-get-their-own-top-level-group-the-settings-group-becomes-admin) | 2026-07-13 | Accepted | Console nav IA: Variables, Secrets, and Config get their own top-level Values group; Inventory holds the estate entities including Nodes; Interfaces and Tasks become facet panels; the Settings group is renamed Admin |
 | [ADR-0027](#adr-0027-create-is-a-route-inventory-create-and-edit-unify-on-the-detail-accordion) | 2026-07-14 | Accepted | Inventory create/edit unify on the detail accordion: `New` routes to `/<entity>/create` (a draft) and Save hands off to `/<entity>/<id>` in edit; view is read-only, edit is the sole writer; the create/edit Drawer is retired |
 | [ADR-0028](#adr-0028-rank-retired-from-the-type-registries-sort-is-alphabetical) | 2026-07-14 | Accepted | `rank` is dropped from `location_type`, `system_type`, and `component_type`; the three list operations sort by `display_name, id` instead |
+| [ADR-0029](#adr-0029-files-slice-1-a-content-addressed-blob-store-and-a-tenant-wide-file-handle) | 2026-07-14 | Accepted | Files slice 1: a content-addressed `blob` store primitive (pgblobs) and a tenant-wide `file` handle; no placement arc (a file is 1:many, its locality is a future attachment), a binary `sensitive` flag reusing the secret `:admin` tier (defaults off), GC deferred so a delete leaves the blob, base64-in-JSON on the wire |
 
 ## Entries
 
@@ -690,3 +691,40 @@ below from the project's history. From here it grows one slice at a time.
 - **Closes:** part of issue [#239](https://github.com/hyperscaleav/omniglass/issues/239) (the
   `allowed_parent_types` half continues in a follow-up PR against the same issue). Design:
   `docs/superpowers/specs/2026-07-14-type-placement-constraints-design.md`.
+
+### ADR-0029: files slice 1, a content-addressed blob store and a tenant-wide file handle
+
+- **Date:** 2026-07-14 | **Status:** Accepted | **Pages:** [files and blobs](/architecture/files/), [storage](/architecture/storage/), [identity and access](/architecture/identity-access/)
+- **Decision:** The files subsystem ships its first slice: a content-addressed **`blob`** store as a Storage
+  Gateway primitive (a `blob.Store` seam, default **pgblobs** backend holding bytes inline, keyed by the sha256
+  of the bytes, dedup via `on conflict do nothing`, integrity-verified on read), and a **`file`** handle,
+  searchable metadata (name, content_type, size, sha256, sensitive) that points at a blob by hash, with CRUD
+  over the API, the generated CLI, and the typed client, plus the Files directory under Inventory. Four calls
+  shape it. **(1) No placement arc on a file.** A file is tenant-wide, not on the exclusive arc a secret sits on,
+  because a file relates **1:many** (to entities and types) rather than 1:1; that locality is a future
+  many-to-many **attachment**, not an owner column, so the gateway injects no ABAC tree scope on a file query.
+  (This reverses an in-design proposal to give `file` a secret-style owner scope.) **(2) Sensitivity reuses the
+  secret mechanism, binary, defaulting off.** A per-file `sensitive` flag reuses
+  [ADR-0025](#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier)'s
+  `:admin`-tier rule (hidden from a lister without the tier, a non-disclosing 404 to a reader without it,
+  admin-only to create), but defaults **false** (a file is shared unless marked, where a secret defaults sensitive
+  because it is a credential), and `file` is **not** added to the sensitive-resource set, so the viewer floor
+  (`*:read`) reads ordinary files. **(3) GC deferred; a delete leaves the blob.** Reference-counted mark-sweep GC
+  is a later slice, so `DeleteFile` drops the handle and intentionally leaves the (possibly still-referenced,
+  deduplicated) blob. **(4) One backend, base64-in-JSON on the wire.** Only the pgblobs backend ships (S3 and disk
+  behind the same seam later); upload and download carry the bytes **base64 in JSON**, reusing the avatar precedent
+  ([ADR-0018](#adr-0018-the-avatar-read-endpoint-is-json-not-raw-image-bytes)) so the whole surface stays under the
+  Huma authz middleware and generates a uniform client and CLI. content_type lives on the **file**, not the blob:
+  content-addressing is about the bytes, so identical bytes are one blob regardless of declared type.
+- **Context:** [files.md](/architecture/files/) specified the two-layer model (handle plus content-addressed blob)
+  and an index-probe GC; its open questions (inline-versus-blob threshold, chunking, the grace floor) are untouched
+  here. The **1:many** insight is what separated a file's *locality* (attachment, deferred) from its *access*
+  (permission plus sensitivity), and is why the file does not copy the secret owner arc. A full
+  **classification + clearance** lattice (an ordered ladder on the resource, a clearance on the principal, an
+  external-principal class) was considered for the sensitive axis and split into
+  [its own epic (#243)](https://github.com/hyperscaleav/omniglass/issues/243) rather than inflating this slice; the
+  binary flag is a 2-rung subset it will subsume. Multipart streaming for very large blobs is deferred with the
+  S3/chunking slice.
+- **Divergences logged:** files.md moved `content_type` from the blob to the file; the in-design file owner/scope
+  arc was dropped (a file is off the placement arc). Both are reflected in the page.
+- **Lands:** [epic #242](https://github.com/hyperscaleav/omniglass/issues/242), [#244](https://github.com/hyperscaleav/omniglass/issues/244).
