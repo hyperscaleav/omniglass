@@ -40,14 +40,24 @@ export const navItems: NavItem[] = [
   { label: "Dashboards", path: "/dashboards", icon: Icons.LayoutDashboard, hint: "Official, shared, and your own dashboards." },
   { label: "Alarms", path: "/alarms", icon: Icons.Bell, hint: "What is firing now, with drill-down to the triggering datapoint." },
   {
-    label: "Inventory", icon: Icons.Package, hint: "The entity graph: systems, components, locations, interfaces, nodes, and tasks.",
+    label: "Inventory", icon: Icons.Package, hint: "The monitored estate: components, systems, locations, and the collection nodes, each addressable with its health and configuration.",
     children: [
-      { label: "Components", path: "/components", live: true, resource: "component", hint: "The component inventory, with declared config, props, and tags." },
+      { label: "Components", path: "/components", live: true, resource: "component", hint: "The component inventory, with declared config, props, and tags. Device interfaces are a panel on the component." },
       { label: "Systems", path: "/systems", live: true, resource: "system", hint: "Location and system trees, navigable, with health at each level." },
       { label: "Locations", path: "/locations", live: true, resource: "location", hint: "The place tree: campuses, buildings, floors, and rooms." },
-      { label: "Interfaces", path: "/interfaces", hint: "Connection endpoints on components, with their device credentials." },
-      { label: "Nodes", path: "/nodes", hint: "Collection daemons: their assigned tasks, health, and enrollment." },
-      { label: "Tasks", path: "/tasks", hint: "Collection task assignments across nodes." },
+      // Nodes are the collection daemons: a monitored, scope-controlled entity, not a
+      // platform-admin surface. Ungated while it is a stub; when its backend lands it
+      // gates on `node:read` with ABAC scope, like the other Inventory directories.
+      // The tasks a node runs are a panel on the node, not a separate nav entry.
+      { label: "Nodes", path: "/nodes", hint: "Collection daemons: their health, enrollment, and the collection tasks assigned to each." },
+    ],
+  },
+  {
+    label: "Values", icon: Icons.Sliders, hint: "Operator-set values resolved down the scope cascade: interpolation variables, encrypted secrets, and reconciled component config.",
+    children: [
+      { label: "Variables", path: "/variables", live: true, resource: "variable", hint: "Free interpolated values (macros), resolved down the scope cascade." },
+      { label: "Secrets", path: "/secrets", live: true, resource: "secret", hint: "Shared device and platform credentials, resolved down the scope cascade." },
+      { label: "Config", path: "/config", hint: "Reconciled component and system configuration: desired values operators set, optionally observed back from the device to detect drift and reconcile." },
     ],
   },
   {
@@ -62,15 +72,13 @@ export const navItems: NavItem[] = [
   { label: "Explore", path: "/explore", icon: Icons.Compass, hint: "Datapoint history, the event log, and the cascade resolve view." },
   { label: "Learn", path: "/learn", icon: Icons.GraduationCap, hint: "How collection turns a device into owned datapoints." },
   {
-    label: "Settings", icon: Icons.Settings, hint: "Platform configuration and tenant administration.",
+    label: "Admin", icon: Icons.Settings, hint: "Platform administration: users, roles, groups, the audit trail, and platform settings.",
     children: [
-      { label: "Config", path: "/config", hint: "Severity levels, schedules, retention, and platform settings." },
-      { label: "Secrets", path: "/secrets", live: true, resource: "secret", hint: "Shared device and platform credentials, resolved down the scope cascade." },
-      { label: "Variables", path: "/variables", live: true, resource: "variable", hint: "Free interpolated values (macros), resolved down the scope cascade." },
       { label: "Users", path: "/users", live: true, perm: "principal:read:admin", hint: "Users and service accounts: status, grants, and tokens." },
       { label: "Roles", path: "/roles", live: true, perm: "role:read:admin", hint: "The built-in roles: what each permission bundle grants, and how they inherit." },
       { label: "Groups", path: "/groups", live: true, perm: "principal_group:read:admin", hint: "User groups: membership and the grants members inherit." },
       { label: "Audit", path: "/audit", live: true, perm: "audit:read:admin", hint: "The audit trail of every privileged action and sign-in." },
+      { label: "Settings", path: "/settings", hint: "Platform preferences: severity scales, schedules, retention, and defaults." },
     ],
   },
 ];
