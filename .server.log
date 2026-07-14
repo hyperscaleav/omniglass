@@ -1,6 +1,0 @@
-time=2026-07-14T07:23:51.393-06:00 level=INFO msg="migrations applied"
-time=2026-07-14T07:23:51.394-06:00 level=WARN msg="no OMNIGLASS_SECRET_KEY or OMNIGLASS_SECRET_KEY_FILE set: generated a random secret key at .omniglass/secret.key. This is convenience, not security (a key on the data volume falls with the volume). Set OMNIGLASS_SECRET_KEY_FILE (a mounted file) for any real deployment."
-time=2026-07-14T07:23:51.394-06:00 level=INFO msg="secret key loaded" source=fallback
-time=2026-07-14T07:23:51.429-06:00 level=INFO msg="boot seed applied"
-time=2026-07-14T07:23:51.432-06:00 level=INFO msg="http api listening" addr=:8080
-time=2026-07-14T07:27:10.554-06:00 level=INFO msg="shutting down"

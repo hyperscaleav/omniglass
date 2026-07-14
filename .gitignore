@@ -53,3 +53,6 @@ coverage.txt
 
 # docs screenshot freshness-gate scratch
 .docs-shots-tmp/
+.superpowers-shot-token.txt
+.infra-build.log
+.server.log
