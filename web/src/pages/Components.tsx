@@ -1,4 +1,4 @@
-import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
+import { For, Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { useNavigate, useParams, useSearchParams } from "@solidjs/router";
 import TreeList, { type ListConfig, type ListCtx, type ListNode, type PageDescriptor } from "../components/TreeList";
@@ -15,9 +15,9 @@ import { SYSTEMS_KEY, listSystems } from "../lib/systems";
 import { LOCATIONS_KEY, listLocations } from "../lib/locations";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
+import { openInEdit, consumePendingEdit } from "../lib/pendingedit";
 import { ChevronRight, Pencil, Plus, Save, X } from "../components/icons";
 import Button from "../components/Button";
-import { DrawerFooter } from "../components/Drawer";
 import EffectiveSecrets, { secretCascadeBlade, cascadeBladeId } from "../components/EffectiveSecrets";
 import TagPills from "../components/TagPills";
 import { tagFilterKeys } from "../lib/predicate";
@@ -29,7 +29,10 @@ import EffectiveVariables, { variableCascadeBlade, varCascadeBladeId } from "../
 // location. The live API carries names/types/placement only (no health or metrics
 // yet, those land with component.state), so the columns and facets are the real
 // fields, not invented health. System and location ids are resolved to readable
-// names from their own lists.
+// names from their own lists. Create and edit both live on the detail accordion
+// (create-as-route): New routes to /components/create (a draft), Save hands off to
+// /components/<name> in edit mode; the pencil flips the same surface. View is
+// read-only, edit is the only writer, per the console invariant.
 type CompNode = ListNode & {
   type: string;
   systemName: string;
@@ -68,6 +71,7 @@ export default function Components() {
   const label = (x: { name: string; display_name?: string }) => x.display_name || x.name;
   const sysById = createMemo(() => new Map((systems.data ?? []).map((s) => [s.id, s] as const)));
   const locById = createMemo(() => new Map((locations.data ?? []).map((l) => [l.id, l] as const)));
+  const componentTypes = createMemo(() => [...new Set((components.data ?? []).map((c) => c.component_type))].sort());
 
   // One filter facet per tag key present across the components, derived from
   // their effective tags, so the bar can filter by any tag like any other field.
@@ -121,19 +125,62 @@ export default function Components() {
     }
   }
 
-  // The detail body, shared by the full page (ctx.full) and a blade. In a blade it
-  // leads with a breadcrumb and drills via ctx.go (push child blade); the system
-  // link crosses to the Systems page.
-  function detail(n: CompNode, ctx: ListCtx<CompNode>): JSX.Element {
-    const parent = ctx.parentOf(n);
-    const path = ctx.pathOf(n);
-    const sysName = n.raw.system_id ? sysById().get(n.raw.system_id)?.name : undefined;
-    const kids = n.children;
+  // ComponentDetail: the entity accordion, read-only in view, editable in edit. Own
+  // fields (display name, type) are editable; placement is fixed at creation. The
+  // Tags section is the shared TagAdder, whose write controls appear only in edit
+  // (canUpdate gates them), so view carries no mutation. The Effective secrets and
+  // variables panels are read-only and render in both modes. The full page renders
+  // its own Save/Cancel/Edit footer from ctx.edit; a blade gets those from BladeStack.
+  function ComponentDetail(props: { node: CompNode; ctx: ListCtx<CompNode> }): JSX.Element {
+    const ctx = props.ctx;
+    const edit = ctx.edit;
+    const editing = () => edit?.editing() ?? false;
+    // Live node, re-resolved from the index so a background refetch updates facts
+    // without remounting (which would drop in-progress edit state).
+    const n = () => ctx.byId(props.node.id) ?? props.node;
+    const parent = () => ctx.parentOf(n());
+    const path = () => ctx.pathOf(n());
+    const sysName = () => { const sid = n().raw.system_id; return sid ? sysById().get(sid)?.name : undefined; };
+    const canUpdate = () => can(me.data, "component", "update");
+
+    const [display, setDisplay] = createSignal(n().raw.display_name ?? "");
+    const [type, setType] = createSignal(n().raw.component_type ?? "");
+    const [saveErr, setSaveErr] = createSignal<string | null>(null);
+    // Seed the inputs from the node each time edit begins (this also reverts a Cancel,
+    // since Cancel exits edit and the next begin re-seeds).
+    createEffect(on(editing, (isEditing) => {
+      if (isEditing) { setDisplay(n().raw.display_name ?? ""); setType(n().raw.component_type ?? ""); }
+    }));
+    // Consume a pending "open in edit" handoff (from create or the row pencil) once
+    // the node has resolved.
+    createEffect(on(() => n().raw.name, (name) => { if (name && consumePendingEdit(name) && canUpdate()) edit?.begin(); }));
+
+    edit?.bind({
+      editable: canUpdate,
+      save: async () => {
+        setSaveErr(null);
+        try {
+          await updateComponent(n().raw.name, { display_name: display() || undefined, component_type: type() || undefined });
+          await qc.invalidateQueries({ queryKey: COMPONENTS_KEY });
+        } catch (e) {
+          setSaveErr(describeError(e));
+          throw e; // keep the slot in edit mode so the operator can retry
+        }
+      },
+      destructive: () =>
+        can(me.data, "component", "delete")
+          ? { label: "Delete", tone: "danger" as const, onClick: () => { ctx.closeBlades(); del(n()); } }
+          : undefined,
+    });
+
     return (
       <div class="flex flex-col gap-5">
-        <Show when={!ctx.full && path.length}>
+        <Show when={saveErr()}>
+          <div role="alert" class="alert alert-error alert-soft text-sm"><span>{saveErr()}</span></div>
+        </Show>
+        <Show when={!ctx.full && path().length}>
           <div class="flex flex-wrap items-center gap-1 text-[11.5px]">
-            <For each={path}>
+            <For each={path()}>
               {(c, i) => (
                 <>
                   <Show when={i()}><span class="text-base-content/30">{"›"}</span></Show>
@@ -143,19 +190,48 @@ export default function Components() {
             </For>
           </div>
         </Show>
-        <div class="grid grid-cols-2 gap-5">
-          {ctx.fact("Type", <span class="badge badge-ghost badge-sm">{n.type}</span>)}
-          {ctx.fact("System", sysName ? <button class="link text-sm" onClick={() => navigate(`/systems/${encodeURIComponent(sysName)}`)}>{n.systemName}</button> : <span class="text-base-content/50">—</span>)}
-          {ctx.fact("Location", <span>{n.locationName || "—"}</span>)}
-          {ctx.fact("Parent", parent ? <button class="link text-sm" onClick={() => ctx.go(parent)}>{parent.display}</button> : <span class="text-base-content/50">Root</span>)}
-          {ctx.fact("Technical name", <span class="font-data text-sm">{n.raw.name}</span>)}
-          {ctx.fact("ID", <span class="font-data text-xs text-base-content/50">{n.raw.id}</span>)}
+
+        <div class="flex flex-col gap-1.5">
+          <span class="eyebrow">Identity</span>
+          <Show
+            when={editing()}
+            fallback={
+              <div class="grid grid-cols-2 gap-5">
+                {ctx.fact("Type", <span class="badge badge-ghost badge-sm">{n().type}</span>)}
+                {ctx.fact("Technical name", <span class="font-data text-sm">{n().raw.name}</span>)}
+                {ctx.fact("ID", <span class="font-data text-xs text-base-content/50">{n().raw.id}</span>)}
+              </div>
+            }
+          >
+            <div class="flex flex-col gap-3">
+              {ctx.field("Display name", <input class="input input-bordered w-full" value={display()} placeholder="Ceiling Mic 2" onInput={(e) => setDisplay(e.currentTarget.value)} />)}
+              {ctx.field(
+                "Component type",
+                <>
+                  <input class="input input-bordered w-full" list="cmp-types-edit" value={type()} placeholder="microphone" onInput={(e) => setType(e.currentTarget.value)} />
+                  <datalist id="cmp-types-edit"><For each={componentTypes()}>{(t) => <option value={t} />}</For></datalist>
+                </>,
+                "A component_type id.",
+              )}
+              {ctx.field("Technical name", <input class="input input-bordered w-full font-data" value={n().raw.name} disabled />, "The address is fixed after creation.")}
+            </div>
+          </Show>
         </div>
-        <Show when={kids.length}>
+
+        <div class="flex flex-col gap-1.5">
+          <span class="eyebrow">Placement</span>
+          <div class="grid grid-cols-2 gap-5">
+            {ctx.fact("System", sysName() ? <button class="link text-sm" onClick={() => navigate(`/systems/${encodeURIComponent(sysName()!)}`)}>{n().systemName}</button> : <span class="text-base-content/50">—</span>)}
+            {ctx.fact("Location", <span>{n().locationName || "—"}</span>)}
+            {ctx.fact("Parent", parent() ? <button class="link text-sm" onClick={() => ctx.go(parent()!)}>{parent()!.display}</button> : <span class="text-base-content/50">Root</span>)}
+          </div>
+        </div>
+
+        <Show when={n().children.length}>
           <div class="flex flex-col gap-1.5">
             <span class="eyebrow">Sub-components</span>
             <div class="overflow-hidden rounded-box border border-base-300">
-              <For each={kids}>
+              <For each={n().children}>
                 {(c, i) => (
                   <button class="flex w-full items-center gap-2.5 px-3 py-2 text-left hover:bg-base-content/5" classList={{ "border-t border-base-300": i() > 0 }} onClick={() => ctx.go(c)}>
                     <span class="flex-1 truncate text-sm">{c.display}</span>
@@ -167,133 +243,146 @@ export default function Components() {
             </div>
           </div>
         </Show>
+
         <Show when={can(me.data, "secret", "read")}>
           <EffectiveSecrets
-            component={n.raw.name}
-            onOpen={(secretName) => ctx.openBlade({ kind: "secret-cascade", id: cascadeBladeId(n.raw.name, secretName) })}
+            component={n().raw.name}
+            onOpen={(secretName) => ctx.openBlade({ kind: "secret-cascade", id: cascadeBladeId(n().raw.name, secretName) })}
           />
         </Show>
         <Show when={can(me.data, "variable", "read")}>
           <EffectiveVariables
-            component={n.raw.name}
-            onOpen={(variableName) => ctx.openBlade({ kind: "variable-cascade", id: varCascadeBladeId(n.raw.name, variableName) })}
+            component={n().raw.name}
+            onOpen={(variableName) => ctx.openBlade({ kind: "variable-cascade", id: varCascadeBladeId(n().raw.name, variableName) })}
           />
         </Show>
-        <TagAdder kind="component" name={n.raw.name} canUpdate={can(me.data, "component", "update")} canCreateKey={can(me.data, "tag", "create")} />
+
+        <TagAdder kind="component" name={n().raw.name} canUpdate={editing() && canUpdate()} canCreateKey={can(me.data, "tag", "create")} />
+
         <Show when={ctx.full}>
-          <div class="flex items-center gap-2 border-t border-base-300 pt-4">
-            <Show when={can(me.data, "component", "delete")}>
-              <Button intent="danger" onClick={() => { ctx.closeBlades(); del(n); }}>Delete</Button>
-            </Show>
-            <span class="flex-1" />
-            <Show when={can(me.data, "component", "update")}>
-              <Button intent="action" icon={Pencil} onClick={() => ctx.openEdit(n)}>Edit</Button>
+          <div class="flex flex-wrap items-center gap-2 border-t border-base-300 pt-4">
+            <Show
+              when={editing()}
+              fallback={
+                <>
+                  <Show when={can(me.data, "component", "delete")}>
+                    <Button intent="danger" onClick={() => del(n())}>Delete</Button>
+                  </Show>
+                  <span class="flex-1" />
+                  <Show when={edit?.editable()}>
+                    <Button intent="action" icon={Pencil} onClick={() => edit!.begin()}>Edit</Button>
+                  </Show>
+                </>
+              }
+            >
+              <span class="flex-1" />
+              <Button icon={X} onClick={() => edit!.cancel()}>Cancel</Button>
+              <Button type="button" intent="action" icon={Save} disabled={edit!.saving()} onClick={() => { void edit!.save().catch(() => {}); }}>Save changes</Button>
             </Show>
           </div>
         </Show>
       </div>
     );
   }
-  // The create/edit form. Only display_name and component_type are mutable on an
-  // existing component (the API update body); name, system, location, and parent
-  // are set at creation and shown read-only when editing.
-  function FormBody(p: { form: { mode: "create"; parent: CompNode | null } | { mode: "edit"; node: CompNode }; close: () => void; ctx: ListCtx<CompNode> }) {
-    const editing = p.form.mode === "edit";
-    const base = p.form.mode === "edit" ? p.form.node.raw : null;
-    const [name, setName] = createSignal(base?.name ?? "");
-    const [display, setDisplay] = createSignal(base?.display_name ?? "");
-    const [type, setType] = createSignal(base?.component_type ?? "");
-    const [system, setSystem] = createSignal(base?.system_id ? sysById().get(base.system_id)?.name ?? "" : "");
-    const [location, setLocation] = createSignal(base?.location_id ? locById().get(base.location_id)?.name ?? "" : "");
-    const parentName = p.form.mode === "create" ? p.form.parent?.raw.name : base?.parent_id ? components.data?.find((c) => c.id === base!.parent_id)?.name : undefined;
-    const [parent, setParent] = createSignal(parentName ?? "");
+
+  // ComponentCreate: the draft-create surface at /components/create. Identity and
+  // Placement are writable; the binding sections (Tags) are shown locked until the
+  // component exists. Create commits the row and hands off to /components/<name> in
+  // edit mode.
+  function ComponentCreate(): JSX.Element {
+    const [name, setName] = createSignal("");
+    const [display, setDisplay] = createSignal("");
+    const [type, setType] = createSignal("");
+    const [system, setSystem] = createSignal("");
+    const [location, setLocation] = createSignal("");
+    const [parent, setParent] = createSignal("");
     const [busy, setBusy] = createSignal(false);
     const [formErr, setFormErr] = createSignal<string | null>(null);
 
-    const types = createMemo(() => [...new Set((components.data ?? []).map((c) => c.component_type))].sort());
-
-    async function submit(e: Event) {
+    async function create(e: Event) {
       e.preventDefault();
       setBusy(true);
       setFormErr(null);
+      const nm = name().trim();
       try {
-        if (editing) {
-          await updateComponent(base!.name, { display_name: display() || undefined, component_type: type() || undefined });
-        } else {
-          await createComponent({
-            name: name().trim(),
-            component_type: type().trim(),
-            display_name: display().trim() || undefined,
-            system: system() || undefined,
-            location: location() || undefined,
-            parent: parent() || undefined,
-          });
-        }
+        await createComponent({
+          name: nm,
+          component_type: type().trim(),
+          display_name: display().trim() || undefined,
+          system: system() || undefined,
+          location: location() || undefined,
+          parent: parent() || undefined,
+        });
         await qc.invalidateQueries({ queryKey: COMPONENTS_KEY });
-        p.close();
+        openInEdit(nm);
+        navigate(`/components/${encodeURIComponent(nm)}`);
       } catch (er) {
         setFormErr(describeError(er));
-      } finally {
         setBusy(false);
       }
     }
 
     return (
-      <form class="flex min-h-full flex-col gap-4" onSubmit={submit}>
+      <form class="flex flex-col gap-5" onSubmit={create}>
+        <div class="flex items-center gap-2">
+          <h2 class="text-lg font-semibold tracking-tight">New component</h2>
+          <span class="badge badge-warning badge-sm">Draft</span>
+        </div>
         <Show when={formErr()}>
           <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
         </Show>
-        {p.ctx.field(
-          "Name",
-          <input class="input input-bordered w-full font-data" value={name()} placeholder="mic-2" disabled={editing} onInput={(e) => setName(e.currentTarget.value)} />,
-          editing ? "The address is fixed after creation." : "Globally unique address.",
-        )}
-        {p.ctx.field("Display name", <input class="input input-bordered w-full" value={display()} placeholder="Ceiling Mic 2" onInput={(e) => setDisplay(e.currentTarget.value)} />)}
-        {p.ctx.field(
-          "Component type",
-          <>
-            <input class="input input-bordered w-full" list="cmp-types" value={type()} placeholder="microphone" onInput={(e) => setType(e.currentTarget.value)} />
-            <datalist id="cmp-types"><For each={types()}>{(t) => <option value={t} />}</For></datalist>
-          </>,
-          "A component_type id.",
-        )}
-        <Show when={!editing}>
-          <div class="grid grid-cols-2 gap-3">
-            {p.ctx.field(
-              "System",
-              <TreeSelect
-                items={(systems.data ?? []).map((s) => ({ id: s.id, value: s.name, label: label(s), parentId: s.parent_id }))}
-                value={system()}
-                onChange={setSystem}
-                rootLabel="None"
-              />,
-            )}
-            {p.ctx.field(
-              "Location",
-              <TreeSelect
-                items={(locations.data ?? []).map((l) => ({ id: l.id, value: l.name, label: label(l), parentId: l.parent_id }))}
-                value={location()}
-                onChange={setLocation}
-                rootLabel="None"
-              />,
+
+        <div class="flex flex-col gap-1.5">
+          <span class="eyebrow">Identity</span>
+          <div class="flex flex-col gap-3">
+            {field("Name", <input class="input input-bordered w-full font-data" value={name()} placeholder="mic-2" onInput={(e) => setName(e.currentTarget.value)} />, "Globally unique address.")}
+            {field("Display name", <input class="input input-bordered w-full" value={display()} placeholder="Ceiling Mic 2" onInput={(e) => setDisplay(e.currentTarget.value)} />)}
+            {field(
+              "Component type",
+              <>
+                <input class="input input-bordered w-full" list="cmp-types-new" value={type()} placeholder="microphone" onInput={(e) => setType(e.currentTarget.value)} />
+                <datalist id="cmp-types-new"><For each={componentTypes()}>{(t) => <option value={t} />}</For></datalist>
+              </>,
+              "A component_type id.",
             )}
           </div>
-          {p.ctx.field(
+        </div>
+
+        <div class="flex flex-col gap-1.5">
+          <span class="eyebrow">Placement</span>
+          <div class="grid grid-cols-2 gap-3">
+            {field("System", <TreeSelect items={(systems.data ?? []).map((s) => ({ id: s.id, value: s.name, label: label(s), parentId: s.parent_id }))} value={system()} onChange={setSystem} rootLabel="None" />)}
+            {field("Location", <TreeSelect items={(locations.data ?? []).map((l) => ({ id: l.id, value: l.name, label: label(l), parentId: l.parent_id }))} value={location()} onChange={setLocation} rootLabel="None" />)}
+          </div>
+          {field(
             "Parent component",
-            <TreeSelect
-              items={(components.data ?? []).map((c) => ({ id: c.id, value: c.name, label: label(c), parentId: c.parent_id }))}
-              value={parent()}
-              onChange={setParent}
-              rootLabel="Root (no parent)"
-            />,
+            <TreeSelect items={(components.data ?? []).map((c) => ({ id: c.id, value: c.name, label: label(c), parentId: c.parent_id }))} value={parent()} onChange={setParent} rootLabel="Root (no parent)" />,
             "Omit for a root component.",
           )}
-        </Show>
-        <DrawerFooter>
-          <Button icon={X} onClick={p.close}>Cancel</Button>
-          <Button type="submit" intent="action" icon={editing ? Save : Plus} disabled={busy()}>{editing ? "Save changes" : "Create component"}</Button>
-        </DrawerFooter>
+        </div>
+
+        <div class="flex items-center gap-2 border-t border-base-300 pt-4">
+          <Button icon={X} onClick={() => navigate("/components")}>Cancel</Button>
+          <span class="flex-1" />
+          <Button type="submit" intent="action" icon={Plus} disabled={busy() || !name().trim() || !type().trim()}>Create component</Button>
+        </div>
+
+        <div class="flex flex-col gap-1 opacity-50">
+          <span class="eyebrow">Tags</span>
+          <span class="text-sm text-base-content/40">Available once the component is created.</span>
+        </div>
       </form>
+    );
+  }
+
+  // A labelled field for the create surface (the detail accordion uses ctx.field).
+  function field(labelText: string, control: JSX.Element, hint?: string): JSX.Element {
+    return (
+      <label class="flex flex-col gap-1">
+        <span class="text-[12px] font-medium text-base-content/70">{labelText}</span>
+        {control}
+        <Show when={hint}><span class="text-[11px] text-base-content/40">{hint}</span></Show>
+      </label>
     );
   }
 
@@ -335,9 +424,11 @@ export default function Components() {
     onOpenNode: (n) => navigate(`/components/${encodeURIComponent(n.id)}`),
     onBack: () => navigate("/components"),
     onDelete: (n) => del(n),
-    renderDetail: (n, ctx) => detail(n, ctx),
+    onNew: () => navigate("/components/create"),
+    onEdit: (n) => { openInEdit(n.raw.name); navigate(`/components/${encodeURIComponent(n.raw.name)}`); },
+    renderCreate: () => <ComponentCreate />,
+    renderDetail: (n, ctx) => <ComponentDetail node={n} ctx={ctx} />,
     extraBlades: { "secret-cascade": secretCascadeBlade, "variable-cascade": variableCascadeBlade },
-    FormBody,
   };
 
   // No page H1: inventory pages built on TreeList let the top bar label them, and

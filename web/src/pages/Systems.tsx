@@ -1,4 +1,4 @@
-import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
+import { For, Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { useNavigate, useParams } from "@solidjs/router";
 import TreeList, { type ListConfig, type ListCtx, type ListNode, type PageDescriptor } from "../components/TreeList";
@@ -18,16 +18,16 @@ import { LOCATIONS_KEY, listLocations } from "../lib/locations";
 import { type Component as Comp, COMPONENTS_KEY, listComponents } from "../lib/components";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
+import { openInEdit, consumePendingEdit } from "../lib/pendingedit";
 import { ArrowRight, ChevronRight, Pencil, Plus, Save, X } from "../components/icons";
 import Button from "../components/Button";
-import { DrawerFooter } from "../components/Drawer";
 
 // Systems: the system inventory on the generic TreeList, the same shell as
 // Locations and Components. Systems form a tree (parent_id) and are placed at a
-// location; each owns a set of components by primary system. The live API carries
-// names/types/placement only (no health yet). Cross-links navigate: a component
-// row opens that component's full page, and "Components" deep-links the Components
-// page filtered to this system.
+// location; each owns a set of components by primary system. Create and edit both
+// live on the detail accordion (create-as-route): New routes to /systems/create (a
+// draft), Save hands off to /systems/<id> in edit mode; the pencil flips the same
+// surface. View is read-only, edit is the only writer, per the console invariant.
 type SysNode = ListNode & { type: string; locationName: string; tags: Record<string, string>; raw: System };
 
 // The static config (matrix-tested in pages/descriptors.test.ts).
@@ -56,6 +56,9 @@ export default function Systems() {
 
   const label = (x: { name: string; display_name?: string }) => x.display_name || x.name;
   const locById = createMemo(() => new Map((locations.data ?? []).map((l) => [l.id, l] as const)));
+  const systemTypes = createMemo(() => [...new Set((systems.data ?? []).map((s) => s.system_type))].sort());
+  const locationItems = createMemo(() => (locations.data ?? []).map((l) => ({ id: l.id, value: l.name, label: l.display_name || l.name, parentId: l.parent_id })));
+  const systemItems = createMemo(() => (systems.data ?? []).map((s) => ({ id: s.id, value: s.name, label: s.display_name || s.name, parentId: s.parent_id })));
   const compsBySystem = createMemo(() => {
     const m = new Map<string, Comp[]>();
     for (const c of components.data ?? []) {
@@ -113,18 +116,61 @@ export default function Systems() {
     }
   }
 
-  function detail(n: SysNode, ctx: ListCtx<SysNode>): JSX.Element {
-    const parent = ctx.parentOf(n);
-    const path = ctx.pathOf(n);
-    // Read inside the JSX (not captured) so the list tracks the components query
-    // and refreshes while a blade is open.
-    const comps = () => compsBySystem().get(n.raw.id) ?? [];
-    const childSystems = n.children;
+  // SystemDetail: the entity accordion, read-only in view, editable in edit. Own
+  // fields (display name, type) are editable; placement is fixed at creation. The
+  // Tags section is the shared TagAdder, whose write controls appear only in edit
+  // (canUpdate gates them), so view carries no mutation. The full page renders its
+  // own Save/Cancel/Edit footer from ctx.edit; a blade gets those from BladeStack.
+  function SystemDetail(props: { node: SysNode; ctx: ListCtx<SysNode> }): JSX.Element {
+    const ctx = props.ctx;
+    const edit = ctx.edit;
+    const editing = () => edit?.editing() ?? false;
+    // Live node, re-resolved from the index so a background refetch updates facts
+    // without remounting (which would drop in-progress edit state).
+    const n = () => ctx.byId(props.node.id) ?? props.node;
+    const parent = () => ctx.parentOf(n());
+    const path = () => ctx.pathOf(n());
+    const comps = () => compsBySystem().get(n().raw.id) ?? [];
+    const canUpdate = () => can(me.data, "system", "update");
+
+    const [display, setDisplay] = createSignal(n().raw.display_name ?? "");
+    const [type, setType] = createSignal(n().raw.system_type ?? "");
+    const [saveErr, setSaveErr] = createSignal<string | null>(null);
+    // Seed the inputs from the node each time edit begins (this also reverts a Cancel,
+    // since Cancel exits edit and the next begin re-seeds).
+    createEffect(on(editing, (isEditing) => {
+      if (isEditing) { setDisplay(n().raw.display_name ?? ""); setType(n().raw.system_type ?? ""); }
+    }));
+    // Consume a pending "open in edit" handoff (from create or the row pencil) once
+    // the node has resolved.
+    createEffect(on(() => n().raw.name, (name) => { if (name && consumePendingEdit(name) && canUpdate()) edit?.begin(); }));
+
+    edit?.bind({
+      editable: canUpdate,
+      save: async () => {
+        setSaveErr(null);
+        try {
+          await updateSystem(n().raw.name, { display_name: display() || undefined, system_type: type() || undefined });
+          await qc.invalidateQueries({ queryKey: SYSTEMS_KEY });
+        } catch (e) {
+          setSaveErr(describeError(e));
+          throw e; // keep the slot in edit mode so the operator can retry
+        }
+      },
+      destructive: () =>
+        can(me.data, "system", "delete")
+          ? { label: "Delete", tone: "danger" as const, onClick: () => { ctx.closeBlades(); del(n()); } }
+          : undefined,
+    });
+
     return (
       <div class="flex flex-col gap-5">
-        <Show when={!ctx.full && path.length}>
+        <Show when={saveErr()}>
+          <div role="alert" class="alert alert-error alert-soft text-sm"><span>{saveErr()}</span></div>
+        </Show>
+        <Show when={!ctx.full && path().length}>
           <div class="flex flex-wrap items-center gap-1 text-[11.5px]">
-            <For each={path}>
+            <For each={path()}>
               {(c, i) => (
                 <>
                   <Show when={i()}><span class="text-base-content/30">{"›"}</span></Show>
@@ -134,17 +180,46 @@ export default function Systems() {
             </For>
           </div>
         </Show>
-        <div class="grid grid-cols-2 gap-5">
-          {ctx.fact("Type", <span class="badge badge-ghost badge-sm">{n.type}</span>)}
-          {ctx.fact("Location", <span>{n.locationName || "—"}</span>)}
-          {ctx.fact("Technical name", <span class="font-data text-sm">{n.raw.name}</span>)}
-          {ctx.fact("Parent", parent ? <button class="link text-sm" onClick={() => ctx.go(parent)}>{parent.display}</button> : <span class="text-base-content/50">Root</span>)}
+
+        <div class="flex flex-col gap-1.5">
+          <span class="eyebrow">Identity</span>
+          <Show
+            when={editing()}
+            fallback={
+              <div class="grid grid-cols-2 gap-5">
+                {ctx.fact("Type", <span class="badge badge-ghost badge-sm">{n().type}</span>)}
+                {ctx.fact("Technical name", <span class="font-data text-sm">{n().raw.name}</span>)}
+              </div>
+            }
+          >
+            <div class="flex flex-col gap-3">
+              {ctx.field("Display name", <input class="input input-bordered w-full" value={display()} placeholder="Executive Boardroom" onInput={(e) => setDisplay(e.currentTarget.value)} />)}
+              {ctx.field(
+                "System type",
+                <>
+                  <input class="input input-bordered w-full" list="sys-types-edit" value={type()} placeholder="meeting-room" onInput={(e) => setType(e.currentTarget.value)} />
+                  <datalist id="sys-types-edit"><For each={systemTypes()}>{(t) => <option value={t} />}</For></datalist>
+                </>,
+                "A system_type id.",
+              )}
+              {ctx.field("Technical name", <input class="input input-bordered w-full font-data" value={n().raw.name} disabled />, "The address is fixed after creation.")}
+            </div>
+          </Show>
         </div>
-        <Show when={childSystems.length}>
+
+        <div class="flex flex-col gap-1.5">
+          <span class="eyebrow">Placement</span>
+          <div class="grid grid-cols-2 gap-5">
+            {ctx.fact("Location", <span>{n().locationName || "—"}</span>)}
+            {ctx.fact("Parent", parent() ? <button class="link text-sm" onClick={() => ctx.go(parent()!)}>{parent()!.display}</button> : <span class="text-base-content/50">Root</span>)}
+          </div>
+        </div>
+
+        <Show when={n().children.length}>
           <div class="flex flex-col gap-1.5">
             <span class="eyebrow">Subsystems</span>
             <div class="overflow-hidden rounded-box border border-base-300">
-              <For each={childSystems}>
+              <For each={n().children}>
                 {(c, i) => (
                   <button class="flex w-full items-center gap-2.5 px-3 py-2 text-left hover:bg-base-content/5" classList={{ "border-t border-base-300": i() > 0 }} onClick={() => ctx.go(c)}>
                     <span class="flex-1 truncate text-sm">{c.display}</span>
@@ -156,10 +231,11 @@ export default function Systems() {
             </div>
           </div>
         </Show>
+
         <div class="flex flex-col gap-1.5">
           <div class="flex items-center justify-between">
             <span class="eyebrow">Components</span>
-            <button class="link text-xs" onClick={() => navigate(`/components?system=${encodeURIComponent(n.raw.name)}`)}>All in this system →</button>
+            <button class="link text-xs" onClick={() => navigate(`/components?system=${encodeURIComponent(n().raw.name)}`)}>All in this system →</button>
           </div>
           <Show when={comps().length} fallback={<span class="text-sm text-base-content/40">No components in this system.</span>}>
             <div class="overflow-hidden rounded-box border border-base-300">
@@ -175,96 +251,120 @@ export default function Systems() {
             </div>
           </Show>
         </div>
-        <TagAdder kind="system" name={n.raw.name} canUpdate={can(me.data, "system", "update")} canCreateKey={can(me.data, "tag", "create")} />
-        <div class="flex flex-wrap items-center gap-2 border-t border-base-300 pt-4">
-          <Show when={ctx.full && can(me.data, "system", "delete")}>
-            <Button intent="danger" onClick={() => { ctx.closeBlades(); del(n); }}>Delete</Button>
-          </Show>
-          <span class="flex-1" />
-          <Button icon={ArrowRight} iconTrailing onClick={() => navigate(`/components?system=${encodeURIComponent(n.raw.name)}`)}>Components</Button>
-          <Show when={ctx.full && can(me.data, "system", "update")}>
-            <Button intent="action" icon={Pencil} onClick={() => ctx.openEdit(n)}>Edit</Button>
-          </Show>
-        </div>
+
+        <TagAdder kind="system" name={n().raw.name} canUpdate={editing() && canUpdate()} canCreateKey={can(me.data, "tag", "create")} />
+
+        <Show when={ctx.full}>
+          <div class="flex flex-wrap items-center gap-2 border-t border-base-300 pt-4">
+            <Show
+              when={editing()}
+              fallback={
+                <>
+                  <Show when={can(me.data, "system", "delete")}>
+                    <Button intent="danger" onClick={() => del(n())}>Delete</Button>
+                  </Show>
+                  <span class="flex-1" />
+                  <Button icon={ArrowRight} iconTrailing onClick={() => navigate(`/components?system=${encodeURIComponent(n().raw.name)}`)}>Components</Button>
+                  <Show when={edit?.editable()}>
+                    <Button intent="action" icon={Pencil} onClick={() => edit!.begin()}>Edit</Button>
+                  </Show>
+                </>
+              }
+            >
+              <span class="flex-1" />
+              <Button icon={X} onClick={() => edit!.cancel()}>Cancel</Button>
+              <Button type="button" intent="action" icon={Save} disabled={edit!.saving()} onClick={() => { void edit!.save().catch(() => {}); }}>Save changes</Button>
+            </Show>
+          </div>
+        </Show>
       </div>
     );
   }
-  function FormBody(p: { form: { mode: "create"; parent: SysNode | null } | { mode: "edit"; node: SysNode }; close: () => void; ctx: ListCtx<SysNode> }) {
-    const editing = p.form.mode === "edit";
-    const base = p.form.mode === "edit" ? p.form.node.raw : null;
-    const seedParent = p.form.mode === "create" ? p.form.parent?.raw.name : base?.parent_id ? systems.data?.find((s) => s.id === base!.parent_id)?.name : undefined;
 
-    const [name, setName] = createSignal(base?.name ?? "");
-    const [display, setDisplay] = createSignal(base?.display_name ?? "");
-    const [type, setType] = createSignal(base?.system_type ?? "");
-    const [location, setLocation] = createSignal(base?.location_id ? locById().get(base.location_id)?.name ?? "" : "");
-    const [parent, setParent] = createSignal(seedParent ?? "");
+  // SystemCreate: the draft-create surface at /systems/create. Identity and Placement
+  // are writable; the binding sections (Tags) are shown locked until the system
+  // exists. Create commits the row and hands off to /systems/<id> in edit mode.
+  function SystemCreate(): JSX.Element {
+    const [name, setName] = createSignal("");
+    const [display, setDisplay] = createSignal("");
+    const [type, setType] = createSignal("");
+    const [location, setLocation] = createSignal("");
+    const [parent, setParent] = createSignal("");
     const [busy, setBusy] = createSignal(false);
     const [formErr, setFormErr] = createSignal<string | null>(null);
 
-    const types = createMemo(() => [...new Set((systems.data ?? []).map((s) => s.system_type))].sort());
-
-    async function submit(e: Event) {
+    async function create(e: Event) {
       e.preventDefault();
       setBusy(true);
       setFormErr(null);
+      const nm = name().trim();
       try {
-        if (editing) {
-          await updateSystem(base!.name, { display_name: display() || undefined, system_type: type() || undefined });
-        } else {
-          await createSystem({ name: name().trim(), system_type: type().trim(), display_name: display().trim() || undefined, location: location() || undefined, parent: parent() || undefined });
-        }
+        await createSystem({ name: nm, system_type: type().trim(), display_name: display().trim() || undefined, location: location() || undefined, parent: parent() || undefined });
         await qc.invalidateQueries({ queryKey: SYSTEMS_KEY });
-        p.close();
+        openInEdit(nm);
+        navigate(`/systems/${encodeURIComponent(nm)}`);
       } catch (er) {
         setFormErr(describeError(er));
-      } finally {
         setBusy(false);
       }
     }
 
     return (
-      <form class="flex min-h-full flex-col gap-4" onSubmit={submit}>
+      <form class="flex flex-col gap-5" onSubmit={create}>
+        <div class="flex items-center gap-2">
+          <h2 class="text-lg font-semibold tracking-tight">New system</h2>
+          <span class="badge badge-warning badge-sm">Draft</span>
+        </div>
         <Show when={formErr()}>
           <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
         </Show>
-        {p.ctx.field("Name", <input class="input input-bordered w-full font-data" value={name()} placeholder="exec-boardroom" disabled={editing} onInput={(e) => setName(e.currentTarget.value)} />, editing ? "The address is fixed after creation." : "Globally unique address.")}
-        {p.ctx.field("Display name", <input class="input input-bordered w-full" value={display()} placeholder="Executive Boardroom" onInput={(e) => setDisplay(e.currentTarget.value)} />)}
-        {p.ctx.field(
-          "System type",
-          <>
-            <input class="input input-bordered w-full" list="sys-types" value={type()} placeholder="meeting-room" onInput={(e) => setType(e.currentTarget.value)} />
-            <datalist id="sys-types"><For each={types()}>{(t) => <option value={t} />}</For></datalist>
-          </>,
-          "A system_type id.",
-        )}
-        <Show when={!editing}>
-          <div class="grid grid-cols-2 gap-3">
-            {p.ctx.field(
-              "Location",
-              <TreeSelect
-                items={(locations.data ?? []).map((l) => ({ id: l.id, value: l.name, label: l.display_name || l.name, parentId: l.parent_id }))}
-                value={location()}
-                onChange={setLocation}
-                rootLabel="None"
-              />,
-            )}
-            {p.ctx.field(
-              "Parent system",
-              <TreeSelect
-                items={(systems.data ?? []).map((s) => ({ id: s.id, value: s.name, label: s.display_name || s.name, parentId: s.parent_id }))}
-                value={parent()}
-                onChange={setParent}
-                rootLabel="Root (no parent)"
-              />,
+
+        <div class="flex flex-col gap-1.5">
+          <span class="eyebrow">Identity</span>
+          <div class="flex flex-col gap-3">
+            {field("Name", <input class="input input-bordered w-full font-data" value={name()} placeholder="exec-boardroom" onInput={(e) => setName(e.currentTarget.value)} />, "Globally unique address.")}
+            {field("Display name", <input class="input input-bordered w-full" value={display()} placeholder="Executive Boardroom" onInput={(e) => setDisplay(e.currentTarget.value)} />)}
+            {field(
+              "System type",
+              <>
+                <input class="input input-bordered w-full" list="sys-types-new" value={type()} placeholder="meeting-room" onInput={(e) => setType(e.currentTarget.value)} />
+                <datalist id="sys-types-new"><For each={systemTypes()}>{(t) => <option value={t} />}</For></datalist>
+              </>,
+              "A system_type id.",
             )}
           </div>
-        </Show>
-        <DrawerFooter>
-          <Button icon={X} onClick={p.close}>Cancel</Button>
-          <Button type="submit" intent="action" icon={editing ? Save : Plus} disabled={busy()}>{editing ? "Save changes" : "Create system"}</Button>
-        </DrawerFooter>
+        </div>
+
+        <div class="flex flex-col gap-1.5">
+          <span class="eyebrow">Placement</span>
+          <div class="grid grid-cols-2 gap-3">
+            {field("Location", <TreeSelect items={locationItems()} value={location()} onChange={setLocation} rootLabel="None" />)}
+            {field("Parent system", <TreeSelect items={systemItems()} value={parent()} onChange={setParent} rootLabel="Root (no parent)" />)}
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2 border-t border-base-300 pt-4">
+          <Button icon={X} onClick={() => navigate("/systems")}>Cancel</Button>
+          <span class="flex-1" />
+          <Button type="submit" intent="action" icon={Plus} disabled={busy() || !name().trim() || !type().trim()}>Create system</Button>
+        </div>
+
+        <div class="flex flex-col gap-1 opacity-50">
+          <span class="eyebrow">Tags</span>
+          <span class="text-sm text-base-content/40">Available once the system is created.</span>
+        </div>
       </form>
+    );
+  }
+
+  // A labelled field for the create surface (the detail accordion uses ctx.field).
+  function field(labelText: string, control: JSX.Element, hint?: string): JSX.Element {
+    return (
+      <label class="flex flex-col gap-1">
+        <span class="text-[12px] font-medium text-base-content/70">{labelText}</span>
+        {control}
+        <Show when={hint}><span class="text-[11px] text-base-content/40">{hint}</span></Show>
+      </label>
     );
   }
 
@@ -299,8 +399,10 @@ export default function Systems() {
     onOpenNode: (n) => navigate(`/systems/${encodeURIComponent(n.id)}`),
     onBack: () => navigate("/systems"),
     onDelete: (n) => del(n),
-    renderDetail: (n, ctx) => detail(n, ctx),
-    FormBody,
+    onNew: () => navigate("/systems/create"),
+    onEdit: (n) => { openInEdit(n.raw.name); navigate(`/systems/${encodeURIComponent(n.raw.name)}`); },
+    renderCreate: () => <SystemCreate />,
+    renderDetail: (n, ctx) => <SystemDetail node={n} ctx={ctx} />,
   };
 
   return (
