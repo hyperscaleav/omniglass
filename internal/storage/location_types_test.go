@@ -35,6 +35,12 @@ func TestLocationTypeCRUD(t *testing.T) {
 		t.Fatalf("dup create err = %v, want ErrTypeExists", err)
 	}
 
+	// "root" is reserved for the allowed_parent_types sentinel: creating a type
+	// with that id is refused, so a real type can never collide with it.
+	if _, err := gw.CreateLocationType(ctx, "", storage.LocationType{ID: "root", DisplayName: "Root"}); !errors.Is(err, storage.ErrReservedTypeID) {
+		t.Fatalf("create root-id type err = %v, want ErrReservedTypeID", err)
+	}
+
 	// Update mutates display_name; icon unchanged when omitted.
 	name := "West Wing"
 	if _, err := gw.UpdateLocationType(ctx, "", "wing", storage.LocationTypePatch{DisplayName: &name}); err != nil {

@@ -17,13 +17,22 @@ import (
 // indistinguishable by design); ErrLocationForbidden is the 403 for a target the
 // caller can read but not act on; the rest are request faults.
 var (
-	ErrLocationNotFound  = errors.New("storage: location not found")
-	ErrLocationForbidden = errors.New("storage: action not permitted on this location")
-	ErrLocationOccupied  = errors.New("storage: location has child locations")
-	ErrLocationExists    = errors.New("storage: location name already exists")
-	ErrParentNotFound    = errors.New("storage: parent location not found")
-	ErrUnknownType       = errors.New("storage: unknown location_type")
+	ErrLocationNotFound    = errors.New("storage: location not found")
+	ErrLocationForbidden   = errors.New("storage: action not permitted on this location")
+	ErrLocationOccupied    = errors.New("storage: location has child locations")
+	ErrLocationExists      = errors.New("storage: location name already exists")
+	ErrParentNotFound      = errors.New("storage: parent location not found")
+	ErrUnknownType         = errors.New("storage: unknown location_type")
+	ErrPlacementNotAllowed = errors.New("storage: placement not allowed for this location_type")
+	ErrLocationCycle       = errors.New("storage: cannot move a location under itself or a descendant")
+	ErrReservedTypeID      = errors.New("storage: \"root\" is a reserved location_type id")
 )
+
+// RootPlacement is the reserved allowed_parent_types member meaning "may sit at
+// the top, no parent." It is not a real location_type id: CreateLocationType
+// refuses it (ErrReservedTypeID), so a real type can never collide with the
+// sentinel.
+const RootPlacement = "root"
 
 // Location is a place in the estate tree: name-addressable (name is globally
 // unique), classified by location_type, and nested under an optional parent.
@@ -54,39 +63,53 @@ type LocationPatch struct {
 }
 
 // LocationType is a registry row classifying a location: a stable id, the
-// official flag, a display_name, and an icon (a glyph key the console renders as
-// the leading glyph on every location of this type). It is the only
-// shape-definer for a location, which has no template. The registry lists
-// alphabetically by display_name; there is no ordering field.
+// official flag, a display_name, an icon (a glyph key the console renders as
+// the leading glyph on every location of this type), and AllowedParentTypes,
+// the placement constraint: a set of location_type ids and/or RootPlacement
+// this type may be placed under. An empty set is unconstrained. It is the
+// only shape-definer for a location, which has no template. The registry
+// lists alphabetically by display_name; there is no ordering field.
 type LocationType struct {
-	ID          string
-	Official    bool
-	DisplayName string
-	Icon        string
+	ID                 string
+	Official           bool
+	DisplayName        string
+	Icon               string
+	AllowedParentTypes []string
 }
 
 // UpsertLocationType installs or updates a location type by id, the boot-seed
 // phase's write. Idempotent: re-seeding the same id updates it in place.
 func (p *PG) UpsertLocationType(ctx context.Context, lt LocationType) error {
 	_, err := p.pool.Exec(ctx, `
-		insert into location_type (id, official, display_name, icon)
-		values ($1, $2, $3, $4)
+		insert into location_type (id, official, display_name, icon, allowed_parent_types)
+		values ($1, $2, $3, $4, $5)
 		on conflict (id) do update
-			set official     = excluded.official,
-			    display_name = excluded.display_name,
-			    icon         = excluded.icon`,
-		lt.ID, lt.Official, lt.DisplayName, lt.Icon)
+			set official             = excluded.official,
+			    display_name         = excluded.display_name,
+			    icon                 = excluded.icon,
+			    allowed_parent_types = excluded.allowed_parent_types`,
+		lt.ID, lt.Official, lt.DisplayName, lt.Icon, normalizeAllowedParentTypes(lt.AllowedParentTypes))
 	if err != nil {
 		return fmt.Errorf("storage: upsert location_type %q: %w", lt.ID, err)
 	}
 	return nil
 }
 
+// normalizeAllowedParentTypes returns a non-nil slice so a nil set writes and
+// reads back as an empty text[], not SQL null (the column is not null, and
+// "empty" is a meaningful, first-class state: unconstrained).
+func normalizeAllowedParentTypes(s []string) []string {
+	if s == nil {
+		return []string{}
+	}
+	return s
+}
+
 // ListLocationTypes returns every location type, ordered alphabetically by
 // display_name then id, for the registry view and validation.
 func (p *PG) ListLocationTypes(ctx context.Context) ([]LocationType, error) {
 	rows, err := p.pool.Query(ctx,
-		`select id, official, display_name, icon from location_type order by display_name, id`)
+		`select id, official, display_name, icon, allowed_parent_types from location_type order by display_name, id`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list location_types: %w", err)
 	}
@@ -94,25 +117,35 @@ func (p *PG) ListLocationTypes(ctx context.Context) ([]LocationType, error) {
 	var out []LocationType
 	for rows.Next() {
 		var lt LocationType
-		if err := rows.Scan(&lt.ID, &lt.Official, &lt.DisplayName, &lt.Icon); err != nil {
+		if err := rows.Scan(&lt.ID, &lt.Official, &lt.DisplayName, &lt.Icon, &lt.AllowedParentTypes); err != nil {
 			return nil, fmt.Errorf("storage: scan location_type: %w", err)
 		}
+		lt.AllowedParentTypes = normalizeAllowedParentTypes(lt.AllowedParentTypes)
 		out = append(out, lt)
 	}
 	return out, rows.Err()
 }
 
 // LocationTypePatch carries the mutable fields of a location_type update; a nil
-// field is left unchanged.
+// field is left unchanged. AllowedParentTypes is a pointer to a slice so a
+// caller can distinguish "leave unchanged" (nil) from "replace with this set"
+// (a non-nil slice, including an empty one, which clears it back to
+// unconstrained).
 type LocationTypePatch struct {
-	DisplayName *string
-	Icon        *string
+	DisplayName        *string
+	Icon               *string
+	AllowedParentTypes *[]string
 }
 
 // CreateLocationType inserts a custom (official=false) location_type and audits
-// it. A duplicate id (including a seed-owned official id) is ErrTypeExists.
+// it. A duplicate id (including a seed-owned official id) is ErrTypeExists;
+// "root" (the allowed_parent_types sentinel) is ErrReservedTypeID.
 func (p *PG) CreateLocationType(ctx context.Context, actorID string, lt LocationType) (*LocationType, error) {
+	if lt.ID == RootPlacement {
+		return nil, ErrReservedTypeID
+	}
 	lt.Official = false
+	lt.AllowedParentTypes = normalizeAllowedParentTypes(lt.AllowedParentTypes)
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("storage: begin create location_type: %w", err)
@@ -120,8 +153,8 @@ func (p *PG) CreateLocationType(ctx context.Context, actorID string, lt Location
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	if _, err := tx.Exec(ctx,
-		`insert into location_type (id, official, display_name, icon) values ($1, false, $2, $3)`,
-		lt.ID, lt.DisplayName, lt.Icon); err != nil {
+		`insert into location_type (id, official, display_name, icon, allowed_parent_types) values ($1, false, $2, $3, $4)`,
+		lt.ID, lt.DisplayName, lt.Icon, lt.AllowedParentTypes); err != nil {
 		if isUniqueViolation(err) {
 			return nil, ErrTypeExists
 		}
@@ -136,9 +169,9 @@ func (p *PG) CreateLocationType(ctx context.Context, actorID string, lt Location
 	return &lt, nil
 }
 
-// UpdateLocationType patches a custom location_type's display_name or icon
-// (nil fields unchanged) and audits it. Official rows are read-only (ErrTypeOfficial);
-// an unknown id is ErrTypeNotFound.
+// UpdateLocationType patches a custom location_type's display_name, icon, or
+// allowed_parent_types (nil fields unchanged) and audits it. Official rows are
+// read-only (ErrTypeOfficial); an unknown id is ErrTypeNotFound.
 func (p *PG) UpdateLocationType(ctx context.Context, actorID, id string, patch LocationTypePatch) (*LocationType, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -149,17 +182,24 @@ func (p *PG) UpdateLocationType(ctx context.Context, actorID, id string, patch L
 	if err := guardTypeMutable(ctx, tx, "location_type", id); err != nil {
 		return nil, err
 	}
+	var allowed *[]string
+	if patch.AllowedParentTypes != nil {
+		v := normalizeAllowedParentTypes(*patch.AllowedParentTypes)
+		allowed = &v
+	}
 	var lt LocationType
 	if err := tx.QueryRow(ctx, `
 		update location_type set
-			display_name = coalesce($2, display_name),
-			icon         = coalesce($3, icon)
+			display_name         = coalesce($2, display_name),
+			icon                 = coalesce($3, icon),
+			allowed_parent_types = coalesce($4, allowed_parent_types)
 		where id = $1
-		returning id, official, display_name, icon`,
-		id, patch.DisplayName, patch.Icon).
-		Scan(&lt.ID, &lt.Official, &lt.DisplayName, &lt.Icon); err != nil {
+		returning id, official, display_name, icon, allowed_parent_types`,
+		id, patch.DisplayName, patch.Icon, allowed).
+		Scan(&lt.ID, &lt.Official, &lt.DisplayName, &lt.Icon, &lt.AllowedParentTypes); err != nil {
 		return nil, fmt.Errorf("storage: update location_type %q: %w", id, err)
 	}
+	lt.AllowedParentTypes = normalizeAllowedParentTypes(lt.AllowedParentTypes)
 	if err := writeAuditRes(ctx, tx, actorID, "update", "location_type", id, nil, lt); err != nil {
 		return nil, err
 	}
