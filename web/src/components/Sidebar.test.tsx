@@ -63,19 +63,3 @@ describe("Sidebar identity avatar", () => {
     expect(document.querySelector('img[alt="Your profile picture"]')).toBeNull();
   });
 });
-
-// The Inventory group carries a `section` band label on select children
-// (Task 1), grouping them under a daisyUI menu-title heading in the expanded
-// submenu: "Entities" over Components, "Values" over Variables.
-describe("Sidebar Inventory band headers", () => {
-  afterEach(() => vi.restoreAllMocks());
-
-  it("renders the Inventory band headers (Entities and Values)", async () => {
-    vi.spyOn(globalThis, "fetch").mockImplementation(
-      async () => new Response(JSON.stringify(meWith(false)), { status: 200, headers: { "Content-Type": "application/json" } }),
-    );
-    mount(false);
-    expect(await screen.findByText("Values")).toBeTruthy();
-    expect(await screen.findByText("Entities")).toBeTruthy();
-  });
-});

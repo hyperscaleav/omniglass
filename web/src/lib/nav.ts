@@ -21,12 +21,6 @@ export type NavChild = {
   // requires the admin tier `audit:read:admin`). Takes precedence over `resource`,
   // so the sidebar hides the tab from exactly whoever the server would 403.
   perm?: string;
-  // A band label rendered as a daisyUI menu-title above this child in the
-  // sidebar, grouping the children beneath a heading (e.g. "Entities" vs
-  // "Values" inside Inventory). Put it on a child that survives filterNav (an
-  // ungated or *:read-visible leaf) so the header is not orphaned when the
-  // child is hidden.
-  section?: string;
 };
 
 export type NavItem = {
@@ -46,15 +40,22 @@ export const navItems: NavItem[] = [
   { label: "Dashboards", path: "/dashboards", icon: Icons.LayoutDashboard, hint: "Official, shared, and your own dashboards." },
   { label: "Alarms", path: "/alarms", icon: Icons.Bell, hint: "What is firing now, with drill-down to the triggering datapoint." },
   {
-    label: "Inventory", icon: Icons.Package, hint: "The entity graph and the values set on it: systems, components, locations, interfaces, nodes, and tasks, plus the variables, secrets, and config attached across the scope cascade.",
+    label: "Inventory", icon: Icons.Package, hint: "The monitored estate: components, systems, locations, and the collection nodes, each addressable with its health and configuration.",
     children: [
-      { label: "Components", path: "/components", live: true, resource: "component", section: "Entities", hint: "The component inventory, with declared config, props, and tags." },
+      { label: "Components", path: "/components", live: true, resource: "component", hint: "The component inventory, with declared config, props, and tags. Device interfaces are a panel on the component." },
       { label: "Systems", path: "/systems", live: true, resource: "system", hint: "Location and system trees, navigable, with health at each level." },
       { label: "Locations", path: "/locations", live: true, resource: "location", hint: "The place tree: campuses, buildings, floors, and rooms." },
-      { label: "Interfaces", path: "/interfaces", hint: "Connection endpoints on components, with their device credentials." },
-      { label: "Nodes", path: "/nodes", hint: "Collection daemons: their assigned tasks, health, and enrollment." },
-      { label: "Tasks", path: "/tasks", hint: "Collection task assignments across nodes." },
-      { label: "Variables", path: "/variables", live: true, resource: "variable", section: "Values", hint: "Free interpolated values (macros), resolved down the scope cascade." },
+      // Nodes are the collection daemons: a monitored, scope-controlled entity, not a
+      // platform-admin surface. Ungated while it is a stub; when its backend lands it
+      // gates on `node:read` with ABAC scope, like the other Inventory directories.
+      // The tasks a node runs are a panel on the node, not a separate nav entry.
+      { label: "Nodes", path: "/nodes", hint: "Collection daemons: their health, enrollment, and the collection tasks assigned to each." },
+    ],
+  },
+  {
+    label: "Values", icon: Icons.Sliders, hint: "Operator-set values resolved down the scope cascade: interpolation variables, encrypted secrets, and reconciled component config.",
+    children: [
+      { label: "Variables", path: "/variables", live: true, resource: "variable", hint: "Free interpolated values (macros), resolved down the scope cascade." },
       { label: "Secrets", path: "/secrets", live: true, resource: "secret", hint: "Shared device and platform credentials, resolved down the scope cascade." },
       { label: "Config", path: "/config", hint: "Reconciled component and system configuration: desired values operators set, optionally observed back from the device to detect drift and reconcile." },
     ],

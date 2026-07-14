@@ -37,11 +37,10 @@ describe("filterNav", () => {
     expect(out[0].children!.map((c) => c.label)).toEqual(["Systems"]);
   });
 
-  it("orders the inventory section Components, Systems, Locations, the stubs, then the values band", () => {
+  it("orders the inventory section Components, Systems, Locations, Nodes", () => {
     const inv = navItems.find((i) => i.label === "Inventory");
     expect(inv?.children?.map((c) => c.label)).toEqual([
-      "Components", "Systems", "Locations", "Interfaces", "Nodes", "Tasks",
-      "Variables", "Secrets", "Config",
+      "Components", "Systems", "Locations", "Nodes",
     ]);
   });
 
@@ -52,7 +51,7 @@ describe("filterNav", () => {
     expect(labels).not.toContain("Systems");
     expect(labels).not.toContain("Components");
     expect(labels).not.toContain("Locations");
-    expect(labels).toContain("Interfaces"); // a resource-less stub stays
+    expect(labels).toContain("Nodes"); // a resource-less stub stays
   });
 
   // The owner regression (owner's only grant is the `>` tail): every gated tab must
@@ -89,13 +88,13 @@ describe("filterNav", () => {
   // Secrets is a sensitive resource: the server takes secret off the *:read floor,
   // so a viewer whose only grant is *:read does not read secrets and must not see
   // the tab, while an operator holding a literal secret:read (and owner's `>`) does.
-  // Secrets now lives under Inventory (the Values band), not the old Settings group.
+  // Secrets lives under the Values group.
   it("hides Secrets from a *:read viewer, keeps it for an explicit secret:read and owner", () => {
-    expect(section("Inventory", ["*:read"])).not.toContain("Secrets");
-    expect(section("Inventory", ["*:*"])).not.toContain("Secrets");
-    expect(section("Inventory", ["secret:read"])).toContain("Secrets");
-    expect(section("Inventory", ["secret:read,reveal,create,update"])).toContain("Secrets");
-    expect(section("Inventory", [">"])).toContain("Secrets");
+    expect(section("Values", ["*:read"])).not.toContain("Secrets");
+    expect(section("Values", ["*:*"])).not.toContain("Secrets");
+    expect(section("Values", ["secret:read"])).toContain("Secrets");
+    expect(section("Values", ["secret:read,reveal,create,update"])).toContain("Secrets");
+    expect(section("Values", [">"])).toContain("Secrets");
   });
 });
 
@@ -145,8 +144,8 @@ describe("routeTokens", () => {
   });
   it("gates exactly what the sidebar hides: routeTokens is set iff the nav entry has a resource/perm", () => {
     // Every gated nav child's route resolves to a permission; a resource-less stub does not.
-    const settings = navItems.find((i) => i.label === "Admin")!;
-    for (const c of settings.children!) {
+    const admin = navItems.find((i) => i.label === "Admin")!;
+    for (const c of admin.children!) {
       const need = routeTokens(`/web${c.path}`);
       if (c.resource || c.perm) expect(need).not.toBeNull();
       else expect(need).toBeNull();
@@ -155,12 +154,9 @@ describe("routeTokens", () => {
 });
 
 describe("nav IA rework", () => {
-  it("groups the estate-attached values under Inventory", () => {
-    const inv = section("Inventory", [">"]);
-    expect(inv).toContain("Components");
-    expect(inv).toContain("Variables");
-    expect(inv).toContain("Secrets");
-    expect(inv).toContain("Config");
+  it("puts the estate entities under Inventory and the operator-set values under Values", () => {
+    expect(section("Inventory", [">"])).toEqual(["Components", "Systems", "Locations", "Nodes"]);
+    expect(section("Values", [">"])).toEqual(["Variables", "Secrets", "Config"]);
   });
 
   it("renames the Settings group to Admin and drops the Settings label", () => {
@@ -177,16 +173,11 @@ describe("nav IA rework", () => {
     expect(section("Admin", ["*:read"])).toEqual(["Settings"]);
   });
 
-  it("marks the two Inventory band leaders with a section header", () => {
-    const inv = navItems.find((i) => i.label === "Inventory")!.children!;
-    expect(inv.find((c) => c.label === "Components")!.section).toBe("Entities");
-    expect(inv.find((c) => c.label === "Variables")!.section).toBe("Values");
-  });
-
   it("keeps moved entries' gates and leaves the stubs ungated", () => {
     expect(routeTokens("/web/secrets")).toEqual(["secret", "read"]);
     expect(routeTokens("/web/variables")).toEqual(["variable", "read"]);
     expect(routeTokens("/web/config")).toBeNull();
     expect(routeTokens("/web/settings")).toBeNull();
+    expect(routeTokens("/web/nodes")).toBeNull(); // node directory is an ungated stub until its backend lands
   });
 });

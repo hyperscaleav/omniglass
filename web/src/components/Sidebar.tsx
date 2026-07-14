@@ -177,17 +177,12 @@ function Group(props: { item: NavItem; rel: string; collapsed: boolean }) {
           <ul class="ms-5 ps-2.25">
             <For each={children()}>
               {(c) => (
-                <>
-                  <Show when={c.section}>
-                    <li class="menu-title px-2 pb-1.5 text-[10.5px]">{c.section}</li>
-                  </Show>
-                  <li>
-                    <A href={c.path} activeClass="menu-active" classList={{ "opacity-45": !c.live }}>
-                      <span class="flex-1 truncate">{c.label}</span>
-                      <Show when={!c.live}><Soon /></Show>
-                    </A>
-                  </li>
-                </>
+                <li>
+                  <A href={c.path} activeClass="menu-active" classList={{ "opacity-45": !c.live }}>
+                    <span class="flex-1 truncate">{c.label}</span>
+                    <Show when={!c.live}><Soon /></Show>
+                  </A>
+                </li>
               )}
             </For>
           </ul>
