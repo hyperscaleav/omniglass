@@ -102,6 +102,7 @@ type updateLocationInput struct {
 	Body struct {
 		DisplayName  *string `json:"display_name,omitempty"`
 		LocationType *string `json:"location_type,omitempty"`
+		Parent       *string `json:"parent,omitempty" doc:"Re-parents the location (a tree move) to this location name, cycle-guarded and placement-validated. Moving to root is not supported via update this slice."`
 	}
 }
 
@@ -267,12 +268,13 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Method:      http.MethodPatch,
 		Path:        "/locations/{name}",
 		Summary:     "Update a location",
-		Description: "Patches a location's display_name or location_type. Gated by location:update; the read and update scopes drive the 404 versus 403 split.",
+		Description: "Patches a location's display_name, location_type, or parent (a move). Gated by location:update; the read and update scopes drive the 404 versus 403 split.",
 		Middlewares: huma.Middlewares{a.authn, a.require("location", "update")},
 	}, func(ctx context.Context, in *updateLocationInput) (*locationOutput, error) {
 		l, err := gw.UpdateLocation(ctx, actorID(ctx), in.Name, storage.LocationPatch{
 			DisplayName:  in.Body.DisplayName,
 			LocationType: in.Body.LocationType,
+			ParentName:   in.Body.Parent,
 		}, a.scopeFor(ctx, "location", "read"), a.scopeFor(ctx, "location", "update"))
 		if err != nil {
 			return nil, mapLocationErr(err)
@@ -308,8 +310,13 @@ func actorID(ctx context.Context) string {
 
 // mapLocationErr translates the gateway's location sentinels into HTTP status:
 // the non-disclosing 404, the readable-not-actionable 403, occupancy and
-// name-clash 409, and the request faults 422.
+// name-clash 409, and the request faults 422. A placement violation carries
+// the offending child and parent type names in its message.
 func mapLocationErr(err error) error {
+	var placementErr *storage.PlacementError
+	if errors.As(err, &placementErr) {
+		return huma.Error422UnprocessableEntity(placementErr.Error())
+	}
 	switch {
 	case errors.Is(err, storage.ErrLocationNotFound):
 		return huma.Error404NotFound("location not found")
@@ -323,6 +330,8 @@ func mapLocationErr(err error) error {
 		return huma.Error422UnprocessableEntity("parent location not found")
 	case errors.Is(err, storage.ErrUnknownType):
 		return huma.Error422UnprocessableEntity("unknown location_type")
+	case errors.Is(err, storage.ErrLocationCycle):
+		return huma.Error422UnprocessableEntity("cannot move a location under itself or a descendant")
 	default:
 		return huma.Error500InternalServerError("location operation failed")
 	}
