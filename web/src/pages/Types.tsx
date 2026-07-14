@@ -42,16 +42,13 @@ function officialBadge(official: boolean): JSX.Element {
 }
 
 // Columns for the active kind: every kind shows id, display name, and origin;
-// the writable kinds add rank; location alone adds its icon glyph. There is no
-// Kind column because the tab already names the kind.
+// location alone adds its icon glyph. There is no Kind column because the tab
+// already names the kind.
 function columnsFor(kind: TypeKind): FlatColumn<TypeRow>[] {
   const cols: FlatColumn<TypeRow>[] = [
     { key: "id", label: "Id", sortVal: (r) => r.id, cell: (r) => <span class="font-data font-semibold">{r.id}</span> },
     { key: "display_name", label: "Display name", sortVal: (r) => r.display_name, cell: (r) => <span>{r.display_name}</span> },
   ];
-  if (kind !== "secret") {
-    cols.push({ key: "rank", label: "Rank", width: "80px", sortVal: (r) => r.rank ?? Number.MAX_SAFE_INTEGER, cell: (r) => <span class="text-base-content/70">{r.rank ?? "—"}</span> });
-  }
   if (kind === "location") {
     cols.push({ key: "icon", label: "Icon", width: "110px", cell: (r) => <span class="font-data text-xs text-base-content/60">{r.icon ?? "—"}</span> });
   }
@@ -64,17 +61,11 @@ export default function Types() {
   const types = useQuery(() => ({ queryKey: TYPES_KEY, queryFn: listTypes }));
   const [kind, setKind] = createSignal<TypeKind>("location");
 
-  // Rows for the active kind, ranked ascending then by id (secret has no rank,
-  // so it falls straight through to id).
+  // Rows for the active kind, sorted alphabetically by display name then id.
   const rowsFor = (k: TypeKind) =>
     (types.data ?? [])
       .filter((r) => r.kind === k)
-      .sort((a, b) => {
-        const ra = a.rank ?? Number.MAX_SAFE_INTEGER;
-        const rb = b.rank ?? Number.MAX_SAFE_INTEGER;
-        if (ra !== rb) return ra - rb;
-        return a.id.localeCompare(b.id);
-      });
+      .sort((a, b) => a.display_name.localeCompare(b.display_name) || a.id.localeCompare(b.id));
 
   return (
     <div class="flex min-h-full flex-col gap-4">
@@ -163,14 +154,12 @@ function TypeBladeBody(p: { id: string }): JSX.Element {
   const row = useTypeRow(p.id);
   const [err, setErr] = createSignal<string | null>(null);
   const [displayName, setDisplayName] = createSignal("");
-  const [rank, setRank] = createSignal(0);
   const [icon, setIcon] = createSignal("");
 
   createEffect(on(edit.editing, (editing) => {
     if (!editing) return;
     const r = row();
     setDisplayName(r?.display_name ?? "");
-    setRank(r?.rank ?? 0);
     setIcon(r?.icon ?? "");
     setErr(null);
   }));
@@ -196,7 +185,6 @@ function TypeBladeBody(p: { id: string }): JSX.Element {
     try {
       await updateType(r.kind, r.id, {
         display_name: displayName(),
-        rank: rank(),
         ...(r.kind === "location" ? { icon: icon() } : {}),
       });
       await qc.invalidateQueries({ queryKey: TYPES_KEY });
@@ -235,22 +223,6 @@ function TypeBladeBody(p: { id: string }): JSX.Element {
               <input class="input input-bordered w-full" value={displayName()} onInput={(e) => setDisplayName(e.currentTarget.value)} />
             </Show>
           </div>
-          <Show when={r().kind !== "secret"}>
-            <div class="flex flex-col gap-1.5">
-              <span class="eyebrow">Rank</span>
-              <Show
-                when={edit.editing()}
-                fallback={<div class="input input-bordered flex items-center text-sm">{r().rank ?? "—"}</div>}
-              >
-                <input
-                  type="number"
-                  class="input input-bordered w-full font-data"
-                  value={rank()}
-                  onInput={(e) => setRank(Number(e.currentTarget.value))}
-                />
-              </Show>
-            </div>
-          </Show>
           <Show when={r().kind === "location"}>
             <div class="flex flex-col gap-1.5">
               <span class="eyebrow">Icon</span>
@@ -300,15 +272,14 @@ function Fact(p: { label: string; children: JSX.Element }): JSX.Element {
   );
 }
 
-// CreateTypeForm: name the id and set the display name + rank for a new custom
-// type of the active kind (the tab decides the kind; secret_type has no write
-// routes this slice, so it never opens this form). A location type also gets an
-// icon glyph key.
+// CreateTypeForm: name the id and set the display name for a new custom type of
+// the active kind (the tab decides the kind; secret_type has no write routes
+// this slice, so it never opens this form). A location type also gets an icon
+// glyph key.
 export function CreateTypeForm(p: { kind: TypeKind; onCreated: (id: string) => void }): JSX.Element {
   const qc = useQueryClient();
   const [id, setId] = createSignal("");
   const [displayName, setDisplayName] = createSignal("");
-  const [rank, setRank] = createSignal(0);
   const [icon, setIcon] = createSignal("");
   const [busy, setBusy] = createSignal(false);
   const [formErr, setFormErr] = createSignal<string | null>(null);
@@ -321,7 +292,6 @@ export function CreateTypeForm(p: { kind: TypeKind; onCreated: (id: string) => v
       await createType(p.kind, {
         id: id().trim(),
         display_name: displayName().trim(),
-        rank: rank(),
         ...(p.kind === "location" ? { icon: icon().trim() || "map-pin" } : {}),
       });
       await qc.invalidateQueries({ queryKey: TYPES_KEY });
@@ -347,14 +317,6 @@ export function CreateTypeForm(p: { kind: TypeKind; onCreated: (id: string) => v
       </Field>
       <Field label="Display name">
         <input class="input input-bordered w-full" value={displayName()} placeholder="Wing" onInput={(e) => setDisplayName(e.currentTarget.value)} />
-      </Field>
-      <Field label="Rank" hint="Sort order within the kind; lower ranks first.">
-        <input
-          type="number"
-          class="input input-bordered w-full font-data"
-          value={rank()}
-          onInput={(e) => setRank(Number(e.currentTarget.value))}
-        />
       </Field>
       <Show when={p.kind === "location"}>
         <Field label="Icon" hint="A glyph key, e.g. map-pin (the default).">

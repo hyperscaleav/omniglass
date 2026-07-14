@@ -17,17 +17,17 @@ describe("types data layer", () => {
       const url = (input as Request).url;
       if (url.includes("/types/location")) {
         return jsonResponse({
-          location_types: [{ id: "campus", display_name: "Campus", rank: 10, icon: "building", official: true }],
+          location_types: [{ id: "campus", display_name: "Campus", icon: "building", official: true }],
         });
       }
       if (url.includes("/types/system")) {
         return jsonResponse({
-          system_types: [{ id: "kiosk", display_name: "Kiosk", rank: 20, official: true }],
+          system_types: [{ id: "kiosk", display_name: "Kiosk", official: true }],
         });
       }
       if (url.includes("/types/component")) {
         return jsonResponse({
-          component_types: [{ id: "relay", display_name: "Relay", rank: 30, official: false }],
+          component_types: [{ id: "relay", display_name: "Relay", official: false }],
         });
       }
       if (url.includes("/types/secret")) {
@@ -50,32 +50,31 @@ describe("types data layer", () => {
     expect(rows).toHaveLength(4);
 
     const location = rows.find((r) => r.kind === "location");
-    expect(location).toMatchObject({ kind: "location", id: "campus", icon: "building", rank: 10 });
+    expect(location).toMatchObject({ kind: "location", id: "campus", icon: "building" });
 
     const system = rows.find((r) => r.kind === "system");
-    expect(system).toMatchObject({ kind: "system", id: "kiosk", rank: 20 });
+    expect(system).toMatchObject({ kind: "system", id: "kiosk" });
     expect(system?.icon).toBeUndefined();
     expect(system?.fields).toBeUndefined();
 
     const component = rows.find((r) => r.kind === "component");
-    expect(component).toMatchObject({ kind: "component", id: "relay", rank: 30 });
+    expect(component).toMatchObject({ kind: "component", id: "relay" });
 
     const secret = rows.find((r) => r.kind === "secret");
     expect(secret).toMatchObject({ kind: "secret", id: "credentials" });
-    expect(secret?.rank).toBeUndefined();
     expect(secret?.fields).toEqual([{ name: "username", type: "string", secret: false, origin: "operator" }]);
   });
 
   it("creates a location type via the typed literal path", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ id: "wing", display_name: "Wing", rank: 40, icon: "map-pin", official: false }, 201),
+      jsonResponse({ id: "wing", display_name: "Wing", icon: "map-pin", official: false }, 201),
     );
-    await createType("location", { id: "wing", display_name: "Wing", rank: 40, icon: "map-pin" });
+    await createType("location", { id: "wing", display_name: "Wing", icon: "map-pin" });
     const req = fetchMock.mock.calls[0][0] as Request;
     expect(req.method).toBe("POST");
     expect(req.url).toContain("/api/v1/types/location");
     const sent = await req.json();
-    expect(sent).toMatchObject({ id: "wing", display_name: "Wing", rank: 40, icon: "map-pin" });
+    expect(sent).toMatchObject({ id: "wing", display_name: "Wing", icon: "map-pin" });
   });
 
   it("rejects creating a secret type without calling fetch", async () => {

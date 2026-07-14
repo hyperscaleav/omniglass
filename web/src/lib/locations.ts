@@ -21,7 +21,6 @@ export const LOCATIONS_KEY = ["locations"] as const;
 export type LocationType = {
   id: string;
   display_name: string;
-  rank: number;
   // A glyph key (kebab, e.g. "building") resolved to an SVG for the tree's leading
   // icon; resolveIcon falls back to map-pin for an unknown key.
   icon: string;
