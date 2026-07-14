@@ -1,4 +1,4 @@
-import { For, Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
+import { For, Show, createEffect, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import Button from "../components/Button";
@@ -8,7 +8,6 @@ import {
   type TypeKind,
   type TypeRow,
   TYPE_KINDS,
-  WRITABLE_KINDS,
   TYPES_KEY,
   listTypes,
   createType,
@@ -19,11 +18,18 @@ import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
-// Types: the unified catalog directory across the four type registries
-// (location, system, component, secret) on the FlatList surface. A row is
-// addressed by kind + id (the write paths key on id within a kind, not
-// globally); secret_type and any official (seed-owned) row are read-only this
-// slice, writable rows are location/system/component custom entries.
+// Types: the classifier registries (location, system, component, secret), one
+// per tab. Each tab is that registry's own directory over the FlatList surface;
+// a row is addressed by kind + id (the write paths key on id within a kind, not
+// globally). secret_type and any official (seed-owned) row are read-only this
+// slice; the writable rows are custom location/system/component entries.
+
+const KIND_LABEL: Record<TypeKind, string> = {
+  location: "Location",
+  system: "System",
+  component: "Component",
+  secret: "Secret",
+};
 
 function kindBadge(kind: TypeKind): JSX.Element {
   return <span class="badge badge-ghost badge-sm font-data">{kind}</span>;
@@ -35,57 +41,91 @@ function officialBadge(official: boolean): JSX.Element {
     : <span class="badge badge-outline badge-sm">custom</span>;
 }
 
-const columns: FlatColumn<TypeRow>[] = [
-  { key: "kind", label: "Kind", width: "110px", sortVal: (r) => r.kind, cell: (r) => kindBadge(r.kind) },
-  { key: "id", label: "Id", sortVal: (r) => r.id, cell: (r) => <span class="font-data font-semibold">{r.id}</span> },
-  { key: "display_name", label: "Display name", sortVal: (r) => r.display_name, cell: (r) => <span>{r.display_name}</span> },
-  { key: "rank", label: "Rank", width: "80px", sortVal: (r) => r.rank ?? Number.MAX_SAFE_INTEGER, cell: (r) => <span class="text-base-content/70">{r.rank ?? "—"}</span> },
-  { key: "official", label: "Origin", width: "100px", sortVal: (r) => String(r.official), cell: (r) => officialBadge(r.official) },
-  { key: "icon", label: "Icon", width: "100px", cell: (r) => <span class="font-data text-xs text-base-content/60">{r.kind === "location" ? (r.icon ?? "—") : "—"}</span> },
-];
+// Columns for the active kind: every kind shows id, display name, and origin;
+// the writable kinds add rank; location alone adds its icon glyph. There is no
+// Kind column because the tab already names the kind.
+function columnsFor(kind: TypeKind): FlatColumn<TypeRow>[] {
+  const cols: FlatColumn<TypeRow>[] = [
+    { key: "id", label: "Id", sortVal: (r) => r.id, cell: (r) => <span class="font-data font-semibold">{r.id}</span> },
+    { key: "display_name", label: "Display name", sortVal: (r) => r.display_name, cell: (r) => <span>{r.display_name}</span> },
+  ];
+  if (kind !== "secret") {
+    cols.push({ key: "rank", label: "Rank", width: "80px", sortVal: (r) => r.rank ?? Number.MAX_SAFE_INTEGER, cell: (r) => <span class="text-base-content/70">{r.rank ?? "—"}</span> });
+  }
+  if (kind === "location") {
+    cols.push({ key: "icon", label: "Icon", width: "110px", cell: (r) => <span class="font-data text-xs text-base-content/60">{r.icon ?? "—"}</span> });
+  }
+  cols.push({ key: "official", label: "Origin", width: "100px", sortVal: (r) => String(r.official), cell: (r) => officialBadge(r.official) });
+  return cols;
+}
 
 export default function Types() {
   const me = useMe();
   const types = useQuery(() => ({ queryKey: TYPES_KEY, queryFn: listTypes }));
+  const [kind, setKind] = createSignal<TypeKind>("location");
 
-  // Group by kind (in TYPE_KINDS order), then rank ascending (secret has none, so
-  // it sorts last within its kind and falls back to id), then id.
-  const rows = createMemo(() => {
-    const kindOrder = new Map(TYPE_KINDS.map((k, i) => [k, i]));
-    return [...(types.data ?? [])].sort((a, b) => {
-      const k = (kindOrder.get(a.kind) ?? 0) - (kindOrder.get(b.kind) ?? 0);
-      if (k !== 0) return k;
-      const ra = a.rank ?? Number.MAX_SAFE_INTEGER;
-      const rb = b.rank ?? Number.MAX_SAFE_INTEGER;
-      if (ra !== rb) return ra - rb;
-      return a.id.localeCompare(b.id);
-    });
-  });
+  // Rows for the active kind, ranked ascending then by id (secret has no rank,
+  // so it falls straight through to id).
+  const rowsFor = (k: TypeKind) =>
+    (types.data ?? [])
+      .filter((r) => r.kind === k)
+      .sort((a, b) => {
+        const ra = a.rank ?? Number.MAX_SAFE_INTEGER;
+        const rb = b.rank ?? Number.MAX_SAFE_INTEGER;
+        if (ra !== rb) return ra - rb;
+        return a.id.localeCompare(b.id);
+      });
 
   return (
-    <FlatList<TypeRow>
-      config={{
-        entity: { name: "type", plural: "types" },
-        rows,
-        loading: () => types.isPending,
-        error: () => types.error,
-        filterKeys: [
-          { key: "kind", type: "string", hint: "exact", get: (r) => r.kind, values: () => TYPE_KINDS },
-          { key: "name", type: "string", hint: "substring", get: (r) => `${r.id} ${r.display_name}`, values: () => [] },
-          { key: "official", type: "string", hint: "exact", get: (r) => (r.official ? "official" : "custom"), values: () => ["official", "custom"] },
-        ],
-        filterPlaceholder: "filter types by kind, id, name…",
-        columns,
-        empty: "No types.",
-        // Address a row by kind + id: the registries are per-kind, and an id is
-        // unique only within its own kind.
-        rowId: (r) => `${r.kind}:${r.id}`,
-        blades: { registry: { type: typeBlade }, rootKind: "type" },
-        create: can(me.data, "type", "create")
-          ? { label: "New type", can: () => can(me.data, "type", "create"), body: (ctx) => <CreateTypeForm onCreated={ctx.close} /> }
-          : undefined,
-      }}
-    />
+    <div class="flex min-h-full flex-col gap-4">
+      <div role="tablist" class="tabs tabs-box w-fit">
+        <For each={TYPE_KINDS}>
+          {(k) => (
+            <button
+              role="tab"
+              class="tab"
+              classList={{ "tab-active": kind() === k }}
+              onClick={() => setKind(k)}
+            >
+              {KIND_LABEL[k]}
+            </button>
+          )}
+        </For>
+      </div>
+      {/* Keyed on the active kind so the FlatList rebuilds with that kind's
+          static config (columns, create, placeholder); the row list itself stays
+          a live accessor over the shared listTypes query. */}
+      <Show when={kind()} keyed>
+        {(k) => {
+          const label = KIND_LABEL[k].toLowerCase();
+          const canCreate = () => k !== "secret" && can(me.data, "type", "create");
+          return (
+            <FlatList<TypeRow>
+              config={{
+                entity: { name: "type", plural: "types" },
+                rows: () => rowsFor(k),
+                loading: () => types.isPending,
+                error: () => types.error,
+                filterKeys: [
+                  { key: "name", type: "string", hint: "substring", get: (r) => `${r.id} ${r.display_name}`, values: () => [] },
+                  { key: "official", type: "string", hint: "exact", get: (r) => (r.official ? "official" : "custom"), values: () => ["official", "custom"] },
+                ],
+                filterPlaceholder: `filter ${label} types by id, name…`,
+                columns: columnsFor(k),
+                empty: `No ${label} types.`,
+                // Address a row by kind + id: the registries are per-kind, and an
+                // id is unique only within its own kind.
+                rowId: (r) => `${r.kind}:${r.id}`,
+                blades: { registry: { type: typeBlade }, rootKind: "type" },
+                create: canCreate()
+                  ? { label: "New type", can: canCreate, body: (ctx) => <CreateTypeForm kind={k} onCreated={ctx.close} /> }
+                  : undefined,
+              }}
+            />
+          );
+        }}
+      </Show>
+    </div>
   );
 }
 
@@ -260,12 +300,12 @@ function Fact(p: { label: string; children: JSX.Element }): JSX.Element {
   );
 }
 
-// CreateTypeForm: pick a writable kind (location/system/component; secret_type
-// has no write routes this slice), name the id, and set display name + rank.
-// A location type also gets an icon glyph key.
-export function CreateTypeForm(p: { onCreated: (id: string) => void }): JSX.Element {
+// CreateTypeForm: name the id and set the display name + rank for a new custom
+// type of the active kind (the tab decides the kind; secret_type has no write
+// routes this slice, so it never opens this form). A location type also gets an
+// icon glyph key.
+export function CreateTypeForm(p: { kind: TypeKind; onCreated: (id: string) => void }): JSX.Element {
   const qc = useQueryClient();
-  const [kind, setKind] = createSignal<TypeKind>(WRITABLE_KINDS[0]);
   const [id, setId] = createSignal("");
   const [displayName, setDisplayName] = createSignal("");
   const [rank, setRank] = createSignal(0);
@@ -278,11 +318,11 @@ export function CreateTypeForm(p: { onCreated: (id: string) => void }): JSX.Elem
     setBusy(true);
     setFormErr(null);
     try {
-      await createType(kind(), {
+      await createType(p.kind, {
         id: id().trim(),
         display_name: displayName().trim(),
         rank: rank(),
-        ...(kind() === "location" ? { icon: icon().trim() || "map-pin" } : {}),
+        ...(p.kind === "location" ? { icon: icon().trim() || "map-pin" } : {}),
       });
       await qc.invalidateQueries({ queryKey: TYPES_KEY });
       p.onCreated(id().trim());
@@ -298,11 +338,10 @@ export function CreateTypeForm(p: { onCreated: (id: string) => void }): JSX.Elem
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <Field label="Kind">
-        <select class="select select-bordered w-full" value={kind()} onChange={(e) => setKind(e.currentTarget.value as TypeKind)}>
-          <For each={WRITABLE_KINDS}>{(k) => <option value={k}>{k}</option>}</For>
-        </select>
-      </Field>
+      <div class="flex items-center gap-2 text-sm text-base-content/70">
+        <span class="eyebrow">Kind</span>
+        {kindBadge(p.kind)}
+      </div>
       <Field label="Id" hint="A kebab id, e.g. wing.">
         <input class="input input-bordered w-full font-data" value={id()} placeholder="wing" onInput={(e) => setId(e.currentTarget.value)} />
       </Field>
@@ -317,7 +356,7 @@ export function CreateTypeForm(p: { onCreated: (id: string) => void }): JSX.Elem
           onInput={(e) => setRank(Number(e.currentTarget.value))}
         />
       </Field>
-      <Show when={kind() === "location"}>
+      <Show when={p.kind === "location"}>
         <Field label="Icon" hint="A glyph key, e.g. map-pin (the default).">
           <input class="input input-bordered w-full font-data" value={icon()} placeholder="map-pin" onInput={(e) => setIcon(e.currentTarget.value)} />
         </Field>
