@@ -18,11 +18,10 @@ import (
 //
 // The hierarchy fixture is built from custom types created in this test
 // (t-campus/t-building/t-floor/t-room) rather than the official
-// campus/building/floor/room registry: the boot seed does not populate the
-// official types' allowed_parent_types until a later slice task, so this
-// keeps the test independent of that not-yet-shipped seed data while
-// exercising the exact same shape (campus={root}, building={root,campus},
-// floor={building,campus}, room={floor,building,campus}).
+// campus/building/floor/room registry, to keep this test independent of the
+// seed's exact values, while exercising the same shape the boot seed ships
+// (campus={root}, building={root,campus}, floor={building,campus},
+// room={floor,building,campus}).
 func TestLocationPlacementEnforcement(t *testing.T) {
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
@@ -131,10 +130,8 @@ func TestLocationRootPlacementRejected(t *testing.T) {
 // Like TestLocationPlacementEnforcement, the placement half of this fixture
 // uses custom types (t-campus/t-building/t-room) with an explicit
 // allowed_parent_types rather than the official campus/building/room
-// registry: the boot seed does not populate the official types' sets until a
-// later slice task (see that test's doc comment), so this keeps the move
-// path's placement enforcement testable independent of that not-yet-shipped
-// seed data.
+// registry, keeping the move path's placement enforcement testable
+// independent of the seed's exact values (see that test's doc comment).
 func TestLocationReparentEnforcement(t *testing.T) {
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()

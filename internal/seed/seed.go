@@ -42,9 +42,10 @@ type rolesDoc struct {
 
 type locationTypesDoc struct {
 	LocationTypes []struct {
-		ID          string `yaml:"id"`
-		DisplayName string `yaml:"display_name"`
-		Icon        string `yaml:"icon"`
+		ID                 string   `yaml:"id"`
+		DisplayName        string   `yaml:"display_name"`
+		Icon               string   `yaml:"icon"`
+		AllowedParentTypes []string `yaml:"allowed_parent_types"`
 	} `yaml:"location_types"`
 }
 
@@ -179,10 +180,11 @@ func seedLocationTypes(ctx context.Context, gw storage.Gateway) error {
 	}
 	for _, lt := range doc.LocationTypes {
 		if err := gw.UpsertLocationType(ctx, storage.LocationType{
-			ID:          lt.ID,
-			Official:    true,
-			DisplayName: lt.DisplayName,
-			Icon:        lt.Icon,
+			ID:                 lt.ID,
+			Official:           true,
+			DisplayName:        lt.DisplayName,
+			Icon:               lt.Icon,
+			AllowedParentTypes: lt.AllowedParentTypes,
 		}); err != nil {
 			return err
 		}
