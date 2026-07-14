@@ -33,7 +33,7 @@ Three nouns describe what you operate, plus the edge process that collects for t
 - A **location** ties systems and components to a physical place (campus, building, floor, room).
   It is classified by `location_type` and, unlike component and system, has **no template**: for a
   location the type is the only shape-definer. The official `location_type` set ships seeded and is
-  readable at `GET /types/location` (ranked), which is what the type picker on the location form
+  readable at `GET /types/location` (alphabetically by display name), which is what the type picker on the location form
   lists so a location is classified by a known type rather than a free-typed string. Each type also
   carries an `icon` (a glyph key like `building` or `landmark`) that the console renders as the
   leading glyph on every location of that type, so a campus reads differently from a building at a
