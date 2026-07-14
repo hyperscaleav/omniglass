@@ -196,6 +196,9 @@ func (UnimplementedGateway) CreateSystem(context.Context, string, SystemSpec, sc
 func (UnimplementedGateway) UpdateSystem(context.Context, string, string, SystemPatch, scope.Set, scope.Set) (*System, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) SystemNameTaken(context.Context, string) (bool, error) {
+	return false, nil
+}
 func (UnimplementedGateway) DeleteSystem(context.Context, string, string, scope.Set, scope.Set) error {
 	return nil
 }

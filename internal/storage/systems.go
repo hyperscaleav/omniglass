@@ -59,6 +59,7 @@ type SystemSpec struct {
 // SystemPatch is the update input: nil fields unchanged. Reparenting and
 // changing located-at are deferred to a later slice.
 type SystemPatch struct {
+	Name        *string
 	DisplayName *string
 	SystemType  *string
 }
@@ -205,6 +206,10 @@ func (p *PG) CreateSystem(ctx context.Context, actorID string, spec SystemSpec, 
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	if err := ValidateEntityName(spec.Name); err != nil {
+		return nil, err
+	}
+
 	var parentID *string
 	if spec.ParentName == nil {
 		if !create.All {
@@ -267,14 +272,20 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 	if err != nil {
 		return nil, err
 	}
+	if patch.Name != nil {
+		if err := ValidateEntityName(*patch.Name); err != nil {
+			return nil, err
+		}
+	}
 	after, err := scanSystem(tx.QueryRow(ctx, `
 		update system set
-			display_name = coalesce($2, display_name),
-			system_type  = coalesce($3, system_type),
+			name         = coalesce($2, name),
+			display_name = coalesce($3, display_name),
+			system_type  = coalesce($4, system_type),
 			updated_at   = now()
 		where id = $1
 		returning `+systemCols,
-		before.ID, patch.DisplayName, patch.SystemType))
+		before.ID, patch.Name, patch.DisplayName, patch.SystemType))
 	if err != nil {
 		return nil, mapSystemWriteErr(err)
 	}
@@ -299,6 +310,18 @@ func (p *PG) resolveSystemForAction(ctx context.Context, q querier, name string,
 
 func (p *PG) systemByName(ctx context.Context, q querier, name string) (*System, error) {
 	return scopedByName(ctx, q, systemConfig, name)
+}
+
+// SystemNameTaken reports whether a system with this name exists. Scope-blind
+// by design: the name unique constraint is global, so availability must be a
+// global fact to match it (a scope-aware answer would false-positive on a name
+// held outside the caller's scope). Gated at the API by system:update.
+func (p *PG) SystemNameTaken(ctx context.Context, name string) (bool, error) {
+	var exists bool
+	if err := p.pool.QueryRow(ctx, `select exists(select 1 from system where name = $1)`, name).Scan(&exists); err != nil {
+		return false, fmt.Errorf("storage: system name taken: %w", err)
+	}
+	return exists, nil
 }
 
 func mapSystemWriteErr(err error) error {

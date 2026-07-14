@@ -219,6 +219,7 @@ type Gateway interface {
 	GetSystem(ctx context.Context, name string, read scope.Set) (*System, error)
 	CreateSystem(ctx context.Context, actorID string, spec SystemSpec, create scope.Set) (*System, error)
 	UpdateSystem(ctx context.Context, actorID, name string, patch SystemPatch, read, action scope.Set) (*System, error)
+	SystemNameTaken(ctx context.Context, name string) (bool, error)
 	DeleteSystem(ctx context.Context, actorID, name string, read, action scope.Set) error
 
 	// The component tier: a type registry and scoped CRUD, on the same helpers.
