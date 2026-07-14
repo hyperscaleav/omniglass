@@ -63,7 +63,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0026](#adr-0026-console-nav-ia-estate-values-get-their-own-top-level-group-the-settings-group-becomes-admin) | 2026-07-13 | Accepted | Console nav IA: Variables, Secrets, and Config get their own top-level Values group; Inventory holds the estate entities including Nodes; Interfaces and Tasks become facet panels; the Settings group is renamed Admin |
 | [ADR-0027](#adr-0027-create-is-a-route-inventory-create-and-edit-unify-on-the-detail-accordion) | 2026-07-14 | Accepted | Inventory create/edit unify on the detail accordion: `New` routes to `/<entity>/create` (a draft) and Save hands off to `/<entity>/<id>` in edit; view is read-only, edit is the sole writer; the create/edit Drawer is retired |
 | [ADR-0028](#adr-0028-rank-retired-from-the-type-registries-sort-is-alphabetical) | 2026-07-14 | Accepted | `rank` is dropped from `location_type`, `system_type`, and `component_type`; the three list operations sort by `display_name, id` instead |
-| [ADR-0029](#adr-0029-files-slice-1-a-content-addressed-blob-store-and-a-tenant-wide-file-handle) | 2026-07-14 | Accepted | Files slice 1: a content-addressed `blob` store primitive (pgblobs) and a tenant-wide `file` handle; no placement arc (a file is 1:many, its locality is a future attachment), a binary `sensitive` flag reusing the secret `:admin` tier (defaults off), GC deferred so a delete leaves the blob, base64-in-JSON on the wire |
+| [ADR-0029](#adr-0029-files-slice-1-a-content-addressed-blob-store-and-a-tenant-wide-file-handle) | 2026-07-14 | Accepted | Files slice 1: a content-addressed `blob` store primitive (pgblobs) and a tenant-wide `file` handle; no placement arc (a file is 1:many, its locality is a future attachment), a binary `sensitive` flag reusing the secret `:admin` tier (defaults off), a delete frees its unreferenced blob synchronously (async mark-sweep GC deferred), base64-in-JSON on the wire |
 
 ## Entries
 
@@ -709,9 +709,12 @@ below from the project's history. From here it grows one slice at a time.
   `:admin`-tier rule (hidden from a lister without the tier, a non-disclosing 404 to a reader without it,
   admin-only to create), but defaults **false** (a file is shared unless marked, where a secret defaults sensitive
   because it is a credential), and `file` is **not** added to the sensitive-resource set, so the viewer floor
-  (`*:read`) reads ordinary files. **(3) GC deferred; a delete leaves the blob.** Reference-counted mark-sweep GC
-  is a later slice, so `DeleteFile` drops the handle and intentionally leaves the (possibly still-referenced,
-  deduplicated) blob. **(4) One backend, base64-in-JSON on the wire.** Only the pgblobs backend ships (S3 and disk
+  (`*:read`) reads ordinary files. **(3) A delete frees its blob synchronously; async GC deferred.** `DeleteFile`
+  drops the handle and, in the same transaction, frees the blob **when no other handle references it** (a dedup-aware
+  refcount: a deleted file reclaims its bytes rather than leaking storage, but a blob shared by another handle is
+  kept). The general async mark-sweep GC (for blobs referenced by other things, an aged large log body, a
+  `collection.failed` raw, an attach event, none of which exist yet) stays a later slice; today a `file` is the only
+  referencer, so the synchronous check is complete. **(4) One backend, base64-in-JSON on the wire.** Only the pgblobs backend ships (S3 and disk
   behind the same seam later); upload and download carry the bytes **base64 in JSON**, reusing the avatar precedent
   ([ADR-0018](#adr-0018-the-avatar-read-endpoint-is-json-not-raw-image-bytes)) so the whole surface stays under the
   Huma authz middleware and generates a uniform client and CLI. content_type lives on the **file**, not the blob:

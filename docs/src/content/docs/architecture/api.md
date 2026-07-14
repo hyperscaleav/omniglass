@@ -260,8 +260,9 @@ so the whole surface stays under the authz middleware and generates a uniform cl
   without the admin tier.
 - `GET /files/{id}:download` returns `{name, content_type, content (base64)}`, the blob read back and its
   hash verified (`file:read`).
-- `DELETE /files/{id}` removes the handle (204, `file:delete`); the blob is left in place (garbage
-  collection is a later slice).
+- `DELETE /files/{id}` removes the handle (204, `file:delete`); the blob is freed in the same transaction
+  when no other handle references it (dedup-aware, so storage is reclaimed), and a blob still shared by
+  another handle is kept.
 
 A `file` body is `{id, name, content_type, size, sha256, sensitive, created_at}`; the `sha256` is the
 content address of the blob it points at, so two handles over identical bytes share one blob.

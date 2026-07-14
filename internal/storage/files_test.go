@@ -80,7 +80,7 @@ func TestCreateFileDedupsIdenticalBytesToOneBlob(t *testing.T) {
 	}
 }
 
-func TestDeleteFileRemovesHandleButLeavesBlob(t *testing.T) {
+func TestDeleteFileFreesUnreferencedBlob(t *testing.T) {
 	ctx, gw, bs := newFileGW(t)
 	payload := []byte("a packet capture")
 
@@ -94,10 +94,46 @@ func TestDeleteFileRemovesHandleButLeavesBlob(t *testing.T) {
 	if _, err := gw.GetFile(ctx, f.ID, false); !errors.Is(err, storage.ErrFileNotFound) {
 		t.Fatalf("get after delete = %v, want ErrFileNotFound", err)
 	}
-	// GC is deferred: the delete releases the handle, not the blob.
+	// Deleting the last handle frees the bytes (synchronous refcount, so storage
+	// does not leak); async mark-sweep GC of aged/event-referenced blobs is a
+	// separate later slice.
 	ok, err := bs.Exists(ctx, f.SHA256)
-	if err != nil || !ok {
-		t.Fatalf("blob after file delete: exists=%v err=%v; want retained", ok, err)
+	if err != nil || ok {
+		t.Fatalf("blob after last-handle delete: exists=%v err=%v; want freed", ok, err)
+	}
+}
+
+func TestDeleteFileKeepsBlobStillReferencedByAnotherHandle(t *testing.T) {
+	ctx, gw, bs := newFileGW(t)
+	payload := []byte("shared firmware bytes")
+
+	a, err := gw.CreateFile(ctx, "", storage.FileSpec{Name: "a.bin", ContentType: "application/octet-stream", Data: payload}, false)
+	if err != nil {
+		t.Fatalf("create a: %v", err)
+	}
+	b, err := gw.CreateFile(ctx, "", storage.FileSpec{Name: "b.bin", ContentType: "application/octet-stream", Data: payload}, false)
+	if err != nil {
+		t.Fatalf("create b: %v", err)
+	}
+
+	// Deleting one of two handles over the same (deduplicated) blob must NOT free
+	// the blob: the other handle still references it.
+	if err := gw.DeleteFile(ctx, "", a.ID, false); err != nil {
+		t.Fatalf("delete a: %v", err)
+	}
+	if ok, err := bs.Exists(ctx, b.SHA256); err != nil || !ok {
+		t.Fatalf("blob after deleting one of two handles: exists=%v err=%v; want retained", ok, err)
+	}
+	if _, _, err := gw.DownloadFile(ctx, b.ID, false); err != nil {
+		t.Fatalf("download surviving handle b: %v", err)
+	}
+
+	// Deleting the last handle then frees it.
+	if err := gw.DeleteFile(ctx, "", b.ID, false); err != nil {
+		t.Fatalf("delete b: %v", err)
+	}
+	if ok, err := bs.Exists(ctx, b.SHA256); err != nil || ok {
+		t.Fatalf("blob after last handle: exists=%v err=%v; want freed", ok, err)
 	}
 }
 

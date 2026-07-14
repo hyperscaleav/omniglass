@@ -152,9 +152,11 @@ func (p *PG) DownloadFile(ctx context.Context, id string, canAdmin bool) (*File,
 	return f, data, nil
 }
 
-// DeleteFile removes a file handle, audited. GC is deferred, so the blob the
-// handle pointed at is intentionally left in place. The sensitive-tier gate
-// applies: a caller without the admin tier gets the non-disclosing not-found.
+// DeleteFile removes a file handle, audited, and frees its blob when no other
+// handle still references it (synchronous, dedup-aware reference counting, so
+// deleting files reclaims storage rather than leaking it). Async mark-sweep GC
+// of aged or event-referenced blobs is a separate later slice. The sensitive-tier
+// gate applies: a caller without the admin tier gets the non-disclosing not-found.
 func (p *PG) DeleteFile(ctx context.Context, actorID, id string, canAdmin bool) error {
 	f, err := p.GetFile(ctx, id, canAdmin)
 	if err != nil {
@@ -172,6 +174,18 @@ func (p *PG) DeleteFile(ctx context.Context, actorID, id string, canAdmin bool) 
 	}
 	if ct.RowsAffected() == 0 {
 		return ErrFileNotFound
+	}
+	// Free the blob only if the just-deleted handle was the last reference to it.
+	// The handle row is already gone in this transaction, so the NOT EXISTS sees
+	// only the surviving handles; a deduplicated blob shared by another file is
+	// kept. One atomic statement, so a concurrent upload of the same bytes cannot
+	// race the collect. (When other referencers land, large log bodies, a
+	// collection.failed raw, an attach event, the general case moves to the async
+	// mark-sweep GC slice.)
+	if _, err := tx.Exec(ctx,
+		`delete from blob where sha256 = $1 and not exists (select 1 from file where sha256 = $1)`,
+		f.SHA256); err != nil {
+		return fmt.Errorf("storage: free unreferenced blob: %w", err)
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "delete", "file", f.ID, auditFile(f), nil); err != nil {
 		return err
