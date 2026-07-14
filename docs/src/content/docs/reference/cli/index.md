@@ -648,12 +648,13 @@ Update a location
 omniglass location update <name> [flags]
 ```
 
-Patches a location's display_name or location_type. Gated by location:update; the read and update scopes drive the 404 versus 403 split.
+Patches a location's display_name, location_type, or parent (a move). Gated by location:update; the read and update scopes drive the 404 versus 403 split.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--display-name` | string | (none) |  |
 | `--location-type` | string | (none) |  |
+| `--parent` | string | (none) | Re-parents the location (a tree move) to this location name, cycle-guarded and placement-validated. Moving to root is not supported via update this slice. |
 
 Example:
 
@@ -1818,9 +1819,10 @@ Creates a custom (non-official) location_type. Gated by type:create.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
+| `--allowed-parent-types` | string | (none) | location_type ids and/or the reserved root sentinel this type may be placed under; empty means unconstrained |
 | `--display-name` | string | (none) |  |
 | `--icon` | string | (none) | A glyph key; the console falls back to map-pin when empty |
-| `--id` | string | (none) | Globally unique type id (kebab, e.g. wing) |
+| `--id` | string | (none) | Globally unique type id (kebab, e.g. wing); "root" is reserved |
 
 Example:
 
@@ -1952,6 +1954,7 @@ Patches a custom location_type's display_name or icon. Official types are read-o
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
+| `--allowed-parent-types` | string | (none) | Replaces the allowed-parent set; omit to leave unchanged, [] to clear back to unconstrained |
 | `--display-name` | string | (none) |  |
 | `--icon` | string | (none) |  |
 

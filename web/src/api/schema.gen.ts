@@ -527,7 +527,7 @@ export interface paths {
         head?: never;
         /**
          * Update a location
-         * @description Patches a location's display_name or location_type. Gated by location:update; the read and update scopes drive the 404 versus 403 split.
+         * @description Patches a location's display_name, location_type, or parent (a move). Gated by location:update; the read and update scopes drive the 404 versus 403 split.
          */
         patch: operations["update-location"];
         trace?: never;
@@ -1825,10 +1825,12 @@ export interface components {
              * @example /api/v1/schemas/CreateLocationTypeInputBody.json
              */
             readonly $schema?: string;
+            /** @description location_type ids and/or the reserved root sentinel this type may be placed under; empty means unconstrained */
+            allowed_parent_types?: string[] | null;
             display_name: string;
             /** @description A glyph key; the console falls back to map-pin when empty */
             icon?: string;
-            /** @description Globally unique type id (kebab, e.g. wing) */
+            /** @description Globally unique type id (kebab, e.g. wing); "root" is reserved */
             id: string;
         };
         CreateMeTokenInputBody: {
@@ -2356,6 +2358,7 @@ export interface components {
              * @example /api/v1/schemas/LocationTypeBody.json
              */
             readonly $schema?: string;
+            allowed_parent_types: string[] | null;
             display_name: string;
             icon: string;
             id: string;
@@ -2768,6 +2771,8 @@ export interface components {
             readonly $schema?: string;
             display_name?: string;
             location_type?: string;
+            /** @description Re-parents the location (a tree move) to this location name, cycle-guarded and placement-validated. Moving to root is not supported via update this slice. */
+            parent?: string;
         };
         UpdateLocationTypeInputBody: {
             /**
@@ -2776,6 +2781,8 @@ export interface components {
              * @example /api/v1/schemas/UpdateLocationTypeInputBody.json
              */
             readonly $schema?: string;
+            /** @description Replaces the allowed-parent set; omit to leave unchanged, [] to clear back to unconstrained */
+            allowed_parent_types?: string[];
             display_name?: string;
             icon?: string;
         };
