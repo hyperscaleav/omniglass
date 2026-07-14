@@ -440,6 +440,13 @@ components:
           format: uri
           readOnly: true
           type: string
+        allowed_parent_types:
+          description: location_type ids and/or the reserved root sentinel this type may be placed under; empty means unconstrained
+          items:
+            type: string
+          type:
+            - array
+            - "null"
         display_name:
           minLength: 1
           type: string
@@ -447,7 +454,7 @@ components:
           description: A glyph key; the console falls back to map-pin when empty
           type: string
         id:
-          description: Globally unique type id (kebab, e.g. wing)
+          description: Globally unique type id (kebab, e.g. wing); "root" is reserved
           minLength: 1
           type: string
       required:
@@ -1490,6 +1497,12 @@ components:
           format: uri
           readOnly: true
           type: string
+        allowed_parent_types:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
         display_name:
           type: string
         icon:
@@ -1502,6 +1515,7 @@ components:
         - id
         - display_name
         - icon
+        - allowed_parent_types
         - official
       type: object
     LoginInputBody:
@@ -2310,6 +2324,9 @@ components:
           minLength: 1
           pattern: ^[a-z0-9][a-z0-9-]*$
           type: string
+        parent:
+          description: Re-parents the location (a tree move) to this location name, cycle-guarded and placement-validated. Moving to root is not supported via update this slice.
+          type: string
       type: object
     UpdateLocationTypeInputBody:
       additionalProperties: false
@@ -2321,6 +2338,11 @@ components:
           format: uri
           readOnly: true
           type: string
+        allowed_parent_types:
+          description: Replaces the allowed-parent set; omit to leave unchanged, [] to clear back to unconstrained
+          items:
+            type: string
+          type: array
         display_name:
           type: string
         icon:
@@ -3387,7 +3409,7 @@ paths:
           description: Error
       summary: Get a location
     patch:
-      description: Patches a location's display_name or location_type. Gated by location:update; the read and update scopes drive the 404 versus 403 split.
+      description: Patches a location's display_name, location_type, or parent (a move). Gated by location:update; the read and update scopes drive the 404 versus 403 split.
       operationId: update-location
       parameters:
         - in: path

@@ -37,7 +37,14 @@ func TestRowActionsAPI(t *testing.T) {
 
 	ownerTok := principalWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
 	body := func(name, parent string) map[string]any {
-		b := map[string]any{"name": name, "location_type": "campus"}
+		// A child needs a type placement-compatible with a campus parent
+		// (allowed_parent_types constrains same-type nesting); campus at root,
+		// building under it, since only the tree shape matters here.
+		lt := "campus"
+		if parent != "" {
+			lt = "building"
+		}
+		b := map[string]any{"name": name, "location_type": lt}
 		if parent != "" {
 			b["parent"] = parent
 		}

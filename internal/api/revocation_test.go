@@ -118,7 +118,14 @@ func TestRevokeCutsScopeLiveSessionAPI(t *testing.T) {
 
 	// Owner builds root > child (the first owner request builds the role index).
 	body := func(name, parent string) map[string]any {
-		b := map[string]any{"name": name, "location_type": "campus"}
+		// A child needs a type placement-compatible with a campus parent
+		// (allowed_parent_types constrains same-type nesting); campus at root,
+		// building under it, since only the tree shape matters here.
+		lt := "campus"
+		if parent != "" {
+			lt = "building"
+		}
+		b := map[string]any{"name": name, "location_type": lt}
 		if parent != "" {
 			b["parent"] = parent
 		}

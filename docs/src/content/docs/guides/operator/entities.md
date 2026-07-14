@@ -47,12 +47,19 @@ user's is **Disable / Enable**), each behind a confirm. Secondary actions like *
   letters, digits, and hyphens (it can be changed later, see Edit). **Create** commits it and
   drops you straight into the new entity's detail in **edit mode**, so you can tag it and finish
   configuring in place instead of hunting for it back in the list. Bindings like tags need the
-  entity to exist, so they unlock the moment it is created.
+  entity to exist, so they unlock the moment it is created. On a location, the type you pick may
+  restrict which parent types it can sit under (or require no parent at all); a placement outside
+  that set is refused with a message naming both types, right on the create form.
 - **Edit** (the pencil on a row, or the button in the detail) flips that same detail into edit
   mode: the fields become inputs and the tag editor goes live. The **technical name** (the
   address) is editable here too, with an inline **Check** button that reports whether a proposed
   name is a valid slug and still free before you save; renaming changes the entity's URL, and
-  existing links to the old name stop resolving. Placement stays fixed. **Save** commits the
-  changes, **Cancel** discards them. In **view** the detail is read-only, so tags and other
-  bindings are shown but not editable until you enter edit.
+  existing links to the old name stop resolving. **Save** commits the changes, **Cancel** discards
+  them. In **view** the detail is read-only, so tags and other bindings are shown but not editable
+  until you enter edit.
+- A **location**'s edit mode also makes its **Parent** editable: the Placement section swaps its
+  read-only fact for a picker narrowed to the location type's allowed parents (or, when
+  unconstrained, every location), excluding the location's own subtree. Moving back to root is
+  not offered; a move a stale picker still lets through is refused the same way as create, inline,
+  naming both types.
 - **Delete** removes it, with a confirm. These actions appear only if your grants allow them.

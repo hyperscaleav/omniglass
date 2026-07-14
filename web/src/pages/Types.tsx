@@ -9,6 +9,7 @@ import {
   type TypeRow,
   TYPE_KINDS,
   TYPES_KEY,
+  ROOT_PLACEMENT,
   listTypes,
   createType,
   updateType,
@@ -155,12 +156,16 @@ function TypeBladeBody(p: { id: string }): JSX.Element {
   const [err, setErr] = createSignal<string | null>(null);
   const [displayName, setDisplayName] = createSignal("");
   const [icon, setIcon] = createSignal("");
+  const allTypes = useQuery(() => ({ queryKey: TYPES_KEY, queryFn: listTypes }));
+  const locationTypeOptions = () => (allTypes.data ?? []).filter((t) => t.kind === "location");
+  const [allowedParents, setAllowedParents] = createSignal<string[]>([]);
 
   createEffect(on(edit.editing, (editing) => {
     if (!editing) return;
     const r = row();
     setDisplayName(r?.display_name ?? "");
     setIcon(r?.icon ?? "");
+    setAllowedParents(r?.allowed_parent_types ?? []);
     setErr(null);
   }));
 
@@ -185,7 +190,7 @@ function TypeBladeBody(p: { id: string }): JSX.Element {
     try {
       await updateType(r.kind, r.id, {
         display_name: displayName(),
-        ...(r.kind === "location" ? { icon: icon() } : {}),
+        ...(r.kind === "location" ? { icon: icon(), allowed_parent_types: allowedParents() } : {}),
       });
       await qc.invalidateQueries({ queryKey: TYPES_KEY });
     } catch (e) {
@@ -234,6 +239,33 @@ function TypeBladeBody(p: { id: string }): JSX.Element {
               </Show>
             </div>
           </Show>
+          <Show when={r().kind === "location"}>
+            <div class="flex flex-col gap-1.5">
+              <span class="eyebrow">Allowed parents</span>
+              <Show
+                when={edit.editing()}
+                fallback={
+                  <Show
+                    when={(r().allowed_parent_types?.length ?? 0) > 0}
+                    fallback={<span class="text-sm text-base-content/50">Unconstrained (any parent, or root).</span>}
+                  >
+                    <div class="flex flex-wrap gap-1.5">
+                      <For each={r().allowed_parent_types}>
+                        {(pid) => (
+                          <span class="badge badge-outline badge-sm">
+                            {pid === ROOT_PLACEMENT ? "Root" : locationTypeOptions().find((t) => t.id === pid)?.display_name ?? pid}
+                          </span>
+                        )}
+                      </For>
+                    </div>
+                  </Show>
+                }
+              >
+                <AllowedParentsPicker options={locationTypeOptions()} value={allowedParents()} onChange={setAllowedParents} />
+              </Show>
+              <span class="text-[11px] text-base-content/40">Empty allows any parent (or root). A non-empty set is enforced on create and move.</span>
+            </div>
+          </Show>
           <Show when={r().kind === "secret"}>
             <div class="flex flex-col gap-1.5">
               <span class="eyebrow">Fields</span>
@@ -278,9 +310,12 @@ function Fact(p: { label: string; children: JSX.Element }): JSX.Element {
 // glyph key.
 export function CreateTypeForm(p: { kind: TypeKind; onCreated: (id: string) => void }): JSX.Element {
   const qc = useQueryClient();
+  const types = useQuery(() => ({ queryKey: TYPES_KEY, queryFn: listTypes }));
+  const locationTypeOptions = () => (types.data ?? []).filter((r) => r.kind === "location");
   const [id, setId] = createSignal("");
   const [displayName, setDisplayName] = createSignal("");
   const [icon, setIcon] = createSignal("");
+  const [allowedParents, setAllowedParents] = createSignal<string[]>([]);
   const [busy, setBusy] = createSignal(false);
   const [formErr, setFormErr] = createSignal<string | null>(null);
 
@@ -292,7 +327,7 @@ export function CreateTypeForm(p: { kind: TypeKind; onCreated: (id: string) => v
       await createType(p.kind, {
         id: id().trim(),
         display_name: displayName().trim(),
-        ...(p.kind === "location" ? { icon: icon().trim() || "map-pin" } : {}),
+        ...(p.kind === "location" ? { icon: icon().trim() || "map-pin", allowed_parent_types: allowedParents() } : {}),
       });
       await qc.invalidateQueries({ queryKey: TYPES_KEY });
       p.onCreated(id().trim());
@@ -323,10 +358,51 @@ export function CreateTypeForm(p: { kind: TypeKind; onCreated: (id: string) => v
           <input class="input input-bordered w-full font-data" value={icon()} placeholder="map-pin" onInput={(e) => setIcon(e.currentTarget.value)} />
         </Field>
       </Show>
+      <Show when={p.kind === "location"}>
+        {/* Not wrapped in Field: Field's root is a <label>, and a picker of one
+            <label> per checkbox nested inside it is invalid HTML that makes a
+            for-less outer label forward a click on the heading or hint straight
+            to the first checkbox. The heading and hint render as plain text
+            instead. */}
+        <div class="flex flex-col gap-1.5">
+          <span class="eyebrow">Allowed parents</span>
+          <AllowedParentsPicker options={locationTypeOptions()} value={allowedParents()} onChange={setAllowedParents} />
+          <span class="text-[11px] text-base-content/40">Where a location of this type may be placed. Leave every box unchecked to allow any parent (unconstrained).</span>
+        </div>
+      </Show>
       <DrawerFooter>
         <Button type="submit" intent="action" icon={Plus} disabled={busy() || !id().trim() || !displayName().trim()}>Create type</Button>
       </DrawerFooter>
     </form>
+  );
+}
+
+// AllowedParentsPicker: a checkbox per location type plus a Root option, the set
+// of types a location of this kind may be placed under. No box checked means
+// unconstrained (any parent, or root). Mirrors Tags.tsx's AppliesToPicker;
+// shared by the create form and the edit blade so the markup and toggle logic
+// exist once. Each option is its own <label> (not nested inside another one),
+// so a click on it only ever toggles that option's own checkbox.
+function AllowedParentsPicker(p: { options: TypeRow[]; value: string[]; onChange: (v: string[]) => void }): JSX.Element {
+  function toggle(id: string) {
+    p.onChange(p.value.includes(id) ? p.value.filter((x) => x !== id) : [...p.value, id]);
+  }
+  return (
+    <div class="flex flex-col gap-1.5 rounded-box border border-base-300 p-2.5">
+      <label class="flex items-center gap-2 text-sm">
+        <input type="checkbox" class="checkbox checkbox-sm" checked={p.value.includes(ROOT_PLACEMENT)} onChange={() => toggle(ROOT_PLACEMENT)} />
+        <span>Root (no parent)</span>
+      </label>
+      <For each={p.options}>
+        {(t) => (
+          <label class="flex items-center gap-2 text-sm">
+            <input type="checkbox" class="checkbox checkbox-sm" checked={p.value.includes(t.id)} onChange={() => toggle(t.id)} />
+            <span>{t.display_name}</span>
+            <span class="font-data text-xs text-base-content/40">{t.id}</span>
+          </label>
+        )}
+      </For>
+    </div>
   );
 }
 

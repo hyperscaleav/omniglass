@@ -38,10 +38,11 @@ func TestLocationTypesAPI(t *testing.T) {
 	out := c.do(ownerTok, http.MethodGet, "/types/location", nil, http.StatusOK)
 	var body struct {
 		LocationTypes []struct {
-			ID          string `json:"id"`
-			DisplayName string `json:"display_name"`
-			Icon        string `json:"icon"`
-			Official    bool   `json:"official"`
+			ID                 string   `json:"id"`
+			DisplayName        string   `json:"display_name"`
+			Icon               string   `json:"icon"`
+			Official           bool     `json:"official"`
+			AllowedParentTypes []string `json:"allowed_parent_types"`
 		} `json:"location_types"`
 	}
 	if err := json.Unmarshal(out, &body); err != nil {
@@ -76,6 +77,24 @@ func TestLocationTypesAPI(t *testing.T) {
 			t.Errorf("type %q: icon=%q, want %q", lt.ID, lt.Icon, wantIcons[lt.ID])
 		}
 	}
+
+	// allowed_parent_types travels the wire, matching the seeded hierarchy.
+	wantParents := map[string][]string{
+		"campus": {"root"}, "building": {"root", "campus"},
+		"floor": {"building", "campus"}, "room": {"floor", "building", "campus"},
+	}
+	for _, lt := range body.LocationTypes {
+		want := wantParents[lt.ID]
+		if len(lt.AllowedParentTypes) != len(want) {
+			t.Errorf("type %q: allowed_parent_types = %v, want %v", lt.ID, lt.AllowedParentTypes, want)
+			continue
+		}
+		for i := range want {
+			if lt.AllowedParentTypes[i] != want[i] {
+				t.Errorf("type %q: allowed_parent_types = %v, want %v", lt.ID, lt.AllowedParentTypes, want)
+			}
+		}
+	}
 }
 
 func TestLocationTypeCRUDAPI(t *testing.T) {
@@ -107,6 +126,38 @@ func TestLocationTypeCRUDAPI(t *testing.T) {
 	c.do(ownerTok, http.MethodPatch, "/types/location/campus",
 		map[string]any{"display_name": "X"}, http.StatusUnprocessableEntity)
 	c.do(ownerTok, http.MethodDelete, "/types/location/campus", nil, http.StatusUnprocessableEntity)
+
+	// "root" is reserved: creating a type with that id is refused (422).
+	c.do(ownerTok, http.MethodPost, "/types/location",
+		map[string]any{"id": "root", "display_name": "Root"}, http.StatusUnprocessableEntity)
+
+	// allowed_parent_types round-trips through create and update.
+	c.do(ownerTok, http.MethodPost, "/types/location",
+		map[string]any{"id": "annex", "display_name": "Annex", "allowed_parent_types": []string{"wing", "root"}}, http.StatusCreated)
+	out := c.do(ownerTok, http.MethodGet, "/types/location", nil, http.StatusOK)
+	var listBody struct {
+		LocationTypes []struct {
+			ID                 string   `json:"id"`
+			AllowedParentTypes []string `json:"allowed_parent_types"`
+		} `json:"location_types"`
+	}
+	if err := json.Unmarshal(out, &listBody); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	found := false
+	for _, lt := range listBody.LocationTypes {
+		if lt.ID == "annex" {
+			found = true
+			if len(lt.AllowedParentTypes) != 2 || lt.AllowedParentTypes[0] != "wing" || lt.AllowedParentTypes[1] != "root" {
+				t.Errorf("annex allowed_parent_types = %v, want [wing root]", lt.AllowedParentTypes)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("annex type not in list")
+	}
+	c.do(ownerTok, http.MethodPatch, "/types/location/annex",
+		map[string]any{"allowed_parent_types": []string{}}, http.StatusOK)
 
 	// In use: place a location of type wing, delete is refused (409).
 	c.do(ownerTok, http.MethodPost, "/locations",

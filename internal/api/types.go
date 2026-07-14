@@ -20,6 +20,8 @@ func mapTypeErr(err error, kind string) error {
 		return huma.Error422UnprocessableEntity("official " + kind + " is read-only")
 	case errors.Is(err, storage.ErrTypeInUse):
 		return huma.Error409Conflict(kind + " is referenced by existing rows")
+	case errors.Is(err, storage.ErrReservedTypeID):
+		return huma.Error422UnprocessableEntity("\"root\" is a reserved " + kind + " id")
 	default:
 		return huma.Error500InternalServerError("type operation failed")
 	}

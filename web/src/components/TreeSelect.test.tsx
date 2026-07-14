@@ -29,4 +29,11 @@ describe("TreeSelect", () => {
     fireEvent.change(select, { target: { value: "bldg-1" } });
     expect(picked).toBe("bldg-1");
   });
+
+  it("forwards an id to the underlying select", () => {
+    const { container } = render(() => (
+      <TreeSelect items={items} value="" onChange={() => {}} id="reparent-select" />
+    ));
+    expect(container.querySelector("select")!.id).toBe("reparent-select");
+  });
 });

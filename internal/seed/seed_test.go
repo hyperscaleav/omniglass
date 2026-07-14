@@ -130,4 +130,28 @@ func TestSeedRolesIdempotent(t *testing.T) {
 	if community != "community" {
 		t.Errorf("snmp-community first field = %q, want community", community)
 	}
+
+	// Each shipped type seeds its allowed_parent_types set, matching the
+	// implied hierarchy (campus is root-only; a room may sit under a floor, a
+	// building, or straight under a campus), and re-running Run keeps it.
+	wantParents := map[string][]string{
+		"campus": {"root"}, "building": {"root", "campus"},
+		"floor": {"building", "campus"}, "room": {"floor", "building", "campus"},
+	}
+	for id, want := range wantParents {
+		var got []string
+		if err := conn.QueryRow(ctx, `select allowed_parent_types from location_type where id = $1`, id).Scan(&got); err != nil {
+			t.Fatalf("read %s allowed_parent_types: %v", id, err)
+		}
+		if len(got) != len(want) {
+			t.Errorf("%s allowed_parent_types = %v, want %v", id, got, want)
+			continue
+		}
+		for i := range want {
+			if got[i] != want[i] {
+				t.Errorf("%s allowed_parent_types = %v, want %v", id, got, want)
+				break
+			}
+		}
+	}
 }

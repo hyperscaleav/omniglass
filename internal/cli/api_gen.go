@@ -869,10 +869,11 @@ func generatedCommands() []*cobra.Command {
 			var fDisplayName string
 			var fLocationType string
 			var fName string
+			var fParent string
 			cmd := &cobra.Command{
 				Use:     "update <name>",
 				Short:   "Update a location",
-				Long:    "Patches a location's display_name or location_type. Gated by location:update; the read and update scopes drive the 404 versus 403 split.",
+				Long:    "Patches a location's display_name, location_type, or parent (a move). Gated by location:update; the read and update scopes drive the 404 versus 403 split.",
 				Example: "  omniglass location update <name>",
 				Args:    cobra.ExactArgs(1),
 				RunE: func(cmd *cobra.Command, args []string) error {
@@ -887,12 +888,16 @@ func generatedCommands() []*cobra.Command {
 					if cmd.Flags().Changed("name") {
 						body["name"] = fName
 					}
+					if cmd.Flags().Changed("parent") {
+						body["parent"] = fParent
+					}
 					return runAPICommand(cmd, "PATCH", path, body)
 				},
 			}
 			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
 			cmd.Flags().StringVar(&fLocationType, "location-type", "", "")
 			cmd.Flags().StringVar(&fName, "name", "", "A new globally unique technical name (rename)")
+			cmd.Flags().StringVar(&fParent, "parent", "", "Re-parents the location (a tree move) to this location name, cycle-guarded and placement-validated. Moving to root is not supported via update this slice.")
 			return cmd
 		}())
 		roots = append(roots, parent)
@@ -2156,6 +2161,7 @@ func generatedCommands() []*cobra.Command {
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
+			var fAllowedParentTypes string
 			var fDisplayName string
 			var fIcon string
 			var fId string
@@ -2168,6 +2174,9 @@ func generatedCommands() []*cobra.Command {
 				RunE: func(cmd *cobra.Command, args []string) error {
 					path := fmt.Sprintf("/api/v1/types/location")
 					body := map[string]any{}
+					if cmd.Flags().Changed("allowed-parent-types") {
+						body["allowed_parent_types"] = jsonOrString(fAllowedParentTypes)
+					}
 					if cmd.Flags().Changed("display-name") {
 						body["display_name"] = fDisplayName
 					}
@@ -2180,10 +2189,11 @@ func generatedCommands() []*cobra.Command {
 					return runAPICommand(cmd, "POST", path, body)
 				},
 			}
+			cmd.Flags().StringVar(&fAllowedParentTypes, "allowed-parent-types", "", "location_type ids and/or the reserved root sentinel this type may be placed under; empty means unconstrained")
 			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
 			_ = cmd.MarkFlagRequired("display-name")
 			cmd.Flags().StringVar(&fIcon, "icon", "", "A glyph key; the console falls back to map-pin when empty")
-			cmd.Flags().StringVar(&fId, "id", "", "Globally unique type id (kebab, e.g. wing)")
+			cmd.Flags().StringVar(&fId, "id", "", "Globally unique type id (kebab, e.g. wing); \"root\" is reserved")
 			_ = cmd.MarkFlagRequired("id")
 			return cmd
 		}())
@@ -2216,6 +2226,7 @@ func generatedCommands() []*cobra.Command {
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
+			var fAllowedParentTypes string
 			var fDisplayName string
 			var fIcon string
 			cmd := &cobra.Command{
@@ -2227,6 +2238,9 @@ func generatedCommands() []*cobra.Command {
 				RunE: func(cmd *cobra.Command, args []string) error {
 					path := fmt.Sprintf("/api/v1/types/location/%s", url.PathEscape(args[0]))
 					body := map[string]any{}
+					if cmd.Flags().Changed("allowed-parent-types") {
+						body["allowed_parent_types"] = jsonOrString(fAllowedParentTypes)
+					}
 					if cmd.Flags().Changed("display-name") {
 						body["display_name"] = fDisplayName
 					}
@@ -2236,6 +2250,7 @@ func generatedCommands() []*cobra.Command {
 					return runAPICommand(cmd, "PATCH", path, body)
 				},
 			}
+			cmd.Flags().StringVar(&fAllowedParentTypes, "allowed-parent-types", "", "Replaces the allowed-parent set; omit to leave unchanged, [] to clear back to unconstrained")
 			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
 			cmd.Flags().StringVar(&fIcon, "icon", "", "")
 			return cmd
