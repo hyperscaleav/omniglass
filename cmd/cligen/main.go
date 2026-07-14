@@ -201,6 +201,22 @@ var nameOverride = map[string]([]string){
 	// The self-service token creation would collapse to `token create`, colliding with
 	// the hand-written direct-DB `token <username>` command; group it under `auth`.
 	"create-auth-me-token": {"auth", "create-token"},
+	// The type registries live under one /types umbrella (/types/location, ...), so the
+	// leaf-noun heuristic would map each to `<kind> create` and collide with the base
+	// entity commands (location/system/component/secret). Group them under `type`.
+	"list-location-types":   {"type", "location", "list"},
+	"create-location-type":  {"type", "location", "create"},
+	"update-location-type":  {"type", "location", "update"},
+	"delete-location-type":  {"type", "location", "delete"},
+	"list-system-types":     {"type", "system", "list"},
+	"create-system-type":    {"type", "system", "create"},
+	"update-system-type":    {"type", "system", "update"},
+	"delete-system-type":    {"type", "system", "delete"},
+	"list-component-types":  {"type", "component", "list"},
+	"create-component-type": {"type", "component", "create"},
+	"update-component-type": {"type", "component", "update"},
+	"delete-component-type": {"type", "component", "delete"},
+	"list-secret-types":     {"type", "secret", "list"},
 }
 
 func buildCommands(doc spec, base string) []command {

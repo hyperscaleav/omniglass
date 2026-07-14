@@ -140,7 +140,7 @@ func registerSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, huma.Operation{
 		OperationID: "list-system-types",
 		Method:      http.MethodGet,
-		Path:        "/system-types",
+		Path:        "/types/system",
 		Summary:     "List system types",
 		Description: "Lists the system_type registry, ordered by rank. Populates the type picker on the system form. Gated by type:read.",
 		Middlewares: huma.Middlewares{a.authn, a.require("type", "read")},
@@ -162,7 +162,7 @@ func registerSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, huma.Operation{
 		OperationID:   "create-system-type",
 		Method:        http.MethodPost,
-		Path:          "/system-types",
+		Path:          "/types/system",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Create a system type",
 		Description:   "Creates a custom (non-official) system_type. Gated by type:create.",
@@ -180,7 +180,7 @@ func registerSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, huma.Operation{
 		OperationID: "update-system-type",
 		Method:      http.MethodPatch,
-		Path:        "/system-types/{id}",
+		Path:        "/types/system/{id}",
 		Summary:     "Update a system type",
 		Description: "Patches a custom system_type's display_name or rank. Official types are read-only (422). Gated by type:update.",
 		Middlewares: huma.Middlewares{a.authn, a.require("type", "update")},
@@ -197,7 +197,7 @@ func registerSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, huma.Operation{
 		OperationID:   "delete-system-type",
 		Method:        http.MethodDelete,
-		Path:          "/system-types/{id}",
+		Path:          "/types/system/{id}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete a system type",
 		Description:   "Deletes a custom system_type, refused if official (422) or referenced by a system (409). Gated by type:delete.",

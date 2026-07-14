@@ -104,7 +104,7 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   fix is real: only the grants whose role carries the action contribute scope, so a read-anywhere principal
   with a narrow write grant cannot write outside it. The three-way status split holds: out of read scope is a
   non-disclosing 404, readable-but-out-of-action-scope is 403, and a delete is refused (409) while the location
-  still has children. The `location_type` registry that classifies a location is itself readable at `GET /api/v1/location-types` (ranked, gated by `location:read`), which the operator console type picker lists. Proven by a pure resolver unit suite, a testcontainer integration test of the gateway
+  still has children. The `location_type` registry that classifies a location is itself readable at `GET /api/v1/types/location` (ranked, gated by `location:read`), which the operator console type picker lists. Proven by a pure resolver unit suite, a testcontainer integration test of the gateway
   split and audit, and an end-to-end HTTP test (scoped subtree listing, the 404, the capability 403, full owner
   CRUD). Deliberate thin cuts: scope kinds resolved are `all` and `location` only; the `location_type` registry
   seeds official rows only; `rank` orders and signals hierarchy but does not constrain nesting; update patches
@@ -357,7 +357,7 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   storage round-trip, and web tests (the Roles page renders and tier-orders the seeded roles).
 - **Estate slice: per-type location icons.** `location_type` gains an `icon` column (a glyph key,
   seeded `landmark` / `building` / `layers` / `door-open` for the four official types, default
-  `map-pin`), projected on `GET /location-types`. The console resolves the key to an SVG and renders
+  `map-pin`), projected on `GET /types/location`. The console resolves the key to an SVG and renders
   it as the leading glyph on every location in the tree, tinted the same hue as the type badge, so a
   campus reads differently from a building at a glance. The glyph rides a new reusable `leadIcon` slot
   on the shared `ListView`, and `resolveIcon` falls back to `map-pin` for a key the console does not
@@ -683,7 +683,7 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   behind a pluggable KEK provider (env / file / fallback), with `(owner, name, field)` bound as AAD so a
   ciphertext cannot be lifted between rows. The load-bearing new piece is the **cascade resolver**: it walks the
   three owner trees up from a component, tags each owner with a band and depth, and ranks per name (highest tier,
-  then deepest), returning the winner and the shadowed candidates. `GET /secret-types`, `/secrets` (all-scope
+  then deepest), returning the winner and the shadowed candidates. `GET /types/secret`, `/secrets` (all-scope
   list, create, update, delete), `GET /components/{name}/effective-secrets` (the masked cascade view), and the
   audited decrypts `POST /secrets/{id}:reveal` and `:copy` (a clipboard copy, recorded under a distinct `copy`
   verb). Masked reads ride the viewer floor; **create and update** are gated by `secret:create` / `secret:update`

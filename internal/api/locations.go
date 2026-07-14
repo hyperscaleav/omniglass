@@ -146,7 +146,7 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 	huma.Register(api, huma.Operation{
 		OperationID: "list-location-types",
 		Method:      http.MethodGet,
-		Path:        "/location-types",
+		Path:        "/types/location",
 		Summary:     "List location types",
 		Description: "Lists the location_type registry (the shape-definers a location is classified by), ordered by rank. Populates the type picker on the location form. Gated by type:read.",
 		Middlewares: huma.Middlewares{a.authn, a.require("type", "read")},
@@ -168,7 +168,7 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 	huma.Register(api, huma.Operation{
 		OperationID:   "create-location-type",
 		Method:        http.MethodPost,
-		Path:          "/location-types",
+		Path:          "/types/location",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Create a location type",
 		Description:   "Creates a custom (non-official) location_type. Gated by type:create.",
@@ -186,7 +186,7 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 	huma.Register(api, huma.Operation{
 		OperationID: "update-location-type",
 		Method:      http.MethodPatch,
-		Path:        "/location-types/{id}",
+		Path:        "/types/location/{id}",
 		Summary:     "Update a location type",
 		Description: "Patches a custom location_type's display_name, rank, or icon. Official types are read-only (422). Gated by type:update.",
 		Middlewares: huma.Middlewares{a.authn, a.require("type", "update")},
@@ -203,7 +203,7 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 	huma.Register(api, huma.Operation{
 		OperationID:   "delete-location-type",
 		Method:        http.MethodDelete,
-		Path:          "/location-types/{id}",
+		Path:          "/types/location/{id}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete a location type",
 		Description:   "Deletes a custom location_type, refused if official (422) or still referenced by a location (409). Gated by type:delete.",

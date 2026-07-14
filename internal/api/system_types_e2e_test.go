@@ -31,7 +31,7 @@ func TestSystemTypesAPI(t *testing.T) {
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
 	// The seeded official types list under type:read.
-	out := c.do(ownerTok, http.MethodGet, "/system-types", nil, http.StatusOK)
+	out := c.do(ownerTok, http.MethodGet, "/types/system", nil, http.StatusOK)
 	var body struct {
 		SystemTypes []struct {
 			ID       string `json:"id"`
@@ -46,24 +46,24 @@ func TestSystemTypesAPI(t *testing.T) {
 	}
 
 	// CRUD a custom type; in-use delete refused.
-	c.do(ownerTok, http.MethodPost, "/system-types",
+	c.do(ownerTok, http.MethodPost, "/types/system",
 		map[string]any{"id": "kiosk", "display_name": "Kiosk", "rank": 15}, http.StatusCreated)
 	// Duplicate id is a 409, exercising the shared mapTypeErr ErrTypeExists branch.
-	c.do(ownerTok, http.MethodPost, "/system-types",
+	c.do(ownerTok, http.MethodPost, "/types/system",
 		map[string]any{"id": "kiosk", "display_name": "Dup"}, http.StatusConflict)
-	c.do(ownerTok, http.MethodPatch, "/system-types/kiosk",
+	c.do(ownerTok, http.MethodPatch, "/types/system/kiosk",
 		map[string]any{"display_name": "Info Kiosk"}, http.StatusOK)
 	c.do(ownerTok, http.MethodPost, "/systems",
 		map[string]any{"name": "k1", "system_type": "kiosk"}, http.StatusCreated)
-	c.do(ownerTok, http.MethodDelete, "/system-types/kiosk", nil, http.StatusConflict)
+	c.do(ownerTok, http.MethodDelete, "/types/system/kiosk", nil, http.StatusConflict)
 	c.do(ownerTok, http.MethodDelete, "/systems/k1", nil, http.StatusNoContent)
-	c.do(ownerTok, http.MethodDelete, "/system-types/kiosk", nil, http.StatusNoContent)
+	c.do(ownerTok, http.MethodDelete, "/types/system/kiosk", nil, http.StatusNoContent)
 
 	// Official rows are read-only (422 on update and delete).
-	c.do(ownerTok, http.MethodPatch, "/system-types/meeting-room",
+	c.do(ownerTok, http.MethodPatch, "/types/system/meeting-room",
 		map[string]any{"display_name": "X"}, http.StatusUnprocessableEntity)
-	c.do(ownerTok, http.MethodDelete, "/system-types/meeting-room", nil, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodDelete, "/types/system/meeting-room", nil, http.StatusUnprocessableEntity)
 
 	// Unknown id is a 404.
-	c.do(ownerTok, http.MethodDelete, "/system-types/nope", nil, http.StatusNotFound)
+	c.do(ownerTok, http.MethodDelete, "/types/system/nope", nil, http.StatusNotFound)
 }

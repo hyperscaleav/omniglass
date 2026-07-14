@@ -34,7 +34,7 @@ func TestLocationTypesAPI(t *testing.T) {
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
-	out := c.do(ownerTok, http.MethodGet, "/location-types", nil, http.StatusOK)
+	out := c.do(ownerTok, http.MethodGet, "/types/location", nil, http.StatusOK)
 	var body struct {
 		LocationTypes []struct {
 			ID          string `json:"id"`
@@ -95,24 +95,24 @@ func TestLocationTypeCRUDAPI(t *testing.T) {
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
 	// Create a custom type (201), then it appears in the list.
-	c.do(ownerTok, http.MethodPost, "/location-types",
+	c.do(ownerTok, http.MethodPost, "/types/location",
 		map[string]any{"id": "wing", "display_name": "Wing", "rank": 15, "icon": "layers"}, http.StatusCreated)
 
 	// Update it (200).
-	c.do(ownerTok, http.MethodPatch, "/location-types/wing",
+	c.do(ownerTok, http.MethodPatch, "/types/location/wing",
 		map[string]any{"display_name": "West Wing"}, http.StatusOK)
 
 	// Official rows are read-only (422 on update and delete).
-	c.do(ownerTok, http.MethodPatch, "/location-types/campus",
+	c.do(ownerTok, http.MethodPatch, "/types/location/campus",
 		map[string]any{"display_name": "X"}, http.StatusUnprocessableEntity)
-	c.do(ownerTok, http.MethodDelete, "/location-types/campus", nil, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodDelete, "/types/location/campus", nil, http.StatusUnprocessableEntity)
 
 	// In use: place a location of type wing, delete is refused (409).
 	c.do(ownerTok, http.MethodPost, "/locations",
 		map[string]any{"name": "w1", "location_type": "wing"}, http.StatusCreated)
-	c.do(ownerTok, http.MethodDelete, "/location-types/wing", nil, http.StatusConflict)
+	c.do(ownerTok, http.MethodDelete, "/types/location/wing", nil, http.StatusConflict)
 
 	// Remove the location, then the type deletes (204).
 	c.do(ownerTok, http.MethodDelete, "/locations/w1", nil, http.StatusNoContent)
-	c.do(ownerTok, http.MethodDelete, "/location-types/wing", nil, http.StatusNoContent)
+	c.do(ownerTok, http.MethodDelete, "/types/location/wing", nil, http.StatusNoContent)
 }

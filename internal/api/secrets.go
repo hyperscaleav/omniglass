@@ -137,7 +137,7 @@ func registerSecretRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, huma.Operation{
 		OperationID: "list-secret-types",
 		Method:      http.MethodGet,
-		Path:        "/secret-types",
+		Path:        "/types/secret",
 		Summary:     "List secret types",
 		Description: "Lists the secret_type shapes a secret can take, for the create form. Gated by secret:read.",
 		Middlewares: huma.Middlewares{a.authn, a.require("secret", "read")},

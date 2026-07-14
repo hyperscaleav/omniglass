@@ -140,7 +140,7 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 	huma.Register(api, huma.Operation{
 		OperationID: "list-component-types",
 		Method:      http.MethodGet,
-		Path:        "/component-types",
+		Path:        "/types/component",
 		Summary:     "List component types",
 		Description: "Lists the component_type registry, ordered by rank. Populates the type picker on the component form. Gated by type:read.",
 		Middlewares: huma.Middlewares{a.authn, a.require("type", "read")},
@@ -162,7 +162,7 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 	huma.Register(api, huma.Operation{
 		OperationID:   "create-component-type",
 		Method:        http.MethodPost,
-		Path:          "/component-types",
+		Path:          "/types/component",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Create a component type",
 		Description:   "Creates a custom (non-official) component_type. Gated by type:create.",
@@ -180,7 +180,7 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 	huma.Register(api, huma.Operation{
 		OperationID: "update-component-type",
 		Method:      http.MethodPatch,
-		Path:        "/component-types/{id}",
+		Path:        "/types/component/{id}",
 		Summary:     "Update a component type",
 		Description: "Patches a custom component_type's display_name or rank. Official types are read-only (422). Gated by type:update.",
 		Middlewares: huma.Middlewares{a.authn, a.require("type", "update")},
@@ -197,7 +197,7 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 	huma.Register(api, huma.Operation{
 		OperationID:   "delete-component-type",
 		Method:        http.MethodDelete,
-		Path:          "/component-types/{id}",
+		Path:          "/types/component/{id}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete a component type",
 		Description:   "Deletes a custom component_type, refused if official (422) or referenced by a component (409). Gated by type:delete.",

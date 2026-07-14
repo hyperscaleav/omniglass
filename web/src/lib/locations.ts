@@ -28,7 +28,7 @@ export type LocationType = {
   official: boolean;
 };
 
-export const LOCATION_TYPES_KEY = ["location-types"] as const;
+export const LOCATION_TYPES_KEY = ["types", "location"] as const;
 
 export async function listLocations(): Promise<Location[]> {
   const { data, error } = await api.GET("/locations");
@@ -37,7 +37,7 @@ export async function listLocations(): Promise<Location[]> {
 }
 
 export async function listLocationTypes(): Promise<LocationType[]> {
-  const { data, error } = await api.GET("/location-types");
+  const { data, error } = await api.GET("/types/location");
   if (error) throw error;
   return (data?.location_types ?? []) as LocationType[];
 }
