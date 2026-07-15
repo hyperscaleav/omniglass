@@ -296,7 +296,7 @@ Expected: PASS.
 
 - [ ] **Step 6: Confirm no gen drift**
 
-Run: `make gen && git diff --exit-code` (generated files) — must be clean.
+Run: `make gen && git diff --exit-code` (generated files): must be clean.
 
 - [ ] **Step 7: Commit**
 
@@ -369,11 +369,11 @@ git commit -m "feat: component makes catalog page"
 ### Task 5: Docs, spec/plan check-in, and ship
 
 **Files:**
-- Create: `docs/src/content/docs/guides/admin/makes.md` (or the Catalog guide location matching the Types guide) — the operator page for the makes registry
+- Create: `docs/src/content/docs/guides/admin/makes.md` (or the Catalog guide location matching the Types guide): the operator page for the makes registry
 - Modify: `docs/src/content/docs/architecture/core-entities.md` (note the make layer above `component_type`, mark it as the first landed piece of the catalog)
 - Modify: `docs/src/content/docs/architecture/status.mdx` (build-progress note) and the relevant status badge to its new floor
 - Modify: the decision log `docs/src/content/docs/architecture/decisions.md` (the `official boolean` vs `origin enum` deviation, and the deferred referential guard)
-- Modify: `docs/astro.config.mjs` sidebar (register the new guide page — the easy-to-miss step)
+- Modify: `docs/astro.config.mjs` sidebar (register the new guide page: the easy-to-miss step)
 - Move into the branch: this plan and `docs/superpowers/specs/2026-07-14-component-make-model-catalog-design.md` (they ride slice 1)
 
 - [ ] **Step 1: Write the docs**
@@ -388,7 +388,7 @@ Expected: build succeeds; the new page is linked.
 - [ ] **Step 3: Full gate**
 
 Run: `make test`
-Expected: all green. Run `make gen && git diff --exit-code` — clean.
+Expected: all green. Run `make gen && git diff --exit-code`: clean.
 
 - [ ] **Step 4: Commit docs**
 
@@ -415,4 +415,4 @@ PR closes #255, refs epic #254.
 ## Self-review notes
 
 - **Spec coverage:** slice 1 of the spec = `component_make` registry (name, display_name, icon, support_phone, website, origin, scoped CRUD, CLI, client, Catalog surface, seed official makes, official read-only, delete-refused-while-referenced). Covered by Tasks 1-5, with two explicit, logged deviations: `official boolean` in place of the `origin` enum (consistency with `component_type`), and the referential delete guard deferred to slice 3 (nothing references makes yet). Both flagged for Fred in Global Constraints and the decision log.
-- **Open lookups for the executor (not placeholders, but require a grep against the live tree):** the exact permission/resource registry file where `type:*` is declared; whether an in-memory Gateway double exists to update; the exact test helpers (`newTestGateway`, `newTestServer`, `renderWithProviders`) names — use whatever the `component_type` tests use verbatim; the migration timestamp (must be unique and latest). Each is resolved by reading the named precedent file.
+- **Open lookups for the executor (not placeholders, but require a grep against the live tree):** the exact permission/resource registry file where `type:*` is declared; whether an in-memory Gateway double exists to update; the exact test helpers (`newTestGateway`, `newTestServer`, `renderWithProviders`) names: use whatever the `component_type` tests use verbatim; the migration timestamp (must be unique and latest). Each is resolved by reading the named precedent file.

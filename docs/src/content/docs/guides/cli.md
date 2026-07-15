@@ -122,6 +122,26 @@ defaults true (the value cascades to descendants); `--propagates=false` binds a 
 that resolves only on its own entity. Resolving onto a component **unions** keys and **overrides** values
 most-specific-wins down the cascade.
 
+## Component makes
+
+The [component make](/architecture/core-entities/#catalog-reference-data-component_make) commands cover
+the manufacturer registry: a flat, official-vs-custom catalog on the same pattern as the `type`
+registries. `make:read` sits on the viewer floor; the three writes (`make:create`, `make:update`,
+`make:delete`) are admin-gated.
+
+```sh
+omniglass component-make list                                       # the manufacturer registry
+omniglass component-make create --id barco --display-name Barco \
+  --icon monitor --support-phone "+1-555-0100" --website https://www.barco.com
+omniglass component-make get barco
+omniglass component-make update barco --support-phone "+1-555-0199"
+omniglass component-make delete barco                                # refused (422) if official
+```
+
+A seed-owned (**official**) make, for example `crestron` or `biamp`, is read-only: `update` and `delete`
+both 422. `website` is validated to an `http`/`https` scheme on write; any other scheme (for example
+`javascript:`) is a 422.
+
 ## Generated versus hand-written
 
 - **Generated** (`internal/cli/api_gen.go`, do not edit): one command per API operation.
