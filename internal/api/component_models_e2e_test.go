@@ -16,11 +16,13 @@ import (
 // TestComponentModelsAPI drives the component_model registry over HTTP: a
 // viewer reads the registry under the model:read floor but cannot create, an
 // admin (owner) creates a custom row referencing a custom make, a duplicate
-// id is a 409, an unknown make_id is a 422 (the FK violation mapped, not a
-// raw 500), the admin patches and deletes the custom row, and deleting a
-// make a model references is refused (409, make-in-use) until the model is
-// gone. A seeded (official) make is also exercised as a valid make_id.
-// Mirrors TestComponentMakesAPI; component_model is a flat registry like
+// id is a 409, a duplicate (make_id, model_number) under a different id is
+// also a 409 (the real product identity), a missing or blank model_number is
+// a 422, an unknown make_id is a 422 (the FK violation mapped, not a raw
+// 500), the admin patches and deletes the custom row, and deleting a make a
+// model references is refused (409, make-in-use) until the model is gone. A
+// seeded (official) make is also exercised as a valid make_id. Mirrors
+// TestComponentMakesAPI; component_model is a flat registry like
 // component_make, so the model:* permission is wired exactly like make:*.
 func TestComponentModelsAPI(t *testing.T) {
 	dsn := storagetest.NewDSN(t)
@@ -78,6 +80,17 @@ func TestComponentModelsAPI(t *testing.T) {
 	// Duplicate id is a 409, exercising the shared mapTypeErr ErrTypeExists branch.
 	c.do(ownerTok, http.MethodPost, "/component-models",
 		map[string]any{"id": "acme-123a", "display_name": "Dup", "make_id": "acme-mfg", "model_number": "1"}, http.StatusConflict)
+
+	// A duplicate (make_id, model_number) under a different id is also a 409:
+	// the real product identity is make + model number, not the id alone.
+	c.do(ownerTok, http.MethodPost, "/component-models",
+		map[string]any{"id": "acme-123a-again", "display_name": "Same Product New Id", "make_id": "acme-mfg", "model_number": "123A"}, http.StatusConflict)
+
+	// A missing/empty model_number is a 422 (Huma's minLength:1 on the create body).
+	c.do(ownerTok, http.MethodPost, "/component-models",
+		map[string]any{"id": "no-model-number", "display_name": "No Model#", "make_id": "acme-mfg"}, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodPost, "/component-models",
+		map[string]any{"id": "blank-model-number", "display_name": "Blank Model#", "make_id": "acme-mfg", "model_number": ""}, http.StatusUnprocessableEntity)
 
 	// An unknown make_id fails the foreign key; the API maps it to a clean 422
 	// rather than a raw 500.

@@ -92,6 +92,30 @@ describe("ComponentModels page", () => {
     expect(screen.getByLabelText(/back image/i)).toBeInTheDocument();
   });
 
+  // Regression: model_number is a required field server-side (the API's
+  // create body is minLength:1, and the DB now carries a nonempty CHECK plus
+  // a unique (make_id, model_number) constraint), so the create form must
+  // block submit until it is filled in, the same way id/display_name/make
+  // already do.
+  it("requires a model number before Create model is enabled", async () => {
+    mount();
+    fireEvent.click(screen.getByRole("button", { name: /new model/i }));
+
+    const submit = screen.getByRole("button", { name: /create model/i });
+    expect(submit).toBeDisabled();
+
+    fireEvent.input(screen.getByPlaceholderText("tsw-1070"), { target: { value: "acme-999" } });
+    fireEvent.input(screen.getByLabelText(/display name/i), { target: { value: "Acme 999" } });
+    fireEvent.change(screen.getByLabelText(/make/i), { target: { value: "crestron" } });
+    expect(submit).toBeDisabled();
+
+    fireEvent.input(screen.getByPlaceholderText("TSW-1070-B-S"), { target: { value: "999-B" } });
+    expect(submit).not.toBeDisabled();
+
+    fireEvent.input(screen.getByPlaceholderText("TSW-1070-B-S"), { target: { value: "   " } });
+    expect(submit).toBeDisabled();
+  });
+
   it("hides New model for a caller without model:create", () => {
     mount(viewer);
     expect(screen.queryByText(/New model/i)).toBeNull();

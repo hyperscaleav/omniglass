@@ -280,7 +280,10 @@ admin tier, exactly like `make:*`. It carries no type or classification field th
   [model]}`, `model:read`).
 - `POST /component-models` mints a custom model from `{id, display_name, make_id, model_number,
   family?, released_at?, eos_at?, eol_at?, front_image_id?, back_image_id?}` (201, `model:create`,
-  admin); a `make_id`, `front_image_id`, or `back_image_id` that names no existing row is a 422.
+  admin); `model_number` is required (non-empty) and, with `make_id`, forms the real product
+  identity, `(make_id, model_number)`, unique: a duplicate id, or a duplicate `(make_id,
+  model_number)` under a different id, is a 409. A `make_id`, `front_image_id`, or
+  `back_image_id` that names no existing row is a 422.
 - `GET /component-models/{id}` reads one (`model:read`).
 - `PATCH /component-models/{id}` updates `{display_name?, model_number?, family?, released_at?, eos_at?,
   eol_at?, front_image_id?, back_image_id?}` (`model:update`, admin); `make_id` is not patchable. An

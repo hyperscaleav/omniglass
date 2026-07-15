@@ -466,7 +466,7 @@ Create a component model
 omniglass component-model create [flags]
 ```
 
-Creates a custom (non-official) component_model referencing an existing component_make. An unknown make_id is a 422. Gated by model:create.
+Creates a custom (non-official) component_model referencing an existing component_make. model_number is required (non-empty) and, together with make_id, must be unique: a duplicate (make_id, model_number) under a different id is a 409, same as a duplicate id. An unknown make_id is a 422. Gated by model:create.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -478,7 +478,7 @@ Creates a custom (non-official) component_model referencing an existing componen
 | `--front-image-id` | string | (none) |  |
 | `--id` | string | (none) | Globally unique model id |
 | `--make-id` | string | (none) | The owning component_make id |
-| `--model-number` | string | (none) |  |
+| `--model-number` | string | (none) | Required. Unique per make (make_id, model_number). |
 | `--released-at` | string | (none) |  |
 
 Example:

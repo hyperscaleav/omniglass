@@ -51,6 +51,22 @@ func TestComponentModelCRUD(t *testing.T) {
 		t.Fatalf("create with unknown make_id: want error, got nil")
 	}
 
+	// A duplicate (make_id, model_number) under a different id is
+	// ErrTypeExists: the real product identity is make + model number, not
+	// the kebab id alone.
+	if _, err := gw.CreateComponentModel(ctx, "", storage.ComponentModel{
+		ID: "acme-123a-dup", DisplayName: "Acme 123A Again", MakeID: "crestron", ModelNumber: "123A",
+	}); !errors.Is(err, storage.ErrTypeExists) {
+		t.Fatalf("create dup (make_id, model_number) err = %v, want ErrTypeExists", err)
+	}
+
+	// A blank model_number is rejected (the nonempty CHECK constraint).
+	if _, err := gw.CreateComponentModel(ctx, "", storage.ComponentModel{
+		ID: "blank-model-number", DisplayName: "Blank", MakeID: "crestron", ModelNumber: "",
+	}); err == nil {
+		t.Fatalf("create with empty model_number: want error, got nil")
+	}
+
 	// Get + list contains our model.
 	got, err := gw.GetComponentModel(ctx, "acme-123a")
 	if err != nil {
@@ -82,7 +98,7 @@ func TestComponentModelCRUD(t *testing.T) {
 
 	// Official rows are read-only.
 	if err := gw.UpsertComponentModel(ctx, storage.ComponentModel{
-		ID: "official-model", DisplayName: "Official Model", MakeID: "crestron", Official: true,
+		ID: "official-model", DisplayName: "Official Model", MakeID: "crestron", ModelNumber: "OFFICIAL-1", Official: true,
 	}); err != nil {
 		t.Fatalf("upsert official: %v", err)
 	}

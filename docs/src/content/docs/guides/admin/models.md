@@ -22,8 +22,9 @@ estate model.
 
 - **New model** (with `model:create`, an admin permission) opens a create drawer: name its **id** (a
   short identifier, unique tenant-wide, e.g. `tsw-1070`), give it a **display name**, pick its **make**
-  (required, fixed after creation), and set a **model number**. **Family**, the three lifecycle dates,
-  and front/back **images** are optional.
+  (required, fixed after creation), and set a **model number** (required; the real product identity is
+  make + model number, so a second model naming the same make and model number is refused). **Family**,
+  the three lifecycle dates, and front/back **images** are optional.
 - Pick a row to open its **detail blade**. The footer **Edit** pencil (with `model:update`) edits the
   display name, model number, family, lifecycle dates, and the front/back images; the id and the make
   are fixed. **Delete** (with `model:delete`) removes the row, behind a confirm.

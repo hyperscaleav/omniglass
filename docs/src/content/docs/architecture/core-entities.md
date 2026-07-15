@@ -86,7 +86,8 @@ for the operator surface.
 
 A `component_model` (a Crestron Flex MX70, a Biamp Tesira Forte AI) is the product layer one level
 below `component_make`: a flat registry naming a specific device product, with a required `make_id`
-foreign key, product identity (model number, an optional family grouping), optional lifecycle dates
+foreign key, product identity (a required model number, unique per make, an optional family
+grouping), optional lifecycle dates
 (released, end-of-sale, end-of-life), and optional front/back image references into the
 [files](/architecture/files/) primitive. Like `component_make` it is official-vs-custom, listed flat
 (no tree). It carries **no type or classification field**: what a model *does* (mic, speaker, codec,

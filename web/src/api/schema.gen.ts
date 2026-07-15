@@ -355,7 +355,7 @@ export interface paths {
         put?: never;
         /**
          * Create a component model
-         * @description Creates a custom (non-official) component_model referencing an existing component_make. An unknown make_id is a 422. Gated by model:create.
+         * @description Creates a custom (non-official) component_model referencing an existing component_make. model_number is required (non-empty) and, together with make_id, must be unique: a duplicate (make_id, model_number) under a different id is a 409, same as a duplicate id. An unknown make_id is a 422. Gated by model:create.
          */
         post: operations["create-component-model"];
         delete?: never;
@@ -2061,6 +2061,7 @@ export interface components {
             id: string;
             /** @description The owning component_make id */
             make_id: string;
+            /** @description Required. Unique per make (make_id, model_number). */
             model_number: string;
             /** Format: date-time */
             released_at?: string;

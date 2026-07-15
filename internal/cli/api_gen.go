@@ -556,7 +556,7 @@ func generatedCommands() []*cobra.Command {
 			cmd := &cobra.Command{
 				Use:     "create",
 				Short:   "Create a component model",
-				Long:    "Creates a custom (non-official) component_model referencing an existing component_make. An unknown make_id is a 422. Gated by model:create.",
+				Long:    "Creates a custom (non-official) component_model referencing an existing component_make. model_number is required (non-empty) and, together with make_id, must be unique: a duplicate (make_id, model_number) under a different id is a 409, same as a duplicate id. An unknown make_id is a 422. Gated by model:create.",
 				Example: "  omniglass component-model create --display-name display_name --id id --make-id make_id --model-number model_number",
 				Args:    cobra.ExactArgs(0),
 				RunE: func(cmd *cobra.Command, args []string) error {
@@ -606,7 +606,7 @@ func generatedCommands() []*cobra.Command {
 			_ = cmd.MarkFlagRequired("id")
 			cmd.Flags().StringVar(&fMakeId, "make-id", "", "The owning component_make id")
 			_ = cmd.MarkFlagRequired("make-id")
-			cmd.Flags().StringVar(&fModelNumber, "model-number", "", "")
+			cmd.Flags().StringVar(&fModelNumber, "model-number", "", "Required. Unique per make (make_id, model_number).")
 			_ = cmd.MarkFlagRequired("model-number")
 			cmd.Flags().StringVar(&fReleasedAt, "released-at", "", "")
 			return cmd

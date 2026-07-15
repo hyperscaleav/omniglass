@@ -11,12 +11,16 @@ import (
 
 // ComponentModel is a registry row naming a make + model product (e.g.
 // "Crestron DM-NVX-363"): a stable id, the official flag, a required make_id
-// pointing at a component_make, product identity (model_number, family),
-// optional lifecycle timestamps, and optional front/back image pointers at
-// the files primitive. Like component_make it is a flat registry (no tree),
-// listed alphabetically by display_name. Unlike component_make, deleting a
-// make referenced by a model is refused (the in-use guard lives on
-// DeleteComponentMake, since the reference runs make -> model).
+// pointing at a component_make, product identity (a required, non-empty
+// model_number, unique per make; optional family), optional lifecycle
+// timestamps, and optional front/back image pointers at the files primitive.
+// Like component_make it is a flat registry (no tree), listed alphabetically
+// by display_name. Unlike component_make, deleting a make referenced by a
+// model is refused (the in-use guard lives on DeleteComponentMake, since the
+// reference runs make -> model). The real product identity is (make_id,
+// model_number), not the id alone: id stays the addressable handle, but
+// component_model_make_model_key rejects a second row naming the same make +
+// model number.
 type ComponentModel struct {
 	ID           string
 	Official     bool
@@ -122,9 +126,12 @@ func (p *PG) GetComponentModel(ctx context.Context, id string) (*ComponentModel,
 }
 
 // CreateComponentModel inserts a custom (official=false) component_model and
-// audits it. A duplicate id is ErrTypeExists. A make_id that does not name an
-// existing component_make fails the foreign key and is returned as a wrapped
-// error (the API layer maps it to 422).
+// audits it. A duplicate id, or a duplicate (make_id, model_number) under a
+// different id, is ErrTypeExists: the real product identity is make + model
+// number, not the kebab id alone (component_model_make_model_key). A blank
+// model_number fails the nonempty CHECK constraint. A make_id that does not
+// name an existing component_make fails the foreign key and is returned as a
+// wrapped error (the API layer maps it to 422).
 func (p *PG) CreateComponentModel(ctx context.Context, actorID string, m ComponentModel) (*ComponentModel, error) {
 	m.Official = false
 	tx, err := p.pool.Begin(ctx)

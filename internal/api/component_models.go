@@ -51,7 +51,7 @@ type createComponentModelInput struct {
 		ID           string     `json:"id" minLength:"1" doc:"Globally unique model id"`
 		DisplayName  string     `json:"display_name" minLength:"1"`
 		MakeID       string     `json:"make_id" minLength:"1" doc:"The owning component_make id"`
-		ModelNumber  string     `json:"model_number" minLength:"1"`
+		ModelNumber  string     `json:"model_number" minLength:"1" doc:"Required. Unique per make (make_id, model_number)."`
 		Family       string     `json:"family,omitempty"`
 		ReleasedAt   *time.Time `json:"released_at,omitempty"`
 		EosAt        *time.Time `json:"eos_at,omitempty"`
@@ -145,7 +145,7 @@ func registerComponentModelRoutes(api huma.API, a *authenticator, gw storage.Gat
 		Path:          "/component-models",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Create a component model",
-		Description:   "Creates a custom (non-official) component_model referencing an existing component_make. An unknown make_id is a 422. Gated by model:create.",
+		Description:   "Creates a custom (non-official) component_model referencing an existing component_make. model_number is required (non-empty) and, together with make_id, must be unique: a duplicate (make_id, model_number) under a different id is a 409, same as a duplicate id. An unknown make_id is a 422. Gated by model:create.",
 		Middlewares:   huma.Middlewares{a.authn, a.require("model", "create")},
 	}, func(ctx context.Context, in *createComponentModelInput) (*componentModelOutput, error) {
 		m, err := gw.CreateComponentModel(ctx, actorID(ctx), storage.ComponentModel{

@@ -382,6 +382,7 @@ components:
           minLength: 1
           type: string
         model_number:
+          description: Required. Unique per make (make_id, model_number).
           minLength: 1
           type: string
         released_at:
@@ -3247,7 +3248,7 @@ paths:
           description: Error
       summary: List component models
     post:
-      description: Creates a custom (non-official) component_model referencing an existing component_make. An unknown make_id is a 422. Gated by model:create.
+      description: "Creates a custom (non-official) component_model referencing an existing component_make. model_number is required (non-empty) and, together with make_id, must be unique: a duplicate (make_id, model_number) under a different id is a 409, same as a duplicate id. An unknown make_id is a 422. Gated by model:create."
       operationId: create-component-model
       requestBody:
         content:
