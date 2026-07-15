@@ -355,6 +355,105 @@ Example:
 omniglass component update <name>
 ```
 
+## `omniglass component-make`
+
+Commands for the component-make resource
+
+### `omniglass component-make create`
+
+Create a component make
+
+```
+omniglass component-make create [flags]
+```
+
+Creates a custom (non-official) component_make. Gated by make:create.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--display-name` | string | (none) |  |
+| `--icon` | string | (none) |  |
+| `--id` | string | (none) | Globally unique make id |
+| `--support-phone` | string | (none) |  |
+| `--website` | string | (none) |  |
+
+Example:
+
+```sh
+omniglass component-make create --display-name display_name --id id
+```
+
+### `omniglass component-make delete`
+
+Delete a component make
+
+```
+omniglass component-make delete <id>
+```
+
+Deletes a custom component_make, refused if official (422). Gated by make:delete.
+
+Example:
+
+```sh
+omniglass component-make delete <id>
+```
+
+### `omniglass component-make get`
+
+Get a component make
+
+```
+omniglass component-make get <id>
+```
+
+Fetches a component_make by id. Gated by make:read.
+
+Example:
+
+```sh
+omniglass component-make get <id>
+```
+
+### `omniglass component-make list`
+
+List component makes
+
+```
+omniglass component-make list
+```
+
+Lists the component_make registry, ordered alphabetically by display name. Populates the make picker on the component_model form. Gated by make:read.
+
+Example:
+
+```sh
+omniglass component-make list
+```
+
+### `omniglass component-make update`
+
+Update a component make
+
+```
+omniglass component-make update <id> [flags]
+```
+
+Patches a custom component_make's display_name, icon, support_phone, or website. Official makes are read-only (422). Gated by make:update.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--display-name` | string | (none) |  |
+| `--icon` | string | (none) |  |
+| `--support-phone` | string | (none) |  |
+| `--website` | string | (none) |  |
+
+Example:
+
+```sh
+omniglass component-make update <id>
+```
+
 ## `omniglass effective-secret`
 
 Commands for the effective-secret resource
@@ -1058,22 +1157,6 @@ omniglass migrate
 
 ## `omniglass node`
 
-Run the edge node: claim, pull the worklist, and heartbeat over NATS
-
-```
-omniglass node [flags]
-```
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--heartbeat` | duration | `30s` | heartbeat interval |
-| `--name` | string | (none) | this node's registered name (env OMNIGLASS_NODE_NAME) |
-| `--once` | bool | `false` | run a single claim + pull + heartbeat cycle and exit |
-| `--server` | string | (none) | Omniglass server base URL (env OMNIGLASS_SERVER) |
-| `--token` | string | (none) | enrollment token from POST /nodes/{name}:enroll (env OMNIGLASS_NODE_TOKEN) |
-
-## `omniglass node`
-
 Commands for the node resource
 
 ### `omniglass node claim`
@@ -1165,6 +1248,22 @@ Example:
 ```sh
 omniglass node list
 ```
+
+## `omniglass node`
+
+Run the edge node: claim, pull the worklist, and heartbeat over NATS
+
+```
+omniglass node [flags]
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--heartbeat` | duration | `30s` | heartbeat interval |
+| `--name` | string | (none) | this node's registered name (env OMNIGLASS_NODE_NAME) |
+| `--once` | bool | `false` | run a single claim + pull + heartbeat cycle and exit |
+| `--server` | string | (none) | Omniglass server base URL (env OMNIGLASS_SERVER) |
+| `--token` | string | (none) | enrollment token from POST /nodes/{name}:enroll (env OMNIGLASS_NODE_TOKEN) |
 
 ## `omniglass principal`
 

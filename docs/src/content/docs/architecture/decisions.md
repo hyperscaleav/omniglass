@@ -64,11 +64,12 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0027](#adr-0027-create-is-a-route-inventory-create-and-edit-unify-on-the-detail-accordion) | 2026-07-14 | Accepted | Inventory create/edit unify on the detail accordion: `New` routes to `/<entity>/create` (a draft) and Save hands off to `/<entity>/<id>` in edit; view is read-only, edit is the sole writer; the create/edit Drawer is retired |
 | [ADR-0028](#adr-0028-rank-retired-from-the-type-registries-sort-is-alphabetical) | 2026-07-14 | Accepted | `rank` is dropped from `location_type`, `system_type`, and `component_type`; the three list operations sort by `display_name, id` instead |
 | [ADR-0029](#adr-0029-files-slice-1-a-content-addressed-blob-store-and-a-tenant-wide-file-handle) | 2026-07-14 | Accepted | Files slice 1: a content-addressed `blob` store primitive (pgblobs) and a tenant-wide `file` handle; no placement arc (a file is 1:many, its locality is a future attachment), a binary `sensitive` flag reusing the secret `:admin` tier (defaults off), a delete frees its unreferenced blob synchronously (async mark-sweep GC deferred), base64-in-JSON on the wire |
-| [ADR-0031](#adr-0031-a-node-is-a-kindnode-principal-with-an-interim-bearer-credential-and-static-per-connection-nats-subject-permissions) | 2026-07-07 | Accepted | A node is a `principal` of `kind=node` with a 1:1 detail table and a bearer `credential` row (interim shared secret), and per-node NATS isolation is static per-connection subject permissions via an in-process auth callback; nkey/JWT deferred |
-| [ADR-0032](#adr-0032-telemetry-is-a-protobuf-event-over-jetstream-with-an-inline-owner-confining-consumer) | 2026-07-07 | Accepted | Telemetry is a protobuf `Event` over a JetStream durable consumer; the consumer binds the owner from the task's interface and confines a node to its own tasks inline (no separate raw-telemetry table or Postgres queue); raw persistence + replay and label-based multi-owner routing deferred |
-| [ADR-0033](#adr-0033-the-reachability-verdict-is-a-built-in-state) | 2026-07-07 | Accepted | The per-interface reachability verdict `interface.reachable` is a built-in **state** (not a metric); availability is `time_in_state` over it; readiness is interface-type-defaulted and interface-overridable, node-executed, not a `calc_rule` |
-| [ADR-0034](#adr-0034-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver) | 2026-07-08 | Accepted | An interface is a device **API** named by its protocol (not a NIC); `interface_type` = its **transport** (the reach gate), a **driver** = the collect layer (protocol handler + transports + normalized menu, what a device CAN do), a template **curates** (SHOULD), the instance holds what **IS** there; OIDs/commands live in the driver, not the template |
-| [ADR-0035](#adr-0035-the-task-is-derived-read-only-plumbing-projected-from-its-interface) | 2026-07-14 | Accepted | The `task` is **derived** read-only plumbing: creating an `interface` derives its one poll task, so task create/update/delete routes and the `task:create` / `:update` grants are dropped; `task.node_name` is removed and **projected** from `interface.node_name` (the worklist and telemetry owner-confinement join the interface), and a node purge cascades its interfaces and their tasks. Reverses the checkpoint-5d task-CRUD build; refines ADR-0034 |
+| [ADR-0031](#adr-0031-component_make-registry-slice-1-an-official-boolean-a-deferred-referential-guard-and-website-scheme-validation) | 2026-07-14 | Accepted | `component_make` slice 1: an `official` boolean (not an `origin` enum) for consistency with the type registries; the in-use referential delete guard deferred to the `component_model` slice (nothing references a make yet); `website` scheme-validated to `http`/`https`, client and server, against stored XSS |
+| [ADR-0032](#adr-0032-a-node-is-a-kindnode-principal-with-an-interim-bearer-credential-and-static-per-connection-nats-subject-permissions) | 2026-07-07 | Accepted | A node is a `principal` of `kind=node` with a 1:1 detail table and a bearer `credential` row (interim shared secret), and per-node NATS isolation is static per-connection subject permissions via an in-process auth callback; nkey/JWT deferred |
+| [ADR-0033](#adr-0033-telemetry-is-a-protobuf-event-over-jetstream-with-an-inline-owner-confining-consumer) | 2026-07-07 | Accepted | Telemetry is a protobuf `Event` over a JetStream durable consumer; the consumer binds the owner from the task's interface and confines a node to its own tasks inline (no separate raw-telemetry table or Postgres queue); raw persistence + replay and label-based multi-owner routing deferred |
+| [ADR-0034](#adr-0034-the-reachability-verdict-is-a-built-in-state) | 2026-07-07 | Accepted | The per-interface reachability verdict `interface.reachable` is a built-in **state** (not a metric); availability is `time_in_state` over it; readiness is interface-type-defaulted and interface-overridable, node-executed, not a `calc_rule` |
+| [ADR-0035](#adr-0035-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver) | 2026-07-08 | Accepted | An interface is a device **API** named by its protocol (not a NIC); `interface_type` = its **transport** (the reach gate), a **driver** = the collect layer (protocol handler + transports + normalized menu, what a device CAN do), a template **curates** (SHOULD), the instance holds what **IS** there; OIDs/commands live in the driver, not the template |
+| [ADR-0036](#adr-0036-the-task-is-derived-read-only-plumbing-projected-from-its-interface) | 2026-07-14 | Accepted | The `task` is **derived** read-only plumbing: creating an `interface` derives its one poll task, so task create/update/delete routes and the `task:create` / `:update` grants are dropped; `task.node_name` is removed and **projected** from `interface.node_name` (the worklist and telemetry owner-confinement join the interface), and a node purge cascades its interfaces and their tasks. Reverses the checkpoint-5d task-CRUD build; refines ADR-0035 |
 
 ## Entries
 
@@ -786,8 +787,7 @@ below from the project's history. From here it grows one slice at a time.
 - **Closes:** issue [#239](https://github.com/hyperscaleav/omniglass/issues/239). Design:
   `docs/superpowers/specs/2026-07-14-type-placement-constraints-design.md`.
 
-
-### ADR-0031: A node is a kind=node principal with an interim bearer credential and static per-connection NATS subject permissions
+### ADR-0032: A node is a kind=node principal with an interim bearer credential and static per-connection NATS subject permissions
 
 - **Date:** 2026-07-07 | **Status:** Accepted | **Pages:** [nodes](/architecture/nodes/), [identity and access](/architecture/identity-access/)
 - **Decision:** A node is a first-class `principal` of `kind='node'` with a 1:1 `node` detail table (keyed by
@@ -821,7 +821,7 @@ below from the project's history. From here it grows one slice at a time.
 - **Closes the gap:** the nkey/JWT node identity (the `nats` credential kind and the signed-nonce admission)
   and the single-use enrollment token are tracked with the node-identity hardening slice.
 
-### ADR-0032: Telemetry is a protobuf Event over JetStream with an inline owner-confining consumer
+### ADR-0033: Telemetry is a protobuf Event over JetStream with an inline owner-confining consumer
 
 - **Date:** 2026-07-07 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [datapoints](/architecture/datapoints/)
 - **Decision:** A node ships each collected batch as a protobuf `Event` (proto3, `proto/og/v1/event.proto`,
@@ -850,7 +850,7 @@ below from the project's history. From here it grows one slice at a time.
 - **Closes the gap:** raw-`Event` persistence (backfill/replay) and the raw -> admission -> trusted two-lane
   topology, plus label-based multi-owner resolution, are tracked with a later collection checkpoint.
 
-### ADR-0033: The reachability verdict is a built-in state
+### ADR-0034: The reachability verdict is a built-in state
 
 - **Date:** 2026-07-07 | **Status:** Accepted | **Pages:** [datapoints](/architecture/datapoints/), [collection](/architecture/collection/)
 - **Decision:** The per-interface reachability verdict `interface.reachable` (value domain `up` / `down`) is a
@@ -885,7 +885,7 @@ below from the project's history. From here it grows one slice at a time.
   that render the transitions are a later slice (5b); readiness config as an interface-type default is a later
   interface-type concern.
 
-### ADR-0034: An interface is a device API; the interface type is its transport, not its driver
+### ADR-0035: An interface is a device API; the interface type is its transport, not its driver
 
 - **Date:** 2026-07-08 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [nodes](/architecture/nodes/)
 - **Decision:** An `interface` is an **API endpoint we intend to call** on a component, identified by the
@@ -932,7 +932,7 @@ below from the project's history. From here it grows one slice at a time.
   with a `web` (http) and a `qrc` (tcp) interface, the "two APIs on one device" story. The driver catalog,
   normalization, discovery, templates, versioning, and the shadow-resolved device pack are later slices of the
   [collection epic](https://github.com/hyperscaleav/omniglass/issues/113) (slices 2 to 4 realize this model).
-- **Refines:** [ADR-0033](#adr-0033-the-reachability-verdict-is-a-built-in-state) (the reachability verdict is the
+- **Refines:** [ADR-0034](#adr-0034-the-reachability-verdict-is-a-built-in-state) (the reachability verdict is the
   first rung of the gate ladder this ADR names).
 - **Status note (2026-07-08):** the `interface = API` / `interface_type = transport` half is **built and stable**
   (this slice). The **driver / collect layer** (the separate `driver` entity, the normalized menu, and the
@@ -942,7 +942,7 @@ below from the project's history. From here it grows one slice at a time.
   driver-centric vs template-centric is re-examined, and this ADR revised or superseded, in a later ADR before
   the collect layer is built.
 
-### ADR-0035: The task is derived read-only plumbing, projected from its interface
+### ADR-0036: The task is derived read-only plumbing, projected from its interface
 
 - **Date:** 2026-07-14 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [api](/architecture/api/)
 - **Decision:** The `interface` is the **only authored** collection primitive; the `task` is **derived**.
@@ -955,10 +955,50 @@ below from the project's history. From here it grows one slice at a time.
 - **Context:** The checkpoint-5d build gave both primitives a full CRUD surface and a node placement of their
   own. That let an operator author a task divorced from its interface, and left a task's node and its interface's
   node as two independently-set fields that could disagree. The reframe makes the interface the one thing an
-  operator authors (an API on a component, [ADR-0034](#adr-0034-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver)):
+  operator authors (an API on a component, [ADR-0035](#adr-0035-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver)):
   a reachability check is an interface, its poll task is the plumbing that runs it, and placement is a property
   of where the interface is reached from, stated once. This is the honest shape for the reach tier; the richer
   driver-authored collection surface (multiple functions over one interface) is a later slice and does not
   reintroduce operator task CRUD.
-- **Refines:** [ADR-0034](#adr-0034-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver)
+- **Refines:** [ADR-0035](#adr-0035-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver)
   (the interface is the authored API; this ADR settles that its task is derived, not co-authored).
+
+### ADR-0031: `component_make` registry slice 1, an `official` boolean, a deferred referential guard, and website scheme validation
+
+- **Date:** 2026-07-14 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/), [Makes guide](/guides/admin/makes/)
+- **Decision:** Three calls on the first slice of the `component_make` manufacturer registry (id,
+  display_name, icon, support_phone, website), lands ahead of the rest of the make/model catalog.
+  **(1) `official boolean`, not an `origin` enum.** The design sketch (below) proposed
+  `origin official | seed | custom` on make and model, matching the model layer's eventual needs.
+  Slice 1 ships a plain `official` boolean instead, because `component_type` and the other
+  registries already distinguish seed-owned from operator rows with a boolean, and a
+  two-value distinction gains nothing from a three-value enum until a real `seed` (installed,
+  mutable) tier exists to fill it; `origin` can still land on `component_model` if that tier turns
+  out to be real. **(2) The in-use / referential delete guard is deferred.** `component_type`,
+  `location_type`, and `system_type` all refuse a delete while a location, system, or component
+  still references the row (409). `component_make` ships **no equivalent guard**: nothing
+  references a `component_make` yet (`component_model`, the referencing entity, does not exist),
+  so a custom make deletes unconditionally (an official row is still refused, 422, the seed-owned
+  rule). The guard is added when `component_model` lands and gives the registry something to be
+  in-use by, rather than building an unused check now. **(3) Website URL scheme validation, client
+  and server.** The create/edit form renders `website` as a live anchor; an operator-entered value
+  with no scheme check is a stored-XSS vector (`javascript:`/`data:` executing on click). A
+  `validWebsiteScheme` guard on the API (`http`/`https` only, empty allowed, else 422) and a
+  matching `safeUrl` guard on the console (render a live link only when safe, else plain text,
+  never a dead or unsafe anchor) close it in both places: server-side so a non-browser caller
+  (CLI/curl) cannot persist a dangerous scheme, client-side so a value written before the
+  server-side check existed (or by any path that bypassed it) still renders safely.
+- **Context:** `docs/superpowers/specs/2026-07-14-component-make-model-catalog-design.md` sketches
+  the full make/model catalog (`component_make`, a `component_type` genus tree, `component_model`,
+  and `component.model_id`) as four independent vertical slices; this is slice 1, make alone, with
+  no dependency on the tree or the model layer. A review pass on the first cut of the console page
+  (Task 4) found the missing website-scheme check as a stored-XSS gap before this shipped, closed
+  in the same slice rather than carried as a follow-up.
+- **Divergences logged:** the design sketch's `origin official | seed | custom` enum is not what
+  shipped; `official boolean` did, per (1) above. The design's delete-refused-while-referenced rule
+  is not enforced yet; per (2), it is deferred to the `component_model` slice that gives it
+  something to check.
+- **Lands:** [epic #254](https://github.com/hyperscaleav/omniglass/issues/254), issue
+  [#255](https://github.com/hyperscaleav/omniglass/issues/255). Design:
+  `docs/superpowers/specs/2026-07-14-component-make-model-catalog-design.md`. Plan:
+  `docs/superpowers/plans/2026-07-14-component-make-registry.md`.

@@ -498,7 +498,7 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   re-guards by skipping a write whose value equals the latest stored value (the net for a node restart), proven
   by a negative test that repeated identical verdicts produce one row per transition, not per tick. Availability
   as `time_in_state` over this state, and the operator surfaces that render the transitions, are checkpoint 5b.
-  See [ADR-0033](/architecture/decisions/#adr-0033-the-reachability-verdict-is-a-built-in-state).
+  See [ADR-0034](/architecture/decisions/#adr-0034-the-reachability-verdict-is-a-built-in-state).
 - **Collection slice (checkpoint 5b): the reachability surface, seen.** The first datapoint read surface. A
   per-component read BFF `GET /components/{name}/reachability` (permission `component:read`, scope-injected, so a
   viewer gets a 404 on a component outside its scope) composes, per interface, the latest verdict (`LatestState`
@@ -580,7 +580,7 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   models a lab **polaris DSP** with two protocol-named APIs on one device (`web` over http, `qrc` over tcp) so
   `make dev` shows the "two APIs on one box" story. The driver layer that turns a device API into a normalized
   menu of datapoints and functions (OIDs, commands, parse) is a separate, later concern, decided in
-  [ADR-0034](/architecture/decisions/#adr-0034-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver);
+  [ADR-0035](/architecture/decisions/#adr-0035-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver);
   this slice ships only the transport / reach tier of it.
 - **Collection slice (checkpoint 5f): reachability lands read-only; check authoring deferred.** Before the PR, the
   component-scoped **Add check** affordance was **removed**: it was a stopgap that a proper **driver**-based
@@ -1180,7 +1180,7 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   on Systems and Components, and a drag-to-reparent affordance (this slice's picker is a select,
   not a drag surface).
 - **Collection slice (checkpoint 5g): the derived interface/task model.** The reachability primitives were
-  reframed to their honest shape ([ADR-0035](/architecture/decisions/#adr-0035-the-task-is-derived-read-only-plumbing-projected-from-its-interface)):
+  reframed to their honest shape ([ADR-0036](/architecture/decisions/#adr-0036-the-task-is-derived-read-only-plumbing-projected-from-its-interface)):
   the **interface** is the only authored primitive and the **task** is **derived**. An interface is now
   **named by its protocol** (the name derives from its `interface_type`, unique per component), so the create
   surface takes a type, not a free-text name. Creating an interface **derives its one poll task**, so the task
@@ -1199,3 +1199,25 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   task surface is read-only, placement projects, a node purge cascades). This keeps the [collection](/architecture/collection/)
   and [nodes](/architecture/nodes/) pages `Partial`: the driver / collect layer (the normalized menu, SNMP, the
   `$sec:` / `$var:` interpolation consumer, templates) is still Design.
+- **Catalog: the `component_make` manufacturer registry.** The first landed slice of a larger
+  make/model catalog: a flat, seed-and-custom registry (`id`, `official`, `display_name`, `icon`,
+  `support_phone`, `website`) naming who makes a component, on the same official-row-read-only
+  pattern as the `*_type` registries. Full CRUD (`POST/GET/PATCH/DELETE/list /api/v1/component-makes`)
+  gated by a new, capability-only, unscoped **`make`** resource (`make:read` sits in the viewer
+  `*:read` floor, `make:create,update,delete` at the admin tier, mirroring `type:*`); eight
+  official makes (Crestron, Biamp, QSC, Shure, Cisco, Extron, Sony, Samsung) are upserted
+  idempotently at boot. The `website` field is validated to an `http`/`https` URL on create and
+  update, both client and server side (a non-browser caller is refused with a 422), closing a
+  stored-XSS path a `javascript:`/`data:` value would otherwise open when the console rendered it
+  as a live link; a value that still fails the check renders as plain text, never a dead or unsafe
+  anchor. The console ships a **[Makes](/guides/admin/makes/)** catalog page (`FlatList` + blade,
+  an official row read-only, same shape as [Types](/guides/admin/types/)) and the generated CLI
+  (`omniglass component-make list/get/create/update/delete`). Proven by a storage round-trip
+  (official read-only, duplicate id, alphabetical list), a seed idempotency test, a real-binary API
+  test (the CRUD lifecycle, the website-scheme 422, the capability gate), and web unit and
+  component tests covering the safe-URL render guard. Deliberate thin cuts: no in-use delete guard
+  (nothing references a make yet, so a custom row deletes unconditionally; the referential 409
+  lands with `component_model`), no `component_type` genus tree, no `component_model`, and no
+  picker wiring a component to a make. Deferred: the rest of the make/model catalog
+  ([epic #254](https://github.com/hyperscaleav/omniglass/issues/254),
+  [#255](https://github.com/hyperscaleav/omniglass/issues/255)).

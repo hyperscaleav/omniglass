@@ -100,6 +100,32 @@ func TestSeedRolesIdempotent(t *testing.T) {
 		t.Errorf("official component_types = %d, want 11", compTypeCount)
 	}
 
+	// The official component makes seed too, idempotently (the second Run
+	// above must not have duplicated them), and every seeded row is official
+	// (read-only in the API layer).
+	var makeCount int
+	if err := conn.QueryRow(ctx, `select count(*) from component_make where official`).Scan(&makeCount); err != nil {
+		t.Fatalf("count component_makes: %v", err)
+	}
+	if makeCount != 8 {
+		t.Errorf("official component_makes = %d, want 8", makeCount)
+	}
+	var totalMakeCount int
+	if err := conn.QueryRow(ctx, `select count(*) from component_make`).Scan(&totalMakeCount); err != nil {
+		t.Fatalf("count all component_makes: %v", err)
+	}
+	if totalMakeCount != makeCount {
+		t.Errorf("total component_makes = %d, official = %d, want equal (a non-official row leaked in)", totalMakeCount, makeCount)
+	}
+	// Re-running Run keeps the metadata fields, not just the initial insert.
+	var crestronWebsite string
+	if err := conn.QueryRow(ctx, `select website from component_make where id = 'crestron'`).Scan(&crestronWebsite); err != nil {
+		t.Fatalf("read crestron website: %v", err)
+	}
+	if crestronWebsite != "https://www.crestron.com" {
+		t.Errorf("crestron website = %q, want https://www.crestron.com", crestronWebsite)
+	}
+
 	// The official secret_types seed with their per-field shape.
 	var secTypeCount int
 	if err := conn.QueryRow(ctx, `select count(*) from secret_type where official`).Scan(&secTypeCount); err != nil {

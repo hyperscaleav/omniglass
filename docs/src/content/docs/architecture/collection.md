@@ -36,10 +36,10 @@ non-disclosing 404, reusing the component tier with no new scope kind). The full
 what is built is the reach gate over four transports (`tcp`/`ssh`/`http` open the port, `icmp` pings). The
 protocol **drivers** that collect a normalized menu of datapoints and functions over a transport are the next
 slices. See
-[ADR-0032](/architecture/decisions/#adr-0032-telemetry-is-a-protobuf-event-over-jetstream-with-an-inline-owner-confining-consumer),
-[ADR-0033](/architecture/decisions/#adr-0033-the-reachability-verdict-is-a-built-in-state),
-[ADR-0034](/architecture/decisions/#adr-0034-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver),
-and [ADR-0035](/architecture/decisions/#adr-0035-the-task-is-derived-read-only-plumbing-projected-from-its-interface).
+[ADR-0033](/architecture/decisions/#adr-0033-telemetry-is-a-protobuf-event-over-jetstream-with-an-inline-owner-confining-consumer),
+[ADR-0034](/architecture/decisions/#adr-0034-the-reachability-verdict-is-a-built-in-state),
+[ADR-0035](/architecture/decisions/#adr-0035-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver),
+and [ADR-0036](/architecture/decisions/#adr-0036-the-task-is-derived-read-only-plumbing-projected-from-its-interface).
 :::
 
 Collection is built from **functions**. A versioned `ComponentTemplate` declares how to reach a
@@ -113,7 +113,7 @@ interfaces:
   default reachability probe. The protocol handler that turns a device's API into a normalized menu of
   datapoints and functions (the OIDs, the commands, the parse) is a separate **driver** layer, so the
   same protocol can run over several transports and a device's OIDs live in its driver, never on a
-  template. See [ADR-0034](/architecture/decisions/#adr-0034-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver).
+  template. See [ADR-0035](/architecture/decisions/#adr-0035-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver).
 - **`liveness`** is the per-interface reachability gate; it decides whether the interface's
   functions run. See [nodes](/architecture/nodes/).
 - **`persistent: true`** keeps a session open across function runs (interface lifecycle contains

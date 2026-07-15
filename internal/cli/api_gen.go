@@ -413,6 +413,132 @@ func generatedCommands() []*cobra.Command {
 	}
 	{
 		parent := &cobra.Command{
+			Use:   "component-make",
+			Short: "Commands for the component-make resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			var fDisplayName string
+			var fIcon string
+			var fId string
+			var fSupportPhone string
+			var fWebsite string
+			cmd := &cobra.Command{
+				Use:     "create",
+				Short:   "Create a component make",
+				Long:    "Creates a custom (non-official) component_make. Gated by make:create.",
+				Example: "  omniglass component-make create --display-name display_name --id id",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/component-makes")
+					body := map[string]any{}
+					if cmd.Flags().Changed("display-name") {
+						body["display_name"] = fDisplayName
+					}
+					if cmd.Flags().Changed("icon") {
+						body["icon"] = fIcon
+					}
+					if cmd.Flags().Changed("id") {
+						body["id"] = fId
+					}
+					if cmd.Flags().Changed("support-phone") {
+						body["support_phone"] = fSupportPhone
+					}
+					if cmd.Flags().Changed("website") {
+						body["website"] = fWebsite
+					}
+					return runAPICommand(cmd, "POST", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
+			_ = cmd.MarkFlagRequired("display-name")
+			cmd.Flags().StringVar(&fIcon, "icon", "", "")
+			cmd.Flags().StringVar(&fId, "id", "", "Globally unique make id")
+			_ = cmd.MarkFlagRequired("id")
+			cmd.Flags().StringVar(&fSupportPhone, "support-phone", "", "")
+			cmd.Flags().StringVar(&fWebsite, "website", "", "")
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "delete <id>",
+				Short:   "Delete a component make",
+				Long:    "Deletes a custom component_make, refused if official (422). Gated by make:delete.",
+				Example: "  omniglass component-make delete <id>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/component-makes/%s", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "DELETE", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "get <id>",
+				Short:   "Get a component make",
+				Long:    "Fetches a component_make by id. Gated by make:read.",
+				Example: "  omniglass component-make get <id>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/component-makes/%s", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "list",
+				Short:   "List component makes",
+				Long:    "Lists the component_make registry, ordered alphabetically by display name. Populates the make picker on the component_model form. Gated by make:read.",
+				Example: "  omniglass component-make list",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/component-makes")
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			var fDisplayName string
+			var fIcon string
+			var fSupportPhone string
+			var fWebsite string
+			cmd := &cobra.Command{
+				Use:     "update <id>",
+				Short:   "Update a component make",
+				Long:    "Patches a custom component_make's display_name, icon, support_phone, or website. Official makes are read-only (422). Gated by make:update.",
+				Example: "  omniglass component-make update <id>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/component-makes/%s", url.PathEscape(args[0]))
+					body := map[string]any{}
+					if cmd.Flags().Changed("display-name") {
+						body["display_name"] = fDisplayName
+					}
+					if cmd.Flags().Changed("icon") {
+						body["icon"] = fIcon
+					}
+					if cmd.Flags().Changed("support-phone") {
+						body["support_phone"] = fSupportPhone
+					}
+					if cmd.Flags().Changed("website") {
+						body["website"] = fWebsite
+					}
+					return runAPICommand(cmd, "PATCH", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
+			cmd.Flags().StringVar(&fIcon, "icon", "", "")
+			cmd.Flags().StringVar(&fSupportPhone, "support-phone", "", "")
+			cmd.Flags().StringVar(&fWebsite, "website", "", "")
+			return cmd
+		}())
+		roots = append(roots, parent)
+	}
+	{
+		parent := &cobra.Command{
 			Use:   "effective-secret",
 			Short: "Commands for the effective-secret resource",
 		}

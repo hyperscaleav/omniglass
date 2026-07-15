@@ -22,7 +22,7 @@ credential is permitted only its own `<node>` subjects, so a node cannot publish
 command queue, sessions and inbound demux, the reachability gate, config-generation-driven cache
 invalidation, `node.self` self-telemetry, and the `node.down` sweep. The credential is a shared secret
 (the enrollment token doubles as the NATS password); the decentralized nkey/JWT model is deferred. See
-[implementation status](/architecture/status/) and [decision log](/architecture/decisions/) (ADR-0031).
+[implementation status](/architecture/status/) and [decision log](/architecture/decisions/) (ADR-0032).
 :::
 
 ## The node

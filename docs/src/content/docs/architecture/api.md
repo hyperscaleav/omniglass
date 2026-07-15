@@ -310,6 +310,25 @@ owning entity's own write. The key vocabulary and an entity's tags read on the v
 
 A `tagBinding` body is `{key, value, owner_kind, owner_id?, owner_name?}`.
 
+A **component make** ([core entities](/architecture/core-entities/#catalog-reference-data-component_make))
+is Catalog reference data, the manufacturer registry a future `component_model` will reference, on the
+same flat, official-vs-custom pattern as the `*_type` registries. The list and read routes sit on the
+viewer floor (`make:read`, which `*:read` carries); the three writes gate on `make:create` /
+`make:update` / `make:delete`, all at the admin tier, exactly like `type:*`.
+
+- `GET /component-makes` lists the registry, ordered alphabetically by display name (`{makes: [make]}`,
+  `make:read`).
+- `POST /component-makes` mints a custom make from `{id, display_name, icon?, support_phone?, website?}`
+  (201, `make:create`, admin).
+- `GET /component-makes/{id}` reads one (`make:read`).
+- `PATCH /component-makes/{id}` updates `{display_name?, icon?, support_phone?, website?}` (`make:update`,
+  admin); an **official** (seed-owned) row is read-only (422).
+- `DELETE /component-makes/{id}` removes a custom make (204, `make:delete`, admin); an official row is
+  refused (422).
+
+A `make` body is `{id, display_name, icon, support_phone, website, official}`. `website` is validated to
+an `http`/`https` scheme on write (a 422 for any other scheme, for example `javascript:`).
+
 ## Files: content-addressed bytes behind a handle
 
 A **file** is a searchable handle over a content-addressed [blob](/architecture/files/): the metadata is

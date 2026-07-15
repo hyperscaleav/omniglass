@@ -17,8 +17,8 @@ results), and the ingest consumer **routes by the `datapoint_type` kind** (metri
 `state_datapoint`), so the verdict lands in `state_datapoint` under the same owner-confinement, **transition-only**
 (one row per flip, guarded at the node and again at ingest). Log datapoints, calculated provenance, fusion, and
 the live NATS data-lane described below are still design. See
-[ADR-0032](/architecture/decisions/#adr-0032-telemetry-is-a-protobuf-event-over-jetstream-with-an-inline-owner-confining-consumer)
-and [ADR-0033](/architecture/decisions/#adr-0033-the-reachability-verdict-is-a-built-in-state).
+[ADR-0033](/architecture/decisions/#adr-0033-telemetry-is-a-protobuf-event-over-jetstream-with-an-inline-owner-confining-consumer)
+and [ADR-0034](/architecture/decisions/#adr-0034-the-reachability-verdict-is-a-built-in-state).
 :::
 
 This is the heart of the authoritative data model: what a datapoint is, the two axes that define it, how we know a value (provenance), and how values reconcile, diverge, and read back. The physical layout (tables, partitioning, the lineage CHECK, tiering) lives in storage; the spine is [the architecture overview](/architecture/). Events, calc rules, and the response layer get their own pages: [events](/architecture/events/), [calculations](/architecture/calculations/), and [alarms and actions](/architecture/alarms-actions/).

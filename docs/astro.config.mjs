@@ -154,6 +154,7 @@ export default defineConfig({
             { label: 'Files', slug: 'guides/admin/files' },
             { label: 'Types', slug: 'guides/admin/types' },
             { label: 'Tags', slug: 'guides/admin/tags' },
+            { label: 'Makes', slug: 'guides/admin/makes' },
           ],
         },
         {

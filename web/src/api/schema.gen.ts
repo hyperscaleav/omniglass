@@ -288,6 +288,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/component-makes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List component makes
+         * @description Lists the component_make registry, ordered alphabetically by display name. Populates the make picker on the component_model form. Gated by make:read.
+         */
+        get: operations["list-component-makes"];
+        put?: never;
+        /**
+         * Create a component make
+         * @description Creates a custom (non-official) component_make. Gated by make:create.
+         */
+        post: operations["create-component-make"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/component-makes/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a component make
+         * @description Fetches a component_make by id. Gated by make:read.
+         */
+        get: operations["get-component-make"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a component make
+         * @description Deletes a custom component_make, refused if official (422). Gated by make:delete.
+         */
+        delete: operations["delete-component-make"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a component make
+         * @description Patches a custom component_make's display_name, icon, support_phone, or website. Official makes are read-only (422). Gated by make:update.
+         */
+        patch: operations["update-component-make"];
+        trace?: never;
+    };
     "/components": {
         parameters: {
             query?: never;
@@ -2078,6 +2130,20 @@ export interface components {
             parent_id?: string;
             system_id?: string;
         };
+        ComponentMakeBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ComponentMakeBody.json
+             */
+            readonly $schema?: string;
+            display_name: string;
+            icon?: string;
+            id: string;
+            official: boolean;
+            support_phone?: string;
+            website?: string;
+        };
         ComponentTypeBody: {
             /**
              * Format: uri
@@ -2107,6 +2173,20 @@ export interface components {
             parent?: string;
             /** @description Primary system name this component belongs to */
             system?: string;
+        };
+        CreateComponentMakeInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateComponentMakeInputBody.json
+             */
+            readonly $schema?: string;
+            display_name: string;
+            icon?: string;
+            /** @description Globally unique make id */
+            id: string;
+            support_phone?: string;
+            website?: string;
         };
         CreateComponentTypeInputBody: {
             /**
@@ -2662,6 +2742,15 @@ export interface components {
             /** @description The endpoint/target settings (jsonb) */
             params?: unknown;
             type: string;
+        };
+        ListComponentMakesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListComponentMakesOutputBody.json
+             */
+            readonly $schema?: string;
+            makes: components["schemas"]["ComponentMakeBody"][] | null;
         };
         ListComponentTypesOutputBody: {
             /**
@@ -3343,6 +3432,18 @@ export interface components {
             /** @description A new globally unique technical name (rename) */
             name?: string;
         };
+        UpdateComponentMakeInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/UpdateComponentMakeInputBody.json
+             */
+            readonly $schema?: string;
+            display_name?: string;
+            icon?: string;
+            support_phone?: string;
+            website?: string;
+        };
         UpdateComponentTypeInputBody: {
             /**
              * Format: uri
@@ -4012,6 +4113,165 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuthStatusOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-component-makes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListComponentMakesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-component-make": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateComponentMakeInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComponentMakeBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-component-make": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The component_make id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComponentMakeBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-component-make": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The component_make id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "update-component-make": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateComponentMakeInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComponentMakeBody"];
                 };
             };
             /** @description Error */
