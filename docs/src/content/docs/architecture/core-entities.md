@@ -73,6 +73,15 @@ deployment, no FK.
 | `location` | a place tree | name (unique), type, **parent_id** (self-ref tree), display_name; no template (the `location_type` is the only shape-definer) |
 | `node` | the edge process | name (the identity); carries labels, last_heartbeat_at, and its bound credential ([identity and access](/architecture/identity-access/)) |
 
+### Catalog reference data: `component_make`
+
+A `component_make` (Crestron, Biamp, QSC, ...) is Catalog reference data, not a structural
+entity: a flat, seed-and-custom registry naming who makes a component, on the same official/custom
+pattern as the `*_type` registries ([Types guide](/guides/admin/types/)). It is the first landed
+piece of a larger make/model catalog; nothing on `component` points at one yet, and the
+`component_type` genus tree and a `component_model` layer between make and instance are later
+work, not built. See the [Makes guide](/guides/admin/makes/) for the operator surface.
+
 ## The variable-depth trees
 
 `component`, `system`, and `location` are each a **variable-depth tree**: a `parent_id` self-reference
