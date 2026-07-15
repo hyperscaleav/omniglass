@@ -185,7 +185,16 @@ function ModelBladeBody(p: { id: string }): JSX.Element {
       await updateModel(r.id, {
         display_name: displayName(),
         model_number: modelNumber(),
-        family: family().trim() || undefined,
+        // family is stored NOT NULL DEFAULT '', so send the raw trimmed
+        // string (empty string included): the server's coalesce($n, family)
+        // treats a present-but-empty string as a real value, clearing it.
+        // family().trim() || undefined would silently no-op an emptied field.
+        family: family().trim(),
+        // TODO(#260): released_at/eos_at/eol_at/front_image_id/back_image_id
+        // are set/replace-only; clearing them needs explicit-null patch
+        // semantics (coalesce keeps the old value when the field is omitted,
+        // and these are nullable columns where undefined is the only way to
+        // "not send" from this client today).
         released_at: fromDateInput(releasedAt()),
         eos_at: fromDateInput(eosAt()),
         eol_at: fromDateInput(eolAt()),

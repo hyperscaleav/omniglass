@@ -159,6 +159,11 @@ func (p *PG) CreateComponentModel(ctx context.Context, actorID string, m Compone
 // model_number, family, lifecycle timestamps, or image pointers (nil fields
 // unchanged) and audits it. Official rows are read-only (ErrTypeOfficial); an
 // unknown id is ErrTypeNotFound. make_id is not patchable in this slice.
+// TODO(#260): released_at/eos_at/eol_at/front_image_id/back_image_id are
+// set/replace-only; clearing them needs explicit-null patch semantics
+// (coalesce keeps the old value when the field is nil, and nil is also what
+// an absent field decodes to, so there is no way to distinguish "leave
+// unchanged" from "clear" for these nullable columns today).
 func (p *PG) UpdateComponentModel(ctx context.Context, actorID, id string, patch ComponentModelPatch) (*ComponentModel, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {

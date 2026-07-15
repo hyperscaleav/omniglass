@@ -18,7 +18,7 @@ const makes: ComponentMake[] = [
 ];
 
 const seed: ComponentModel[] = [
-  { id: "acme-123a", display_name: "Acme 123A", make_id: "crestron", model_number: "123A", official: false },
+  { id: "acme-123a", display_name: "Acme 123A", make_id: "crestron", model_number: "123A", official: false, family: "Legacy" },
   { id: "biamp-x", display_name: "Biamp X", make_id: "biamp", model_number: "X-1", official: true },
 ];
 
@@ -95,5 +95,44 @@ describe("ComponentModels page", () => {
   it("hides New model for a caller without model:create", () => {
     mount(viewer);
     expect(screen.queryByText(/New model/i)).toBeNull();
+  });
+
+  // Regression: family is stored NOT NULL DEFAULT '', so clearing it in the
+  // edit blade must send the empty string, not omit the field. Sending
+  // `undefined` would hit UpdateComponentModel's coalesce($n, family) and
+  // silently no-op, leaving the old value on refetch.
+  it("clearing Family in the edit blade sends an empty string, not undefined", async () => {
+    let sent: unknown;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "PATCH" && req.url.includes("/component-models/acme-123a")) {
+        sent = JSON.parse(await req.clone().text());
+        return new Response(
+          JSON.stringify({ id: "acme-123a", display_name: "Acme 123A", make_id: "crestron", model_number: "123A", official: false, family: "" }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      return new Response(JSON.stringify({ models: seed }), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+
+    mount();
+    fireEvent.click(screen.getByText("Acme 123A"));
+    const blade = await waitFor(() => {
+      const el = asides()[0];
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    fireEvent.click(within(blade).getByLabelText("Edit"));
+
+    const familyInput = within(blade).getByPlaceholderText("TSW") as HTMLInputElement;
+    expect(familyInput.value).toBe("Legacy");
+    fireEvent.input(familyInput, { target: { value: "" } });
+
+    fireEvent.click(within(blade).getByText("Save"));
+    await waitFor(() => expect(sent).toBeTruthy());
+    // toMatchObject requires the key to be present: if the send path still
+    // fell back to `|| undefined`, JSON.stringify would drop the key
+    // entirely and this assertion would fail.
+    expect(sent).toMatchObject({ family: "" });
   });
 });
