@@ -196,6 +196,33 @@ components:
         - name
         - component_type
       type: object
+    ComponentMakeBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ComponentMakeBody.json
+          format: uri
+          readOnly: true
+          type: string
+        display_name:
+          type: string
+        icon:
+          type: string
+        id:
+          type: string
+        official:
+          type: boolean
+        support_phone:
+          type: string
+        website:
+          type: string
+      required:
+        - id
+        - display_name
+        - official
+      type: object
     ComponentTypeBody:
       additionalProperties: false
       properties:
@@ -251,6 +278,33 @@ components:
       required:
         - name
         - component_type
+      type: object
+    CreateComponentMakeInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateComponentMakeInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        display_name:
+          minLength: 1
+          type: string
+        icon:
+          type: string
+        id:
+          description: Globally unique make id
+          minLength: 1
+          type: string
+        support_phone:
+          type: string
+        website:
+          type: string
+      required:
+        - id
+        - display_name
       type: object
     CreateComponentTypeInputBody:
       additionalProperties: false
@@ -1126,6 +1180,25 @@ components:
         - mode
         - target_id
         - expires_at
+      type: object
+    ListComponentMakesOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListComponentMakesOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        makes:
+          items:
+            $ref: "#/components/schemas/ComponentMakeBody"
+          type:
+            - array
+            - "null"
+      required:
+        - makes
       type: object
     ListComponentTypesOutputBody:
       additionalProperties: false
@@ -2266,6 +2339,25 @@ components:
           pattern: ^[a-z0-9][a-z0-9-]*$
           type: string
       type: object
+    UpdateComponentMakeInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/UpdateComponentMakeInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        display_name:
+          type: string
+        icon:
+          type: string
+        support_phone:
+          type: string
+        website:
+          type: string
+      type: object
     UpdateComponentTypeInputBody:
       additionalProperties: false
       properties:
@@ -2883,6 +2975,123 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Whether the system has an owner yet
+  /component-makes:
+    get:
+      description: Lists the component_make registry, ordered alphabetically by display name. Populates the make picker on the component_model form. Gated by make:read.
+      operationId: list-component-makes
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListComponentMakesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List component makes
+    post:
+      description: Creates a custom (non-official) component_make. Gated by make:create.
+      operationId: create-component-make
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateComponentMakeInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComponentMakeBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Create a component make
+  /component-makes/{id}:
+    delete:
+      description: Deletes a custom component_make, refused if official (422). Gated by make:delete.
+      operationId: delete-component-make
+      parameters:
+        - description: The component_make id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The component_make id
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Delete a component make
+    get:
+      description: Fetches a component_make by id. Gated by make:read.
+      operationId: get-component-make
+      parameters:
+        - description: The component_make id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The component_make id
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComponentMakeBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get a component make
+    patch:
+      description: Patches a custom component_make's display_name, icon, support_phone, or website. Official makes are read-only (422). Gated by make:update.
+      operationId: update-component-make
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateComponentMakeInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComponentMakeBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Update a component make
   /components:
     get:
       description: Lists the components the caller may read, each filtered to its scope subtree. Gated by component:read.
