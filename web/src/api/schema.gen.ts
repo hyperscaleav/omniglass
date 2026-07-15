@@ -340,6 +340,58 @@ export interface paths {
         patch: operations["update-component-make"];
         trace?: never;
     };
+    "/component-models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List component models
+         * @description Lists the component_model registry, ordered alphabetically by display name. Gated by model:read.
+         */
+        get: operations["list-component-models"];
+        put?: never;
+        /**
+         * Create a component model
+         * @description Creates a custom (non-official) component_model referencing an existing component_make. An unknown make_id is a 422. Gated by model:create.
+         */
+        post: operations["create-component-model"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/component-models/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a component model
+         * @description Fetches a component_model by id. Gated by model:read.
+         */
+        get: operations["get-component-model"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a component model
+         * @description Deletes a custom component_model, refused if official (422). Gated by model:delete.
+         */
+        delete: operations["delete-component-model"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a component model
+         * @description Patches a custom component_model's display_name, model_number, family, lifecycle timestamps, or image pointers. make_id is not patchable. Official models are read-only (422). Gated by model:update.
+         */
+        patch: operations["update-component-model"];
+        trace?: never;
+    };
     "/components": {
         parameters: {
             query?: never;
@@ -1924,6 +1976,28 @@ export interface components {
             support_phone?: string;
             website?: string;
         };
+        ComponentModelBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ComponentModelBody.json
+             */
+            readonly $schema?: string;
+            back_image_id?: string;
+            display_name: string;
+            /** Format: date-time */
+            eol_at?: string;
+            /** Format: date-time */
+            eos_at?: string;
+            family?: string;
+            front_image_id?: string;
+            id: string;
+            make_id: string;
+            model_number: string;
+            official: boolean;
+            /** Format: date-time */
+            released_at?: string;
+        };
         ComponentTypeBody: {
             /**
              * Format: uri
@@ -1967,6 +2041,29 @@ export interface components {
             id: string;
             support_phone?: string;
             website?: string;
+        };
+        CreateComponentModelInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateComponentModelInputBody.json
+             */
+            readonly $schema?: string;
+            back_image_id?: string;
+            display_name: string;
+            /** Format: date-time */
+            eol_at?: string;
+            /** Format: date-time */
+            eos_at?: string;
+            family?: string;
+            front_image_id?: string;
+            /** @description Globally unique model id */
+            id: string;
+            /** @description The owning component_make id */
+            make_id: string;
+            model_number: string;
+            /** Format: date-time */
+            released_at?: string;
         };
         CreateComponentTypeInputBody: {
             /**
@@ -2474,6 +2571,15 @@ export interface components {
              */
             readonly $schema?: string;
             makes: components["schemas"]["ComponentMakeBody"][] | null;
+        };
+        ListComponentModelsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListComponentModelsOutputBody.json
+             */
+            readonly $schema?: string;
+            models: components["schemas"]["ComponentModelBody"][] | null;
         };
         ListComponentTypesOutputBody: {
             /**
@@ -3048,6 +3154,25 @@ export interface components {
             icon?: string;
             support_phone?: string;
             website?: string;
+        };
+        UpdateComponentModelInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/UpdateComponentModelInputBody.json
+             */
+            readonly $schema?: string;
+            back_image_id?: string;
+            display_name?: string;
+            /** Format: date-time */
+            eol_at?: string;
+            /** Format: date-time */
+            eos_at?: string;
+            family?: string;
+            front_image_id?: string;
+            model_number?: string;
+            /** Format: date-time */
+            released_at?: string;
         };
         UpdateComponentTypeInputBody: {
             /**
@@ -3865,6 +3990,165 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ComponentMakeBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-component-models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListComponentModelsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-component-model": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateComponentModelInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComponentModelBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-component-model": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The component_model id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComponentModelBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-component-model": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The component_model id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "update-component-model": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateComponentModelInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComponentModelBody"];
                 };
             };
             /** @description Error */

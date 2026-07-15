@@ -454,6 +454,114 @@ Example:
 omniglass component-make update <id>
 ```
 
+## `omniglass component-model`
+
+Commands for the component-model resource
+
+### `omniglass component-model create`
+
+Create a component model
+
+```
+omniglass component-model create [flags]
+```
+
+Creates a custom (non-official) component_model referencing an existing component_make. An unknown make_id is a 422. Gated by model:create.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--back-image-id` | string | (none) |  |
+| `--display-name` | string | (none) |  |
+| `--eol-at` | string | (none) |  |
+| `--eos-at` | string | (none) |  |
+| `--family` | string | (none) |  |
+| `--front-image-id` | string | (none) |  |
+| `--id` | string | (none) | Globally unique model id |
+| `--make-id` | string | (none) | The owning component_make id |
+| `--model-number` | string | (none) |  |
+| `--released-at` | string | (none) |  |
+
+Example:
+
+```sh
+omniglass component-model create --display-name display_name --id id --make-id make_id --model-number model_number
+```
+
+### `omniglass component-model delete`
+
+Delete a component model
+
+```
+omniglass component-model delete <id>
+```
+
+Deletes a custom component_model, refused if official (422). Gated by model:delete.
+
+Example:
+
+```sh
+omniglass component-model delete <id>
+```
+
+### `omniglass component-model get`
+
+Get a component model
+
+```
+omniglass component-model get <id>
+```
+
+Fetches a component_model by id. Gated by model:read.
+
+Example:
+
+```sh
+omniglass component-model get <id>
+```
+
+### `omniglass component-model list`
+
+List component models
+
+```
+omniglass component-model list
+```
+
+Lists the component_model registry, ordered alphabetically by display name. Gated by model:read.
+
+Example:
+
+```sh
+omniglass component-model list
+```
+
+### `omniglass component-model update`
+
+Update a component model
+
+```
+omniglass component-model update <id> [flags]
+```
+
+Patches a custom component_model's display_name, model_number, family, lifecycle timestamps, or image pointers. make_id is not patchable. Official models are read-only (422). Gated by model:update.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--back-image-id` | string | (none) |  |
+| `--display-name` | string | (none) |  |
+| `--eol-at` | string | (none) |  |
+| `--eos-at` | string | (none) |  |
+| `--family` | string | (none) |  |
+| `--front-image-id` | string | (none) |  |
+| `--model-number` | string | (none) |  |
+| `--released-at` | string | (none) |  |
+
+Example:
+
+```sh
+omniglass component-model update <id>
+```
+
 ## `omniglass effective-secret`
 
 Commands for the effective-secret resource

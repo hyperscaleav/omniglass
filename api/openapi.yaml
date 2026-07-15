@@ -223,6 +223,48 @@ components:
         - display_name
         - official
       type: object
+    ComponentModelBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ComponentModelBody.json
+          format: uri
+          readOnly: true
+          type: string
+        back_image_id:
+          type: string
+        display_name:
+          type: string
+        eol_at:
+          format: date-time
+          type: string
+        eos_at:
+          format: date-time
+          type: string
+        family:
+          type: string
+        front_image_id:
+          type: string
+        id:
+          type: string
+        make_id:
+          type: string
+        model_number:
+          type: string
+        official:
+          type: boolean
+        released_at:
+          format: date-time
+          type: string
+      required:
+        - id
+        - display_name
+        - make_id
+        - model_number
+        - official
+      type: object
     ComponentTypeBody:
       additionalProperties: false
       properties:
@@ -305,6 +347,51 @@ components:
       required:
         - id
         - display_name
+      type: object
+    CreateComponentModelInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateComponentModelInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        back_image_id:
+          type: string
+        display_name:
+          minLength: 1
+          type: string
+        eol_at:
+          format: date-time
+          type: string
+        eos_at:
+          format: date-time
+          type: string
+        family:
+          type: string
+        front_image_id:
+          type: string
+        id:
+          description: Globally unique model id
+          minLength: 1
+          type: string
+        make_id:
+          description: The owning component_make id
+          minLength: 1
+          type: string
+        model_number:
+          minLength: 1
+          type: string
+        released_at:
+          format: date-time
+          type: string
+      required:
+        - id
+        - display_name
+        - make_id
+        - model_number
       type: object
     CreateComponentTypeInputBody:
       additionalProperties: false
@@ -1199,6 +1286,25 @@ components:
             - "null"
       required:
         - makes
+      type: object
+    ListComponentModelsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListComponentModelsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        models:
+          items:
+            $ref: "#/components/schemas/ComponentModelBody"
+          type:
+            - array
+            - "null"
+      required:
+        - models
       type: object
     ListComponentTypesOutputBody:
       additionalProperties: false
@@ -2358,6 +2464,36 @@ components:
         website:
           type: string
       type: object
+    UpdateComponentModelInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/UpdateComponentModelInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        back_image_id:
+          type: string
+        display_name:
+          type: string
+        eol_at:
+          format: date-time
+          type: string
+        eos_at:
+          format: date-time
+          type: string
+        family:
+          type: string
+        front_image_id:
+          type: string
+        model_number:
+          type: string
+        released_at:
+          format: date-time
+          type: string
+      type: object
     UpdateComponentTypeInputBody:
       additionalProperties: false
       properties:
@@ -3092,6 +3228,123 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Update a component make
+  /component-models:
+    get:
+      description: Lists the component_model registry, ordered alphabetically by display name. Gated by model:read.
+      operationId: list-component-models
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListComponentModelsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List component models
+    post:
+      description: Creates a custom (non-official) component_model referencing an existing component_make. An unknown make_id is a 422. Gated by model:create.
+      operationId: create-component-model
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateComponentModelInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComponentModelBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Create a component model
+  /component-models/{id}:
+    delete:
+      description: Deletes a custom component_model, refused if official (422). Gated by model:delete.
+      operationId: delete-component-model
+      parameters:
+        - description: The component_model id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The component_model id
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Delete a component model
+    get:
+      description: Fetches a component_model by id. Gated by model:read.
+      operationId: get-component-model
+      parameters:
+        - description: The component_model id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The component_model id
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComponentModelBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get a component model
+    patch:
+      description: Patches a custom component_model's display_name, model_number, family, lifecycle timestamps, or image pointers. make_id is not patchable. Official models are read-only (422). Gated by model:update.
+      operationId: update-component-model
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateComponentModelInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComponentModelBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Update a component model
   /components:
     get:
       description: Lists the components the caller may read, each filtered to its scope subtree. Gated by component:read.

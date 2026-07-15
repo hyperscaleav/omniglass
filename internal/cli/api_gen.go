@@ -539,6 +539,179 @@ func generatedCommands() []*cobra.Command {
 	}
 	{
 		parent := &cobra.Command{
+			Use:   "component-model",
+			Short: "Commands for the component-model resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			var fBackImageId string
+			var fDisplayName string
+			var fEolAt string
+			var fEosAt string
+			var fFamily string
+			var fFrontImageId string
+			var fId string
+			var fMakeId string
+			var fModelNumber string
+			var fReleasedAt string
+			cmd := &cobra.Command{
+				Use:     "create",
+				Short:   "Create a component model",
+				Long:    "Creates a custom (non-official) component_model referencing an existing component_make. An unknown make_id is a 422. Gated by model:create.",
+				Example: "  omniglass component-model create --display-name display_name --id id --make-id make_id --model-number model_number",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/component-models")
+					body := map[string]any{}
+					if cmd.Flags().Changed("back-image-id") {
+						body["back_image_id"] = fBackImageId
+					}
+					if cmd.Flags().Changed("display-name") {
+						body["display_name"] = fDisplayName
+					}
+					if cmd.Flags().Changed("eol-at") {
+						body["eol_at"] = fEolAt
+					}
+					if cmd.Flags().Changed("eos-at") {
+						body["eos_at"] = fEosAt
+					}
+					if cmd.Flags().Changed("family") {
+						body["family"] = fFamily
+					}
+					if cmd.Flags().Changed("front-image-id") {
+						body["front_image_id"] = fFrontImageId
+					}
+					if cmd.Flags().Changed("id") {
+						body["id"] = fId
+					}
+					if cmd.Flags().Changed("make-id") {
+						body["make_id"] = fMakeId
+					}
+					if cmd.Flags().Changed("model-number") {
+						body["model_number"] = fModelNumber
+					}
+					if cmd.Flags().Changed("released-at") {
+						body["released_at"] = fReleasedAt
+					}
+					return runAPICommand(cmd, "POST", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fBackImageId, "back-image-id", "", "")
+			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
+			_ = cmd.MarkFlagRequired("display-name")
+			cmd.Flags().StringVar(&fEolAt, "eol-at", "", "")
+			cmd.Flags().StringVar(&fEosAt, "eos-at", "", "")
+			cmd.Flags().StringVar(&fFamily, "family", "", "")
+			cmd.Flags().StringVar(&fFrontImageId, "front-image-id", "", "")
+			cmd.Flags().StringVar(&fId, "id", "", "Globally unique model id")
+			_ = cmd.MarkFlagRequired("id")
+			cmd.Flags().StringVar(&fMakeId, "make-id", "", "The owning component_make id")
+			_ = cmd.MarkFlagRequired("make-id")
+			cmd.Flags().StringVar(&fModelNumber, "model-number", "", "")
+			_ = cmd.MarkFlagRequired("model-number")
+			cmd.Flags().StringVar(&fReleasedAt, "released-at", "", "")
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "delete <id>",
+				Short:   "Delete a component model",
+				Long:    "Deletes a custom component_model, refused if official (422). Gated by model:delete.",
+				Example: "  omniglass component-model delete <id>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/component-models/%s", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "DELETE", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "get <id>",
+				Short:   "Get a component model",
+				Long:    "Fetches a component_model by id. Gated by model:read.",
+				Example: "  omniglass component-model get <id>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/component-models/%s", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "list",
+				Short:   "List component models",
+				Long:    "Lists the component_model registry, ordered alphabetically by display name. Gated by model:read.",
+				Example: "  omniglass component-model list",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/component-models")
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			var fBackImageId string
+			var fDisplayName string
+			var fEolAt string
+			var fEosAt string
+			var fFamily string
+			var fFrontImageId string
+			var fModelNumber string
+			var fReleasedAt string
+			cmd := &cobra.Command{
+				Use:     "update <id>",
+				Short:   "Update a component model",
+				Long:    "Patches a custom component_model's display_name, model_number, family, lifecycle timestamps, or image pointers. make_id is not patchable. Official models are read-only (422). Gated by model:update.",
+				Example: "  omniglass component-model update <id>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/component-models/%s", url.PathEscape(args[0]))
+					body := map[string]any{}
+					if cmd.Flags().Changed("back-image-id") {
+						body["back_image_id"] = fBackImageId
+					}
+					if cmd.Flags().Changed("display-name") {
+						body["display_name"] = fDisplayName
+					}
+					if cmd.Flags().Changed("eol-at") {
+						body["eol_at"] = fEolAt
+					}
+					if cmd.Flags().Changed("eos-at") {
+						body["eos_at"] = fEosAt
+					}
+					if cmd.Flags().Changed("family") {
+						body["family"] = fFamily
+					}
+					if cmd.Flags().Changed("front-image-id") {
+						body["front_image_id"] = fFrontImageId
+					}
+					if cmd.Flags().Changed("model-number") {
+						body["model_number"] = fModelNumber
+					}
+					if cmd.Flags().Changed("released-at") {
+						body["released_at"] = fReleasedAt
+					}
+					return runAPICommand(cmd, "PATCH", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fBackImageId, "back-image-id", "", "")
+			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
+			cmd.Flags().StringVar(&fEolAt, "eol-at", "", "")
+			cmd.Flags().StringVar(&fEosAt, "eos-at", "", "")
+			cmd.Flags().StringVar(&fFamily, "family", "", "")
+			cmd.Flags().StringVar(&fFrontImageId, "front-image-id", "", "")
+			cmd.Flags().StringVar(&fModelNumber, "model-number", "", "")
+			cmd.Flags().StringVar(&fReleasedAt, "released-at", "", "")
+			return cmd
+		}())
+		roots = append(roots, parent)
+	}
+	{
+		parent := &cobra.Command{
 			Use:   "effective-secret",
 			Short: "Commands for the effective-secret resource",
 		}
