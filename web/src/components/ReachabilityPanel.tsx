@@ -183,7 +183,7 @@ export default function ReachabilityPanel(p: {
         </Show>
         <span class="flex-1" />
         <Show when={p.onAdd}>
-          <Button size="xs" intent="quiet" icon={Plus} onClick={() => p.onAdd!()}>Add interface</Button>
+          <Button intent="quiet" icon={Plus} onClick={() => p.onAdd!()}>Add interface</Button>
         </Show>
       </div>
       <Show
