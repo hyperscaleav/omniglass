@@ -84,10 +84,22 @@ func TestComponentModelsAPI(t *testing.T) {
 	c.do(ownerTok, http.MethodPost, "/component-models",
 		map[string]any{"id": "bad", "display_name": "Bad", "make_id": "nope", "model_number": "1"}, http.StatusUnprocessableEntity)
 
+	// A well-formed but nonexistent front_image_id also fails a foreign key
+	// (front_image_id -> file(id), not make_id -> component_make(id)); the API
+	// must disambiguate by constraint and still return a clean 422, not a 500.
+	c.do(ownerTok, http.MethodPost, "/component-models",
+		map[string]any{"id": "bad-image", "display_name": "Bad Image", "make_id": "acme-mfg", "model_number": "1",
+			"front_image_id": "00000000-0000-0000-0000-000000000000"}, http.StatusUnprocessableEntity)
+
 	// The custom row is mutable.
 	c.do(ownerTok, http.MethodPatch, "/component-models/acme-123a",
 		map[string]any{"display_name": "Acme 123A Rev B"}, http.StatusOK)
 	c.do(ownerTok, http.MethodGet, "/component-models/acme-123a", nil, http.StatusOK)
+
+	// A PATCH setting front_image_id to a nonexistent file also fails the
+	// foreign key; the update handler must map it to 422, not a raw 500.
+	c.do(ownerTok, http.MethodPatch, "/component-models/acme-123a",
+		map[string]any{"front_image_id": "00000000-0000-0000-0000-000000000000"}, http.StatusUnprocessableEntity)
 
 	// The custom make is now referenced by a model, so deleting it is
 	// refused (409, the make-in-use guard on DeleteComponentMake).

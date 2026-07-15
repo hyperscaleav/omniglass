@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -79,13 +80,38 @@ type componentModelOutput struct {
 }
 
 // isForeignKeyViolation reports whether err is a Postgres foreign_key_violation
-// (23503), used to turn an unknown make_id into a clean 422 rather than a raw
-// 500. Mirrors storage.isUniqueViolation's use of pgconn.PgError.Code, but the
-// component_model insert doesn't pre-check the make_id (the FK is the check),
-// so the API layer detects it directly off the wrapped storage error.
-func isForeignKeyViolation(err error) bool {
+// (23503) and, when so, the name of the violated constraint. Used to turn an
+// unknown make_id/front_image_id/back_image_id into a clean 422 rather than a
+// raw 500. Mirrors storage.isUniqueViolation's use of pgconn.PgError.Code, but
+// the component_model insert/update doesn't pre-check these references (the FK
+// is the check), so the API layer detects it directly off the wrapped storage
+// error.
+func isForeignKeyViolation(err error) (constraint string, ok bool) {
 	var pgErr *pgconn.PgError
-	return errors.As(err, &pgErr) && pgErr.Code == "23503"
+	if !errors.As(err, &pgErr) || pgErr.Code != "23503" {
+		return "", false
+	}
+	return pgErr.ConstraintName, true
+}
+
+// componentModelFKMessage maps a violated component_model foreign-key
+// constraint name to the 422 message naming the offending field. Postgres's
+// default unnamed-constraint naming is "<table>_<column>_fkey"
+// (component_model_make_id_fkey, component_model_front_image_id_fkey,
+// component_model_back_image_id_fkey; see db/migrations/20260715100000_component_models.sql),
+// so a substring match on the column name is stable even if the exact name
+// ever changes shape.
+func componentModelFKMessage(constraint string) string {
+	switch {
+	case strings.Contains(constraint, "make_id"):
+		return "make_id does not name an existing component_make"
+	case strings.Contains(constraint, "front_image_id"):
+		return "front_image_id does not name an existing file"
+	case strings.Contains(constraint, "back_image_id"):
+		return "back_image_id does not name an existing file"
+	default:
+		return "referenced id does not name an existing row"
+	}
 }
 
 // registerComponentModelRoutes wires the component_model registry CRUD
@@ -129,8 +155,8 @@ func registerComponentModelRoutes(api huma.API, a *authenticator, gw storage.Gat
 			FrontImageID: in.Body.FrontImageID, BackImageID: in.Body.BackImageID,
 		})
 		if err != nil {
-			if isForeignKeyViolation(err) {
-				return nil, huma.Error422UnprocessableEntity("make_id does not name an existing component_make")
+			if constraint, ok := isForeignKeyViolation(err); ok {
+				return nil, huma.Error422UnprocessableEntity(componentModelFKMessage(constraint))
 			}
 			return nil, mapTypeErr(err, "component_model")
 		}
@@ -166,6 +192,9 @@ func registerComponentModelRoutes(api huma.API, a *authenticator, gw storage.Gat
 			FrontImageID: in.Body.FrontImageID, BackImageID: in.Body.BackImageID,
 		})
 		if err != nil {
+			if constraint, ok := isForeignKeyViolation(err); ok {
+				return nil, huma.Error422UnprocessableEntity(componentModelFKMessage(constraint))
+			}
 			return nil, mapTypeErr(err, "component_model")
 		}
 		return &componentModelOutput{Body: toComponentModelBody(m)}, nil
