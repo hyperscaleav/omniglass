@@ -52,8 +52,21 @@ func TestComponentMakeCRUD(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
-	if len(all) != 1 {
-		t.Fatalf("list len = %d, want 1", len(all))
+	var found *storage.ComponentMake
+	for i := range all {
+		if all[i].ID == "acme" {
+			found = &all[i]
+			break
+		}
+	}
+	if found == nil {
+		t.Fatalf("list does not contain acme; got %d rows", len(all))
+	}
+	if found.DisplayName != "Acme" {
+		t.Fatalf("list acme display_name = %q, want Acme", found.DisplayName)
+	}
+	if found.Official {
+		t.Fatalf("list acme official=true, want false")
 	}
 
 	// Update patch (display name + support phone); icon/website unchanged when omitted.
