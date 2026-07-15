@@ -3,19 +3,27 @@ import { render, fireEvent, screen, waitFor } from "@solidjs/testing-library";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import Nodes from "./Nodes";
 import { NODES_KEY, type Node } from "../lib/nodes";
+import { TASKS_KEY, type Task } from "../lib/tasks";
+import { INTERFACES_KEY, type Interface } from "../lib/interfaces";
 import { ME_KEY, type Me } from "../lib/auth";
 
 // The Nodes page is a config over the shared FlatList: a row per collection node,
-// a row opening the side Drawer detail (facts + an Enroll / Re-enroll action), and
-// a create Drawer that mints the enrollment token. Data is seeded into the query
-// cache so no server is needed; the enrollment fetch is faked where a test drives
-// the token modal.
+// a row opening the blade detail (facts + the derived Tasks panel + an Enroll /
+// Re-enroll action), and a create Drawer that mints the enrollment token. Data is
+// seeded into the query cache so no server is needed; the enrollment fetch is faked
+// where a test drives the token modal.
 const now = Date.now();
 const seed: Node[] = [
   { name: "edge-hq", enrolled: true, description: "HQ closet", last_heartbeat_at: new Date(now).toISOString() }, // up
   { name: "edge-east", enrolled: true, last_heartbeat_at: new Date(now - 11 * 60_000).toISOString() }, // down (stale)
   { name: "edge-new", enrolled: false }, // never checked in
 ];
+
+// The derived tasks and their interfaces the node detail's Tasks panel reads from:
+// a task's node placement projects from its interface, so it is listed read-only on
+// the node it runs on.
+const taskSeed: Task[] = [{ id: "t-hq", interface_id: "if-hq", mode: "poll", enabled: true, node: "edge-hq" }];
+const ifaceSeed: Interface[] = [{ id: "if-hq", name: "disp-1-tcp", type: "tcp", component: "disp-1", node: "edge-hq" }];
 
 const owner: Me = { principal: { id: "p", kind: "human" }, permissions: [">"], grants: [] };
 const reader: Me = { principal: { id: "r", kind: "human" }, permissions: ["node:read"], grants: [] };
@@ -27,6 +35,8 @@ function json(body: unknown, status = 200) {
 function mount(me: Me) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...NODES_KEY], seed);
+  qc.setQueryData([...TASKS_KEY], taskSeed);
+  qc.setQueryData([...INTERFACES_KEY], ifaceSeed);
   qc.setQueryData([...ME_KEY], me);
   return render(() => (
     <QueryClientProvider client={qc}>
@@ -58,13 +68,23 @@ describe("Nodes page", () => {
     expect(screen.getByText("New node")).toBeTruthy();
   });
 
-  it("hides the Re-enroll action in the detail drawer without node:enroll", async () => {
+  it("hides the Re-enroll action in the detail blade without node:enroll", async () => {
     mount(reader);
     fireEvent.click(screen.getByText("edge-hq"));
-    // Wait for the detail drawer to render (a fact always present) before
+    // Wait for the detail blade to render (a fact always present) before
     // asserting the gated action is absent, not just not-yet-rendered.
     await screen.findByText("Enrolled");
     expect(screen.queryByText(/Re-?enroll/i)).toBeNull();
+  });
+
+  it("folds the node's derived tasks into a read-only panel on the detail blade", async () => {
+    mount(owner);
+    fireEvent.click(screen.getByText("edge-hq"));
+    // The Tasks panel lists the node's derived tasks, resolved to their interface
+    // name and mode; there is no create/edit affordance (tasks are derived).
+    await screen.findByText("Tasks");
+    expect(await screen.findByText("disp-1-tcp")).toBeTruthy();
+    expect(screen.getByText("poll")).toBeTruthy();
   });
 
   it("reveals the enrollment token once, copies it to the clipboard, and clears it on close", async () => {

@@ -1,10 +1,12 @@
-import { For, Show, createMemo, createSignal } from "solid-js";
+import { For, Show, createEffect, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import Button from "../components/Button";
 import { Sliders } from "../components/icons";
+import { Fact } from "../components/DetailShell";
 import {
   type Interface,
+  type UpdateInterface,
   INTERFACES_KEY,
   INTERFACE_TYPES,
   listInterfaces,
@@ -18,27 +20,26 @@ import { COMPONENTS_KEY, listComponents } from "../lib/components";
 import { NODES_KEY, listNodes } from "../lib/nodes";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
+import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
 // Interfaces: the connection-endpoint inventory, a config over the shared FlatList
-// (the flat sibling of the inventory TreeList). A row per interface with its type,
-// owning component, node placement, and probed target; a row opens the side Drawer
+// (the flat sibling of the inventory TreeList). An interface is an API on a
+// component, named by its protocol (its name is the protocol; name == type), so the
+// list shows ONE protocol token per row, not a redundant name-and-type pair, then
+// the owning component, node placement, and probed target. A row opens the blade
 // detail (facts + an inline edit of the mutable fields + delete); "New interface"
 // opens the create Drawer. The type picker offers the built types (icmp, tcp) this
 // slice ships (there is no interface_type list endpoint). Every gate is a UI hint;
 // the server is the authority. Renders only real InterfaceBody fields.
 const columns: FlatColumn<Interface>[] = [
   {
-    key: "name", label: "Name", sortVal: (i) => i.name.toLowerCase(),
+    key: "name", label: "Interface", sortVal: (i) => i.name.toLowerCase(),
     cell: (i) => (
       <div class="flex items-center gap-2.5">
         <span class="text-base-content/40"><Sliders size={16} /></span>
         <span class="truncate font-data text-sm font-medium">{i.name}</span>
       </div>
     ),
-  },
-  {
-    key: "type", label: "Type", width: "110px", sortVal: (i) => i.type,
-    cell: (i) => <span class="badge badge-ghost badge-sm">{i.type}</span>,
   },
   {
     key: "component", label: "Component", width: "180px", sortVal: (i) => (i.component ?? "").toLowerCase(),
@@ -69,7 +70,8 @@ export default function Interfaces() {
         filterPlaceholder: "filter by name, type, component",
         columns,
         empty: "No interfaces yet.",
-        detail: (i) => ({ title: <span class="font-data">{i.name}</span>, body: <InterfaceDetail id={i.id} /> }),
+        rowId: (i) => i.id,
+        blades: { registry: { interface: interfaceBlade }, rootKind: "interface" },
         create: {
           label: "New interface",
           can: () => can(me.data, "interface", "create"),
@@ -80,46 +82,90 @@ export default function Interfaces() {
   );
 }
 
-function Fact(props: { label: string; value: unknown }) {
-  return (
-    <div>
-      <div class="eyebrow">{props.label}</div>
-      <div>{props.value as never}</div>
-    </div>
-  );
+// interfaceBlade renders an interface on the shared blade stack (same chrome and
+// footer action rail as the identity blades): read-only facts, a pencil into an
+// inline edit of the mutable fields (node placement, target), and Delete as the one
+// destructive action.
+export const interfaceBlade: BladeDef = {
+  Title: (p) => <InterfaceBladeTitle id={p.id} />,
+  Body: (p) => <InterfaceBladeBody id={p.id} />,
+};
+
+function useInterfaceById(id: string): () => Interface | null {
+  const interfaces = useQuery(() => ({ queryKey: INTERFACES_KEY, queryFn: () => listInterfaces() }));
+  return () => interfaces.data?.find((x) => x.id === id) ?? null;
 }
 
-// InterfaceDetail is the row's side-Drawer body. It re-derives the interface from
-// the live query by id (not the row snapshot), so an edit reflects after the
-// invalidate. The read view carries the facts, an inline edit (mutable fields only),
-// and a delete; both actions are gated by the matching permission.
-function InterfaceDetail(props: { id: string }) {
+function InterfaceBladeTitle(props: { id: string }): JSX.Element {
+  const iface = useInterfaceById(props.id);
+  return <span class="font-data">{iface()?.name ?? "interface"}</span>;
+}
+
+// InterfaceBladeBody re-derives the interface from the live query by id (not a row
+// snapshot), so an edit reflects after the invalidate. Only the node placement and
+// the probed target are mutable (name, type, and owning component are fixed at
+// creation); the edit slot seeds its inputs each time edit begins, and a Cancel
+// reverts by leaving edit (the next begin re-seeds).
+function InterfaceBladeBody(props: { id: string }): JSX.Element {
   const qc = useQueryClient();
   const me = useMe();
-  const interfaces = useQuery(() => ({ queryKey: INTERFACES_KEY, queryFn: () => listInterfaces() }));
-  const i = createMemo(() => interfaces.data?.find((x) => x.id === props.id) ?? null);
-  const [editing, setEditing] = createSignal(false);
+  const blades = useBlades();
+  const edit = useBladeEdit();
+  const i = useInterfaceById(props.id);
+  const [node, setNode] = createSignal("");
+  const [target, setTarget] = createSignal("");
   const [err, setErr] = createSignal<string | null>(null);
-  const [busy, setBusy] = createSignal(false);
 
-  async function del(iface: Interface) {
+  createEffect(on(edit.editing, (editing) => {
+    if (!editing) return;
+    const iface = i();
+    setNode(iface?.node ?? "");
+    setTarget(iface ? interfaceTarget(iface) : "");
+    setErr(null);
+  }));
+
+  async function removeInterface() {
+    const iface = i();
+    if (!iface) return;
     if (!confirm(`Delete interface "${iface.name}"?`)) return;
     setErr(null);
-    setBusy(true);
     try {
       await deleteInterface(iface.id);
+      blades.close();
       await qc.invalidateQueries({ queryKey: INTERFACES_KEY });
     } catch (e) {
       setErr(describeError(e));
-    } finally {
-      setBusy(false);
     }
   }
 
+  async function save() {
+    const iface = i();
+    if (!iface) return;
+    // Patch only the changed mutable fields. A blank node or target selection is left
+    // unchanged: the API has no clear-placement, so an empty node would FK-fault (422).
+    const patch: UpdateInterface = {};
+    if (node() && node() !== (iface.node ?? "")) patch.node = node();
+    if (target() && target() !== interfaceTarget(iface)) patch.params = { target: target().trim() };
+    setErr(null);
+    try {
+      await updateInterface(iface.id, patch);
+      await qc.invalidateQueries({ queryKey: INTERFACES_KEY });
+    } catch (e) {
+      setErr(describeError(e));
+      throw e; // keep the blade in edit mode on failure
+    }
+  }
+
+  edit.bind({
+    editable: () => !!i() && can(me.data, "interface", "update"),
+    save,
+    destructive: () => (i() && can(me.data, "interface", "delete") ? { label: "Delete", tone: "danger", onClick: removeInterface } : undefined),
+  });
+
   return (
-    <Show when={i()} fallback={<p class="py-8 text-center text-sm text-base-content/40">This interface is no longer available.</p>}>
+    <Show when={i()} fallback={<p class="text-sm text-base-content/50">This interface is no longer available.</p>}>
       {(iface) => (
-        <div class="flex flex-col gap-3">
+        <div class="flex flex-col gap-4">
           <div class="flex items-center gap-3">
             <span class="text-base-content/40"><Sliders size={22} /></span>
             <span class="badge badge-ghost badge-sm">{iface().type}</span>
@@ -130,29 +176,28 @@ function InterfaceDetail(props: { id: string }) {
           </Show>
 
           <Show
-            when={editing()}
+            when={edit.editing()}
             fallback={
-              <>
-                <div class="grid grid-cols-2 gap-3 text-sm">
-                  <Fact label="Name" value={<span class="font-data">{iface().name}</span>} />
-                  <Fact label="Type" value={iface().type} />
-                  <Fact label="Component" value={iface().component ? <span class="font-data">{iface().component}</span> : <span class="text-base-content/40">server-hosted</span>} />
-                  <Fact label="Node" value={iface().node ? <span class="font-data">{iface().node}</span> : <span class="text-base-content/40">unassigned</span>} />
-                  <Fact label="Target" value={interfaceTarget(iface()) ? <span class="font-data">{interfaceTarget(iface())}</span> : <span class="text-base-content/40">not set</span>} />
-                </div>
-                <div class="flex items-center gap-2 border-t border-base-300 pt-3">
-                  <Show when={can(me.data, "interface", "delete")}>
-                    <Button intent="danger" onClick={() => del(iface())} disabled={busy()}>Delete</Button>
-                  </Show>
-                  <span class="flex-1" />
-                  <Show when={can(me.data, "interface", "update")}>
-                    <Button intent="action" onClick={() => setEditing(true)}>Edit</Button>
-                  </Show>
-                </div>
-              </>
+              <div class="grid grid-cols-2 gap-4">
+                <Fact label="Name" value={<span class="font-data">{iface().name}</span>} />
+                <Fact label="Type" value={<span class="badge badge-ghost badge-sm">{iface().type}</span>} />
+                <Fact label="Component" value={iface().component ? <span class="font-data">{iface().component}</span> : <span class="text-base-content/40">server-hosted</span>} />
+                <Fact label="Node" value={iface().node ? <span class="font-data">{iface().node}</span> : <span class="text-base-content/40">unassigned</span>} />
+                <Fact label="Target" value={interfaceTarget(iface()) ? <span class="font-data">{interfaceTarget(iface())}</span> : <span class="text-base-content/40">not set</span>} />
+              </div>
             }
           >
-            <EditInterfaceForm iface={iface()} onDone={() => setEditing(false)} />
+            <div class="flex flex-col gap-3">
+              <p class="text-xs text-base-content/50">Reassign the node placement or change the probed target. The name, type, and component are fixed after creation.</p>
+              <div>
+                <label class="eyebrow mb-1.5 block" for="edit-iface-node">Node</label>
+                <NodeSelect id="edit-iface-node" value={node()} onChange={setNode} />
+              </div>
+              <div>
+                <label class="eyebrow mb-1.5 block" for="edit-iface-target">Target</label>
+                <input id="edit-iface-target" autocomplete="off" class="input input-bordered w-full font-data" value={target()} placeholder="10.0.0.1:22" onInput={(e) => setTarget(e.currentTarget.value)} />
+              </div>
+            </div>
           </Show>
         </div>
       )}
@@ -172,63 +217,10 @@ function NodeSelect(props: { value: string; onChange: (v: string) => void; disab
   );
 }
 
-// EditInterfaceForm edits the mutable fields inline (no nested dialog): only the node
-// placement and the probed target (params) are patchable; name, type, and the owning
-// component are fixed at creation. A left-blank field is left unchanged.
-function EditInterfaceForm(props: { iface: Interface; onDone: () => void }) {
-  const qc = useQueryClient();
-  const [node, setNode] = createSignal(props.iface.node ?? "");
-  const [target, setTarget] = createSignal(interfaceTarget(props.iface));
-  const [busy, setBusy] = createSignal(false);
-  const [err, setErr] = createSignal<string | null>(null);
-
-  async function submit(e: SubmitEvent) {
-    e.preventDefault();
-    setBusy(true);
-    setErr(null);
-    try {
-      const patch: { node?: string; params?: { target: string } } = {};
-      if (node() && node() !== (props.iface.node ?? "")) patch.node = node();
-      if (target() && target() !== interfaceTarget(props.iface)) patch.params = { target: target().trim() };
-      await updateInterface(props.iface.id, patch);
-      await qc.invalidateQueries({ queryKey: INTERFACES_KEY });
-      props.onDone();
-    } catch (er) {
-      setErr(describeError(er));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <form class="flex flex-col gap-3" onSubmit={submit}>
-      <p class="text-xs text-base-content/50">Reassign the node placement or change the probed target. The name, type, and component are fixed after creation.</p>
-      <Show when={err()}>
-        <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
-      </Show>
-      <div>
-        <label class="eyebrow mb-1.5 block" for="edit-iface-node">Node</label>
-        <NodeSelect id="edit-iface-node" value={node()} onChange={setNode} disabled={busy()} />
-      </div>
-      <div>
-        <label class="eyebrow mb-1.5 block" for="edit-iface-target">Target</label>
-        <input id="edit-iface-target" autocomplete="off" class="input input-bordered w-full font-data" value={target()} placeholder="10.0.0.1:22" onInput={(e) => setTarget(e.currentTarget.value)} disabled={busy()} />
-      </div>
-      <div class="mt-1 flex justify-end gap-2">
-        <Button type="button" intent="quiet" onClick={props.onDone} disabled={busy()}>Cancel</Button>
-        <Button type="submit" intent="action" disabled={busy()}>
-          <Show when={busy()}><span class="loading loading-spinner loading-xs" /></Show>
-          Save changes
-        </Button>
-      </div>
-    </form>
-  );
-}
-
-// CreateInterfaceForm is the new-interface form the create Drawer hosts: name, type
-// (the built types), owning component (or server-hosted), node placement, and the
-// probed target. On success it invalidates the list and hands the created interface
-// to onCreated, which opens its detail Drawer.
+// CreateInterfaceForm is the new-interface form the create Drawer hosts: type (the
+// built types), owning component (or server-hosted), node placement, and the probed
+// target. On success it invalidates the list and hands the created interface to
+// onCreated, which opens its detail blade.
 function CreateInterfaceForm(props: { close: () => void; onCreated: (i: Interface) => void }) {
   const qc = useQueryClient();
   const components = useQuery(() => ({ queryKey: COMPONENTS_KEY, queryFn: () => listComponents() }));

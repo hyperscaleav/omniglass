@@ -179,9 +179,6 @@ shape the [Shape](#shape-resources-and-verb-methods) section describes.
 | DELETE | `/interfaces/{id}` | `interface:delete` |
 | GET | `/tasks` | `task:read` |
 | GET | `/tasks/{id}` | `task:read` |
-| POST | `/tasks` | `task:create` |
-| PATCH | `/tasks/{id}` | `task:update` |
-| DELETE | `/tasks/{id}` | `task:delete` |
 | GET | `/components/{name}/reachability` | `component:read` |
 
 **The node custom methods are the day-one enrollment handshake.** `POST /nodes/{name}:enroll` mints (or
@@ -193,15 +190,16 @@ because the token itself is the authentication, so it carries no permission and 
 **401** (a claim must not disclose which nodes exist). A node is estate-wide, so `node:read` and `node:create`
 require an **all-scope** grant, not a tree-scoped one.
 
-**Interface and task scope cascades through the owning component.** An interface is addressed by a surrogate
-`id` and carries a friendly `name` that is unique **within its component** (so the same name can be reused
-across components); a task references its interface by `interface_id`. An interface belongs to a component (or
-is server-hosted, which needs an all-scoped grant), and a task belongs to an interface, so both inherit the
+**The interface is authored; the task is derived.** An interface is addressed by a surrogate `id` and is
+**named by its protocol**: its `name` derives from its `interface_type` and is unique **within its component**
+(so create takes a type, not a name, and a duplicate protocol on one component is a **409**). Creating an
+interface **derives its one poll task**, so the task surface is **read-only** (`GET /tasks`, `GET /tasks/{id}`):
+there are no task create, update, or delete routes and no `task:create` / `task:update` grants. A task references
+its interface by `interface_id`, its id is **content-addressed** over its interface, mode, and spec, and it
+carries **no node column**: its placement **projects from the interface**. An interface belongs to a component
+(or is server-hosted, which needs an all-scoped grant), and a task belongs to an interface, so both inherit the
 component's [scope](/architecture/identity-access/): an out-of-read-scope component's interface or task is a
-non-disclosing **404**, exactly the [403/404 split](#errors-one-problemjson-envelope) above. A task's id is
-**content-addressed** over its interface, mode, and spec, so identical work always maps to the same id and a
-re-create of an identical task dedupes rather than duplicating (a distinct duplicate is a **409**). A duplicate
-interface name on one component is a **409**.
+non-disclosing **404**, exactly the [403/404 split](#errors-one-problemjson-envelope) above.
 
 **The reachability read is a typed composed read, not yet a view.** `GET /components/{name}/reachability`
 composes, per interface, the latest verdict state (`interface.reachable`), the probe-layer signals that
@@ -213,12 +211,12 @@ views](#reads-beyond-one-resource-are-views), standing in until the `ViewResult`
 
 :::note[Thin cuts today]
 These routes ship the operationally useful slice, not the full CRUD matrix. A **node** has create, list, get,
-`:enroll`, and `:claim`, but no update or delete. An **interface** `PATCH` changes only its node placement and
-its params (target); the name, type, and owning component are fixed at creation, and a delete is refused while
-a task still references it (a **409**). A **task** `PATCH` changes only its display name, enabled toggle, node
-placement, and spec; the interface and mode that form its content-addressed identity are immutable (change them
-and it is a new task). The two built interface types are `icmp` and `tcp`; there is no `interface_type` list
-route yet.
+`:enroll`, and `:claim`, but no update or delete; a node **purge cascades** its interfaces and their derived
+tasks. An **interface** `PATCH` changes only its node placement and its params (target); the type (and so the
+name it derives) and the owning component are fixed at creation, and a delete is refused while a task still
+references it (a **409**). A **task** is **derived and read-only**: it is created with its interface and has no
+write routes, and its placement follows the interface's rather than being set on the task. The four built
+interface types are `icmp`, `tcp`, `ssh`, and `http`; there is no `interface_type` list route yet.
 :::
 ## Secrets: masked reads, an audited reveal
 

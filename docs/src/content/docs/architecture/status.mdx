@@ -498,7 +498,7 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   re-guards by skipping a write whose value equals the latest stored value (the net for a node restart), proven
   by a negative test that repeated identical verdicts produce one row per transition, not per tick. Availability
   as `time_in_state` over this state, and the operator surfaces that render the transitions, are checkpoint 5b.
-  See [ADR-0019](/architecture/decisions/#adr-0019-the-reachability-verdict-is-a-built-in-state).
+  See [ADR-0033](/architecture/decisions/#adr-0033-the-reachability-verdict-is-a-built-in-state).
 - **Collection slice (checkpoint 5b): the reachability surface, seen.** The first datapoint read surface. A
   per-component read BFF `GET /components/{name}/reachability` (permission `component:read`, scope-injected, so a
   viewer gets a 404 on a component outside its scope) composes, per interface, the latest verdict (`LatestState`
@@ -580,7 +580,7 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   models a lab **polaris DSP** with two protocol-named APIs on one device (`web` over http, `qrc` over tcp) so
   `make dev` shows the "two APIs on one box" story. The driver layer that turns a device API into a normalized
   menu of datapoints and functions (OIDs, commands, parse) is a separate, later concern, decided in
-  [ADR-0020](/architecture/decisions/#adr-0020-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver);
+  [ADR-0034](/architecture/decisions/#adr-0034-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver);
   this slice ships only the transport / reach tier of it.
 - **Collection slice (checkpoint 5f): reachability lands read-only; check authoring deferred.** Before the PR, the
   component-scoped **Add check** affordance was **removed**: it was a stopgap that a proper **driver**-based
@@ -1179,3 +1179,21 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   `allowed_parent_types` for `system_type`/`component_type`, the same read-only-in-edit Parent gap
   on Systems and Components, and a drag-to-reparent affordance (this slice's picker is a select,
   not a drag surface).
+- **Collection slice (checkpoint 5g): the derived interface/task model.** The reachability primitives were
+  reframed to their honest shape ([ADR-0035](/architecture/decisions/#adr-0035-the-task-is-derived-read-only-plumbing-projected-from-its-interface)):
+  the **interface** is the only authored primitive and the **task** is **derived**. An interface is now
+  **named by its protocol** (the name derives from its `interface_type`, unique per component), so the create
+  surface takes a type, not a free-text name. Creating an interface **derives its one poll task**, so the task
+  surface is **read-only**: the `POST` / `PATCH` / `DELETE /tasks` routes and the `task:create` / `task:update`
+  grants are gone, leaving `GET /tasks` and `GET /tasks/{id}`. `task.node_name` is dropped and **projected** from
+  `interface.node_name` (the worklist and the telemetry owner-confinement now join the interface for placement),
+  and a **node purge cascades** its interfaces and their tasks (`interface.node_name` and `task.interface_id` are
+  `ON DELETE CASCADE`). The console follows: the standalone Tasks page and its `/tasks` route are removed and a
+  node's derived tasks read as a **panel on the node detail**, the interface create form drops the name input, the
+  interface and node detail move onto the shared read-edit-save blade, and the collection pages route through the
+  shared Button primitive.
+  Storage, the API, the CLI, and the typed client regenerate from the reduced surface, so `make gen` is clean.
+  Proven by the reduced storage, API, and web suites over the derived model (an interface derives its task, the
+  task surface is read-only, placement projects, a node purge cascades). This keeps the [collection](/architecture/collection/)
+  and [nodes](/architecture/nodes/) pages `Partial`: the driver / collect layer (the normalized menu, SNMP, the
+  `$sec:` / `$var:` interpolation consumer, templates) is still Design.

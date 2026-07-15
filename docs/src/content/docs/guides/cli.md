@@ -125,29 +125,31 @@ Nodes page) or against the API until that binding lands. `node claim`, which car
 name in the body, works as shown.
 :::
 
-Author a reachability check (an interface plus a poll task over it):
+Author a reachability check by **creating an interface** (its poll task is derived
+automatically):
 
 ```sh
 # An interface owned by a component, placed on a node, with its probe target in params.
+# It is named by its protocol: --type is the interface_type, there is no --name flag.
 omniglass interface create \
-  --name disp-1-tcp --type tcp --component disp-1 --node edge-hq \
+  --type tcp --component disp-1 --node edge-hq \
   --params '{"target":"10.0.0.1:22"}'                          # needs interface:create
 
 omniglass interface list
-omniglass interface get disp-1-tcp
-omniglass interface update disp-1-tcp --node edge-hq --params '{"target":"10.0.0.2:22"}'
-omniglass interface delete disp-1-tcp                          # refused (409) while a task references it
+omniglass interface get <id>                                    # interfaces are addressed by id
+omniglass interface update <id> --node edge-hq --params '{"target":"10.0.0.2:22"}'
+omniglass interface delete <id>                                 # refused (409) while its task references it
 
-# A poll task over the interface, put on the node's worklist.
-omniglass task create --interface disp-1-tcp --mode poll        # needs task:create; --enabled defaults to true
+# The poll task is derived from the interface, so the task surface is read-only.
 omniglass task list
-omniglass task update <id> --display-name "HQ display ping"     # id is content-addressed; interface/mode are fixed
-omniglass task delete <id>
+omniglass task get <id>
 ```
 
-The two built interface types are `icmp` and `tcp`. An interface `update` changes only its
-node placement and params; a task `update` changes only its display name, enabled toggle,
-node, and spec (the interface and mode form its content-addressed id and are fixed).
+The four built interface types are `icmp`, `tcp`, `ssh`, and `http`, and an interface is
+**named by its protocol** (the `--type`), unique within its component. An interface `update`
+changes only its node placement and params. A **task** is **derived** when its interface is
+created, so there is no `task create`, `update`, or `delete`; its placement follows the
+interface's. A node purge cascades its interfaces and their derived tasks.
 
 Read a component's composed reachability (the verdict, the probe-layer signals, and the
 recent transitions the availability strip draws):

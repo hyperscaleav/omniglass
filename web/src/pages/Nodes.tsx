@@ -1,9 +1,10 @@
-import { Show, createMemo, createSignal } from "solid-js";
+import { Show, createMemo, createSignal, type JSX } from "solid-js";
 import { Dialog } from "@kobalte/core/dialog";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import Button from "../components/Button";
 import { Check, Copy, Server } from "../components/icons";
+import { Fact, RelatedList, type RelatedItem } from "../components/DetailShell";
 import {
   type Node,
   type EnrollOutput,
@@ -15,16 +16,21 @@ import {
   nodeStatus,
   nodeFilterKeys,
 } from "../lib/nodes";
+import { TASKS_KEY, listTasks } from "../lib/tasks";
+import { INTERFACES_KEY, listInterfaces } from "../lib/interfaces";
 import { useMe, can } from "../lib/auth";
 import { describeError, rel } from "../lib/format";
+import { type BladeDef, useBladeEdit } from "../lib/blades";
 
 // Nodes: the collection-daemon inventory, a config over the shared FlatList (the
 // flat sibling of the inventory TreeList). A row per node with its liveness pill
 // (derived client-side from last_heartbeat_at against the server's down window),
-// a row opening the side Drawer detail (facts + an Enroll / Re-enroll action), and
-// "New node" opening the create Drawer. Day-one enrollment mints a secret token
-// shown ONCE in a modal; it is never cached or logged. Every gate is a UI hint;
-// the server is the authority.
+// a row opening the blade detail (facts + the derived Tasks panel + an Enroll /
+// Re-enroll action), and "New node" opening the create Drawer. Day-one enrollment
+// mints a secret token shown ONCE in a modal; it is never cached or logged. The
+// tasks a node runs are DERIVED read-only plumbing, so they read as a panel on the
+// node, not a separate nav entry. Every gate is a UI hint; the server is the
+// authority.
 // Per-status pill class. up/down carry a soft hue; "never" (no heartbeat yet) is a
 // neutral state given a soft grey fill (a tint of the text color, so it reads as a
 // visible pill in both themes). The daisyUI neutral badge renders near-black against
@@ -71,9 +77,17 @@ export default function Nodes() {
   const me = useMe();
   const nodes = useQuery(() => ({ queryKey: NODES_KEY, queryFn: () => listNodes() }));
   // The once-shown enrollment token lives ONLY in this signal for the modal's
-  // lifetime: enrollNode hands it here, the modal reveals it, and onClose clears
-  // it. It is never written to the query cache, localStorage, or a log.
+  // lifetime: enroll hands it here, the modal reveals it, and onClose clears it. It
+  // is never written to the query cache, localStorage, or a log.
   const [enrollResult, setEnrollResult] = createSignal<EnrollOutput | null>(null);
+
+  // The node blade closes over setEnrollResult so its Enroll action can hand the
+  // minted token to the page-level show-once modal (the blade body only receives an
+  // id, so the callback rides in on the registry entry).
+  const nodeBlade: BladeDef = {
+    Title: (p) => <NodeBladeTitle name={p.id} />,
+    Body: (p) => <NodeBladeBody name={p.id} onEnrolled={setEnrollResult} />,
+  };
 
   return (
     <>
@@ -87,10 +101,8 @@ export default function Nodes() {
           filterPlaceholder: "filter by name or status",
           columns,
           empty: "No nodes yet.",
-          detail: (n) => ({
-            title: <span class="font-data">{n.name}</span>,
-            body: <NodeDetail name={n.name} canEnroll={can(me.data, "node", "enroll")} onEnrolled={setEnrollResult} />,
-          }),
+          rowId: (n) => n.name,
+          blades: { registry: { node: nodeBlade }, rootKind: "node" },
           create: {
             label: "New node",
             can: () => can(me.data, "node", "create") && can(me.data, "node", "enroll"),
@@ -103,28 +115,44 @@ export default function Nodes() {
   );
 }
 
-function Fact(props: { label: string; value: unknown }) {
-  return (
-    <div>
-      <div class="eyebrow">{props.label}</div>
-      <div>{props.value as never}</div>
-    </div>
-  );
+function NodeBladeTitle(props: { name: string }): JSX.Element {
+  const nodes = useQuery(() => ({ queryKey: NODES_KEY, queryFn: () => listNodes() }));
+  const n = () => (nodes.data ?? []).find((x) => x.name === props.name);
+  return <span class="font-data">{n()?.name ?? props.name}</span>;
 }
 
-// NodeDetail is the row's side-Drawer body. It re-derives the node from the live
-// query by name (not the row snapshot the Drawer opened with), so a re-enroll
-// (which flips enrolled / stamps enrolled_at) reflects after the invalidate. The
-// Enroll / Re-enroll action is gated by node:enroll; a re-enroll invalidates the
-// previous token, so the copy is the operator's only chance to keep it.
-function NodeDetail(props: { name: string; canEnroll: boolean; onEnrolled: (out: EnrollOutput) => void }) {
+// NodeBladeBody is the node's detail on the shared blade stack (same chrome and
+// footer action rail as the identity blades). It re-derives the node from the live
+// query by name (not a row snapshot), so a re-enroll (which flips enrolled / stamps
+// enrolled_at) reflects after the invalidate. A node has no editable fields, so no
+// pencil; the footer carries Enroll / Re-enroll as its one prominent action. The
+// Tasks panel lists the node's derived tasks (read-only): a task's node placement
+// projects from its interface, so it is read here, never authored.
+function NodeBladeBody(props: { name: string; onEnrolled: (out: EnrollOutput) => void }): JSX.Element {
   const qc = useQueryClient();
+  const me = useMe();
+  const edit = useBladeEdit();
   const nodes = useQuery(() => ({ queryKey: NODES_KEY, queryFn: () => listNodes() }));
+  const tasks = useQuery(() => ({ queryKey: TASKS_KEY, queryFn: () => listTasks() }));
+  const interfaces = useQuery(() => ({ queryKey: INTERFACES_KEY, queryFn: () => listInterfaces() }));
   const n = createMemo(() => nodes.data?.find((x) => x.name === props.name) ?? null);
-  const [busy, setBusy] = createSignal(false);
   const [err, setErr] = createSignal<string | null>(null);
+  const [busy, setBusy] = createSignal(false);
+  const canEnroll = () => can(me.data, "node", "enroll");
 
-  async function doEnroll(node: Node) {
+  // The node's derived tasks, resolved to their interface's friendly name (a task
+  // carries the surrogate interface_id). Mode is the badge; the enabled state is the
+  // sub-label. Read-only: no drill, no remove.
+  const ifaceName = (id: string) => interfaces.data?.find((i) => i.id === id)?.name ?? id;
+  const nodeTasks = createMemo<RelatedItem[]>(() =>
+    (tasks.data ?? [])
+      .filter((t) => t.node === props.name)
+      .map((t) => ({ id: t.id, kind: "task", name: ifaceName(t.interface_id), sub: t.enabled ? "enabled" : "disabled", badge: t.mode })),
+  );
+
+  async function doEnroll() {
+    const node = n();
+    if (!node || busy()) return;
     setBusy(true);
     setErr(null);
     try {
@@ -138,10 +166,18 @@ function NodeDetail(props: { name: string; canEnroll: boolean; onEnrolled: (out:
     }
   }
 
+  // A node has no operator-editable fields (name / description are set at creation),
+  // so the body is never editable; its one prominent footer action is Enroll /
+  // Re-enroll, gated on node:enroll.
+  edit.bind({
+    editable: () => false,
+    primary: () => (canEnroll() && n() ? { label: n()!.enrolled ? "Re-enroll" : "Enroll", onClick: () => void doEnroll() } : undefined),
+  });
+
   return (
-    <Show when={n()} fallback={<p class="py-8 text-center text-sm text-base-content/40">This node is no longer available.</p>}>
+    <Show when={n()} fallback={<p class="text-sm text-base-content/50">This node is no longer available.</p>}>
       {(node) => (
-        <div class="flex flex-col gap-3">
+        <div class="flex flex-col gap-4">
           <div class="flex items-center gap-3">
             <span class="text-base-content/40"><Server size={22} /></span>
             <StatusPill node={node()} />
@@ -151,7 +187,7 @@ function NodeDetail(props: { name: string; canEnroll: boolean; onEnrolled: (out:
             <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
           </Show>
 
-          <div class="grid grid-cols-2 gap-3 text-sm">
+          <div class="grid grid-cols-2 gap-4">
             <Fact label="Name" value={<span class="font-data">{node().name}</span>} />
             <Fact label="Status" value={STATUS[nodeStatus(node())].label} />
             <Fact label="Last heartbeat" value={node().last_heartbeat_at ? rel(node().last_heartbeat_at!) : <span class="text-base-content/40">never</span>} />
@@ -161,17 +197,16 @@ function NodeDetail(props: { name: string; canEnroll: boolean; onEnrolled: (out:
             </Show>
           </div>
 
-          <Show when={props.canEnroll}>
-            <div class="flex items-center gap-2 border-t border-base-300 pt-3">
-              <span class="text-xs text-base-content/50">
-                {node().enrolled ? "Re-mint the enrollment token (the old one stops working)." : "Mint the enrollment token to connect this node."}
-              </span>
-              <span class="flex-1" />
-              <Button intent="action" onClick={() => doEnroll(node())} disabled={busy()}>
-                <Show when={busy()}><span class="loading loading-spinner loading-xs" /></Show>
-                {node().enrolled ? "Re-enroll" : "Enroll"}
-              </Button>
-            </div>
+          <RelatedList
+            label="Tasks"
+            items={nodeTasks()}
+            empty="No tasks. A task derives when an interface placed on this node is created."
+          />
+
+          <Show when={canEnroll()}>
+            <p class="text-xs text-base-content/50">
+              {node().enrolled ? "Re-mint the enrollment token (the old one stops working)." : "Mint the enrollment token to connect this node."}
+            </p>
           </Show>
         </div>
       )}

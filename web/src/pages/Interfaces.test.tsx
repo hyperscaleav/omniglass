@@ -7,9 +7,10 @@ import { COMPONENTS_KEY } from "../lib/components";
 import { NODES_KEY } from "../lib/nodes";
 import { ME_KEY, type Me } from "../lib/auth";
 
-// The Interfaces page is a config over the shared FlatList: a row per interface, a
-// row opening the side Drawer detail (facts + inline edit + delete), and a create
-// Drawer. Data is seeded into the query cache so no server is needed.
+// The Interfaces page is a config over the shared FlatList: a row per interface
+// (one protocol token, not a redundant name-and-type pair), a row opening the blade
+// detail (facts + inline edit + delete), and a create Drawer. Data is seeded into
+// the query cache so no server is needed.
 const seed: Interface[] = [
   { id: "if-1", name: "disp-1-tcp", type: "tcp", component: "disp-1", node: "edge-hq", params: { target: "10.0.0.1:22" } },
   { id: "if-2", name: "disp-1-icmp", type: "icmp", component: "disp-1", params: { target: "10.0.0.1" } },
@@ -35,13 +36,14 @@ function mount(me: Me) {
 describe("Interfaces page", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("renders a row per interface with its type, component, node, and target", () => {
-    const { getByText, getAllByText } = mount(owner);
+  it("renders one protocol token per interface, plus component, node, and target", () => {
+    const { getByText } = mount(owner);
+    // The identity column is a single protocol token (name == type), not a separate
+    // Name text and Type badge.
     expect(getByText("disp-1-tcp")).toBeTruthy();
     expect(getByText("disp-1-icmp")).toBeTruthy();
     expect(getByText("srv-tcp")).toBeTruthy();
-    // type badges (tcp appears on two rows), the target, and the server-hosted marker.
-    expect(getAllByText("tcp").length).toBeGreaterThan(0);
+    // the target and the server-hosted marker.
     expect(getByText("10.0.0.1:22")).toBeTruthy();
     expect(getByText("server-hosted")).toBeTruthy(); // srv-tcp has no component
   });
@@ -54,10 +56,10 @@ describe("Interfaces page", () => {
     expect(screen.getByText("New interface")).toBeTruthy();
   });
 
-  it("hides Edit and Delete in the detail Drawer without update/delete perms", async () => {
+  it("hides Edit and Delete in the detail blade without update/delete perms", async () => {
     mount(reader);
     fireEvent.click(screen.getByText("disp-1-tcp"));
-    // Wait for the detail Drawer (a dialog) to render before asserting the gated
+    // Wait for the detail blade (a dialog) to render before asserting the gated
     // actions are absent, not just not-yet-rendered.
     await screen.findByRole("dialog");
     expect(screen.queryByText("Edit")).toBeNull();
