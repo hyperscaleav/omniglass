@@ -79,6 +79,20 @@ func TestComponentMakesAPI(t *testing.T) {
 		map[string]any{"display_name": "Acme Corp"}, http.StatusOK)
 	c.do(ownerTok, http.MethodGet, "/component-makes/acme", nil, http.StatusOK)
 
+	// A non-http(s) website scheme is refused server-side (defense-in-depth
+	// against a stored javascript:/data: href reaching a non-browser caller
+	// that bypasses the client's own scheme check), on both create and update.
+	// A normal https:// website succeeds.
+	c.do(ownerTok, http.MethodPost, "/component-makes",
+		map[string]any{"id": "evil", "display_name": "Evil", "website": "javascript:alert(1)"}, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodPost, "/component-makes",
+		map[string]any{"id": "acme2", "display_name": "Acme 2", "website": "https://acme.example"}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPatch, "/component-makes/acme",
+		map[string]any{"website": "javascript:alert(1)"}, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodPatch, "/component-makes/acme",
+		map[string]any{"website": "https://acme.example"}, http.StatusOK)
+	c.do(ownerTok, http.MethodDelete, "/component-makes/acme2", nil, http.StatusNoContent)
+
 	// The seeded official row (crestron) is read-only: 422 on patch and delete.
 	c.do(ownerTok, http.MethodPatch, "/component-makes/crestron",
 		map[string]any{"display_name": "X"}, http.StatusUnprocessableEntity)

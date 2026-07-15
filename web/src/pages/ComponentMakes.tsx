@@ -21,6 +21,21 @@ import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 // its id (a kebab id, create-only); official (seed-owned) rows are read-only,
 // same as the Types catalog's official rows: no Edit pencil, no Delete.
 
+// safeUrl allows only http(s) hrefs through to a live anchor. Website is
+// operator-entered free text; without this check a stored javascript:/data:
+// URL would execute on click (stored XSS). A value that fails the check
+// still renders, as plain text (see MakeBladeBody), so nothing is silently
+// dropped.
+const safeUrl = (u?: string): string | undefined => {
+  if (!u) return undefined;
+  try {
+    const p = new URL(u);
+    return p.protocol === "http:" || p.protocol === "https:" ? p.toString() : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
 function officialBadge(official: boolean): JSX.Element {
   return official
     ? <span class="badge badge-ghost badge-sm">official</span>
@@ -192,7 +207,16 @@ function MakeBladeBody(p: { id: string }): JSX.Element {
               when={edit.editing()}
               fallback={
                 <Show when={r().website} fallback={<div class="input input-bordered flex items-center text-sm">—</div>}>
-                  <a class="link input input-bordered flex items-center text-sm" href={r().website} target="_blank" rel="noreferrer">{r().website}</a>
+                  <Show
+                    when={safeUrl(r().website)}
+                    fallback={<div class="input input-bordered flex items-center text-sm">{r().website}</div>}
+                  >
+                    {(href) => (
+                      <a class="link input input-bordered flex items-center text-sm" href={href()} target="_blank" rel="noreferrer">
+                        {r().website}
+                      </a>
+                    )}
+                  </Show>
                 </Show>
               }
             >

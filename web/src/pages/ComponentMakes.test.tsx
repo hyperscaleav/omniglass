@@ -13,6 +13,7 @@ import { ME_KEY, type Me } from "../lib/auth";
 const seed: ComponentMake[] = [
   { id: "crestron", display_name: "Crestron", official: true, icon: "crestron-logo" },
   { id: "acme-av", display_name: "Acme AV", official: false, website: "https://acme.example" },
+  { id: "evil-corp", display_name: "Evil Corp", official: false, website: "javascript:alert(document.cookie)" },
 ];
 
 const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
@@ -69,5 +70,31 @@ describe("ComponentMakes page", () => {
   it("hides New make for a caller without make:create", () => {
     mount(viewer);
     expect(screen.queryByText(/New make/i)).toBeNull();
+  });
+
+  it("renders a normal https website as a live link", async () => {
+    mount();
+    fireEvent.click(screen.getByText("Acme AV"));
+    const blade = await waitFor(() => {
+      const el = asides()[0];
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    const link = await within(blade).findByText("https://acme.example");
+    expect(link.tagName).toBe("A");
+    expect(link).toHaveAttribute("href", "https://acme.example/");
+  });
+
+  it("does not render a javascript: website as a live link (stored XSS guard)", async () => {
+    mount();
+    fireEvent.click(screen.getByText("Evil Corp"));
+    const blade = await waitFor(() => {
+      const el = asides()[0];
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    const value = await within(blade).findByText("javascript:alert(document.cookie)");
+    expect(value.tagName).not.toBe("A");
+    expect(blade.querySelector('a[href^="javascript:"]')).not.toBeInTheDocument();
   });
 });

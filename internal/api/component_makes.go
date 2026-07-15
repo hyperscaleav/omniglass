@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"net/http"
+	"net/url"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/hyperscaleav/omniglass/internal/storage"
@@ -60,6 +61,22 @@ type componentMakeOutput struct {
 	Body componentMakeBody
 }
 
+// validWebsiteScheme is defense-in-depth against a stored javascript:/data:
+// href: an empty website is fine (the field is optional), but a non-empty
+// one must parse as an absolute http(s) URL. The client applies the same
+// scheme check before it renders a link; this closes the gap for a
+// non-browser caller (CLI/curl) that bypasses the client entirely.
+func validWebsiteScheme(website string) bool {
+	if website == "" {
+		return true
+	}
+	u, err := url.Parse(website)
+	if err != nil {
+		return false
+	}
+	return u.Scheme == "http" || u.Scheme == "https"
+}
+
 // registerComponentMakeRoutes wires the component_make registry CRUD surface,
 // on the same pattern as the component/location/system type registries. Gated
 // by make:read|create|update|delete: make:read sits in the viewer read-floor
@@ -94,6 +111,9 @@ func registerComponentMakeRoutes(api huma.API, a *authenticator, gw storage.Gate
 		Description:   "Creates a custom (non-official) component_make. Gated by make:create.",
 		Middlewares:   huma.Middlewares{a.authn, a.require("make", "create")},
 	}, func(ctx context.Context, in *createComponentMakeInput) (*componentMakeOutput, error) {
+		if !validWebsiteScheme(in.Body.Website) {
+			return nil, huma.Error422UnprocessableEntity("website must be an http or https URL")
+		}
 		m, err := gw.CreateComponentMake(ctx, actorID(ctx), storage.ComponentMake{
 			ID: in.Body.ID, DisplayName: in.Body.DisplayName, Icon: in.Body.Icon,
 			SupportPhone: in.Body.SupportPhone, Website: in.Body.Website,
@@ -127,6 +147,9 @@ func registerComponentMakeRoutes(api huma.API, a *authenticator, gw storage.Gate
 		Description: "Patches a custom component_make's display_name, icon, support_phone, or website. Official makes are read-only (422). Gated by make:update.",
 		Middlewares: huma.Middlewares{a.authn, a.require("make", "update")},
 	}, func(ctx context.Context, in *updateComponentMakeInput) (*componentMakeOutput, error) {
+		if in.Body.Website != nil && !validWebsiteScheme(*in.Body.Website) {
+			return nil, huma.Error422UnprocessableEntity("website must be an http or https URL")
+		}
 		m, err := gw.UpdateComponentMake(ctx, actorID(ctx), in.ID, storage.ComponentMakePatch{
 			DisplayName: in.Body.DisplayName, Icon: in.Body.Icon,
 			SupportPhone: in.Body.SupportPhone, Website: in.Body.Website,
