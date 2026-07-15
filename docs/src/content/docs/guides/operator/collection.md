@@ -28,26 +28,26 @@ and a description. A row opens the node's detail.
 
 ## Interfaces
 
-**Inventory > Interfaces** (with `interface:read`) lists the **APIs on components** that a
-node reaches for. An interface is **named by its protocol**: you pick a **type** (the
-transport) and the interface takes that protocol as its name, unique within its component, so
-one component can have one `tcp` and one `http`. Each row shows the interface's protocol name,
-its type, its owning component (or **server-hosted**), its node placement, and its probed
-target.
+An interface is an **API on a component** that a node reaches for, and it lives **on the
+component**: there is no standalone Interfaces surface. Open a component from **Inventory >
+Components** (with `interface:read`) and its interfaces read as a panel on the detail, each
+showing the interface's protocol name, its reachability, its node placement, and its probed
+target. An interface is **named by its protocol**: you pick a **type** (the transport) and the
+interface takes that protocol as its name, unique within its component, so one component can
+have one `tcp` and one `http`.
 
-- With `interface:create`, **New interface** creates one: choose a **type** (the built types
-  are `icmp`, `tcp`, `ssh`, and `http`; there is no free-text name), the owning component,
-  a node placement, and a target (`host:port` for the tcp-family transports, `host` for
-  icmp). Creating an interface **derives its poll task** for you, so a fresh interface is a
-  working reachability check with no second step.
-- With `interface:update`, **Edit** changes only the **node placement** and the **target**;
-  the type (and so the protocol name) and the owning component are fixed at creation.
-- With `interface:delete`, **Delete** removes it, refused while its derived task still
-  references it.
+- With `interface:create`, **Add interface** on the component detail creates one: choose a
+  **type** (the built types are `icmp`, `tcp`, `ssh`, and `http`; there is no free-text name),
+  a node placement, and a target (`host:port` for the tcp-family transports, `host` for icmp).
+  The owning component is the one you are on. Creating an interface **derives its poll task**
+  for you, so a fresh interface is a working reachability check with no second step.
+- With `interface:update`, editing an interface changes only its **node placement** and its
+  **target**; the type (and so the protocol name) is fixed at creation.
+- With `interface:delete`, deleting an interface removes it and **cascades its derived task**.
 
 Because an interface belongs to a component, it inherits that component's scope: an interface
-on a component outside your scope is not listed and is a non-disclosing 404 if addressed
-directly. A node **purge cascades** its interfaces and their derived tasks.
+on a component outside your scope is not shown. A node **purge cascades** its interfaces and
+their derived tasks.
 
 ## Tasks
 

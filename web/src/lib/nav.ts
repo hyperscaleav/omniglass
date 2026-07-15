@@ -45,9 +45,9 @@ export const navItems: NavItem[] = [
       { label: "Components", path: "/components", live: true, resource: "component", hint: "The component inventory, with declared config, props, and tags. Device interfaces are a panel on the component." },
       { label: "Systems", path: "/systems", live: true, resource: "system", hint: "Location and system trees, navigable, with health at each level." },
       { label: "Locations", path: "/locations", live: true, resource: "location", hint: "The place tree: campuses, buildings, floors, and rooms." },
-      // An interface is an API on a component, named by its protocol. The tasks a
-      // node runs are derived and read as a panel on the node, not a separate nav entry.
-      { label: "Interfaces", path: "/interfaces", live: true, resource: "interface", hint: "The APIs on components, named by protocol, with their reachability and device credentials." },
+      // An interface is an API on a component, named by its protocol, so it surfaces
+      // as a panel on the component detail, not a separate nav entry. The tasks a
+      // node runs are likewise a panel on the node.
       { label: "Nodes", path: "/nodes", live: true, resource: "node", hint: "Collection daemons: their health, enrollment, and the collection tasks assigned to each." },
     ],
   },

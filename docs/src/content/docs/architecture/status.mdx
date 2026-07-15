@@ -1188,10 +1188,12 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   grants are gone, leaving `GET /tasks` and `GET /tasks/{id}`. `task.node_name` is dropped and **projected** from
   `interface.node_name` (the worklist and the telemetry owner-confinement now join the interface for placement),
   and a **node purge cascades** its interfaces and their tasks (`interface.node_name` and `task.interface_id` are
-  `ON DELETE CASCADE`). The console follows: the standalone Tasks page and its `/tasks` route are removed and a
-  node's derived tasks read as a **panel on the node detail**, the interface create form drops the name input, the
-  interface and node detail move onto the shared read-edit-save blade, and the collection pages route through the
-  shared Button primitive.
+  `ON DELETE CASCADE`). The console follows the entity model, folding the collection children onto their parents:
+  the standalone Tasks page is removed and a node's derived tasks read as a **panel on the node detail**, and the
+  standalone Interfaces tab is removed and a component's interfaces (with their reachability, add, and edit/delete)
+  read as a **panel on the component detail** (an interface belongs to its component). The interface create form
+  drops the name input (name derives from the protocol), the node detail moves onto the shared read-edit-save blade,
+  and the collection pages route through the shared Button primitive.
   Storage, the API, the CLI, and the typed client regenerate from the reduced surface, so `make gen` is clean.
   Proven by the reduced storage, API, and web suites over the derived model (an interface derives its task, the
   task surface is read-only, placement projects, a node purge cascades). This keeps the [collection](/architecture/collection/)

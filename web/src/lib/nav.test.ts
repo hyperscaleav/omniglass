@@ -37,10 +37,10 @@ describe("filterNav", () => {
     expect(out[0].children!.map((c) => c.label)).toEqual(["Systems"]);
   });
 
-  it("orders the inventory section Components, Systems, Locations, Interfaces, Nodes", () => {
+  it("orders the inventory section Components, Systems, Locations, Nodes", () => {
     const inv = navItems.find((i) => i.label === "Inventory");
     expect(inv?.children?.map((c) => c.label)).toEqual([
-      "Components", "Systems", "Locations", "Interfaces", "Nodes",
+      "Components", "Systems", "Locations", "Nodes",
     ]);
   });
 
@@ -51,7 +51,7 @@ describe("filterNav", () => {
     expect(labels).not.toContain("Systems");
     expect(labels).not.toContain("Components");
     expect(labels).not.toContain("Locations");
-    expect(labels).toContain("Interfaces"); // gated on interface:read, which this filter allows
+    expect(labels).toContain("Nodes"); // gated on node:read, which this filter allows
   });
 
   // The owner regression (owner's only grant is the `>` tail): every gated tab must
@@ -127,7 +127,6 @@ describe("routeTokens", () => {
     expect(routeTokens("/web/locations")).toEqual(["location", "read"]);
     expect(routeTokens("/web/components")).toEqual(["component", "read"]);
     expect(routeTokens("/web/systems")).toEqual(["system", "read"]);
-    expect(routeTokens("/web/interfaces")).toEqual(["interface", "read"]);
     expect(routeTokens("/web/users")).toEqual(["principal", "read", "admin"]);
     expect(routeTokens("/web/roles")).toEqual(["role", "read", "admin"]);
     expect(routeTokens("/web/groups")).toEqual(["principal_group", "read", "admin"]);
@@ -156,7 +155,7 @@ describe("routeTokens", () => {
 
 describe("nav IA rework", () => {
   it("puts the estate entities under Inventory and the operator-set values under Values", () => {
-    expect(section("Inventory", [">"])).toEqual(["Components", "Systems", "Locations", "Interfaces", "Nodes"]);
+    expect(section("Inventory", [">"])).toEqual(["Components", "Systems", "Locations", "Nodes"]);
     expect(section("Values", [">"])).toEqual(["Variables", "Secrets", "Config", "Files"]);
   });
 
@@ -180,6 +179,5 @@ describe("nav IA rework", () => {
     expect(routeTokens("/web/config")).toBeNull();
     expect(routeTokens("/web/settings")).toBeNull();
     expect(routeTokens("/web/nodes")).toEqual(["node", "read"]); // node directory is live, gated on node:read
-    expect(routeTokens("/web/interfaces")).toEqual(["interface", "read"]); // interface directory is live, gated on interface:read
   });
 });

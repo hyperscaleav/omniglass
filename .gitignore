@@ -56,3 +56,4 @@ coverage.txt
 .superpowers-shot-token.txt
 .infra-build.log
 .server.log
+**/node_modules.broken.bak/

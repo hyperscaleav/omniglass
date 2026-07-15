@@ -1,9 +1,8 @@
 import { For, Show, createEffect, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
-import FlatList, { type FlatColumn } from "../components/FlatList";
-import Button from "../components/Button";
-import { Sliders } from "../components/icons";
-import { Fact } from "../components/DetailShell";
+import Button from "./Button";
+import { Sliders } from "./icons";
+import { Fact } from "./DetailShell";
 import {
   type Interface,
   type UpdateInterface,
@@ -14,71 +13,42 @@ import {
   updateInterface,
   deleteInterface,
   interfaceTarget,
-  interfaceFilterKeys,
 } from "../lib/interfaces";
+import { REACHABILITY_KEY } from "../lib/reachability";
 import { COMPONENTS_KEY, listComponents } from "../lib/components";
 import { NODES_KEY, listNodes } from "../lib/nodes";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
-// Interfaces: the connection-endpoint inventory, a config over the shared FlatList
-// (the flat sibling of the inventory TreeList). An interface is an API on a
-// component, named by its protocol (its name is the protocol; name == type), so the
-// list shows ONE protocol token per row, not a redundant name-and-type pair, then
-// the owning component, node placement, and probed target. A row opens the blade
-// detail (facts + an inline edit of the mutable fields + delete); "New interface"
-// opens the create Drawer. The type picker offers the built types (icmp, tcp) this
-// slice ships (there is no interface_type list endpoint). Every gate is a UI hint;
-// the server is the authority. Renders only real InterfaceBody fields.
-const columns: FlatColumn<Interface>[] = [
-  {
-    key: "name", label: "Interface", sortVal: (i) => i.name.toLowerCase(),
-    cell: (i) => (
-      <div class="flex items-center gap-2.5">
-        <span class="text-base-content/40"><Sliders size={16} /></span>
-        <span class="truncate font-data text-sm font-medium">{i.name}</span>
-      </div>
-    ),
-  },
-  {
-    key: "component", label: "Component", width: "180px", sortVal: (i) => (i.component ?? "").toLowerCase(),
-    cell: (i) => (i.component ? <span class="font-data text-sm text-base-content/70">{i.component}</span> : <span class="text-base-content/30">server-hosted</span>),
-  },
-  {
-    key: "node", label: "Node", width: "150px", sortVal: (i) => (i.node ?? "").toLowerCase(),
-    cell: (i) => (i.node ? <span class="font-data text-sm text-base-content/70">{i.node}</span> : <span class="text-base-content/30">-</span>),
-  },
-  {
-    key: "target", label: "Target", width: "170px", sortVal: (i) => interfaceTarget(i),
-    cell: (i) => { const t = interfaceTarget(i); return t ? <span class="font-data text-xs text-base-content/60">{t}</span> : <span class="text-base-content/30">-</span>; },
-  },
-];
+// The interface blades, salvaged from the retired standalone Interfaces page and
+// folded onto the component detail's shared blade stack (an interface belongs to
+// its component, so it surfaces as a panel there, not a top-level tab). Two kinds:
+//   interface        the read -> edit -> save detail blade (edit node placement and
+//                    target, Delete), addressed by the interface's surrogate id.
+//   interface-create the new-interface Drawer body, addressed by the OWNING
+//                    component's name (an interface added from a component always
+//                    belongs to it), so the create form pre-sets and hides the
+//                    component picker.
+// Both invalidate the interfaces list AND the component's reachability read after a
+// write, so the component's Interfaces panel (ReachabilityPanel) refreshes. They
+// deliberately never touch the components query, so the TreeList blade index stays
+// stable and the blade survives on the stack (like the secret cascade blade).
 
-export default function Interfaces() {
-  const me = useMe();
+function useInterfaceById(id: string): () => Interface | null {
   const interfaces = useQuery(() => ({ queryKey: INTERFACES_KEY, queryFn: () => listInterfaces() }));
+  return () => interfaces.data?.find((x) => x.id === id) ?? null;
+}
 
+// A node-placement select shared by the create and edit forms: the enrolled nodes
+// plus an unassigned option. The value is the node's name (its address).
+function NodeSelect(props: { value: string; onChange: (v: string) => void; disabled?: boolean; id?: string; allowNone?: boolean }) {
+  const nodes = useQuery(() => ({ queryKey: NODES_KEY, queryFn: () => listNodes() }));
   return (
-    <FlatList<Interface>
-      config={{
-        entity: { name: "interface", plural: "interfaces" },
-        rows: () => interfaces.data ?? [],
-        loading: () => interfaces.isLoading,
-        error: () => interfaces.error,
-        filterKeys: interfaceFilterKeys,
-        filterPlaceholder: "filter by name, type, component",
-        columns,
-        empty: "No interfaces yet.",
-        rowId: (i) => i.id,
-        blades: { registry: { interface: interfaceBlade }, rootKind: "interface" },
-        create: {
-          label: "New interface",
-          can: () => can(me.data, "interface", "create"),
-          body: (ctx) => <CreateInterfaceForm close={ctx.close} onCreated={ctx.select} />,
-        },
-      }}
-    />
+    <select id={props.id} class="select select-bordered w-full" value={props.value} disabled={props.disabled} onChange={(e) => props.onChange(e.currentTarget.value)}>
+      <Show when={props.allowNone ?? true}><option value="">Unassigned</option></Show>
+      <For each={nodes.data}>{(n) => <option value={n.name}>{n.name}</option>}</For>
+    </select>
   );
 }
 
@@ -90,11 +60,6 @@ export const interfaceBlade: BladeDef = {
   Title: (p) => <InterfaceBladeTitle id={p.id} />,
   Body: (p) => <InterfaceBladeBody id={p.id} />,
 };
-
-function useInterfaceById(id: string): () => Interface | null {
-  const interfaces = useQuery(() => ({ queryKey: INTERFACES_KEY, queryFn: () => listInterfaces() }));
-  return () => interfaces.data?.find((x) => x.id === id) ?? null;
-}
 
 function InterfaceBladeTitle(props: { id: string }): JSX.Element {
   const iface = useInterfaceById(props.id);
@@ -116,6 +81,13 @@ function InterfaceBladeBody(props: { id: string }): JSX.Element {
   const [target, setTarget] = createSignal("");
   const [err, setErr] = createSignal<string | null>(null);
 
+  // Invalidate the interfaces list and, when the interface is on a component, that
+  // component's reachability read, so the component's Interfaces panel refreshes.
+  async function refresh(iface: Interface) {
+    await qc.invalidateQueries({ queryKey: INTERFACES_KEY });
+    if (iface.component) await qc.invalidateQueries({ queryKey: REACHABILITY_KEY(iface.component) });
+  }
+
   createEffect(on(edit.editing, (editing) => {
     if (!editing) return;
     const iface = i();
@@ -131,8 +103,10 @@ function InterfaceBladeBody(props: { id: string }): JSX.Element {
     setErr(null);
     try {
       await deleteInterface(iface.id);
-      blades.close();
-      await qc.invalidateQueries({ queryKey: INTERFACES_KEY });
+      // Pop just this blade (not the whole stack): a component opened as a blade
+      // behind it must stay.
+      blades.pop();
+      await refresh(iface);
     } catch (e) {
       setErr(describeError(e));
     }
@@ -149,7 +123,7 @@ function InterfaceBladeBody(props: { id: string }): JSX.Element {
     setErr(null);
     try {
       await updateInterface(iface.id, patch);
-      await qc.invalidateQueries({ queryKey: INTERFACES_KEY });
+      await refresh(iface);
     } catch (e) {
       setErr(describeError(e));
       throw e; // keep the blade in edit mode on failure
@@ -205,27 +179,41 @@ function InterfaceBladeBody(props: { id: string }): JSX.Element {
   );
 }
 
-// A node-placement select shared by the create and edit forms: the enrolled nodes
-// plus an unassigned option. The value is the node's name (its address).
-function NodeSelect(props: { value: string; onChange: (v: string) => void; disabled?: boolean; id?: string; allowNone?: boolean }) {
-  const nodes = useQuery(() => ({ queryKey: NODES_KEY, queryFn: () => listNodes() }));
+// interfaceCreateBlade hosts the new-interface form on the shared blade stack,
+// addressed by the OWNING component's name. On success it invalidates the
+// component's reachability read (the form already invalidates the interfaces list)
+// and swaps itself for the created interface's detail blade.
+export const interfaceCreateBlade: BladeDef = {
+  Title: () => <span>New interface</span>,
+  Body: (p) => <InterfaceCreateBody component={p.id} />,
+};
+
+function InterfaceCreateBody(props: { component: string }): JSX.Element {
+  const qc = useQueryClient();
+  const blades = useBlades();
   return (
-    <select id={props.id} class="select select-bordered w-full" value={props.value} disabled={props.disabled} onChange={(e) => props.onChange(e.currentTarget.value)}>
-      <Show when={props.allowNone ?? true}><option value="">Unassigned</option></Show>
-      <For each={nodes.data}>{(n) => <option value={n.name}>{n.name}</option>}</For>
-    </select>
+    <CreateInterfaceForm
+      component={props.component}
+      close={() => blades.pop()}
+      onCreated={(created) => {
+        void qc.invalidateQueries({ queryKey: REACHABILITY_KEY(props.component) });
+        blades.pop();
+        blades.push({ kind: "interface", id: created.id });
+      }}
+    />
   );
 }
 
-// CreateInterfaceForm is the new-interface form the create Drawer hosts: type (the
-// built types), owning component (or server-hosted), node placement, and the probed
-// target. On success it invalidates the list and hands the created interface to
-// onCreated, which opens its detail blade.
-function CreateInterfaceForm(props: { close: () => void; onCreated: (i: Interface) => void }) {
+// CreateInterfaceForm is the new-interface form: type (the built types), owning
+// component (or server-hosted), node placement, and the probed target. When
+// `component` is set the interface always belongs to it, so the form pre-sets that
+// component and hides the picker. On success it invalidates the list and hands the
+// created interface to onCreated, which opens its detail blade.
+function CreateInterfaceForm(props: { close: () => void; onCreated: (i: Interface) => void; component?: string }) {
   const qc = useQueryClient();
-  const components = useQuery(() => ({ queryKey: COMPONENTS_KEY, queryFn: () => listComponents() }));
+  const components = useQuery(() => ({ queryKey: COMPONENTS_KEY, queryFn: () => listComponents(), enabled: !props.component }));
   const [type, setType] = createSignal<string>(INTERFACE_TYPES[0]);
-  const [component, setComponent] = createSignal("");
+  const [component, setComponent] = createSignal(props.component ?? "");
   const [node, setNode] = createSignal("");
   const [target, setTarget] = createSignal("");
   const [busy, setBusy] = createSignal(false);
@@ -263,13 +251,23 @@ function CreateInterfaceForm(props: { close: () => void; onCreated: (i: Interfac
           <For each={INTERFACE_TYPES}>{(t) => <option value={t}>{t}</option>}</For>
         </select>
       </div>
-      <div>
-        <label class="eyebrow mb-1.5 block" for="new-iface-component">Component</label>
-        <select id="new-iface-component" class="select select-bordered w-full" value={component()} onChange={(e) => setComponent(e.currentTarget.value)} disabled={busy()}>
-          <option value="">Server-hosted (no component)</option>
-          <For each={components.data}>{(c) => <option value={c.name}>{c.display_name || c.name}</option>}</For>
-        </select>
-      </div>
+      <Show
+        when={props.component}
+        fallback={
+          <div>
+            <label class="eyebrow mb-1.5 block" for="new-iface-component">Component</label>
+            <select id="new-iface-component" class="select select-bordered w-full" value={component()} onChange={(e) => setComponent(e.currentTarget.value)} disabled={busy()}>
+              <option value="">Server-hosted (no component)</option>
+              <For each={components.data}>{(c) => <option value={c.name}>{c.display_name || c.name}</option>}</For>
+            </select>
+          </div>
+        }
+      >
+        <div>
+          <span class="eyebrow mb-1.5 block">Component</span>
+          <div class="input input-bordered flex w-full items-center font-data text-sm text-base-content/70">{props.component}</div>
+        </div>
+      </Show>
       <div>
         <label class="eyebrow mb-1.5 block" for="new-iface-node">Node</label>
         <NodeSelect id="new-iface-node" value={node()} onChange={setNode} disabled={busy()} />

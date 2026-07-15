@@ -16,7 +16,6 @@ import Systems from "./pages/Systems";
 import Components from "./pages/Components";
 import Profile from "./pages/Profile";
 import Nodes from "./pages/Nodes";
-import Interfaces from "./pages/Interfaces";
 import Users from "./pages/Users";
 import Roles from "./pages/Roles";
 import Groups from "./pages/Groups";
@@ -76,7 +75,6 @@ render(
           <Route path="/components" component={Components} />
           <Route path="/components/:name" component={Components} />
           <Route path="/nodes" component={Nodes} />
-          <Route path="/interfaces" component={Interfaces} />
           {/* Files are a flat, tenant-wide list addressed by id (names are not
               unique across files); the :id route is the addressable full-page detail. */}
           <Route path="/files" component={Files} />
