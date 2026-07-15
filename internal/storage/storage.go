@@ -237,6 +237,17 @@ type Gateway interface {
 	ComponentNameTaken(ctx context.Context, name string) (bool, error)
 	DeleteComponent(ctx context.Context, actorID, name string, read, action scope.Set) error
 
+	// The component_make registry: a flat manufacturer registry (Cisco,
+	// Crestron, ...), same shape and official-read-only guard as the type
+	// registries above but with no tree and no in-use delete guard in this
+	// slice (component_model will reference it later).
+	UpsertComponentMake(ctx context.Context, m ComponentMake) error
+	ListComponentMakes(ctx context.Context) ([]ComponentMake, error)
+	GetComponentMake(ctx context.Context, id string) (*ComponentMake, error)
+	CreateComponentMake(ctx context.Context, actorID string, m ComponentMake) (*ComponentMake, error)
+	UpdateComponentMake(ctx context.Context, actorID, id string, patch ComponentMakePatch) (*ComponentMake, error)
+	DeleteComponentMake(ctx context.Context, actorID, id string) error
+
 	// The secret tier: a shape registry, scoped CRUD, an audited reveal, and the
 	// cascade resolver. A secret is owned on the exclusive arc (global or one of
 	// the three trees) and encrypted at rest; ResolveSecrets is the per-component

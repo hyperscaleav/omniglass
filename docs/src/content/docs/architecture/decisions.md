@@ -64,6 +64,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0027](#adr-0027-create-is-a-route-inventory-create-and-edit-unify-on-the-detail-accordion) | 2026-07-14 | Accepted | Inventory create/edit unify on the detail accordion: `New` routes to `/<entity>/create` (a draft) and Save hands off to `/<entity>/<id>` in edit; view is read-only, edit is the sole writer; the create/edit Drawer is retired |
 | [ADR-0028](#adr-0028-rank-retired-from-the-type-registries-sort-is-alphabetical) | 2026-07-14 | Accepted | `rank` is dropped from `location_type`, `system_type`, and `component_type`; the three list operations sort by `display_name, id` instead |
 | [ADR-0029](#adr-0029-files-slice-1-a-content-addressed-blob-store-and-a-tenant-wide-file-handle) | 2026-07-14 | Accepted | Files slice 1: a content-addressed `blob` store primitive (pgblobs) and a tenant-wide `file` handle; no placement arc (a file is 1:many, its locality is a future attachment), a binary `sensitive` flag reusing the secret `:admin` tier (defaults off), a delete frees its unreferenced blob synchronously (async mark-sweep GC deferred), base64-in-JSON on the wire |
+| [ADR-0031](#adr-0031-component_make-registry-slice-1-an-official-boolean-a-deferred-referential-guard-and-website-scheme-validation) | 2026-07-14 | Accepted | `component_make` slice 1: an `official` boolean (not an `origin` enum) for consistency with the type registries; the in-use referential delete guard deferred to the `component_model` slice (nothing references a make yet); `website` scheme-validated to `http`/`https`, client and server, against stored XSS |
 
 ## Entries
 
@@ -780,3 +781,43 @@ below from the project's history. From here it grows one slice at a time.
   editable-Parent pattern to two more pages is a follow-up, not bundled here.
 - **Closes:** issue [#239](https://github.com/hyperscaleav/omniglass/issues/239). Design:
   `docs/superpowers/specs/2026-07-14-type-placement-constraints-design.md`.
+
+### ADR-0031: `component_make` registry slice 1, an `official` boolean, a deferred referential guard, and website scheme validation
+
+- **Date:** 2026-07-14 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/), [Makes guide](/guides/admin/makes/)
+- **Decision:** Three calls on the first slice of the `component_make` manufacturer registry (id,
+  display_name, icon, support_phone, website), lands ahead of the rest of the make/model catalog.
+  **(1) `official boolean`, not an `origin` enum.** The design sketch (below) proposed
+  `origin official | seed | custom` on make and model, matching the model layer's eventual needs.
+  Slice 1 ships a plain `official` boolean instead, because `component_type` and the other
+  registries already distinguish seed-owned from operator rows with a boolean, and a
+  two-value distinction gains nothing from a three-value enum until a real `seed` (installed,
+  mutable) tier exists to fill it; `origin` can still land on `component_model` if that tier turns
+  out to be real. **(2) The in-use / referential delete guard is deferred.** `component_type`,
+  `location_type`, and `system_type` all refuse a delete while a location, system, or component
+  still references the row (409). `component_make` ships **no equivalent guard**: nothing
+  references a `component_make` yet (`component_model`, the referencing entity, does not exist),
+  so a custom make deletes unconditionally (an official row is still refused, 422, the seed-owned
+  rule). The guard is added when `component_model` lands and gives the registry something to be
+  in-use by, rather than building an unused check now. **(3) Website URL scheme validation, client
+  and server.** The create/edit form renders `website` as a live anchor; an operator-entered value
+  with no scheme check is a stored-XSS vector (`javascript:`/`data:` executing on click). A
+  `validWebsiteScheme` guard on the API (`http`/`https` only, empty allowed, else 422) and a
+  matching `safeUrl` guard on the console (render a live link only when safe, else plain text,
+  never a dead or unsafe anchor) close it in both places: server-side so a non-browser caller
+  (CLI/curl) cannot persist a dangerous scheme, client-side so a value written before the
+  server-side check existed (or by any path that bypassed it) still renders safely.
+- **Context:** `docs/superpowers/specs/2026-07-14-component-make-model-catalog-design.md` sketches
+  the full make/model catalog (`component_make`, a `component_type` genus tree, `component_model`,
+  and `component.model_id`) as four independent vertical slices; this is slice 1, make alone, with
+  no dependency on the tree or the model layer. A review pass on the first cut of the console page
+  (Task 4) found the missing website-scheme check as a stored-XSS gap before this shipped, closed
+  in the same slice rather than carried as a follow-up.
+- **Divergences logged:** the design sketch's `origin official | seed | custom` enum is not what
+  shipped; `official boolean` did, per (1) above. The design's delete-refused-while-referenced rule
+  is not enforced yet; per (2), it is deferred to the `component_model` slice that gives it
+  something to check.
+- **Lands:** [epic #254](https://github.com/hyperscaleav/omniglass/issues/254), issue
+  [#255](https://github.com/hyperscaleav/omniglass/issues/255). Design:
+  `docs/superpowers/specs/2026-07-14-component-make-model-catalog-design.md`. Plan:
+  `docs/superpowers/plans/2026-07-14-component-make-registry.md`.

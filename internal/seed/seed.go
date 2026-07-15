@@ -27,6 +27,9 @@ var systemTypesYAML []byte
 //go:embed component_types.yaml
 var componentTypesYAML []byte
 
+//go:embed component_makes.yaml
+var componentMakesYAML []byte
+
 //go:embed secret_types.yaml
 var secretTypesYAML []byte
 
@@ -63,6 +66,15 @@ type componentTypesDoc struct {
 	} `yaml:"component_types"`
 }
 
+type componentMakesDoc struct {
+	ComponentMakes []struct {
+		ID          string `yaml:"id"`
+		DisplayName string `yaml:"display_name"`
+		Icon        string `yaml:"icon"`
+		Website     string `yaml:"website"`
+	} `yaml:"component_makes"`
+}
+
 type secretTypesDoc struct {
 	SecretTypes []struct {
 		ID                    string `yaml:"id"`
@@ -91,6 +103,9 @@ func Run(ctx context.Context, gw storage.Gateway) error {
 		return err
 	}
 	if err := seedComponentTypes(ctx, gw); err != nil {
+		return err
+	}
+	if err := seedComponentMakes(ctx, gw); err != nil {
 		return err
 	}
 	return seedSecretTypes(ctx, gw)
@@ -129,6 +144,25 @@ func seedComponentTypes(ctx context.Context, gw storage.Gateway) error {
 			ID:          ct.ID,
 			Official:    true,
 			DisplayName: ct.DisplayName,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func seedComponentMakes(ctx context.Context, gw storage.Gateway) error {
+	var doc componentMakesDoc
+	if err := yaml.Unmarshal(componentMakesYAML, &doc); err != nil {
+		return fmt.Errorf("seed: parse component_makes: %w", err)
+	}
+	for _, cm := range doc.ComponentMakes {
+		if err := gw.UpsertComponentMake(ctx, storage.ComponentMake{
+			ID:          cm.ID,
+			Official:    true,
+			DisplayName: cm.DisplayName,
+			Icon:        cm.Icon,
+			Website:     cm.Website,
 		}); err != nil {
 			return err
 		}
