@@ -21,12 +21,12 @@ var (
 	ErrUnknownComponentType    = errors.New("storage: unknown component_type")
 )
 
-// ComponentType is a registry row classifying a component.
+// ComponentType is a registry row classifying a component. The registry lists
+// alphabetically by display_name; there is no ordering field.
 type ComponentType struct {
 	ID          string
 	Official    bool
 	DisplayName string
-	Rank        int
 }
 
 // Component is a leaf of the estate: name-addressable, classified by
@@ -58,6 +58,7 @@ type ComponentSpec struct {
 // ComponentPatch is the update input: nil fields unchanged. Reparent, rebind,
 // and relocate are deferred.
 type ComponentPatch struct {
+	Name          *string
 	DisplayName   *string
 	ComponentType *string
 }
@@ -66,11 +67,11 @@ type ComponentPatch struct {
 
 func (p *PG) UpsertComponentType(ctx context.Context, ct ComponentType) error {
 	_, err := p.pool.Exec(ctx, `
-		insert into component_type (id, official, display_name, rank)
-		values ($1, $2, $3, $4)
+		insert into component_type (id, official, display_name)
+		values ($1, $2, $3)
 		on conflict (id) do update
-			set official = excluded.official, display_name = excluded.display_name, rank = excluded.rank`,
-		ct.ID, ct.Official, ct.DisplayName, ct.Rank)
+			set official = excluded.official, display_name = excluded.display_name`,
+		ct.ID, ct.Official, ct.DisplayName)
 	if err != nil {
 		return fmt.Errorf("storage: upsert component_type %q: %w", ct.ID, err)
 	}
@@ -78,7 +79,7 @@ func (p *PG) UpsertComponentType(ctx context.Context, ct ComponentType) error {
 }
 
 func (p *PG) ListComponentTypes(ctx context.Context) ([]ComponentType, error) {
-	rows, err := p.pool.Query(ctx, `select id, official, display_name, rank from component_type order by rank, id`)
+	rows, err := p.pool.Query(ctx, `select id, official, display_name from component_type order by display_name, id`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list component_types: %w", err)
 	}
@@ -86,12 +87,83 @@ func (p *PG) ListComponentTypes(ctx context.Context) ([]ComponentType, error) {
 	var out []ComponentType
 	for rows.Next() {
 		var ct ComponentType
-		if err := rows.Scan(&ct.ID, &ct.Official, &ct.DisplayName, &ct.Rank); err != nil {
+		if err := rows.Scan(&ct.ID, &ct.Official, &ct.DisplayName); err != nil {
 			return nil, fmt.Errorf("storage: scan component_type: %w", err)
 		}
 		out = append(out, ct)
 	}
 	return out, rows.Err()
+}
+
+// ComponentTypePatch carries the mutable fields of a component_type update; a nil
+// field is left unchanged.
+type ComponentTypePatch struct {
+	DisplayName *string
+}
+
+// CreateComponentType inserts a custom (official=false) component_type and audits
+// it. A duplicate id is ErrTypeExists.
+func (p *PG) CreateComponentType(ctx context.Context, actorID string, ct ComponentType) (*ComponentType, error) {
+	ct.Official = false
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("storage: begin create component_type: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	if _, err := tx.Exec(ctx,
+		`insert into component_type (id, official, display_name) values ($1, false, $2)`,
+		ct.ID, ct.DisplayName); err != nil {
+		if isUniqueViolation(err) {
+			return nil, ErrTypeExists
+		}
+		return nil, fmt.Errorf("storage: insert component_type %q: %w", ct.ID, err)
+	}
+	if err := writeAuditRes(ctx, tx, actorID, "create", "component_type", ct.ID, nil, ct); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("storage: commit create component_type: %w", err)
+	}
+	return &ct, nil
+}
+
+// UpdateComponentType patches a custom component_type's display_name (nil
+// unchanged) and audits it. Official rows are read-only; an unknown id is
+// ErrTypeNotFound.
+func (p *PG) UpdateComponentType(ctx context.Context, actorID, id string, patch ComponentTypePatch) (*ComponentType, error) {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("storage: begin update component_type: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	if err := guardTypeMutable(ctx, tx, "component_type", id); err != nil {
+		return nil, err
+	}
+	var ct ComponentType
+	if err := tx.QueryRow(ctx, `
+		update component_type set
+			display_name = coalesce($2, display_name)
+		where id = $1
+		returning id, official, display_name`,
+		id, patch.DisplayName).
+		Scan(&ct.ID, &ct.Official, &ct.DisplayName); err != nil {
+		return nil, fmt.Errorf("storage: update component_type %q: %w", id, err)
+	}
+	if err := writeAuditRes(ctx, tx, actorID, "update", "component_type", id, nil, ct); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("storage: commit update component_type: %w", err)
+	}
+	return &ct, nil
+}
+
+// DeleteComponentType removes a custom component_type, refusing an official row
+// and a row still referenced by a component.
+func (p *PG) DeleteComponentType(ctx context.Context, actorID, id string) error {
+	return deleteTypeRow(ctx, p, "component_type", "component_type", typeRef{table: "component", col: "component_type"}, actorID, id)
 }
 
 // --- component CRUD (read/delete via the generic helpers) --------------------
@@ -124,6 +196,19 @@ func (p *PG) DeleteComponent(ctx context.Context, actorID, name string, read, ac
 	return scopedDelete(ctx, p, componentConfig, actorID, name, read, action)
 }
 
+// ComponentNameTaken reports whether a component with this name exists.
+// Scope-blind by design: the name unique constraint is global, so availability
+// must be a global fact to match it (a scope-aware answer would false-positive
+// on a name held outside the caller's scope). Gated at the API by
+// component:update.
+func (p *PG) ComponentNameTaken(ctx context.Context, name string) (bool, error) {
+	var exists bool
+	if err := p.pool.QueryRow(ctx, `select exists(select 1 from component where name = $1)`, name).Scan(&exists); err != nil {
+		return false, fmt.Errorf("storage: component name taken: %w", err)
+	}
+	return exists, nil
+}
+
 // CreateComponent inserts a component under an optional parent, bound to an
 // optional system and location, writing the audit row in the same transaction.
 // A root component requires an all create scope; a child requires the parent in
@@ -134,6 +219,10 @@ func (p *PG) CreateComponent(ctx context.Context, actorID string, spec Component
 		return nil, fmt.Errorf("storage: begin create component: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+
+	if err := ValidateEntityName(spec.Name); err != nil {
+		return nil, err
+	}
 
 	var parentID *string
 	if spec.ParentName == nil {
@@ -204,14 +293,20 @@ func (p *PG) UpdateComponent(ctx context.Context, actorID, name string, patch Co
 	if err != nil {
 		return nil, err
 	}
+	if patch.Name != nil {
+		if err := ValidateEntityName(*patch.Name); err != nil {
+			return nil, err
+		}
+	}
 	after, err := scanComponent(tx.QueryRow(ctx, `
 		update component set
-			display_name   = coalesce($2, display_name),
-			component_type = coalesce($3, component_type),
+			name           = coalesce($2, name),
+			display_name   = coalesce($3, display_name),
+			component_type = coalesce($4, component_type),
 			updated_at     = now()
 		where id = $1
 		returning `+componentCols,
-		before.ID, patch.DisplayName, patch.ComponentType))
+		before.ID, patch.Name, patch.DisplayName, patch.ComponentType))
 	if err != nil {
 		return nil, mapComponentWriteErr(err)
 	}

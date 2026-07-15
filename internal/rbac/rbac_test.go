@@ -25,6 +25,16 @@ func TestSetAllows(t *testing.T) {
 		{"comma actions deny delete", []string{"component:create,update"}, "component", "delete", false},
 		{"resource wildcard action", []string{"component:*"}, "component", "anything", true},
 		{"empty set denies", nil, "x", "read", false},
+		// secret is a sensitive resource: a bare `*` does not reach it (neither the
+		// direct match nor the read floor), so viewer's *:read cannot enumerate
+		// secrets. A literal grant, a resource wildcard on secret, and owner's > do.
+		{"*:read does not reach secret", []string{"*:read"}, "secret", "read", false},
+		{"*:* does not reach secret read", []string{"*:*"}, "secret", "read", false},
+		{"literal secret:read reaches it", []string{"secret:read"}, "secret", "read", true},
+		{"secret:reveal floors to secret:read", []string{"secret:reveal"}, "secret", "read", true},
+		{"secret:* reaches secret read", []string{"secret:*"}, "secret", "read", true},
+		{"owner > reaches secret read", []string{">"}, "secret", "read", true},
+		{"*:read still reaches a non-sensitive resource (variable)", []string{"*:read"}, "variable", "read", true},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -51,6 +61,12 @@ func TestTopicPatternMatching(t *testing.T) {
 		{"viewer *:read misses audit:read:admin", []string{"*:read"}, []string{"audit", "read", "admin"}, false},
 		{"*:* misses audit:read:admin", []string{"*:*"}, []string{"audit", "read", "admin"}, false},
 		{"principal:* misses principal:delete:admin", []string{"principal:*"}, []string{"principal", "delete", "admin"}, false},
+		// The IAM directory reads sit at the admin tier: viewer's *:read and a
+		// 2-token resource wildcard cannot reach them, which is why admin carries an
+		// explicit <resource>:read:admin grant alongside its wildcard.
+		{"*:read misses principal:read:admin", []string{"*:read"}, []string{"principal", "read", "admin"}, false},
+		{"principal:* misses principal:read:admin", []string{"principal:*"}, []string{"principal", "read", "admin"}, false},
+		{"explicit principal:read:admin reaches it", []string{"principal:read:admin"}, []string{"principal", "read", "admin"}, true},
 		// The tail wildcard and explicit grants do reach it.
 		{"owner > reaches audit:read:admin", []string{">"}, []string{"audit", "read", "admin"}, true},
 		{"audit:> reaches audit:read:admin", []string{"audit:>"}, []string{"audit", "read", "admin"}, true},
@@ -64,6 +80,12 @@ func TestTopicPatternMatching(t *testing.T) {
 		{"*:read covers a normal read", []string{"*:read"}, []string{"location", "read"}, true},
 		{"location:> covers location:read", []string{"location:>"}, []string{"location", "read"}, true},
 		{"location:> does not cover system:read", []string{"location:>"}, []string{"system", "read"}, false},
+		// A secret's admin-sensitive actions live at the :admin tier: a 2-token
+		// secret:* cannot reach them, admin's secret:> does. This is how an
+		// admin_sensitive secret stays admin/owner-only per row.
+		{"secret:* misses secret:reveal:admin", []string{"secret:*"}, []string{"secret", "reveal", "admin"}, false},
+		{"secret:> reaches secret:reveal:admin", []string{"secret:>"}, []string{"secret", "reveal", "admin"}, true},
+		{"*:read misses the sensitive secret resource", []string{"*:read"}, []string{"secret", "read"}, false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

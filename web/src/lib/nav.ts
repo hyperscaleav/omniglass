@@ -40,37 +40,48 @@ export const navItems: NavItem[] = [
   { label: "Dashboards", path: "/dashboards", icon: Icons.LayoutDashboard, hint: "Official, shared, and your own dashboards." },
   { label: "Alarms", path: "/alarms", icon: Icons.Bell, hint: "What is firing now, with drill-down to the triggering datapoint." },
   {
-    label: "Inventory", icon: Icons.Package, hint: "The entity graph: systems, components, locations, interfaces, nodes, and tasks.",
+    label: "Inventory", icon: Icons.Package, hint: "The monitored estate: components, systems, locations, and the collection nodes, each addressable with its health and configuration.",
     children: [
-      { label: "Components", path: "/components", live: true, resource: "component", hint: "The component inventory, with declared config, props, and tags." },
+      { label: "Components", path: "/components", live: true, resource: "component", hint: "The component inventory, with declared config, props, and tags. Device interfaces are a panel on the component." },
       { label: "Systems", path: "/systems", live: true, resource: "system", hint: "Location and system trees, navigable, with health at each level." },
       { label: "Locations", path: "/locations", live: true, resource: "location", hint: "The place tree: campuses, buildings, floors, and rooms." },
-      { label: "Interfaces", path: "/interfaces", live: true, resource: "interface", hint: "Connection endpoints on components, with their device credentials." },
-      { label: "Nodes", path: "/nodes", live: true, resource: "node", hint: "Collection daemons: their assigned tasks, health, and enrollment." },
-      { label: "Tasks", path: "/tasks", live: true, resource: "task", hint: "Collection task assignments across nodes." },
+      // An interface is an API on a component, named by its protocol. The tasks a
+      // node runs are derived and read as a panel on the node, not a separate nav entry.
+      { label: "Interfaces", path: "/interfaces", live: true, resource: "interface", hint: "The APIs on components, named by protocol, with their reachability and device credentials." },
+      { label: "Nodes", path: "/nodes", live: true, resource: "node", hint: "Collection daemons: their health, enrollment, and the collection tasks assigned to each." },
+    ],
+  },
+  {
+    label: "Values", icon: Icons.Sliders, hint: "Operator-set values and content: interpolation variables, encrypted secrets, and reconciled component config, each resolved down the scope cascade, plus the files kept with the estate.",
+    children: [
+      { label: "Variables", path: "/variables", live: true, resource: "variable", hint: "Free interpolated values (macros), resolved down the scope cascade." },
+      { label: "Secrets", path: "/secrets", live: true, resource: "secret", hint: "Shared device and platform credentials, resolved down the scope cascade." },
+      { label: "Config", path: "/config", hint: "Reconciled component and system configuration: desired values operators set, optionally observed back from the device to detect drift and reconcile." },
+      // Files are operator-uploaded content, not a cascaded value: a flat, tenant-wide
+      // store of opaque bytes kept beside the estate. It sits in Values as the
+      // non-cascading member (deliberately off the exclusive arc).
+      { label: "Files", path: "/files", live: true, resource: "file", hint: "Firmware images, config dumps, runbooks, and captures kept with the estate, deduplicated and searchable." },
     ],
   },
   {
     label: "Catalog", icon: Icons.Layers, hint: "The authored model: templates, types, tags, and rules.",
     children: [
       { label: "Templates", path: "/templates", hint: "Author device shapes: component and system templates, versioned." },
-      { label: "Types", path: "/types", hint: "Component, system, location, interface, datapoint, and event type registries." },
-      { label: "Tags", path: "/tags", hint: "Tag definitions applied across the inventory." },
+      { label: "Types", path: "/types", live: true, resource: "type", hint: "Location, system, component, and secret type registries, classified by kind." },
+      { label: "Tags", path: "/tags", live: true, resource: "tag", hint: "The governed tag key vocabulary applied across the inventory." },
       { label: "Rules", path: "/rules", hint: "Transform, calc, and event rules, with CEL and blast-radius preview." },
     ],
   },
   { label: "Explore", path: "/explore", icon: Icons.Compass, hint: "Datapoint history, the event log, and the cascade resolve view." },
   { label: "Learn", path: "/learn", icon: Icons.GraduationCap, hint: "How collection turns a device into owned datapoints." },
   {
-    label: "Settings", icon: Icons.Settings, hint: "Platform configuration and tenant administration.",
+    label: "Admin", icon: Icons.Settings, hint: "Platform administration: users, roles, groups, the audit trail, and platform settings.",
     children: [
-      { label: "Config", path: "/config", hint: "Severity levels, schedules, retention, and platform settings." },
-      { label: "Secrets", path: "/secrets", live: true, resource: "secret", hint: "Shared device and platform credentials, resolved down the scope cascade." },
-      { label: "Variables", path: "/variables", live: true, resource: "variable", hint: "Free interpolated values (macros), resolved down the scope cascade." },
-      { label: "Users", path: "/users", live: true, resource: "principal", hint: "Users and service accounts: status, grants, and tokens." },
-      { label: "Roles", path: "/roles", live: true, resource: "role", hint: "The built-in roles: what each permission bundle grants, and how they inherit." },
-      { label: "Groups", path: "/groups", live: true, resource: "principal_group", hint: "User groups: membership and the grants members inherit." },
+      { label: "Users", path: "/users", live: true, perm: "principal:read:admin", hint: "Users and service accounts: status, grants, and tokens." },
+      { label: "Roles", path: "/roles", live: true, perm: "role:read:admin", hint: "The built-in roles: what each permission bundle grants, and how they inherit." },
+      { label: "Groups", path: "/groups", live: true, perm: "principal_group:read:admin", hint: "User groups: membership and the grants members inherit." },
       { label: "Audit", path: "/audit", live: true, perm: "audit:read:admin", hint: "The audit trail of every privileged action and sign-in." },
+      { label: "Settings", path: "/settings", hint: "Platform preferences: severity scales, schedules, retention, and defaults." },
     ],
   },
 ];

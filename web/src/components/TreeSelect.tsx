@@ -17,6 +17,11 @@ export interface TreeSelectProps {
   excludeSubtreeOf?: string;
   class?: string;
   disabled?: boolean;
+  // A DOM id passthrough, so a caller can associate an external <label for=...>
+  // when the picker sits inside a helper that only auto-associates a label for a
+  // raw intrinsic control (see TreeList.tsx's ctx.field and its use in
+  // Locations.tsx's reparent field).
+  id?: string;
 }
 
 // Three non-breaking spaces per level (not collapsed by the browser) plus a guide
@@ -28,6 +33,7 @@ export default function TreeSelect(props: TreeSelectProps) {
   const options = () => flattenTree(props.items, props.excludeSubtreeOf);
   return (
     <select
+      id={props.id}
       class={props.class ?? "select select-bordered w-full"}
       value={props.value}
       disabled={props.disabled}

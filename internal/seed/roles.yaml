@@ -16,7 +16,8 @@ roles:
     description: >-
       Day-to-day operations: acknowledge, snooze, and resolve alarms, and create
       or edit components, interfaces, tasks, rules, config, secrets, and variables.
-      Inherits Viewer.
+      Sees and reveals the device secrets in its scope (never the admin-sensitive
+      platform credentials). Inherits Viewer.
     inherits: ["viewer"]
     permissions:
       - "component:create,update"
@@ -24,9 +25,13 @@ roles:
       - "task:create,update"
       - "rule:create,update"
       - "config:create,update"
-      - "secret:create,update"
+      - "secret:read,reveal,create,update"
       - "variable:create,update"
       - "alarm:ack,snooze,resolve"
+      # files are shared knowledge (not in the sensitive-resource set), so the
+      # viewer floor reads ordinary ones; operators upload and delete them. A
+      # sensitive file needs the admin tier, which operator does not hold.
+      - "file:create,delete"
   - id: deploy
     display_name: Deploy
     description: >-
@@ -39,6 +44,8 @@ roles:
       - "location:create,update"
       - "system:create,update"
       - "component:create,update"
+      - "secret:read,reveal,create,update"
+      - "file:create"
   - id: admin
     display_name: Administrator
     description: >-
@@ -55,19 +62,32 @@ roles:
       - "system:create,update,delete"
       - "location:create,update,delete"
       - "principal:*"
-      # purge (the irreversible hard delete) is admin-sensitive: a three-token
-      # permission that principal:* (two tokens) structurally cannot reach, so only
-      # admin (via this explicit grant) and owner (via >) can purge.
+      # read (the Users directory) and purge (the irreversible hard delete) are
+      # admin-sensitive: three-token permissions that principal:* (two tokens)
+      # structurally cannot reach, so only admin (via these explicit grants) and
+      # owner (via >) get the directory and the hard delete. Roles and groups gate
+      # their directory the same way.
+      - "principal:read:admin"
       - "principal:purge:admin"
       - "credential:*"
-      - "secret:*"
+      # secret:> (not secret:*) so admin reaches the admin-sensitive tier
+      # (secret:reveal:admin etc.) a two-token wildcard cannot; an admin-sensitive
+      # secret is thus admin/owner-only, while operators hold the two-token actions
+      # on the non-sensitive ones.
+      - "secret:>"
+      # file:> (not file:*) so admin reaches the sensitive tier (file:read:admin
+      # etc.) a two-token wildcard cannot; a sensitive file is thus admin/owner-only.
+      - "file:>"
       - "variable:*"
       - "principal_grant:*"
       - "principal_group:*"
+      - "principal_group:read:admin"
       - "role:*"
       - "node:*"
+      - "role:read:admin"
       - "audit:read:admin"
       - "datapoint_type:create"
+      - "type:create,update,delete"
       - "tag:*"
       - "unit:create"
       - "event_type:create"

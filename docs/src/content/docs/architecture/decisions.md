@@ -53,11 +53,21 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0016](#adr-0016-a-principal-can-be-purged-and-the-audit-trail-is-denormalized-to-survive-it) | 2026-07-09 | Accepted | A principal can be hard-deleted (purge, gated on archival); the audit trail survives via a denormalized actor label and `ON DELETE SET NULL`, retiring the "never hard-deleted" rule (soft-delete verb: archive) |
 | [ADR-0017](#adr-0017-credential-is-renamed-secret-the-cascade-is-the-reuse-mechanism) | 2026-07-09 | Accepted | The access-secret member of the config / credential / variable trio is renamed credential to secret: an encrypted-at-rest typed value resolved most-specific-wins down the cascade |
 | [ADR-0018](#adr-0018-the-avatar-read-endpoint-is-json-not-raw-image-bytes) | 2026-07-10 | Accepted | A profile picture is read through a JSON `image_base64` endpoint the console renders as a data URL, not a raw `image/jpeg` handler, so every route stays under the Huma authz middleware |
+| [ADR-0019](#adr-0019-every-credential-is-time-bounded-token-purpose-not-expiry-shape) | 2026-07-11 | Accepted | Every credential is time-bounded (reverses tokens-never-expire): session 12h, token / bootstrap 90d default with a `--ttl` capped at 365d; a `credential.purpose` column, not the expiry shape, tells session from token |
 | [ADR-0020](#adr-0020-variable-slice-1-types-inline-and-mirrors-the-secret-arc) | 2026-07-11 | Accepted | The variable member ships plaintext, typed inline against a `value_type` enum (no `variable_type` registry), on the secret owner arc; template scope, groups, the `$var:` consumer deferred |
-| [ADR-0022](#adr-0022-a-node-is-a-kindnode-principal-with-an-interim-bearer-credential-and-static-per-connection-nats-subject-permissions) | 2026-07-07 | Accepted | A node is a `principal` of `kind=node` with a 1:1 detail table and a bearer `credential` row (interim shared secret), and per-node NATS isolation is static per-connection subject permissions via an in-process auth callback; nkey/JWT deferred |
-| [ADR-0023](#adr-0023-telemetry-is-a-protobuf-event-over-jetstream-with-an-inline-owner-confining-consumer) | 2026-07-07 | Accepted | Telemetry is a protobuf `Event` over a JetStream durable consumer; the consumer binds the owner from the task's interface and confines a node to its own tasks inline (no separate raw-telemetry table or Postgres queue); raw persistence + replay and label-based multi-owner routing deferred |
-| [ADR-0024](#adr-0024-the-reachability-verdict-is-a-built-in-state) | 2026-07-07 | Accepted | The per-interface reachability verdict `interface.reachable` is a built-in **state** (not a metric); availability is `time_in_state` over it; readiness is interface-type-defaulted and interface-overridable, node-executed, not a `calc_rule` |
-| [ADR-0025](#adr-0025-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver) | 2026-07-08 | Accepted | An interface is a device **API** named by its protocol (not a NIC); `interface_type` = its **transport** (the reach gate), a **driver** = the collect layer (protocol handler + transports + normalized menu, what a device CAN do), a template **curates** (SHOULD), the instance holds what **IS** there; OIDs/commands live in the driver, not the template |
+| [ADR-0021](#adr-0021-tag-slice-1-a-governed-key-registry-with-entity-update-gated-bindings) | 2026-07-12 | Accepted | The tag primitive ships its first slice (governed key registry, per-entity bindings, cascade); minting a key is admin `tag:create`, setting a value is the entity's own `update` |
+| [ADR-0022](#adr-0022-effective-tags-resolve-onto-systems-and-locations-a-placed-system-inherits-its-location) | 2026-07-13 | Accepted | Directory rows carry batch-resolved effective tags; effective resolution extends to systems and locations, and a placed system inherits its location's tags |
+| [ADR-0023](#adr-0023-the-iam-directory-reads-principal-role-principal_group-are-admin-tier) | 2026-07-13 | Accepted | The IAM directory reads (principal, role, principal_group) move to the admin tier (`<resource>:read:admin`), so viewer's `*:read` floor no longer reaches Users, Roles, and Groups |
+| [ADR-0024](#adr-0024-a-tag-key-may-constrain-its-values-to-an-enum) | 2026-07-13 | Accepted | A tag key may declare an `allowed_values` enum (empty = free text), enforced on the binding write; a free key autocompletes its distinct in-use values |
+| [ADR-0025](#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier) | 2026-07-13 | Accepted | `secret` leaves the bare `*` wildcard's reach (direct match and read floor); a per-secret `admin_sensitive` flag flips a secret to the `:admin` tier, so operators read operational device secrets in scope while platform credentials stay admin/owner-only at the same scope |
+| [ADR-0026](#adr-0026-console-nav-ia-estate-values-get-their-own-top-level-group-the-settings-group-becomes-admin) | 2026-07-13 | Accepted | Console nav IA: Variables, Secrets, and Config get their own top-level Values group; Inventory holds the estate entities including Nodes; Interfaces and Tasks become facet panels; the Settings group is renamed Admin |
+| [ADR-0027](#adr-0027-create-is-a-route-inventory-create-and-edit-unify-on-the-detail-accordion) | 2026-07-14 | Accepted | Inventory create/edit unify on the detail accordion: `New` routes to `/<entity>/create` (a draft) and Save hands off to `/<entity>/<id>` in edit; view is read-only, edit is the sole writer; the create/edit Drawer is retired |
+| [ADR-0028](#adr-0028-rank-retired-from-the-type-registries-sort-is-alphabetical) | 2026-07-14 | Accepted | `rank` is dropped from `location_type`, `system_type`, and `component_type`; the three list operations sort by `display_name, id` instead |
+| [ADR-0029](#adr-0029-files-slice-1-a-content-addressed-blob-store-and-a-tenant-wide-file-handle) | 2026-07-14 | Accepted | Files slice 1: a content-addressed `blob` store primitive (pgblobs) and a tenant-wide `file` handle; no placement arc (a file is 1:many, its locality is a future attachment), a binary `sensitive` flag reusing the secret `:admin` tier (defaults off), a delete frees its unreferenced blob synchronously (async mark-sweep GC deferred), base64-in-JSON on the wire |
+| [ADR-0031](#adr-0031-a-node-is-a-kindnode-principal-with-an-interim-bearer-credential-and-static-per-connection-nats-subject-permissions) | 2026-07-07 | Accepted | A node is a `principal` of `kind=node` with a 1:1 detail table and a bearer `credential` row (interim shared secret), and per-node NATS isolation is static per-connection subject permissions via an in-process auth callback; nkey/JWT deferred |
+| [ADR-0032](#adr-0032-telemetry-is-a-protobuf-event-over-jetstream-with-an-inline-owner-confining-consumer) | 2026-07-07 | Accepted | Telemetry is a protobuf `Event` over a JetStream durable consumer; the consumer binds the owner from the task's interface and confines a node to its own tasks inline (no separate raw-telemetry table or Postgres queue); raw persistence + replay and label-based multi-owner routing deferred |
+| [ADR-0033](#adr-0033-the-reachability-verdict-is-a-built-in-state) | 2026-07-07 | Accepted | The per-interface reachability verdict `interface.reachable` is a built-in **state** (not a metric); availability is `time_in_state` over it; readiness is interface-type-defaulted and interface-overridable, node-executed, not a `calc_rule` |
+| [ADR-0034](#adr-0034-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver) | 2026-07-08 | Accepted | An interface is a device **API** named by its protocol (not a NIC); `interface_type` = its **transport** (the reach gate), a **driver** = the collect layer (protocol handler + transports + normalized menu, what a device CAN do), a template **curates** (SHOULD), the instance holds what **IS** there; OIDs/commands live in the driver, not the template |
 
 ## Entries
 
@@ -373,6 +383,29 @@ below from the project's history. From here it grows one slice at a time.
 - **Closes:** issue [#143](https://github.com/hyperscaleav/omniglass/issues/143) (backend),
   [#146](https://github.com/hyperscaleav/omniglass/issues/146) (console + rename).
 
+### ADR-0019: Every credential is time-bounded; token `purpose`, not expiry shape
+
+- **Date:** 2026-07-11 | **Status:** Accepted | **Pages:** [identity and access](/architecture/identity-access/)
+- **Decision:** All credentials are time-bounded (reverses the earlier tokens-never-expire choice). A
+  web-login session keeps a 12h absolute lifetime; CLI/API tokens and the bootstrap token get a 90-day
+  default expiry with a `--ttl` override capped at 365 days; nothing is issued without an expiry. Sessions
+  and API tokens are distinguished by a `credential.purpose` column, not by whether `expires_at` is set.
+  Expiry is enforced lazily at authentication; there is no background sweep, and session/token lists show
+  only live credentials. Deferred: a sliding idle timeout, a housekeeping sweep of long-expired rows, and
+  nearing-expiry notifications.
+- **Context:** The credential-expiry slice ([#157](https://github.com/hyperscaleav/omniglass/issues/157))
+  bounded only the web-login session and left the CLI/API token unbounded (`expires_at` null), overloading
+  "has an expiry" to mean "is a session". That left an eternal secret in the field, against the every-secret-
+  rotates principle, and coupled the session-vs-token distinction to a nullable column that both kinds now
+  populate. A dedicated `purpose` column names the concept directly, so the list and the console read the
+  discriminator rather than inferring it, and the default 90-day / 365-day-cap window keeps a minted token
+  usable for real automation without becoming permanent. `AuthenticateBearer` already refused a passed
+  expiry, so enforcement needed no change: giving tokens a future expiry is enough, and the list reuses the
+  same `expires_at is null or expires_at > now()` filter so a dead row is never shown.
+- **Reverses:** the tokens-never-expire behavior introduced with
+  [#157](https://github.com/hyperscaleav/omniglass/issues/157).
+- **Closes:** issue [#172](https://github.com/hyperscaleav/omniglass/issues/172) (self-service sessions and
+  the every-credential-expires model).
 ### ADR-0018: The avatar read endpoint is JSON, not raw image bytes
 
 - **Date:** 2026-07-10 | **Status:** Accepted | **Pages:** [identity and access](/architecture/identity-access/)
@@ -478,8 +511,282 @@ below from the project's history. From here it grows one slice at a time.
   [#191](https://github.com/hyperscaleav/omniglass/issues/191); groups and template scope ride
   [#184](https://github.com/hyperscaleav/omniglass/issues/184).
 
+### ADR-0022: effective tags resolve onto systems and locations; a placed system inherits its location
 
-### ADR-0022: A node is a kind=node principal with an interim bearer credential and static per-connection NATS subject permissions
+- **Date:** 2026-07-13 | **Status:** Accepted | **Pages:** [tags](/architecture/tags/)
+- **Decision:** The directory **Tags column** shows a row's **effective** (resolved-cascade) tags, not its direct
+  bindings, so the list routes (`GET /components`, `/systems`, `/locations`) carry an **`effective_tags`** map (key to
+  winning value, winners only) per row, resolved for the whole page in **one batched query per kind**
+  (`Gateway.EffectiveTags(kind, ownerIDs)`, three per-kind recursive-CTE resolvers that thread a target id through the
+  ancestor chains and rank per `(target, key)`). This required **defining effective tags for systems and locations**,
+  which previously only components resolved: a **location** resolves `global` plus its own location tree; a **system**
+  resolves `global`, its own system tree, **and the location it is placed at** (its `location_id` tree). A placed
+  system therefore inherits its location's tags (a system in a PCI building surfaces `compliance: pci`), consistent
+  with how a component picks up its own `location_id`. A component is unchanged (the full four-band arc). The resolver
+  is **scopeless by contract**: the list query has already filtered the ids to the caller's read scope, so the batch
+  adds no per-id check, matching the existing `rowActions` batch. Winners only in the column; provenance (which scope a
+  value came from) stays in the per-entity effective-tags detail view.
+- **Context:** The tag-apply UI needs each directory row to show what tags actually apply to it. The cheaper option was
+  to embed a row's **direct** bindings (a flat, non-recursive `where owner_id = any($1)` lookup); the architect chose
+  **effective** so the column reflects inherited values, not just locally-set ones. That choice moved real work to the
+  backend (a batched recursive cascade versus a flat index scan) and forced the systems-and-locations effective
+  definition, whose one genuine call was whether a **system inherits its location**: yes, because a system carries a
+  `location_id` exactly as a component does, so treating it as placement-that-inherits is the consistent reading. The
+  added cost is a small bounded per-row recursion over the shallow estate trees, one round-trip, and is capped by the
+  directory page size. This is the first (backend) slice of the tag-apply UI; the Tags column, the type-to-add editor,
+  and tag search consume it in later slices.
+- **Closes:** issue [#201](https://github.com/hyperscaleav/omniglass/issues/201) (batch effective-tags resolver);
+  part of [#189](https://github.com/hyperscaleav/omniglass/issues/189).
+
+### ADR-0023: the IAM directory reads (principal, role, principal_group) are admin-tier
+
+- **Date:** 2026-07-13 | **Status:** Accepted | **Pages:** [identity and access](/architecture/identity-access/)
+- **Decision:** The **read** (list and get) of `principal`, `role`, and `principal_group` moves from a two-token
+  `<resource>:read` to the admin-sensitive **`<resource>:read:admin`**, so the `viewer` read floor (`*:read`) no
+  longer reaches the Users, Roles, and Groups directories. `admin` carries an explicit `principal:read:admin`,
+  `role:read:admin`, and `principal_group:read:admin` alongside its `<resource>:*` wildcards, the same shape as the
+  existing `principal:purge:admin`; `owner`'s `>` is unaffected. Create, update, and the lifecycle verbs stay
+  two-token: they were never reachable by a non-admin, so only the directory read needed promoting. The console
+  gates the three Settings tabs on the same three-token permission and the route guard reads it from the shared nav
+  map, so the sidebar and the server never diverge.
+- **Context:** `deploy` (an integrator or field tech) inherits `viewer`, whose `*:read` is a single-token resource
+  wildcard. Because `*` matches exactly one token, `*:read` matched `principal:read`/`role:read`/`principal_group:read`,
+  and the read floor shares that reach, so a field tech could enumerate every user, role, and group over the API (a
+  real 200, not just a visible menu). Promoting the directory reads reuses
+  [ADR-0015](/architecture/decisions/#adr-0015-permissions-are-topic-patterns-single-token-and-tail-wildcards)'s
+  deeper-token rule rather than adding a matcher special case: admin-sensitivity is a third token `*` cannot reach.
+  Secrets are a separate concern (an operator legitimately reads device secrets in scope), handled by a forthcoming
+  slice that combines placement scope with a per-secret admin-sensitive flag; this ADR is the IAM directories only.
+- **Closes:** issue [#197](https://github.com/hyperscaleav/omniglass/issues/197).
+
+### ADR-0024: a tag key may constrain its values to an enum
+
+- **Date:** 2026-07-13 | **Status:** Accepted | **Pages:** [tags](/architecture/tags/)
+- **Decision:** A tag key gains an **`allowed_values`** set (a new `text[]` column, empty by default). Empty leaves
+  the key **free-text**, unchanged; a non-empty set is the **enum** a bound value must belong to, so `environment`
+  can be declared as one of `prod`, `staging`, `dev`. The **binding write enforces it**: `SetTagBinding` rejects a
+  value outside a key's non-empty allowed set with a dedicated 422 (`ErrTagValueNotAllowed`), so the constraint is a
+  real server gate, not a UI hint. The Tags directory create and edit forms carry a value-domain control (a checkbox
+  that turns the key into an enum plus a value-list editor), and the TagAdder value stage renders a **strict dropdown**
+  for an enum key. A **free** key instead offers **value autocomplete from the distinct values already bound** for it,
+  through a new `GET /tags/{name}:values` read (a `select distinct value`), so an operator reaches for an existing
+  value without the key having to declare a set up front. Only the enum (a string set) ships; a typed `value_type`
+  (int, bool, date) and input normalization (lowercase, trim, fold) stay the page's open question.
+- **Context:** The [tags](/architecture/tags/) page left value-domain governance an open question, with the enum, a
+  typed value_type, and normalization all on the table. Operators asked first for the plain case, a key like
+  `environment` that should only ever be one of a short list, so that shipped: a string enum on the key, enforced on
+  write, with a strict picker. The distinct-in-use autocomplete is the free-key counterpart, cheap (one `select
+  distinct`) and immediately useful, so the two ship together. This resolves the enum half of the page's open
+  question; the value_type and normalization halves remain deferred.
+- **Closes:** issue [#190](https://github.com/hyperscaleav/omniglass/issues/190) (tag value-domain governance, enum).
+
+### ADR-0025: `secret` is a sensitive resource; a per-secret `admin_sensitive` flag flips a secret to the `:admin` tier
+
+- **Date:** 2026-07-13 | **Status:** Accepted | **Pages:** [identity and access](/architecture/identity-access/), [variables](/architecture/variables/)
+- **Decision:** Two orthogonal axes now decide who reaches a secret. **Placement scope** (the `global`/`location`/
+  `system`/`component` entity a secret attaches to on the exclusive arc) gives locality, unchanged. A new per-secret
+  **`admin_sensitive` flag** gives same-scope sensitivity: when set, every action on that secret is lifted to the
+  **`:admin` tier**, so a scoped two-token grant (`secret:reveal`) cannot reach it and only `admin` (`secret:>`) or
+  `owner` (`>`) may see, reveal, update, delete, or create it. The flag defaults from the secret's `secret_type`
+  (`secret_type.default_admin_sensitive`: an SNMP community defaults operational, an OAuth2 client secret defaults
+  admin-sensitive) and the row's own value is authoritative; the column default is `true` (a secret is admin-only
+  until marked operational). Enforcement is a capability flag computed at the API (`canAdmin` = the caller holds
+  `secret:<action>:admin`) and passed to the Storage Gateway alongside scope: the gateway hides admin-sensitive rows
+  from a lister/resolver without it, and returns a **non-disclosing 404** (not a 403) to a revealer/updater/deleter
+  without it, so a platform credential's existence and field names are not disclosed through the read, reveal, list,
+  or cascade paths. (One residual: because a secret name is unique per owner, an operator with create scope at the
+  same owner can distinguish a create-collision 409 from a 201, a narrow existence-and-name oracle, no field values.
+  It predates this slice, since operators already held `secret:create` without `secret:read`; closing it needs a
+  namespace or create-path change and is a tracked follow-up, not a value-disclosure path.) Separately, `secret` joins a
+  **sensitive-resource set** that a bare single-token `*` does not reach, in both places `*` grants read (the direct
+  topic match and the read floor); `>` (owner), a literal `secret:read`, and a `secret:*` still name it. So
+  `viewer` (only `*:read`) reads no secrets at all (not the directory, not the per-component effective-secrets
+  cascade), `operator`/`deploy` gain a scoped `secret:read,reveal,create,update` and see and reveal the operational
+  secrets in their subtree, and `admin`'s `secret:*` becomes `secret:>` so it reaches the admin tier. The
+  `/secrets` directory, previously all-scope-only, is now scope-filtered. The client `can()` mirrors both the
+  sensitive-set and the `:read` floor so the console hides exactly what the server denies.
+- **Context:** A field tech setting up a site must create and read back that site's **device** secrets (an SNMP
+  community, a device login), but the **platform integration** credentials (a Zoom or Microsoft client secret the
+  collection engine consumes) must never be revealed below admin. A device secret and a platform credential can sit
+  at the **same** scope (both global), so placement alone cannot separate them, and a low/medium/high sensitivity
+  ladder was rejected as arbitrary and hard-fixed to three tiers. A per-secret binary flag reusing
+  [ADR-0015](/architecture/decisions/#adr-0015-permissions-are-topic-patterns-single-token-and-tail-wildcards)'s
+  third-token `:admin` rule expresses the real distinction without a new matcher concept. Taking `secret` off the
+  bare `*` wildcard (rather than promoting `secret:read` wholesale to `:admin`, which would deny operators their
+  device secrets) is the one lever that keeps the two-token `secret:read` operators legitimately hold while stopping
+  `viewer`'s `*:read` from reaching it. Negative grants (deny-after-allow) were rejected as a footgun the `:admin`
+  tier and the sensitive-set already cover. This is Slice B of the same visibility rework as
+  [ADR-0023](/architecture/decisions/#adr-0023-the-iam-directory-reads-principal-role-principal_group-are-admin-tier);
+  the IAM directories use the `:admin` tier (no legitimate sub-admin reader) and are not in the sensitive-set,
+  `variable` stays viewer-visible by decision and is not in the set. The move of Secrets, Variables, and Config out
+  of Settings into Catalog is a separate branch, not this slice.
+- **Closes:** issue [#210](https://github.com/hyperscaleav/omniglass/issues/210).
+### ADR-0026: Console nav IA: estate values get their own top-level group; the Settings group becomes Admin
+
+- **Date:** 2026-07-13 | **Status:** Accepted | **Pages:** [ui](/architecture/ui/)
+- **Decision:** The operator console left nav is reorganized around five genera: Catalog (the reusable,
+  estate-agnostic model), Inventory (the estate instances: locations, systems, components, and nodes), Values
+  (the operator-set values resolved down the scope cascade: variables, secrets, config), the observed surfaces
+  (Explore, Alarms, Dashboards, Learn), and platform Admin. Secrets, Variables, and Config are values operators
+  set on estate entities, so they move from the Settings menu into a **Values** group of their own, standing
+  beside Inventory rather than nested inside it as a band. Config's meaning is fixed as the **CI store**:
+  operator-set desired component and system configuration, optionally observed back from the device to detect
+  drift and reconcile, distinct from platform Settings and from Variables. Inventory gains **Nodes** (the
+  collection daemons, a monitored, scope-controlled entity, ungated "soon" until `node:read` lands) alongside
+  Locations, Systems, and Components; Interfaces and Tasks are dropped from the nav entirely, since an interface
+  is a facet of a component and a task a facet of a node, not a directory of their own. The Settings group is
+  renamed **Admin** (Users, Roles, Groups, Audit) and gains an ungated "soon" Settings leaf that reserves the
+  platform-settings-table page.
+- **Context:** Settings had become a junk drawer mixing platform governance, platform config, and estate-attached
+  values. Those three values attach to a single estate entity on the scope cascade (the same genus as a tag
+  assignment) but are not estate entities themselves, so they earned a home of their own, not Settings, not
+  Catalog, and not a band folded inside Inventory. This **supersedes** the "into Catalog" line of ADR-0025 above:
+  the earlier same-day plan named Catalog, and the decision is a dedicated Values group. Interfaces and Nodes were
+  first sketched as Inventory children alongside the estate entities; Nodes stayed (a node is monitored and
+  scope-controlled exactly like a location, system, or component, so it belongs with them, not under Admin), but
+  Interfaces and the Tasks a node runs were cut from the nav once it was clear each is a facet of one owning
+  entity's detail page (a component's device endpoints, a node's collection assignments), not a set an operator
+  browses on its own. The relaxed whole-group-drop (an ungated Settings "soon" stub keeps the Admin group visible
+  to a viewer, showing only that greyed placeholder while every data-bearing child stays admin-gated and hidden)
+  is deliberate until the platform-settings backend ships and the leaf is gated on `setting:read:admin`. Design:
+  `docs/superpowers/specs/2026-07-13-operator-console-nav-ia-design.md`.
+- **Closes:** issue [#222](https://github.com/hyperscaleav/omniglass/issues/222).
+- **Update (2026-07-14):** **Files** joins the **Values** group. The files slice ([ADR-0029](#adr-0029-files-slice-1-a-content-addressed-blob-store-and-a-tenant-wide-file-handle)) first shipped the Files directory under Inventory, but a file is not part of the monitored estate (no health, not polled): it is operator-uploaded **content**. So the Values group broadens from "operator-set values resolved down the cascade" to **operator-set values and content**, with the (deliberately non-cascading, flat) file as its content member alongside the cascaded variables, secrets, and config ([#249](https://github.com/hyperscaleav/omniglass/issues/249)).
+### ADR-0027: create is a route; inventory create and edit unify on the detail accordion
+
+- **Date:** 2026-07-14 | **Status:** Accepted | **Pages:** [design system](/contributing/design-system/), [core entities](/architecture/core-entities/)
+- **Decision:** The inventory entities (component, system, location) drop the create/edit **Drawer**. Creating one
+  is now a **route**: `New` navigates to `/<entity>/create`, a **draft accordion** where Identity and Placement are
+  writable and the binding sections (Tags, and later Secrets/Variables) are shown locked until the entity exists;
+  **Save** commits the row and hands off to `/<entity>/<id>` in **edit mode** (a one-shot pending-edit flag consumed
+  when the detail resolves, the Users `openPrincipalInEdit` pattern). The detail is one accordion, **read-only in
+  view and the sole writer in edit**: no in-body field or binding mutation control renders while not editing (the
+  footer's Edit / Delete chrome and the read-only effective-secrets/variables panels are exempt). This is the Users
+  inline-blade-edit model generalised to inventory, and it holds on **both** the docked blade and the addressable
+  full page. No new routes: the static `/create` outranks `/:name` in the router, so `create` is a reserved segment.
+  The shared `TreeList` primitive gains a per-surface **edit slot on `ListCtx`** (the full page makes its own slot,
+  since the shared `renderDetail` must not call `useBladeEdit` outside a blade provider), plus `renderCreate` /
+  `onNew` / `onEdit` hooks and an optional `FormBody`, so a page opts into the model without breaking the others.
+- **Context:** Creating an inventory entity returned you to the list, so setting a tag meant find, reopen, edit; and
+  `TagAdder` rendered a write control in view. A drawer that opened in edit after create would need a fragile
+  cross-surface hand-off (the code-grounded review of the drawer design surfaced a full-page `useBladeEdit` crash, a
+  `FormBody` footer collision, and a pending-edit gap). Framing create as its own URL dissolved the "create is
+  blade-only" false dilemma: a draft with an address is deep-linkable full-page and dockable as a blade, and Save is
+  a route hand-off, not a surface hop. Own-field edits commit on Save (Cancel reverts them); tag bindings keep their
+  immediate per-binding write, so Cancel does not roll a tag back, and the tag control sits apart from the Save/Cancel
+  form. Slice 2 (a shared cross-page form shell) and slice 3 (moving Users onto it) are deferred.
+- **Closes:** issue [#231](https://github.com/hyperscaleav/omniglass/issues/231).
+
+### ADR-0028: `rank` retired from the type registries; sort is alphabetical
+
+- **Date:** 2026-07-14 | **Status:** Accepted | **Pages:** [core-entities](/architecture/core-entities/), [Types guide](/guides/admin/types/)
+- **Decision:** `rank` is dropped from `location_type`, `system_type`, and `component_type`: the
+  column (a new idempotent migration), the three API bodies and create/update inputs, the
+  boot-seed YAMLs, the generated client and CLI, and the Types catalog page (no Rank column, no
+  Rank field on create or edit). `ListLocationTypes`, `ListSystemTypes`, and `ListComponentTypes`
+  now order by `display_name, id` instead.
+- **Context:** `rank` was sort-only from the start (the location_type seed comment already said
+  so: "rank does NOT constrain nesting"), never an enforcement mechanism. The upcoming
+  `allowed_parent_types` placement constraint on `location_type` needed a clean field to
+  introduce without a stale, unused ordering column sitting beside it, so retiring `rank` is the
+  mechanical precursor to that slice rather than part of it: this PR only removes the field and
+  switches the sort, `allowed_parent_types` is a separate slice. Alphabetical is the obvious
+  default with no enforcement semantics to preserve; an operator who wants a specific browse
+  order can still rely on the id or display name they chose.
+- **Closes:** part of issue [#239](https://github.com/hyperscaleav/omniglass/issues/239) (the
+  `allowed_parent_types` half continues in a follow-up PR against the same issue). Design:
+  `docs/superpowers/specs/2026-07-14-type-placement-constraints-design.md`.
+
+### ADR-0029: files slice 1, a content-addressed blob store and a tenant-wide file handle
+
+- **Date:** 2026-07-14 | **Status:** Accepted | **Pages:** [files and blobs](/architecture/files/), [storage](/architecture/storage/), [identity and access](/architecture/identity-access/)
+- **Decision:** The files subsystem ships its first slice: a content-addressed **`blob`** store as a Storage
+  Gateway primitive (a `blob.Store` seam, default **pgblobs** backend holding bytes inline, keyed by the sha256
+  of the bytes, dedup via `on conflict do nothing`, integrity-verified on read), and a **`file`** handle,
+  searchable metadata (name, content_type, size, sha256, sensitive) that points at a blob by hash, with CRUD
+  over the API, the generated CLI, and the typed client, plus the Files directory (under Values; see the
+  [ADR-0026 update](#adr-0026-console-nav-ia-estate-values-get-their-own-top-level-group-the-settings-group-becomes-admin)). Four calls
+  shape it. **(1) No placement arc on a file.** A file is tenant-wide, not on the exclusive arc a secret sits on,
+  because a file relates **1:many** (to entities and types) rather than 1:1; that locality is a future
+  many-to-many **attachment**, not an owner column, so the gateway injects no ABAC tree scope on a file query.
+  (This reverses an in-design proposal to give `file` a secret-style owner scope.) **(2) Sensitivity reuses the
+  secret mechanism, binary, defaulting off.** A per-file `sensitive` flag reuses
+  [ADR-0025](#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier)'s
+  `:admin`-tier rule (hidden from a lister without the tier, a non-disclosing 404 to a reader without it,
+  admin-only to create), but defaults **false** (a file is shared unless marked, where a secret defaults sensitive
+  because it is a credential), and `file` is **not** added to the sensitive-resource set, so the viewer floor
+  (`*:read`) reads ordinary files. **(3) A delete frees its blob synchronously; async GC deferred.** `DeleteFile`
+  drops the handle and, in the same transaction, frees the blob **when no other handle references it** (a dedup-aware
+  refcount: a deleted file reclaims its bytes rather than leaking storage, but a blob shared by another handle is
+  kept). The general async mark-sweep GC (for blobs referenced by other things, an aged large log body, a
+  `collection.failed` raw, an attach event, none of which exist yet) stays a later slice; today a `file` is the only
+  referencer, so the synchronous check is complete. **(4) One backend, base64-in-JSON on the wire.** Only the pgblobs backend ships (S3 and disk
+  behind the same seam later); upload and download carry the bytes **base64 in JSON**, reusing the avatar precedent
+  ([ADR-0018](#adr-0018-the-avatar-read-endpoint-is-json-not-raw-image-bytes)) so the whole surface stays under the
+  Huma authz middleware and generates a uniform client and CLI. content_type lives on the **file**, not the blob:
+  content-addressing is about the bytes, so identical bytes are one blob regardless of declared type.
+- **Context:** [files.md](/architecture/files/) specified the two-layer model (handle plus content-addressed blob)
+  and an index-probe GC; its open questions (inline-versus-blob threshold, chunking, the grace floor) are untouched
+  here. The **1:many** insight is what separated a file's *locality* (attachment, deferred) from its *access*
+  (permission plus sensitivity), and is why the file does not copy the secret owner arc. A full
+  **classification + clearance** lattice (an ordered ladder on the resource, a clearance on the principal, an
+  external-principal class) was considered for the sensitive axis and split into
+  [its own epic (#243)](https://github.com/hyperscaleav/omniglass/issues/243) rather than inflating this slice; the
+  binary flag is a 2-rung subset it will subsume. Multipart streaming for very large blobs is deferred with the
+  S3/chunking slice.
+- **Divergences logged:** files.md moved `content_type` from the blob to the file; the in-design file owner/scope
+  arc was dropped (a file is off the placement arc). Both are reflected in the page.
+- **Lands:** [epic #242](https://github.com/hyperscaleav/omniglass/issues/242), [#244](https://github.com/hyperscaleav/omniglass/issues/244).
+
+### ADR-0030: `allowed_parent_types` constrains where a location may be placed
+
+- **Date:** 2026-07-14 | **Status:** Accepted | **Pages:** [core-entities](/architecture/core-entities/), [Types guide](/guides/admin/types/), [Work with an entity](/guides/operator/entities/)
+- **Decision:** `location_type` gains `allowed_parent_types` (`text[]`, default `{}`): a set whose
+  members are `location_type` ids and/or the reserved `root` sentinel (a placement at the top,
+  no parent). An empty set is unconstrained (the default, and every existing custom type until an
+  operator opts in); a non-empty set is enforced: a placement is valid iff the parent is null and
+  the set contains `root`, or the parent location's type is in the set. `root` cannot collide with
+  a real type id: `CreateLocationType` refuses it. Enforcement is forward-only, on `CreateLocation`
+  and the location move path (`UpdateLocation`'s new `ParentName` patch field, added this slice so
+  the "grandfathered until moved" guarantee is real and testable, not merely a claim); an existing
+  placement a type's set no longer allows is untouched until something tries to move it. The four
+  seeded types get their sets: `campus={root}`, `building={root,campus}`,
+  `floor={building,campus}`, `room={floor,building,campus}`. Re-parent ships operator-usable this
+  slice: the location edit form's Placement section makes Parent editable, a picker built on
+  #240's inventory edit model (the same `Show when={editing()}` field/fact split every other
+  editable field on the accordion uses), narrowed to the set and excluding the location's own
+  subtree; moving back to root is not offered (the move primitive does not support it this slice).
+- **Context:** `rank` ([ADR-0028](/architecture/decisions/#adr-0028-rank-retired-from-the-type-registries-sort-is-alphabetical))
+  was sort-only and never expressed the estate's real hierarchy rule (a floor does not belong
+  above a room). A `child.level > parent.level` rule was rejected: it does not generalize past
+  locations (systems and components have no total order), while a type-level allowed-parent set
+  expresses both the general "may skip a level" case and the specific "may never be root" or
+  "may never nest under this particular type" cases with one field. A separate `root_placeable`
+  boolean was rejected in favor of folding root into the set as a sentinel, keeping one field and
+  one validation path. Enforcing retroactively was rejected: seeding a type's set must never
+  invalidate an existing estate. Locations had no move or re-parent capability at all before this
+  slice (create-time placement only); the storage/API primitive was originally scoped without a UI
+  trigger (the console's placement fields render read-only in every edit context today, on all
+  three inventory pages), but the decision changed once #240's create-as-route edit model landed
+  as the concrete field pattern to hang a reparent picker off: one PR ships the enforcement point
+  and a real way to use it, rather than a primitive an operator cannot reach. The picker's
+  candidate list is narrowed client-side (a UX nicety); the server-side `validatePlacement` call
+  is the actual gate, so a stale or bypassed client filter still gets an inline 422, not a
+  silently-accepted violation. One divergence from the design surfaced while building the move
+  primitive: `UpdateLocation` checks placement before the cycle guard, not after, so a move that is
+  simultaneously a placement violation and a structural cycle (moving a location under its own
+  descendant, where the descendant's type also does not allow this child) reports the `PlacementError`
+  (422, naming both types) rather than the generic `ErrLocationCycle`; the design left the check
+  order unstated, and the more specific, actionable error was chosen to win. Systems and components
+  lose `rank` too but get no `allowed_parent_types` this slice, and keep their existing
+  read-only-in-edit Parent field: a leaf or must-nest constraint there is closer to a boolean than
+  an ordered set, deferred until a concrete need names the shape, and extending the same
+  editable-Parent pattern to two more pages is a follow-up, not bundled here.
+- **Closes:** issue [#239](https://github.com/hyperscaleav/omniglass/issues/239). Design:
+  `docs/superpowers/specs/2026-07-14-type-placement-constraints-design.md`.
+
+
+### ADR-0031: A node is a kind=node principal with an interim bearer credential and static per-connection NATS subject permissions
 
 - **Date:** 2026-07-07 | **Status:** Accepted | **Pages:** [nodes](/architecture/nodes/), [identity and access](/architecture/identity-access/)
 - **Decision:** A node is a first-class `principal` of `kind='node'` with a 1:1 `node` detail table (keyed by
@@ -513,7 +820,7 @@ below from the project's history. From here it grows one slice at a time.
 - **Closes the gap:** the nkey/JWT node identity (the `nats` credential kind and the signed-nonce admission)
   and the single-use enrollment token are tracked with the node-identity hardening slice.
 
-### ADR-0023: Telemetry is a protobuf Event over JetStream with an inline owner-confining consumer
+### ADR-0032: Telemetry is a protobuf Event over JetStream with an inline owner-confining consumer
 
 - **Date:** 2026-07-07 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [datapoints](/architecture/datapoints/)
 - **Decision:** A node ships each collected batch as a protobuf `Event` (proto3, `proto/og/v1/event.proto`,
@@ -542,7 +849,7 @@ below from the project's history. From here it grows one slice at a time.
 - **Closes the gap:** raw-`Event` persistence (backfill/replay) and the raw -> admission -> trusted two-lane
   topology, plus label-based multi-owner resolution, are tracked with a later collection checkpoint.
 
-### ADR-0024: The reachability verdict is a built-in state
+### ADR-0033: The reachability verdict is a built-in state
 
 - **Date:** 2026-07-07 | **Status:** Accepted | **Pages:** [datapoints](/architecture/datapoints/), [collection](/architecture/collection/)
 - **Decision:** The per-interface reachability verdict `interface.reachable` (value domain `up` / `down`) is a
@@ -577,7 +884,7 @@ below from the project's history. From here it grows one slice at a time.
   that render the transitions are a later slice (5b); readiness config as an interface-type default is a later
   interface-type concern.
 
-### ADR-0025: An interface is a device API; the interface type is its transport, not its driver
+### ADR-0034: An interface is a device API; the interface type is its transport, not its driver
 
 - **Date:** 2026-07-08 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [nodes](/architecture/nodes/)
 - **Decision:** An `interface` is an **API endpoint we intend to call** on a component, identified by the
@@ -624,7 +931,7 @@ below from the project's history. From here it grows one slice at a time.
   with a `web` (http) and a `qrc` (tcp) interface, the "two APIs on one device" story. The driver catalog,
   normalization, discovery, templates, versioning, and the shadow-resolved device pack are later slices of the
   [collection epic](https://github.com/hyperscaleav/omniglass/issues/113) (slices 2 to 4 realize this model).
-- **Refines:** [ADR-0024](#adr-0024-the-reachability-verdict-is-a-built-in-state) (the reachability verdict is the
+- **Refines:** [ADR-0033](#adr-0033-the-reachability-verdict-is-a-built-in-state) (the reachability verdict is the
   first rung of the gate ladder this ADR names).
 - **Status note (2026-07-08):** the `interface = API` / `interface_type = transport` half is **built and stable**
   (this slice). The **driver / collect layer** (the separate `driver` entity, the normalized menu, and the

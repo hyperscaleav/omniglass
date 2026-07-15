@@ -7,17 +7,21 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/api"
+	"github.com/hyperscaleav/omniglass/internal/auth"
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
-// TestPasswordChangeRevokesSessions proves the force-logout: an admin reset revokes
-// ALL of the target's sessions (a live cookie stops working), and a self-service
-// change-password revokes the caller's OTHER sessions but keeps the one making the
-// request. Skipped under -short.
+// TestPasswordChangeRevokesSessions proves the force-logout revokes SESSIONS only,
+// never tokens (issue #194): an admin reset revokes ALL of the target's sessions (a
+// live cookie stops working) but leaves its API tokens; a self-service change-password
+// revokes the caller's OTHER sessions, keeps the one making the request, and leaves all
+// tokens. A token is its own bearer secret, not derived from the password. Skipped
+// under -short.
 func TestPasswordChangeRevokesSessions(t *testing.T) {
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
@@ -82,7 +86,28 @@ func TestPasswordChangeRevokesSessions(t *testing.T) {
 	body := c.do(adminTok, "POST", "/principals", map[string]string{"username": "alice", "password": "orange-boat-42x"}, http.StatusCreated)
 	_ = json.Unmarshal(body, &alice)
 
-	// An admin reset revokes every one of the target's sessions.
+	// Alice also holds an API token (the CLI lane). It must survive every password
+	// change: a token is its own bearer secret, not tied to the password.
+	tok, hash, prefix, _ := auth.NewBearerToken()
+	future := time.Now().Add(90 * 24 * time.Hour)
+	if ok, err := gw.IssueBearerCredential(ctx, storage.BearerIssue{Username: "alice", SecretHash: hash, Prefix: prefix, Purpose: "token", ExpiresAt: &future}); err != nil || !ok {
+		t.Fatalf("mint alice token: ok=%v err=%v", ok, err)
+	}
+	tokenStatus := func() int {
+		req, _ := http.NewRequest("GET", base+"/api/v1/auth/me", nil)
+		req.Header.Set("Authorization", "Bearer "+tok)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("token me: %v", err)
+		}
+		resp.Body.Close()
+		return resp.StatusCode
+	}
+	if tokenStatus() != http.StatusOK {
+		t.Fatalf("alice's token should authenticate before any change, got %d", tokenStatus())
+	}
+
+	// An admin reset revokes every one of the target's sessions, but not its tokens.
 	cookieA := loginCookie("alice", "orange-boat-42x")
 	if meStatus(cookieA) != http.StatusOK {
 		t.Fatalf("fresh session should work, got %d", meStatus(cookieA))
@@ -91,8 +116,12 @@ func TestPasswordChangeRevokesSessions(t *testing.T) {
 	if code := meStatus(cookieA); code != http.StatusUnauthorized {
 		t.Fatalf("reset should have revoked the session: want 401, got %d", code)
 	}
+	if code := tokenStatus(); code != http.StatusOK {
+		t.Fatalf("reset must NOT revoke the token: want 200, got %d", code)
+	}
 
-	// A self change-password revokes the OTHER sessions but keeps the current one.
+	// A self change-password revokes the OTHER sessions but keeps the current one, and
+	// leaves all tokens.
 	cookieB := loginCookie("alice", "purple-canyon-7")
 	cookieC := loginCookie("alice", "purple-canyon-7")
 	if code := changePassword(cookieC, "purple-canyon-7", "green-river-88x"); code != http.StatusNoContent {
@@ -103,5 +132,8 @@ func TestPasswordChangeRevokesSessions(t *testing.T) {
 	}
 	if code := meStatus(cookieC); code != http.StatusOK {
 		t.Fatalf("a change should keep the current session: want 200 for cookieC, got %d", code)
+	}
+	if code := tokenStatus(); code != http.StatusOK {
+		t.Fatalf("a change must NOT revoke the token: want 200, got %d", code)
 	}
 }

@@ -141,10 +141,23 @@ func parse(p string) ([]pattern, error) {
 	return out, nil
 }
 
+// sensitiveResources are resources a bare single-token `*` wildcard does not
+// reach: a principal holds them only through an explicit (scoped) grant, never
+// through the `*:read` floor, so a viewer cannot enumerate them. The tail wildcard
+// `>` (owner) and a literal grant still name them. Secrets are sensitive so a
+// field tech does not see the platform-credential directory; per-secret
+// admin-sensitivity (the `:admin` tier, enforced in the gateway) then fences
+// individual rows. The IAM directories use the `:admin` tier instead (they have no
+// legitimate sub-admin reader), so they are not in this set.
+var sensitiveResources = map[string]bool{
+	"secret": true,
+}
+
 // match reports whether a grant pattern matches a required permission path (both
 // token slices): a literal matches itself, `*` matches one token, `>` matches one
 // or more remaining tokens (and is last). No wildcard reaches deeper than it
-// spans, so a two-token pattern never matches a three-token `:admin` path.
+// spans, so a two-token pattern never matches a three-token `:admin` path, and a
+// bare `*` at the resource position never matches a sensitive resource.
 func match(pat pattern, path []string) bool {
 	i := 0
 	for ; i < len(pat); i++ {
@@ -154,7 +167,13 @@ func match(pat pattern, path []string) bool {
 		if i >= len(path) {
 			return false // pattern has a token the path lacks
 		}
-		if pat[i] != "*" && pat[i] != path[i] {
+		if pat[i] == "*" {
+			if i == 0 && sensitiveResources[path[0]] {
+				return false // a bare resource wildcard does not reach a sensitive resource
+			}
+			continue
+		}
+		if pat[i] != path[i] {
 			return false
 		}
 	}
@@ -173,8 +192,9 @@ func (s Set) Allows(tokens ...string) bool {
 		}
 	}
 	if len(tokens) == 2 && tokens[1] == "read" {
+		sensitive := sensitiveResources[tokens[0]]
 		for _, p := range s.patterns {
-			if len(p) > 0 && (p[0] == "*" || p[0] == ">" || p[0] == tokens[0]) {
+			if len(p) > 0 && (p[0] == ">" || p[0] == tokens[0] || (p[0] == "*" && !sensitive)) {
 				return true
 			}
 		}
@@ -212,6 +232,7 @@ func (s Set) coversPattern(p pattern) bool {
 		}
 	}
 	if len(p) == 2 && p[1] == "read" {
+		sensitive := sensitiveResources[p[0]]
 		for _, q := range s.patterns {
 			if len(q) == 0 {
 				continue
@@ -220,7 +241,7 @@ func (s Set) coversPattern(p pattern) bool {
 				if q[0] == "*" || q[0] == ">" {
 					return true
 				}
-			} else if q[0] == "*" || q[0] == ">" || q[0] == p[0] {
+			} else if q[0] == ">" || q[0] == p[0] || (q[0] == "*" && !sensitive) {
 				return true
 			}
 		}
@@ -245,6 +266,9 @@ func subsumes(q, p pattern) bool {
 			return false // p is a tail here; a single q token cannot cover it
 		}
 		if q[i] == "*" {
+			if i == 0 && sensitiveResources[p[0]] {
+				return false // a bare resource wildcard does not subsume a sensitive resource
+			}
 			continue // covers any single token, including p's "*"
 		}
 		if q[i] != p[i] {

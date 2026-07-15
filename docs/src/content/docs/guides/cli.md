@@ -9,6 +9,9 @@ from the API: a new route is a new command on the next regeneration. A small set
 commands (the run modes and the trusted bootstrap) are hand-written and compose with the
 generated tree on the same root.
 
+This page is the mental model and the setup. For the exhaustive, generated list of every
+command, its flags, and an example, see the **[CLI reference](/reference/cli/)**.
+
 ## Running the full stack locally
 
 `make dev` brings up the whole stack for a browser session: a dev Postgres (docker
@@ -58,20 +61,25 @@ no running server needed):
 ```sh
 # Mints a bearer credential (the token is printed once) and, with --password, a password
 # credential (argon2id) so the owner can sign in to the console. This is a trusted direct-DB
-# lane, so it is exempt from the password policy (unlike the console/API paths).
+# lane, so it is exempt from the password policy (unlike the console/API paths). The bootstrap
+# token expires after --ttl (default 90 days, hard maximum 365 days).
 omniglass bootstrap ops --password 'set-a-strong-one' --email ops@example.com --display-name "Ops Lead"
 
-# Reprint a fresh bearer token for an existing user (direct-DB, owner lane). A CLI
-# token does not expire (unlike a web-login session cookie, which has a fixed lifetime).
-omniglass token ops
+# Mint a fresh bearer token for an existing user (direct-DB, owner lane). A --description
+# (required) names what the token is for. Every credential is time-bounded: the token expires
+# after --ttl (default 90 days, hard maximum 365 days; a --ttl above the cap is an error). A
+# web-login session cookie has its own, shorter fixed lifetime.
+omniglass token ops --description 'ci pipeline'
+omniglass token ops --description 'nightly backup' --ttl 720h   # a 30-day token
+
+# A signed-in user can mint its own token over the API (the console Create token action), which
+# returns the secret once: omniglass auth create-token --description 'my laptop cli'.
 
 # Set or rotate a user's password (direct-DB, owner lane; also policy-exempt as the recovery path).
+# A break-glass reset also revokes the user's live SESSIONS, so a stolen login stops at once; API
+# tokens are kept unless --revoke-tokens is given (a full lockout of a compromised account).
 omniglass set-password ops 'set-a-strong-one'
-
-# Seed a dev database with an example estate (locations, users, grants). Idempotent and
-# dev-only; `make dev` runs it for you, so a fresh console is populated instead of empty.
-# Never for production: these are operator rows, not ship-with reference data.
-omniglass seed-dev
+omniglass set-password ops 'set-a-strong-one' --revoke-tokens   # full lockout: sessions and tokens
 ```
 
 Once a server is running, a signed-in principal manages **its own** account through the
@@ -200,6 +208,10 @@ bare `30`, `true`, or `{"k":"v"}` sends the number, the boolean, or the object; 
 falls back to a string, so the common case needs no quoting. A string value that would otherwise parse
 as JSON (`30`, `true`) is quoted to force a string: `--value '"30"'`. (`secret create --fields` parses
 the same way.)
+generated self-scoped commands (`omniglass auth me`, `auth update-profile`,
+`auth change-password`, `me setAvatar` / `removeAvatar`); an administrator manages other
+principals, roles, groups, secrets, and variables through the resource commands, all covered
+in the [admin guide](/guides/admin/) and listed in full in the [CLI reference](/reference/cli/).
 
 ## Tags
 

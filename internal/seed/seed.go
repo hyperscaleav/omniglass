@@ -49,10 +49,10 @@ type rolesDoc struct {
 
 type locationTypesDoc struct {
 	LocationTypes []struct {
-		ID          string `yaml:"id"`
-		DisplayName string `yaml:"display_name"`
-		Rank        int    `yaml:"rank"`
-		Icon        string `yaml:"icon"`
+		ID                 string   `yaml:"id"`
+		DisplayName        string   `yaml:"display_name"`
+		Icon               string   `yaml:"icon"`
+		AllowedParentTypes []string `yaml:"allowed_parent_types"`
 	} `yaml:"location_types"`
 }
 
@@ -60,7 +60,6 @@ type systemTypesDoc struct {
 	SystemTypes []struct {
 		ID          string `yaml:"id"`
 		DisplayName string `yaml:"display_name"`
-		Rank        int    `yaml:"rank"`
 	} `yaml:"system_types"`
 }
 
@@ -68,7 +67,6 @@ type componentTypesDoc struct {
 	ComponentTypes []struct {
 		ID          string `yaml:"id"`
 		DisplayName string `yaml:"display_name"`
-		Rank        int    `yaml:"rank"`
 	} `yaml:"component_types"`
 }
 
@@ -94,9 +92,10 @@ type interfaceTypesDoc struct {
 
 type secretTypesDoc struct {
 	SecretTypes []struct {
-		ID          string `yaml:"id"`
-		DisplayName string `yaml:"display_name"`
-		Fields      []struct {
+		ID                    string `yaml:"id"`
+		DisplayName           string `yaml:"display_name"`
+		DefaultAdminSensitive bool   `yaml:"default_admin_sensitive"`
+		Fields                []struct {
 			Name   string `yaml:"name"`
 			Type   string `yaml:"type"`
 			Secret bool   `yaml:"secret"`
@@ -186,10 +185,11 @@ func seedSecretTypes(ctx context.Context, gw storage.Gateway) error {
 			fields[i] = secret.Field{Name: f.Name, Type: f.Type, Secret: f.Secret, Origin: secret.Origin(f.Origin)}
 		}
 		if err := gw.UpsertSecretType(ctx, storage.SecretType{
-			ID:          st.ID,
-			Official:    true,
-			DisplayName: st.DisplayName,
-			Fields:      fields,
+			ID:                    st.ID,
+			Official:              true,
+			DisplayName:           st.DisplayName,
+			DefaultAdminSensitive: st.DefaultAdminSensitive,
+			Fields:                fields,
 		}); err != nil {
 			return err
 		}
@@ -207,7 +207,6 @@ func seedComponentTypes(ctx context.Context, gw storage.Gateway) error {
 			ID:          ct.ID,
 			Official:    true,
 			DisplayName: ct.DisplayName,
-			Rank:        ct.Rank,
 		}); err != nil {
 			return err
 		}
@@ -225,7 +224,6 @@ func seedSystemTypes(ctx context.Context, gw storage.Gateway) error {
 			ID:          st.ID,
 			Official:    true,
 			DisplayName: st.DisplayName,
-			Rank:        st.Rank,
 		}); err != nil {
 			return err
 		}
@@ -260,11 +258,11 @@ func seedLocationTypes(ctx context.Context, gw storage.Gateway) error {
 	}
 	for _, lt := range doc.LocationTypes {
 		if err := gw.UpsertLocationType(ctx, storage.LocationType{
-			ID:          lt.ID,
-			Official:    true,
-			DisplayName: lt.DisplayName,
-			Rank:        lt.Rank,
-			Icon:        lt.Icon,
+			ID:                 lt.ID,
+			Official:           true,
+			DisplayName:        lt.DisplayName,
+			Icon:               lt.Icon,
+			AllowedParentTypes: lt.AllowedParentTypes,
 		}); err != nil {
 			return err
 		}

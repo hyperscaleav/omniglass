@@ -14,15 +14,26 @@ Built and tested today: the `principal` (+ per-kind `human` / `service`) and `cr
 `role` / `principal_grant` model, the `audit_log`, the capability fast-reject, **local password auth
 (argon2id) behind an httpOnly session cookie** (`POST /auth/login` and `/auth/logout`, the public
 `GET /auth/status`), the self-service `GET` / `PATCH /auth/me` and `POST /auth/me:changePassword`, the
+self-service **session list and revoke** (`GET /auth/me/sessions`, `POST /auth/me/sessions/{id}:revoke`:
+a signed-in user sees their own live bearer credentials, labelled `session` or `token` by their stored
+`purpose`, with the current one flagged, and revokes any of them scoped to their own principal so
+another principal's credential id is a non-disclosing 404; revoking the current one signs it out), the
+admin **session management** (`GET /principals/{id}/sessions`, `POST /principals/{id}/sessions/{sid}:revoke`,
+gated by the new `principal:revoke-session` capability: an administrator lists another principal's active
+sessions and tokens in the same non-secret shape, with `current` always false, and revokes one, bounded to
+the target so a credential id that is not theirs is a non-disclosing 404, behind the same **takeover guard**
+as impersonation and the password reset so an owner's sessions cannot be revoked by a lesser admin, and
+audited with the admin as the actor), the
 admin **principal directory** (`GET /principals`, `GET /principals/{id}`), human **create**
 (`POST /principals`) and **update** (`PATCH /principals/{id}`: display name, email, username), an
 admin **password reset** (`POST /principals/{id}:resetPassword`, gated `principal:reset-password`,
 policy-enforced, no current password, audited as the admin, refused on self (change your own password
 from your profile, which verifies your current one), behind the same **takeover guard** as
 impersonation so an owner cannot be reset and a caller cannot reset a principal whose capabilities
-exceed their own, and **force-logout**: a reset revokes every one of the target's bearer credentials
-(all sessions and tokens) so it takes effect at once, and a self-service change revokes the caller's
-other sessions while keeping the current one, and **force-change-on-next-login**: a reset sets
+exceed their own, and **force-logout**: a reset revokes every one of the target's **sessions** so it
+takes effect at once (its API **tokens** survive, a token being its own bearer secret, not tied to the
+password), and a self-service change revokes the caller's other **sessions** while keeping the current
+one and leaving its tokens intact, and **force-change-on-next-login**: a reset sets
 `human.must_change_password`, and until the user changes it (which clears the flag) the `authn` choke
 point refuses **every** route except reading their own principal and the change itself with a 403, so
 the admin-known secret is short-lived and cannot be used to act), **role
@@ -50,12 +61,24 @@ Where the build currently differs from the present-tense design below (each logg
 - **Credentials are `bearer` or `password`.** `credential.kind` is `bearer` or `password` (argon2id,
   PHC-encoded, one password per principal); the `oidc` / `nats` methods and the full
   `(method, identifier)` lookup are still deferred. The minted bearer token prefix is `ogp_`.
-- **A bearer credential can expire.** `credential.expires_at` (nullable) bounds a bearer's lifetime, and
+- **Every credential is time-bounded.** `credential.expires_at` bounds a bearer's lifetime, and
   `AuthenticateBearer` treats a passed expiry as absent (the credential authenticates nothing). A **web
-  login** installs a session cookie with a fixed absolute lifetime (12h today), so a stolen cookie is not
-  valid forever, and the cookie's `Max-Age` matches. A CLI-minted **API token** (`omniglass token`) and the
-  bootstrap token leave `expires_at` null and do not expire. A sliding idle timeout and a background sweep
-  of expired rows are later refinements; today an expired row is simply refused at auth.
+  login** installs a session cookie with a fixed absolute lifetime (12h), so a stolen cookie is not valid
+  forever, and the cookie's `Max-Age` matches. A CLI-minted **API token** (`omniglass token`) and the
+  **bootstrap token** now expire too: a **90-day default** with a `--ttl` override, hard-capped at **365 days**
+  (a `--ttl` above the cap errors), so no eternal secret sits in the field ([ADR-0017](/architecture/decisions/#adr-0017-every-credential-is-time-bounded-token-purpose-not-expiry-shape),
+  reversing the earlier tokens-never-expire choice). Because both kinds now carry an expiry, they are told
+  apart by a **`credential.purpose`** column (`session` vs `token`), not by whether `expires_at` is set.
+  Enforcement is **lazy**: an expired row is simply refused at auth, there is no background sweep, and the
+  self-service list shows only **live** credentials (`expires_at is null or expires_at > now()`, the same
+  filter). A sliding idle timeout, a housekeeping sweep of long-expired rows, and nearing-expiry
+  notifications are later refinements.
+
+  | credential | `purpose` | lifetime |
+  | --- | --- | --- |
+  | web-login session | `session` | 12h absolute (fixed) |
+  | CLI/API token (`omniglass token`) | `token` | 90d default, `--ttl` up to 365d max |
+  | bootstrap token (`omniglass bootstrap`) | `token` | 90d default, `--ttl` up to 365d max |
 - **Failed logins lock the account.** A run of wrong passwords on a real account is throttled by a
   per-username lockout: `human.failed_login_count` counts consecutive misses and, on the 5th, sets
   `human.locked_until` to 15 minutes out. Inside that window `AuthenticatePassword` refuses every
@@ -79,7 +102,11 @@ Where the build currently differs from the present-tense design below (each logg
   **direct-DB break-glass lanes** (`bootstrap` and `set-password`) are deliberately **exempt**: they
   already require database access (fully trusted) and are the recovery path, so the policy never
   blocks initial setup or a lockout recovery. A breached-password check (HIBP k-anonymity) is a
-  planned enhancement over the embedded list.
+  planned enhancement over the embedded list. Because break-glass is a **lockout**, `set-password`
+  also revokes the target's live **sessions** (a stolen login stops at once), and revokes its API
+  **tokens** too with `--revoke-tokens`. This is the only in-product way to fully cut off a
+  compromised **owner**: the API reset and revoke are all 403 on an owner target (the takeover
+  guard, owner-to-owner included), so an owner can only be recovered from the direct-DB lane.
 - **The `iam` command namespace is not built.** Owner creation is `omniglass bootstrap <username>
   [--password <pw>]` ([Bootstrap](#bootstrap)), not the `og iam create-owner` path; the broader `iam`
   admin CLI is deferred with the admin user surface.
@@ -164,13 +191,13 @@ viewer  <-  operator  <-  admin  <-  owner
 
 | role | what it can do |
 |---|---|
-| `viewer` | Read every operator-facing resource within scope. |
-| `operator` | viewer + create/update on components, interfaces, tasks, rules, config, secrets; ack/snooze/resolve alarms. Secret **delete** and the **reveal/copy** decrypt stay off the role (admin `secret:*` and owner only). |
-| `deploy` | viewer + create/update on locations, systems, and components (the integrator / field-tech role, typically granted with the `subtree_excl_root` operator to build out a subtree without editing its root). No delete. |
-| `admin` | operator + delete on managed resources + manage IAM (principals, credentials, grants, custom roles) + curate registries (`<registry>:create`). IAM management is meaningful only from an `@ all` grant (a scoped `admin @ subtree` keeps the operator powers within its subtree but gets no IAM); registry curation is a plain capability, so a custom role can carry `<registry>:create` alone for a non-admin curator. Deliberately **not** the superuser: it cannot grant a role above its own tier ([ADR-0013](/architecture/decisions/#adr-0013-a-grant-cannot-confer-capabilities-the-granter-lacks)), so it cannot make itself owner, and it cannot delete `official` roles. |
+| `viewer` | Read every operator-facing resource within scope. The IAM directories (`principal`, `role`, `principal_group`) are **not** operator-facing: their reads are admin-tier (`<resource>:read:admin`), so `viewer`'s `*:read` does not reach the Users, Roles, or Groups pages ([ADR-0023](/architecture/decisions/#adr-0023-the-iam-directory-reads-principal-role-principal_group-are-admin-tier)). Secrets are likewise off the floor: `secret` is a **sensitive resource** a bare `*` does not reach, so `viewer` reads no secret directory and no per-component effective-secrets cascade ([ADR-0025](/architecture/decisions/#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier)). |
+| `operator` | viewer + create/update on components, interfaces, tasks, rules, config; **read, reveal, create, and update the operational secrets in scope** (`secret:read,reveal,create,update`); ack/snooze/resolve alarms. Secret **delete** stays admin-only, and an **admin-sensitive** secret (a platform credential, `admin_sensitive = true`) is invisible in the directory and a non-disclosing 404 on reveal regardless of scope, so an operator sees device secrets but never a platform key at the same scope ([ADR-0025](/architecture/decisions/#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier)). Creating an admin-sensitive secret needs the admin tier, so an operator can mint only operational ones. |
+| `deploy` | viewer + create/update on locations, systems, and components (the integrator / field-tech role, typically granted with the `subtree_excl_root` operator to build out a subtree without editing its root). No delete. Carries the same scoped `secret:read,reveal,create,update` as `operator`, for the device secrets a field tech sets up during a site build. |
+| `admin` | operator + delete on managed resources + manage IAM (principals, credentials, grants, custom roles) + curate registries (`<registry>:create`). Holds `secret:>` (the tail wildcard, not the two-token `secret:*`), so it reaches the **admin-sensitive** secret tier (`secret:reveal:admin`) that a two-token wildcard cannot, and sees and reveals platform credentials. IAM management is meaningful only from an `@ all` grant (a scoped `admin @ subtree` keeps the operator powers within its subtree but gets no IAM); registry curation is a plain capability, so a custom role can carry `<registry>:create` alone for a non-admin curator. Deliberately **not** the superuser: it cannot grant a role above its own tier ([ADR-0013](/architecture/decisions/#adr-0013-a-grant-cannot-confer-capabilities-the-granter-lacks)), so it cannot make itself owner, and it cannot delete `official` roles. |
 | `owner` | The break-glass superuser (`>`, the tail wildcard, covering every capability at every tier, including admin-sensitive ones and future resources). The unkillable role: at least one active `owner@all` grant must exist at all times (enforced by DB trigger), and an owner account cannot be impersonated. The bootstrap creates the first owner. |
 
-The console **Roles view** (`GET /roles`, gated `role:read`) lists these read-only with each role's display name, description, inheritance, and **effective permissions**, so an operator sees exactly what a role grants before assigning it. Custom-role editing is a later slice.
+The console **Roles view** (`GET /roles`, gated `role:read:admin`) lists these read-only with each role's display name, description, inheritance, and **effective permissions**, so an operator sees exactly what a role grants before assigning it. Custom-role editing is a later slice.
 
 ### Custom roles
 
@@ -195,7 +222,9 @@ audit:read:admin              <- an admin-sensitive permission (three tokens)
 >                             <- everything, at every tier (the owner superuser)
 ```
 
-A normal permission is `resource:action` (two tokens); an **admin-sensitive** one carries a third `admin` token (`audit:read:admin`). Because `*` matches exactly one token, a two-token pattern like `*:read` (viewer) or `*:*` or `principal:*` **structurally cannot** match a three-token `:admin` permission: admin-sensitivity is a **deeper token**, not a special case in the matcher. The whole-estate superuser is `>` (owner); `<resource>:>` grants everything under one resource including its admin tier. Actions are HTTP-aligned: `read` (GET), `create` (POST), `update` (PATCH/PUT), `delete` (DELETE), plus resource-specific verbs (`ack`, `snooze`, `resolve` for alarms; future kinds add their own). The aggregate `write` does not exist as an alias.
+A normal permission is `resource:action` (two tokens); an **admin-sensitive** one carries a third `admin` token (`audit:read:admin`). Because `*` matches exactly one token, a two-token pattern like `*:read` (viewer) or `*:*` or `principal:*` **structurally cannot** match a three-token `:admin` permission: admin-sensitivity is a **deeper token**, not a special case in the matcher. The IAM directory reads (`principal:read:admin`, `role:read:admin`, `principal_group:read:admin`) use this to keep the Users, Roles, and Groups pages off the `viewer` floor, alongside `audit:read:admin` and `principal:purge:admin`; `admin` carries each explicitly, since its `principal:*` (two tokens) cannot reach them. The whole-estate superuser is `>` (owner); `<resource>:>` grants everything under one resource including its admin tier. Actions are HTTP-aligned: `read` (GET), `create` (POST), `update` (PATCH/PUT), `delete` (DELETE), plus resource-specific verbs (`ack`, `snooze`, `resolve` for alarms; future kinds add their own). The aggregate `write` does not exist as an alias.
+
+There is one further carve-out: a small **sensitive-resource set** that a bare single-token `*` does not reach, in **both** places `*` can grant read (the direct topic match and the `:read` floor). It exists for a resource an operator legitimately holds a two-token grant on (so promoting its read to `:admin` wholesale is wrong), but which `viewer`'s `*:read` must not enumerate. The set is currently `{secret}`: an operator holds a literal `secret:read` and reads its scoped device secrets, but a `*:read`-only `viewer` reads no secrets at all. A literal (`secret:read`), a resource wildcard (`secret:*`), and owner's `>` still name a sensitive resource; only the **bare** `*` is turned away ([ADR-0025](/architecture/decisions/#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier)). This is distinct from, and composes with, the `:admin` tier: `secret` uses **both**, a per-secret `admin_sensitive` flag flipping an individual platform credential to the `:admin` tier (see [config and credentials](/architecture/variables/)), while the set keeps the whole resource off the viewer floor. The IAM directories are **not** in the set (they have no legitimate sub-admin reader, so the `:admin` tier alone suffices).
 
 Inheritance composes permissions **by union**:
 
@@ -381,11 +410,12 @@ The capability check is **necessary not sufficient** (it only rejects), the `can
 4. **Backstop**: had the handler skipped step 2, the gateway's `:ack` write carries `visible_set(P, ack)`, X is outside it, the UPDATE matches 0 rows, and the gateway returns the same 403, never a silent success.
 
 The flattened-set model would have wrongly allowed this: `ack` is "in the permission set" and X is "in the global visible set", so the per-grant binding is exactly what stops estate-wide ack.
-- **Non-entity resources** have no entity `E`, so `canDo` cannot scope by owner. Two governance classes:
+- **Non-entity resources** have no entity `E`, so `canDo` cannot scope by owner. Three governance classes:
   - **IAM subjects** (`principal`, `role`, `principal_grant`, and a principal's **login credential** create/delete): the action must appear in a grant whose `scope_kind` is `all`. A scoped grant confers **no** IAM capability, so `role:create` carried by an `operator @ HQ` grant does not let you create roles. Typically `owner @ all` / `admin @ all`. (Device secrets are a different resource: a **credential variable** is entity-scoped, so its `secret:read` plaintext decrypt and its rotation are ordinary scoped actions against the credential's owner, [config and credentials](/architecture/variables/).)
   - **Data registries** (`datapoint_type`, `tag`, `unit`, `event_type`, `severity_level`, source): governed by a distinct **`<registry>:create` curator capability** (`datapoint_type:create`, `tag:create`, `unit:create`, `event_type:create`, `severity_level:create`, `source:create`). A registry entry has no owner entity, so the grant's `scope_kind` is irrelevant: the check is simply whether the principal holds the capability. Granting it to a curator role lets a principal mint registry entries **without** IAM admin; a minted entry carries its own `scope` (an org-scoped entry shadows an official one, the [namespace-shadow pattern](/architecture/datapoints/#key-scope-template-org-official)), and `official`-scoped entries are reserved to `owner` and the boot seed.
+  - **Type registries** (`location_type`, `system_type`, `component_type`): governed by a single shared **`type`** resource carrying the full verb set (`type:read`, `type:create`, `type:update`, `type:delete`), unlike a data registry's create-only curator capability. `type:read` needs no separate grant, since `viewer`'s `*:read` floor already covers it; `type:create,update,delete` is granted to `admin`. As with data registries, `scope_kind` is irrelevant and the check is simply whether the principal holds the capability, since a type row has no owner entity to scope by. Unlike a data registry entry, a type row carries no namespace-shadow `scope`: an `official` (seed-owned) row is read-only (create/update/delete 422), an operator-created row is `official: false` and freely editable, and deleting a row still referenced by a location, system, or component is refused (409), first by a Gateway pre-count for the friendly error and, as a backstop, by the parent foreign key.
 
-  The fast-reject still only rejects; for these resources the authorization is the grant-class check (an `all`-scoped grant for IAM, the `<registry>:create` capability for registries), the one place the decision is capability-shaped because there is no entity to scope.
+  The fast-reject still only rejects; for these resources the authorization is the grant-class check (an `all`-scoped grant for IAM, the `<registry>:create` / `type:<action>` capability for registries), the one place the decision is capability-shaped because there is no entity to scope.
 
 Both layers operate **within one database**. Tenant isolation is **per-deployment**: a tenant is one database plus one **NATS account** plus one deployment, so per-database isolation (storage) and per-account isolation (messaging) are the same boundary. There is no `tenant_id` column anywhere, so the cross-tenant boundary is the database / account boundary itself, not a row predicate. Intra-database scope (above) is the only app-enforced layer; there is no RLS backstop.
 
@@ -433,7 +463,9 @@ GET /api/v1/auth/me
 }
 ```
 
-The `/auth/me` family is also where a principal manages **its own** identity: `PATCH /api/v1/auth/me` edits the caller's own `display_name` (email is an administrator-set field, not self-editable), and `POST /api/v1/auth/me:changePassword` (an AIP `:verb` custom method) verifies the current password and installs a new one. Both are **authn-only and self-scoped**: they resolve the target from the session, never a path id, so they need no capability and join the route-gating allow-list next to the `GET`. Acting on **another** principal (create, disable, reset, regrant) is the admin surface and does carry capabilities. Changing a password does not, today, revoke the principal's other live sessions.
+The `/auth/me` family is also where a principal manages **its own** identity: `PATCH /api/v1/auth/me` edits the caller's own `display_name` (email is an administrator-set field, not self-editable), and `POST /api/v1/auth/me:changePassword` (an AIP `:verb` custom method) verifies the current password and installs a new one. Both are **authn-only and self-scoped**: they resolve the target from the session, never a path id, so they need no capability and join the route-gating allow-list next to the `GET`. Acting on **another** principal (create, disable, reset, regrant) is the admin surface and does carry capabilities. The same self-scoped family is where a principal manages **its own sessions**: `GET /api/v1/auth/me/sessions` lists the caller's **live** bearer credentials (a web login is a `session`, a CLI/API credential a `token`, told apart by the stored `credential.purpose` since both now carry an expiry; the request's own credential is flagged `current`, and an expired row is omitted the same way `AuthenticateBearer` refuses it) returning only non-secret metadata (the `sha256(token)` is compared in-query to mark `current` and never leaves the database), and `POST /api/v1/auth/me/sessions/{id}:revoke` deletes one of them, **bounded to the caller's own principal** so a credential id belonging to another principal is a non-disclosing 404 rather than a cross-principal revoke; revoking the current credential is permitted and signs that session out. A **bulk** self counterpart, `POST /api/v1/auth/me/sessions:revokeAll` with a `{ purpose }` body (`session` or `token`), ends all of the caller's own sessions or all its tokens at once, **always keeping the credential that made the request** (so a user is never signed out of the one they are on), and returns the count; it reuses `RevokeBearersByPurposeExcept` (the current session hash in `keep`), the same primitive the self-service change-password force-logout uses. A user can also **mint its own** API token with `POST /api/v1/auth/me/tokens` (a **required** description and an optional `ttl_days`, default 90, hard-capped at 365 by validation), which returns the secret **once**. All are authn-only and self-scoped. Every bearer credential now carries **identifying metadata**: a token's **description** (required on a token, empty on an auto-created session), the **user-agent** and **client-ip** that created it (captured by a small middleware before Huma, so both the public login and the token mint see them), and a **`last_used_at`** bumped on authentication (throttled to at most once a minute so a burst of requests is not a burst of writes), so the list shows a device label, the creating address, and a last-active time. Location from the IP (a GeoIP lookup) is **deferred**; v1 records the raw IP and User-Agent only. The console splits the list into a **Sessions** section (web logins) and an **API tokens** section (CLI/API credentials), each rendering the same list primitive, with a **Revoke all** on each section header and a **Create token** action on the tokens section.
+
+The **admin** counterpart lets an administrator see and end **another** principal's sessions, so a lost laptop or a leaked API token can be cut off without resetting the account. `GET /api/v1/principals/{id}/sessions` lists the target's active bearer credentials in the same non-secret shape (`session` vs `token`, the `ogp_` locator, created and expiry), with `current` **always false** (there is no "this request's own session" when viewing someone else: the list passes a nil `currentHash`, so no row is ever flagged). `POST /api/v1/principals/{id}/sessions/{sid}:revoke` ends one (204). Both are gated by the new **`principal:revoke-session`** capability, a normal two-token permission held by `admin` and `owner` through their `principal:*` / `>` wildcards, kept separable so a future help-desk role can be granted only it. The revoke reuses the same principal-scoped delete as the self-service one, so a `sid` that is not the target's matches nothing and is a non-disclosing 404, never a cross-principal revoke. It sits behind the same **takeover guard** as impersonation and the password reset (fetch the target, then check): an **owner's sessions cannot be revoked by anyone** (a 403, so a lesser admin cannot sign an owner out from under them), nor can a caller revoke a principal whose capabilities exceed its own. The revoke is **audited with the acting admin as the actor** (the real actor rides context when impersonating), recorded as an auth-domain event (`verb = revoke_session`). The list itself is read-only and carries no takeover guard, so an admin can *see* an owner's sessions even where it cannot end them. A **bulk** counterpart, `POST /api/v1/principals/{id}/sessions:revokeAll` with a `{ purpose }` body (`session` or `token`), ends **all** of one kind at once (a purpose-filtered `RevokeBearersByPurpose`, so revoking sessions never touches tokens) and returns the count; it carries the same `principal:revoke-session` gate, the same takeover guard, and the same audit, so an owner's credentials cannot be bulk-revoked by a lesser admin either.
 
 `permissions` is flat and wildcard-expanded, ready for O(1) `useCan(...)` checks in the web app. It is a **fast-reject / UI hint only**, the union over all grants: it answers "could this principal ever do X anywhere", never "can it do X to **this** entity". List visibility likewise (a row in `GET /alarms` is read-scoped) does **not** imply per-action authority on that row. Per-row action affordances (the ack/snooze button on a specific alarm) must be computed against `visible_set(P, action)` for that target, which the `grants` array drives: `grants` is the source for advanced UI logic (scope chips, deciding per-row actionability, explaining why a button is or is not shown). The server is the only authority regardless; the flat list and the list view are hints, the scoped gateway decides.
 
@@ -459,7 +491,7 @@ re-encodes as JPEG at quality 82. A bad or oversize image is a **422**. The one 
 `has_avatar` flag and the console knows whether to render an image or fall back to initials without paying for
 the payload per row.
 
-The **read side is a JSON endpoint** (`GET /principals/{id}/avatar` gated `principal:read`,
+The **read side is a JSON endpoint** (`GET /principals/{id}/avatar` gated `principal:read:admin`,
 `GET /auth/me/avatar` on the self lane) returning `{ image_base64 }`, which the console renders as a `data:`
 URL; a principal without a picture is a **404**. It is deliberately JSON and **not** a raw `image/jpeg`
 handler ([ADR-0018](/architecture/decisions/#adr-0018-the-avatar-read-endpoint-is-json-not-raw-image-bytes)):

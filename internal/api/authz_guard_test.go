@@ -20,17 +20,22 @@ import (
 // operation MUST reject a no-permission principal. Keep this list short and
 // justified; a new entry is a security decision.
 var ungated = map[string]bool{
-	"GET /healthz":                 true, // public, no auth
-	"GET /auth/status":             true, // public: drives the login screen's bootstrap hint
-	"GET /auth/me":                 true, // authn-only: returns the caller's own principal
-	"GET /auth/me/avatar":          true, // authn-only, self-scoped: reads only the caller's own profile picture
-	"PATCH /auth/me":               true, // authn-only, self-scoped: edits only the caller's own profile
-	"POST /auth/login":             true, // public by necessity: it establishes a session
-	"POST /auth/logout":            true, // public: clearing a session must always succeed
-	"POST /auth/me:changePassword": true, // authn-only, self-scoped: changes only the caller's own password
-	"POST /nodes:claim":            true, // public by necessity: the node is not yet a principal; the enrollment token is the authentication, exchanged for its NATS credential
-	"POST /auth/me:setAvatar":      true, // authn-only, self-scoped: sets only the caller's own profile picture
-	"POST /auth/me:removeAvatar":   true, // authn-only, self-scoped: clears only the caller's own profile picture
+	"POST /nodes:claim":                  true, // public by necessity: the node is not yet a principal; the enrollment token is the authentication, exchanged for its NATS credential
+	"GET /healthz":                       true, // public, no auth
+	"GET /auth/status":                   true, // public: drives the login screen's bootstrap hint
+	"GET /auth/me":                       true, // authn-only: returns the caller's own principal
+	"GET /auth/me/avatar":                true, // authn-only, self-scoped: reads only the caller's own profile picture
+	"PATCH /auth/me":                     true, // authn-only, self-scoped: edits only the caller's own profile
+	"POST /auth/login":                   true, // public by necessity: it establishes a session
+	"POST /auth/logout":                  true, // public: clearing a session must always succeed
+	"POST /auth/me:changePassword":       true, // authn-only, self-scoped: changes only the caller's own password
+	"POST /auth/me:setAvatar":            true, // authn-only, self-scoped: sets only the caller's own profile picture
+	"POST /auth/me:removeAvatar":         true, // authn-only, self-scoped: clears only the caller's own profile picture
+	"GET /auth/me/sessions":              true, // authn-only, self-scoped: lists only the caller's own sessions
+	"POST /auth/me/sessions/{id}:revoke": true, // authn-only, self-scoped: revokes only the caller's own (a foreign id is a 404)
+	"POST /auth/me/sessions:revokeAll":   true, // authn-only, self-scoped: bulk-revokes only the caller's own, keeping the current one
+	"POST /auth/me/tokens":               true, // authn-only, self-scoped: mints a token only for the caller
+
 }
 
 // TestEveryRouteIsGated is the no-unguarded-route guard. It enumerates every

@@ -5,9 +5,12 @@
 // (additive), chips ACROSS keys are AND, and clicking an active facet removes
 // it (dropping the chip when its last value goes).
 
-export type OpKey = "contains" | "eq" | "neq" | "starts" | "ends" | "gt" | "gte" | "lt" | "lte";
+export type OpKey = "contains" | "eq" | "neq" | "starts" | "ends" | "gt" | "gte" | "lt" | "lte" | "exists" | "absent";
 
-type OpSpec = { glyph: string; token: string; label: string; types: ("string" | "number")[] };
+// valueless marks a presence operator that carries no value (exists / absent):
+// it tests only whether the field has any value, so it is offered only on a
+// presence-capable FilterKey (a tag facet), never on a field that is always set.
+type OpSpec = { glyph: string; token: string; label: string; types: ("string" | "number")[]; valueless?: boolean };
 
 export const OP: Record<OpKey, OpSpec> = {
   contains: { glyph: "~", token: "~", label: "contains", types: ["string"] },
@@ -19,7 +22,12 @@ export const OP: Record<OpKey, OpSpec> = {
   gte: { glyph: "≥", token: ">=", label: "at least", types: ["number"] },
   lt: { glyph: "<", token: "<", label: "less than", types: ["number"] },
   lte: { glyph: "≤", token: "<=", label: "at most", types: ["number"] },
+  exists: { glyph: "∃", token: "?", label: "is set", types: ["string", "number"], valueless: true },
+  absent: { glyph: "∄", token: "!?", label: "is absent", types: ["string", "number"], valueless: true },
 };
+
+// valueless reports whether an operator carries no value (exists / absent).
+export const valueless = (op: OpKey): boolean => OP[op].valueless === true;
 
 export const chipGlyph = (op: OpKey): string => OP[op].glyph;
 
@@ -32,12 +40,49 @@ export type FilterKey<T> = {
   get: (row: T) => unknown;
   values?: (rows: T[]) => string[]; // autocomplete + facet catalog
   valueLabel?: (v: string) => string;
+  presence?: boolean; // offers the value-less exists / absent operators (a tag facet)
 };
 
 export type Chip = { key: string; op: OpKey; values: string[] };
 
-export const opsFor = (type: "string" | "number"): OpKey[] =>
-  (Object.keys(OP) as OpKey[]).filter((k) => OP[k].types.includes(type));
+// FilterKeys is a page's facet set: a static array, or an accessor when the set
+// is dynamic (a directory whose tag facets derive from the loaded rows). Resolve
+// it inside a reactive scope so the dynamic facets track their source.
+export type FilterKeys<T> = FilterKey<T>[] | (() => FilterKey<T>[]);
+export const resolveFilterKeys = <T>(fk: FilterKeys<T>): FilterKey<T>[] => (typeof fk === "function" ? fk() : fk);
+
+// opsFor lists the operators a key offers: those valid for its value type, plus
+// the value-less presence operators only when the key is presence-capable.
+export const opsFor = (type: "string" | "number", presence = false): OpKey[] =>
+  (Object.keys(OP) as OpKey[]).filter((k) => OP[k].types.includes(type) && (!OP[k].valueless || presence));
+
+// tagFilterKeys yields one filter facet per tag key, so a directory can be
+// filtered by its rows' effective tags exactly like any other field. Each facet
+// reads the row's effective value for its key (empty when the tag is absent),
+// autocompletes the values in use, and offers the presence operators. Keys
+// already covered by a static facet are skipped so a tag can never shadow a
+// column filter. Derived from the loaded rows, so a tag is filterable as soon as
+// it appears on any row.
+export function tagFilterKeys<T extends { tags: Record<string, string> }>(keyNames: string[], exclude: Set<string>): FilterKey<T>[] {
+  return keyNames
+    .filter((name) => !exclude.has(name))
+    .map((name) => ({
+      key: name,
+      type: "string" as const,
+      hint: "tag",
+      presence: true,
+      get: (row: T) => row.tags[name] ?? "",
+      values: (rows: T[]) => [...new Set(rows.map((r) => r.tags[name]).filter(Boolean))].sort(),
+    }));
+}
+
+// tagKeysOf collects the distinct tag keys present across rows, sorted, for the
+// dynamic facet set.
+export function tagKeysOf<T extends { tags: Record<string, string> }>(rows: T[]): string[] {
+  const set = new Set<string>();
+  for (const r of rows) for (const k of Object.keys(r.tags)) set.add(k);
+  return [...set].sort();
+}
 
 export function defaultOp<T>(spec: FilterKey<T>): OpKey {
   return spec.hint === "exact" ? "eq" : spec.type === "number" ? "eq" : "contains";
@@ -46,6 +91,9 @@ export function defaultOp<T>(spec: FilterKey<T>): OpKey {
 // matchOp tests one row value against one target under one operator.
 export function matchOp(op: OpKey, rowVal: unknown, target: string): boolean {
   const rv = rowVal === null || rowVal === undefined ? "" : rowVal;
+  // Presence operators ignore the target and test only whether the field is set.
+  if (op === "exists") return String(rv).trim() !== "";
+  if (op === "absent") return String(rv).trim() === "";
   // Compare numerically only when the field value is actually a number; comparing
   // numeric-looking strings (a "type"/"name" facet) would false-match (e.g. "01"
   // vs "1"). Number fields still get numeric equality.
@@ -78,6 +126,8 @@ export function buildPredicate<T>(keys: FilterKey<T>[], chips: Chip[]): (row: T)
       const spec = byKey[c.key];
       if (!spec) return true;
       const v = spec.get(row);
+      // A value-less presence chip carries no values; test the operator once.
+      if (valueless(c.op)) return matchOp(c.op, v, "");
       return c.values.some((val) => matchOp(c.op, v, val));
     });
 }
@@ -118,17 +168,21 @@ export function tokenToChip<T>(raw: string, keys: FilterKey<T>[], fallbackKey: s
   if (!spec) return null;
   let op = defaultOp(spec);
   let value = rest;
+  // "!?" (absent) and "?" (exists) are the value-less presence tokens, matched
+  // before "!=" so the leading "!" is not read as not-equal.
   const tokens: [string, OpKey][] = [
+    ["!?", "absent"], ["?", "exists"],
     ["!=", "neq"], [">=", "gte"], ["<=", "lte"], ["~", "contains"], ["=", "eq"],
     ["≠", "neq"], ["^", "starts"], ["$", "ends"], [">", "gt"], ["≥", "gte"], ["<", "lt"], ["≤", "lte"],
   ];
   for (const [tok, o] of tokens) {
-    if (rest.startsWith(tok) && OP[o].types.includes(spec.type)) {
+    if (rest.startsWith(tok) && OP[o].types.includes(spec.type) && (!OP[o].valueless || spec.presence)) {
       op = o;
       value = rest.slice(tok.length);
       break;
     }
   }
+  if (valueless(op)) return { key: spec.key, op, values: [] };
   value = value.trim();
   if (!value) return null;
   return { key: spec.key, op, values: [value] };

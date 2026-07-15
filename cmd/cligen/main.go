@@ -108,7 +108,7 @@ type schema struct {
 
 type property struct {
 	Description string   `json:"description"`
-	Type       jsonType `json:"type"`
+	Type        jsonType `json:"type"`
 }
 
 // jsonType is an OpenAPI `type` that may be a single string ("string") or, for a
@@ -186,6 +186,37 @@ var nameOverride = map[string]([]string){
 	"get-auth-me":             {"auth", "me"},
 	"update-auth-me":          {"auth", "update-profile"},
 	"change-auth-me-password": {"auth", "change-password"},
+	// The admin per-principal session routes share the leaf collection noun
+	// ("sessions") with the self-service `/auth/me/sessions` ones, so the leaf-noun
+	// heuristic would collapse both into one `session` group with two colliding
+	// `list` / `revoke` commands. Group the admin pair under the `principal`
+	// resource instead (alongside reset-password and impersonate), keeping the
+	// self-service pair as the plain `session list` / `session revoke`.
+	"list-principal-sessions":       {"principal", "sessions"},
+	"revoke-principal-session":      {"principal", "revoke-session"},
+	"revoke-all-principal-sessions": {"principal", "revoke-all-sessions"},
+	// The self-service bulk revoke shares the sessions collection with `session list` /
+	// `session revoke`; name it `session revoke-all` explicitly.
+	"revoke-all-auth-me-sessions": {"session", "revoke-all"},
+	// The self-service token creation would collapse to `token create`, colliding with
+	// the hand-written direct-DB `token <username>` command; group it under `auth`.
+	"create-auth-me-token": {"auth", "create-token"},
+	// The type registries live under one /types umbrella (/types/location, ...), so the
+	// leaf-noun heuristic would map each to `<kind> create` and collide with the base
+	// entity commands (location/system/component/secret). Group them under `type`.
+	"list-location-types":   {"type", "location", "list"},
+	"create-location-type":  {"type", "location", "create"},
+	"update-location-type":  {"type", "location", "update"},
+	"delete-location-type":  {"type", "location", "delete"},
+	"list-system-types":     {"type", "system", "list"},
+	"create-system-type":    {"type", "system", "create"},
+	"update-system-type":    {"type", "system", "update"},
+	"delete-system-type":    {"type", "system", "delete"},
+	"list-component-types":  {"type", "component", "list"},
+	"create-component-type": {"type", "component", "create"},
+	"update-component-type": {"type", "component", "update"},
+	"delete-component-type": {"type", "component", "delete"},
+	"list-secret-types":     {"type", "secret", "list"},
 }
 
 func buildCommands(doc spec, base string) []command {

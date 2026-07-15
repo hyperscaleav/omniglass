@@ -36,11 +36,28 @@ Everything lives under `/api/v1`. The path shape is derivable, not special-cased
 - **Custom methods carry a colon**, `:verb` not `/verb`, for anything that is not CRUD:
   `/alarms/{id}:ack`, `/components/{name}:apply`, `/views/{id}:run`. The verb
   is also the **permission**: `:ack` is gated by `alarm:ack`, so the route and the
-  [authorization](/architecture/identity-access/) check share one vocabulary.
+  [authorization](/architecture/identity-access/) check share one vocabulary. The **self-scoped**
+  `/auth/me` family is the exception: `/auth/me:changePassword`, `/auth/me/sessions/{id}:revoke`, and
+  the bulk `/auth/me/sessions:revokeAll` (a `{ purpose }` body, keeping the current credential) are
+  **authn-only** (they resolve the target from the session, never a path id, so they carry no
+  capability and a credential id that is not the caller's own is a 404, not a cross-principal action).
+  The **admin** counterparts on `/principals/{id}` do carry a capability and a scoped path id:
+  `GET /principals/{id}/sessions` and `POST /principals/{id}/sessions/{sid}:revoke` (both gated by
+  `principal:revoke-session`) let an administrator list and end **another** principal's sessions, the revoke
+  bounded to that target and behind the owner takeover guard. `POST /principals/{id}/sessions:revokeAll` (a
+  `{ purpose }` body, same gate and guard) bulk-ends all of one kind at once, returning the count.
 - **Singular kind sub-segments** for the typed families: `/rules/calc`, `/datapoints/metric`,
   `/types/component`.
+- **Collection-level custom methods** carry the colon on the collection, not a member:
+  `POST /systems:checkName` (also `/components:checkName`, `/locations:checkName`) is an advisory
+  precheck for a technical-name rename, returning `{ valid, available, reason }`. It is gated by
+  `<entity>:update` like a rename, but its availability answer is deliberately **scope-blind**: the
+  `name` uniqueness constraint is global, so a scope-filtered answer would report a name held outside
+  the caller's scope as free and then 409 at save. This is a bounded, documented exception to the
+  ABAC-scope-on-every-query rule (it discloses only that a technical name is taken somewhere, nothing
+  more), not a license to skip scope elsewhere.
 - **A principal is addressable by uuid or username.** Every `/principals/{id}` route (read, update,
-  grants, the lifecycle verbs, reset, impersonate) accepts either the principal's uuid or a human's
+  grants, the lifecycle verbs, reset, sessions, impersonate) accepts either the principal's uuid or a human's
   current username, resolved server-side (a value that parses as a uuid is used directly; otherwise it
   is a username lookup, and an unknown one is a 404). The uuid is still the stable identity (a username
   is mutable and nothing keys on it), so a username is a convenience address resolved at call time.
@@ -215,7 +232,7 @@ gates on **`secret:reveal`**, a permission the `*:read` floor does **not** carry
 everything" grant sees only masks and **only admin (`secret:*`) and owner (`>`) reveal**. Every
 `:reveal` writes an [audit](/architecture/audit/) row (verb `reveal`) in the same call.
 
-- `GET /secret-types` lists the shape registry, each `{id, display_name, official, fields:[{name, type,
+- `GET /types/secret` lists the shape registry, each `{id, display_name, official, fields:[{name, type,
   secret, origin}]}` (`secret:read`).
 - `GET /secrets` is the **all-scope admin directory** (`{secrets: [secret]}`); like the principal
   directory it needs an all-scope grant, and a non-all scope is a 403 (`secret:read`).
@@ -287,8 +304,40 @@ owning entity's own write. The key vocabulary and an entity's tags read on the v
   overriding most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves
   only from a binding on the component itself (`component:read`; the component must be in the caller's
   component read-scope).
+- The directory list routes (`GET /components`, `/systems`, `/locations`) each carry an **`effective_tags`**
+  map (`{key: winning_value}`, winners only) on every row, resolved for the whole page in one batched query.
+  It feeds the Tags column. A component resolves the full arc; a location resolves global plus its location
+  tree; a system resolves global, its system tree, and the location it is placed at. Provenance lives in the
+  per-entity effective-tags detail, not the row.
 
 A `tagBinding` body is `{key, value, owner_kind, owner_id?, owner_name?}`.
+
+## Files: content-addressed bytes behind a handle
+
+A **file** is a searchable handle over a content-addressed [blob](/architecture/files/): the metadata is
+tenant-wide (no placement arc), so unlike a secret these routes take **no scope**, only the
+`file:<action>` permission plus the per-file `sensitive` tier. Reading rides the **viewer floor**
+(`file:read`, which `*:read` carries, since a file is not a sensitive *resource*); a **sensitive** file is
+instead fenced to the `:admin` tier (`file:read:admin`), hidden from a lister without it and a
+**non-disclosing 404** to a reader without it, exactly the [secret sensitivity rule](/architecture/decisions/#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier).
+The bytes ride **base64 in JSON** on both create and download (the [avatar precedent](/architecture/decisions/#adr-0018-the-avatar-read-endpoint-is-json-not-raw-image-bytes)),
+so the whole surface stays under the authz middleware and generates a uniform client.
+
+- `GET /files` is the directory (`{files: [file]}`), sensitive files omitted below the admin tier
+  (`file:read`).
+- `POST /files` creates one from an upload `{name, content_type, content (base64), sensitive?}` (201,
+  `file:create`): the server hashes the bytes, **deduplicates** the blob, and writes the handle. A
+  `sensitive: true` file additionally needs the admin tier.
+- `GET /files/{id}` returns one handle's metadata (`file:read`); a sensitive file is a non-disclosing 404
+  without the admin tier.
+- `GET /files/{id}:download` returns `{name, content_type, content (base64)}`, the blob read back and its
+  hash verified (`file:read`).
+- `DELETE /files/{id}` removes the handle (204, `file:delete`); the blob is freed in the same transaction
+  when no other handle references it (dedup-aware, so storage is reclaimed), and a blob still shared by
+  another handle is kept.
+
+A `file` body is `{id, name, content_type, size, sha256, sensitive, created_at}`; the `sha256` is the
+content address of the blob it points at, so two handles over identical bytes share one blob.
 
 ## Reads beyond one resource are views
 

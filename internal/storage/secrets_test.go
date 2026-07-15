@@ -66,7 +66,7 @@ func TestSecretSealRoundTrip(t *testing.T) {
 	created, err := gw.CreateSecret(ctx, "", storage.SecretSpec{
 		Name: "snmp", SecretType: "snmp-community", OwnerKind: "global",
 		Fields: map[string]string{"community": "s3cr3t-ro"},
-	}, all)
+	}, all, true)
 	if err != nil {
 		t.Fatalf("create secret: %v", err)
 	}
@@ -77,7 +77,7 @@ func TestSecretSealRoundTrip(t *testing.T) {
 	}
 
 	// The reveal decrypts to the exact plaintext (the real-crypto path).
-	got, err := gw.RevealSecret(ctx, "", created.ID, all, all)
+	got, err := gw.RevealSecret(ctx, "", created.ID, all, all, true)
 	if err != nil {
 		t.Fatalf("reveal: %v", err)
 	}
@@ -109,14 +109,14 @@ func TestSecretFieldValidation(t *testing.T) {
 	_, err := gw.CreateSecret(ctx, "", storage.SecretSpec{
 		Name: "bad", SecretType: "snmp-community", OwnerKind: "global",
 		Fields: map[string]string{"nope": "x"},
-	}, all)
+	}, all, true)
 	if !errors.Is(err, storage.ErrSecretFieldInvalid) {
 		t.Errorf("unknown field = %v, want ErrSecretFieldInvalid", err)
 	}
 	_, err = gw.CreateSecret(ctx, "", storage.SecretSpec{
 		Name: "empty", SecretType: "snmp-community", OwnerKind: "global",
 		Fields: map[string]string{},
-	}, all)
+	}, all, true)
 	if !errors.Is(err, storage.ErrSecretFieldInvalid) {
 		t.Errorf("missing field = %v, want ErrSecretFieldInvalid", err)
 	}
@@ -124,7 +124,7 @@ func TestSecretFieldValidation(t *testing.T) {
 	s, err := gw.CreateSecret(ctx, "", storage.SecretSpec{
 		Name: "web", SecretType: "basic-auth", OwnerKind: "global",
 		Fields: map[string]string{"username": "admin", "password": "hunter2"},
-	}, all)
+	}, all, true)
 	if err != nil {
 		t.Fatalf("create basic-auth: %v", err)
 	}
@@ -141,11 +141,13 @@ func TestSecretFieldValidation(t *testing.T) {
 }
 
 // TestSecretOwnerScope covers the owner-arc scope gate on create and the
-// all-scope-only list.
+// scope-filtered list (a secret outside the read scope is dropped).
 func TestSecretOwnerScope(t *testing.T) {
 	gw, _ := secretGateway(t)
 	ctx := context.Background()
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "rm", LocationType: "room"}, all); err != nil {
+	// campus is the official type allowed at root; the type is incidental
+	// here, only the name (rm) is asserted below.
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "rm", LocationType: "campus"}, all); err != nil {
 		t.Fatalf("seed location: %v", err)
 	}
 
@@ -153,21 +155,21 @@ func TestSecretOwnerScope(t *testing.T) {
 	if _, err := gw.CreateSecret(ctx, "", storage.SecretSpec{
 		Name: "g", SecretType: "snmp-community", OwnerKind: "global",
 		Fields: map[string]string{"community": "x"},
-	}, scope.Set{}); !errors.Is(err, storage.ErrSecretForbidden) {
+	}, scope.Set{}, true); !errors.Is(err, storage.ErrSecretForbidden) {
 		t.Errorf("global create without all = %v, want ErrSecretForbidden", err)
 	}
 	// An unknown owner name is a 422, not a 500.
 	if _, err := gw.CreateSecret(ctx, "", storage.SecretSpec{
 		Name: "l", SecretType: "snmp-community", OwnerKind: "location", OwnerName: strptr("ghost"),
 		Fields: map[string]string{"community": "x"},
-	}, all); !errors.Is(err, storage.ErrSecretOwnerNotFound) {
+	}, all, true); !errors.Is(err, storage.ErrSecretOwnerNotFound) {
 		t.Errorf("unknown owner = %v, want ErrSecretOwnerNotFound", err)
 	}
 	// A location-owned secret lands on the location arc.
 	locSec, err := gw.CreateSecret(ctx, "", storage.SecretSpec{
 		Name: "l", SecretType: "snmp-community", OwnerKind: "location", OwnerName: strptr("rm"),
 		Fields: map[string]string{"community": "x"},
-	}, all)
+	}, all, true)
 	if err != nil {
 		t.Fatalf("create location secret: %v", err)
 	}
@@ -178,14 +180,15 @@ func TestSecretOwnerScope(t *testing.T) {
 	if _, err := gw.CreateSecret(ctx, "", storage.SecretSpec{
 		Name: "l", SecretType: "snmp-community", OwnerKind: "location", OwnerName: strptr("rm"),
 		Fields: map[string]string{"community": "y"},
-	}, all); !errors.Is(err, storage.ErrSecretExists) {
+	}, all, true); !errors.Is(err, storage.ErrSecretExists) {
 		t.Errorf("dup owner+name = %v, want ErrSecretExists", err)
 	}
-	// List is all-scope only.
-	if _, err := gw.ListSecrets(ctx, scope.Set{IDs: []string{"whatever"}}); !errors.Is(err, storage.ErrSecretForbidden) {
-		t.Errorf("non-all list = %v, want ErrSecretForbidden", err)
+	// List is scope-filtered now (not all-scope-only): a scope that does not cover
+	// the location's arc sees nothing, while the all scope sees the one secret.
+	if got, err := gw.ListSecrets(ctx, scope.Set{IDs: []string{"00000000-0000-0000-0000-000000000000"}}, true); err != nil || len(got) != 0 {
+		t.Errorf("out-of-scope list = %d, err %v, want 0", len(got), err)
 	}
-	all, err := gw.ListSecrets(ctx, all)
+	all, err := gw.ListSecrets(ctx, all, true)
 	if err != nil || len(all) != 1 {
 		t.Fatalf("list = %d, err %v, want 1", len(all), err)
 	}
@@ -220,7 +223,7 @@ func TestSecretCascadeResolve(t *testing.T) {
 	mustSecret(t, gw, "poll", "system", strptr("sys"), "sys-val")
 	mustSecret(t, gw, "poll", "component", strptr("codec-1"), "comp-val")
 
-	resolved, err := gw.ResolveSecrets(ctx, comp.ID, all)
+	resolved, err := gw.ResolveSecrets(ctx, comp.ID, all, true)
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
 	}
@@ -243,9 +246,9 @@ func TestSecretCascadeResolve(t *testing.T) {
 	}
 
 	// Remove the component-tier secret: the system tier now wins.
-	list, _ := gw.ListSecrets(ctx, all)
+	list, _ := gw.ListSecrets(ctx, all, true)
 	deleteByOwner(t, gw, list, "component")
-	resolved, err = gw.ResolveSecrets(ctx, comp.ID, all)
+	resolved, err = gw.ResolveSecrets(ctx, comp.ID, all, true)
 	if err != nil {
 		t.Fatalf("resolve 2: %v", err)
 	}
@@ -255,9 +258,9 @@ func TestSecretCascadeResolve(t *testing.T) {
 	}
 
 	// Remove the system tier: the deeper location (room) beats campus.
-	list, _ = gw.ListSecrets(ctx, all)
+	list, _ = gw.ListSecrets(ctx, all, true)
 	deleteByOwner(t, gw, list, "system")
-	resolved, err = gw.ResolveSecrets(ctx, comp.ID, all)
+	resolved, err = gw.ResolveSecrets(ctx, comp.ID, all, true)
 	if err != nil {
 		t.Fatalf("resolve 3: %v", err)
 	}
@@ -267,7 +270,7 @@ func TestSecretCascadeResolve(t *testing.T) {
 	}
 
 	// A component outside the read scope does not disclose its cascade.
-	if _, err := gw.ResolveSecrets(ctx, comp.ID, scope.Set{IDs: []string{"00000000-0000-0000-0000-000000000000"}}); !errors.Is(err, storage.ErrComponentNotFound) {
+	if _, err := gw.ResolveSecrets(ctx, comp.ID, scope.Set{IDs: []string{"00000000-0000-0000-0000-000000000000"}}, true); !errors.Is(err, storage.ErrComponentNotFound) {
 		t.Errorf("out-of-scope resolve = %v, want ErrComponentNotFound", err)
 	}
 }
@@ -284,7 +287,7 @@ func mustSecret(t *testing.T, gw storage.Gateway, name, ownerKind string, ownerN
 	if _, err := gw.CreateSecret(context.Background(), "", storage.SecretSpec{
 		Name: name, SecretType: "snmp-community", OwnerKind: ownerKind, OwnerName: ownerName,
 		Fields: map[string]string{"community": community},
-	}, all); err != nil {
+	}, all, true); err != nil {
 		t.Fatalf("secret %s@%s: %v", name, ownerKind, err)
 	}
 }
@@ -293,7 +296,7 @@ func deleteByOwner(t *testing.T, gw storage.Gateway, list []storage.Secret, owne
 	t.Helper()
 	for _, s := range list {
 		if s.OwnerKind == ownerKind {
-			if err := gw.DeleteSecret(context.Background(), "", s.ID, all, all); err != nil {
+			if err := gw.DeleteSecret(context.Background(), "", s.ID, all, all, true); err != nil {
 				t.Fatalf("delete %s: %v", s.ID, err)
 			}
 		}

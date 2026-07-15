@@ -52,8 +52,9 @@ func TestSeedRolesIdempotent(t *testing.T) {
 		t.Errorf("owner permissions = %v, want [>] (the superuser tail wildcard)", ownerPerms)
 	}
 
-	// The four official location types seed alongside the roles, ranked and
-	// idempotent (the second Run above must not have duplicated them).
+	// The four official location types seed alongside the roles, in
+	// alphabetical order by display_name, and idempotently (the second Run
+	// above must not have duplicated them).
 	var typeCount int
 	if err := conn.QueryRow(ctx, `select count(*) from location_type where official`).Scan(&typeCount); err != nil {
 		t.Fatalf("count location_types: %v", err)
@@ -62,11 +63,11 @@ func TestSeedRolesIdempotent(t *testing.T) {
 		t.Errorf("official location_types = %d, want 4", typeCount)
 	}
 	var topType string
-	if err := conn.QueryRow(ctx, `select id from location_type order by rank, id limit 1`).Scan(&topType); err != nil {
+	if err := conn.QueryRow(ctx, `select id from location_type order by display_name, id limit 1`).Scan(&topType); err != nil {
 		t.Fatalf("read top location_type: %v", err)
 	}
-	if topType != "campus" {
-		t.Errorf("lowest-rank location_type = %q, want campus", topType)
+	if topType != "building" {
+		t.Errorf("first-alphabetically location_type = %q, want building", topType)
 	}
 	// Each shipped type seeds its glyph key, and re-running Run keeps it (the icon
 	// is part of the idempotent upsert, not just the initial insert).
@@ -104,8 +105,23 @@ func TestSeedRolesIdempotent(t *testing.T) {
 	if err := conn.QueryRow(ctx, `select count(*) from secret_type where official`).Scan(&secTypeCount); err != nil {
 		t.Fatalf("count secret_types: %v", err)
 	}
-	if secTypeCount != 2 {
-		t.Errorf("official secret_types = %d, want 2", secTypeCount)
+	if secTypeCount != 3 {
+		t.Errorf("official secret_types = %d, want 3", secTypeCount)
+	}
+	// The type default seeds the create form: a device type is operational, the
+	// OAuth2 integration type is admin-sensitive.
+	var snmpDefault, oauthDefault bool
+	if err := conn.QueryRow(ctx, `select default_admin_sensitive from secret_type where id = 'snmp-community'`).Scan(&snmpDefault); err != nil {
+		t.Fatalf("read snmp-community default_admin_sensitive: %v", err)
+	}
+	if err := conn.QueryRow(ctx, `select default_admin_sensitive from secret_type where id = 'oauth2-client'`).Scan(&oauthDefault); err != nil {
+		t.Fatalf("read oauth2-client default_admin_sensitive: %v", err)
+	}
+	if snmpDefault {
+		t.Error("snmp-community default_admin_sensitive = true, want false (operational device secret)")
+	}
+	if !oauthDefault {
+		t.Error("oauth2-client default_admin_sensitive = false, want true (platform credential)")
 	}
 	var community string
 	if err := conn.QueryRow(ctx, `select schema->0->>'name' from secret_type where id = 'snmp-community'`).Scan(&community); err != nil {
@@ -113,5 +129,29 @@ func TestSeedRolesIdempotent(t *testing.T) {
 	}
 	if community != "community" {
 		t.Errorf("snmp-community first field = %q, want community", community)
+	}
+
+	// Each shipped type seeds its allowed_parent_types set, matching the
+	// implied hierarchy (campus is root-only; a room may sit under a floor, a
+	// building, or straight under a campus), and re-running Run keeps it.
+	wantParents := map[string][]string{
+		"campus": {"root"}, "building": {"root", "campus"},
+		"floor": {"building", "campus"}, "room": {"floor", "building", "campus"},
+	}
+	for id, want := range wantParents {
+		var got []string
+		if err := conn.QueryRow(ctx, `select allowed_parent_types from location_type where id = $1`, id).Scan(&got); err != nil {
+			t.Fatalf("read %s allowed_parent_types: %v", id, err)
+		}
+		if len(got) != len(want) {
+			t.Errorf("%s allowed_parent_types = %v, want %v", id, got, want)
+			continue
+		}
+		for i := range want {
+			if got[i] != want[i] {
+				t.Errorf("%s allowed_parent_types = %v, want %v", id, got, want)
+				break
+			}
+		}
 	}
 }

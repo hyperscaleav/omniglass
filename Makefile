@@ -1,7 +1,7 @@
 # Local dev loop + the build/run flow for the single binary. Production deploy
 # is BYO Postgres; tests use ephemeral testcontainer Postgres.
 
-.PHONY: build build-web web image gen gen-proto gen-web test test-short test-e2e clean-testcontainers tidy up down dev release-plan release-apply release-snapshot
+.PHONY: build build-web web image gen gen-proto gen-web test test-web test-short test-e2e clean-testcontainers tidy up down dev release-plan release-apply release-snapshot
 
 # Build the single binary (no console embedded; serves the build-the-console
 # placeholder under /web).
@@ -28,13 +28,15 @@ image:
 
 # Regenerate the derived artifacts from the Huma API (the source of truth): the
 # OpenAPI 3.1 document (server-less, into api/openapi.{json,yaml}), the cobra
-# command tree (internal/cli/api_gen.go), and the typed SPA client
-# (web/src/api/schema.gen.ts). The spec is the seam every downstream client is
-# generated from. Run after any API change; the results are committed and
-# reviewed like code.
+# command tree (internal/cli/api_gen.go), the CLI reference page (from that
+# command tree, into docs/), the protobuf telemetry wire, and the typed SPA
+# client (web/src/api/schema.gen.ts). The spec is the seam every downstream
+# client is generated from. Run after any API change; the results are committed
+# and reviewed like code.
 gen: gen-proto
 	go run ./cmd/openapigen
 	go run ./cmd/cligen
+	go run ./cmd/docsgen
 	cd web && npm install && npm run gen:api
 
 # Regenerate the protobuf telemetry wire (proto/og/v1/event.pb.go) from its
@@ -51,9 +53,25 @@ gen-web:
 	cd web && npm install && npm run gen:api
 
 # Full gate: every test, including the testcontainer-backed integration and
-# end-to-end tests (real Postgres). Green before commit and before merge.
-test:
-	go test ./...
+# end-to-end tests (real Postgres) plus the SPA (vitest). Green before commit and
+# before merge.
+#
+# TEST_PARALLEL caps how many package test binaries run at once (go test -p). It
+# bounds both concurrent linking and, because each container-backed package spins
+# its own ephemeral Postgres, the number of live testcontainers. The Go default
+# (GOMAXPROCS, e.g. 16) lets every container-backed package start a Postgres at
+# once alongside up to that many link jobs, which saturates memory on smaller
+# machines (notably WSL2). 4 keeps a healthy machine near full speed while
+# leaving headroom; override for a beefier box: make test TEST_PARALLEL=8.
+TEST_PARALLEL ?= 4
+test: test-web
+	go test -p $(TEST_PARALLEL) ./...
+
+# The SPA unit + theming-ban tests (vitest). Part of the local gate so web-only
+# regressions (an illegible badge class, a broken page descriptor) are caught
+# before merge, not just by the Go suite.
+test-web:
+	cd web && npm install && npm run test
 
 # Fast iteration: unit/pure tests only. -short skips anything that needs a
 # Postgres container or builds the binary.
@@ -125,6 +143,31 @@ up:
 down:
 	docker compose down
 
+# Capture the docs screenshots against the real console (dev stack + Playwright),
+# writing PNGs into docs/public/screenshots/ from each page's `screenshots`
+# frontmatter. Commit the regenerated images like any other generated resource.
+# Needs the Playwright browser once: (cd web && npx playwright install chromium).
+docs-shots:
+	bash docs/screenshots/capture.sh
+
+# Freshness gate for the screenshots, the visual sibling of `make gen`: recapture
+# into a temp dir and fail if any shot differs from the committed image by more
+# than a small tolerance, so a UI change that was not re-captured cannot merge.
+# Tolerance (not byte equality) because the dev seed's random UUIDs make a fresh
+# capture differ from the committed one by a fraction of a percent of pixels.
+# The temp dir is repo-relative so it lands inside the capture container's mount.
+docs-shots-check:
+	@tmp=.docs-shots-tmp; mkdir -p $$tmp; \
+	  DOCS_SHOTS_OUT=$$tmp bash docs/screenshots/capture.sh && \
+	  node web/e2e/docs-shots-diff.mjs $$tmp docs/public/screenshots; \
+	  rc=$$?; rm -f $$tmp/*.png; rmdir $$tmp 2>/dev/null || true; exit $$rc
+
+# Structural gate for the screenshots (no browser, fully deterministic): every
+# `screenshots` frontmatter entry has a committed PNG, every PNG is declared, and
+# ids are unique. Fast enough to run on every PR (see .github/workflows/docs-shots.yml).
+docs-shots-verify:
+	node web/e2e/docs-shots-verify.mjs
+
 # Full stack for a browser session: Postgres + the server with the console
 # embedded. Creates (idempotently) a dev owner with password "dev", also mints a
 # bearer token, then serves the API and console at http://localhost:8080/web.
@@ -135,5 +178,5 @@ dev: up build-web
 	@./bin/omniglass seed-dev || true
 	@echo "console: http://localhost:8080/web"
 	@echo "  sign in with username 'dev' and password 'dev', or paste a bearer token:"
-	@./bin/omniglass token dev
+	@./bin/omniglass token dev --description "dev login token"
 	./bin/omniglass server

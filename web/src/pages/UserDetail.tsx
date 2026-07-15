@@ -2,9 +2,11 @@ import { type JSX, For, Show, createEffect, createMemo, createResource, createSi
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import GrantBuilder from "../components/GrantBuilder";
 import { Fact, RelatedList } from "../components/DetailShell";
-import { Ban, Eye, Key, Mask, Trash, X } from "../components/icons";
+import { Ban, Eye, Key, LogOut, Mask, Trash, X } from "../components/icons";
 import PasswordField from "../components/PasswordField";
 import Button from "../components/Button";
+import SessionsList from "../components/SessionsList";
+import { usePrincipalSessions, useRevokePrincipalSession, useRevokeAllPrincipalSessions, type Session } from "../lib/sessions";
 import { useBlades, useBladeEdit } from "../lib/blades";
 import type { BladeDef } from "../lib/blades";
 import type { TreeNode } from "../lib/treeselect";
@@ -43,6 +45,13 @@ export function UserDetail(props: { id: string }) {
   const canPurge = () => can(me.data, "principal", "purge", "admin");
   const canResetPassword = () => can(me.data, "principal", "reset-password");
   const canSetAvatar = () => can(me.data, "principal", "set-avatar");
+  const canRevokeSession = () => can(me.data, "principal", "revoke-session");
+  const revokeAllSessions = useRevokeAllPrincipalSessions(props.id);
+  // An owner's credentials cannot be revoked by anyone (the takeover guard, server-side).
+  // Detect it from the target's grants so the console hides the revoke affordances rather
+  // than offering an action that would 403: an admin can see an owner's sessions, not end
+  // them. The capability-escalation half of the guard is rarer and still errors gracefully.
+  const isOwnerTarget = () => (p()?.grants ?? []).some((g) => g.role === "owner");
   // The admin reset-password panel (toggled from the kebab): its own new-password
   // field, a server-policy error routed inline, and a "set" confirmation.
   const [resetting, setResetting] = createSignal(false);
@@ -149,6 +158,13 @@ export function UserDetail(props: { id: string }) {
         items.push({ label: "View as", icon: <Eye size={15} />, onClick: () => doImpersonate(pr, "view_as") });
         items.push({ label: "Act as", icon: <Mask size={15} />, onClick: () => doImpersonate(pr, "act_as") });
       }
+      // Bulk session/token revoke, alongside the per-row Revoke in the Sessions section
+      // and gated by the same capability: end every session or every token at once. Hidden
+      // on an owner target, whose credentials the takeover guard makes un-revocable.
+      if (canRevokeSession() && !isOwnerTarget()) {
+        items.push({ label: "Revoke all sessions", icon: <LogOut size={15} />, tone: "danger", onClick: () => doRevokeAll("session") });
+        items.push({ label: "Revoke all tokens", icon: <Trash size={15} />, tone: "danger", onClick: () => doRevokeAll("token") });
+      }
       return items;
     },
     save: async () => {
@@ -242,6 +258,17 @@ export function UserDetail(props: { id: string }) {
   async function doImpersonate(pr: Principal, mode: "view_as" | "act_as") {
     setActErr(null);
     const r = await impersonate(qc, pr.id, principalName(pr), mode);
+    if (!r.ok) setActErr(r.message);
+  }
+
+  // Bulk-revoke every one of the target's sessions or tokens from the kebab. Confirmed
+  // (it signs the user out of all of that kind at once), scoped to purpose so one never
+  // touches the other, then the Sessions section refetches from the invalidated query.
+  async function doRevokeAll(purpose: "session" | "token") {
+    const noun = purpose === "session" ? "sessions" : "API tokens";
+    if (!confirm(`Revoke all ${noun} for this user? They are signed out of every ${purpose} at once.`)) return;
+    setActErr(null);
+    const r = await revokeAllSessions(purpose);
     if (!r.ok) setActErr(r.message);
   }
 
@@ -409,9 +436,74 @@ export function UserDetail(props: { id: string }) {
             canRevoke={can(me.data, "principal_grant", "delete")}
             onBind={(h) => { grantCommit = h.commit; grantCancel = h.cancel; }}
           />
+
+          {/* Sessions: the target's active sign-ins and API tokens, each revocable.
+              Only rendered when the caller holds principal:revoke-session, so the
+              affordance is hidden from an operator (a UI hint; the server is the
+              authority, and it bounds every revoke to this principal). */}
+          <Show when={canRevokeSession()}>
+            <SessionsSection id={pr().id} revocable={!isOwnerTarget()} />
+          </Show>
         </div>
       )}
     </Show>
+  );
+}
+
+// SessionsSection lists a target principal's active sessions and tokens on the admin
+// blade, each with a Revoke. It reuses the same SessionsList presentation as the
+// self-service Profile card; the server bounds every read and revoke to this
+// principal and never returns the secret. current is always false here (there is no
+// "this request's own session" when viewing another principal), so every row reads
+// as "Revoke". Rendered only when the caller holds principal:revoke-session. When the
+// target is not revocable (an owner, per the takeover guard), the list stays read-only:
+// the caller can see where the account is signed in but not end any of it.
+function SessionsSection(props: { id: string; revocable: boolean }) {
+  const sessions = usePrincipalSessions(props.id);
+  const revokeSession = useRevokePrincipalSession(props.id);
+  const [revoking, setRevoking] = createSignal<string | null>(null);
+  const [err, setErr] = createSignal<string | null>(null);
+  // Split by kind so sessions and API tokens each render in their own section, matching
+  // the self-service Profile card. current is always false here (viewing another
+  // principal), so every row reads as "Revoke".
+  const sessionRows = () => (sessions.data ?? []).filter((s) => s.kind === "session");
+  const tokenRows = () => (sessions.data ?? []).filter((s) => s.kind === "token");
+  async function revoke(s: Session) {
+    if (!confirm("Revoke this credential? The user is signed out of it immediately.")) return;
+    setRevoking(s.id);
+    setErr(null);
+    const r = await revokeSession(s.id);
+    if (!r.ok) setErr(r.message);
+    setRevoking(null);
+  }
+  return (
+    <div class="flex flex-col gap-4">
+      <Show when={sessions.error}>
+        <div role="alert" class="alert alert-error alert-soft text-sm"><span>Could not load this user's sessions.</span></div>
+      </Show>
+      <Show when={err()}>
+        <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
+      </Show>
+      <Show when={!props.revocable}>
+        <p class="text-xs text-base-content/40">An owner's sessions and tokens cannot be revoked. You can see where the account is signed in, but not end it.</p>
+      </Show>
+      <div class="flex flex-col gap-2">
+        <div class="eyebrow">Sessions</div>
+        <p class="text-xs text-base-content/50">
+          Where this account is signed in. Revoke a <span class="font-data text-base-content/70">session</span> to sign
+          it out at once. The credential secret is never shown, only its <span class="font-data text-base-content/70">ogp_</span> locator.
+        </p>
+        <SessionsList sessions={sessionRows()} revoking={revoking()} onRevoke={props.revocable ? revoke : undefined} emptyLabel="No active sessions." />
+      </div>
+      <div class="flex flex-col gap-2">
+        <div class="eyebrow">API tokens</div>
+        <p class="text-xs text-base-content/50">
+          Tokens this account minted for the CLI or API. Revoke any that should no longer work. The token secret is never
+          shown, only its <span class="font-data text-base-content/70">ogp_</span> locator.
+        </p>
+        <SessionsList sessions={tokenRows()} revoking={revoking()} onRevoke={props.revocable ? revoke : undefined} emptyLabel="No API tokens." />
+      </div>
+    </div>
   );
 }
 

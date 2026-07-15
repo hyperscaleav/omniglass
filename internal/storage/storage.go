@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/hyperscaleav/omniglass/internal/blob"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/secret"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -37,10 +38,12 @@ type Gateway interface {
 	// per username. Returns whether a new owner was created (false if the
 	// username already exists, so re-running mints no second credential).
 	BootstrapOwner(ctx context.Context, spec OwnerSpec) (created bool, err error)
-	// IssueBearerCredential mints an additional bearer credential for an existing
-	// principal by human username (token reissue / break-glass / dev login).
-	// Returns false if no such username.
-	IssueBearerCredential(ctx context.Context, username string, hash []byte, prefix string, expiresAt *time.Time) (bool, error)
+	// IssueBearerCredential mints an additional bearer credential (a web-login session
+	// or a CLI/API token) for an existing principal, addressed by human username, from a
+	// BearerIssue spec: the secret hash and prefix, the purpose, the expiry, and the
+	// identifying metadata (a token's description, and the user-agent / client-ip that
+	// created it). Returns false if no such username.
+	IssueBearerCredential(ctx context.Context, spec BearerIssue) (bool, error)
 	// AuthenticateBearer resolves a bearer credential by its sha256 hash to the
 	// principal, its kind profile, and its grants. Returns ErrCredentialNotFound
 	// if no credential matches.
@@ -144,13 +147,30 @@ type Gateway interface {
 	// applies the same all-scope invariant as the rest of the directory (a non-all
 	// scope is ErrPrincipalForbidden), then delegates to GetHumanAvatar.
 	GetPrincipalAvatar(ctx context.Context, id string, action scope.Set) (string, bool, error)
-	// RevokePrincipalBearers deletes a principal's bearer credentials (sessions and
-	// tokens) except any sha256 hash in keep (empty revokes all); the force-logout on a
-	// self-service password change keeps the caller's own session. Returns the count.
-	RevokePrincipalBearers(ctx context.Context, principalID string, keep [][]byte) (int, error)
 	// RevokeBearer deletes the bearer credential with the given sha256 hash
 	// (session logout). A no-op if none matches.
 	RevokeBearer(ctx context.Context, hash []byte) error
+	// ListBearerCredentials returns a principal's own bearer credentials (login
+	// sessions and API tokens) with their non-secret metadata (id, prefix,
+	// created_at, expires_at), newest first; the secret hash is never returned.
+	// currentHash (the sha256 of the request's own token) is compared only in SQL to
+	// flag the current credential. It backs a signed-in user viewing their sessions.
+	ListBearerCredentials(ctx context.Context, principalID string, currentHash []byte) ([]BearerCredential, error)
+	// RevokeBearerByID deletes one bearer credential by id, scoped to the owning
+	// principal (so a caller revokes only their own). Returns false when nothing
+	// matched (wrong/already-revoked id, another principal's credential, or a
+	// malformed id).
+	RevokeBearerByID(ctx context.Context, principalID, credentialID string) (bool, error)
+	// RevokeBearersByPurpose deletes every one of a principal's bearer credentials of
+	// the given purpose ('session' or 'token'), scoped to the owning principal, and
+	// returns the count deleted. It backs the admin "revoke all sessions" / "revoke
+	// all tokens" blade actions: end all of one kind at once without touching the other.
+	RevokeBearersByPurpose(ctx context.Context, principalID, purpose string) (int, error)
+	// RevokeBearersByPurposeExcept is RevokeBearersByPurpose keeping any credential
+	// whose sha256 secret hash is in keep (empty keep is the plain bulk revoke). It backs
+	// "revoke my OTHER sessions" on a password change and the self-service "revoke all
+	// sessions" that keeps the session the caller is on, tokens untouched.
+	RevokeBearersByPurposeExcept(ctx context.Context, principalID, purpose string, keep [][]byte) (int, error)
 	// AnyHuman reports whether any human principal exists (drives the login
 	// screen's bootstrap hint).
 	AnyHuman(ctx context.Context) (bool, error)
@@ -165,8 +185,14 @@ type Gateway interface {
 	// UpsertLocationType installs or updates an official location type by id, the
 	// boot-seed phase's write. Idempotent.
 	UpsertLocationType(ctx context.Context, lt LocationType) error
-	// ListLocationTypes returns every location type, ranked.
+	// ListLocationTypes returns every location type, alphabetically by display_name.
 	ListLocationTypes(ctx context.Context) ([]LocationType, error)
+	// The location_type registry CRUD (capability-only, unscoped). Create writes a
+	// custom (official=false) row; update/delete refuse official rows and delete
+	// refuses a row still referenced by a location.
+	CreateLocationType(ctx context.Context, actorID string, lt LocationType) (*LocationType, error)
+	UpdateLocationType(ctx context.Context, actorID, id string, patch LocationTypePatch) (*LocationType, error)
+	DeleteLocationType(ctx context.Context, actorID, id string) error
 
 	// InScopeIDs reports which of the candidate row ids of a tree resource
 	// (location/system/component) are inside a resolved scope, applying the same
@@ -182,20 +208,28 @@ type Gateway interface {
 	GetLocation(ctx context.Context, name string, read scope.Set) (*Location, error)
 	CreateLocation(ctx context.Context, actorID string, spec LocationSpec, create scope.Set) (*Location, error)
 	UpdateLocation(ctx context.Context, actorID, name string, patch LocationPatch, read, action scope.Set) (*Location, error)
+	LocationNameTaken(ctx context.Context, name string) (bool, error)
 	DeleteLocation(ctx context.Context, actorID, name string, read, action scope.Set) error
 
 	// The system tier: a type registry and scoped CRUD, mirroring locations.
 	UpsertSystemType(ctx context.Context, st SystemType) error
 	ListSystemTypes(ctx context.Context) ([]SystemType, error)
+	CreateSystemType(ctx context.Context, actorID string, st SystemType) (*SystemType, error)
+	UpdateSystemType(ctx context.Context, actorID, id string, patch SystemTypePatch) (*SystemType, error)
+	DeleteSystemType(ctx context.Context, actorID, id string) error
 	ListSystems(ctx context.Context, read scope.Set) ([]System, error)
 	GetSystem(ctx context.Context, name string, read scope.Set) (*System, error)
 	CreateSystem(ctx context.Context, actorID string, spec SystemSpec, create scope.Set) (*System, error)
 	UpdateSystem(ctx context.Context, actorID, name string, patch SystemPatch, read, action scope.Set) (*System, error)
+	SystemNameTaken(ctx context.Context, name string) (bool, error)
 	DeleteSystem(ctx context.Context, actorID, name string, read, action scope.Set) error
 
 	// The component tier: a type registry and scoped CRUD, on the same helpers.
 	UpsertComponentType(ctx context.Context, ct ComponentType) error
 	ListComponentTypes(ctx context.Context) ([]ComponentType, error)
+	CreateComponentType(ctx context.Context, actorID string, ct ComponentType) (*ComponentType, error)
+	UpdateComponentType(ctx context.Context, actorID, id string, patch ComponentTypePatch) (*ComponentType, error)
+	DeleteComponentType(ctx context.Context, actorID, id string) error
 	ListComponents(ctx context.Context, read scope.Set) ([]Component, error)
 	GetComponent(ctx context.Context, name string, read scope.Set) (*Component, error)
 	// ListComponentInterfaces returns a component's interfaces (the reachability
@@ -204,6 +238,7 @@ type Gateway interface {
 	ListComponentInterfaces(ctx context.Context, componentName string) ([]ComponentInterface, error)
 	CreateComponent(ctx context.Context, actorID string, spec ComponentSpec, create scope.Set) (*Component, error)
 	UpdateComponent(ctx context.Context, actorID, name string, patch ComponentPatch, read, action scope.Set) (*Component, error)
+	ComponentNameTaken(ctx context.Context, name string) (bool, error)
 	DeleteComponent(ctx context.Context, actorID, name string, read, action scope.Set) error
 
 	// The interface tier: operator CRUD over placement-bound connections. An
@@ -275,13 +310,19 @@ type Gateway interface {
 	UpsertSecretType(ctx context.Context, st SecretType) error
 	ListSecretTypes(ctx context.Context) ([]SecretType, error)
 	GetSecretType(ctx context.Context, id string) (*SecretType, error)
-	ListSecrets(ctx context.Context, read scope.Set) ([]Secret, error)
-	CreateSecret(ctx context.Context, actorID string, spec SecretSpec, create scope.Set) (*Secret, error)
-	UpdateSecret(ctx context.Context, actorID, id string, fields map[string]string, read, action scope.Set) (*Secret, error)
-	DeleteSecret(ctx context.Context, actorID, id string, read, action scope.Set) error
-	RevealSecret(ctx context.Context, actorID, id string, read, action scope.Set) (map[string]string, error)
-	CopySecret(ctx context.Context, actorID, id string, read, action scope.Set) (map[string]string, error)
-	ResolveSecrets(ctx context.Context, componentID string, read scope.Set) ([]ResolvedSecret, error)
+	// canAdmin reports whether the caller holds the secret action at the :admin
+	// tier (e.g. secret:reveal:admin), which admin/owner reach via secret:> / >.
+	// It gates admin-sensitive secrets: those are hidden from a lister/resolver
+	// without it, refused to a revealer/updater/deleter without it (non-disclosing),
+	// and cannot be created by a caller without it. Placement scope still fences
+	// where; canAdmin fences the sensitivity tier.
+	ListSecrets(ctx context.Context, read scope.Set, canAdmin bool) ([]Secret, error)
+	CreateSecret(ctx context.Context, actorID string, spec SecretSpec, create scope.Set, canAdmin bool) (*Secret, error)
+	UpdateSecret(ctx context.Context, actorID, id string, fields map[string]string, read, action scope.Set, canAdmin bool) (*Secret, error)
+	DeleteSecret(ctx context.Context, actorID, id string, read, action scope.Set, canAdmin bool) error
+	RevealSecret(ctx context.Context, actorID, id string, read, action scope.Set, canAdmin bool) (map[string]string, error)
+	CopySecret(ctx context.Context, actorID, id string, read, action scope.Set, canAdmin bool) (map[string]string, error)
+	ResolveSecrets(ctx context.Context, componentID string, read scope.Set, canAdmin bool) ([]ResolvedSecret, error)
 
 	// The variable tier: a typed, cascade-resolved plaintext value (a macro),
 	// owned on the same exclusive arc as a secret but shown in the clear (no
@@ -299,6 +340,7 @@ type Gateway interface {
 	// owner's read/action scopes. ResolveTags is the per-component effective-tags
 	// view (union on key, override on value) down the structural cascade.
 	ListTags(ctx context.Context) ([]Tag, error)
+	DistinctTagValues(ctx context.Context, key string) ([]string, error)
 	CreateTag(ctx context.Context, actorID string, spec TagSpec, create scope.Set) (*Tag, error)
 	UpdateTag(ctx context.Context, actorID, name string, spec TagSpec, action scope.Set) (*Tag, error)
 	DeleteTag(ctx context.Context, actorID, name string, action scope.Set) error
@@ -306,6 +348,22 @@ type Gateway interface {
 	DeleteTagBinding(ctx context.Context, actorID, key, ownerKind string, ownerName *string, read, action scope.Set) error
 	ListEntityTags(ctx context.Context, ownerKind string, ownerName *string, read scope.Set) ([]TagBinding, error)
 	ResolveTags(ctx context.Context, componentID string, read scope.Set) ([]ResolvedTag, error)
+	// EffectiveTags batch-resolves the winning effective tags (key -> value) for a
+	// set of owners of one kind, feeding the directory Tags column. Scopeless: the
+	// caller passes ids already in the read scope (the rowActions batch contract).
+	EffectiveTags(ctx context.Context, kind string, ownerIDs []string) (map[string]map[string]string, error)
+
+	// The file tier: a searchable metadata handle over the content-addressed blob
+	// store. A file has no estate placement (tenant-wide), so these methods take no
+	// scope; canAdmin gates the per-file sensitive flag (the :admin tier), mirroring
+	// the secret sensitivity axis. CreateFile stores the upload as a deduplicated
+	// blob and points the handle at it; DeleteFile drops the handle but leaves the
+	// blob (GC is a later slice).
+	ListFiles(ctx context.Context, canAdmin bool) ([]File, error)
+	GetFile(ctx context.Context, id string, canAdmin bool) (*File, error)
+	CreateFile(ctx context.Context, actorID string, spec FileSpec, canAdmin bool) (*File, error)
+	DownloadFile(ctx context.Context, id string, canAdmin bool) (*File, []byte, error)
+	DeleteFile(ctx context.Context, actorID, id string, canAdmin bool) error
 
 	// Close releases the underlying connection pool. Idempotent at the pool
 	// level; call once on shutdown.
@@ -316,6 +374,7 @@ type Gateway interface {
 type PG struct {
 	pool   *pgxpool.Pool
 	secret secret.Provider
+	blob   blob.Store
 }
 
 // Option configures a PG at construction. The secret provider is optional so
@@ -331,6 +390,13 @@ func WithSecretProvider(prov secret.Provider) Option {
 	return func(p *PG) { p.secret = prov }
 }
 
+// WithBlobStore overrides the default pgblobs backend the file bytes are stored
+// behind (an S3-compatible or disk backend implementing the same blob.Store).
+// Unset, the gateway uses the pgblobs backend over its own pool.
+func WithBlobStore(store blob.Store) Option {
+	return func(p *PG) { p.blob = store }
+}
+
 // NewPG opens a pgx pool against dsn and verifies connectivity once before
 // returning, so a bad DSN or an unreachable database fails fast at boot rather
 // than on the first query.
@@ -343,7 +409,7 @@ func NewPG(ctx context.Context, dsn string, opts ...Option) (*PG, error) {
 		pool.Close()
 		return nil, fmt.Errorf("storage: ping: %w", err)
 	}
-	p := &PG{pool: pool}
+	p := &PG{pool: pool, blob: NewPGBlobStore(pool)}
 	for _, opt := range opts {
 		opt(p)
 	}

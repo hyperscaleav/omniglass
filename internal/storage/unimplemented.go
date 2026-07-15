@@ -19,7 +19,7 @@ func (UnimplementedGateway) UpsertRole(context.Context, Role) error { return nil
 func (UnimplementedGateway) BootstrapOwner(context.Context, OwnerSpec) (bool, error) {
 	return false, nil
 }
-func (UnimplementedGateway) IssueBearerCredential(context.Context, string, []byte, string, *time.Time) (bool, error) {
+func (UnimplementedGateway) IssueBearerCredential(context.Context, BearerIssue) (bool, error) {
 	return false, nil
 }
 func (UnimplementedGateway) AuthenticateBearer(context.Context, []byte) (*Principal, error) {
@@ -123,11 +123,20 @@ func (UnimplementedGateway) GetHumanAvatar(context.Context, string) (string, boo
 func (UnimplementedGateway) GetPrincipalAvatar(context.Context, string, scope.Set) (string, bool, error) {
 	return "", false, nil
 }
-func (UnimplementedGateway) RevokePrincipalBearers(context.Context, string, [][]byte) (int, error) {
+func (UnimplementedGateway) RevokeBearer(context.Context, []byte) error { return nil }
+func (UnimplementedGateway) ListBearerCredentials(context.Context, string, []byte) ([]BearerCredential, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) RevokeBearerByID(context.Context, string, string) (bool, error) {
+	return false, nil
+}
+func (UnimplementedGateway) RevokeBearersByPurpose(context.Context, string, string) (int, error) {
 	return 0, nil
 }
-func (UnimplementedGateway) RevokeBearer(context.Context, []byte) error { return nil }
-func (UnimplementedGateway) AnyHuman(context.Context) (bool, error)     { return false, nil }
+func (UnimplementedGateway) RevokeBearersByPurposeExcept(context.Context, string, string, [][]byte) (int, error) {
+	return 0, nil
+}
+func (UnimplementedGateway) AnyHuman(context.Context) (bool, error)    { return false, nil }
 func (UnimplementedGateway) ListRoles(context.Context) ([]Role, error) { return nil, nil }
 func (UnimplementedGateway) ListAuditLog(context.Context, AuditFilter) ([]AuditEntry, error) {
 	return nil, nil
@@ -139,6 +148,13 @@ func (UnimplementedGateway) UpsertLocationType(context.Context, LocationType) er
 func (UnimplementedGateway) ListLocationTypes(context.Context) ([]LocationType, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) CreateLocationType(context.Context, string, LocationType) (*LocationType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) UpdateLocationType(context.Context, string, string, LocationTypePatch) (*LocationType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteLocationType(context.Context, string, string) error { return nil }
 func (UnimplementedGateway) InScopeIDs(context.Context, string, []string, scope.Set) (map[string]bool, error) {
 	return nil, nil
 }
@@ -154,6 +170,9 @@ func (UnimplementedGateway) CreateLocation(context.Context, string, LocationSpec
 func (UnimplementedGateway) UpdateLocation(context.Context, string, string, LocationPatch, scope.Set, scope.Set) (*Location, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) LocationNameTaken(context.Context, string) (bool, error) {
+	return false, nil
+}
 func (UnimplementedGateway) DeleteLocation(context.Context, string, string, scope.Set, scope.Set) error {
 	return nil
 }
@@ -161,6 +180,13 @@ func (UnimplementedGateway) UpsertSystemType(context.Context, SystemType) error 
 func (UnimplementedGateway) ListSystemTypes(context.Context) ([]SystemType, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) CreateSystemType(context.Context, string, SystemType) (*SystemType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) UpdateSystemType(context.Context, string, string, SystemTypePatch) (*SystemType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteSystemType(context.Context, string, string) error { return nil }
 func (UnimplementedGateway) ListSystems(context.Context, scope.Set) ([]System, error) {
 	return nil, nil
 }
@@ -173,6 +199,9 @@ func (UnimplementedGateway) CreateSystem(context.Context, string, SystemSpec, sc
 func (UnimplementedGateway) UpdateSystem(context.Context, string, string, SystemPatch, scope.Set, scope.Set) (*System, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) SystemNameTaken(context.Context, string) (bool, error) {
+	return false, nil
+}
 func (UnimplementedGateway) DeleteSystem(context.Context, string, string, scope.Set, scope.Set) error {
 	return nil
 }
@@ -180,6 +209,13 @@ func (UnimplementedGateway) UpsertComponentType(context.Context, ComponentType) 
 func (UnimplementedGateway) ListComponentTypes(context.Context) ([]ComponentType, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) CreateComponentType(context.Context, string, ComponentType) (*ComponentType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) UpdateComponentType(context.Context, string, string, ComponentTypePatch) (*ComponentType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteComponentType(context.Context, string, string) error { return nil }
 func (UnimplementedGateway) ListComponents(context.Context, scope.Set) ([]Component, error) {
 	return nil, nil
 }
@@ -194,6 +230,9 @@ func (UnimplementedGateway) CreateComponent(context.Context, string, ComponentSp
 }
 func (UnimplementedGateway) UpdateComponent(context.Context, string, string, ComponentPatch, scope.Set, scope.Set) (*Component, error) {
 	return nil, nil
+}
+func (UnimplementedGateway) ComponentNameTaken(context.Context, string) (bool, error) {
+	return false, nil
 }
 func (UnimplementedGateway) DeleteComponent(context.Context, string, string, scope.Set, scope.Set) error {
 	return nil
@@ -290,25 +329,25 @@ func (UnimplementedGateway) ListSecretTypes(context.Context) ([]SecretType, erro
 func (UnimplementedGateway) GetSecretType(context.Context, string) (*SecretType, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) ListSecrets(context.Context, scope.Set) ([]Secret, error) {
+func (UnimplementedGateway) ListSecrets(context.Context, scope.Set, bool) ([]Secret, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) CreateSecret(context.Context, string, SecretSpec, scope.Set) (*Secret, error) {
+func (UnimplementedGateway) CreateSecret(context.Context, string, SecretSpec, scope.Set, bool) (*Secret, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) UpdateSecret(context.Context, string, string, map[string]string, scope.Set, scope.Set) (*Secret, error) {
+func (UnimplementedGateway) UpdateSecret(context.Context, string, string, map[string]string, scope.Set, scope.Set, bool) (*Secret, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) DeleteSecret(context.Context, string, string, scope.Set, scope.Set) error {
+func (UnimplementedGateway) DeleteSecret(context.Context, string, string, scope.Set, scope.Set, bool) error {
 	return nil
 }
-func (UnimplementedGateway) RevealSecret(context.Context, string, string, scope.Set, scope.Set) (map[string]string, error) {
+func (UnimplementedGateway) RevealSecret(context.Context, string, string, scope.Set, scope.Set, bool) (map[string]string, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) CopySecret(context.Context, string, string, scope.Set, scope.Set) (map[string]string, error) {
+func (UnimplementedGateway) CopySecret(context.Context, string, string, scope.Set, scope.Set, bool) (map[string]string, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) ResolveSecrets(context.Context, string, scope.Set) ([]ResolvedSecret, error) {
+func (UnimplementedGateway) ResolveSecrets(context.Context, string, scope.Set, bool) ([]ResolvedSecret, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) ListVariables(context.Context, scope.Set) ([]Variable, error) {
@@ -327,6 +366,9 @@ func (UnimplementedGateway) ResolveVariables(context.Context, string, scope.Set)
 	return nil, nil
 }
 func (UnimplementedGateway) ListTags(context.Context) ([]Tag, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DistinctTagValues(context.Context, string) ([]string, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) CreateTag(context.Context, string, TagSpec, scope.Set) (*Tag, error) {
@@ -350,4 +392,18 @@ func (UnimplementedGateway) ListEntityTags(context.Context, string, *string, sco
 func (UnimplementedGateway) ResolveTags(context.Context, string, scope.Set) ([]ResolvedTag, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) Close() {}
+func (UnimplementedGateway) EffectiveTags(context.Context, string, []string) (map[string]map[string]string, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) ListFiles(context.Context, bool) ([]File, error) { return nil, nil }
+func (UnimplementedGateway) GetFile(context.Context, string, bool) (*File, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) CreateFile(context.Context, string, FileSpec, bool) (*File, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DownloadFile(context.Context, string, bool) (*File, []byte, error) {
+	return nil, nil, nil
+}
+func (UnimplementedGateway) DeleteFile(context.Context, string, string, bool) error { return nil }
+func (UnimplementedGateway) Close()                                                 {}

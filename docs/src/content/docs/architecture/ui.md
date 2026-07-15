@@ -19,7 +19,7 @@ the renderer library, and composable dashboards below remain the intended **read
 analytical and dashboard surfaces (alarms, datapoint history, the cascade view, fleet
 dashboards), which are not built yet. The realized inventory shell and its primitives are in the
 [design system](/contributing/design-system/); how to operate it is the
-[console guide](/guides/console/), and the per-slice breakdown is on
+[operator guide](/guides/operator/), and the per-slice breakdown is on
 [implementation status](/architecture/status/).
 :::
 
@@ -100,8 +100,12 @@ Which high-frequency surfaces move from polling to the SSE relay, and what laten
 
 ## Configuration UIs
 
-CRUD forms over the typed resource API, one per primitive (components, templates, rules, config,
-tags, groups, schedules, severity levels, and the IAM resources). Editing a setting is editing
+CRUD forms over the typed resource API, one per primitive (components, templates, types, tags,
+rules, config, groups, schedules, severity levels, and the IAM resources). **Types** is the
+first of these to span several registries rather than one per primitive: a segmented tab per
+kind (location, system, component, secret), each tab its own directory over that registry, CRUD
+on the three writable kinds, and a read-only view of the fourth ([implementation
+status](/architecture/status/#build-progress)). Editing a setting is editing
 **[config](/architecture/variables/)**, an audited mutation, not a separate prop store
 ([audit](/architecture/audit/)). The standout is the **rule-authoring
 page**:
@@ -139,10 +143,30 @@ The IA has two layers, deliberately decoupled:
    stable however the menu is later reorganized. There are no taxonomy-nested routes and no redirects
    to maintain.
 2. **The sidebar groups those flat routes into clusters for browsing**: Home, Dashboards, Alarms,
-   Inventory (systems, components, locations, interfaces, nodes, tasks), Catalog (templates, types,
-   tags, rules), Explore, Settings (config, secrets, identity, audit). Grouping is pure
-   presentation: a cluster is not a destination and carries no route of its own. It can be
-   rearranged, and is user-customizable, without touching a single route.
+   Inventory (locations, systems, components, nodes), Values (variables, secrets, config), Catalog
+   (templates, types, tags, rules), Explore, Learn, Admin (users, roles, groups, audit, and a soon
+   Settings leaf). Grouping is pure presentation: a cluster is not a destination and carries no route
+   of its own. It can be rearranged, and is user-customizable, without touching a single route.
+
+**Values is its own top-level group**, standing beside Inventory rather than nested inside it as a
+band. Variables, secrets, and config are values an operator sets on estate entities and resolves down
+the cascade, a distinct genus from the estate entities themselves. **Config is the CI store**:
+operator-set desired component and system configuration, optionally observed back from the device to
+detect drift and reconcile ([config, secrets, and variables](/architecture/variables/)), distinct from
+platform Settings (preferences: severity scales, schedules, retention, defaults) and from Variables
+(free interpolated values with no observed side).
+
+**Inventory holds the estate entities**: locations, systems, components, and **nodes**, the collection
+daemons that gather datapoints. A node is a monitored, scope-controlled entity like any other estate
+member (gated on `node:read` plus ABAC scope once its backend lands; an ungated **soon** stub until
+then), so it stays in Inventory rather than Admin. **Interfaces and tasks are not nav items**: an
+interface is a panel on a component (its device endpoints), and a task is a panel on a node (its
+collection assignments), each a facet of its owning entity's detail page rather than a directory of
+its own.
+
+Admin is the renamed Settings group: it holds the platform-administration surfaces (Users, Roles,
+Groups, Audit) plus the Settings leaf itself, dimmed **soon** until the platform-preferences page
+ships.
 
 **Home is distinct from Dashboards.** Dashboards monitor the *fleet* (datapoint views over the
 inventory). Home monitors the *monitor*: the operator and admin situation room for config lifecycle

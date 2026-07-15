@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { listLocations, listLocationTypes, createLocation, deleteLocation } from "./locations";
+import { listLocations, listLocationTypes, createLocation, updateLocation, deleteLocation } from "./locations";
 
 // The data layer is the unit under test; fetch is the seam we fake, so these
 // assert the request shape and the response handling without a server.
@@ -27,13 +27,13 @@ describe("locations data layer", () => {
 
   it("lists location types and unwraps the registry envelope", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ location_types: [{ id: "campus", display_name: "Campus", rank: 10, official: true }] }),
+      jsonResponse({ location_types: [{ id: "campus", display_name: "Campus", official: true, allowed_parent_types: ["root"] }] }),
     );
     const types = await listLocationTypes();
     expect(types).toHaveLength(1);
-    expect(types[0]).toMatchObject({ id: "campus", display_name: "Campus" });
+    expect(types[0]).toMatchObject({ id: "campus", display_name: "Campus", allowed_parent_types: ["root"] });
     const req = fetchMock.mock.calls[0][0] as Request;
-    expect(req.url).toContain("/api/v1/location-types");
+    expect(req.url).toContain("/api/v1/types/location");
   });
 
   it("posts the create body", async () => {
@@ -46,6 +46,18 @@ describe("locations data layer", () => {
     expect(req.method).toBe("POST");
     const sent = await req.json();
     expect(sent).toMatchObject({ name: "hq-b1", location_type: "building", parent: "hq" });
+  });
+
+  it("patches the parent to move a location", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonResponse({ id: "3", name: "hq-b1", location_type: "building", parent_id: "l-lab" }),
+    );
+    const moved = await updateLocation("hq-b1", { parent: "lab" });
+    expect(moved.name).toBe("hq-b1");
+    const req = fetchMock.mock.calls[0][0] as Request;
+    expect(req.method).toBe("PATCH");
+    const sent = await req.json();
+    expect(sent).toMatchObject({ parent: "lab" });
   });
 
   it("throws on an error status", async () => {

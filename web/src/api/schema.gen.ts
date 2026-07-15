@@ -108,6 +108,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/me/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List your own sessions and tokens
+         * @description Lists the caller's own active bearer credentials (time-bounded web-login sessions and CLI/API tokens) with their non-secret metadata; the current one is flagged. Requires authentication; self-scoped (never another principal's). The token secret is never returned.
+         */
+        get: operations["list-auth-me-sessions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/me/sessions/{id}:revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revoke one of your own sessions
+         * @description Revokes one of the caller's own sessions or tokens by id (from the session list); revoking the current one signs it out. Requires authentication; self-scoped, so a credential id that is not yours is a 404.
+         */
+        post: operations["revoke-auth-me-session"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/me/sessions:revokeAll": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revoke all of your own sessions or tokens
+         * @description Revokes every one of the caller's own web-login sessions, or every one of its CLI/API tokens (chosen by purpose), returning how many were ended. Requires authentication; self-scoped. Always keeps the credential that made this request, so you are never signed out of the one you are on; sessions and tokens never cross.
+         */
+        post: operations["revoke-all-auth-me-sessions"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/me/tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create one of your own API tokens
+         * @description Mints a CLI/API token for the caller and returns it once (store it now; it cannot be retrieved again). A description is required (what the token is for); an optional ttl_days bounds its lifetime (default 90, maximum 365). Requires authentication; self-scoped (always issued for you). The token is stamped with the device and address that created it.
+         */
+        post: operations["create-auth-me-token"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/me:changePassword": {
         parameters: {
             query?: never;
@@ -400,6 +480,94 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/components:checkName": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check a component technical name
+         * @description Reports whether a proposed technical name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by component:update.
+         */
+        post: operations["check-component-name"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List files
+         * @description Lists the file handles the caller may see (searchable metadata, no bytes). Sensitive files appear only to the admin tier. Gated by file:read.
+         */
+        get: operations["list-files"];
+        put?: never;
+        /**
+         * Create a file from an upload
+         * @description Stores the uploaded bytes as a content-addressed blob (identical bytes dedup to one blob) and writes the file handle pointing at it. Gated by file:create; a sensitive file additionally needs the admin tier (file:create:admin).
+         */
+        post: operations["create-file"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/files/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a file's metadata
+         * @description Returns one file handle's searchable metadata (no bytes). A sensitive file is a non-disclosing 404 without the admin tier. Gated by file:read.
+         */
+        get: operations["get-file"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a file
+         * @description Removes a file handle. The underlying blob is left in place (garbage collection is a later slice). A sensitive file is a non-disclosing 404 without the admin tier. Gated by file:delete.
+         */
+        delete: operations["delete-file"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/files/{id}:download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download a file's bytes
+         * @description Returns a file's bytes (base64-encoded) read from the blob it points at, the hash verified on read. A sensitive file is a non-disclosing 404 without the admin tier. Gated by file:read.
+         */
+        get: operations["download-file"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/healthz": {
         parameters: {
             query?: never;
@@ -472,26 +640,6 @@ export interface paths {
         patch: operations["update-interface"];
         trace?: never;
     };
-    "/location-types": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List location types
-         * @description Lists the location_type registry (the shape-definers a location is classified by), ordered by rank. Populates the type picker on the location form. Gated by location:read.
-         */
-        get: operations["list-location-types"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/locations": {
         parameters: {
             query?: never;
@@ -539,7 +687,7 @@ export interface paths {
         head?: never;
         /**
          * Update a location
-         * @description Patches a location's display_name or location_type. Gated by location:update; the read and update scopes drive the 404 versus 403 split.
+         * @description Patches a location's display_name, location_type, or parent (a move). Gated by location:update; the read and update scopes drive the 404 versus 403 split.
          */
         patch: operations["update-location"];
         trace?: never;
@@ -598,6 +746,26 @@ export interface paths {
          * @description Binds a value for a key on a location. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by location:update.
          */
         post: operations["set-location-tag"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/locations:checkName": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check a location technical name
+         * @description Reports whether a proposed technical name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by location:update.
+         */
+        post: operations["check-location-name"];
         delete?: never;
         options?: never;
         head?: never;
@@ -697,7 +865,7 @@ export interface paths {
         };
         /**
          * List principal groups
-         * @description Every principal group. Gated by principal_group:read (all-scope).
+         * @description Every principal group. Gated by principal_group:read:admin.
          */
         get: operations["list-groups"];
         put?: never;
@@ -721,7 +889,7 @@ export interface paths {
         };
         /**
          * Get a principal group
-         * @description One principal group by id. Gated by principal_group:read (all-scope).
+         * @description One principal group by id. Gated by principal_group:read:admin.
          */
         get: operations["get-group"];
         put?: never;
@@ -749,7 +917,7 @@ export interface paths {
         };
         /**
          * List a group's grants
-         * @description The role x scope grants a group confers on its members. Gated by principal_group:read (all-scope).
+         * @description The role x scope grants a group confers on its members. Gated by principal_group:read:admin.
          */
         get: operations["list-group-grants"];
         put?: never;
@@ -793,7 +961,7 @@ export interface paths {
         };
         /**
          * List a group's members
-         * @description The principals in a group. Gated by principal_group:read (all-scope).
+         * @description The principals in a group. Gated by principal_group:read:admin.
          */
         get: operations["list-group-members"];
         put?: never;
@@ -837,7 +1005,7 @@ export interface paths {
         };
         /**
          * List principals
-         * @description Lists all principals (humans and service accounts) with their grants. Gated by principal:read, which confers access only at all-scope.
+         * @description Lists all principals (humans and service accounts) with their grants. Gated by principal:read:admin.
          */
         get: operations["list-principals"];
         put?: never;
@@ -861,7 +1029,7 @@ export interface paths {
         };
         /**
          * Get a principal
-         * @description Fetches one principal by id with its profile and grants. Gated by principal:read (all-scope).
+         * @description Fetches one principal by id with its profile and grants. Gated by principal:read:admin.
          */
         get: operations["get-principal"];
         put?: never;
@@ -885,7 +1053,7 @@ export interface paths {
         };
         /**
          * Get a principal's profile picture
-         * @description Returns the principal's profile picture as a base64-encoded JPEG. Gated by principal:read (all-scope). A principal without a picture is a 404.
+         * @description Returns the principal's profile picture as a base64-encoded JPEG. Gated by principal:read:admin. A principal without a picture is a 404.
          */
         get: operations["get-principal-avatar"];
         put?: never;
@@ -931,6 +1099,66 @@ export interface paths {
          * @description Removes one grant from a principal. Gated by principal_grant:delete (all-scope). The last owner grant cannot be revoked.
          */
         delete: operations["revoke-grant"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/principals/{id}/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a principal's sessions
+         * @description Lists another principal's active bearer credentials (login sessions and API tokens) with their non-secret metadata, newest first, so an administrator can see where an account is signed in and revoke a session that should not be. Gated by principal:revoke-session (all-scope). The token secret is never returned, and current is always false (there is no "this request's own session" when viewing another principal).
+         */
+        get: operations["list-principal-sessions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/principals/{id}/sessions/{sid}:revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revoke a principal's session
+         * @description Revokes one of another principal's sessions or tokens by id (an administrator action; the target is immediately signed out of that credential). Gated by principal:revoke-session (all-scope). Bounded to the target, so a credential id that is not theirs is a non-disclosing 404, never a cross-principal revoke. Refused (403) on an owner (an owner's sessions cannot be revoked by anyone, the takeover guard shared with impersonation and password reset) or when it would exceed the caller's own capabilities. Audited with the administrator as the actor.
+         */
+        post: operations["revoke-principal-session"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/principals/{id}/sessions:revokeAll": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revoke all of a principal's sessions or tokens
+         * @description Revokes every one of another principal's web-login sessions, or every one of its CLI/API tokens (chosen by purpose), in a single administrator action, returning how many were ended. Gated by principal:revoke-session (all-scope). Bounded to the target and never crosses purpose (revoking sessions leaves tokens, and vice versa). Refused (403) on an owner (the takeover guard shared with impersonation and the password reset) or when it would exceed the caller's own capabilities. Audited with the administrator as the actor.
+         */
+        post: operations["revoke-all-principal-sessions"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1125,29 +1353,9 @@ export interface paths {
         };
         /**
          * List roles
-         * @description Lists the roles with their metadata and effective (flattened) permissions. Gated by the role:read capability.
+         * @description Lists the roles with their metadata and effective (flattened) permissions. Gated by the role:read:admin capability.
          */
         get: operations["list-roles"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/secret-types": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List secret types
-         * @description Lists the secret_type shapes a secret can take, for the create form. Gated by secret:read.
-         */
-        get: operations["list-secret-types"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1164,8 +1372,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List secrets (admin directory)
-         * @description Lists every secret with masked fields. Requires an all-scope read; the scoped, per-component view is the effective-secrets route. Gated by secret:read.
+         * List secrets
+         * @description Lists the secrets the caller may see, with masked fields, filtered to the read scope; admin-sensitive secrets appear only to the admin tier. Gated by secret:read, which the viewer floor does not carry (secret is a sensitive resource).
          */
         get: operations["list-secrets"];
         put?: never;
@@ -1235,7 +1443,7 @@ export interface paths {
         put?: never;
         /**
          * Reveal a secret's plaintext
-         * @description Decrypts and returns a secret's field values, auditing the decrypt. Sensitive: gated by secret:reveal, which the viewer read floor does not carry, so only admin (secret:*) and owner may reveal.
+         * @description Decrypts and returns a secret's field values, auditing the decrypt. Gated by secret:reveal at the caller's scope; an admin-sensitive secret additionally needs the admin tier (secret:reveal:admin), so a scoped operator reveals device secrets but never a platform credential.
          */
         post: operations["reveal-secret"];
         delete?: never;
@@ -1356,6 +1564,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/systems:checkName": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check a system technical name
+         * @description Reports whether a proposed technical name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by system:update.
+         */
+        post: operations["check-system-name"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/tags": {
         parameters: {
             query?: never;
@@ -1444,6 +1672,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tags/{name}:values": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the distinct values bound for a key
+         * @description Returns the distinct values already bound for a key across the estate, for value autocomplete on a free-text key (an enum key carries its allowed set on the key itself). Rides the tag:read floor.
+         */
+        get: operations["list-tag-values"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/tasks": {
         parameters: {
             query?: never;
@@ -1494,6 +1742,170 @@ export interface paths {
          * @description Patches a task's display name, enabled toggle, node placement, or spec. Gated by task:update; read and update scopes (through the component) drive the 404 versus 403 split.
          */
         patch: operations["update-task"];
+        trace?: never;
+    };
+    "/types/component": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List component types
+         * @description Lists the component_type registry, ordered alphabetically by display name. Populates the type picker on the component form. Gated by type:read.
+         */
+        get: operations["list-component-types"];
+        put?: never;
+        /**
+         * Create a component type
+         * @description Creates a custom (non-official) component_type. Gated by type:create.
+         */
+        post: operations["create-component-type"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/types/component/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete a component type
+         * @description Deletes a custom component_type, refused if official (422) or referenced by a component (409). Gated by type:delete.
+         */
+        delete: operations["delete-component-type"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a component type
+         * @description Patches a custom component_type's display_name. Official types are read-only (422). Gated by type:update.
+         */
+        patch: operations["update-component-type"];
+        trace?: never;
+    };
+    "/types/location": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List location types
+         * @description Lists the location_type registry (the shape-definers a location is classified by), ordered alphabetically by display name. Populates the type picker on the location form. Gated by type:read.
+         */
+        get: operations["list-location-types"];
+        put?: never;
+        /**
+         * Create a location type
+         * @description Creates a custom (non-official) location_type. Gated by type:create.
+         */
+        post: operations["create-location-type"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/types/location/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete a location type
+         * @description Deletes a custom location_type, refused if official (422) or still referenced by a location (409). Gated by type:delete.
+         */
+        delete: operations["delete-location-type"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a location type
+         * @description Patches a custom location_type's display_name or icon. Official types are read-only (422). Gated by type:update.
+         */
+        patch: operations["update-location-type"];
+        trace?: never;
+    };
+    "/types/secret": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List secret types
+         * @description Lists the secret_type shapes a secret can take, for the create form. Gated by secret:read.
+         */
+        get: operations["list-secret-types"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/types/system": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List system types
+         * @description Lists the system_type registry, ordered alphabetically by display name. Populates the type picker on the system form. Gated by type:read.
+         */
+        get: operations["list-system-types"];
+        put?: never;
+        /**
+         * Create a system type
+         * @description Creates a custom (non-official) system_type. Gated by type:create.
+         */
+        post: operations["create-system-type"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/types/system/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete a system type
+         * @description Deletes a custom system_type, refused if official (422) or referenced by a system (409). Gated by type:delete.
+         */
+        delete: operations["delete-system-type"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a system type
+         * @description Patches a custom system_type's display_name. Official types are read-only (422). Gated by type:update.
+         */
+        patch: operations["update-system-type"];
         trace?: never;
     };
     "/variables": {
@@ -1609,6 +2021,30 @@ export interface components {
             /** @description The new password (at least 12 characters, not a common password, not containing the username) */
             new_password: string;
         };
+        CheckNameInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CheckNameInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The proposed technical name to check */
+            name: string;
+        };
+        CheckNameOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CheckNameOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Whether the name is free (scope-blind, matches the global unique constraint) */
+            available: boolean;
+            /** @description Human explanation when not valid or not available */
+            reason?: string;
+            /** @description Whether the name matches the slug rule */
+            valid: boolean;
+        };
         ClaimNodeInputBody: {
             /**
              * Format: uri
@@ -1644,11 +2080,26 @@ export interface components {
             actions?: string[] | null;
             component_type: string;
             display_name?: string;
+            /** @description The resolved effective tags (key -> winning value) that cascade onto this component; for the Tags column. Provenance is in the effective-tags detail view. */
+            effective_tags?: {
+                [key: string]: string;
+            };
             id: string;
             location_id?: string;
             name: string;
             parent_id?: string;
             system_id?: string;
+        };
+        ComponentTypeBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ComponentTypeBody.json
+             */
+            readonly $schema?: string;
+            display_name: string;
+            id: string;
+            official: boolean;
         };
         CreateComponentInputBody: {
             /**
@@ -1662,12 +2113,39 @@ export interface components {
             display_name?: string;
             /** @description Location name this component is placed at */
             location?: string;
-            /** @description Globally unique name (the address) */
+            /** @description Globally unique name (the address; lowercase letters, digits, hyphens) */
             name: string;
             /** @description Parent component name; omit for a root component */
             parent?: string;
             /** @description Primary system name this component belongs to */
             system?: string;
+        };
+        CreateComponentTypeInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateComponentTypeInputBody.json
+             */
+            readonly $schema?: string;
+            display_name: string;
+            /** @description Globally unique type id */
+            id: string;
+        };
+        CreateFileInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateFileInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The file bytes, base64-encoded */
+            content: string;
+            /** @description The MIME type used to serve the file */
+            content_type: string;
+            /** @description The file's display name (a label, no path separators) */
+            name: string;
+            /** @description Admin-only visibility; defaults false. Setting true requires the admin tier */
+            sensitive?: boolean;
         };
         CreateGrantInputBody: {
             /**
@@ -1753,10 +2231,56 @@ export interface components {
             display_name?: string;
             /** @description A location_type id (campus, building, ...) */
             location_type: string;
-            /** @description Globally unique name (the address) */
+            /** @description Globally unique name (the address; lowercase letters, digits, hyphens) */
             name: string;
             /** @description Parent location name; omit for a root location */
             parent?: string;
+        };
+        CreateLocationTypeInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateLocationTypeInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description location_type ids and/or the reserved root sentinel this type may be placed under; empty means unconstrained */
+            allowed_parent_types?: string[] | null;
+            display_name: string;
+            /** @description A glyph key; the console falls back to map-pin when empty */
+            icon?: string;
+            /** @description Globally unique type id (kebab, e.g. wing); "root" is reserved */
+            id: string;
+        };
+        CreateMeTokenInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateMeTokenInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description What the token is for (required) */
+            description: string;
+            /**
+             * Format: int64
+             * @description Days until the token expires (default 90, maximum 365)
+             */
+            ttl_days?: number;
+        };
+        CreateMeTokenOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateMeTokenOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description What the token is for */
+            description: string;
+            /** @description When the token expires (RFC 3339) */
+            expires_at: string;
+            /** @description The non-secret ogp locator for the new token */
+            prefix: string;
+            /** @description The bearer token, shown once. Store it now: it cannot be retrieved again. */
+            token: string;
         };
         CreateNodeInputBody: {
             /**
@@ -1791,6 +2315,8 @@ export interface components {
              * @example /api/v1/schemas/CreateSecretInputBody.json
              */
             readonly $schema?: string;
+            /** @description Admin-only visibility; omit to use the type default. Setting true requires the admin tier */
+            admin_sensitive?: boolean;
             /** @description The operator field map, validated against the type shape */
             fields: {
                 [key: string]: string;
@@ -1817,12 +2343,23 @@ export interface components {
             display_name?: string;
             /** @description Location name this system is placed at */
             location?: string;
-            /** @description Globally unique name (the address) */
+            /** @description Globally unique name (the address; lowercase letters, digits, hyphens) */
             name: string;
             /** @description Parent system name; omit for a root system */
             parent?: string;
             /** @description A system_type id */
             system_type: string;
+        };
+        CreateSystemTypeInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateSystemTypeInputBody.json
+             */
+            readonly $schema?: string;
+            display_name: string;
+            /** @description Globally unique type id */
+            id: string;
         };
         CreateTagInputBody: {
             /**
@@ -1831,6 +2368,8 @@ export interface components {
              * @example /api/v1/schemas/CreateTagInputBody.json
              */
             readonly $schema?: string;
+            /** @description The value enum a bound value must belong to; omit for free text */
+            allowed_values?: string[] | null;
             /** @description Entity kinds this key may bind to (component, system, location); omit for universal */
             applies_to?: string[] | null;
             /** @description The normalized key: a lowercase identifier, unique tenant-wide */
@@ -1886,6 +2425,18 @@ export interface components {
              * @enum {string}
              */
             value_type: "string" | "int" | "float" | "bool" | "json";
+        };
+        DownloadFileOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/DownloadFileOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The file bytes, base64-encoded */
+            content: string;
+            content_type: string;
+            name: string;
         };
         EffectiveSecretsOutputBody: {
             /**
@@ -2002,6 +2553,24 @@ export interface components {
              * @example https://example.com/errors/example
              */
             type: string;
+        };
+        FileBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/FileBody.json
+             */
+            readonly $schema?: string;
+            content_type: string;
+            created_at: string;
+            id: string;
+            name: string;
+            /** @description When true, only the admin tier may see or download this file */
+            sensitive: boolean;
+            /** @description The content hash of the blob this handle points at */
+            sha256: string;
+            /** Format: int64 */
+            size: number;
         };
         GlobalBindingInputBody: {
             /**
@@ -2133,6 +2702,15 @@ export interface components {
             params?: unknown;
             type: string;
         };
+        ListComponentTypesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListComponentTypesOutputBody.json
+             */
+            readonly $schema?: string;
+            component_types: components["schemas"]["ComponentTypeBody"][] | null;
+        };
         ListComponentsOutputBody: {
             /**
              * Format: uri
@@ -2141,6 +2719,15 @@ export interface components {
              */
             readonly $schema?: string;
             components: components["schemas"]["ComponentBody"][] | null;
+        };
+        ListFilesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListFilesOutputBody.json
+             */
+            readonly $schema?: string;
+            files: components["schemas"]["FileBody"][] | null;
         };
         ListGroupGrantsOutputBody: {
             /**
@@ -2187,6 +2774,15 @@ export interface components {
             readonly $schema?: string;
             locations: components["schemas"]["LocationBody"][] | null;
         };
+        ListMeSessionsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListMeSessionsOutputBody.json
+             */
+            readonly $schema?: string;
+            sessions: components["schemas"]["SessionBody"][] | null;
+        };
         ListMembersOutputBody: {
             /**
              * Format: uri
@@ -2204,6 +2800,15 @@ export interface components {
              */
             readonly $schema?: string;
             nodes: components["schemas"]["NodeBody"][] | null;
+        };
+        ListPrincipalSessionsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListPrincipalSessionsOutputBody.json
+             */
+            readonly $schema?: string;
+            sessions: components["schemas"]["SessionBody"][] | null;
         };
         ListPrincipalsOutputBody: {
             /**
@@ -2231,6 +2836,15 @@ export interface components {
              */
             readonly $schema?: string;
             secrets: components["schemas"]["SecretBody"][] | null;
+        };
+        ListSystemTypesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListSystemTypesOutputBody.json
+             */
+            readonly $schema?: string;
+            system_types: components["schemas"]["SystemTypeBody"][] | null;
         };
         ListSystemsOutputBody: {
             /**
@@ -2278,18 +2892,27 @@ export interface components {
             /** @description The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces. */
             actions?: string[] | null;
             display_name?: string;
+            /** @description The resolved effective tags (key -> winning value) that cascade onto this location (global and its location tree); for the Tags column. */
+            effective_tags?: {
+                [key: string]: string;
+            };
             id: string;
             location_type: string;
             name: string;
             parent_id?: string;
         };
         LocationTypeBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/LocationTypeBody.json
+             */
+            readonly $schema?: string;
+            allowed_parent_types: string[] | null;
             display_name: string;
             icon: string;
             id: string;
             official: boolean;
-            /** Format: int64 */
-            rank: number;
         };
         LoginInputBody: {
             /**
@@ -2505,6 +3128,58 @@ export interface components {
                 [key: string]: string;
             };
         };
+        RevokeAllMeSessionsInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/RevokeAllMeSessionsInputBody.json
+             */
+            readonly $schema?: string;
+            /**
+             * @description Which of your own credentials to revoke: all your web-login sessions, or all your CLI/API tokens
+             * @enum {string}
+             */
+            purpose: "session" | "token";
+        };
+        RevokeAllMeSessionsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/RevokeAllMeSessionsOutputBody.json
+             */
+            readonly $schema?: string;
+            /**
+             * Format: int64
+             * @description How many credentials were revoked
+             */
+            revoked: number;
+        };
+        RevokeAllPrincipalSessionsInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/RevokeAllPrincipalSessionsInputBody.json
+             */
+            readonly $schema?: string;
+            /**
+             * @description Which credentials to revoke: all of the principal's web-login sessions, or all its CLI/API tokens
+             * @enum {string}
+             */
+            purpose: "session" | "token";
+        };
+        RevokeAllPrincipalSessionsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/RevokeAllPrincipalSessionsOutputBody.json
+             */
+            readonly $schema?: string;
+            /**
+             * Format: int64
+             * @description How many credentials were revoked
+             */
+            revoked: number;
+        };
         RoleBody: {
             description?: string;
             display_name?: string;
@@ -2530,6 +3205,8 @@ export interface components {
              * @example /api/v1/schemas/SecretBody.json
              */
             readonly $schema?: string;
+            /** @description When true, only the admin tier may see or reveal this secret, regardless of placement */
+            admin_sensitive: boolean;
             fields: components["schemas"]["SecretFieldBody"][] | null;
             id: string;
             name: string;
@@ -2545,6 +3222,8 @@ export interface components {
             value: string;
         };
         SecretTypeBody: {
+            /** @description The admin_sensitive value the create form seeds for this type */
+            default_admin_sensitive: boolean;
             display_name: string;
             fields: components["schemas"]["SecretTypeFieldBody"][] | null;
             id: string;
@@ -2556,6 +3235,30 @@ export interface components {
             origin: string;
             secret: boolean;
             type: string;
+        };
+        SessionBody: {
+            /** @description The IP address the credential was created from */
+            client_ip?: string;
+            /** @description When the credential was issued (RFC 3339) */
+            created_at: string;
+            /** @description True for the credential that authenticated this request; revoking it signs out the current session */
+            current: boolean;
+            /** @description What a token is for (a token carries a description; a session does not) */
+            description?: string;
+            /** @description When the credential expires (RFC 3339); every credential is now time-bounded */
+            expires_at?: string;
+            id: string;
+            /**
+             * @description session for a web login, token for a CLI/API credential (omniglass token)
+             * @enum {string}
+             */
+            kind: "session" | "token";
+            /** @description When the credential last authenticated a request (RFC 3339), throttled to the minute */
+            last_used_at?: string;
+            /** @description The non-secret ogp locator, so a credential is recognizable without exposing the token */
+            prefix: string;
+            /** @description The User-Agent that created the credential, so the console can show a device label */
+            user_agent?: string;
         };
         SetAvatarInputBody: {
             /**
@@ -2590,11 +3293,26 @@ export interface components {
             /** @description The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces. */
             actions?: string[] | null;
             display_name?: string;
+            /** @description The resolved effective tags (key -> winning value) that cascade onto this system (global, its location, its system tree); for the Tags column. */
+            effective_tags?: {
+                [key: string]: string;
+            };
             id: string;
             location_id?: string;
             name: string;
             parent_id?: string;
             system_type: string;
+        };
+        SystemTypeBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/SystemTypeBody.json
+             */
+            readonly $schema?: string;
+            display_name: string;
+            id: string;
+            official: boolean;
         };
         TagBindingBody: {
             /**
@@ -2616,12 +3334,23 @@ export interface components {
              * @example /api/v1/schemas/TagBody.json
              */
             readonly $schema?: string;
+            /** @description The value enum a bound value must belong to; empty means free text */
+            allowed_values: string[] | null;
             /** @description Entity kinds this key may bind to; empty means universal */
             applies_to: string[] | null;
             id: string;
             name: string;
             /** @description Whether a bound value cascades to descendants */
             propagates: boolean;
+        };
+        TagValuesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/TagValuesOutputBody.json
+             */
+            readonly $schema?: string;
+            values: string[] | null;
         };
         TaskBody: {
             /**
@@ -2649,6 +3378,17 @@ export interface components {
              */
             readonly $schema?: string;
             component_type?: string;
+            display_name?: string;
+            /** @description A new globally unique technical name (rename) */
+            name?: string;
+        };
+        UpdateComponentTypeInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/UpdateComponentTypeInputBody.json
+             */
+            readonly $schema?: string;
             display_name?: string;
         };
         UpdateGroupInputBody: {
@@ -2686,6 +3426,22 @@ export interface components {
             readonly $schema?: string;
             display_name?: string;
             location_type?: string;
+            /** @description A new globally unique technical name (rename) */
+            name?: string;
+            /** @description Re-parents the location (a tree move) to this location name, cycle-guarded and placement-validated. Moving to root is not supported via update this slice. */
+            parent?: string;
+        };
+        UpdateLocationTypeInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/UpdateLocationTypeInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Replaces the allowed-parent set; omit to leave unchanged, [] to clear back to unconstrained */
+            allowed_parent_types?: string[];
+            display_name?: string;
+            icon?: string;
         };
         UpdateMeInputBody: {
             /**
@@ -2731,7 +3487,18 @@ export interface components {
              */
             readonly $schema?: string;
             display_name?: string;
+            /** @description A new globally unique technical name (rename) */
+            name?: string;
             system_type?: string;
+        };
+        UpdateSystemTypeInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/UpdateSystemTypeInputBody.json
+             */
+            readonly $schema?: string;
+            display_name?: string;
         };
         UpdateTagInputBody: {
             /**
@@ -2740,6 +3507,8 @@ export interface components {
              * @example /api/v1/schemas/UpdateTagInputBody.json
              */
             readonly $schema?: string;
+            /** @description The value enum a bound value must belong to; omit for free text */
+            allowed_values?: string[] | null;
             /** @description Entity kinds this key may bind to; omit for universal */
             applies_to?: string[] | null;
             /** @description Whether bindings cascade to descendants; defaults true */
@@ -3000,6 +3769,149 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AvatarOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-auth-me-sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListMeSessionsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "revoke-auth-me-session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The credential id to revoke (from the session list) */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "revoke-all-auth-me-sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RevokeAllMeSessionsInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevokeAllMeSessionsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-auth-me-token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateMeTokenInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateMeTokenOutputBody"];
                 };
             };
             /** @description Error */
@@ -3556,6 +4468,195 @@ export interface operations {
             };
         };
     };
+    "check-component-name": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CheckNameInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckNameOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListFilesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateFileInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The file's id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The file's id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "download-file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The file's id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DownloadFileOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "get-healthz": {
         parameters: {
             query?: never;
@@ -3731,35 +4832,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InterfaceBody"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "list-location-types": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ListLocationTypesOutputBody"];
                 };
             };
             /** @description Error */
@@ -4021,6 +5093,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TagBindingBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "check-location-name": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CheckNameInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckNameOutputBody"];
                 };
             };
             /** @description Error */
@@ -4804,6 +5909,187 @@ export interface operations {
             };
         };
     };
+    "list-principal-sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The principal, addressed by its uuid or a human username */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListPrincipalSessionsOutputBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "revoke-principal-session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The principal, addressed by its uuid or a human username */
+                id: string;
+                /** @description The credential id to revoke (from the principal's session list) */
+                sid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "revoke-all-principal-sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The principal, addressed by its uuid or a human username */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RevokeAllPrincipalSessionsInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevokeAllPrincipalSessionsOutputBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "archive-principal": {
         parameters: {
             query?: never;
@@ -5131,35 +6417,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RolesOutputBody"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "list-secret-types": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ListSecretTypesOutputBody"];
                 };
             };
             /** @description Error */
@@ -5626,6 +6883,39 @@ export interface operations {
             };
         };
     };
+    "check-system-name": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CheckNameInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckNameOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "list-tags": {
         parameters: {
             query?: never;
@@ -5820,6 +7110,38 @@ export interface operations {
             };
         };
     };
+    "list-tag-values": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The tag key */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagValuesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "list-tasks": {
         parameters: {
             query?: never;
@@ -5966,6 +7288,416 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TaskBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-component-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListComponentTypesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-component-type": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateComponentTypeInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComponentTypeBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-component-type": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The component_type id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "update-component-type": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateComponentTypeInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComponentTypeBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-location-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListLocationTypesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-location-type": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateLocationTypeInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationTypeBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-location-type": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The location_type id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "update-location-type": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateLocationTypeInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationTypeBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-secret-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListSecretTypesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-system-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListSystemTypesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-system-type": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSystemTypeInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemTypeBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-system-type": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The system_type id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "update-system-type": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSystemTypeInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemTypeBody"];
                 };
             };
             /** @description Error */

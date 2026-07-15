@@ -174,6 +174,15 @@ export async function fetchMyAvatar(): Promise<string | null> {
   return `data:image/jpeg;base64,${data.image_base64}`;
 }
 
+// sensitiveResources mirror the server's set (internal/rbac/rbac.go): resources a
+// bare single-token `*` wildcard does not reach, in both the direct match and the
+// `:read` floor, so the viewer floor (`*:read`) cannot enumerate them. A literal
+// grant, a `<resource>:*`, and owner's `>` still name them. `secret` is here so a
+// field tech does not see the platform-credential directory (per-secret
+// admin_sensitivity, enforced server-side, then fences individual rows). Keep this
+// in sync with the Go set.
+const SENSITIVE_RESOURCES = new Set(["secret"]);
+
 // A permission is a colon-delimited topic pattern, matched exactly like the server
 // rbac core that authorizes the request: a literal matches itself, `*` matches
 // exactly one token, and `>` matches one or more trailing tokens (and is last). A
@@ -200,12 +209,18 @@ function permPatterns(perms: string[]): string[][] {
 
 // matchTopic mirrors the server's match: `>` covers the non-empty remainder, `*`
 // covers a single token, a literal covers itself, and both must exhaust together.
+// A bare `*` at the resource position does not reach a sensitive resource (the
+// viewer floor cannot enumerate secrets).
 function matchTopic(pat: string[], path: string[]): boolean {
   let i = 0;
   for (; i < pat.length; i++) {
     if (pat[i] === ">") return path.length - i >= 1;
     if (i >= path.length) return false;
-    if (pat[i] !== "*" && pat[i] !== path[i]) return false;
+    if (pat[i] === "*") {
+      if (i === 0 && SENSITIVE_RESOURCES.has(path[0])) return false;
+      continue;
+    }
+    if (pat[i] !== path[i]) return false;
   }
   return i === path.length;
 }
@@ -214,16 +229,18 @@ function matchTopic(pat: string[], path: string[]): boolean {
 // given as its tokens (e.g. can(me, "location", "read") or, for a sensitive tier,
 // can(me, "audit", "read", "admin")). It mirrors the server's Allows, including
 // the :read floor (holding any permission on a resource implies read on it, but
-// only for a two-token read query, so the floor never reaches a `:admin` tier), so
-// the console hides exactly what the server would deny. A UI hint only; the server
-// is the authority.
+// only for a two-token read query, so the floor never reaches a `:admin` tier) and
+// the sensitive-resource set (a bare `*` does not floor a sensitive resource, so a
+// `*:read`-only viewer cannot read secrets), so the console hides exactly what the
+// server would deny. A UI hint only; the server is the authority.
 export function can(me: Me | null | undefined, ...tokens: string[]): boolean {
   if (!me) return false;
   const pats = permPatterns(me.permissions);
   for (const pat of pats) if (matchTopic(pat, tokens)) return true;
   if (tokens.length === 2 && tokens[1] === "read") {
+    const sensitive = SENSITIVE_RESOURCES.has(tokens[0]);
     for (const pat of pats) {
-      if (pat.length > 0 && (pat[0] === "*" || pat[0] === ">" || pat[0] === tokens[0])) return true;
+      if (pat.length > 0 && (pat[0] === ">" || pat[0] === tokens[0] || (pat[0] === "*" && !sensitive))) return true;
     }
   }
   return false;

@@ -22,13 +22,13 @@ var (
 	ErrUnknownSystemType    = errors.New("storage: unknown system_type")
 )
 
-// SystemType is a registry row classifying a system (id, official, display_name,
-// rank), the shape-definer, mirroring location_type.
+// SystemType is a registry row classifying a system (id, official, display_name),
+// the shape-definer, mirroring location_type. The registry lists alphabetically
+// by display_name; there is no ordering field.
 type SystemType struct {
 	ID          string
 	Official    bool
 	DisplayName string
-	Rank        int
 }
 
 // System is a composition of components (the service tree): name-addressable,
@@ -59,6 +59,7 @@ type SystemSpec struct {
 // SystemPatch is the update input: nil fields unchanged. Reparenting and
 // changing located-at are deferred to a later slice.
 type SystemPatch struct {
+	Name        *string
 	DisplayName *string
 	SystemType  *string
 }
@@ -67,11 +68,11 @@ type SystemPatch struct {
 
 func (p *PG) UpsertSystemType(ctx context.Context, st SystemType) error {
 	_, err := p.pool.Exec(ctx, `
-		insert into system_type (id, official, display_name, rank)
-		values ($1, $2, $3, $4)
+		insert into system_type (id, official, display_name)
+		values ($1, $2, $3)
 		on conflict (id) do update
-			set official = excluded.official, display_name = excluded.display_name, rank = excluded.rank`,
-		st.ID, st.Official, st.DisplayName, st.Rank)
+			set official = excluded.official, display_name = excluded.display_name`,
+		st.ID, st.Official, st.DisplayName)
 	if err != nil {
 		return fmt.Errorf("storage: upsert system_type %q: %w", st.ID, err)
 	}
@@ -79,7 +80,7 @@ func (p *PG) UpsertSystemType(ctx context.Context, st SystemType) error {
 }
 
 func (p *PG) ListSystemTypes(ctx context.Context) ([]SystemType, error) {
-	rows, err := p.pool.Query(ctx, `select id, official, display_name, rank from system_type order by rank, id`)
+	rows, err := p.pool.Query(ctx, `select id, official, display_name from system_type order by display_name, id`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list system_types: %w", err)
 	}
@@ -87,12 +88,82 @@ func (p *PG) ListSystemTypes(ctx context.Context) ([]SystemType, error) {
 	var out []SystemType
 	for rows.Next() {
 		var st SystemType
-		if err := rows.Scan(&st.ID, &st.Official, &st.DisplayName, &st.Rank); err != nil {
+		if err := rows.Scan(&st.ID, &st.Official, &st.DisplayName); err != nil {
 			return nil, fmt.Errorf("storage: scan system_type: %w", err)
 		}
 		out = append(out, st)
 	}
 	return out, rows.Err()
+}
+
+// SystemTypePatch carries the mutable fields of a system_type update; a nil field
+// is left unchanged.
+type SystemTypePatch struct {
+	DisplayName *string
+}
+
+// CreateSystemType inserts a custom (official=false) system_type and audits it. A
+// duplicate id is ErrTypeExists.
+func (p *PG) CreateSystemType(ctx context.Context, actorID string, st SystemType) (*SystemType, error) {
+	st.Official = false
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("storage: begin create system_type: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	if _, err := tx.Exec(ctx,
+		`insert into system_type (id, official, display_name) values ($1, false, $2)`,
+		st.ID, st.DisplayName); err != nil {
+		if isUniqueViolation(err) {
+			return nil, ErrTypeExists
+		}
+		return nil, fmt.Errorf("storage: insert system_type %q: %w", st.ID, err)
+	}
+	if err := writeAuditRes(ctx, tx, actorID, "create", "system_type", st.ID, nil, st); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("storage: commit create system_type: %w", err)
+	}
+	return &st, nil
+}
+
+// UpdateSystemType patches a custom system_type's display_name (nil unchanged)
+// and audits it. Official rows are read-only; an unknown id is ErrTypeNotFound.
+func (p *PG) UpdateSystemType(ctx context.Context, actorID, id string, patch SystemTypePatch) (*SystemType, error) {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("storage: begin update system_type: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	if err := guardTypeMutable(ctx, tx, "system_type", id); err != nil {
+		return nil, err
+	}
+	var st SystemType
+	if err := tx.QueryRow(ctx, `
+		update system_type set
+			display_name = coalesce($2, display_name)
+		where id = $1
+		returning id, official, display_name`,
+		id, patch.DisplayName).
+		Scan(&st.ID, &st.Official, &st.DisplayName); err != nil {
+		return nil, fmt.Errorf("storage: update system_type %q: %w", id, err)
+	}
+	if err := writeAuditRes(ctx, tx, actorID, "update", "system_type", id, nil, st); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("storage: commit update system_type: %w", err)
+	}
+	return &st, nil
+}
+
+// DeleteSystemType removes a custom system_type, refusing an official row and a
+// row still referenced by a system.
+func (p *PG) DeleteSystemType(ctx context.Context, actorID, id string) error {
+	return deleteTypeRow(ctx, p, "system_type", "system_type", typeRef{table: "system", col: "system_type"}, actorID, id)
 }
 
 // --- system CRUD -------------------------------------------------------------
@@ -134,6 +205,10 @@ func (p *PG) CreateSystem(ctx context.Context, actorID string, spec SystemSpec, 
 		return nil, fmt.Errorf("storage: begin create system: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+
+	if err := ValidateEntityName(spec.Name); err != nil {
+		return nil, err
+	}
 
 	var parentID *string
 	if spec.ParentName == nil {
@@ -197,14 +272,20 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 	if err != nil {
 		return nil, err
 	}
+	if patch.Name != nil {
+		if err := ValidateEntityName(*patch.Name); err != nil {
+			return nil, err
+		}
+	}
 	after, err := scanSystem(tx.QueryRow(ctx, `
 		update system set
-			display_name = coalesce($2, display_name),
-			system_type  = coalesce($3, system_type),
+			name         = coalesce($2, name),
+			display_name = coalesce($3, display_name),
+			system_type  = coalesce($4, system_type),
 			updated_at   = now()
 		where id = $1
 		returning `+systemCols,
-		before.ID, patch.DisplayName, patch.SystemType))
+		before.ID, patch.Name, patch.DisplayName, patch.SystemType))
 	if err != nil {
 		return nil, mapSystemWriteErr(err)
 	}
@@ -229,6 +310,18 @@ func (p *PG) resolveSystemForAction(ctx context.Context, q querier, name string,
 
 func (p *PG) systemByName(ctx context.Context, q querier, name string) (*System, error) {
 	return scopedByName(ctx, q, systemConfig, name)
+}
+
+// SystemNameTaken reports whether a system with this name exists. Scope-blind
+// by design: the name unique constraint is global, so availability must be a
+// global fact to match it (a scope-aware answer would false-positive on a name
+// held outside the caller's scope). Gated at the API by system:update.
+func (p *PG) SystemNameTaken(ctx context.Context, name string) (bool, error) {
+	var exists bool
+	if err := p.pool.QueryRow(ctx, `select exists(select 1 from system where name = $1)`, name).Scan(&exists); err != nil {
+		return false, fmt.Errorf("storage: system name taken: %w", err)
+	}
+	return exists, nil
 }
 
 func mapSystemWriteErr(err error) error {

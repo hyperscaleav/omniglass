@@ -84,6 +84,9 @@ export const Save: Component<P> = (p) => (
 export const Trash: Component<P> = (p) => (
   <Svg size={p.size}><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" /></Svg>
 );
+export const Download: Component<P> = (p) => (
+  <Svg size={p.size}><path d="M12 3v12" /><path d="m7 12 5 5 5-5" /><path d="M5 21h14" /></Svg>
+);
 export const MoreHorizontal: Component<P> = (p) => (
   <Svg size={p.size} fill><circle cx="5" cy="12" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="19" cy="12" r="1.6" /></Svg>
 );

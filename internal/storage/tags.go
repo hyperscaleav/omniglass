@@ -24,25 +24,28 @@ var (
 	ErrTagValueInvalid     = errors.New("storage: tag value invalid")
 	ErrTagKindNotAllowed   = errors.New("storage: tag key does not apply to this entity kind")
 	ErrTagBindingNotFound  = errors.New("storage: tag binding not found")
+	ErrTagValueNotAllowed  = errors.New("storage: value not in this key's allowed set")
 )
 
 // Tag is one key in the governed vocabulary: its normalized name, the entity
 // kinds it may apply to (empty = universal), and whether its bindings cascade to
 // descendants. It owns no value; values live in tag_binding.
 type Tag struct {
-	ID         string
-	Name       string
-	AppliesTo  []string
-	Propagates bool
-	CreatedAt  time.Time
-	UpdatedAt  time.Time
+	ID            string
+	Name          string
+	AppliesTo     []string
+	Propagates    bool
+	AllowedValues []string // the value enum; empty means the key is free-text
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
 }
 
 // TagSpec is the create/update input for a key.
 type TagSpec struct {
-	Name       string
-	AppliesTo  []string
-	Propagates bool
+	Name          string
+	AppliesTo     []string
+	Propagates    bool
+	AllowedValues []string
 }
 
 // TagBinding is one bound value: the key it sets, the value, and the owner on
@@ -75,7 +78,7 @@ type ResolvedTag struct {
 	Winner    bool
 }
 
-const tagCols = `id, name, applies_to, propagates, created_at, updated_at`
+const tagCols = `id, name, applies_to, propagates, allowed_values, created_at, updated_at`
 
 // tagBindingConflictArc maps an owner kind to the ON CONFLICT target that
 // matches its partial unique index, so an upsert lands on the one-value-per-owner
@@ -101,6 +104,9 @@ func (p *PG) CreateTag(ctx context.Context, actorID string, spec TagSpec, create
 	if err := tag.ValidateAppliesTo(spec.AppliesTo); err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrTagAppliesToInvalid, err)
 	}
+	if err := tag.ValidateAllowedValues(spec.AllowedValues); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrTagValueInvalid, err)
+	}
 
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -109,10 +115,10 @@ func (p *PG) CreateTag(ctx context.Context, actorID string, spec TagSpec, create
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	t, err := scanTagRow(tx.QueryRow(ctx, `
-		insert into tag (name, applies_to, propagates)
-		values ($1, $2, $3)
+		insert into tag (name, applies_to, propagates, allowed_values)
+		values ($1, $2, $3, $4)
 		returning `+tagCols,
-		spec.Name, normalizeAppliesTo(spec.AppliesTo), spec.Propagates))
+		spec.Name, normalizeAppliesTo(spec.AppliesTo), spec.Propagates, normalizeAppliesTo(spec.AllowedValues)))
 	if err != nil {
 		return nil, mapTagWriteErr(err)
 	}
@@ -145,6 +151,34 @@ func (p *PG) ListTags(ctx context.Context) ([]Tag, error) {
 	return out, rows.Err()
 }
 
+// DistinctTagValues returns the distinct values already bound for a key, ordered,
+// for the value-stage autocomplete on a free-text key (an enum key carries its
+// allowed set on the row instead). An unknown key is the non-disclosing
+// ErrTagNotFound; a key with no bindings yet is an empty slice.
+func (p *PG) DistinctTagValues(ctx context.Context, key string) ([]string, error) {
+	if _, err := loadTagByName(ctx, p.pool, key); err != nil {
+		return nil, err
+	}
+	rows, err := p.pool.Query(ctx, `
+		select distinct b.value
+		from tag_binding b join tag t on t.id = b.tag_id
+		where t.name = $1
+		order by b.value`, key)
+	if err != nil {
+		return nil, fmt.Errorf("storage: distinct tag values: %w", err)
+	}
+	defer rows.Close()
+	out := []string{}
+	for rows.Next() {
+		var v string
+		if err := rows.Scan(&v); err != nil {
+			return nil, fmt.Errorf("storage: scan distinct value: %w", err)
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
 // UpdateTag replaces a key's governance fields (applies_to, propagates); the
 // name is fixed at creation. An all-scope update grant is required (tag:update).
 func (p *PG) UpdateTag(ctx context.Context, actorID, name string, spec TagSpec, action scope.Set) (*Tag, error) {
@@ -154,6 +188,9 @@ func (p *PG) UpdateTag(ctx context.Context, actorID, name string, spec TagSpec, 
 	if err := tag.ValidateAppliesTo(spec.AppliesTo); err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrTagAppliesToInvalid, err)
 	}
+	if err := tag.ValidateAllowedValues(spec.AllowedValues); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrTagValueInvalid, err)
+	}
 
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -162,10 +199,10 @@ func (p *PG) UpdateTag(ctx context.Context, actorID, name string, spec TagSpec, 
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	t, err := scanTagRow(tx.QueryRow(ctx, `
-		update tag set applies_to = $2, propagates = $3, updated_at = now()
+		update tag set applies_to = $2, propagates = $3, allowed_values = $4, updated_at = now()
 		where name = $1
 		returning `+tagCols,
-		name, normalizeAppliesTo(spec.AppliesTo), spec.Propagates))
+		name, normalizeAppliesTo(spec.AppliesTo), spec.Propagates, normalizeAppliesTo(spec.AllowedValues)))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrTagNotFound
 	}
@@ -233,6 +270,9 @@ func (p *PG) SetTagBinding(ctx context.Context, actorID, key, ownerKind string, 
 	}
 	if ownerKind != "global" && !tag.AppliesToKind(t.AppliesTo, tag.EntityKind(ownerKind)) {
 		return nil, ErrTagKindNotAllowed
+	}
+	if !tag.ValueAllowed(t.AllowedValues, value) {
+		return nil, ErrTagValueNotAllowed
 	}
 	ownerID, ownerDisplay, err := resolveTagBindingOwner(ctx, tx, ownerKind, ownerName, read, action)
 	if err != nil {
@@ -448,6 +488,168 @@ left join system    sy on r.owner_kind = 'system'   and sy.id = r.owner_id
 left join location  l on r.owner_kind = 'location'  and l.id = r.owner_id
 order by r.key, r.band desc, r.depth asc`
 
+// EffectiveTags resolves the winning effective tags for a batch of owners of one
+// kind in a single query: for each id, the key -> winning value map its cascade
+// produces (the same union-on-key, override-on-value rule ResolveTags applies to
+// one component, batched and reduced to winners only). It is the read that feeds
+// the directory Tags column, so it is deliberately scopeless: the caller passes
+// ids already filtered to the read scope by the list query (the same contract as
+// the rowActions batch), and this resolver adds no per-id scope check. Each kind
+// resolves the bands that apply to it: a component the full arc (global, its
+// location tree, its system tree, its component tree); a system global, its own
+// location tree, and its system tree (a system placed in a location inherits that
+// location's tags); a location global and its own location tree. A non-propagating
+// key resolves only from the owner itself. Ids that are not valid uuids are
+// dropped. Owners with no effective tags are simply absent from the map.
+func (p *PG) EffectiveTags(ctx context.Context, kind string, ownerIDs []string) (map[string]map[string]string, error) {
+	out := make(map[string]map[string]string, len(ownerIDs))
+	ids := uuidRoots(ownerIDs)
+	if len(ids) == 0 {
+		return out, nil
+	}
+	var sql string
+	switch kind {
+	case "component":
+		sql = effectiveComponentTagsSQL
+	case "system":
+		sql = effectiveSystemTagsSQL
+	case "location":
+		sql = effectiveLocationTagsSQL
+	default:
+		return nil, fmt.Errorf("storage: effective tags: unknown kind %q", kind)
+	}
+	rows, err := p.pool.Query(ctx, sql, ids)
+	if err != nil {
+		return nil, fmt.Errorf("storage: effective tags (%s): %w", kind, err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var target, key, value string
+		if err := rows.Scan(&target, &key, &value); err != nil {
+			return nil, fmt.Errorf("storage: scan effective tag: %w", err)
+		}
+		m := out[target]
+		if m == nil {
+			m = make(map[string]string)
+			out[target] = m
+		}
+		m[key] = value
+	}
+	return out, rows.Err()
+}
+
+// The three batch effective-tags resolvers, one per owner kind. Each threads a
+// target_id through the recursive ancestor chains so many owners resolve in one
+// pass, ranks per (target, key) by band desc then depth asc, and returns only the
+// winner (rnk = 1). The propagates predicate admits a non-propagating key only
+// from the owner itself (its own tree's band at depth 0). The CYCLE guards are
+// per derivation path, so owners sharing an ancestor never trip a false cycle.
+
+const effectiveComponentTagsSQL = `
+with recursive
+targets as (
+    select id as target_id, id, system_id, location_id from component where id = any($1)
+),
+comp_chain(target_id, id, depth) as (
+    select target_id, id, 0 from targets
+    union all
+    select cc.target_id, c.parent_id, cc.depth + 1
+    from component c join comp_chain cc on c.id = cc.id
+    where c.parent_id is not null
+) cycle id set comp_cyc using comp_path,
+sys_chain(target_id, id, depth) as (
+    select target_id, system_id, 0 from targets where system_id is not null
+    union all
+    select sc.target_id, s.parent_id, sc.depth + 1
+    from system s join sys_chain sc on s.id = sc.id
+    where s.parent_id is not null
+) cycle id set sys_cyc using sys_path,
+loc_chain(target_id, id, depth) as (
+    select target_id, location_id, 0 from targets where location_id is not null
+    union all
+    select lc.target_id, l.parent_id, lc.depth + 1
+    from location l join loc_chain lc on l.id = lc.id
+    where l.parent_id is not null
+) cycle id set loc_cyc using loc_path,
+owners(target_id, owner_kind, owner_id, band, depth) as (
+                select target_id, 'global',    null::uuid, 0, 0 from targets
+    union all   select target_id, 'location',  id, 1, depth from loc_chain
+    union all   select target_id, 'system',    id, 2, depth from sys_chain
+    union all   select target_id, 'component', id, 3, depth from comp_chain
+),
+ranked as (
+    select o.target_id, t.name as key, b.value,
+           row_number() over (partition by o.target_id, t.id order by o.band desc, o.depth asc) as rnk
+    from tag_binding b
+    join tag t on t.id = b.tag_id
+    join owners o
+      on o.owner_kind = b.owner_kind
+     and o.owner_id is not distinct from coalesce(b.component_id, b.system_id, b.location_id)
+    where t.propagates or (o.owner_kind = 'component' and o.depth = 0)
+)
+select target_id::text, key, value from ranked where rnk = 1 order by target_id, key`
+
+const effectiveSystemTagsSQL = `
+with recursive
+targets as (
+    select id as target_id, id, location_id from system where id = any($1)
+),
+sys_chain(target_id, id, depth) as (
+    select target_id, id, 0 from targets
+    union all
+    select sc.target_id, s.parent_id, sc.depth + 1
+    from system s join sys_chain sc on s.id = sc.id
+    where s.parent_id is not null
+) cycle id set sys_cyc using sys_path,
+loc_chain(target_id, id, depth) as (
+    select target_id, location_id, 0 from targets where location_id is not null
+    union all
+    select lc.target_id, l.parent_id, lc.depth + 1
+    from location l join loc_chain lc on l.id = lc.id
+    where l.parent_id is not null
+) cycle id set loc_cyc using loc_path,
+owners(target_id, owner_kind, owner_id, band, depth) as (
+                select target_id, 'global',   null::uuid, 0, 0 from targets
+    union all   select target_id, 'location', id, 1, depth from loc_chain
+    union all   select target_id, 'system',   id, 2, depth from sys_chain
+),
+ranked as (
+    select o.target_id, t.name as key, b.value,
+           row_number() over (partition by o.target_id, t.id order by o.band desc, o.depth asc) as rnk
+    from tag_binding b
+    join tag t on t.id = b.tag_id
+    join owners o
+      on o.owner_kind = b.owner_kind
+     and o.owner_id is not distinct from coalesce(b.component_id, b.system_id, b.location_id)
+    where t.propagates or (o.owner_kind = 'system' and o.depth = 0)
+)
+select target_id::text, key, value from ranked where rnk = 1 order by target_id, key`
+
+const effectiveLocationTagsSQL = `
+with recursive
+loc_chain(target_id, id, depth) as (
+    select id, id, 0 from location where id = any($1)
+    union all
+    select lc.target_id, l.parent_id, lc.depth + 1
+    from location l join loc_chain lc on l.id = lc.id
+    where l.parent_id is not null
+) cycle id set loc_cyc using loc_path,
+owners(target_id, owner_kind, owner_id, band, depth) as (
+                select distinct target_id, 'global',   null::uuid, 0, 0 from loc_chain
+    union all   select target_id, 'location', id, 1, depth from loc_chain
+),
+ranked as (
+    select o.target_id, t.name as key, b.value,
+           row_number() over (partition by o.target_id, t.id order by o.band desc, o.depth asc) as rnk
+    from tag_binding b
+    join tag t on t.id = b.tag_id
+    join owners o
+      on o.owner_kind = b.owner_kind
+     and o.owner_id is not distinct from coalesce(b.component_id, b.system_id, b.location_id)
+    where t.propagates or (o.owner_kind = 'location' and o.depth = 0)
+)
+select target_id::text, key, value from ranked where rnk = 1 order by target_id, key`
+
 // --- helpers -----------------------------------------------------------------
 
 // resolveTagBindingOwner turns an owner kind + optional name into the owning id,
@@ -511,11 +713,14 @@ func normalizeAppliesTo(kinds []string) []string {
 
 func scanTagRow(row pgx.Row) (*Tag, error) {
 	var t Tag
-	if err := row.Scan(&t.ID, &t.Name, &t.AppliesTo, &t.Propagates, &t.CreatedAt, &t.UpdatedAt); err != nil {
+	if err := row.Scan(&t.ID, &t.Name, &t.AppliesTo, &t.Propagates, &t.AllowedValues, &t.CreatedAt, &t.UpdatedAt); err != nil {
 		return nil, err
 	}
 	if t.AppliesTo == nil {
 		t.AppliesTo = []string{}
+	}
+	if t.AllowedValues == nil {
+		t.AllowedValues = []string{}
 	}
 	return &t, nil
 }
@@ -547,9 +752,10 @@ func scanBindingListRow(row pgx.Row) (*TagBinding, string, error) {
 
 func auditTag(t *Tag) map[string]any {
 	return map[string]any{
-		"name":       t.Name,
-		"applies_to": t.AppliesTo,
-		"propagates": t.Propagates,
+		"name":           t.Name,
+		"applies_to":     t.AppliesTo,
+		"propagates":     t.Propagates,
+		"allowed_values": t.AllowedValues,
 	}
 }
 

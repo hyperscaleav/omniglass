@@ -12,12 +12,13 @@ import (
 // locationBody is the wire shape of a location: name-addressable, classified by
 // location_type, optionally nested under a parent (by id).
 type locationBody struct {
-	ID           string   `json:"id"`
-	Name         string   `json:"name"`
-	DisplayName  string   `json:"display_name,omitempty"`
-	LocationType string   `json:"location_type"`
-	ParentID     *string  `json:"parent_id,omitempty"`
-	Actions      []string `json:"actions,omitempty" doc:"The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces."`
+	ID            string            `json:"id"`
+	Name          string            `json:"name"`
+	DisplayName   string            `json:"display_name,omitempty"`
+	LocationType  string            `json:"location_type"`
+	ParentID      *string           `json:"parent_id,omitempty"`
+	Actions       []string          `json:"actions,omitempty" doc:"The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces."`
+	EffectiveTags map[string]string `json:"effective_tags,omitempty" doc:"The resolved effective tags (key -> winning value) that cascade onto this location (global and its location tree); for the Tags column."`
 }
 
 func toLocationBody(l *storage.Location) locationBody {
@@ -33,22 +34,50 @@ type listLocationsOutput struct {
 	}
 }
 
-// locationTypeBody is the wire shape of a location_type registry row: the stable
-// id a location is classified by, its display_name, the rank that orders the
-// registry, the icon the console renders as each location's leading tree glyph,
-// and whether it ships with the binary.
+// locationTypeBody is the wire shape of a location_type registry row: the
+// stable id a location is classified by, its display_name, the icon the
+// console renders as each location's leading tree glyph, AllowedParentTypes
+// (the placement constraint: a set of location_type ids and/or the reserved
+// "root" sentinel; empty means unconstrained), and whether it ships with the
+// binary. The registry lists alphabetically by display_name.
 type locationTypeBody struct {
-	ID          string `json:"id"`
-	DisplayName string `json:"display_name"`
-	Rank        int    `json:"rank"`
-	Icon        string `json:"icon"`
-	Official    bool   `json:"official"`
+	ID                 string   `json:"id"`
+	DisplayName        string   `json:"display_name"`
+	Icon               string   `json:"icon"`
+	AllowedParentTypes []string `json:"allowed_parent_types"`
+	Official           bool     `json:"official"`
 }
 
 type listLocationTypesOutput struct {
 	Body struct {
 		LocationTypes []locationTypeBody `json:"location_types"`
 	}
+}
+
+type locationTypePathInput struct {
+	ID string `path:"id" doc:"The location_type id"`
+}
+
+type createLocationTypeInput struct {
+	Body struct {
+		ID                 string   `json:"id" minLength:"1" doc:"Globally unique type id (kebab, e.g. wing); \"root\" is reserved"`
+		DisplayName        string   `json:"display_name" minLength:"1"`
+		Icon               string   `json:"icon,omitempty" doc:"A glyph key; the console falls back to map-pin when empty"`
+		AllowedParentTypes []string `json:"allowed_parent_types,omitempty" doc:"location_type ids and/or the reserved root sentinel this type may be placed under; empty means unconstrained"`
+	}
+}
+
+type updateLocationTypeInput struct {
+	ID   string `path:"id"`
+	Body struct {
+		DisplayName        *string   `json:"display_name,omitempty"`
+		Icon                *string   `json:"icon,omitempty"`
+		AllowedParentTypes *[]string `json:"allowed_parent_types,omitempty" doc:"Replaces the allowed-parent set; omit to leave unchanged, [] to clear back to unconstrained"`
+	}
+}
+
+type locationTypeOutput struct {
+	Body locationTypeBody
 }
 
 type locationOutput struct {
@@ -61,7 +90,7 @@ type locationPathInput struct {
 
 type createLocationInput struct {
 	Body struct {
-		Name         string  `json:"name" minLength:"1" doc:"Globally unique name (the address)"`
+		Name         string  `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"Globally unique name (the address; lowercase letters, digits, hyphens)"`
 		DisplayName  string  `json:"display_name,omitempty"`
 		LocationType string  `json:"location_type" minLength:"1" doc:"A location_type id (campus, building, ...)"`
 		Parent       *string `json:"parent,omitempty" doc:"Parent location name; omit for a root location"`
@@ -71,8 +100,10 @@ type createLocationInput struct {
 type updateLocationInput struct {
 	Name string `path:"name"`
 	Body struct {
+		Name         *string `json:"name,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"A new globally unique technical name (rename)"`
 		DisplayName  *string `json:"display_name,omitempty"`
 		LocationType *string `json:"location_type,omitempty"`
+		Parent       *string `json:"parent,omitempty" doc:"Re-parents the location (a tree move) to this location name, cycle-guarded and placement-validated. Moving to root is not supported via update this slice."`
 	}
 }
 
@@ -97,6 +128,10 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		for i := range locs {
 			ids[i] = locs[i].ID
 		}
+		effTags, err := gw.EffectiveTags(ctx, "location", ids)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("list locations")
+		}
 		acts, err := a.rowActions(ctx, gw, "location", ids)
 		if err != nil {
 			return nil, huma.Error500InternalServerError("list locations")
@@ -106,6 +141,7 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		for i := range locs {
 			b := toLocationBody(&locs[i])
 			b.Actions = acts[locs[i].ID]
+			b.EffectiveTags = effTags[locs[i].ID]
 			out.Body.Locations = append(out.Body.Locations, b)
 		}
 		return out, nil
@@ -114,10 +150,10 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 	huma.Register(api, huma.Operation{
 		OperationID: "list-location-types",
 		Method:      http.MethodGet,
-		Path:        "/location-types",
+		Path:        "/types/location",
 		Summary:     "List location types",
-		Description: "Lists the location_type registry (the shape-definers a location is classified by), ordered by rank. Populates the type picker on the location form. Gated by location:read.",
-		Middlewares: huma.Middlewares{a.authn, a.require("location", "read")},
+		Description: "Lists the location_type registry (the shape-definers a location is classified by), ordered alphabetically by display name. Populates the type picker on the location form. Gated by type:read.",
+		Middlewares: huma.Middlewares{a.authn, a.require("type", "read")},
 	}, func(ctx context.Context, _ *struct{}) (*listLocationTypesOutput, error) {
 		types, err := gw.ListLocationTypes(ctx)
 		if err != nil {
@@ -127,10 +163,69 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		out.Body.LocationTypes = make([]locationTypeBody, 0, len(types))
 		for i := range types {
 			out.Body.LocationTypes = append(out.Body.LocationTypes, locationTypeBody{
-				ID: types[i].ID, DisplayName: types[i].DisplayName, Rank: types[i].Rank, Icon: types[i].Icon, Official: types[i].Official,
+				ID: types[i].ID, DisplayName: types[i].DisplayName, Icon: types[i].Icon,
+				AllowedParentTypes: types[i].AllowedParentTypes, Official: types[i].Official,
 			})
 		}
 		return out, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID:   "create-location-type",
+		Method:        http.MethodPost,
+		Path:          "/types/location",
+		DefaultStatus: http.StatusCreated,
+		Summary:       "Create a location type",
+		Description:   "Creates a custom (non-official) location_type. Gated by type:create.",
+		Middlewares:   huma.Middlewares{a.authn, a.require("type", "create")},
+	}, func(ctx context.Context, in *createLocationTypeInput) (*locationTypeOutput, error) {
+		lt, err := gw.CreateLocationType(ctx, actorID(ctx), storage.LocationType{
+			ID: in.Body.ID, DisplayName: in.Body.DisplayName, Icon: in.Body.Icon,
+			AllowedParentTypes: in.Body.AllowedParentTypes,
+		})
+		if err != nil {
+			return nil, mapTypeErr(err, "location_type")
+		}
+		return &locationTypeOutput{Body: locationTypeBody{
+			ID: lt.ID, DisplayName: lt.DisplayName, Icon: lt.Icon,
+			AllowedParentTypes: lt.AllowedParentTypes, Official: lt.Official,
+		}}, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "update-location-type",
+		Method:      http.MethodPatch,
+		Path:        "/types/location/{id}",
+		Summary:     "Update a location type",
+		Description: "Patches a custom location_type's display_name or icon. Official types are read-only (422). Gated by type:update.",
+		Middlewares: huma.Middlewares{a.authn, a.require("type", "update")},
+	}, func(ctx context.Context, in *updateLocationTypeInput) (*locationTypeOutput, error) {
+		lt, err := gw.UpdateLocationType(ctx, actorID(ctx), in.ID, storage.LocationTypePatch{
+			DisplayName: in.Body.DisplayName, Icon: in.Body.Icon,
+			AllowedParentTypes: in.Body.AllowedParentTypes,
+		})
+		if err != nil {
+			return nil, mapTypeErr(err, "location_type")
+		}
+		return &locationTypeOutput{Body: locationTypeBody{
+			ID: lt.ID, DisplayName: lt.DisplayName, Icon: lt.Icon,
+			AllowedParentTypes: lt.AllowedParentTypes, Official: lt.Official,
+		}}, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID:   "delete-location-type",
+		Method:        http.MethodDelete,
+		Path:          "/types/location/{id}",
+		DefaultStatus: http.StatusNoContent,
+		Summary:       "Delete a location type",
+		Description:   "Deletes a custom location_type, refused if official (422) or still referenced by a location (409). Gated by type:delete.",
+		Middlewares:   huma.Middlewares{a.authn, a.require("type", "delete")},
+	}, func(ctx context.Context, in *locationTypePathInput) (*struct{}, error) {
+		if err := gw.DeleteLocationType(ctx, actorID(ctx), in.ID); err != nil {
+			return nil, mapTypeErr(err, "location_type")
+		}
+		return nil, nil
 	})
 
 	huma.Register(api, huma.Operation{
@@ -174,17 +269,45 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Method:      http.MethodPatch,
 		Path:        "/locations/{name}",
 		Summary:     "Update a location",
-		Description: "Patches a location's display_name or location_type. Gated by location:update; the read and update scopes drive the 404 versus 403 split.",
+		Description: "Patches a location's display_name, location_type, or parent (a move). Gated by location:update; the read and update scopes drive the 404 versus 403 split.",
 		Middlewares: huma.Middlewares{a.authn, a.require("location", "update")},
 	}, func(ctx context.Context, in *updateLocationInput) (*locationOutput, error) {
 		l, err := gw.UpdateLocation(ctx, actorID(ctx), in.Name, storage.LocationPatch{
+			Name:         in.Body.Name,
 			DisplayName:  in.Body.DisplayName,
 			LocationType: in.Body.LocationType,
+			ParentName:   in.Body.Parent,
 		}, a.scopeFor(ctx, "location", "read"), a.scopeFor(ctx, "location", "update"))
 		if err != nil {
 			return nil, mapLocationErr(err)
 		}
 		return &locationOutput{Body: toLocationBody(l)}, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "check-location-name",
+		Method:      http.MethodPost,
+		Path:        "/locations:checkName",
+		Summary:     "Check a location technical name",
+		Description: "Reports whether a proposed technical name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by location:update.",
+		Middlewares: huma.Middlewares{a.authn, a.require("location", "update")},
+	}, func(ctx context.Context, in *checkNameInput) (*checkNameOutput, error) {
+		out := &checkNameOutput{}
+		if err := storage.ValidateEntityName(in.Body.Name); err != nil {
+			out.Body.Valid = false
+			out.Body.Reason = "Use lowercase letters, digits, and hyphens."
+			return out, nil
+		}
+		out.Body.Valid = true
+		taken, err := gw.LocationNameTaken(ctx, in.Body.Name)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("check location name")
+		}
+		out.Body.Available = !taken
+		if taken {
+			out.Body.Reason = "That name is already taken."
+		}
+		return out, nil
 	})
 
 	huma.Register(api, huma.Operation{
@@ -215,8 +338,13 @@ func actorID(ctx context.Context) string {
 
 // mapLocationErr translates the gateway's location sentinels into HTTP status:
 // the non-disclosing 404, the readable-not-actionable 403, occupancy and
-// name-clash 409, and the request faults 422.
+// name-clash 409, and the request faults 422. A placement violation carries
+// the offending child and parent type names in its message.
 func mapLocationErr(err error) error {
+	var placementErr *storage.PlacementError
+	if errors.As(err, &placementErr) {
+		return huma.Error422UnprocessableEntity(placementErr.Error())
+	}
 	switch {
 	case errors.Is(err, storage.ErrLocationNotFound):
 		return huma.Error404NotFound("location not found")
@@ -226,10 +354,14 @@ func mapLocationErr(err error) error {
 		return huma.Error409Conflict("location has child locations")
 	case errors.Is(err, storage.ErrLocationExists):
 		return huma.Error409Conflict("location name already exists")
+	case errors.Is(err, storage.ErrInvalidName):
+		return huma.Error422UnprocessableEntity("invalid name")
 	case errors.Is(err, storage.ErrParentNotFound):
 		return huma.Error422UnprocessableEntity("parent location not found")
 	case errors.Is(err, storage.ErrUnknownType):
 		return huma.Error422UnprocessableEntity("unknown location_type")
+	case errors.Is(err, storage.ErrLocationCycle):
+		return huma.Error422UnprocessableEntity("cannot move a location under itself or a descendant")
 	default:
 		return huma.Error500InternalServerError("location operation failed")
 	}

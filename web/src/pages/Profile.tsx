@@ -2,9 +2,11 @@ import { Show, For, createSignal, createEffect, createResource } from "solid-js"
 import PasswordField from "../components/PasswordField";
 import Button from "../components/Button";
 import Drawer, { DrawerFooter } from "../components/Drawer";
+import SessionsList from "../components/SessionsList";
 import { passwordError, isPasswordPolicyMessage } from "../lib/validate";
 import { useMe, useUpdateProfile, useChangePassword, setMyAvatar, removeMyAvatar, fetchMyAvatar } from "../lib/auth";
-import { Key, Save, X } from "../components/icons";
+import { useSessions, useRevokeSession, useRevokeAllSelfSessions, createSelfToken, type Session } from "../lib/sessions";
+import { Check, Copy, Key, LogOut, Plus, Save, Trash, X } from "../components/icons";
 
 // Profile is the signed-in operator's own account surface: edit your display name
 // and email, change your password, and (pedagogically) see the identity model you
@@ -14,6 +16,71 @@ export default function Profile() {
   const me = useMe();
   const updateProfile = useUpdateProfile();
   const changePassword = useChangePassword();
+  const sessions = useSessions();
+  const revokeSession = useRevokeSession();
+  const revokeAllSelf = useRevokeAllSelfSessions();
+
+  // Sessions and API tokens are both bearer credentials, split by their kind so each
+  // renders in its own section: a session is a web login, a token one you minted for
+  // the CLI or API.
+  const sessionRows = () => (sessions.data ?? []).filter((s) => s.kind === "session");
+  const tokenRows = () => (sessions.data ?? []).filter((s) => s.kind === "token");
+
+  // The id currently being revoked, so only that row's button spins.
+  const [revoking, setRevoking] = createSignal<string | null>(null);
+  async function revoke(s: Session) {
+    setRevoking(s.id);
+    const r = await revokeSession(s.id);
+    // Revoking the current session signs it out: the auth guard redirects on the
+    // /auth/me invalidation, so no page-level note is needed. Only a failure surfaces.
+    if (!r.ok) setProfileMsg({ tone: "error", text: r.message });
+    setRevoking(null);
+  }
+  // Bulk-revoke all of your own sessions or tokens. The server keeps the credential you
+  // are on, so this never signs you out. Confirmed, since it ends everything of that kind.
+  const [revokingAll, setRevokingAll] = createSignal<"session" | "token" | null>(null);
+  async function revokeAll(purpose: "session" | "token") {
+    const noun = purpose === "session" ? "other sessions" : "API tokens";
+    if (!window.confirm(`Revoke all your ${noun}? You stay signed in on this one.`)) return;
+    setRevokingAll(purpose);
+    const r = await revokeAllSelf(purpose);
+    if (!r.ok) setProfileMsg({ tone: "error", text: r.message });
+    setRevokingAll(null);
+  }
+
+  // Create an API token for yourself: a required description and an optional lifetime.
+  // The secret comes back once, shown copyable in the drawer; the list then refreshes.
+  const [tokenOpen, setTokenOpen] = createSignal(false);
+  const [tokenDesc, setTokenDesc] = createSignal("");
+  const [tokenTtl, setTokenTtl] = createSignal<number | "">(90);
+  const [tokenBusy, setTokenBusy] = createSignal(false);
+  const [tokenErr, setTokenErr] = createSignal<string | null>(null);
+  const [newToken, setNewToken] = createSignal<string | null>(null);
+  function openCreateToken() {
+    setTokenDesc("");
+    setTokenTtl(90);
+    setTokenErr(null);
+    setNewToken(null);
+    setTokenOpen(true);
+  }
+  async function createToken(e: SubmitEvent) {
+    e.preventDefault();
+    setTokenBusy(true);
+    setTokenErr(null);
+    const ttl = typeof tokenTtl() === "number" ? (tokenTtl() as number) : undefined;
+    const r = await createSelfToken(tokenDesc().trim(), ttl);
+    if (r.ok) {
+      setNewToken(r.token);
+      await sessions.refetch?.();
+    } else {
+      setTokenErr(r.message);
+    }
+    setTokenBusy(false);
+  }
+  async function copyToken() {
+    const t = newToken();
+    if (t) await navigator.clipboard.writeText(t);
+  }
 
   // Seed the editable field once, when /auth/me first resolves, so later keystrokes
   // are not clobbered by the query settling.
@@ -218,6 +285,51 @@ export default function Profile() {
             </div>
           </div>
         </div>
+
+        {/* Sessions: the browsers and devices the caller is signed in from, each revocable. */}
+        <div class="card border border-base-300 bg-base-200">
+          <div class="card-body gap-3">
+            <div class="flex items-center justify-between gap-2">
+              <h2 class="card-title text-base">Sessions</h2>
+              <Show when={sessionRows().length > 1}>
+                <Button intent="danger" size="xs" icon={LogOut} loading={revokingAll() === "session"} onClick={() => revokeAll("session")}>Revoke all</Button>
+              </Show>
+            </div>
+            <p class="text-xs text-base-content/50">
+              Devices and browsers you are signed in from. Each <span class="font-data text-base-content/70">session</span>
+              {" "}expires on its own; revoke anything you do not recognize, and revoking the one you are using signs you out.
+              The credential secret is never shown here, only its <span class="font-data text-base-content/70">ogp_</span> locator.
+            </p>
+            <Show when={sessions.error}>
+              <div role="alert" class="alert alert-error alert-soft text-sm"><span>Could not load your sessions.</span></div>
+            </Show>
+            <SessionsList sessions={sessionRows()} revoking={revoking()} onRevoke={revoke} emptyLabel="No active sessions." />
+          </div>
+        </div>
+
+        {/* API tokens: credentials the caller minted for the CLI or API, each revocable. */}
+        <div class="card border border-base-300 bg-base-200">
+          <div class="card-body gap-3">
+            <div class="flex items-center justify-between gap-2">
+              <h2 class="card-title text-base">API tokens</h2>
+              <div class="flex items-center gap-2">
+                <Show when={tokenRows().length > 0}>
+                  <Button intent="danger" size="xs" icon={Trash} loading={revokingAll() === "token"} onClick={() => revokeAll("token")}>Revoke all</Button>
+                </Show>
+                <Button intent="action" size="xs" icon={Plus} onClick={openCreateToken}>Create token</Button>
+              </div>
+            </div>
+            <p class="text-xs text-base-content/50">
+              Tokens you minted for the CLI or API. Each <span class="font-data text-base-content/70">token</span> is
+              time-bounded and expires on its own; revoke any you no longer use. The token secret is never shown here, only
+              its <span class="font-data text-base-content/70">ogp_</span> locator.
+            </p>
+            <Show when={sessions.error}>
+              <div role="alert" class="alert alert-error alert-soft text-sm"><span>Could not load your tokens.</span></div>
+            </Show>
+            <SessionsList sessions={tokenRows()} revoking={revoking()} onRevoke={revoke} emptyLabel="No API tokens." />
+          </div>
+        </div>
       </div>
 
       <Drawer open={pwOpen()} onClose={() => setPwOpen(false)} title="Change password">
@@ -262,6 +374,66 @@ export default function Profile() {
             <Button type="submit" intent="action" icon={Save} loading={pwBusy()} disabled={!current() || !next() || next() !== confirm() || !!passwordError(next(), human()?.username)}>Change password</Button>
           </DrawerFooter>
         </form>
+      </Drawer>
+
+      <Drawer open={tokenOpen()} onClose={() => setTokenOpen(false)} title="Create API token">
+        <Show
+          when={newToken()}
+          fallback={
+            <form onSubmit={createToken} class="flex min-h-full flex-col gap-3">
+              <div>
+                <label class="eyebrow mb-1.5 block" for="tok-desc">Description</label>
+                <input
+                  id="tok-desc"
+                  class="input input-bordered w-full"
+                  placeholder="What is this token for? (e.g. CI pipeline)"
+                  value={tokenDesc()}
+                  onInput={(e) => setTokenDesc(e.currentTarget.value)}
+                  disabled={tokenBusy()}
+                  required
+                />
+                <p class="mt-1 text-[11px] text-base-content/40">Required, so you can tell your tokens apart later.</p>
+              </div>
+              <div>
+                <label class="eyebrow mb-1.5 block" for="tok-ttl">Expires in (days)</label>
+                <input
+                  id="tok-ttl"
+                  type="number"
+                  min="1"
+                  max="365"
+                  class="input input-bordered w-full font-data"
+                  value={tokenTtl()}
+                  onInput={(e) => setTokenTtl(e.currentTarget.value === "" ? "" : Number(e.currentTarget.value))}
+                  disabled={tokenBusy()}
+                />
+                <p class="mt-1 text-[11px] text-base-content/40">Default 90, maximum 365. Every token is time-bounded.</p>
+              </div>
+              <Show when={tokenErr()}>
+                <div role="alert" class="alert alert-error alert-soft text-sm"><span>{tokenErr()}</span></div>
+              </Show>
+              <DrawerFooter>
+                <Button icon={X} onClick={() => setTokenOpen(false)} disabled={tokenBusy()}>Cancel</Button>
+                <Button type="submit" intent="action" icon={Plus} loading={tokenBusy()} disabled={!tokenDesc().trim()}>Create token</Button>
+              </DrawerFooter>
+            </form>
+          }
+        >
+          <div class="flex min-h-full flex-col gap-3">
+            <div role="alert" class="alert alert-success alert-soft text-sm">
+              <span>Token created. Copy it now: for your security it is not shown again.</span>
+            </div>
+            <div>
+              <label class="eyebrow mb-1.5 block" for="tok-secret">Your new token</label>
+              <div class="flex gap-2">
+                <input id="tok-secret" readonly class="input input-bordered w-full font-data text-xs" value={newToken()!} />
+                <Button icon={Copy} onClick={copyToken}>Copy</Button>
+              </div>
+            </div>
+            <DrawerFooter>
+              <Button intent="action" icon={Check} onClick={() => setTokenOpen(false)}>Done</Button>
+            </DrawerFooter>
+          </div>
+        </Show>
       </Drawer>
     </section>
   );

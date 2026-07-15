@@ -27,8 +27,10 @@ func TestComponentScopeCRUD(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	// A location and a system for the component to bind to.
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "rm-1", LocationType: "room"}, all); err != nil {
+	// A location and a system for the component to bind to. campus is the
+	// official type allowed at root; the type is incidental here, only the
+	// name (rm-1) is asserted below.
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "rm-1", LocationType: "campus"}, all); err != nil {
 		t.Fatalf("seed location: %v", err)
 	}
 	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "sys-1", SystemType: "meeting-room"}, all); err != nil {

@@ -12,6 +12,7 @@ export type System = {
   location_id?: string;
   parent_id?: string;
   actions?: string[];
+  effective_tags?: Record<string, string>;
 };
 
 export const SYSTEMS_KEY = ["systems"] as const;
@@ -43,6 +44,7 @@ export async function createSystem(body: CreateSystem): Promise<System> {
 }
 
 export type UpdateSystem = {
+  name?: string;
   display_name?: string;
   system_type?: string;
 };
@@ -51,6 +53,14 @@ export async function updateSystem(name: string, body: UpdateSystem): Promise<Sy
   const { data, error } = await api.PATCH("/systems/{name}", { params: { path: { name } }, body });
   if (error) throw error;
   return data as System;
+}
+
+export type NameCheck = { valid: boolean; available: boolean; reason?: string };
+
+export async function checkSystemName(name: string): Promise<NameCheck> {
+  const { data, error } = await api.POST("/systems:checkName", { body: { name } });
+  if (error) throw error;
+  return data as NameCheck;
 }
 
 export async function deleteSystem(name: string): Promise<void> {

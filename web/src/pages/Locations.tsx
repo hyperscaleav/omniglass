@@ -1,37 +1,46 @@
-import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
+import { For, Show, createEffect, createMemo, createSignal, createUniqueId, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { useNavigate, useParams } from "@solidjs/router";
 import TreeList, { type ListConfig, type ListCtx, type ListNode, type PageDescriptor, type Widget } from "../components/TreeList";
 import Donut from "../components/Donut";
 import TreeSelect from "../components/TreeSelect";
+import TagPills from "../components/TagPills";
+import { tagFilterKeys } from "../lib/predicate";
+import TagAdder from "../components/TagAdder";
 import {
   type Location,
+  type NameCheck,
   LOCATIONS_KEY,
   LOCATION_TYPES_KEY,
   listLocations,
   listLocationTypes,
   createLocation,
   updateLocation,
+  checkLocationName,
   deleteLocation,
 } from "../lib/locations";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
-import { ChevronRight, Pencil, Plus, Save, X, resolveIcon } from "../components/icons";
+import { openInEdit, consumePendingEdit } from "../lib/pendingedit";
+import { ChevronRight, Pencil, Plus, Save, Search, X, resolveIcon } from "../components/icons";
 import Button from "../components/Button";
-import { DrawerFooter } from "../components/Drawer";
+import InfoTip from "../components/InfoTip";
+import { ROOT_PLACEMENT } from "../lib/types";
 
 // Locations: the place tree on the generic TreeList (campuses, buildings, floors,
-// rooms). Replaces the standalone Locations page/new/detail trio with the same
-// config-driven shell every inventory page uses: embedded filter, action rail,
-// tree, blades, full-page detail, create/edit Drawer. The tree comes from
-// parent_id; the live API carries names/types/placement only.
-type LocNode = ListNode & { type: string; raw: Location };
+// rooms). The same config-driven shell every inventory page uses: embedded filter,
+// action rail, tree, blades, full-page detail. Create and edit both live on the
+// detail accordion (create-as-route): New routes to /locations/create (a draft),
+// Save hands off to /locations/<name> in edit mode; the pencil flips the same
+// surface. View is read-only, edit is the only writer, per the console invariant.
+// The tree comes from parent_id; the live API carries names/types/placement only.
+type LocNode = ListNode & { type: string; tags: Record<string, string>; raw: Location };
 
 // A loose visual ranking for the seeded place types; unknown types sort last.
 const TYPE_RANK: Record<string, number> = { campus: 0, site: 0, region: 0, building: 1, floor: 2, room: 3 };
-// Distinct, readable badge hues per place type. badge-neutral renders its text in
-// the dark neutral color, which is unreadable on the dark theme, so each type maps
-// to a bright daisyUI semantic; unknown types fall back to the readable ghost.
+// Distinct, readable badge hues per place type. daisyUI's neutral token renders its
+// text in the dark neutral color, which is unreadable on the dark theme, so each type
+// maps to a bright daisyUI semantic; unknown types fall back to the readable ghost.
 const TYPE_BADGE: Record<string, string> = { campus: "badge-primary", site: "badge-primary", region: "badge-primary", building: "badge-warning", floor: "badge-success", room: "badge-info" };
 // The same hues as CSS color values, for the type-mix donut.
 const TYPE_COLOR: Record<string, string> = { campus: "var(--color-primary)", site: "var(--color-primary)", region: "var(--color-primary)", building: "var(--color-warning)", floor: "var(--color-success)", room: "var(--color-info)" };
@@ -46,9 +55,10 @@ export const locationsDescriptor: PageDescriptor = {
     type: { label: "Type", width: 120 },
     parent: { label: "Parent", width: 190 },
     tech: { label: "Technical name", width: 200 },
+    tags: { label: "Tags", width: 340 },
   },
-  columnKeys: ["type", "parent", "tech"],
-  defaultCols: ["type", "parent"],
+  columnKeys: ["type", "parent", "tech", "tags"],
+  defaultCols: ["type", "parent", "tags"],
 };
 
 export default function Locations() {
@@ -71,7 +81,7 @@ export default function Locations() {
     const list = locations.data ?? [];
     const byId = new Map<string, LocNode>();
     for (const l of list) {
-      byId.set(l.id, { id: l.name, display: l.display_name || l.name, children: [], type: l.location_type, actions: l.actions, raw: l });
+      byId.set(l.id, { id: l.name, display: l.display_name || l.name, children: [], type: l.location_type, actions: l.actions, tags: l.effective_tags ?? {}, raw: l });
     }
     const roots: LocNode[] = [];
     for (const l of list) {
@@ -93,6 +103,14 @@ export default function Locations() {
     return c;
   });
   const total = () => Object.values(counts()).reduce((a, b) => a + b, 0);
+
+  // One filter facet per tag key present across the locations, derived from their
+  // effective tags, so the bar can filter by any tag like any other field.
+  const tagFacets = createMemo(() => {
+    const keys = new Set<string>();
+    for (const l of locations.data ?? []) for (const k of Object.keys(l.effective_tags ?? {})) keys.add(k);
+    return tagFilterKeys<LocNode>([...keys].sort(), new Set(["name", "type"]));
+  });
   const segs = () => ORDER.map((t) => ({ key: t, label: TYPE_PLURAL[t] ?? t, value: counts()[t] ?? 0, color: TYPE_COLOR[t] ?? "var(--color-base-content)" }));
 
   // Raised-card surface (base-200, the same chip/card treatment as the prototype),
@@ -183,18 +201,112 @@ export default function Locations() {
     }
   }
 
-  // The detail body, shared by the full page (ctx.full) and a blade. In a blade it
-  // leads with a breadcrumb and drills via ctx.go (push child blade); on the full
-  // page ctx.go navigates to the child's URL.
-  function detail(n: LocNode, ctx: ListCtx<LocNode>): JSX.Element {
-    const parent = ctx.parentOf(n);
-    const path = ctx.pathOf(n);
-    const kids = n.children;
+  // LocationDetail: the entity accordion, read-only in view, editable in edit. Own
+  // fields (display name, location type) are editable; placement is fixed at
+  // creation. The Tags section is the shared TagAdder, whose write controls appear
+  // only in edit (canUpdate gates them), so view carries no mutation. The full page
+  // renders its own Save/Cancel/Edit footer from ctx.edit; a blade gets those from
+  // BladeStack.
+  function LocationDetail(props: { node: LocNode; ctx: ListCtx<LocNode> }): JSX.Element {
+    const ctx = props.ctx;
+    const edit = ctx.edit;
+    const editing = () => edit?.editing() ?? false;
+    // Live node, re-resolved from the index so a background refetch updates facts
+    // without remounting (which would drop in-progress edit state).
+    const n = () => ctx.byId(props.node.id) ?? props.node;
+    const parent = () => ctx.parentOf(n());
+    const path = () => ctx.pathOf(n());
+    const kids = () => n().children;
+    const canUpdate = () => can(me.data, "location", "update");
+
+    // The reparent picker's candidate list, narrowed to the location's own
+    // (stored, not live-edited) type's allowed_parent_types; empty means
+    // unconstrained. Filtering on the stored type rather than the in-progress
+    // `type()` edit avoids a picker that silently invalidates itself if the
+    // operator changes Location type and Parent in the same edit; a mismatch
+    // between the two is still caught server-side (validatePlacement uses the
+    // final, possibly-also-patched type) and surfaces through saveErr below,
+    // exactly like every other placement violation this slice.
+    const allowedParentTypes = () => locationTypes.data?.find((t) => t.id === n().raw.location_type)?.allowed_parent_types ?? [];
+    const parentCandidates = createMemo(() => {
+      const allowed = allowedParentTypes();
+      const pool = allowed.length === 0 ? (locations.data ?? []) : (locations.data ?? []).filter((l) => allowed.includes(l.location_type));
+      return pool.map((l) => ({ id: l.id, value: l.name, label: l.display_name || l.name, parentId: l.parent_id, rank: TYPE_RANK[l.location_type] ?? 9 }));
+    });
+    const parentTypeLabel = (id: string) => (id === ROOT_PLACEMENT ? "Root" : locationTypes.data?.find((t) => t.id === id)?.display_name ?? id);
+    const parentHint = () =>
+      allowedParentTypes().length
+        ? `Restricted to: ${allowedParentTypes().map(parentTypeLabel).join(", ")}. Moving back to root is not supported here.`
+        : "Any location may be the parent (unconstrained). Moving back to root is not supported here.";
+
+    const [display, setDisplay] = createSignal(n().raw.display_name ?? "");
+    const [type, setType] = createSignal(n().raw.location_type ?? "");
+    const [name, setName] = createSignal(n().raw.name);
+    const [nameCheck, setNameCheck] = createSignal<NameCheck | null>(null);
+    const [checking, setChecking] = createSignal(false);
+    const [saveErr, setSaveErr] = createSignal<string | null>(null);
+    // The reparent picker: parentName is the field's live value, seeded from the
+    // current parent's name each time edit begins; initialParentName is the same
+    // seed, kept static for the whole edit session so save() can tell "the
+    // operator actually changed this" from "unchanged, omit from the patch."
+    const [parentName, setParentName] = createSignal("");
+    const [initialParentName, setInitialParentName] = createSignal("");
+    const parentFieldId = createUniqueId();
+    async function runCheck() {
+      setChecking(true);
+      try { setNameCheck(await checkLocationName(name().trim())); }
+      catch { setNameCheck(null); }
+      finally { setChecking(false); }
+    }
+    // Seed the inputs from the node each time edit begins (this also reverts a Cancel,
+    // since Cancel exits edit and the next begin re-seeds).
+    createEffect(on(editing, (isEditing) => {
+      if (isEditing) {
+        setDisplay(n().raw.display_name ?? "");
+        setType(n().raw.location_type ?? "");
+        setName(n().raw.name);
+        setNameCheck(null);
+        const seed = parent()?.raw.name ?? "";
+        setParentName(seed);
+        setInitialParentName(seed);
+      }
+    }));
+    // Consume a pending "open in edit" handoff (from create or the row pencil) once
+    // the node has resolved.
+    createEffect(on(() => n().raw.name, (name) => { if (name && consumePendingEdit(name) && canUpdate()) edit?.begin(); }));
+
+    edit?.bind({
+      editable: canUpdate,
+      save: async () => {
+        setSaveErr(null);
+        const renamed = name().trim() !== n().raw.name;
+        try {
+          const movedParent = parentName() !== initialParentName() ? parentName() : undefined;
+          await updateLocation(n().raw.name, {
+            name: renamed ? name().trim() : undefined,
+            display_name: display() || undefined,
+            location_type: type() || undefined,
+            ...(movedParent ? { parent: movedParent } : {}),
+          });
+          await qc.invalidateQueries({ queryKey: LOCATIONS_KEY });
+          if (renamed) navigate(`/locations/${encodeURIComponent(name().trim())}`);
+        } catch (e) {
+          setSaveErr(describeError(e));
+          throw e; // keep the slot in edit mode so the operator can retry
+        }
+      },
+      destructive: () =>
+        can(me.data, "location", "delete")
+          ? { label: "Delete", tone: "danger" as const, onClick: () => { ctx.closeBlades(); del(n()); } }
+          : undefined,
+    });
+
     return (
       <div class="flex flex-col gap-5">
-        <Show when={!ctx.full && path.length}>
+        <Show when={saveErr()}><div role="alert" class="alert alert-error alert-soft text-sm"><span>{saveErr()}</span></div></Show>
+        <Show when={!ctx.full && path().length}>
           <div class="flex flex-wrap items-center gap-1 text-[11.5px]">
-            <For each={path}>
+            <For each={path()}>
               {(c, i) => (
                 <>
                   <Show when={i()}><span class="text-base-content/30">{"›"}</span></Show>
@@ -204,17 +316,96 @@ export default function Locations() {
             </For>
           </div>
         </Show>
-        <div class="grid grid-cols-2 gap-5">
-          {ctx.fact("Type", <span class={typeBadge(n.type)}>{n.type}</span>)}
-          {ctx.fact("Technical name", <span class="font-data text-sm">{n.raw.name}</span>)}
-          {ctx.fact("Parent", parent ? <button class="link text-sm" onClick={() => ctx.go(parent)}>{parent.display}</button> : <span class="text-base-content/50">Root</span>)}
-          {ctx.fact("Contains", <span class="tnum text-sm">{kids.length}</span>)}
+
+        <div class="flex flex-col gap-1.5">
+          <span class="eyebrow">Identity</span>
+          <Show
+            when={editing()}
+            fallback={
+              <div class="grid grid-cols-2 gap-5">
+                {ctx.fact("Type", <span class={typeBadge(n().type)}>{n().type}</span>)}
+                {ctx.fact("Technical name", <span class="font-data text-sm">{n().raw.name}</span>)}
+              </div>
+            }
+          >
+            <div class="flex flex-col gap-3">
+              {ctx.field("Display name", <input class="input input-bordered w-full" value={display()} placeholder="Conf Room 301" onInput={(e) => setDisplay(e.currentTarget.value)} />)}
+              {ctx.field(
+                "Location type",
+                <select class="select select-bordered w-full" value={type()} onChange={(e) => setType(e.currentTarget.value)}>
+                  <option value="" disabled>Select a type…</option>
+                  <For each={locationTypes.data}>{(t) => <option value={t.id}>{t.display_name}</option>}</For>
+                </select>,
+                "A location_type id.",
+              )}
+              {ctx.field(
+                "Technical name",
+                <>
+                  <div class="join w-full">
+                    <input
+                      class="input input-bordered join-item w-full font-data"
+                      value={name()}
+                      onInput={(e) => { setName(e.currentTarget.value); setNameCheck(null); }}
+                    />
+                    <Button
+                      square
+                      size="md"
+                      icon={Search}
+                      label="Check name"
+                      title="Check availability"
+                      class="join-item"
+                      disabled={checking() || !name().trim() || name().trim() === n().raw.name}
+                      onClick={() => void runCheck()}
+                    />
+                  </div>
+                  <Show when={nameCheck()}>
+                    {(c) => (
+                      <span
+                        class="text-[11px]"
+                        classList={{ "text-success": c().valid && c().available, "text-error": !c().valid || !c().available }}
+                      >
+                        {!c().valid ? (c().reason ?? "Use lowercase, digits, hyphens.") : c().available ? "Available" : (c().reason ?? "Taken")}
+                      </span>
+                    )}
+                  </Show>
+                </>,
+                "Renaming changes the address; existing links to the old name stop resolving.",
+              )}
+            </div>
+          </Show>
         </div>
-        <Show when={kids.length}>
+
+        <div class="flex flex-col gap-1.5">
+          <span class="eyebrow">Placement</span>
+          <div class="grid grid-cols-2 gap-5">
+            <Show
+              when={editing()}
+              fallback={ctx.fact("Parent", parent() ? <button class="link text-sm" onClick={() => ctx.go(parent()!)}>{parent()!.display}</button> : <span class="text-base-content/50">Root</span>)}
+            >
+              <div class="flex flex-col gap-1.5">
+                <span class="flex items-center gap-1.5">
+                  <label class="eyebrow" for={parentFieldId}>Parent</label>
+                  <InfoTip text={parentHint()} label="Parent" />
+                </span>
+                <TreeSelect
+                  id={parentFieldId}
+                  items={parentCandidates()}
+                  value={parentName()}
+                  onChange={setParentName}
+                  excludeSubtreeOf={n().raw.id}
+                  rootLabel={parent() ? undefined : "Root (current)"}
+                />
+              </div>
+            </Show>
+            {ctx.fact("Contains", <span class="tnum text-sm">{kids().length}</span>)}
+          </div>
+        </div>
+
+        <Show when={kids().length}>
           <div class="flex flex-col gap-1.5">
             <span class="eyebrow">Contains</span>
             <div class="overflow-hidden rounded-box border border-base-300">
-              <For each={kids}>
+              <For each={kids()}>
                 {(c, i) => (
                   <button
                     class="flex w-full items-center gap-2.5 px-3 py-2 text-left hover:bg-base-content/5"
@@ -230,73 +421,93 @@ export default function Locations() {
             </div>
           </div>
         </Show>
-        <Show when={ctx.full || (n.type !== "room" && can(me.data, "location", "create"))}>
+
+        <TagAdder kind="location" name={n().raw.name} canUpdate={editing() && can(me.data, "location", "update")} canCreateKey={can(me.data, "tag", "create")} />
+
+        <Show when={ctx.full}>
           <div class="flex flex-wrap items-center gap-2 border-t border-base-300 pt-4">
-            <Show when={ctx.full && can(me.data, "location", "delete")}>
-              <Button intent="danger" onClick={() => { ctx.closeBlades(); del(n); }}>Delete</Button>
-            </Show>
-            <span class="flex-1" />
-            <Show when={n.type !== "room" && can(me.data, "location", "create")}>
-              <Button icon={Plus} onClick={() => ctx.openCreate(n)}>Add child</Button>
-            </Show>
-            <Show when={ctx.full && can(me.data, "location", "update")}>
-              <Button intent="action" icon={Pencil} onClick={() => ctx.openEdit(n)}>Edit</Button>
+            <Show
+              when={editing()}
+              fallback={
+                <>
+                  <Show when={can(me.data, "location", "delete")}>
+                    <Button intent="danger" onClick={() => del(n())}>Delete</Button>
+                  </Show>
+                  <span class="flex-1" />
+                  <Show when={edit?.editable()}>
+                    <Button intent="action" icon={Pencil} onClick={() => edit!.begin()}>Edit</Button>
+                  </Show>
+                </>
+              }
+            >
+              <span class="flex-1" />
+              <Button icon={X} onClick={() => edit!.cancel()}>Cancel</Button>
+              <Button type="button" intent="action" icon={Save} disabled={edit!.saving()} onClick={() => { void edit!.save().catch(() => {}); }}>Save changes</Button>
             </Show>
           </div>
         </Show>
       </div>
     );
   }
-  function FormBody(p: { form: { mode: "create"; parent: LocNode | null } | { mode: "edit"; node: LocNode }; close: () => void; ctx: ListCtx<LocNode> }) {
-    const editing = p.form.mode === "edit";
-    const base = p.form.mode === "edit" ? p.form.node.raw : null;
-    const seedParent = p.form.mode === "create"
-      ? p.form.parent?.raw.name
-      : base?.parent_id ? (locations.data?.find((l) => l.id === base!.parent_id)?.name) : undefined;
 
-    const [name, setName] = createSignal(base?.name ?? "");
-    const [display, setDisplay] = createSignal(base?.display_name ?? "");
-    const [type, setType] = createSignal(base?.location_type ?? (p.form.mode === "create" && p.form.parent ? childType(p.form.parent.type) : ""));
-    const [parent, setParent] = createSignal(seedParent ?? "");
+  // LocationCreate: the draft-create surface at /locations/create. Identity and
+  // Placement are writable; the binding sections (Tags) are shown locked until the
+  // location exists. Create commits the row and hands off to /locations/<name> in
+  // edit mode.
+  function LocationCreate(): JSX.Element {
+    const [name, setName] = createSignal("");
+    const [display, setDisplay] = createSignal("");
+    const [type, setType] = createSignal("");
+    const [parent, setParent] = createSignal("");
     const [busy, setBusy] = createSignal(false);
     const [formErr, setFormErr] = createSignal<string | null>(null);
 
-    async function submit(e: Event) {
+    async function create(e: Event) {
       e.preventDefault();
       setBusy(true);
       setFormErr(null);
+      const nm = name().trim();
       try {
-        if (editing) {
-          await updateLocation(base!.name, { display_name: display() || undefined, location_type: type() || undefined });
-        } else {
-          await createLocation({ name: name().trim(), location_type: type().trim(), display_name: display().trim() || undefined, parent: parent() || undefined });
-        }
+        await createLocation({ name: nm, location_type: type().trim(), display_name: display().trim() || undefined, parent: parent() || undefined });
         await qc.invalidateQueries({ queryKey: LOCATIONS_KEY });
-        p.close();
+        openInEdit(nm);
+        navigate(`/locations/${encodeURIComponent(nm)}`);
       } catch (er) {
         setFormErr(describeError(er));
-      } finally {
         setBusy(false);
       }
     }
 
     return (
-      <form class="flex min-h-full flex-col gap-4" onSubmit={submit}>
+      <form class="flex flex-col gap-5" onSubmit={create}>
+        <div class="flex items-center gap-2">
+          <h2 class="text-lg font-semibold tracking-tight">New location</h2>
+          <span class="badge badge-warning badge-sm">Draft</span>
+        </div>
         <Show when={formErr()}>
           <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
         </Show>
-        {p.ctx.field("Name", <input class="input input-bordered w-full font-data" value={name()} placeholder="hq-a-301" disabled={editing} onInput={(e) => setName(e.currentTarget.value)} />, editing ? "The address is fixed after creation." : "Globally unique address.")}
-        {p.ctx.field("Display name", <input class="input input-bordered w-full" value={display()} placeholder="Conf Room 301" onInput={(e) => setDisplay(e.currentTarget.value)} />)}
-        <div class="grid grid-cols-2 gap-3">
-          {p.ctx.field(
-            "Type",
-            <select class="select select-bordered w-full" value={type()} onChange={(e) => setType(e.currentTarget.value)}>
-              <option value="" disabled>Select a type…</option>
-              <For each={locationTypes.data}>{(t) => <option value={t.id}>{t.display_name}</option>}</For>
-            </select>,
-          )}
-          <Show when={!editing}>
-            {p.ctx.field(
+
+        <div class="flex flex-col gap-1.5">
+          <span class="eyebrow">Identity</span>
+          <div class="flex flex-col gap-3">
+            {field("Name", <input class="input input-bordered w-full font-data" value={name()} placeholder="hq-a-301" onInput={(e) => setName(e.currentTarget.value)} />, "Globally unique address.")}
+            {field("Display name", <input class="input input-bordered w-full" value={display()} placeholder="Conf Room 301" onInput={(e) => setDisplay(e.currentTarget.value)} />)}
+            {field(
+              "Location type",
+              <select class="select select-bordered w-full" value={type()} onChange={(e) => setType(e.currentTarget.value)}>
+                <option value="" disabled>Select a type…</option>
+                <For each={locationTypes.data}>{(t) => <option value={t.id}>{t.display_name}</option>}</For>
+              </select>,
+              "A location_type id.",
+            )}
+          </div>
+        </div>
+
+        <div class="flex flex-col gap-1.5">
+          <span class="eyebrow">Placement</span>
+          <div class="grid grid-cols-2 gap-3">
+            {field(
               "Parent",
               <TreeSelect
                 items={(locations.data ?? []).map((l) => ({ id: l.id, value: l.name, label: l.display_name || l.name, parentId: l.parent_id, rank: TYPE_RANK[l.location_type] ?? 9 }))}
@@ -305,13 +516,31 @@ export default function Locations() {
                 rootLabel="Root (no parent)"
               />,
             )}
-          </Show>
+          </div>
         </div>
-        <DrawerFooter>
-          <Button icon={X} onClick={p.close}>Cancel</Button>
-          <Button type="submit" intent="action" icon={editing ? Save : Plus} disabled={busy() || locationTypes.isLoading}>{editing ? "Save changes" : "Create location"}</Button>
-        </DrawerFooter>
+
+        <div class="flex items-center gap-2 border-t border-base-300 pt-4">
+          <Button icon={X} onClick={() => navigate("/locations")}>Cancel</Button>
+          <span class="flex-1" />
+          <Button type="submit" intent="action" icon={Plus} disabled={busy() || !name().trim() || !type().trim()}>Create location</Button>
+        </div>
+
+        <div class="flex flex-col gap-1 opacity-50">
+          <span class="eyebrow">Tags</span>
+          <span class="text-sm text-base-content/40">Available once the location is created.</span>
+        </div>
       </form>
+    );
+  }
+
+  // A labelled field for the create surface (the detail accordion uses ctx.field).
+  function field(labelText: string, control: JSX.Element, hint?: string): JSX.Element {
+    return (
+      <label class="flex flex-col gap-1">
+        <span class="text-[12px] font-medium text-base-content/70">{labelText}</span>
+        {control}
+        <Show when={hint}><span class="text-[11px] text-base-content/40">{hint}</span></Show>
+      </label>
     );
   }
 
@@ -334,16 +563,19 @@ export default function Locations() {
       if (key === "type") return <span class={typeBadge(n.type)}>{n.type}</span>;
       if (key === "parent") { const p = ctx.parentOf(n); return p ? <span class="text-base-content/70">{p.display}</span> : <span class="text-base-content/40">—</span>; }
       if (key === "tech") return <span class="font-data text-[11.5px] text-base-content/50">{n.raw.name}</span>;
+      if (key === "tags") return <TagPills tags={n.tags} />;
       return null;
     },
-    filterKeys: [
+    filterKeys: () => [
       { key: "name", type: "string", hint: "substring", get: (n) => `${n.display} ${n.raw.name}`, values: () => [] },
       { key: "type", type: "string", hint: "exact", get: (n) => n.type, values: (rows) => [...new Set(rows.map((r) => r.type))].sort() },
+      ...tagFacets(),
     ],
     sortVal: (n, key) => {
       if (key === "type") return TYPE_RANK[n.type] ?? 9;
       if (key === "parent") return ""; // parent resolved via ctx; name sort is the useful default
       if (key === "tech") return n.raw.name.toLowerCase();
+      if (key === "tags") return Object.keys(n.tags).sort().join(",");
       return n.display.toLowerCase();
     },
     widgets,
@@ -352,8 +584,10 @@ export default function Locations() {
     onOpenNode: (n) => navigate(`/locations/${encodeURIComponent(n.id)}`),
     onBack: () => navigate("/locations"),
     onDelete: (n) => del(n),
-    renderDetail: (n, ctx) => detail(n, ctx),
-    FormBody,
+    onNew: () => navigate("/locations/create"),
+    onEdit: (n) => { openInEdit(n.raw.name); navigate(`/locations/${encodeURIComponent(n.raw.name)}`); },
+    renderCreate: () => <LocationCreate />,
+    renderDetail: (n, ctx) => <LocationDetail node={n} ctx={ctx} />,
   };
 
   return (
@@ -364,9 +598,4 @@ export default function Locations() {
       <TreeList config={cfg} />
     </div>
   );
-}
-
-// The conventional child type one level down, used to seed the create form's type.
-function childType(t: string): string {
-  return ({ campus: "building", site: "building", building: "floor", floor: "room", room: "room" } as Record<string, string>)[t] ?? "";
 }

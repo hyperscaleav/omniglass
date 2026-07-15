@@ -85,7 +85,9 @@ func TestVariableValueValidation(t *testing.T) {
 func TestVariableOwnerScope(t *testing.T) {
 	gw := variableGateway(t)
 	ctx := context.Background()
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "rm", LocationType: "room"}, all); err != nil {
+	// campus is the official type allowed at root; the type is incidental
+	// here, only the name (rm) is asserted below.
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "rm", LocationType: "campus"}, all); err != nil {
 		t.Fatalf("seed location: %v", err)
 	}
 

@@ -1,24 +1,27 @@
 # The official location types, seeded idempotently at boot (ON CONFLICT DO
-# UPDATE). rank orders the types and gives a soft hierarchy signal; ranks are
-# spaced by 10 so a new type (a wing, a zone) can slot between without a
-# renumber. rank does NOT constrain nesting: the location tree stays free-form.
+# UPDATE). The registry lists alphabetically by display_name; that ordering
+# does NOT constrain nesting. allowed_parent_types is what does: a set of
+# location_type ids and/or the reserved "root" sentinel (may sit at the top,
+# no parent) this type may be placed under. Empty means unconstrained; these
+# four ship the estate's implied hierarchy so a floor can never sit above a
+# room, but "skip a level" (a room straight under a campus) still works.
 # icon is a glyph key the console resolves to an SVG and renders as the leading
 # glyph on every location of this type; an unknown key falls back to map-pin.
 # Operator-defined types via the namespace shadow are a later slice.
 location_types:
   - id: campus
     display_name: Campus
-    rank: 10
     icon: landmark
+    allowed_parent_types: [root]
   - id: building
     display_name: Building
-    rank: 20
     icon: building
+    allowed_parent_types: [root, campus]
   - id: floor
     display_name: Floor
-    rank: 30
     icon: layers
+    allowed_parent_types: [building, campus]
   - id: room
     display_name: Room
-    rank: 40
     icon: door-open
+    allowed_parent_types: [floor, building, campus]

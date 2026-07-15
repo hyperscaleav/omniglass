@@ -23,6 +23,9 @@ import Roles from "./pages/Roles";
 import Groups from "./pages/Groups";
 import Secrets from "./pages/Secrets";
 import Variables from "./pages/Variables";
+import Tags from "./pages/Tags";
+import Types from "./pages/Types";
+import Files from "./pages/Files";
 import Audit from "./pages/Audit";
 import SectionStub from "./pages/SectionStub";
 import NotFound from "./pages/NotFound";
@@ -54,8 +57,8 @@ const ProtectedShell: ParentComponent = (props) => (
 // Stubbed sections: backends not built yet. The design draws them as stubs too.
 const STUBS = [
   "/dashboards", "/alarms",
-  "/templates", "/types", "/tags", "/rules", "/explore", "/learn",
-  "/config",
+  "/templates", "/rules", "/explore", "/learn",
+  "/config", "/settings",
 ];
 
 render(
@@ -76,12 +79,18 @@ render(
           <Route path="/nodes" component={Nodes} />
           <Route path="/interfaces" component={Interfaces} />
           <Route path="/tasks" component={Tasks} />
+          {/* Files are a flat, tenant-wide list addressed by id (names are not
+              unique across files); the :id route is the addressable full-page detail. */}
+          <Route path="/files" component={Files} />
+          <Route path="/files/:id" component={Files} />
           <Route path="/profile" component={Profile} />
           <Route path="/users" component={Users} />
           <Route path="/roles" component={Roles} />
           <Route path="/groups" component={Groups} />
           <Route path="/secrets" component={Secrets} />
           <Route path="/variables" component={Variables} />
+          <Route path="/tags" component={Tags} />
+          <Route path="/types" component={Types} />
           <Route path="/audit" component={Audit} />
           {STUBS.map((p) => <Route path={p} component={SectionStub} />)}
           <Route path="*" component={NotFound} />
