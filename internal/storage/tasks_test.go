@@ -46,16 +46,17 @@ func TestResolveTaskOwner(t *testing.T) {
 		t.Fatalf("connect: %v", err)
 	}
 	defer conn.Close(ctx)
-	// A component-bound tcp interface + task on node-a; a shared (no component)
-	// interface + task on node-a.
+	// A component-bound tcp interface placed on node-a, and a shared (no component)
+	// interface on node-a. The node placement lives on the INTERFACE; a task carries
+	// no node column (its placement projects from its interface).
 	if _, err := conn.Exec(ctx, `insert into interface (name, type, component, node_name, params) values
 		('disp-1-tcp', 'tcp', 'disp-1', 'node-a', '{"target":"10.0.0.1:22"}'::jsonb),
 		('shared-tcp', 'tcp', null, 'node-a', '{"target":"10.0.0.2:22"}'::jsonb)`); err != nil {
 		t.Fatalf("insert interfaces: %v", err)
 	}
-	if _, err := conn.Exec(ctx, `insert into task (id, mode, interface_id, node_name, enabled) values
-		('t-bound', 'poll', (select id from interface where name = 'disp-1-tcp'), 'node-a', true),
-		('t-shared', 'poll', (select id from interface where name = 'shared-tcp'), 'node-a', true)`); err != nil {
+	if _, err := conn.Exec(ctx, `insert into task (id, mode, interface_id, enabled) values
+		('t-bound', 'poll', (select id from interface where name = 'disp-1-tcp'), true),
+		('t-shared', 'poll', (select id from interface where name = 'shared-tcp'), true)`); err != nil {
 		t.Fatalf("insert tasks: %v", err)
 	}
 

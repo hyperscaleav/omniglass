@@ -15,12 +15,13 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
-// TestTaskAPI drives the task CRUD surface over HTTP, proving BOTH authz layers:
-// the permission gate (an all-scope viewer holds *:read but not task:create, so
-// POST is a capability 403) and the scope gate (an operator scoped to component B
-// reaches component A's task, which cascades through A's interface's component, as
-// a non-disclosing 404, and is refused a create under A's interface). Skipped
-// under -short.
+// TestTaskAPI drives the read-only task surface over HTTP. A task is DERIVED (one
+// poll task per interface), never authored, so there is no create route; the test
+// proves the read surface plus both authz layers on it: the permission gate (an
+// all-scope viewer holds *:read and reads a task) and the scope gate (an operator
+// scoped to component B reads B's derived task, while A's, cascading through A's
+// interface's component, is a non-disclosing 404 and never leaks into its list).
+// Skipped under -short.
 func TestTaskAPI(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -52,50 +53,42 @@ func TestTaskAPI(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create comp-b: %v", err)
 	}
-	// An interface on each component to hang tasks off; keep their surrogate ids.
-	ifA, err := gw.CreateInterface(ctx, "", storage.InterfaceSpec{Name: "if-a", Type: "tcp", Component: ptr("comp-a")}, all)
+	// Each interface DERIVES one poll task; that is the only way a task exists.
+	ifA, err := gw.CreateInterface(ctx, "", storage.InterfaceSpec{Type: "tcp", Component: ptr("comp-a")}, all)
 	if err != nil {
-		t.Fatalf("create if-a: %v", err)
+		t.Fatalf("create interface on comp-a: %v", err)
 	}
-	ifB, err := gw.CreateInterface(ctx, "", storage.InterfaceSpec{Name: "if-b", Type: "tcp", Component: ptr("comp-b")}, all)
+	ifB, err := gw.CreateInterface(ctx, "", storage.InterfaceSpec{Type: "tcp", Component: ptr("comp-b")}, all)
 	if err != nil {
-		t.Fatalf("create if-b: %v", err)
+		t.Fatalf("create interface on comp-b: %v", err)
 	}
 
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
-	// Owner creates a task on each interface; the id is content-addressed server-side.
-	taskA := createTask(c, ownerTok, map[string]any{"mode": "poll", "interface_id": ifA.ID, "spec": map[string]any{"probe": "tcp"}})
-	createTask(c, ownerTok, map[string]any{"mode": "poll", "interface_id": ifB.ID, "spec": map[string]any{"probe": "tcp"}})
-	if got := listTasks(c, ownerTok); len(got) != 2 {
-		t.Fatalf("owner task list = %d, want 2", len(got))
+	// The task surface is READ-ONLY: the owner sees both derived tasks, matched to
+	// their interfaces.
+	tasks := listTasks(c, ownerTok)
+	if len(tasks) != 2 {
+		t.Fatalf("owner task list = %d, want 2 derived", len(tasks))
 	}
+	taskA := taskByInterface(c, tasks, ifA.ID)
+	taskB := taskByInterface(c, tasks, ifB.ID)
 	c.do(ownerTok, http.MethodGet, "/tasks/"+taskA.ID, nil, http.StatusOK)
-	// A task over a well-formed but unknown interface id is a 422.
-	c.do(ownerTok, http.MethodPost, "/tasks", map[string]any{"mode": "poll", "interface_id": "00000000-0000-0000-0000-000000000000"}, http.StatusUnprocessableEntity)
 
-	// PERMISSION GATE: an all-scope viewer reads (the *:read floor) but cannot
-	// create (no task:create) -> a capability 403.
+	// PERMISSION GATE: an all-scope viewer holds *:read -> can read a task.
 	viewerAllTok := setupAllViewer(t, ctx, dsn, "viewer-all")
 	c.do(viewerAllTok, http.MethodGet, "/tasks/"+taskA.ID, nil, http.StatusOK)
-	c.do(viewerAllTok, http.MethodPost, "/tasks", map[string]any{"mode": "poll", "interface_id": ifA.ID}, http.StatusForbidden)
-	c.do(viewerAllTok, http.MethodPatch, "/tasks/"+taskA.ID, map[string]any{"enabled": false}, http.StatusForbidden)
 
-	// SCOPE GATE: an operator scoped to component B holds task:create/update but its
-	// scope cascades only through B (via its interface's component). A's task is a
-	// non-disclosing 404 on read AND update; a create over A's interface is a 403;
-	// B's own task path is fully reachable.
+	// SCOPE GATE: an operator scoped to component B reads B's derived task; A's, which
+	// cascades through A's interface's component, is a non-disclosing 404 and never
+	// shows in its list.
 	opBTok := setupScopedViewer(t, ctx, dsn, "op-b", "operator", "component", compB.ID)
 	c.do(opBTok, http.MethodGet, "/tasks/"+taskA.ID, nil, http.StatusNotFound)
-	c.do(opBTok, http.MethodPatch, "/tasks/"+taskA.ID, map[string]any{"enabled": false}, http.StatusNotFound)
-	c.do(opBTok, http.MethodPost, "/tasks", map[string]any{"mode": "poll", "interface_id": ifA.ID, "spec": map[string]any{"x": 1}}, http.StatusForbidden)
-	taskB2 := createTask(c, opBTok, map[string]any{"mode": "listen", "interface_id": ifB.ID})
-	c.do(opBTok, http.MethodGet, "/tasks/"+taskB2.ID, nil, http.StatusOK)
-	// The scoped operator's list never shows A's task.
+	c.do(opBTok, http.MethodGet, "/tasks/"+taskB.ID, nil, http.StatusOK)
 	if got := listTasks(c, opBTok); len(got) == 0 {
-		t.Fatalf("operator@B task list empty, want its own B tasks")
+		t.Fatalf("operator@B task list empty, want B's derived task")
 	}
 	for _, tk := range listTasks(c, opBTok) {
 		if tk.ID == taskA.ID {
@@ -111,16 +104,6 @@ type taskResp struct {
 	Enabled     bool   `json:"enabled"`
 }
 
-func createTask(c *apiClient, tok string, body map[string]any) taskResp {
-	c.t.Helper()
-	out := c.do(tok, http.MethodPost, "/tasks", body, http.StatusCreated)
-	var tk taskResp
-	if err := json.Unmarshal(out, &tk); err != nil {
-		c.t.Fatalf("decode task: %v", err)
-	}
-	return tk
-}
-
 func listTasks(c *apiClient, tok string) []taskResp {
 	c.t.Helper()
 	out := c.do(tok, http.MethodGet, "/tasks", nil, http.StatusOK)
@@ -131,4 +114,15 @@ func listTasks(c *apiClient, tok string) []taskResp {
 		c.t.Fatalf("decode task list: %v", err)
 	}
 	return body.Tasks
+}
+
+func taskByInterface(c *apiClient, tasks []taskResp, interfaceID string) taskResp {
+	c.t.Helper()
+	for _, tk := range tasks {
+		if tk.InterfaceID == interfaceID {
+			return tk
+		}
+	}
+	c.t.Fatalf("no derived task for interface %s", interfaceID)
+	return taskResp{}
 }

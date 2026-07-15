@@ -46,16 +46,16 @@ describe("interfaces data layer", () => {
     expect(req.url).toContain("/api/v1/interfaces/if-1");
   });
 
-  it("posts the create body (name, type, component, node, params.target) and returns the created interface", async () => {
+  it("posts the create body (type, component, node, params.target) and returns the created interface", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       jsonResponse({ id: "if-1", name: "disp-1-tcp", type: "tcp", component: "disp-1" }, 201),
     );
-    const created = await createInterface({ name: "disp-1-tcp", type: "tcp", component: "disp-1", node: "edge-hq", params: { target: "10.0.0.1:22" } });
+    const created = await createInterface({ type: "tcp", component: "disp-1", node: "edge-hq", params: { target: "10.0.0.1:22" } });
     expect(created.id).toBe("if-1");
     const req = fetchMock.mock.calls[0][0] as Request;
     expect(req.method).toBe("POST");
     expect(req.url).toContain("/api/v1/interfaces");
-    expect(await req.json()).toMatchObject({ name: "disp-1-tcp", type: "tcp", component: "disp-1", node: "edge-hq", params: { target: "10.0.0.1:22" } });
+    expect(await req.json()).toMatchObject({ type: "tcp", component: "disp-1", node: "edge-hq", params: { target: "10.0.0.1:22" } });
   });
 
   it("patches only the mutable fields (node, params) on update, addressed by id", async () => {

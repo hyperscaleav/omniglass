@@ -189,17 +189,19 @@ func TestRunIdempotent(t *testing.T) {
 			byName[ifaces[i].Name] = &ifaces[i]
 		}
 	}
-	web, qrc := byName["web"], byName["qrc"]
-	if web == nil || qrc == nil {
-		t.Fatalf("seeded interfaces web/qrc not both found on hq-boardroom-dsp: %v", byName)
+	// The interface is protocol-named: the DSP's two APIs are named by their
+	// transport (http and tcp), not a free-text label.
+	httpIf, tcpIf := byName["http"], byName["tcp"]
+	if httpIf == nil || tcpIf == nil {
+		t.Fatalf("seeded http/tcp interfaces not both found on hq-boardroom-dsp: %v", byName)
 	}
-	if web.Type != "http" {
-		t.Errorf("web interface type = %q, want http (transport, not the probe)", web.Type)
+	if httpIf.Type != "http" {
+		t.Errorf("http interface type = %q, want http", httpIf.Type)
 	}
-	if qrc.Type != "tcp" {
-		t.Errorf("qrc interface type = %q, want tcp", qrc.Type)
+	if tcpIf.Type != "tcp" {
+		t.Errorf("tcp interface type = %q, want tcp", tcpIf.Type)
 	}
-	for _, it := range []*storage.Interface{web, qrc} {
+	for _, it := range []*storage.Interface{httpIf, tcpIf} {
 		if it.Node == nil || *it.Node != "edge-hq" {
 			t.Errorf("interface %s node = %v, want edge-hq", it.Name, it.Node)
 		}
@@ -219,7 +221,7 @@ func TestRunIdempotent(t *testing.T) {
 	}
 	reachTasks := map[string]int{}
 	for i := range tasks {
-		for _, it := range []*storage.Interface{web, qrc} {
+		for _, it := range []*storage.Interface{httpIf, tcpIf} {
 			if tasks[i].InterfaceID == it.ID {
 				reachTasks[it.Name]++
 				if tasks[i].Mode != "poll" || !tasks[i].Enabled {
@@ -228,12 +230,12 @@ func TestRunIdempotent(t *testing.T) {
 			}
 		}
 	}
-	if reachTasks["web"] != 1 || reachTasks["qrc"] != 1 {
+	if reachTasks["http"] != 1 || reachTasks["tcp"] != 1 {
 		t.Errorf("reachability task rows = %v, want one poll task per interface (seed not idempotent)", reachTasks)
 	}
 
 	// The datapoints populate the panel: each interface has a fresh "up" verdict and
-	// both probe layers green. web reads cleanly up (one transition); qrc carries the
+	// both probe layers green. http reads cleanly up (one transition); tcp carries the
 	// up->down->up recovered-blip history (three transitions). The transition counts
 	// also prove the datapoints did not double on the second Run (append-only, so the
 	// sentinel must have skipped them).
@@ -241,8 +243,8 @@ func TestRunIdempotent(t *testing.T) {
 		iface       string
 		transitions int
 	}{
-		{iface: "web", transitions: 1},
-		{iface: "qrc", transitions: 3},
+		{iface: "http", transitions: 1},
+		{iface: "tcp", transitions: 3},
 	} {
 		verdict, err := gw.LatestState(ctx, "hq-boardroom-dsp", "interface.reachable", tc.iface)
 		if err != nil {

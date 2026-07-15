@@ -637,15 +637,14 @@ Creates an interface owned by a component (or a server-hosted one, which needs a
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--component` | string | (none) | Owning component name; omit for a server-hosted interface (needs an all-scoped grant) |
-| `--name` | string | (none) | Friendly name, unique within the owning component |
 | `--node` | string | (none) | Node placement name |
 | `--params` | string | (none) | Endpoint/target settings (jsonb) |
-| `--type` | string | (none) | An interface_type name |
+| `--type` | string | (none) | An interface_type name (the protocol); the interface is named by it, unique within the component |
 
 Example:
 
 ```sh
-omniglass interface create --name name --type type
+omniglass interface create --type type
 ```
 
 ### `omniglass interface delete`
@@ -2131,47 +2130,6 @@ omniglass tag values <name>
 
 Commands for the task resource
 
-### `omniglass task create`
-
-Create a task
-
-```
-omniglass task create [flags]
-```
-
-Creates a content-addressed task over an interface. The create scope cascades through the interface's owning component. A duplicate (identical) task is a 409. Gated by task:create.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--display-name` | string | (none) |  |
-| `--enabled` | string | (none) | Whether the task is on the worklist; defaults to true |
-| `--interface-id` | string | (none) | The interface id this task runs over |
-| `--mode` | string | (none) | The poll/listen axis |
-| `--node` | string | (none) | Node placement name |
-| `--spec` | string | (none) | Inline probe settings (jsonb) |
-
-Example:
-
-```sh
-omniglass task create --interface-id interface_id --mode mode
-```
-
-### `omniglass task delete`
-
-Delete a task
-
-```
-omniglass task delete <id>
-```
-
-Deletes a task. Gated by task:delete; read and delete scopes (through the component) drive the 404 versus 403 split.
-
-Example:
-
-```sh
-omniglass task delete <id>
-```
-
 ### `omniglass task get`
 
 Get a task
@@ -2196,35 +2154,12 @@ List tasks in scope
 omniglass task list
 ```
 
-Lists the tasks whose interface's owning component the caller may read (the component cascade). Gated by task:read.
+Lists the tasks whose interface's owning component the caller may read (the component cascade). Tasks are derived from interfaces, not authored. Gated by task:read.
 
 Example:
 
 ```sh
 omniglass task list
-```
-
-### `omniglass task update`
-
-Update a task
-
-```
-omniglass task update <id> [flags]
-```
-
-Patches a task's display name, enabled toggle, node placement, or spec. Gated by task:update; read and update scopes (through the component) drive the 404 versus 403 split.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--display-name` | string | (none) |  |
-| `--enabled` | string | (none) | Toggle the task on/off the worklist |
-| `--node` | string | (none) | Reassign the node placement |
-| `--spec` | string | (none) | Replace the inline probe settings (jsonb) |
-
-Example:
-
-```sh
-omniglass task update <id>
 ```
 
 ## `omniglass token`

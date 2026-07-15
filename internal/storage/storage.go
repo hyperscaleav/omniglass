@@ -253,15 +253,13 @@ type Gateway interface {
 	UpdateInterface(ctx context.Context, actorID, id string, patch InterfacePatch, read, action scope.Set) (*Interface, error)
 	DeleteInterface(ctx context.Context, actorID, id string, read, action scope.Set) error
 
-	// The task tier: operator CRUD over content-addressed collection work. A task
-	// hangs off an interface (task.interface_id), so its scope cascades through
-	// the interface's owning component, the same component-tier cascade as the
-	// interface itself.
+	// The task tier: read-only over DERIVED collection work. A task is not
+	// operator-authored: it is derived when an interface is created (the node's
+	// unit of work over that connection) and carries no node column (its placement
+	// projects from the interface). Reads cascade through the interface's owning
+	// component, the same component-tier cascade as the interface itself.
 	ListTasks(ctx context.Context, read scope.Set) ([]Task, error)
 	GetTask(ctx context.Context, id string, read scope.Set) (*Task, error)
-	CreateTask(ctx context.Context, actorID string, spec TaskSpec, create scope.Set) (*Task, error)
-	UpdateTask(ctx context.Context, actorID, id string, patch TaskPatch, read, action scope.Set) (*Task, error)
-	DeleteTask(ctx context.Context, actorID, id string, read, action scope.Set) error
 
 	// The collection registries: estate-wide reference data (no scope.Set),
 	// seeded official and operator-extensible at org/template scope later.

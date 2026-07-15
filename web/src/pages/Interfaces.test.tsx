@@ -67,12 +67,12 @@ describe("Interfaces page", () => {
   it("opens the create Drawer and offers only the built types (icmp, tcp)", async () => {
     mount(owner);
     fireEvent.click(screen.getByText("New interface"));
-    const typeSelect = (await screen.findByLabelText("Type")) as HTMLSelectElement;
+    const typeSelect = (await screen.findByLabelText("Protocol (type)")) as HTMLSelectElement;
     const options = Array.from(typeSelect.options).map((o) => o.value);
     expect(options).toEqual(["icmp", "tcp"]);
   });
 
-  it("posts the create body (type + component + node + params.target) and lands on the new row", async () => {
+  it("posts the create body (type + component + node + params.target), no name, and lands on the new row", async () => {
     const created: Interface = { id: "if-9", name: "disp-1-tcp2", type: "tcp", component: "disp-1", node: "edge-east", params: { target: "10.0.0.2:80" } };
     const calls: { url: string; method: string; body: unknown }[] = [];
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
@@ -87,8 +87,7 @@ describe("Interfaces page", () => {
 
     mount(owner);
     fireEvent.click(screen.getByText("New interface"));
-    fireEvent.input(await screen.findByLabelText("Name"), { target: { value: "disp-1-tcp2" } });
-    fireEvent.change(screen.getByLabelText("Type"), { target: { value: "tcp" } });
+    fireEvent.change(await screen.findByLabelText("Protocol (type)"), { target: { value: "tcp" } });
     fireEvent.change(screen.getByLabelText("Component"), { target: { value: "disp-1" } });
     fireEvent.change(screen.getByLabelText("Node"), { target: { value: "edge-east" } });
     fireEvent.input(screen.getByLabelText("Target"), { target: { value: "10.0.0.2:80" } });
@@ -100,12 +99,12 @@ describe("Interfaces page", () => {
     });
     const post = calls.find((c) => c.method === "POST" && c.url.includes("/interfaces"))!;
     expect(post.body).toMatchObject({
-      name: "disp-1-tcp2",
       type: "tcp",
       component: "disp-1",
       node: "edge-east",
       params: { target: "10.0.0.2:80" },
     });
+    expect(post.body).not.toHaveProperty("name");
     // The create Drawer gives way to the new interface's detail Drawer.
     await waitFor(() => expect(screen.queryByText("Create interface")).toBeNull());
   });

@@ -50,8 +50,7 @@ type interfacePathInput struct {
 
 type createInterfaceInput struct {
 	Body struct {
-		Name      string          `json:"name" minLength:"1" doc:"Friendly name, unique within the owning component"`
-		Type      string          `json:"type" minLength:"1" doc:"An interface_type name"`
+		Type      string          `json:"type" minLength:"1" doc:"An interface_type name (the protocol); the interface is named by it, unique within the component"`
 		Component *string         `json:"component,omitempty" doc:"Owning component name; omit for a server-hosted interface (needs an all-scoped grant)"`
 		Node      *string         `json:"node,omitempty" doc:"Node placement name"`
 		Params    json.RawMessage `json:"params,omitempty" doc:"Endpoint/target settings (jsonb)"`
@@ -114,7 +113,6 @@ func registerInterfaceRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Middlewares:   huma.Middlewares{a.authn, a.require("interface", "create")},
 	}, func(ctx context.Context, in *createInterfaceInput) (*interfaceOutput, error) {
 		it, err := gw.CreateInterface(ctx, actorID(ctx), storage.InterfaceSpec{
-			Name:      in.Body.Name,
 			Type:      in.Body.Type,
 			Component: in.Body.Component,
 			Node:      in.Body.Node,
@@ -168,9 +166,7 @@ func mapInterfaceErr(err error) error {
 	case errors.Is(err, storage.ErrInterfaceForbidden):
 		return huma.Error403Forbidden("forbidden")
 	case errors.Is(err, storage.ErrInterfaceExists):
-		return huma.Error409Conflict("an interface with that name already exists on this component")
-	case errors.Is(err, storage.ErrInterfaceOccupied):
-		return huma.Error409Conflict("interface still has tasks")
+		return huma.Error409Conflict("an interface of that protocol already exists on this component")
 	case errors.Is(err, storage.ErrUnknownInterfaceType):
 		return huma.Error422UnprocessableEntity("unknown interface type")
 	case errors.Is(err, storage.ErrInterfaceComponentNotFound):

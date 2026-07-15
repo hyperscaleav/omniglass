@@ -19,7 +19,6 @@ var (
 	ErrInterfaceNotFound          = errors.New("storage: interface not found")
 	ErrInterfaceForbidden         = errors.New("storage: action not permitted on this interface")
 	ErrInterfaceExists            = errors.New("storage: interface name already exists on this component")
-	ErrInterfaceOccupied          = errors.New("storage: interface still has tasks")
 	ErrUnknownInterfaceType       = errors.New("storage: unknown interface_type")
 	ErrInterfaceComponentNotFound = errors.New("storage: interface component not found")
 	ErrInterfaceNodeNotFound      = errors.New("storage: interface node not found")
@@ -41,10 +40,10 @@ type Interface struct {
 	UpdatedAt time.Time
 }
 
-// InterfaceSpec is the create input. Name is unique within the owning component
-// (the id is server-generated).
+// InterfaceSpec is the create input. The interface is protocol-named: its name is
+// DERIVED from its type (the protocol it speaks), unique within the owning
+// component, never operator-typed. The id is server-generated.
 type InterfaceSpec struct {
-	Name      string
 	Type      string
 	Component *string
 	Node      *string
@@ -219,11 +218,17 @@ func (p *PG) CreateInterface(ctx context.Context, actorID string, spec Interface
 	}
 	it, err := scanInterface(tx.QueryRow(ctx, `
 		insert into interface (name, type, component, node_name, params)
-		values ($1, $2, $3, $4, $5)
+		values ($1, $1, $2, $3, $4)
 		returning `+interfaceCols,
-		spec.Name, spec.Type, spec.Component, spec.Node, params))
+		spec.Type, spec.Component, spec.Node, params))
 	if err != nil {
 		return nil, mapInterfaceWriteErr(err)
+	}
+	// The interface is protocol-named: its name IS its transport/type (unique per
+	// component). Deriving the reachability poll task here, the node's unit of work
+	// over this connection, makes task a derived artifact, never operator-authored.
+	if err := deriveReachabilityTask(ctx, tx, it.ID); err != nil {
+		return nil, err
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "create", "interface", it.ID, nil, it); err != nil {
 		return nil, err
@@ -268,10 +273,9 @@ func (p *PG) UpdateInterface(ctx context.Context, actorID, id string, patch Inte
 	return after, nil
 }
 
-// DeleteInterface removes an interface by name with the read/action split
-// (through the owning component) and in-transaction audit. A task still
-// referencing it is a foreign-key restrict, mapped to ErrInterfaceOccupied via
-// the write-error mapper.
+// DeleteInterface removes an interface by id with the read/action split (through
+// the owning component) and in-transaction audit. Its derived tasks cascade-delete
+// with it (task.interface_id ON DELETE CASCADE).
 func (p *PG) DeleteInterface(ctx context.Context, actorID, id string, read, action scope.Set) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -337,10 +341,6 @@ func mapInterfaceWriteErr(err error) error {
 		switch pgErr.Code {
 		case "23505": // unique_violation
 			return ErrInterfaceExists
-		case "23001": // restrict_violation: a task still references this interface
-			if pgErr.ConstraintName == "task_interface_id_fkey" {
-				return ErrInterfaceOccupied
-			}
 		case "23503": // foreign_key_violation
 			switch pgErr.ConstraintName {
 			case "interface_type_fkey":

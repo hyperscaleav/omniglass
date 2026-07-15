@@ -307,7 +307,7 @@ func seedReachability(ctx context.Context, gw storage.Gateway, actorID string) e
 		return fmt.Errorf("devseed: check reachability interfaces: %w", err)
 	}
 	for _, it := range existing {
-		if it.Name == reachChecks[0].name {
+		if it.Name == reachChecks[0].itype {
 			return nil
 		}
 	}
@@ -358,27 +358,18 @@ func seedReachability(ctx context.Context, gw storage.Gateway, actorID string) e
 	node := reachNode
 	now := time.Now().UTC()
 	for _, c := range reachChecks {
-		iface, err := gw.CreateInterface(ctx, actorID, storage.InterfaceSpec{
-			Name:      c.name,
+		// The interface is protocol-named: its name is DERIVED from its transport
+		// (c.itype). Its poll task derives automatically from creating it, so the
+		// datapoints are instanced by the interface name (the transport).
+		if _, err := gw.CreateInterface(ctx, actorID, storage.InterfaceSpec{
 			Type:      c.itype,
 			Component: &comp,
 			Node:      &node,
 			Params:    []byte(fmt.Sprintf(`{"target":"%s:%d"}`, reachHost, c.port)),
-		}, all)
-		if err != nil {
-			return fmt.Errorf("devseed: create %s interface: %w", c.name, err)
-		}
-		enabled := true
-		if _, err := gw.CreateTask(ctx, actorID, storage.TaskSpec{
-			DisplayName: fmt.Sprintf("Boardroom DSP %s reachability", c.name),
-			Mode:        "poll",
-			InterfaceID: iface.ID,
-			Node:        &node,
-			Enabled:     &enabled,
 		}, all); err != nil {
-			return fmt.Errorf("devseed: create %s task: %w", c.name, err)
+			return fmt.Errorf("devseed: create %s interface: %w", c.itype, err)
 		}
-		if err := seedReachDatapoints(ctx, gw, c.name, c.flapped, c.rttMs, c.connMs, now); err != nil {
+		if err := seedReachDatapoints(ctx, gw, c.itype, c.flapped, c.rttMs, c.connMs, now); err != nil {
 			return err
 		}
 	}

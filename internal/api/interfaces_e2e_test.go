@@ -57,38 +57,39 @@ func TestInterfaceAPI(t *testing.T) {
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
-	// Owner (all scope + owner wildcard) runs full CRUD. Interfaces are id-addressed,
-	// so capture the surrogate id the create returns.
+	// Owner (all scope + owner wildcard) runs full CRUD. The interface is protocol-
+	// named (name = type), so the create body carries no name; capture the surrogate
+	// id the create returns.
 	ifA := createInterface(c, ownerTok, map[string]any{
-		"name": "if-a", "type": "tcp", "component": "comp-a", "params": map[string]any{"target": "10.0.0.1"},
+		"type": "tcp", "component": "comp-a", "params": map[string]any{"target": "10.0.0.1"},
 	})
 	ifB := createInterface(c, ownerTok, map[string]any{
-		"name": "if-b", "type": "tcp", "component": "comp-b",
+		"type": "tcp", "component": "comp-b",
 	})
 	if got := listInterfaces(c, ownerTok); len(got) != 2 {
 		t.Fatalf("owner interface list = %d, want 2", len(got))
 	}
 	c.do(ownerTok, http.MethodGet, "/interfaces/"+ifA.ID, nil, http.StatusOK)
 	// An unknown interface_type is a 422.
-	c.do(ownerTok, http.MethodPost, "/interfaces", map[string]any{"name": "bad", "type": "galaxy"}, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodPost, "/interfaces", map[string]any{"type": "galaxy"}, http.StatusUnprocessableEntity)
 
 	// PERMISSION GATE: an all-scope viewer can read (the *:read floor) but cannot
 	// create (no interface:create) -> a capability 403.
 	viewerAllTok := setupAllViewer(t, ctx, dsn, "viewer-all")
 	c.do(viewerAllTok, http.MethodGet, "/interfaces/"+ifA.ID, nil, http.StatusOK)
-	c.do(viewerAllTok, http.MethodPost, "/interfaces", map[string]any{"name": "if-x", "type": "tcp", "component": "comp-a"}, http.StatusForbidden)
+	c.do(viewerAllTok, http.MethodPost, "/interfaces", map[string]any{"type": "http", "component": "comp-a"}, http.StatusForbidden)
 	c.do(viewerAllTok, http.MethodPatch, "/interfaces/"+ifA.ID, map[string]any{"params": map[string]any{"target": "9.9.9.9"}}, http.StatusForbidden)
 
 	// SCOPE GATE: an operator scoped to component B holds interface:create/update
 	// but its scope cascades only through B. A's interface is a non-disclosing 404
 	// on read AND on update; a create under A is a 403 (out of the create scope);
-	// its own B interface is fully reachable.
+	// its own B interface is fully reachable (a different transport, so no collision).
 	opBTok := setupScopedViewer(t, ctx, dsn, "op-b", "operator", "component", compB.ID)
 	c.do(opBTok, http.MethodGet, "/interfaces/"+ifA.ID, nil, http.StatusNotFound)
 	c.do(opBTok, http.MethodPatch, "/interfaces/"+ifA.ID, map[string]any{"params": map[string]any{"target": "9.9.9.9"}}, http.StatusNotFound)
-	c.do(opBTok, http.MethodPost, "/interfaces", map[string]any{"name": "if-a2", "type": "tcp", "component": "comp-a"}, http.StatusForbidden)
+	c.do(opBTok, http.MethodPost, "/interfaces", map[string]any{"type": "http", "component": "comp-a"}, http.StatusForbidden)
 	c.do(opBTok, http.MethodGet, "/interfaces/"+ifB.ID, nil, http.StatusOK)
-	c.do(opBTok, http.MethodPost, "/interfaces", map[string]any{"name": "if-b2", "type": "tcp", "component": "comp-b"}, http.StatusCreated)
+	c.do(opBTok, http.MethodPost, "/interfaces", map[string]any{"type": "icmp", "component": "comp-b"}, http.StatusCreated)
 	// The scoped operator's list shows only B's interfaces (if-b, if-b2), never A's.
 	for _, it := range listInterfaces(c, opBTok) {
 		if it.Component != nil && *it.Component == "comp-a" {

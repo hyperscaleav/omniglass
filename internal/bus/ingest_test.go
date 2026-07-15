@@ -93,9 +93,9 @@ func TestTelemetryRoundTrip(t *testing.T) {
 		`{"target":"`+target+`"}`); err != nil {
 		t.Fatalf("insert interfaces: %v", err)
 	}
-	if _, err := conn.Exec(ctx, `insert into task (id, mode, interface_id, node_name, enabled) values
-		('t-a', 'poll', (select id from interface where name = 'disp-1-tcp'), 'node-a', true),
-		('t-b', 'poll', (select id from interface where name = 'disp-2-tcp'), 'node-b', true)`); err != nil {
+	if _, err := conn.Exec(ctx, `insert into task (id, mode, interface_id, enabled) values
+		('t-a', 'poll', (select id from interface where name = 'disp-1-tcp'), true),
+		('t-b', 'poll', (select id from interface where name = 'disp-2-tcp'), true)`); err != nil {
 		t.Fatalf("insert tasks: %v", err)
 	}
 	conn.Close(ctx)

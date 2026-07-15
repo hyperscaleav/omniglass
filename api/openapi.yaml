@@ -458,21 +458,16 @@ components:
         component:
           description: Owning component name; omit for a server-hosted interface (needs an all-scoped grant)
           type: string
-        name:
-          description: Friendly name, unique within the owning component
-          minLength: 1
-          type: string
         node:
           description: Node placement name
           type: string
         params:
           description: Endpoint/target settings (jsonb)
         type:
-          description: An interface_type name
+          description: An interface_type name (the protocol); the interface is named by it, unique within the component
           minLength: 1
           type: string
       required:
-        - name
         - type
       type: object
     CreateLocationInputBody:
@@ -766,40 +761,6 @@ components:
           type: boolean
       required:
         - name
-      type: object
-    CreateTaskInputBody:
-      additionalProperties: false
-      properties:
-        $schema:
-          description: A URL to the JSON Schema for this object.
-          examples:
-            - /api/v1/schemas/CreateTaskInputBody.json
-          format: uri
-          readOnly: true
-          type: string
-        display_name:
-          type: string
-        enabled:
-          description: Whether the task is on the worklist; defaults to true
-          type: boolean
-        interface_id:
-          description: The interface id this task runs over
-          format: uuid
-          type: string
-        mode:
-          description: The poll/listen axis
-          enum:
-            - poll
-            - listen
-          type: string
-        node:
-          description: Node placement name
-          type: string
-        spec:
-          description: Inline probe settings (jsonb)
-      required:
-        - mode
-        - interface_id
       type: object
     CreateVariableInputBody:
       additionalProperties: false
@@ -2640,7 +2601,7 @@ components:
         mode:
           type: string
         node:
-          description: The node placement name, if assigned
+          description: The node placement, projected from the interface
           type: string
         spec:
           description: The inline probe settings (jsonb)
@@ -2888,27 +2849,6 @@ components:
         propagates:
           description: Whether bindings cascade to descendants; defaults true
           type: boolean
-      type: object
-    UpdateTaskInputBody:
-      additionalProperties: false
-      properties:
-        $schema:
-          description: A URL to the JSON Schema for this object.
-          examples:
-            - /api/v1/schemas/UpdateTaskInputBody.json
-          format: uri
-          readOnly: true
-          type: string
-        display_name:
-          type: string
-        enabled:
-          description: Toggle the task on/off the worklist
-          type: boolean
-        node:
-          description: Reassign the node placement
-          type: string
-        spec:
-          description: Replace the inline probe settings (jsonb)
       type: object
     UpdateVariableInputBody:
       additionalProperties: false
@@ -5697,7 +5637,7 @@ paths:
       summary: List the distinct values bound for a key
   /tasks:
     get:
-      description: Lists the tasks whose interface's owning component the caller may read (the component cascade). Gated by task:read.
+      description: Lists the tasks whose interface's owning component the caller may read (the component cascade). Tasks are derived from interfaces, not authored. Gated by task:read.
       operationId: list-tasks
       responses:
         "200":
@@ -5713,51 +5653,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List tasks in scope
-    post:
-      description: Creates a content-addressed task over an interface. The create scope cascades through the interface's owning component. A duplicate (identical) task is a 409. Gated by task:create.
-      operationId: create-task
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateTaskInputBody"
-        required: true
-      responses:
-        "201":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/TaskBody"
-          description: Created
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Create a task
   /tasks/{id}:
-    delete:
-      description: Deletes a task. Gated by task:delete; read and delete scopes (through the component) drive the 404 versus 403 split.
-      operationId: delete-task
-      parameters:
-        - description: The task's content-addressed id
-          in: path
-          name: id
-          required: true
-          schema:
-            description: The task's content-addressed id
-            type: string
-      responses:
-        "204":
-          description: No Content
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Delete a task
     get:
       description: Fetches a task by id. A task whose component is out of the caller's read scope is a non-disclosing 404. Gated by task:read.
       operationId: get-task
@@ -5783,35 +5679,6 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Get a task
-    patch:
-      description: Patches a task's display name, enabled toggle, node placement, or spec. Gated by task:update; read and update scopes (through the component) drive the 404 versus 403 split.
-      operationId: update-task
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UpdateTaskInputBody"
-        required: true
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/TaskBody"
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Update a task
   /types/component:
     get:
       description: Lists the component_type registry, ordered alphabetically by display name. Populates the type picker on the component form. Gated by type:read.

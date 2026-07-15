@@ -2,9 +2,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   listTasks,
   getTask,
-  createTask,
-  updateTask,
-  deleteTask,
   taskLabel,
   taskFilterKeys,
   type Task,
@@ -44,40 +41,6 @@ describe("tasks data layer", () => {
     expect(t.id).toBe("t-1");
     const req = fetchMock.mock.calls[0][0] as Request;
     expect(req.url).toContain("/api/v1/tasks/t-1");
-  });
-
-  it("posts the create body (interface_id, mode, enabled) and returns the created task", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ id: "t-9", interface_id: "if-tcp", mode: "poll", enabled: true }, 201),
-    );
-    const created = await createTask({ interface_id: "if-tcp", mode: "poll", enabled: true });
-    expect(created.id).toBe("t-9");
-    const req = fetchMock.mock.calls[0][0] as Request;
-    expect(req.method).toBe("POST");
-    expect(req.url).toContain("/api/v1/tasks");
-    expect(await req.json()).toMatchObject({ interface_id: "if-tcp", mode: "poll", enabled: true });
-  });
-
-  it("patches only the mutable fields (enabled, display_name, node) on update", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ id: "t-1", interface_id: "if-tcp", mode: "poll", enabled: false }));
-    await updateTask("t-1", { enabled: false, display_name: "HQ ping" });
-    const req = fetchMock.mock.calls[0][0] as Request;
-    expect(req.method).toBe("PATCH");
-    expect(req.url).toContain("/api/v1/tasks/t-1");
-    expect(await req.json()).toEqual({ enabled: false, display_name: "HQ ping" });
-  });
-
-  it("deletes a task by id", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
-    await deleteTask("t-1");
-    const req = fetchMock.mock.calls[0][0] as Request;
-    expect(req.method).toBe("DELETE");
-    expect(req.url).toContain("/api/v1/tasks/t-1");
-  });
-
-  it("throws on an error status (e.g. a duplicate content-addressed task, 409)", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ detail: "task already exists" }, 409));
-    await expect(createTask({ interface_id: "if-tcp", mode: "poll" })).rejects.toBeTruthy();
   });
 });
 

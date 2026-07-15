@@ -248,7 +248,7 @@ func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 		select t.id, t.mode, i.name, i.type, i.params, t.spec
 		from task t
 		join interface i on i.id = t.interface_id
-		where t.node_name = $1 and t.enabled = true
+		where i.node_name = $1 and t.enabled = true
 		order by t.id`, name)
 	if err != nil {
 		return Worklist{}, fmt.Errorf("storage: node worklist %q: %w", name, err)

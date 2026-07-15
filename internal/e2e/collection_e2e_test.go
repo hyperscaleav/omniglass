@@ -105,7 +105,7 @@ func TestCollectionEndToEnd(t *testing.T) {
 	if _, err := conn.Exec(ctx, `insert into interface (name, type, component, node_name, params) values ('disp-1-tcp', 'tcp', 'disp-1', 'site-a', $1::jsonb)`, `{"target":"`+target+`"}`); err != nil {
 		t.Fatalf("insert interface: %v", err)
 	}
-	if _, err := conn.Exec(ctx, `insert into task (id, mode, interface_id, node_name, enabled) values ('t-a', 'poll', (select id from interface where name = 'disp-1-tcp'), 'site-a', true)`); err != nil {
+	if _, err := conn.Exec(ctx, `insert into task (id, mode, interface_id, enabled) values ('t-a', 'poll', (select id from interface where name = 'disp-1-tcp'), true)`); err != nil {
 		t.Fatalf("insert task: %v", err)
 	}
 	conn.Close(ctx)

@@ -81,7 +81,7 @@ create table if not exists interface (
     name       text        not null,
     type       text        not null references interface_type (name),
     component  text        references component (name) on delete set null,
-    node_name  text        references node (name) on delete set null,
+    node_name  text        references node (name) on delete cascade,
     params     jsonb       not null default '{}'::jsonb,
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now(),
@@ -96,8 +96,7 @@ create table if not exists task (
     id             text        primary key,
     display_name   text        not null default '',
     mode           text        not null,
-    interface_id   uuid        not null references interface (id) on delete restrict,
-    node_name      text        references node (name) on delete set null,
+    interface_id   uuid        not null references interface (id) on delete cascade,
     spec           jsonb       not null default '{}'::jsonb,
     enabled        boolean     not null default true,
     created_at     timestamptz not null default now(),
@@ -105,7 +104,10 @@ create table if not exists task (
     constraint task_mode_check check (mode in ('poll', 'listen'))
 );
 create index if not exists task_interface_idx on task (interface_id);
-create index if not exists task_worklist_idx on task (node_name) where node_name is not null and enabled = true;
+-- A task's node is a projection of its interface's placement (interface.node_name),
+-- not a column: the node derives its worklist by joining task to interface. This
+-- partial index on placed interfaces backs that worklist join.
+create index if not exists interface_node_name_idx on interface (node_name) where node_name is not null;
 
 -- metric_datapoint: the observed-metric sink. Owner is exactly one of the four
 -- estate/edge arms (or, later, none for a global singleton). The lineage CHECK

@@ -2,6 +2,7 @@ import { Show, createMemo, createSignal } from "solid-js";
 import { Dialog } from "@kobalte/core/dialog";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
+import Button from "../components/Button";
 import { Check, Copy, Server } from "../components/icons";
 import {
   type Node,
@@ -26,8 +27,8 @@ import { describeError, rel } from "../lib/format";
 // the server is the authority.
 // Per-status pill class. up/down carry a soft hue; "never" (no heartbeat yet) is a
 // neutral state given a soft grey fill (a tint of the text color, so it reads as a
-// visible pill in both themes). badge-neutral renders near-black against the dark
-// surface and badge-ghost renders transparent, so neither works here.
+// visible pill in both themes). The daisyUI neutral badge renders near-black against
+// the dark surface and badge-ghost renders transparent, so neither works here.
 const NEUTRAL_PILL = "bg-base-content/10 text-base-content/70 border-transparent";
 const STATUS: Record<NodeStatus, { label: string; badge: string }> = {
   up: { label: "up", badge: "badge-soft badge-success" },
@@ -166,10 +167,10 @@ function NodeDetail(props: { name: string; canEnroll: boolean; onEnrolled: (out:
                 {node().enrolled ? "Re-mint the enrollment token (the old one stops working)." : "Mint the enrollment token to connect this node."}
               </span>
               <span class="flex-1" />
-              <button class="btn btn-action btn-sm" onClick={() => doEnroll(node())} disabled={busy()}>
+              <Button intent="action" onClick={() => doEnroll(node())} disabled={busy()}>
                 <Show when={busy()}><span class="loading loading-spinner loading-xs" /></Show>
                 {node().enrolled ? "Re-enroll" : "Enroll"}
-              </button>
+              </Button>
             </div>
           </Show>
         </div>
@@ -223,11 +224,11 @@ function CreateNodeForm(props: { close: () => void; onEnrolled: (out: EnrollOutp
         <input id="new-node-desc" autocomplete="off" class="input input-bordered w-full" value={description()} placeholder="HQ network closet" onInput={(e) => setDescription(e.currentTarget.value)} disabled={busy()} />
       </div>
       <div class="mt-1 flex justify-end gap-2">
-        <button type="button" class="btn btn-quiet btn-sm" onClick={props.close} disabled={busy()}>Cancel</button>
-        <button type="submit" class="btn btn-action btn-sm" disabled={busy() || !name().trim()}>
+        <Button type="button" intent="quiet" onClick={props.close} disabled={busy()}>Cancel</Button>
+        <Button type="submit" intent="action" disabled={busy() || !name().trim()}>
           <Show when={busy()}><span class="loading loading-spinner loading-xs" /></Show>
           Create node
-        </button>
+        </Button>
       </div>
     </form>
   );
@@ -264,13 +265,13 @@ function EnrollTokenModal(props: { result: EnrollOutput | null; onClose: () => v
             </div>
             <div class="flex items-stretch gap-2">
               <input readonly value={props.result?.token ?? ""} aria-label="Enrollment token" class="input input-bordered w-full font-data text-xs" onFocus={(e) => e.currentTarget.select()} />
-              <button class="btn btn-action btn-sm gap-1.5" onClick={() => props.result && copy(props.result.token)}>
+              <Button intent="action" onClick={() => props.result && copy(props.result.token)}>
                 <Show when={copied()} fallback={<><Copy size={14} /> Copy</>}><Check size={14} /> Copied</Show>
-              </button>
+              </Button>
             </div>
             <p class="text-xs text-base-content/50">Hand it to the node deployment; the node presents it to claim its NATS credential. The server stores only a hash and never logs it.</p>
             <div class="flex justify-end">
-              <button class="btn btn-quiet btn-sm" onClick={props.onClose}>Done</button>
+              <Button intent="quiet" onClick={props.onClose}>Done</Button>
             </div>
           </Dialog.Content>
         </div>

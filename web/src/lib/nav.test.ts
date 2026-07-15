@@ -37,10 +37,10 @@ describe("filterNav", () => {
     expect(out[0].children!.map((c) => c.label)).toEqual(["Systems"]);
   });
 
-  it("orders the inventory section Components, Systems, Locations, Nodes", () => {
+  it("orders the inventory section Components, Systems, Locations, Interfaces, Nodes", () => {
     const inv = navItems.find((i) => i.label === "Inventory");
     expect(inv?.children?.map((c) => c.label)).toEqual([
-      "Components", "Systems", "Locations", "Nodes",
+      "Components", "Systems", "Locations", "Interfaces", "Nodes",
     ]);
   });
 
@@ -156,7 +156,7 @@ describe("routeTokens", () => {
 
 describe("nav IA rework", () => {
   it("puts the estate entities under Inventory and the operator-set values under Values", () => {
-    expect(section("Inventory", [">"])).toEqual(["Components", "Systems", "Locations", "Nodes"]);
+    expect(section("Inventory", [">"])).toEqual(["Components", "Systems", "Locations", "Interfaces", "Nodes"]);
     expect(section("Values", [">"])).toEqual(["Variables", "Secrets", "Config", "Files"]);
   });
 
@@ -179,6 +179,7 @@ describe("nav IA rework", () => {
     expect(routeTokens("/web/variables")).toEqual(["variable", "read"]);
     expect(routeTokens("/web/config")).toBeNull();
     expect(routeTokens("/web/settings")).toBeNull();
-    expect(routeTokens("/web/nodes")).toBeNull(); // node directory is an ungated stub until its backend lands
+    expect(routeTokens("/web/nodes")).toEqual(["node", "read"]); // node directory is live, gated on node:read
+    expect(routeTokens("/web/interfaces")).toEqual(["interface", "read"]); // interface directory is live, gated on interface:read
   });
 });

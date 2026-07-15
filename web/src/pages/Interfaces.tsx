@@ -1,6 +1,7 @@
 import { For, Show, createMemo, createSignal } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
+import Button from "../components/Button";
 import { Sliders } from "../components/icons";
 import {
   type Interface,
@@ -141,11 +142,11 @@ function InterfaceDetail(props: { id: string }) {
                 </div>
                 <div class="flex items-center gap-2 border-t border-base-300 pt-3">
                   <Show when={can(me.data, "interface", "delete")}>
-                    <button class="btn btn-danger btn-sm" onClick={() => del(iface())} disabled={busy()}>Delete</button>
+                    <Button intent="danger" onClick={() => del(iface())} disabled={busy()}>Delete</Button>
                   </Show>
                   <span class="flex-1" />
                   <Show when={can(me.data, "interface", "update")}>
-                    <button class="btn btn-action btn-sm" onClick={() => setEditing(true)}>Edit</button>
+                    <Button intent="action" onClick={() => setEditing(true)}>Edit</Button>
                   </Show>
                 </div>
               </>
@@ -214,11 +215,11 @@ function EditInterfaceForm(props: { iface: Interface; onDone: () => void }) {
         <input id="edit-iface-target" autocomplete="off" class="input input-bordered w-full font-data" value={target()} placeholder="10.0.0.1:22" onInput={(e) => setTarget(e.currentTarget.value)} disabled={busy()} />
       </div>
       <div class="mt-1 flex justify-end gap-2">
-        <button type="button" class="btn btn-quiet btn-sm" onClick={props.onDone} disabled={busy()}>Cancel</button>
-        <button type="submit" class="btn btn-action btn-sm" disabled={busy()}>
+        <Button type="button" intent="quiet" onClick={props.onDone} disabled={busy()}>Cancel</Button>
+        <Button type="submit" intent="action" disabled={busy()}>
           <Show when={busy()}><span class="loading loading-spinner loading-xs" /></Show>
           Save changes
-        </button>
+        </Button>
       </div>
     </form>
   );
@@ -231,7 +232,6 @@ function EditInterfaceForm(props: { iface: Interface; onDone: () => void }) {
 function CreateInterfaceForm(props: { close: () => void; onCreated: (i: Interface) => void }) {
   const qc = useQueryClient();
   const components = useQuery(() => ({ queryKey: COMPONENTS_KEY, queryFn: () => listComponents() }));
-  const [name, setName] = createSignal("");
   const [type, setType] = createSignal<string>(INTERFACE_TYPES[0]);
   const [component, setComponent] = createSignal("");
   const [node, setNode] = createSignal("");
@@ -245,7 +245,6 @@ function CreateInterfaceForm(props: { close: () => void; onCreated: (i: Interfac
     setErr(null);
     try {
       const created = await createInterface({
-        name: name().trim(),
         type: type(),
         component: component() || undefined,
         node: node() || undefined,
@@ -262,16 +261,12 @@ function CreateInterfaceForm(props: { close: () => void; onCreated: (i: Interfac
 
   return (
     <form class="flex flex-col gap-3" onSubmit={submit}>
-      <p class="text-xs text-base-content/50">Defines a connection endpoint on a component. A task over it (Tasks) puts it on a node's worklist.</p>
+      <p class="text-xs text-base-content/50">An API on a component, named by its protocol (its type). Its reachability task derives automatically.</p>
       <Show when={err()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
       </Show>
       <div>
-        <label class="eyebrow mb-1.5 block" for="new-iface-name">Name</label>
-        <input id="new-iface-name" autocomplete="off" class="input input-bordered w-full font-data" value={name()} placeholder="disp-1-tcp" onInput={(e) => setName(e.currentTarget.value)} disabled={busy()} required />
-      </div>
-      <div>
-        <label class="eyebrow mb-1.5 block" for="new-iface-type">Type</label>
+        <label class="eyebrow mb-1.5 block" for="new-iface-type">Protocol (type)</label>
         <select id="new-iface-type" class="select select-bordered w-full" value={type()} onChange={(e) => setType(e.currentTarget.value)} disabled={busy()}>
           <For each={INTERFACE_TYPES}>{(t) => <option value={t}>{t}</option>}</For>
         </select>
@@ -293,11 +288,11 @@ function CreateInterfaceForm(props: { close: () => void; onCreated: (i: Interfac
         <p class="mt-1 text-[11px] text-base-content/40">host:port for tcp, host for icmp.</p>
       </div>
       <div class="mt-1 flex justify-end gap-2">
-        <button type="button" class="btn btn-quiet btn-sm" onClick={props.close} disabled={busy()}>Cancel</button>
-        <button type="submit" class="btn btn-action btn-sm" disabled={busy() || !name().trim()}>
+        <Button type="button" intent="quiet" onClick={props.close} disabled={busy()}>Cancel</Button>
+        <Button type="submit" intent="action" disabled={busy()}>
           <Show when={busy()}><span class="loading loading-spinner loading-xs" /></Show>
           Create interface
-        </button>
+        </Button>
       </div>
     </form>
   );

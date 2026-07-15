@@ -69,7 +69,7 @@ func TestNodeRoundTrip(t *testing.T) {
 	if _, err := conn.Exec(ctx, `insert into interface (name, type, component, node_name, params) values ('disp-1-icmp', 'icmp', 'disp-1', 'node-a', '{"target":"10.0.0.1"}'::jsonb)`); err != nil {
 		t.Fatalf("insert interface: %v", err)
 	}
-	if _, err := conn.Exec(ctx, `insert into task (id, mode, interface_id, node_name, spec, enabled) values ('t-icmp', 'poll', (select id from interface where name = 'disp-1-icmp'), 'node-a', '{"probe":"icmp"}'::jsonb, true)`); err != nil {
+	if _, err := conn.Exec(ctx, `insert into task (id, mode, interface_id, spec, enabled) values ('t-icmp', 'poll', (select id from interface where name = 'disp-1-icmp'), '{"probe":"icmp"}'::jsonb, true)`); err != nil {
 		t.Fatalf("insert task: %v", err)
 	}
 	conn.Close(ctx)

@@ -42,35 +42,8 @@ export async function getTask(id: string): Promise<Task> {
   return data as Task;
 }
 
-export type CreateTask = {
-  interface_id: string;
-  mode: TaskMode;
-  enabled?: boolean;
-  display_name?: string;
-  node?: string;
-  spec?: unknown;
-};
-
-export async function createTask(body: CreateTask): Promise<Task> {
-  const { data, error } = await api.POST("/tasks", { body });
-  if (error) throw error;
-  return data as Task;
-}
-
-// Only the display name, enabled toggle, node placement, and spec are mutable after
-// creation (interface and mode define the content-addressed identity).
-export type UpdateTask = { display_name?: string; enabled?: boolean; node?: string; spec?: unknown };
-
-export async function updateTask(id: string, body: UpdateTask): Promise<Task> {
-  const { data, error } = await api.PATCH("/tasks/{id}", { params: { path: { id } }, body });
-  if (error) throw error;
-  return data as Task;
-}
-
-export async function deleteTask(id: string): Promise<void> {
-  const { error } = await api.DELETE("/tasks/{id}", { params: { path: { id } } });
-  if (error) throw error;
-}
+// A task is DERIVED (from creating an interface) and read-only: there is no
+// create/update/delete client. Its node placement projects from its interface.
 
 // The faceted-search fields the shared FilterBar/ListShell drives: interface (exact),
 // mode (exact, over poll/listen), and enabled (exact, over the boolean rendered as

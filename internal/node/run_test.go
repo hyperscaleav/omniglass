@@ -60,7 +60,7 @@ func TestNodeRunOnce(t *testing.T) {
 	if _, err := conn.Exec(ctx, `insert into interface (name, type, component, node_name, params) values ('disp-1-icmp', 'icmp', 'disp-1', 'site-a', '{"target":"10.0.0.1"}'::jsonb)`); err != nil {
 		t.Fatalf("insert interface: %v", err)
 	}
-	if _, err := conn.Exec(ctx, `insert into task (id, mode, interface_id, node_name, spec, enabled) values ('t-icmp', 'poll', (select id from interface where name = 'disp-1-icmp'), 'site-a', '{}'::jsonb, true)`); err != nil {
+	if _, err := conn.Exec(ctx, `insert into task (id, mode, interface_id, spec, enabled) values ('t-icmp', 'poll', (select id from interface where name = 'disp-1-icmp'), '{}'::jsonb, true)`); err != nil {
 		t.Fatalf("insert task: %v", err)
 	}
 	conn.Close(ctx)
@@ -163,7 +163,7 @@ func TestNodeVerdictPerInterface(t *testing.T) {
 			t.Fatalf("insert interface for %s: %v", c.comp, err)
 		}
 		if _, err := conn.Exec(ctx,
-			`insert into task (id, mode, interface_id, node_name, spec, enabled) values ($1, 'poll', (select id from interface where component = $2 and name = 'api'), 'site-a', '{}'::jsonb, true)`,
+			`insert into task (id, mode, interface_id, spec, enabled) values ($1, 'poll', (select id from interface where component = $2 and name = 'api'), '{}'::jsonb, true)`,
 			"t-"+c.comp, c.comp); err != nil {
 			t.Fatalf("insert task for %s: %v", c.comp, err)
 		}

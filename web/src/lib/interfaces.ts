@@ -46,8 +46,9 @@ export async function getInterface(id: string): Promise<Interface> {
   return data as Interface;
 }
 
+// The interface is protocol-named: its name is DERIVED server-side from its type,
+// so the create body carries no name.
 export type CreateInterface = {
-  name: string;
   type: string;
   component?: string;
   node?: string;

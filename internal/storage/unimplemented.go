@@ -258,15 +258,6 @@ func (UnimplementedGateway) ListTasks(context.Context, scope.Set) ([]Task, error
 func (UnimplementedGateway) GetTask(context.Context, string, scope.Set) (*Task, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) CreateTask(context.Context, string, TaskSpec, scope.Set) (*Task, error) {
-	return nil, nil
-}
-func (UnimplementedGateway) UpdateTask(context.Context, string, string, TaskPatch, scope.Set, scope.Set) (*Task, error) {
-	return nil, nil
-}
-func (UnimplementedGateway) DeleteTask(context.Context, string, string, scope.Set, scope.Set) error {
-	return nil
-}
 func (UnimplementedGateway) UpsertDatapointType(context.Context, DatapointType) error {
 	return nil
 }
