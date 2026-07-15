@@ -71,6 +71,7 @@ export const navItems: NavItem[] = [
       { label: "Types", path: "/types", live: true, resource: "type", hint: "Location, system, component, and secret type registries, classified by kind." },
       { label: "Tags", path: "/tags", live: true, resource: "tag", hint: "The governed tag key vocabulary applied across the inventory." },
       { label: "Makes", path: "/component-makes", live: true, resource: "make", hint: "Manufacturer catalog: the vendors behind component models, with support and website." },
+      { label: "Models", path: "/component-models", live: true, resource: "model", hint: "The product catalog: specific device make + model, with lifecycle and photos." },
       { label: "Rules", path: "/rules", hint: "Transform, calc, and event rules, with CEL and blast-radius preview." },
     ],
   },

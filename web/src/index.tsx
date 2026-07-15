@@ -23,6 +23,7 @@ import Variables from "./pages/Variables";
 import Tags from "./pages/Tags";
 import Types from "./pages/Types";
 import ComponentMakes from "./pages/ComponentMakes";
+import ComponentModels from "./pages/ComponentModels";
 import Files from "./pages/Files";
 import Audit from "./pages/Audit";
 import SectionStub from "./pages/SectionStub";
@@ -87,6 +88,7 @@ render(
           <Route path="/tags" component={Tags} />
           <Route path="/types" component={Types} />
           <Route path="/component-makes" component={ComponentMakes} />
+          <Route path="/component-models" component={ComponentModels} />
           <Route path="/audit" component={Audit} />
           {STUBS.map((p) => <Route path={p} component={SectionStub} />)}
           <Route path="*" component={NotFound} />
