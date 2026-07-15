@@ -665,7 +665,7 @@ func generatedCommands() []*cobra.Command {
 			cmd := &cobra.Command{
 				Use:     "update <id>",
 				Short:   "Update a component model",
-				Long:    "Patches a custom component_model's display_name, model_number, family, lifecycle timestamps, or image pointers. make_id is not patchable. Official models are read-only (422). Gated by model:update.",
+				Long:    "Patches a custom component_model's display_name, model_number, family, lifecycle timestamps, or image pointers. model_number, when present, must be non-empty (422); omit it to leave unchanged. make_id is not patchable. Official models are read-only (422). Gated by model:update.",
 				Example: "  omniglass component-model update <id>",
 				Args:    cobra.ExactArgs(1),
 				RunE: func(cmd *cobra.Command, args []string) error {
@@ -704,7 +704,7 @@ func generatedCommands() []*cobra.Command {
 			cmd.Flags().StringVar(&fEosAt, "eos-at", "", "")
 			cmd.Flags().StringVar(&fFamily, "family", "", "")
 			cmd.Flags().StringVar(&fFrontImageId, "front-image-id", "", "")
-			cmd.Flags().StringVar(&fModelNumber, "model-number", "", "")
+			cmd.Flags().StringVar(&fModelNumber, "model-number", "", "Unique per make (make_id, model_number). Omit to leave unchanged; a present-but-blank value is rejected.")
 			cmd.Flags().StringVar(&fReleasedAt, "released-at", "", "")
 			return cmd
 		}())

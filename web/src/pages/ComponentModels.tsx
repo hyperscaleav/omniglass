@@ -210,6 +210,10 @@ function ModelBladeBody(p: { id: string }): JSX.Element {
 
   edit.bind({
     editable: () => !!row() && !row()!.official && can(me.data, "model", "update"),
+    // model_number is required server-side (a nonempty CHECK constraint plus
+    // Huma's minLength:1 on the update body): gate Save so clearing it can't
+    // be committed, mirroring the create form's disabled-state guard.
+    valid: () => modelNumber().trim() !== "",
     save,
     destructive: () =>
       row() && !row()!.official && can(me.data, "model", "delete")

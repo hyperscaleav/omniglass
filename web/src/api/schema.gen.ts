@@ -387,7 +387,7 @@ export interface paths {
         head?: never;
         /**
          * Update a component model
-         * @description Patches a custom component_model's display_name, model_number, family, lifecycle timestamps, or image pointers. make_id is not patchable. Official models are read-only (422). Gated by model:update.
+         * @description Patches a custom component_model's display_name, model_number, family, lifecycle timestamps, or image pointers. model_number, when present, must be non-empty (422); omit it to leave unchanged. make_id is not patchable. Official models are read-only (422). Gated by model:update.
          */
         patch: operations["update-component-model"];
         trace?: never;
@@ -3171,6 +3171,7 @@ export interface components {
             eos_at?: string;
             family?: string;
             front_image_id?: string;
+            /** @description Unique per make (make_id, model_number). Omit to leave unchanged; a present-but-blank value is rejected. */
             model_number?: string;
             /** Format: date-time */
             released_at?: string;

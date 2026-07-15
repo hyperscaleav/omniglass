@@ -65,7 +65,7 @@ type updateComponentModelInput struct {
 	ID   string `path:"id"`
 	Body struct {
 		DisplayName  *string    `json:"display_name,omitempty"`
-		ModelNumber  *string    `json:"model_number,omitempty"`
+		ModelNumber  *string    `json:"model_number,omitempty" minLength:"1" doc:"Unique per make (make_id, model_number). Omit to leave unchanged; a present-but-blank value is rejected."`
 		Family       *string    `json:"family,omitempty"`
 		ReleasedAt   *time.Time `json:"released_at,omitempty"`
 		EosAt        *time.Time `json:"eos_at,omitempty"`
@@ -92,6 +92,18 @@ func isForeignKeyViolation(err error) (constraint string, ok bool) {
 		return "", false
 	}
 	return pgErr.ConstraintName, true
+}
+
+// isCheckViolation reports whether err is a Postgres check_violation (23514).
+// Defense-in-depth for UpdateComponentModel: the update body's minLength:1 on
+// ModelNumber already rejects a present-but-blank value before it reaches
+// storage, so component_model_model_number_nonempty should never trip here,
+// but if that guard ever regresses this still maps the CHECK violation to a
+// clean 422 instead of a raw 500 (mirrors mapGrantWriteErr's 23514 handling
+// in internal/storage/iam.go).
+func isCheckViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23514"
 }
 
 // componentModelFKMessage maps a violated component_model foreign-key
@@ -183,7 +195,7 @@ func registerComponentModelRoutes(api huma.API, a *authenticator, gw storage.Gat
 		Method:      http.MethodPatch,
 		Path:        "/component-models/{id}",
 		Summary:     "Update a component model",
-		Description: "Patches a custom component_model's display_name, model_number, family, lifecycle timestamps, or image pointers. make_id is not patchable. Official models are read-only (422). Gated by model:update.",
+		Description: "Patches a custom component_model's display_name, model_number, family, lifecycle timestamps, or image pointers. model_number, when present, must be non-empty (422); omit it to leave unchanged. make_id is not patchable. Official models are read-only (422). Gated by model:update.",
 		Middlewares: huma.Middlewares{a.authn, a.require("model", "update")},
 	}, func(ctx context.Context, in *updateComponentModelInput) (*componentModelOutput, error) {
 		m, err := gw.UpdateComponentModel(ctx, actorID(ctx), in.ID, storage.ComponentModelPatch{
@@ -194,6 +206,9 @@ func registerComponentModelRoutes(api huma.API, a *authenticator, gw storage.Gat
 		if err != nil {
 			if constraint, ok := isForeignKeyViolation(err); ok {
 				return nil, huma.Error422UnprocessableEntity(componentModelFKMessage(constraint))
+			}
+			if isCheckViolation(err) {
+				return nil, huma.Error422UnprocessableEntity("model_number cannot be blank")
 			}
 			return nil, mapTypeErr(err, "component_model")
 		}

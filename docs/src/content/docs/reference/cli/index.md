@@ -543,7 +543,7 @@ Update a component model
 omniglass component-model update <id> [flags]
 ```
 
-Patches a custom component_model's display_name, model_number, family, lifecycle timestamps, or image pointers. make_id is not patchable. Official models are read-only (422). Gated by model:update.
+Patches a custom component_model's display_name, model_number, family, lifecycle timestamps, or image pointers. model_number, when present, must be non-empty (422); omit it to leave unchanged. make_id is not patchable. Official models are read-only (422). Gated by model:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -553,7 +553,7 @@ Patches a custom component_model's display_name, model_number, family, lifecycle
 | `--eos-at` | string | (none) |  |
 | `--family` | string | (none) |  |
 | `--front-image-id` | string | (none) |  |
-| `--model-number` | string | (none) |  |
+| `--model-number` | string | (none) | Unique per make (make_id, model_number). Omit to leave unchanged; a present-but-blank value is rejected. |
 | `--released-at` | string | (none) |  |
 
 Example:

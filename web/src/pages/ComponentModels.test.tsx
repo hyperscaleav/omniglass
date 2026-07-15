@@ -116,6 +116,34 @@ describe("ComponentModels page", () => {
     expect(submit).toBeDisabled();
   });
 
+  // Regression: model_number is required server-side on update too (the
+  // API's PATCH body now carries minLength:1, mirroring create), so clearing
+  // it in the edit blade must disable Save rather than let a blank value
+  // reach the server and trip the DB's nonempty CHECK constraint.
+  it("clearing Model number in the edit blade disables Save", async () => {
+    mount();
+    fireEvent.click(screen.getByText("Acme 123A"));
+    const blade = await waitFor(() => {
+      const el = asides()[0];
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    fireEvent.click(within(blade).getByLabelText("Edit"));
+
+    const modelNumberInput = within(blade).getByDisplayValue("123A") as HTMLInputElement;
+    const save = within(blade).getByRole("button", { name: /save/i });
+    expect(save).not.toBeDisabled();
+
+    fireEvent.input(modelNumberInput, { target: { value: "" } });
+    expect(save).toBeDisabled();
+
+    fireEvent.input(modelNumberInput, { target: { value: "   " } });
+    expect(save).toBeDisabled();
+
+    fireEvent.input(modelNumberInput, { target: { value: "123A-R2" } });
+    expect(save).not.toBeDisabled();
+  });
+
   it("hides New model for a caller without model:create", () => {
     mount(viewer);
     expect(screen.queryByText(/New model/i)).toBeNull();

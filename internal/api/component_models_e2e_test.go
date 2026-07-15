@@ -114,6 +114,13 @@ func TestComponentModelsAPI(t *testing.T) {
 	c.do(ownerTok, http.MethodPatch, "/component-models/acme-123a",
 		map[string]any{"front_image_id": "00000000-0000-0000-0000-000000000000"}, http.StatusUnprocessableEntity)
 
+	// A present-but-blank model_number on update is a 422 (Huma's minLength:1
+	// on the update body), not a raw 500: the DB's nonempty CHECK constraint
+	// must never be reached, since UpdateComponentModel's coalesce($3,
+	// model_number) would otherwise write the empty string through.
+	c.do(ownerTok, http.MethodPatch, "/component-models/acme-123a",
+		map[string]any{"model_number": ""}, http.StatusUnprocessableEntity)
+
 	// The custom make is now referenced by a model, so deleting it is
 	// refused (409, the make-in-use guard on DeleteComponentMake).
 	c.do(ownerTok, http.MethodDelete, "/component-makes/acme-mfg", nil, http.StatusConflict)
