@@ -1,10 +1,10 @@
-import { Show, createMemo, createSignal, type JSX } from "solid-js";
+import { Show, For, createMemo, createSignal, type JSX } from "solid-js";
 import { Dialog } from "@kobalte/core/dialog";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import Button from "../components/Button";
 import { Check, Copy, Server } from "../components/icons";
-import { Fact, RelatedList, type RelatedItem } from "../components/DetailShell";
+import { Fact } from "../components/DetailShell";
 import {
   type Node,
   type EnrollOutput,
@@ -140,14 +140,16 @@ function NodeBladeBody(props: { name: string; onEnrolled: (out: EnrollOutput) =>
   const [busy, setBusy] = createSignal(false);
   const canEnroll = () => can(me.data, "node", "enroll");
 
-  // The node's derived tasks, resolved to their interface's friendly name (a task
-  // carries the surrogate interface_id). Mode is the badge; the enabled state is the
-  // sub-label. Read-only: no drill, no remove.
+  // The node's derived tasks. A task has no name: it is a binding, a function running
+  // over an interface, so it reads as its interface (the anchor, resolved from the
+  // surrogate interface_id) plus the function it runs, never a redundant label. The
+  // function name arrives with device drivers, so today it reads as the built-in check
+  // with a provisional marker. Read-only: a task is derived, never authored here.
   const ifaceName = (id: string) => interfaces.data?.find((i) => i.id === id)?.name ?? id;
-  const nodeTasks = createMemo<RelatedItem[]>(() =>
+  const nodeTasks = createMemo(() =>
     (tasks.data ?? [])
       .filter((t) => t.node === props.name)
-      .map((t) => ({ id: t.id, kind: "task", name: ifaceName(t.interface_id), sub: t.enabled ? "enabled" : "disabled", badge: t.mode })),
+      .map((t) => ({ id: t.id, iface: ifaceName(t.interface_id), enabled: t.enabled })),
   );
 
   async function doEnroll() {
@@ -197,11 +199,33 @@ function NodeBladeBody(props: { name: string; onEnrolled: (out: EnrollOutput) =>
             </Show>
           </div>
 
-          <RelatedList
-            label="Tasks"
-            items={nodeTasks()}
-            empty="No tasks. A task derives when an interface placed on this node is created."
-          />
+          <div class="flex flex-col gap-1.5">
+            <div class="flex items-baseline gap-1.5">
+              <span class="eyebrow">Tasks</span>
+              <Show when={nodeTasks().length}><span class="text-xs text-base-content/40">{nodeTasks().length}</span></Show>
+            </div>
+            <Show
+              when={nodeTasks().length}
+              fallback={<p class="text-xs text-base-content/40">No tasks. A task derives when an interface placed on this node is created.</p>}
+            >
+              <div class="overflow-hidden rounded-box border border-base-300">
+                <For each={nodeTasks()}>
+                  {(t, i) => (
+                    <div class="flex items-center gap-2 px-3 py-1.5 text-sm" classList={{ "border-t border-base-300": i() > 0 }}>
+                      <span class="font-data text-base-content/80">{t.iface}</span>
+                      <span class="text-base-content/25">/</span>
+                      <span class="flex items-center gap-1.5 text-base-content/50">
+                        reachability
+                        <span class="rounded bg-base-content/5 px-1 py-px text-[9px] font-medium uppercase tracking-wide text-base-content/40" title="Named collection functions arrive with device drivers">driver fn soon</span>
+                      </span>
+                      <span class="flex-1" />
+                      <span class={`badge badge-xs ${t.enabled ? "badge-soft badge-success" : "bg-base-content/10 text-base-content/70 border-transparent"}`}>{t.enabled ? "enabled" : "disabled"}</span>
+                    </div>
+                  )}
+                </For>
+              </div>
+            </Show>
+          </div>
 
           <Show when={canEnroll()}>
             <p class="text-xs text-base-content/50">

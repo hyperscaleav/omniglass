@@ -80,11 +80,15 @@ describe("Nodes page", () => {
   it("folds the node's derived tasks into a read-only panel on the detail blade", async () => {
     mount(owner);
     fireEvent.click(screen.getByText("edge-hq"));
-    // The Tasks panel lists the node's derived tasks, resolved to their interface
-    // name and mode; there is no create/edit affordance (tasks are derived).
+    // The Tasks panel reads each derived task as a binding: its interface (the anchor)
+    // plus the function it runs, never a task name or the mode mechanism. The function
+    // reads as the built-in check with a provisional "driver fn soon" marker.
     await screen.findByText("Tasks");
     expect(await screen.findByText("disp-1-tcp")).toBeTruthy();
-    expect(screen.getByText("poll")).toBeTruthy();
+    expect(screen.getByText("reachability")).toBeTruthy();
+    expect(screen.getByText(/driver fn soon/i)).toBeTruthy();
+    expect(screen.getByText("enabled")).toBeTruthy();
+    expect(screen.queryByText("poll")).toBeNull(); // the mode mechanism is not shown
   });
 
   it("reveals the enrollment token once, copies it to the clipboard, and clears it on close", async () => {

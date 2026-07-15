@@ -52,11 +52,14 @@ their derived tasks.
 ## Tasks
 
 A task is the **collection work** a node runs, and it is **derived**, not authored: creating an
-interface creates its one poll task. There is no standalone Tasks surface. A node's derived
-tasks read as a **panel on the node's detail** (open a node from **Inventory > Nodes**, with
-`task:read`): each shows its interface, its mode (`poll`), and an **enabled** state, and the
-node it runs on follows its interface's placement. To change what a node collects, add or
-remove the **interface**; there is no task create, edit, or delete.
+interface creates its one poll task. A task has **no name**: it is a binding, a **function**
+running over an **interface**, so it reads as its interface (the anchor) plus that function,
+never a redundant label. There is no standalone Tasks surface. A node's derived tasks read as a
+**panel on the node's detail** (open a node from **Inventory > Nodes**, with `task:read`): each
+shows its interface, the function it runs (today the built-in **reachability** check, with a
+provisional marker since named collection functions arrive with device drivers), and an
+**enabled** state; the node it runs on follows its interface's placement. To change what a node
+collects, add or remove the **interface**; there is no task create, edit, or delete.
 
 ## Reachability
 
