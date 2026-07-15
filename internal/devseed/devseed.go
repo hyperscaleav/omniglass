@@ -28,13 +28,12 @@ var fixturesYAML []byte
 
 // Doc is the parsed example-data fixture.
 type Doc struct {
-	Locations   []Location   `yaml:"locations"`
-	Users       []User       `yaml:"users"`
-	Variables   []Variable   `yaml:"variables"`
-	Tags        []Tag        `yaml:"tags"`
-	TagBindings []TagBinding `yaml:"tag_bindings"`
-	Files       []File       `yaml:"files"`
-
+	Locations       []Location       `yaml:"locations"`
+	Users           []User           `yaml:"users"`
+	Variables       []Variable       `yaml:"variables"`
+	Tags            []Tag            `yaml:"tags"`
+	TagBindings     []TagBinding     `yaml:"tag_bindings"`
+	Files           []File           `yaml:"files"`
 	ComponentModels []ComponentModel `yaml:"component_models"`
 }
 

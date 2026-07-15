@@ -138,6 +138,13 @@ func TestRunIdempotent(t *testing.T) {
 	if grants != 3 {
 		t.Errorf("grants = %d, want 3", grants)
 	}
+	var models int
+	if err := conn.QueryRow(ctx, `select count(*) from component_model`).Scan(&models); err != nil {
+		t.Fatalf("count component models: %v", err)
+	}
+	if models != 3 {
+		t.Errorf("component models = %d, want 3", models)
+	}
 
 	// The tree links resolve: the west building hangs under the hq campus.
 	var parentName string
