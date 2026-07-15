@@ -79,8 +79,22 @@ A `component_make` (Crestron, Biamp, QSC, ...) is Catalog reference data, not a 
 entity: a flat, seed-and-custom registry naming who makes a component, on the same official/custom
 pattern as the `*_type` registries ([Types guide](/guides/admin/types/)). It is the first landed
 piece of a larger make/model catalog; nothing on `component` points at one yet, and the
-`component_type` genus tree and a `component_model` layer between make and instance are later
-work, not built. See the [Makes guide](/guides/admin/makes/) for the operator surface.
+`component_type` genus tree is later work, not built. See the [Makes guide](/guides/admin/makes/)
+for the operator surface.
+
+### Catalog reference data: `component_model`
+
+A `component_model` (a Crestron Flex MX70, a Biamp Tesira Forte AI) is the product layer one level
+below `component_make`: a flat registry naming a specific device product, with a required `make_id`
+foreign key, product identity (model number, an optional family grouping), optional lifecycle dates
+(released, end-of-sale, end-of-life), and optional front/back image references into the
+[files](/architecture/files/) primitive. Like `component_make` it is official-vs-custom, listed flat
+(no tree). It carries **no type or classification field**: what a model *does* (mic, speaker, codec,
+switcher, and so on) is being reframed from a single genus into multi-valued **roles**, its own later
+slice, and nothing on `component` points at a model yet (slots and template-stamping are later
+epics too). `component_model` is the first entity to reference `component_make`, so deleting a make
+still referenced by a model is refused (409). See the [Models guide](/guides/admin/models/) for the
+operator surface.
 
 ## The variable-depth trees
 

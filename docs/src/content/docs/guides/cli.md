@@ -142,6 +142,28 @@ A seed-owned (**official**) make, for example `crestron` or `biamp`, is read-onl
 both 422. `website` is validated to an `http`/`https` scheme on write; any other scheme (for example
 `javascript:`) is a 422.
 
+## Component models
+
+The [component model](/architecture/core-entities/#catalog-reference-data-component_model) commands
+cover the product catalog: a specific make + model product, one layer down from `component-make`, on
+the same official-vs-custom pattern. `model:read` sits on the viewer floor; the three writes
+(`model:create`, `model:update`, `model:delete`) are admin-gated.
+
+```sh
+omniglass component-model list                                      # the product catalog
+omniglass component-model create --id tsw-1070 --display-name TSW-1070 \
+  --make-id crestron --model-number TSW-1070-B-S --family TSW
+omniglass component-model get tsw-1070
+omniglass component-model update tsw-1070 --family "TSW gen2"
+omniglass component-model delete tsw-1070                            # refused (422) if official
+```
+
+A seed-owned (**official**) model is read-only: `update` and `delete` both 422. `make_id` is set at
+create and is not patchable after. Front/back product photos take a file id (`--front-image-id` /
+`--back-image-id`), uploaded through the [Files](/guides/admin/files/) commands first; an unknown
+`make_id` or image id is a 422. Deleting a `component-make` still referenced by a model is now refused
+too (409), the referential guard deferred from the make registry.
+
 ## Generated versus hand-written
 
 - **Generated** (`internal/cli/api_gen.go`, do not edit): one command per API operation.

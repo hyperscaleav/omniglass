@@ -1049,3 +1049,27 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   picker wiring a component to a make. Deferred: the rest of the make/model catalog
   ([epic #254](https://github.com/hyperscaleav/omniglass/issues/254),
   [#255](https://github.com/hyperscaleav/omniglass/issues/255)).
+- **Catalog: the `component_model` product registry, and the make-in-use delete guard.** Slice 2 of
+  the make/model catalog: a flat, seed-and-custom registry (`id`, `official`, `display_name`,
+  `make_id` -> `component_make`, `model_number`, `family`, `released_at`/`eos_at`/`eol_at`,
+  `front_image_id`/`back_image_id` -> `file`) naming a specific device product, on the same
+  official-row-read-only pattern as `component_make`. Full CRUD (`POST/GET/PATCH/DELETE/list
+  /api/v1/component-models`) is gated by a new **`model`** resource (`model:read` on the viewer
+  floor, `model:create,update,delete` at the admin tier); an unknown `make_id`, `front_image_id`, or
+  `back_image_id` is a 422, and `make_id` is fixed after creation. This slice also lands the
+  referential guard deferred from `component_make`: `DELETE /api/v1/component-makes/{id}` now
+  refuses (409) while a `component_model` still points at it, the same in-use rule the `*_type`
+  registries already enforce. A few dev-seed example models (referencing the seeded makes) come up
+  populated on `make dev`. The console's **[Models](/guides/admin/models/)** page becomes the
+  primary catalog browse surface (`FlatList` + blade, a **Make** column and a make filter, front/back
+  image upload through the existing [files](/architecture/files/) primitive, an official row
+  read-only); **[Makes](/guides/admin/makes/)** stays the manufacturer-admin peer. The generated CLI
+  gains `omniglass component-model list/get/create/update/delete`. Proven by a storage round-trip
+  (CRUD, the FK faults, official read-only, the make-in-use 409), a dev-seed idempotency test, a
+  real-binary API test (the CRUD lifecycle, unknown-make and unknown-image 422s, the make-in-use
+  409, the capability gate), and web unit and component tests (the Make column, the make filter, the
+  image-upload round-trip). Deliberate thin cuts: **no type or classification field** (the genus
+  model is being reframed into multi-valued roles, its own slice, [#256](https://github.com/hyperscaleav/omniglass/issues/256)),
+  no `component_type` genus tree, and no picker wiring a `component` to a model (slots and
+  template-stamping are later epics). Completes [epic #254](https://github.com/hyperscaleav/omniglass/issues/254)
+  slice 2 ([#257](https://github.com/hyperscaleav/omniglass/issues/257)).

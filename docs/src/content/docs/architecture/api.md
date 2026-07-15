@@ -267,6 +267,34 @@ viewer floor (`make:read`, which `*:read` carries); the three writes gate on `ma
 A `make` body is `{id, display_name, icon, support_phone, website, official}`. `website` is validated to
 an `http`/`https` scheme on write (a 422 for any other scheme, for example `javascript:`).
 
+A **component model** ([core entities](/architecture/core-entities/#catalog-reference-data-component_model))
+is Catalog reference data one layer down: a specific product (a Crestron Flex MX70) made by a
+`component_make`, with model number, family, optional lifecycle dates, and optional front/back product
+images. It is the primary catalog browse surface (the console's Models page); `component_make` stays
+the manufacturer-admin peer. The list and read routes sit on the viewer floor (`model:read`, which
+`*:read` carries); the three writes gate on `model:create` / `model:update` / `model:delete`, all at the
+admin tier, exactly like `make:*`. It carries no type or classification field this slice; see
+[core entities](/architecture/core-entities/) for what is deferred.
+
+- `GET /component-models` lists the registry, ordered alphabetically by display name (`{models:
+  [model]}`, `model:read`).
+- `POST /component-models` mints a custom model from `{id, display_name, make_id, model_number,
+  family?, released_at?, eos_at?, eol_at?, front_image_id?, back_image_id?}` (201, `model:create`,
+  admin); a `make_id`, `front_image_id`, or `back_image_id` that names no existing row is a 422.
+- `GET /component-models/{id}` reads one (`model:read`).
+- `PATCH /component-models/{id}` updates `{display_name?, model_number?, family?, released_at?, eos_at?,
+  eol_at?, front_image_id?, back_image_id?}` (`model:update`, admin); `make_id` is not patchable. An
+  **official** (seed-owned) row is read-only (422).
+- `DELETE /component-models/{id}` removes a custom model (204, `model:delete`, admin); an official row
+  is refused (422).
+
+A `model` body is `{id, display_name, make_id, model_number, family, released_at, eos_at, eol_at,
+front_image_id, back_image_id, official}`. Front/back images are file ids from the
+[files](/architecture/files/) primitive: the console uploads through the files API first and sets the
+returned id on the model, so this surface takes only the FK, never raw bytes. `component_model` is the
+first entity to reference `component_make`, so `DELETE /component-makes/{id}` now also refuses (409)
+while a model still references the make, alongside its existing official-row 422.
+
 ## Files: content-addressed bytes behind a handle
 
 A **file** is a searchable handle over a content-addressed [blob](/architecture/files/): the metadata is

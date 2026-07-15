@@ -821,3 +821,41 @@ below from the project's history. From here it grows one slice at a time.
   [#255](https://github.com/hyperscaleav/omniglass/issues/255). Design:
   `docs/superpowers/specs/2026-07-14-component-make-model-catalog-design.md`. Plan:
   `docs/superpowers/plans/2026-07-14-component-make-registry.md`.
+
+### ADR-0032: `component_model` registry slice 2, no type field this slice, images via the files primitive, Models as the primary catalog IA, and the make-in-use guard lands
+
+- **Date:** 2026-07-15 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/),
+  [Models guide](/guides/admin/models/), [Makes guide](/guides/admin/makes/)
+- **Decision:** Four calls on the second slice of the make/model catalog, the `component_model`
+  product registry (id, display_name, `make_id` -> `component_make`, model_number, family, lifecycle
+  dates, front/back image FKs, official). **(1) No type or classification field.** The design sketch
+  named a `component_type` genus tree feeding a model's type. Classification is instead being
+  reframed from a single genus into **multi-valued roles** (a device plays mic / speaker / codec /
+  switcher / amplifier / control at once, not one), a separate slice ([#256](https://github.com/hyperscaleav/omniglass/issues/256))
+  this registry does not block on and does not pre-shape a column for; when roles land, a model gains
+  them with no rework here. **(2) Images are file FKs, not a new upload path.** `front_image_id` /
+  `back_image_id` are nullable foreign keys to `file` ([#246](https://github.com/hyperscaleav/omniglass/issues/246)).
+  The console uploads through the existing files API (base64, the [ADR-0018](#adr-0018-the-avatar-read-endpoint-is-json-not-raw-image-bytes)
+  precedent) and sets the returned id on the model; the model API takes only the FK, so the files
+  primitive is reused verbatim rather than growing a second upload surface. **(3) Models is the
+  primary catalog IA; Makes stays a peer.** The console's new **Models** page (a flat directory with
+  a **Make** column and a make filter) is where an operator browses the product catalog day to day;
+  **Makes** is unchanged, the manufacturer-admin page one references point at, not folded into or
+  replaced by Models. **(4) The make-in-use delete guard, deferred from ADR-0031, lands here.**
+  `component_model` is the first entity to reference `component_make`, so `DeleteComponentMake` now
+  refuses (409, `ErrTypeInUse`) while a model still points at the make it targets, the same
+  in-use rule the `*_type` registries already enforce; an official make is still refused
+  unconditionally (422).
+- **Context:** `docs/superpowers/specs/2026-07-14-component-model-registry-design.md` scopes this as
+  slice 2 of the four-slice make/model catalog sketched in ADR-0031's design doc, building on the
+  merged `component_make` ([#255](https://github.com/hyperscaleav/omniglass/issues/255)) and files
+  ([#246](https://github.com/hyperscaleav/omniglass/issues/246)) primitives, with no dependency on the
+  classification slice ([#256](https://github.com/hyperscaleav/omniglass/issues/256)).
+- **Divergences logged:** the design sketch's `component_type` genus tree feeding a model's
+  classification is not what shipped; per (1), a model carries no type field this slice, and
+  classification is reframed to roles rather than a genus. Nothing else on this slice diverges from
+  the design.
+- **Lands:** [epic #254](https://github.com/hyperscaleav/omniglass/issues/254), issue
+  [#257](https://github.com/hyperscaleav/omniglass/issues/257). Design:
+  `docs/superpowers/specs/2026-07-14-component-model-registry-design.md`. Plan:
+  `docs/superpowers/plans/2026-07-14-component-model-registry.md`.
