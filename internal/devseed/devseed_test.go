@@ -17,6 +17,14 @@ var officialRoles = map[string]bool{
 	"viewer": true, "operator": true, "deploy": true, "admin": true, "owner": true,
 }
 
+// officialMakes are the component_make ids the boot seed installs; every
+// fixture component model must reference one of them, else the model's
+// make_id foreign key fails at seed time.
+var officialMakes = map[string]bool{
+	"crestron": true, "biamp": true, "qsc": true, "shure": true,
+	"cisco": true, "extron": true, "sony": true, "samsung": true,
+}
+
 // TestFixturesShape is a pure unit check on the embedded fixtures: the tree is
 // well formed (every parent named before its children), every user carries a
 // password, and every grant references a real role and (when scoped) a location
@@ -55,6 +63,18 @@ func TestFixturesShape(t *testing.T) {
 			if g.ScopeKind != "all" && !seenLoc[g.ScopeRef] {
 				t.Errorf("user %q grant scoped to location %q not in the fixtures", u.Username, g.ScopeRef)
 			}
+		}
+	}
+
+	if len(doc.ComponentModels) == 0 {
+		t.Fatal("fixtures empty: 0 component models")
+	}
+	for _, m := range doc.ComponentModels {
+		if m.ID == "" || m.DisplayName == "" || m.MakeID == "" {
+			t.Errorf("component model %+v missing id, display_name, or make_id", m)
+		}
+		if !officialMakes[m.MakeID] {
+			t.Errorf("component model %q references unknown make %q", m.ID, m.MakeID)
 		}
 	}
 }

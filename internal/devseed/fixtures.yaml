@@ -157,3 +157,23 @@ files:
     content_type: text/plain
     content: "CONFIDENTIAL competitive bid, integrator A"
     sensitive: true
+
+# Component models: a few example make + model products (dev examples, not the
+# official ship-with registry) so the Models page comes up populated. Each
+# references a make the boot seed installs.
+component_models:
+  - id: crestron-uc-mx70
+    display_name: Crestron Flex MX70
+    make_id: crestron
+    model_number: UC-MX70
+    family: flex
+  - id: biamp-tesira-forte-ai
+    display_name: Biamp Tesira Forte AI
+    make_id: biamp
+    model_number: FORTE-AI
+    family: tesira
+  - id: cisco-room-kit-pro
+    display_name: Cisco Room Kit Pro
+    make_id: cisco
+    model_number: CS-KIT-PRO-K9
+    family: room-kit

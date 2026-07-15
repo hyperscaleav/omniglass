@@ -34,6 +34,8 @@ type Doc struct {
 	Tags        []Tag        `yaml:"tags"`
 	TagBindings []TagBinding `yaml:"tag_bindings"`
 	Files       []File       `yaml:"files"`
+
+	ComponentModels []ComponentModel `yaml:"component_models"`
 }
 
 // File is one example file handle over the blob store: its bytes ride inline in
@@ -44,6 +46,17 @@ type File struct {
 	ContentType string `yaml:"content_type"`
 	Content     string `yaml:"content"`
 	Sensitive   bool   `yaml:"sensitive"`
+}
+
+// ComponentModel is one example make + model product, referencing a make id
+// the boot seed installs (crestron, biamp, ...). Dev examples only: Official
+// is always false, unlike the boot seed's official registry rows.
+type ComponentModel struct {
+	ID          string `yaml:"id"`
+	DisplayName string `yaml:"display_name"`
+	MakeID      string `yaml:"make_id"`
+	ModelNumber string `yaml:"model_number"`
+	Family      string `yaml:"family"`
 }
 
 // Tag is one example key in the governed vocabulary, optionally with a global
@@ -246,6 +259,19 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 			Name: f.Name, ContentType: f.ContentType, Data: []byte(f.Content), Sensitive: f.Sensitive,
 		}, true); err != nil {
 			return fmt.Errorf("devseed: create file %q: %w", f.Name, err)
+		}
+	}
+
+	// Component models: a few example make + model products so the Models page
+	// comes up populated. Official is always false (these are dev examples, not
+	// ship-with registry rows). UpsertComponentModel keys on id, so a re-run
+	// updates the same rows in place rather than duplicating them.
+	for _, m := range doc.ComponentModels {
+		if err := gw.UpsertComponentModel(ctx, storage.ComponentModel{
+			ID: m.ID, Official: false, DisplayName: m.DisplayName,
+			MakeID: m.MakeID, ModelNumber: m.ModelNumber, Family: m.Family,
+		}); err != nil {
+			return fmt.Errorf("devseed: upsert component model %q: %w", m.ID, err)
 		}
 	}
 	return nil
