@@ -234,7 +234,21 @@ func (UnimplementedGateway) ComponentNameTaken(context.Context, string) (bool, e
 func (UnimplementedGateway) DeleteComponent(context.Context, string, string, scope.Set, scope.Set) error {
 	return nil
 }
-func (UnimplementedGateway) UpsertSecretType(context.Context, SecretType) error { return nil }
+func (UnimplementedGateway) UpsertComponentMake(context.Context, ComponentMake) error { return nil }
+func (UnimplementedGateway) ListComponentMakes(context.Context) ([]ComponentMake, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) GetComponentMake(context.Context, string) (*ComponentMake, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) CreateComponentMake(context.Context, string, ComponentMake) (*ComponentMake, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) UpdateComponentMake(context.Context, string, string, ComponentMakePatch) (*ComponentMake, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteComponentMake(context.Context, string, string) error { return nil }
+func (UnimplementedGateway) UpsertSecretType(context.Context, SecretType) error        { return nil }
 func (UnimplementedGateway) ListSecretTypes(context.Context) ([]SecretType, error) {
 	return nil, nil
 }
