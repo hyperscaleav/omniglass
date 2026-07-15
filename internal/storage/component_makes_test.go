@@ -112,3 +112,37 @@ func TestComponentMakeCRUD(t *testing.T) {
 		t.Fatalf("get after delete err = %v, want ErrTypeNotFound", err)
 	}
 }
+
+// TestDeleteComponentMakeInUse proves the make-in-use delete guard: a
+// component_make still referenced by a component_model is refused with
+// ErrTypeInUse, the same sentinel the type registries use for their in-use
+// delete guard. The referencing make must be custom (official=false): a
+// seeded make like "crestron" hits the official guard first (ErrTypeOfficial
+// takes precedence, correctly), so this test creates its own custom make to
+// isolate the in-use check.
+func TestDeleteComponentMakeInUse(t *testing.T) {
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	if _, err := gw.CreateComponentMake(ctx, "", storage.ComponentMake{
+		ID: "acme-mk", DisplayName: "Acme",
+	}); err != nil {
+		t.Fatalf("create component_make: %v", err)
+	}
+	if _, err := gw.CreateComponentModel(ctx, "", storage.ComponentModel{
+		ID: "m1", DisplayName: "M1", MakeID: "acme-mk", ModelNumber: "1",
+	}); err != nil {
+		t.Fatalf("create component_model: %v", err)
+	}
+
+	if err := gw.DeleteComponentMake(ctx, "", "acme-mk"); !errors.Is(err, storage.ErrTypeInUse) {
+		t.Fatalf("delete in-use make err = %v, want ErrTypeInUse", err)
+	}
+}

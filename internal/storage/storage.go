@@ -239,14 +239,25 @@ type Gateway interface {
 
 	// The component_make registry: a flat manufacturer registry (Cisco,
 	// Crestron, ...), same shape and official-read-only guard as the type
-	// registries above but with no tree and no in-use delete guard in this
-	// slice (component_model will reference it later).
+	// registries above but with no tree. DeleteComponentMake refuses a make
+	// still referenced by a component_model (in-use guard).
 	UpsertComponentMake(ctx context.Context, m ComponentMake) error
 	ListComponentMakes(ctx context.Context) ([]ComponentMake, error)
 	GetComponentMake(ctx context.Context, id string) (*ComponentMake, error)
 	CreateComponentMake(ctx context.Context, actorID string, m ComponentMake) (*ComponentMake, error)
 	UpdateComponentMake(ctx context.Context, actorID, id string, patch ComponentMakePatch) (*ComponentMake, error)
 	DeleteComponentMake(ctx context.Context, actorID, id string) error
+
+	// The component_model registry: a make + model product, same shape and
+	// official-read-only guard as component_make but with a required make_id
+	// FK, product identity fields, optional lifecycle timestamps, and optional
+	// image pointers at the files primitive.
+	UpsertComponentModel(ctx context.Context, m ComponentModel) error
+	ListComponentModels(ctx context.Context) ([]ComponentModel, error)
+	GetComponentModel(ctx context.Context, id string) (*ComponentModel, error)
+	CreateComponentModel(ctx context.Context, actorID string, m ComponentModel) (*ComponentModel, error)
+	UpdateComponentModel(ctx context.Context, actorID, id string, patch ComponentModelPatch) (*ComponentModel, error)
+	DeleteComponentModel(ctx context.Context, actorID, id string) error
 
 	// The secret tier: a shape registry, scoped CRUD, an audited reveal, and the
 	// cascade resolver. A secret is owned on the exclusive arc (global or one of

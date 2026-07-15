@@ -12,8 +12,8 @@ import (
 // ComponentMake is a registry row naming a manufacturer (e.g. "Cisco",
 // "Crestron"): a stable id, the official flag, a display_name, and optional
 // contact metadata (icon, support phone, website). It is a flat registry like
-// component_type: no tree, and no in-use delete guard in this slice (nothing
-// references a component_make yet; component_model will). The registry lists
+// component_type: no tree. DeleteComponentMake refuses a make still
+// referenced by a component_model (the in-use guard). The registry lists
 // alphabetically by display_name; there is no ordering field.
 type ComponentMake struct {
 	ID           string
@@ -164,8 +164,9 @@ func (p *PG) UpdateComponentMake(ctx context.Context, actorID, id string, patch 
 }
 
 // DeleteComponentMake removes a custom component_make, refusing an official
-// row (ErrTypeOfficial). Nothing references component_make in this slice (a
-// later component_model slice will), so there is no in-use guard.
+// row (ErrTypeOfficial) and refusing a make still referenced by a
+// component_model (ErrTypeInUse), mirroring the type registries' in-use
+// delete guard.
 func (p *PG) DeleteComponentMake(ctx context.Context, actorID, id string) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -175,6 +176,13 @@ func (p *PG) DeleteComponentMake(ctx context.Context, actorID, id string) error 
 
 	if err := guardTypeMutable(ctx, tx, "component_make", id); err != nil {
 		return err
+	}
+	n, err := countTypeRefs(ctx, tx, typeRef{table: "component_model", col: "make_id"}, id)
+	if err != nil {
+		return err
+	}
+	if n > 0 {
+		return ErrTypeInUse
 	}
 	if _, err := tx.Exec(ctx, `delete from component_make where id = $1`, id); err != nil {
 		return fmt.Errorf("storage: delete component_make %q: %w", id, err)

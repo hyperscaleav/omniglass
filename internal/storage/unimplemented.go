@@ -248,7 +248,25 @@ func (UnimplementedGateway) UpdateComponentMake(context.Context, string, string,
 	return nil, nil
 }
 func (UnimplementedGateway) DeleteComponentMake(context.Context, string, string) error { return nil }
-func (UnimplementedGateway) UpsertSecretType(context.Context, SecretType) error        { return nil }
+func (UnimplementedGateway) UpsertComponentModel(context.Context, ComponentModel) error {
+	return nil
+}
+func (UnimplementedGateway) ListComponentModels(context.Context) ([]ComponentModel, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) GetComponentModel(context.Context, string) (*ComponentModel, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) CreateComponentModel(context.Context, string, ComponentModel) (*ComponentModel, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) UpdateComponentModel(context.Context, string, string, ComponentModelPatch) (*ComponentModel, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteComponentModel(context.Context, string, string) error {
+	return nil
+}
+func (UnimplementedGateway) UpsertSecretType(context.Context, SecretType) error { return nil }
 func (UnimplementedGateway) ListSecretTypes(context.Context) ([]SecretType, error) {
 	return nil, nil
 }
