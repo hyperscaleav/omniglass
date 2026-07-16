@@ -9,9 +9,9 @@ screenshots:
       - action: click
         selector: '[role="tab"]:has-text("Component")'
       - action: click
-        selector: 'tr:has-text("Display")'
+        selector: 'tr.cursor-pointer:has-text("Display")'
   - id: fields-effective
-    path: /web/components/main-display
+    path: /web/components/lobby-display
     alt: "The Effective fields panel on a component's detail: each field its type declares, resolved to the set literal or the type default, an override-versus-default badge, and an inline setter."
 ---
 
