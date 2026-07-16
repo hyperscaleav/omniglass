@@ -15,7 +15,8 @@ roles:
     display_name: Operator
     description: >-
       Day-to-day operations: acknowledge, snooze, and resolve alarms, and create
-      or edit components, interfaces, tasks, rules, config, secrets, and variables.
+      or edit components, interfaces, tasks, rules, config, secrets, variables, and
+      fields.
       Sees and reveals the device secrets in its scope (never the admin-sensitive
       platform credentials). Inherits Viewer.
     inherits: ["viewer"]
