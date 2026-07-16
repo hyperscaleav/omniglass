@@ -602,6 +602,54 @@ func generatedCommands() []*cobra.Command {
 	}
 	{
 		parent := &cobra.Command{
+			Use:   "field",
+			Short: "Commands for the field resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			var fField string
+			var fValue string
+			cmd := &cobra.Command{
+				Use:     "create <name>",
+				Short:   "Set a field value on a component",
+				Long:    "Sets a literal for a field defined on the component's type, validated against its data_type. Gated by field:create; the component must be in the caller's field create scope.",
+				Example: "  omniglass field create <name> --field field --value value",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/components/%s/fields", url.PathEscape(args[0]))
+					body := map[string]any{}
+					if cmd.Flags().Changed("field") {
+						body["field"] = fField
+					}
+					if cmd.Flags().Changed("value") {
+						body["value"] = jsonOrString(fValue)
+					}
+					return runAPICommand(cmd, "POST", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fField, "field", "", "The field name, defined on the component's type")
+			_ = cmd.MarkFlagRequired("field")
+			cmd.Flags().StringVar(&fValue, "value", "", "The literal, validated against the field's data_type")
+			_ = cmd.MarkFlagRequired("value")
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "list <name>",
+				Short:   "List a component's effective fields",
+				Long:    "Each field defined on the component's type, resolved to the set literal or the type default (is_set marks the override). Gated by field:read; the component must be in the caller's field read scope.",
+				Example: "  omniglass field list <name>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/components/%s/fields", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		roots = append(roots, parent)
+	}
+	{
+		parent := &cobra.Command{
 			Use:   "field-definition",
 			Short: "Commands for the field-definition resource",
 		}
@@ -695,6 +743,48 @@ func generatedCommands() []*cobra.Command {
 			cmd.Flags().StringVar(&fDataType, "data-type", "", "The declared value type")
 			_ = cmd.MarkFlagRequired("data-type")
 			cmd.Flags().StringVar(&fDefaultValue, "default-value", "", "Optional type-level default, validated against data_type")
+			return cmd
+		}())
+		roots = append(roots, parent)
+	}
+	{
+		parent := &cobra.Command{
+			Use:   "field-value",
+			Short: "Commands for the field-value resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "delete <id>",
+				Short:   "Delete a field value",
+				Long:    "Clears a component's override for a field, reverting it to the type default. Gated by field:delete; read and delete scopes on the owning component drive the 404 versus 403 split.",
+				Example: "  omniglass field-value delete <id>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/field-values/%s", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "DELETE", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			var fValue string
+			cmd := &cobra.Command{
+				Use:     "update <id>",
+				Short:   "Update a field value",
+				Long:    "Replaces a field value's literal, revalidated against the field's fixed data_type. Gated by field:update; read and update scopes on the owning component drive the 404 versus 403 split.",
+				Example: "  omniglass field-value update <id> --value value",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/field-values/%s", url.PathEscape(args[0]))
+					body := map[string]any{}
+					if cmd.Flags().Changed("value") {
+						body["value"] = jsonOrString(fValue)
+					}
+					return runAPICommand(cmd, "PATCH", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fValue, "value", "", "The new literal, validated against the field's fixed data_type")
+			_ = cmd.MarkFlagRequired("value")
 			return cmd
 		}())
 		roots = append(roots, parent)

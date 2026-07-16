@@ -40,6 +40,56 @@ type fieldDefinitionOutput struct {
 	Body fieldDefinitionBody
 }
 
+// effectiveFieldBody is one field resolved for a component: the effective value
+// (the set literal or the type default), plus the override if the component set
+// one. Value and SetValue are polymorphic, shaped by data_type.
+type effectiveFieldBody struct {
+	FieldID  string `json:"field_id"`
+	Name     string `json:"name"`
+	DataType string `json:"data_type"`
+	Value    any    `json:"value" doc:"The effective value: the set literal, or the type default when unset"`
+	SetValue any    `json:"set_value,omitempty" doc:"The component's override; omitted when the field is unset"`
+	IsSet    bool   `json:"is_set" doc:"True when the component overrides the type default"`
+}
+
+type effectiveFieldsOutput struct {
+	Body struct {
+		Fields []effectiveFieldBody `json:"fields"`
+	}
+}
+
+// fieldValueBody is the wire shape of a single stored field value: a literal a
+// component sets for a field defined on its type.
+type fieldValueBody struct {
+	ID          string `json:"id"`
+	FieldID     string `json:"field_id"`
+	ComponentID string `json:"component_id"`
+	Value       any    `json:"value" doc:"The literal, shape given by the field's data_type"`
+}
+
+type fieldValueOutput struct {
+	Body fieldValueBody
+}
+
+func toEffectiveFieldBody(ef *storage.EffectiveField) effectiveFieldBody {
+	b := effectiveFieldBody{FieldID: ef.FieldID, Name: ef.Name, DataType: ef.DataType, IsSet: ef.IsSet}
+	if len(ef.Value) > 0 {
+		_ = json.Unmarshal(ef.Value, &b.Value)
+	}
+	if len(ef.SetValue) > 0 {
+		_ = json.Unmarshal(ef.SetValue, &b.SetValue)
+	}
+	return b
+}
+
+func toFieldValueBody(fv *storage.FieldValue) fieldValueBody {
+	b := fieldValueBody{ID: fv.ID, FieldID: fv.FieldID, ComponentID: fv.ComponentID}
+	if len(fv.Value) > 0 {
+		_ = json.Unmarshal(fv.Value, &b.Value)
+	}
+	return b
+}
+
 type createFieldDefinitionInput struct {
 	Body struct {
 		ComponentType string `json:"component_type" minLength:"1" doc:"The component_type this field is defined on"`
@@ -59,6 +109,29 @@ type updateFieldDefinitionInput struct {
 
 type fieldDefinitionIDInput struct {
 	ID string `path:"id" doc:"The field definition's id"`
+}
+
+type effectiveFieldsInput struct {
+	Name string `path:"name" doc:"The component's name"`
+}
+
+type setFieldValueInput struct {
+	Name string `path:"name" doc:"The component's name"`
+	Body struct {
+		Field string `json:"field" minLength:"1" doc:"The field name, defined on the component's type"`
+		Value any    `json:"value" doc:"The literal, validated against the field's data_type"`
+	}
+}
+
+type fieldValueIDInput struct {
+	ID string `path:"id" doc:"The field value's id"`
+}
+
+type updateFieldValueInput struct {
+	ID   string `path:"id" doc:"The field value's id"`
+	Body struct {
+		Value any `json:"value" doc:"The new literal, validated against the field's fixed data_type"`
+	}
 }
 
 // registerFieldRoutes wires the field-definition catalog: a flat, unscoped
@@ -140,6 +213,85 @@ func registerFieldRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Middlewares:   huma.Middlewares{a.authn, a.require("field", "delete")},
 	}, func(ctx context.Context, in *fieldDefinitionIDInput) (*struct{}, error) {
 		if err := gw.DeleteFieldDefinition(ctx, actorID(ctx), in.ID); err != nil {
+			return nil, mapFieldErr(err)
+		}
+		return nil, nil
+	})
+
+	// Value routes. Unlike the definition catalog these are ABAC-scoped to the
+	// component: the field:<action> scope contains the owning component (the arc),
+	// mirroring the variable value routes.
+	huma.Register(api, huma.Operation{
+		OperationID: "list-effective-fields",
+		Method:      http.MethodGet,
+		Path:        "/components/{name}/fields",
+		Summary:     "List a component's effective fields",
+		Description: "Each field defined on the component's type, resolved to the set literal or the type default (is_set marks the override). Gated by field:read; the component must be in the caller's field read scope.",
+		Middlewares: huma.Middlewares{a.authn, a.require("field", "read")},
+	}, func(ctx context.Context, in *effectiveFieldsInput) (*effectiveFieldsOutput, error) {
+		eff, err := gw.EffectiveFields(ctx, in.Name, a.scopeFor(ctx, "field", "read"))
+		if err != nil {
+			return nil, mapFieldErr(err)
+		}
+		out := &effectiveFieldsOutput{}
+		out.Body.Fields = make([]effectiveFieldBody, 0, len(eff))
+		for i := range eff {
+			out.Body.Fields = append(out.Body.Fields, toEffectiveFieldBody(&eff[i]))
+		}
+		return out, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID:   "set-field-value",
+		Method:        http.MethodPost,
+		Path:          "/components/{name}/fields",
+		DefaultStatus: http.StatusCreated,
+		Summary:       "Set a field value on a component",
+		Description:   "Sets a literal for a field defined on the component's type, validated against its data_type. Gated by field:create; the component must be in the caller's field create scope.",
+		Middlewares:   huma.Middlewares{a.authn, a.require("field", "create")},
+	}, func(ctx context.Context, in *setFieldValueInput) (*fieldValueOutput, error) {
+		raw, err := json.Marshal(in.Body.Value)
+		if err != nil {
+			return nil, huma.Error422UnprocessableEntity("value is not encodable")
+		}
+		fv, err := gw.CreateFieldValue(ctx, actorID(ctx), in.Name, in.Body.Field, raw, a.scopeFor(ctx, "field", "create"))
+		if err != nil {
+			return nil, mapFieldErr(err)
+		}
+		return &fieldValueOutput{Body: toFieldValueBody(fv)}, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "update-field-value",
+		Method:      http.MethodPatch,
+		Path:        "/field-values/{id}",
+		Summary:     "Update a field value",
+		Description: "Replaces a field value's literal, revalidated against the field's fixed data_type. Gated by field:update; read and update scopes on the owning component drive the 404 versus 403 split.",
+		Middlewares: huma.Middlewares{a.authn, a.require("field", "update")},
+	}, func(ctx context.Context, in *updateFieldValueInput) (*fieldValueOutput, error) {
+		raw, err := json.Marshal(in.Body.Value)
+		if err != nil {
+			return nil, huma.Error422UnprocessableEntity("value is not encodable")
+		}
+		fv, err := gw.UpdateFieldValue(ctx, actorID(ctx), in.ID, raw,
+			a.scopeFor(ctx, "field", "read"), a.scopeFor(ctx, "field", "update"))
+		if err != nil {
+			return nil, mapFieldErr(err)
+		}
+		return &fieldValueOutput{Body: toFieldValueBody(fv)}, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID:   "delete-field-value",
+		Method:        http.MethodDelete,
+		Path:          "/field-values/{id}",
+		DefaultStatus: http.StatusNoContent,
+		Summary:       "Delete a field value",
+		Description:   "Clears a component's override for a field, reverting it to the type default. Gated by field:delete; read and delete scopes on the owning component drive the 404 versus 403 split.",
+		Middlewares:   huma.Middlewares{a.authn, a.require("field", "delete")},
+	}, func(ctx context.Context, in *fieldValueIDInput) (*struct{}, error) {
+		if err := gw.DeleteFieldValue(ctx, actorID(ctx), in.ID,
+			a.scopeFor(ctx, "field", "read"), a.scopeFor(ctx, "field", "delete")); err != nil {
 			return nil, mapFieldErr(err)
 		}
 		return nil, nil

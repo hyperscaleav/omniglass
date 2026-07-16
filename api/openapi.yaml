@@ -826,6 +826,48 @@ components:
         - content_type
         - content
       type: object
+    EffectiveFieldBody:
+      additionalProperties: false
+      properties:
+        data_type:
+          type: string
+        field_id:
+          type: string
+        is_set:
+          description: True when the component overrides the type default
+          type: boolean
+        name:
+          type: string
+        set_value:
+          description: The component's override; omitted when the field is unset
+        value:
+          description: "The effective value: the set literal, or the type default when unset"
+      required:
+        - field_id
+        - name
+        - data_type
+        - value
+        - is_set
+      type: object
+    EffectiveFieldsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/EffectiveFieldsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        fields:
+          items:
+            $ref: "#/components/schemas/EffectiveFieldBody"
+          type:
+            - array
+            - "null"
+      required:
+        - fields
+      type: object
     EffectiveSecretsOutputBody:
       additionalProperties: false
       properties:
@@ -1025,6 +1067,30 @@ components:
         - component_type
         - name
         - data_type
+      type: object
+    FieldValueBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/FieldValueBody.json
+          format: uri
+          readOnly: true
+          type: string
+        component_id:
+          type: string
+        field_id:
+          type: string
+        id:
+          type: string
+        value:
+          description: The literal, shape given by the field's data_type
+      required:
+        - id
+        - field_id
+        - component_id
+        - value
       type: object
     FileBody:
       additionalProperties: false
@@ -2247,6 +2313,26 @@ components:
       required:
         - image_base64
       type: object
+    SetFieldValueInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/SetFieldValueInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        field:
+          description: The field name, defined on the component's type
+          minLength: 1
+          type: string
+        value:
+          description: The literal, validated against the field's data_type
+      required:
+        - field
+        - value
+      type: object
     SvcBody:
       additionalProperties: false
       properties:
@@ -2473,6 +2559,21 @@ components:
           description: Optional type-level default, validated against data_type
       required:
         - data_type
+      type: object
+    UpdateFieldValueInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/UpdateFieldValueInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        value:
+          description: The new literal, validated against the field's fixed data_type
+      required:
+        - value
       type: object
     UpdateGroupInputBody:
       additionalProperties: false
@@ -3390,6 +3491,63 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Effective variables for a component
+  /components/{name}/fields:
+    get:
+      description: Each field defined on the component's type, resolved to the set literal or the type default (is_set marks the override). Gated by field:read; the component must be in the caller's field read scope.
+      operationId: list-effective-fields
+      parameters:
+        - description: The component's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The component's name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EffectiveFieldsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List a component's effective fields
+    post:
+      description: Sets a literal for a field defined on the component's type, validated against its data_type. Gated by field:create; the component must be in the caller's field create scope.
+      operationId: set-field-value
+      parameters:
+        - description: The component's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The component's name
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetFieldValueInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FieldValueBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Set a field value on a component
   /components/{name}:listTags:
     get:
       description: Lists the tags bound directly on a component (not the resolved cascade). Gated by component:read.
@@ -3594,6 +3752,59 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Update a field definition
+  /field-values/{id}:
+    delete:
+      description: Clears a component's override for a field, reverting it to the type default. Gated by field:delete; read and delete scopes on the owning component drive the 404 versus 403 split.
+      operationId: delete-field-value
+      parameters:
+        - description: The field value's id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The field value's id
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Delete a field value
+    patch:
+      description: Replaces a field value's literal, revalidated against the field's fixed data_type. Gated by field:update; read and update scopes on the owning component drive the 404 versus 403 split.
+      operationId: update-field-value
+      parameters:
+        - description: The field value's id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The field value's id
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateFieldValueInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FieldValueBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Update a field value
   /files:
     get:
       description: Lists the file handles the caller may see (searchable metadata, no bytes). Sensitive files appear only to the admin tier. Gated by file:read.

@@ -514,6 +514,47 @@ Example:
 omniglass effective-variable list <name>
 ```
 
+## `omniglass field`
+
+Commands for the field resource
+
+### `omniglass field create`
+
+Set a field value on a component
+
+```
+omniglass field create <name> [flags]
+```
+
+Sets a literal for a field defined on the component's type, validated against its data_type. Gated by field:create; the component must be in the caller's field create scope.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--field` | string | (none) | The field name, defined on the component's type |
+| `--value` | string | (none) | The literal, validated against the field's data_type |
+
+Example:
+
+```sh
+omniglass field create <name> --field field --value value
+```
+
+### `omniglass field list`
+
+List a component's effective fields
+
+```
+omniglass field list <name>
+```
+
+Each field defined on the component's type, resolved to the set literal or the type default (is_set marks the override). Gated by field:read; the component must be in the caller's field read scope.
+
+Example:
+
+```sh
+omniglass field list <name>
+```
+
 ## `omniglass field-definition`
 
 Commands for the field-definition resource
@@ -592,6 +633,46 @@ Example:
 
 ```sh
 omniglass field-definition update <id> --data-type data_type
+```
+
+## `omniglass field-value`
+
+Commands for the field-value resource
+
+### `omniglass field-value delete`
+
+Delete a field value
+
+```
+omniglass field-value delete <id>
+```
+
+Clears a component's override for a field, reverting it to the type default. Gated by field:delete; read and delete scopes on the owning component drive the 404 versus 403 split.
+
+Example:
+
+```sh
+omniglass field-value delete <id>
+```
+
+### `omniglass field-value update`
+
+Update a field value
+
+```
+omniglass field-value update <id> [flags]
+```
+
+Replaces a field value's literal, revalidated against the field's fixed data_type. Gated by field:update; read and update scopes on the owning component drive the 404 versus 403 split.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--value` | string | (none) | The new literal, validated against the field's fixed data_type |
+
+Example:
+
+```sh
+omniglass field-value update <id> --value value
 ```
 
 ## `omniglass file`
