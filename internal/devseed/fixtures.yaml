@@ -160,7 +160,7 @@ files:
 
 # Field definitions: a couple of typed fields declared on the `display`
 # component_type, so the field primitive comes up with a schema to teach.
-# `brightness` carries a default (50); `asset_tag` and `location_note` have none,
+# `diagonal_inches` carries a default (55); `asset_tag` and `location_note` have none,
 # so the effective-values panel shows a default-vs-plain contrast. Flat and
 # unscoped, like the type registries (no owner, no ABAC scope).
 field_definitions:
@@ -168,9 +168,9 @@ field_definitions:
     name: asset_tag
     data_type: string
   - component_type: display
-    name: brightness
+    name: diagonal_inches
     data_type: int
-    default: 50
+    default: 55
   - component_type: display
     name: location_note
     data_type: string
@@ -185,11 +185,11 @@ components:
     component_type: display
     location: hq-west-2-boardroom
 
-# Field values: an override the Lobby Display sets for `brightness` (80 over the
-# definition's default of 50), so the effective-values panel teaches
+# Field values: an override the Lobby Display sets for `diagonal_inches` (65 over
+# the definition's default of 55), so the effective-values panel teaches
 # direct-vs-inherited; `asset_tag` and `location_note` stay unset to show the
 # other side of that contrast.
 field_values:
   - component: lobby-display
-    field: brightness
-    value: 80
+    field: diagonal_inches
+    value: 65

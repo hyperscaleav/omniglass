@@ -107,7 +107,7 @@ func TestFieldValueEffective(t *testing.T) {
 
 	// A field on the "display" type with a default.
 	fd, err := gw.CreateFieldDefinition(ctx, "", storage.FieldDefinitionSpec{
-		ComponentType: "display", Name: "brightness", DataType: "int",
+		ComponentType: "display", Name: "diagonal_inches", DataType: "int",
 		DefaultValue: json.RawMessage(`50`),
 	})
 	if err != nil {
@@ -138,7 +138,7 @@ func TestFieldValueEffective(t *testing.T) {
 	}
 
 	// Set an override on the component.
-	if _, err := gw.CreateFieldValue(ctx, "", "lobby-display", "brightness", json.RawMessage(`80`), all); err != nil {
+	if _, err := gw.CreateFieldValue(ctx, "", "lobby-display", "diagonal_inches", json.RawMessage(`80`), all); err != nil {
 		t.Fatalf("set value: %v", err)
 	}
 	eff, _ = gw.EffectiveFields(ctx, "lobby-display", all)
@@ -148,12 +148,12 @@ func TestFieldValueEffective(t *testing.T) {
 
 	// A value that does not match the field's data_type is rejected (int field,
 	// string value).
-	if _, err := gw.CreateFieldValue(ctx, "", "lobby-display", "brightness", json.RawMessage(`"bright"`), all); !errors.Is(err, storage.ErrInvalidValue) {
+	if _, err := gw.CreateFieldValue(ctx, "", "lobby-display", "diagonal_inches", json.RawMessage(`"bright"`), all); !errors.Is(err, storage.ErrInvalidValue) {
 		t.Fatalf("want ErrInvalidValue, got %v", err)
 	}
 
 	// A field defined on "display" cannot be set on a "camera" component.
-	if _, err := gw.CreateFieldValue(ctx, "", "lobby-cam", "brightness", json.RawMessage(`10`), all); !errors.Is(err, storage.ErrFieldNotApplicable) {
+	if _, err := gw.CreateFieldValue(ctx, "", "lobby-cam", "diagonal_inches", json.RawMessage(`10`), all); !errors.Is(err, storage.ErrFieldNotApplicable) {
 		t.Fatalf("want ErrFieldNotApplicable, got %v", err)
 	}
 
@@ -173,9 +173,9 @@ func TestFieldValueUpdateDelete(t *testing.T) {
 	gw := fieldGateway(t)
 	ctx := context.Background()
 
-	// brightness:int default 50 on "display", set on a fresh display component.
+	// diagonal_inches:int default 50 on "display", set on a fresh display component.
 	if _, err := gw.CreateFieldDefinition(ctx, "", storage.FieldDefinitionSpec{
-		ComponentType: "display", Name: "brightness", DataType: "int",
+		ComponentType: "display", Name: "diagonal_inches", DataType: "int",
 		DefaultValue: json.RawMessage(`50`),
 	}); err != nil {
 		t.Fatalf("define: %v", err)
@@ -185,7 +185,7 @@ func TestFieldValueUpdateDelete(t *testing.T) {
 	}, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
-	fv, err := gw.CreateFieldValue(ctx, "", "lobby-display", "brightness", json.RawMessage(`80`), all)
+	fv, err := gw.CreateFieldValue(ctx, "", "lobby-display", "diagonal_inches", json.RawMessage(`80`), all)
 	if err != nil {
 		t.Fatalf("set value: %v", err)
 	}

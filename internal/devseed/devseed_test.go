@@ -178,7 +178,7 @@ func TestRunIdempotent(t *testing.T) {
 		t.Fatalf("count field values: %v", err)
 	}
 	if fieldVals != 1 {
-		t.Errorf("field values = %d, want 1 (brightness override)", fieldVals)
+		t.Errorf("field values = %d, want 1 (diagonal_inches override)", fieldVals)
 	}
 
 	// The tree links resolve: the west building hangs under the hq campus.

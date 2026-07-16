@@ -114,7 +114,7 @@ func TestFieldValueAPI(t *testing.T) {
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
-	// A display component and a brightness field with a type-level default of 50.
+	// A display component and a diagonal_inches field with a type-level default of 50.
 	compRaw := c.do(ownerTok, http.MethodPost, "/components",
 		map[string]any{"name": "lobby-display", "component_type": "display"}, http.StatusCreated)
 	var comp struct {
@@ -122,11 +122,11 @@ func TestFieldValueAPI(t *testing.T) {
 	}
 	json.Unmarshal(compRaw, &comp)
 	c.do(ownerTok, http.MethodPost, "/field-definitions",
-		map[string]any{"component_type": "display", "name": "brightness", "data_type": "int", "default_value": 50},
+		map[string]any{"component_type": "display", "name": "diagonal_inches", "data_type": "int", "default_value": 50},
 		http.StatusCreated)
 
 	// Effective read before any override: the default, unset.
-	if f := effectiveField(t, c, ownerTok, "lobby-display", "brightness"); f.Value.(float64) != 50 || f.IsSet {
+	if f := effectiveField(t, c, ownerTok, "lobby-display", "diagonal_inches"); f.Value.(float64) != 50 || f.IsSet {
 		t.Fatalf("want default 50 unset, got %+v", f)
 	}
 
@@ -136,17 +136,17 @@ func TestFieldValueAPI(t *testing.T) {
 		Value any    `json:"value"`
 	}
 	json.Unmarshal(c.do(ownerTok, http.MethodPost, "/components/lobby-display/fields",
-		map[string]any{"field": "brightness", "value": 80}, http.StatusCreated), &setBody)
+		map[string]any{"field": "diagonal_inches", "value": 80}, http.StatusCreated), &setBody)
 	if setBody.ID == "" || setBody.Value.(float64) != 80 {
 		t.Fatalf("set response = %+v, want value 80 with id", setBody)
 	}
-	if f := effectiveField(t, c, ownerTok, "lobby-display", "brightness"); f.Value.(float64) != 80 || !f.IsSet {
+	if f := effectiveField(t, c, ownerTok, "lobby-display", "diagonal_inches"); f.Value.(float64) != 80 || !f.IsSet {
 		t.Fatalf("want set 80, got %+v", f)
 	}
 
 	// A second value for the same field on the same component is a conflict.
 	c.do(ownerTok, http.MethodPost, "/components/lobby-display/fields",
-		map[string]any{"field": "brightness", "value": 90}, http.StatusConflict)
+		map[string]any{"field": "diagonal_inches", "value": 90}, http.StatusConflict)
 	// A value for a field not defined on the type is a request fault.
 	c.do(ownerTok, http.MethodPost, "/components/lobby-display/fields",
 		map[string]any{"field": "nope", "value": 1}, http.StatusUnprocessableEntity)
@@ -166,7 +166,7 @@ func TestFieldValueAPI(t *testing.T) {
 
 	// Delete the override; the field reverts to its default, unset.
 	c.do(ownerTok, http.MethodDelete, "/field-values/"+setBody.ID, nil, http.StatusNoContent)
-	if f := effectiveField(t, c, ownerTok, "lobby-display", "brightness"); f.Value.(float64) != 50 || f.IsSet {
+	if f := effectiveField(t, c, ownerTok, "lobby-display", "diagonal_inches"); f.Value.(float64) != 50 || f.IsSet {
 		t.Fatalf("after delete want default 50 unset, got %+v", f)
 	}
 
@@ -175,15 +175,15 @@ func TestFieldValueAPI(t *testing.T) {
 	// forbidden to set (403 at the field:create gate, before any handler runs).
 	opTok := setupScopedViewer(t, ctx, dsn, "operator-display", "operator", "component", comp.ID)
 	c.do(opTok, http.MethodPost, "/components/lobby-display/fields",
-		map[string]any{"field": "brightness", "value": 70}, http.StatusCreated)
-	if f := effectiveField(t, c, opTok, "lobby-display", "brightness"); f.Value.(float64) != 70 || !f.IsSet {
+		map[string]any{"field": "diagonal_inches", "value": 70}, http.StatusCreated)
+	if f := effectiveField(t, c, opTok, "lobby-display", "diagonal_inches"); f.Value.(float64) != 70 || !f.IsSet {
 		t.Fatalf("operator set = %+v, want 70 set", f)
 	}
 
 	viewerTok := setupScopedViewer(t, ctx, dsn, "viewer-display", "viewer", "component", comp.ID)
 	c.do(viewerTok, http.MethodGet, "/components/lobby-display/fields", nil, http.StatusOK)
 	c.do(viewerTok, http.MethodPost, "/components/lobby-display/fields",
-		map[string]any{"field": "brightness", "value": 10}, http.StatusForbidden)
+		map[string]any{"field": "diagonal_inches", "value": 10}, http.StatusForbidden)
 }
 
 // effectiveField reads a component's effective fields and returns the one named,

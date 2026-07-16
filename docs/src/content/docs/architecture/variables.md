@@ -267,8 +267,8 @@ The rest of the design below is **deferred**, listed plainly so a built badge ne
 A **field** is an operator-defined **typed attribute declared on a type**, the schema layer over the value
 cells above: where a variable or a secret is a single cascaded cell, a field is a named slot every instance
 of a type carries, whose value the operator sets per instance. It revives the fixed-inventory idea (Zabbix's
-`inventory_1..40` that never fit and were never custom) as a schema an operator defines per type, so "add a
-`brightness` field to every `display` component" is one operation, not forty fixed slots.
+`inventory_1..40` that never fit and were never custom) as a schema an operator defines per type, so "add an
+`asset_tag` field to every `display` component" is one operation, not forty fixed slots.
 
 Slice 0 stores **literals only** and resolves on the **component alone**. What the design intends, and this
 slice does **not** yet do:

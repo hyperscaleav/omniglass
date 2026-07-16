@@ -396,7 +396,7 @@ function ComponentTypeFields(props: { typeId: string; canCreate: boolean }): JSX
             <div class="flex flex-wrap items-end gap-2">
               <input
                 class="input input-bordered input-sm w-36 font-data"
-                placeholder="brightness"
+                placeholder="asset_tag"
                 value={name()}
                 onInput={(e) => setName(e.currentTarget.value)}
               />
