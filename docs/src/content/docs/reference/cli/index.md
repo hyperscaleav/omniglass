@@ -514,6 +514,86 @@ Example:
 omniglass effective-variable list <name>
 ```
 
+## `omniglass field-definition`
+
+Commands for the field-definition resource
+
+### `omniglass field-definition create`
+
+Define a field
+
+```
+omniglass field-definition create [flags]
+```
+
+Declares a typed field on a component_type. The default, if given, is validated against data_type. Gated by field:create.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--component-type` | string | (none) | The component_type this field is defined on |
+| `--data-type` | string | (none) | The declared value type |
+| `--default-value` | string | (none) | Optional type-level default, validated against data_type |
+| `--name` | string | (none) | The field name; unique per component_type |
+
+Example:
+
+```sh
+omniglass field-definition create --component-type component_type --data-type data_type --name name
+```
+
+### `omniglass field-definition delete`
+
+Delete a field definition
+
+```
+omniglass field-definition delete <id>
+```
+
+Removes a field definition by id. Gated by field:delete.
+
+Example:
+
+```sh
+omniglass field-definition delete <id>
+```
+
+### `omniglass field-definition list`
+
+List field definitions
+
+```
+omniglass field-definition list
+```
+
+Lists every field defined on any component_type (the catalog directory). Gated by field:read.
+
+Example:
+
+```sh
+omniglass field-definition list
+```
+
+### `omniglass field-definition update`
+
+Update a field definition
+
+```
+omniglass field-definition update <id> [flags]
+```
+
+Replaces a field's data_type and default value, revalidating the default. component_type and name are fixed at creation. Gated by field:update.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--data-type` | string | (none) | The declared value type |
+| `--default-value` | string | (none) | Optional type-level default, validated against data_type |
+
+Example:
+
+```sh
+omniglass field-definition update <id> --data-type data_type
+```
+
 ## `omniglass file`
 
 Commands for the file resource

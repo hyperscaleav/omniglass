@@ -327,6 +327,40 @@ components:
         - id
         - display_name
       type: object
+    CreateFieldDefinitionInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateFieldDefinitionInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        component_type:
+          description: The component_type this field is defined on
+          minLength: 1
+          type: string
+        data_type:
+          description: The declared value type
+          enum:
+            - string
+            - int
+            - float
+            - bool
+            - json
+          type: string
+        default_value:
+          description: Optional type-level default, validated against data_type
+        name:
+          description: The field name; unique per component_type
+          minLength: 1
+          type: string
+      required:
+        - component_type
+        - name
+        - data_type
+      type: object
     CreateFileInputBody:
       additionalProperties: false
       properties:
@@ -966,6 +1000,32 @@ components:
           format: uri
           type: string
       type: object
+    FieldDefinitionBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/FieldDefinitionBody.json
+          format: uri
+          readOnly: true
+          type: string
+        component_type:
+          type: string
+        data_type:
+          type: string
+        default_value:
+          description: The type-level default, shape given by data_type; omitted when unset
+        id:
+          type: string
+        name:
+          type: string
+      required:
+        - id
+        - component_type
+        - name
+        - data_type
+      type: object
     FileBody:
       additionalProperties: false
       properties:
@@ -1237,6 +1297,25 @@ components:
             - "null"
       required:
         - components
+      type: object
+    ListFieldDefinitionsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListFieldDefinitionsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        field_definitions:
+          items:
+            $ref: "#/components/schemas/FieldDefinitionBody"
+          type:
+            - array
+            - "null"
+      required:
+        - field_definitions
       type: object
     ListFilesOutputBody:
       additionalProperties: false
@@ -2371,6 +2450,30 @@ components:
         display_name:
           type: string
       type: object
+    UpdateFieldDefinitionInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/UpdateFieldDefinitionInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        data_type:
+          description: The declared value type
+          enum:
+            - string
+            - int
+            - float
+            - bool
+            - json
+          type: string
+        default_value:
+          description: Optional type-level default, validated against data_type
+      required:
+        - data_type
+      type: object
     UpdateGroupInputBody:
       additionalProperties: false
       properties:
@@ -3397,6 +3500,100 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Check a component technical name
+  /field-definitions:
+    get:
+      description: Lists every field defined on any component_type (the catalog directory). Gated by field:read.
+      operationId: list-field-definitions
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListFieldDefinitionsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List field definitions
+    post:
+      description: Declares a typed field on a component_type. The default, if given, is validated against data_type. Gated by field:create.
+      operationId: create-field-definition
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateFieldDefinitionInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FieldDefinitionBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Define a field
+  /field-definitions/{id}:
+    delete:
+      description: Removes a field definition by id. Gated by field:delete.
+      operationId: delete-field-definition
+      parameters:
+        - description: The field definition's id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The field definition's id
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Delete a field definition
+    patch:
+      description: Replaces a field's data_type and default value, revalidating the default. component_type and name are fixed at creation. Gated by field:update.
+      operationId: update-field-definition
+      parameters:
+        - description: The field definition's id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The field definition's id
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateFieldDefinitionInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FieldDefinitionBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Update a field definition
   /files:
     get:
       description: Lists the file handles the caller may see (searchable metadata, no bytes). Sensitive files appear only to the admin tier. Gated by file:read.

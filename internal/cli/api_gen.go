@@ -602,6 +602,105 @@ func generatedCommands() []*cobra.Command {
 	}
 	{
 		parent := &cobra.Command{
+			Use:   "field-definition",
+			Short: "Commands for the field-definition resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			var fComponentType string
+			var fDataType string
+			var fDefaultValue string
+			var fName string
+			cmd := &cobra.Command{
+				Use:     "create",
+				Short:   "Define a field",
+				Long:    "Declares a typed field on a component_type. The default, if given, is validated against data_type. Gated by field:create.",
+				Example: "  omniglass field-definition create --component-type component_type --data-type data_type --name name",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/field-definitions")
+					body := map[string]any{}
+					if cmd.Flags().Changed("component-type") {
+						body["component_type"] = fComponentType
+					}
+					if cmd.Flags().Changed("data-type") {
+						body["data_type"] = fDataType
+					}
+					if cmd.Flags().Changed("default-value") {
+						body["default_value"] = jsonOrString(fDefaultValue)
+					}
+					if cmd.Flags().Changed("name") {
+						body["name"] = fName
+					}
+					return runAPICommand(cmd, "POST", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fComponentType, "component-type", "", "The component_type this field is defined on")
+			_ = cmd.MarkFlagRequired("component-type")
+			cmd.Flags().StringVar(&fDataType, "data-type", "", "The declared value type")
+			_ = cmd.MarkFlagRequired("data-type")
+			cmd.Flags().StringVar(&fDefaultValue, "default-value", "", "Optional type-level default, validated against data_type")
+			cmd.Flags().StringVar(&fName, "name", "", "The field name; unique per component_type")
+			_ = cmd.MarkFlagRequired("name")
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "delete <id>",
+				Short:   "Delete a field definition",
+				Long:    "Removes a field definition by id. Gated by field:delete.",
+				Example: "  omniglass field-definition delete <id>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/field-definitions/%s", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "DELETE", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "list",
+				Short:   "List field definitions",
+				Long:    "Lists every field defined on any component_type (the catalog directory). Gated by field:read.",
+				Example: "  omniglass field-definition list",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/field-definitions")
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			var fDataType string
+			var fDefaultValue string
+			cmd := &cobra.Command{
+				Use:     "update <id>",
+				Short:   "Update a field definition",
+				Long:    "Replaces a field's data_type and default value, revalidating the default. component_type and name are fixed at creation. Gated by field:update.",
+				Example: "  omniglass field-definition update <id> --data-type data_type",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/field-definitions/%s", url.PathEscape(args[0]))
+					body := map[string]any{}
+					if cmd.Flags().Changed("data-type") {
+						body["data_type"] = fDataType
+					}
+					if cmd.Flags().Changed("default-value") {
+						body["default_value"] = jsonOrString(fDefaultValue)
+					}
+					return runAPICommand(cmd, "PATCH", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fDataType, "data-type", "", "The declared value type")
+			_ = cmd.MarkFlagRequired("data-type")
+			cmd.Flags().StringVar(&fDefaultValue, "default-value", "", "Optional type-level default, validated against data_type")
+			return cmd
+		}())
+		roots = append(roots, parent)
+	}
+	{
+		parent := &cobra.Command{
 			Use:   "file",
 			Short: "Commands for the file resource",
 		}

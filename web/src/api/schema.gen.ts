@@ -532,6 +532,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/field-definitions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List field definitions
+         * @description Lists every field defined on any component_type (the catalog directory). Gated by field:read.
+         */
+        get: operations["list-field-definitions"];
+        put?: never;
+        /**
+         * Define a field
+         * @description Declares a typed field on a component_type. The default, if given, is validated against data_type. Gated by field:create.
+         */
+        post: operations["create-field-definition"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/field-definitions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete a field definition
+         * @description Removes a field definition by id. Gated by field:delete.
+         */
+        delete: operations["delete-field-definition"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a field definition
+         * @description Replaces a field's data_type and default value, revalidating the default. component_type and name are fixed at creation. Gated by field:update.
+         */
+        patch: operations["update-field-definition"];
+        trace?: never;
+    };
     "/files": {
         parameters: {
             query?: never;
@@ -1979,6 +2027,25 @@ export interface components {
             /** @description Globally unique type id */
             id: string;
         };
+        CreateFieldDefinitionInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateFieldDefinitionInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The component_type this field is defined on */
+            component_type: string;
+            /**
+             * @description The declared value type
+             * @enum {string}
+             */
+            data_type: "string" | "int" | "float" | "bool" | "json";
+            /** @description Optional type-level default, validated against data_type */
+            default_value?: unknown;
+            /** @description The field name; unique per component_type */
+            name: string;
+        };
         CreateFileInputBody: {
             /**
              * Format: uri
@@ -2337,6 +2404,20 @@ export interface components {
              */
             type: string;
         };
+        FieldDefinitionBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/FieldDefinitionBody.json
+             */
+            readonly $schema?: string;
+            component_type: string;
+            data_type: string;
+            /** @description The type-level default, shape given by data_type; omitted when unset */
+            default_value?: unknown;
+            id: string;
+            name: string;
+        };
         FileBody: {
             /**
              * Format: uri
@@ -2492,6 +2573,15 @@ export interface components {
              */
             readonly $schema?: string;
             components: components["schemas"]["ComponentBody"][] | null;
+        };
+        ListFieldDefinitionsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListFieldDefinitionsOutputBody.json
+             */
+            readonly $schema?: string;
+            field_definitions: components["schemas"]["FieldDefinitionBody"][] | null;
         };
         ListFilesOutputBody: {
             /**
@@ -3057,6 +3147,21 @@ export interface components {
              */
             readonly $schema?: string;
             display_name?: string;
+        };
+        UpdateFieldDefinitionInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/UpdateFieldDefinitionInputBody.json
+             */
+            readonly $schema?: string;
+            /**
+             * @description The declared value type
+             * @enum {string}
+             */
+            data_type: "string" | "int" | "float" | "bool" | "json";
+            /** @description Optional type-level default, validated against data_type */
+            default_value?: unknown;
         };
         UpdateGroupInputBody: {
             /**
@@ -4255,6 +4360,134 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CheckNameOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-field-definitions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListFieldDefinitionsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-field-definition": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateFieldDefinitionInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FieldDefinitionBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-field-definition": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The field definition's id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "update-field-definition": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The field definition's id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateFieldDefinitionInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FieldDefinitionBody"];
                 };
             };
             /** @description Error */
