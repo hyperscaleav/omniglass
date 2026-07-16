@@ -26,8 +26,8 @@ var (
 )
 
 // FieldDefinition is a typed field declared on a component_type; every component
-// of that type carries it. The literal a component sets lives in field_value (a
-// later slice); this is the schema row.
+// of that type carries it. The literal a component sets lives in field_value;
+// this is the schema row.
 type FieldDefinition struct {
 	ID            string
 	ComponentType string

@@ -2,7 +2,7 @@
 
 -- The field tier: a typed field declared on a component_type (the schema half of
 -- the field primitive, mirroring variable's value_type but lifted onto a type).
--- Components of that type carry the value in field_value (a later slice). DDL is
+-- Components of that type carry the value in field_value. DDL is
 -- idempotent.
 create table if not exists field_definition (
     id             uuid        primary key default uuidv7(),

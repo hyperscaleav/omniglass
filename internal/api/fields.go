@@ -313,8 +313,7 @@ func encodeFieldDefault(v any) (json.RawMessage, error) {
 }
 
 // mapFieldErr translates the gateway's field sentinels (definition and value
-// tiers) into HTTP status. Shared by the definition routes here and the value
-// routes in a later slice.
+// tiers) into HTTP status. Shared by the definition routes and the value routes.
 func mapFieldErr(err error) error {
 	switch {
 	case errors.Is(err, storage.ErrFieldDefinitionNotFound),
