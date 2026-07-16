@@ -279,6 +279,14 @@ type Gateway interface {
 	DeleteVariable(ctx context.Context, actorID, id string, read, action scope.Set) error
 	ResolveVariables(ctx context.Context, componentID string, read scope.Set) ([]ResolvedVariable, error)
 
+	// The field tier: a typed field declared on a component_type (the schema
+	// half of the field primitive), flat and unscoped like the type registries.
+	// The value a component carries for it lives in field_value (a later slice).
+	ListFieldDefinitions(ctx context.Context) ([]FieldDefinition, error)
+	CreateFieldDefinition(ctx context.Context, actorID string, spec FieldDefinitionSpec) (*FieldDefinition, error)
+	UpdateFieldDefinition(ctx context.Context, actorID, id, dataType string, def json.RawMessage) (*FieldDefinition, error)
+	DeleteFieldDefinition(ctx context.Context, actorID, id string) error
+
 	// The tag tier: the governed key vocabulary and the per-entity value
 	// bindings. Minting a key (tag:create) is a tenant-wide governance action;
 	// binding a value is the owner's own write, so the binding methods take the
