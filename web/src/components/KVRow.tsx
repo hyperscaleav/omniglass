@@ -54,11 +54,21 @@ export default function KVRow(props: {
   // The edit control (and its bordered box) appears only in edit mode; read mode
   // is a slim one-line scan with the value inline, no box.
   const showInput = () => !!props.editing && props.input !== undefined;
+  // A read-mode row that drills in is whole-row clickable (the chevron is the
+  // visible affordance, the whole row is the target, as the pre-primitive
+  // Variables / Secrets rows were). An edit-mode row is not clickable, so a click
+  // lands in the input, not the drill-in; and a click on an inline control
+  // (input / actions / chevron) is stopped so it never bubbles up to open it.
+  const rowClickable = () => !!props.onDrillIn && !props.editing;
 
   return (
     <div
       class="flex items-center gap-2 px-3 py-2"
-      classList={{ "border-t border-base-300": !props.first }}
+      classList={{
+        "border-t border-base-300": !props.first,
+        "cursor-pointer hover:bg-base-content/5": rowClickable(),
+      }}
+      onClick={rowClickable() ? () => props.onDrillIn?.() : undefined}
     >
       <span
         class="min-w-0 truncate text-sm"
@@ -85,12 +95,19 @@ export default function KVRow(props: {
                 {props.value}
               </span>
             </Show>
-            {props.actions}
+            {/* Read-mode actions (reveal / copy) are interactive: a click on one
+                must not bubble up to open the drill-in. */}
+            <Show when={props.actions !== undefined}>
+              <span class="flex items-center" onClick={(e) => e.stopPropagation()}>
+                {props.actions}
+              </span>
+            </Show>
           </>
         }
       >
-        {/* Edit: the input and its actions become one bordered daisyUI join. */}
-        <div class="join min-w-0 grow basis-64">
+        {/* Edit: the input and its actions become one bordered daisyUI join;
+            clicks stay in the field rather than bubbling to any row handler. */}
+        <div class="join min-w-0 grow basis-64" onClick={(e) => e.stopPropagation()}>
           {props.input}
           {props.actions}
         </div>
@@ -103,7 +120,7 @@ export default function KVRow(props: {
           type="button"
           class="shrink-0 text-base-content/40 hover:text-base-content"
           aria-label="Show resolution"
-          onClick={() => props.onDrillIn?.()}
+          onClick={(e) => { e.stopPropagation(); props.onDrillIn?.(); }}
         >
           <ChevronRight size={14} />
         </button>

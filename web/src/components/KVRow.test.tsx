@@ -57,4 +57,29 @@ describe("KVRow", () => {
     fireEvent.click(getByLabelText("Show resolution"));
     expect(onDrillIn).toHaveBeenCalledTimes(1);
   });
+
+  it("a read-mode drill-in row is whole-row clickable (a click on the label opens it)", () => {
+    const onDrillIn = vi.fn();
+    const { getByText } = render(() => <KVRow label="Gain" value={<span>x</span>} onDrillIn={onDrillIn} />);
+    fireEvent.click(getByText("Gain")); // the label bubbles to the row
+    expect(onDrillIn).toHaveBeenCalledTimes(1);
+  });
+
+  it("a click on an inline action does not open the drill-in", () => {
+    const onDrillIn = vi.fn();
+    const { getByLabelText } = render(() => (
+      <KVRow label="Secret" value={<span>x</span>} onDrillIn={onDrillIn} actions={<button aria-label="reveal">o</button>} />
+    ));
+    fireEvent.click(getByLabelText("reveal")); // stopped, never bubbles to the row
+    expect(onDrillIn).not.toHaveBeenCalled();
+  });
+
+  it("an edit-mode row is not whole-row clickable", () => {
+    const onDrillIn = vi.fn();
+    const { getByText } = render(() => (
+      <KVRow label="Gain" value={<span>x</span>} input={<input />} editing onDrillIn={onDrillIn} />
+    ));
+    fireEvent.click(getByText("Gain")); // no row handler in edit mode
+    expect(onDrillIn).not.toHaveBeenCalled();
+  });
 });
