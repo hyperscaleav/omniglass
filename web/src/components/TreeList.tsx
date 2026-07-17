@@ -16,6 +16,7 @@ import {
 } from "./icons";
 import BladeStack from "./BladeStack";
 import Button from "./Button";
+import KVStacked from "./KVStacked";
 import { type BladeDef, type BladeEdit, type BladeRef, createBladeController, createEditSlot, useBladeEdit } from "../lib/blades";
 
 // TreeList: the one config-driven tree-list body (composing ListShell), the inventory shell. Every entity page (Components,
@@ -292,12 +293,7 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
   const back = () => (cfg.onBack ? cfg.onBack() : showFull(null));
 
   const baseCtx = {
-    fact: (label: string, value: JSX.Element) => (
-      <div>
-        <div class="eyebrow mb-1.5">{label}</div>
-        <div class="text-sm">{value}</div>
-      </div>
-    ),
+    fact: (label: string, value: JSX.Element) => <KVStacked label={label} value={value} />,
     field: (label: string, control: JSX.Element, hint?: string) => {
       // Associate the visible label with the control by id, and keep the (i) help
       // affordance OUTSIDE the label: a labelable button inside the label would

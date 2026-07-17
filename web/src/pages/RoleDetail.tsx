@@ -1,6 +1,6 @@
 import { For, Show, createMemo, createSignal } from "solid-js";
 import { useQuery } from "@tanstack/solid-query";
-import { Fact } from "../components/DetailShell";
+import KVStacked from "../components/KVStacked";
 import { type BladeDef } from "../lib/blades";
 import { type Role, ROLES_KEY, listRoles } from "../lib/principals";
 
@@ -108,7 +108,7 @@ export function RoleDetail(props: { id: string }) {
             <p class="text-sm text-base-content/70">{role().description}</p>
           </Show>
           <Show when={role().inherits.length}>
-            <Fact label="Inherits" value={<span class="font-data text-sm text-base-content/70">{role().inherits.join(", ")}</span>} />
+            <KVStacked label="Inherits" value={<span class="font-data text-sm text-base-content/70">{role().inherits.join(", ")}</span>} />
           </Show>
           <div>
             <div class="eyebrow mb-1.5">Permissions</div>

@@ -1,7 +1,8 @@
 import { createEffect, createMemo, createSignal, on, Show } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import GrantBuilder from "../components/GrantBuilder";
-import { Fact, RelatedList } from "../components/DetailShell";
+import { RelatedList } from "../components/DetailShell";
+import KVStacked from "../components/KVStacked";
 import { useBlades, useBladeEdit } from "../lib/blades";
 import type { BladeDef } from "../lib/blades";
 import type { TreeNode } from "../lib/treeselect";
@@ -149,15 +150,15 @@ export function GroupDetail(props: { id: string }) {
       </Show>
 
       <div class="grid grid-cols-2 gap-3">
-        <Fact label="Name" value={<span class="font-data">{group.data?.name}</span>} />
-        <Fact label="Members" value={<span class="tnum text-sm">{memberItems().length}</span>} />
+        <KVStacked label="Name" value={<span class="font-data">{group.data?.name}</span>} />
+        <KVStacked label="Members" value={<span class="tnum text-sm">{memberItems().length}</span>} />
       </div>
 
       <Show
         when={editing()}
         fallback={
           <Show when={group.data?.description}>
-            <Fact label="Description" value={<span class="text-sm">{group.data!.description}</span>} />
+            <KVStacked label="Description" value={<span class="text-sm">{group.data!.description}</span>} />
           </Show>
         }
       >
