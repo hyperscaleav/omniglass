@@ -25,7 +25,7 @@ import TagPills from "../components/TagPills";
 import { tagFilterKeys } from "../lib/predicate";
 import TagAdder from "../components/TagAdder";
 import EffectiveVariables, { variableCascadeBlade, varCascadeBladeId } from "../components/EffectiveVariables";
-import EffectiveFields from "../components/EffectiveFields";
+import EffectiveFields, { fieldResolutionBlade, fieldBladeId } from "../components/EffectiveFields";
 
 // Components: the device inventory, the first page built on the generic TreeList.
 // Components form a tree (parent_id) and each is bound to a primary system and a
@@ -307,7 +307,11 @@ export default function Components() {
           />
         </Show>
         <Show when={can(me.data, "field", "read")}>
-          <EffectiveFields component={n().raw.name} editing={editing()} />
+          <EffectiveFields
+            component={n().raw.name}
+            editing={editing()}
+            onOpen={(fieldName) => ctx.openBlade({ kind: "field-resolution", id: fieldBladeId(n().raw.name, fieldName) })}
+          />
         </Show>
 
         <TagAdder kind="component" name={n().raw.name} canUpdate={editing() && canUpdate()} canCreateKey={can(me.data, "tag", "create")} />
@@ -481,7 +485,7 @@ export default function Components() {
     onEdit: (n) => { openInEdit(n.raw.name); navigate(`/components/${encodeURIComponent(n.raw.name)}`); },
     renderCreate: () => <ComponentCreate />,
     renderDetail: (n, ctx) => <ComponentDetail node={n} ctx={ctx} />,
-    extraBlades: { "secret-cascade": secretCascadeBlade, "variable-cascade": variableCascadeBlade },
+    extraBlades: { "secret-cascade": secretCascadeBlade, "variable-cascade": variableCascadeBlade, "field-resolution": fieldResolutionBlade },
   };
 
   // No page H1: inventory pages built on TreeList let the top bar label them, and
