@@ -42,6 +42,15 @@ describe("KVRow", () => {
     expect(container.querySelector(".badge")).toBeNull();
   });
 
+  it("renders the type badge when given and omits it when not", () => {
+    const withBadge = render(() => <KVRow label="host" value={<span>x</span>} typeBadge="string" />);
+    expect(withBadge.getByText("string").className).toContain("badge");
+    withBadge.unmount();
+
+    const noBadge = render(() => <KVRow label="host" value={<span>x</span>} />);
+    expect(noBadge.container.querySelector(".badge")).toBeNull();
+  });
+
   it("the drill-in chevron calls onDrillIn", () => {
     const onDrillIn = vi.fn();
     const { getByLabelText } = render(() => <KVRow label="Gain" value={<span>x</span>} onDrillIn={onDrillIn} />);

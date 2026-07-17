@@ -19,8 +19,15 @@ import { ChevronRight } from "./icons";
 //    collapsed shared-edge hover all come from join/join-item rather than a
 //    hand-rolled border group. Slot children opt into the group with `join-item`.
 export default function KVRow(props: {
-  // The display name (prose, not font-data); the raw key belongs in the drill-in.
+  // The label. Prose by default (a display name); the raw key otherwise belongs
+  // in the drill-in. Consumers whose label IS the technical key with no separate
+  // display name (Variables, Secrets) set `labelMono` to render it font-data.
   label: string;
+  // Render the label font-data (mono), for key-style labels. Default prose.
+  labelMono?: boolean;
+  // Optional type badge (value_type / secret_type) shown right after the label.
+  // Fields pass nothing; Variables and Secrets pass their declared type.
+  typeBadge?: string;
   // Read-mode value render. Ignored in edit mode when `input` is given.
   value?: JSX.Element;
   // Edit-mode control; rendered in the join ahead of `actions`.
@@ -55,11 +62,14 @@ export default function KVRow(props: {
     >
       <span
         class="min-w-0 truncate text-sm"
-        classList={{ "grow basis-32": showInput(), "font-medium": props.emphasize }}
+        classList={{ "grow basis-32": showInput(), "font-medium": props.emphasize, "font-data": props.labelMono }}
         title={props.label}
       >
         {props.label}
       </span>
+      <Show when={props.typeBadge}>
+        <span class="badge badge-ghost badge-sm shrink-0">{props.typeBadge}</span>
+      </Show>
       <Show
         when={showInput()}
         fallback={
