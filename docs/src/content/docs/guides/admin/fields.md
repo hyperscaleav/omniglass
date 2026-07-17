@@ -12,7 +12,10 @@ screenshots:
         selector: 'tr.cursor-pointer:has-text("Display")'
   - id: fields-effective
     path: /web/components/lobby-display
-    alt: "The Effective fields panel on a component's detail: each field its type declares, resolved to the set literal or the type default, an override-versus-default badge, and an inline setter."
+    alt: "The Effective fields panel on a component's detail: each field its type declares, resolved to the set literal or the type default, an override-versus-default badge, an inline setter, and a revert-to-default control on an overridden field."
+    steps:
+      - action: hover
+        selector: 'text=diagonal_inches'
 ---
 
 A **field** is an operator-defined **typed attribute declared on a type**: you add a field once to a
@@ -55,14 +58,11 @@ component set its own value) or **default** (it inherits the type default).
   input (a number input, a bool toggle, a JSON textarea) seeded from the current value, and a **Set** that
   writes the literal and refreshes the row. Setting a value flips the row to **override**; the value is
   validated against the field's data type, and a bad value is a per-row error, not a lost edit.
+- With `field:delete` (an **admin** permission) each **override** row also carries a **revert** control that
+  clears the component's value and returns the field to its type default. The effective read returns the
+  `field_value` id (`value_id`) next to the literal, so the panel knows which value the revert deletes.
 - A component in a scope you cannot reach is **not found**, not forbidden: the panel resolves fields only
   for components within your `field` read scope, mirroring secrets and variables.
-
-:::note[Known limitation this slice]
-The panel can set and re-set a value but **cannot yet clear** it back to the type default from the UI: the
-effective read returns the field's id, not the value id the clear needs, so the clear route exists on the
-API and CLI (`omniglass field-value delete <id>`) but is not wired into the panel yet.
-:::
 
 From the CLI the same surface is `omniglass field-definition list` / `create` / `update` / `delete` to
 manage a type's schema, `omniglass field list <component>` to read a component's effective fields, and

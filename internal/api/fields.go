@@ -50,6 +50,7 @@ type effectiveFieldBody struct {
 	Value    any    `json:"value" doc:"The effective value: the set literal, or the type default when unset"`
 	SetValue any    `json:"set_value,omitempty" doc:"The component's override; omitted when the field is unset"`
 	IsSet    bool   `json:"is_set" doc:"True when the component overrides the type default"`
+	ValueID  string `json:"value_id,omitempty" doc:"The field_value id when set; the id to DELETE to clear the override. Omitted when the field is unset"`
 }
 
 type effectiveFieldsOutput struct {
@@ -72,7 +73,7 @@ type fieldValueOutput struct {
 }
 
 func toEffectiveFieldBody(ef *storage.EffectiveField) effectiveFieldBody {
-	b := effectiveFieldBody{FieldID: ef.FieldID, Name: ef.Name, DataType: ef.DataType, IsSet: ef.IsSet}
+	b := effectiveFieldBody{FieldID: ef.FieldID, Name: ef.Name, DataType: ef.DataType, IsSet: ef.IsSet, ValueID: ef.ValueID}
 	if len(ef.Value) > 0 {
 		_ = json.Unmarshal(ef.Value, &b.Value)
 	}

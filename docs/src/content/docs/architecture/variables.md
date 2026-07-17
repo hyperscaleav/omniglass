@@ -286,9 +286,9 @@ slice does **not** yet do:
 - **Multi-type definitions.** Slice 0 defines fields on `component_type` only; the `location_type` /
   `system_type` / `vendor` / `product` / `driver` schemas the exclusive-arc owner model allows come later.
 
-One **known limitation** in the shipped UI: the Effective fields panel can set and re-set a value but
-**cannot yet clear** it back to the type default. The effective read returns the field's id, not the
-`field_value` id the clear needs, so the `DELETE` route exists on the API but is not wired into the panel.
+The Effective fields panel can set, re-set, and **clear** a value: the effective read returns the
+`field_value` id (`value_id`) alongside the literal, so each override row offers a **revert** control
+that deletes the value and reverts the field to its type default (gated on `field:delete`).
 
 ## tag: a normalized label vocabulary
 
@@ -401,7 +401,7 @@ exclusive-arc scope either way.
 | `secret` | (name, **owner arc**), secret_type, **`admin_sensitive`**, **value** (secret fields as `{ciphertext, nonce, wrapped_dek, key_id}` envelopes, non-secret fields plaintext) | **Built.** The encrypted cell and the `$sec:` cascade key; scope is the exclusive arc (global/location/system/component). Read masked through a **scope-filtered** directory; decrypted only through the audited `:reveal` / `:copy` path. Visibility is placement scope plus the per-secret `admin_sensitive` flag (admin-only when set); `secret` is off the `*:read` floor ([ADR-0025](/architecture/decisions/#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier)) |
 | `variable` | (name, **owner arc**), **value_type** (`string`/`int`/`float`/`bool`/`json`), **value** (jsonb) | **Built.** The plaintext variable cell and the `$var:` cascade key; scope is the exclusive arc. Typed inline (no `variable_type` registry: the value is validated against `value_type` in the app), no observed side. The **config** cell (declared/observed/reconcile) is a separate, deferred member |
 | `field_definition` | (**component_type**, name), **data_type** (`string`/`int`/`float`/`bool`/`json`), **default_value** (jsonb) | **Built (slice 0).** The typed **schema on a `component_type`**: flat and unscoped like the type registries, unique per `(component_type, name)`, with an optional type-level default validated against `data_type`. Multi-type owners (`location_type`/`system_type`/`vendor`/`product`/`driver`) are deferred |
-| `field_value` | (**field**, **component**), **value** (jsonb) | **Built (slice 0).** A component's **literal** for a field on its type; the effective read is **set-or-default** (`is_set` marks the override), ABAC-scoped to the owning component. Macro-string values (`$var:`/`$sec:`/`$datapoint:`), the cross-type cascade, and clear-to-default in the UI are deferred |
+| `field_value` | (**field**, **component**), **value** (jsonb) | **Built (slice 0).** A component's **literal** for a field on its type; the effective read is **set-or-default** (`is_set` marks the override, `value_id` carries the row id so the UI can clear it), ABAC-scoped to the owning component. Setting, re-setting, and clearing back to the default are wired; macro-string values (`$var:`/`$sec:`/`$datapoint:`) and the cross-type cascade are deferred |
 | `tag` | name, applies_to, propagates | **Built.** The **tenant-wide governed key vocabulary**; minting a key needs `tag:create` ([identity and access](/architecture/identity-access/)). No `_type`, no namespace; values bind via `tag_binding`. See [tags](/architecture/tags/) |
 | `tag_binding` | (tag, **owner arc**), value | **Built.** The `key: value` binding: **union on key, override on value** down the [cascade](/architecture/cascade/), owned on the exclusive arc (`global / location / system / component`); setting a value is the owner's own `update` write. Binding via groups and a `template` default are deferred |
 
