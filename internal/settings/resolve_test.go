@@ -47,3 +47,17 @@ func TestResolveLockPinsBroaderValue(t *testing.T) {
 		t.Fatalf("theme lock level = %v, want global", r.Locks["ui.theme"])
 	}
 }
+
+func TestResolvePanicsOnDuplicateLevelNames(t *testing.T) {
+	// Lock identity keys on the level name, so duplicate names would let a more-
+	// specific level bypass a broader lock. Reject it as a programming defect.
+	defer func() {
+		if recover() == nil {
+			t.Fatalf("Resolve did not panic on duplicate level names")
+		}
+	}()
+	Resolve(
+		Level{Name: "dup", Doc: Doc{"ui": {"theme": "a"}}},
+		Level{Name: "dup", Doc: Doc{"ui": {"theme": "b"}}},
+	)
+}

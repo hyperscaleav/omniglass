@@ -27,6 +27,17 @@ type Resolved struct {
 // absolute over a group or user lock. Provenance (Sources) and the winning lock
 // level (Locks) are recorded per key.
 func Resolve(levels ...Level) Resolved {
+	// Lock identity keys on the level name, so names must be unique: a duplicate
+	// would let a more-specific level bypass a broader level's lock. Level names are
+	// engine constants (code, file, global, group, user), so a collision is a
+	// programming defect, not a runtime condition.
+	seen := make(map[string]bool, len(levels))
+	for _, lvl := range levels {
+		if seen[lvl.Name] {
+			panic(fmt.Sprintf("settings: duplicate level name %q in Resolve", lvl.Name))
+		}
+		seen[lvl.Name] = true
+	}
 	r := Resolved{
 		Values:  Doc{},
 		Sources: map[string]string{},

@@ -31,3 +31,26 @@ func TestApplyMergePatchNullDeletes(t *testing.T) {
 		t.Fatalf("ApplyMergePatch = %v, want %v", got, want)
 	}
 }
+
+func TestDeepMergeCopiesSlices(t *testing.T) {
+	base := map[string]any{"nested": map[string]any{"list": []any{"a", "b"}}}
+	got := DeepMerge(base)
+	got["nested"].(map[string]any)["list"].([]any)[0] = "MUT"
+	if base["nested"].(map[string]any)["list"].([]any)[0] != "a" {
+		t.Fatalf("DeepMerge aliased a nested slice: mutating the result mutated the input")
+	}
+}
+
+func TestApplyMergePatchCopiesSlices(t *testing.T) {
+	target := map[string]any{"keep": []any{"x"}}
+	patch := map[string]any{"add": []any{"y"}}
+	got := ApplyMergePatch(target, patch)
+	got["keep"].([]any)[0] = "MUT"
+	got["add"].([]any)[0] = "MUT"
+	if target["keep"].([]any)[0] != "x" {
+		t.Fatalf("ApplyMergePatch aliased the target slice")
+	}
+	if patch["add"].([]any)[0] != "y" {
+		t.Fatalf("ApplyMergePatch aliased the patch slice")
+	}
+}

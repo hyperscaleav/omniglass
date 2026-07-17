@@ -1,5 +1,50 @@
 package settings
 
+import "reflect"
+
+// deepCopyValue returns a fresh copy of a decoded settings value so the result of
+// a merge never aliases an input. Decoded documents (YAML or JSON) carry values as
+// map[string]any and []any, both copied recursively; other slice, array, and map
+// kinds are copied via reflection; primitives (strings, numbers, bools, nil) are
+// immutable and pass through unchanged.
+func deepCopyValue(v any) any {
+	switch t := v.(type) {
+	case map[string]any:
+		out := make(map[string]any, len(t))
+		for k, val := range t {
+			out[k] = deepCopyValue(val)
+		}
+		return out
+	case []any:
+		out := make([]any, len(t))
+		for i, val := range t {
+			out[i] = deepCopyValue(val)
+		}
+		return out
+	}
+	rv := reflect.ValueOf(v)
+	switch rv.Kind() {
+	case reflect.Slice:
+		if rv.IsNil() {
+			return v
+		}
+		out := reflect.MakeSlice(rv.Type(), rv.Len(), rv.Len())
+		reflect.Copy(out, rv)
+		return out.Interface()
+	case reflect.Array:
+		out := reflect.New(rv.Type()).Elem()
+		reflect.Copy(out, rv)
+		return out.Interface()
+	case reflect.Map:
+		out := reflect.MakeMap(rv.Type())
+		for _, k := range rv.MapKeys() {
+			out.SetMapIndex(k, rv.MapIndex(k))
+		}
+		return out.Interface()
+	}
+	return v
+}
+
 // DeepMerge overlays layers left to right: a later layer wins. Nested maps merge
 // recursively; any non-map value (including a slice) replaces wholesale. Inputs
 // are never mutated; the result is a fresh deep copy. Merging in generic-map space
@@ -17,7 +62,7 @@ func DeepMerge(layers ...map[string]any) map[string]any {
 				out[k] = DeepMerge(sub) // deep copy
 				continue
 			}
-			out[k] = v
+			out[k] = deepCopyValue(v)
 		}
 	}
 	return out
@@ -31,7 +76,7 @@ func DeepMerge(layers ...map[string]any) map[string]any {
 func ApplyMergePatch(target, patch map[string]any) map[string]any {
 	out := map[string]any{}
 	for k, v := range target {
-		out[k] = v
+		out[k] = deepCopyValue(v)
 	}
 	for k, v := range patch {
 		if v == nil {
@@ -46,7 +91,7 @@ func ApplyMergePatch(target, patch map[string]any) map[string]any {
 			out[k] = ApplyMergePatch(map[string]any{}, sub)
 			continue
 		}
-		out[k] = v
+		out[k] = deepCopyValue(v)
 	}
 	return out
 }
