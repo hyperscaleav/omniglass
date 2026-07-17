@@ -657,6 +657,7 @@ func generatedCommands() []*cobra.Command {
 			var fComponentType string
 			var fDataType string
 			var fDefaultValue string
+			var fDisplayName string
 			var fName string
 			cmd := &cobra.Command{
 				Use:     "create",
@@ -676,6 +677,9 @@ func generatedCommands() []*cobra.Command {
 					if cmd.Flags().Changed("default-value") {
 						body["default_value"] = jsonOrString(fDefaultValue)
 					}
+					if cmd.Flags().Changed("display-name") {
+						body["display_name"] = fDisplayName
+					}
 					if cmd.Flags().Changed("name") {
 						body["name"] = fName
 					}
@@ -687,6 +691,7 @@ func generatedCommands() []*cobra.Command {
 			cmd.Flags().StringVar(&fDataType, "data-type", "", "The declared value type")
 			_ = cmd.MarkFlagRequired("data-type")
 			cmd.Flags().StringVar(&fDefaultValue, "default-value", "", "Optional type-level default, validated against data_type")
+			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "Optional human label; falls back to name when unset")
 			cmd.Flags().StringVar(&fName, "name", "", "The field name; unique per component_type")
 			_ = cmd.MarkFlagRequired("name")
 			return cmd
@@ -722,6 +727,7 @@ func generatedCommands() []*cobra.Command {
 		parent.AddCommand(func() *cobra.Command {
 			var fDataType string
 			var fDefaultValue string
+			var fDisplayName string
 			cmd := &cobra.Command{
 				Use:     "update <id>",
 				Short:   "Update a field definition",
@@ -737,12 +743,16 @@ func generatedCommands() []*cobra.Command {
 					if cmd.Flags().Changed("default-value") {
 						body["default_value"] = jsonOrString(fDefaultValue)
 					}
+					if cmd.Flags().Changed("display-name") {
+						body["display_name"] = fDisplayName
+					}
 					return runAPICommand(cmd, "PATCH", path, body)
 				},
 			}
 			cmd.Flags().StringVar(&fDataType, "data-type", "", "The declared value type")
 			_ = cmd.MarkFlagRequired("data-type")
 			cmd.Flags().StringVar(&fDefaultValue, "default-value", "", "Optional type-level default, validated against data_type")
+			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "Optional human label; falls back to name when unset")
 			return cmd
 		}())
 		roots = append(roots, parent)

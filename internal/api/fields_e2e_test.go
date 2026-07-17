@@ -42,9 +42,9 @@ func TestFieldDefinitionAPI(t *testing.T) {
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
-	// Define a field on the "display" type.
+	// Define a field on the "display" type, with an optional human label.
 	c.do(ownerTok, http.MethodPost, "/field-definitions",
-		map[string]any{"component_type": "display", "name": "asset_tag", "data_type": "string"},
+		map[string]any{"component_type": "display", "name": "asset_tag", "display_name": "Asset tag", "data_type": "string"},
 		http.StatusCreated)
 
 	// A duplicate name on the same type conflicts.
@@ -63,6 +63,7 @@ func TestFieldDefinitionAPI(t *testing.T) {
 			ID            string `json:"id"`
 			ComponentType string `json:"component_type"`
 			Name          string `json:"name"`
+			DisplayName   string `json:"display_name"`
 			DataType      string `json:"data_type"`
 		} `json:"field_definitions"`
 	}
@@ -72,6 +73,9 @@ func TestFieldDefinitionAPI(t *testing.T) {
 	}
 	if fd := listed.FieldDefinitions[0]; fd.ComponentType != "display" || fd.Name != "asset_tag" || fd.DataType != "string" {
 		t.Fatalf("listed definition = %+v, want display/asset_tag/string", fd)
+	}
+	if listed.FieldDefinitions[0].DisplayName != "Asset tag" {
+		t.Fatalf("display_name = %q, want \"Asset tag\"", listed.FieldDefinitions[0].DisplayName)
 	}
 }
 
