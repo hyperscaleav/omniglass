@@ -60,7 +60,7 @@ func NewHandler(gw storage.Gateway, opts ...Option) http.Handler {
 		f(&o)
 	}
 	if o.settingsSvc == nil {
-		o.settingsSvc = defaultSettingsService()
+		o.settingsSvc = defaultSettingsService(gw)
 	}
 	r := chi.NewRouter()
 	r.Route("/api/v1", func(sub chi.Router) {
@@ -91,7 +91,6 @@ func NewHandler(gw storage.Gateway, opts ...Option) http.Handler {
 // surface and the generated spec can never drift.
 func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o options) {
 	a := &authenticator{gw: gw, api: api, secureCookies: o.secureCookies}
-	_ = svc // consumed by registerSettingsRoutes in the settings-routes slice
 
 	huma.Register(api, huma.Operation{
 		OperationID: "get-healthz",
@@ -256,6 +255,7 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 	registerPrincipalGroupRoutes(api, a, gw)
 	registerImpersonationRoutes(api, a, gw)
 	registerAuditRoutes(api, a, gw)
+	registerSettingsRoutes(api, a, gw, svc)
 }
 
 // apiConfig is the shared Huma config for the live server and the spec dump. It
@@ -273,17 +273,32 @@ func apiConfig() huma.Config {
 // handlers (never invoked here), so a nil-backed stub is fine.
 func specAPI(gw storage.Gateway) huma.API {
 	api := humachi.New(chi.NewRouter(), apiConfig())
-	registerRoutes(api, gw, defaultSettingsService(), options{})
+	registerRoutes(api, gw, defaultSettingsService(gw), options{})
 	return api
 }
 
-// defaultSettingsService builds a settings service with no operator file and an
-// empty override reader, so it resolves the embedded code defaults only. It is
-// the fallback when no service is wired (tests, the spec dump); the boot path
-// supplies a Gateway-backed service instead.
-func defaultSettingsService() *settings.Service {
-	return settings.NewService(nil, func(context.Context, string) (settings.Doc, map[string][]string, error) {
-		return settings.Doc{}, nil, nil
+// defaultSettingsService builds a settings service with no operator file, reading
+// the global override live from the Gateway (the same seam the boot path uses,
+// minus the operator file). It is the fallback when no service is wired via
+// WithSettingsService, so NewHandler(gw) resolves real overrides; the boot path
+// supplies a file-aware service instead. The override reader is never invoked
+// during the server-less spec dump (handlers are only registered, not called), so
+// specAPI's stub gateway is fine.
+func defaultSettingsService(gw storage.Gateway) *settings.Service {
+	return settings.NewService(nil, func(ctx context.Context, scope string) (settings.Doc, map[string][]string, error) {
+		rows, err := gw.GetSettingOverrides(ctx, scope)
+		if err != nil {
+			return nil, nil, err
+		}
+		doc := settings.Doc{}
+		locks := map[string][]string{}
+		for _, r := range rows {
+			doc[r.Namespace] = r.Doc
+			if len(r.Locks) > 0 {
+				locks[r.Namespace] = r.Locks
+			}
+		}
+		return doc, locks, nil
 	})
 }
 

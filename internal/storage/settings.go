@@ -3,7 +3,11 @@ package storage
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+
+	"github.com/hyperscaleav/omniglass/internal/settings"
+	"github.com/jackc/pgx/v5"
 )
 
 // SettingOverride is one override row: the values and locked key-paths an operator
@@ -50,6 +54,72 @@ func (p *PG) GetSettingOverrides(ctx context.Context, scope string) ([]SettingOv
 // audits it. principal_id is NULL (global). The ON CONFLICT target is the identity
 // constraint, which treats the NULL principal as one value.
 func (p *PG) UpsertSettingOverride(ctx context.Context, actorID, scope, namespace string, doc map[string]any, locks []string) (*SettingOverride, error) {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("storage: begin upsert setting override: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	o, err := upsertOverrideTx(ctx, tx, actorID, scope, namespace, doc, locks)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("storage: commit upsert setting override: %w", err)
+	}
+	return o, nil
+}
+
+// MergePatchSettingOverride applies an RFC 7386 JSON Merge Patch to the (scope,
+// namespace) global override as a single atomic read-modify-write. A
+// transaction-scoped advisory lock keyed on (scope, namespace) serializes concurrent
+// patches to the same namespace so no update is lost. A plain SELECT FOR UPDATE would
+// not suffice: on the first patch the row does not exist yet, so there is nothing to
+// lock, and racing inserts would clobber each other through ON CONFLICT. The advisory
+// lock covers the not-yet-existent row too. It releases at commit or rollback.
+func (p *PG) MergePatchSettingOverride(ctx context.Context, actorID, scope, namespace string, patch map[string]any) (*SettingOverride, error) {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("storage: begin merge-patch setting override: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	if _, err := tx.Exec(ctx,
+		`select pg_advisory_xact_lock(hashtext($1), hashtext($2))`, scope, namespace); err != nil {
+		return nil, fmt.Errorf("storage: lock setting override: %w", err)
+	}
+
+	var docRaw []byte
+	err = tx.QueryRow(ctx,
+		`select doc from setting_override where scope = $1 and principal_id is null and namespace = $2`,
+		scope, namespace).Scan(&docRaw)
+	current := map[string]any{}
+	switch {
+	case err == nil:
+		if err := json.Unmarshal(docRaw, &current); err != nil {
+			return nil, fmt.Errorf("storage: unmarshal override doc: %w", err)
+		}
+	case errors.Is(err, pgx.ErrNoRows):
+		// no override yet: patch merges onto an empty doc
+	default:
+		return nil, fmt.Errorf("storage: read setting override: %w", err)
+	}
+
+	merged := settings.ApplyMergePatch(current, patch)
+	o, err := upsertOverrideTx(ctx, tx, actorID, scope, namespace, merged, nil)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("storage: commit merge-patch setting override: %w", err)
+	}
+	return o, nil
+}
+
+// upsertOverrideTx inserts or replaces the (scope, namespace) global row and audits
+// it, inside the caller's transaction. principal_id is NULL (global); the ON CONFLICT
+// target is the identity constraint, which treats the NULL principal as one value.
+func upsertOverrideTx(ctx context.Context, tx pgx.Tx, actorID, scope, namespace string, doc map[string]any, locks []string) (*SettingOverride, error) {
 	if doc == nil {
 		doc = map[string]any{}
 	}
@@ -64,12 +134,6 @@ func (p *PG) UpsertSettingOverride(ctx context.Context, actorID, scope, namespac
 	if err != nil {
 		return nil, fmt.Errorf("storage: marshal override locks: %w", err)
 	}
-	tx, err := p.pool.Begin(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("storage: begin upsert setting override: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
 	if _, err := tx.Exec(ctx, `
 		insert into setting_override (scope, principal_id, namespace, doc, locks, updated_by)
 		values ($1, null, $2, $3, $4, $5)
@@ -82,9 +146,6 @@ func (p *PG) UpsertSettingOverride(ctx context.Context, actorID, scope, namespac
 	o := SettingOverride{Scope: scope, Namespace: namespace, Doc: doc, Locks: locks}
 	if err := writeAuditRes(ctx, tx, actorID, "update", "settings", namespace, nil, o); err != nil {
 		return nil, err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("storage: commit upsert setting override: %w", err)
 	}
 	return &o, nil
 }

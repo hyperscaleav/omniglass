@@ -362,6 +362,9 @@ func (UnimplementedGateway) GetSettingOverrides(context.Context, string) ([]Sett
 func (UnimplementedGateway) UpsertSettingOverride(context.Context, string, string, string, map[string]any, []string) (*SettingOverride, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) MergePatchSettingOverride(context.Context, string, string, string, map[string]any) (*SettingOverride, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) DeleteSettingOverride(context.Context, string, string, string) error {
 	return nil
 }

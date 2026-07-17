@@ -34,7 +34,7 @@ var ungated = map[string]bool{
 	"POST /auth/me/sessions/{id}:revoke": true, // authn-only, self-scoped: revokes only the caller's own (a foreign id is a 404)
 	"POST /auth/me/sessions:revokeAll":   true, // authn-only, self-scoped: bulk-revokes only the caller's own, keeping the current one
 	"POST /auth/me/tokens":               true, // authn-only, self-scoped: mints a token only for the caller
-
+	"GET /settings/me":                   true, // authn-only: the caller's own client-visible effective settings (feeds the SPA at boot)
 }
 
 // TestEveryRouteIsGated is the no-unguarded-route guard. It enumerates every

@@ -334,6 +334,10 @@ type Gateway interface {
 	// scope "global" (principal_id NULL). Every write is audited.
 	GetSettingOverrides(ctx context.Context, scope string) ([]SettingOverride, error)
 	UpsertSettingOverride(ctx context.Context, actorID, scope, namespace string, doc map[string]any, locks []string) (*SettingOverride, error)
+	// MergePatchSettingOverride applies an RFC 7386 merge patch to the (scope,
+	// namespace) global override as one atomic read-modify-write, serialized against
+	// concurrent patches to the same namespace so no update is lost.
+	MergePatchSettingOverride(ctx context.Context, actorID, scope, namespace string, patch map[string]any) (*SettingOverride, error)
 	DeleteSettingOverride(ctx context.Context, actorID, scope, namespace string) error
 	DeleteAllSettingOverrides(ctx context.Context, actorID, scope string) error
 

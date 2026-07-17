@@ -151,6 +151,11 @@ func parse(p string) ([]pattern, error) {
 // legitimate sub-admin reader), so they are not in this set.
 var sensitiveResources = map[string]bool{
 	"secret": true,
+	// settings is platform configuration, admin-only to read: a bare `*:read`
+	// (viewer) must not reach it, so an ordinary user sees settings only through
+	// the authn-only /settings/me (client-visible namespaces), never the admin
+	// read-with-provenance. admin/owner hold it via the explicit settings grant.
+	"settings": true,
 }
 
 // match reports whether a grant pattern matches a required permission path (both
