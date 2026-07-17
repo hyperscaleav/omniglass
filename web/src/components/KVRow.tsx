@@ -77,7 +77,7 @@ export default function KVRow(props: {
       >
         {props.label}
       </span>
-      <Show when={props.typeBadge}>
+      <Show when={props.typeBadge && !showInput()}>
         <span class="badge badge-ghost badge-sm shrink-0">{props.typeBadge}</span>
       </Show>
       <Show
@@ -112,10 +112,14 @@ export default function KVRow(props: {
           {props.actions}
         </div>
       </Show>
-      <Show when={showOrigin()}>
+      {/* The type badge, origin badge, and drill-in chevron are read-mode
+          affordances: an edit row is label + input + actions only. In edit mode
+          the revert control already signals "overridden", and you drill in from
+          read mode, so all three are hidden while the input is shown. */}
+      <Show when={showOrigin() && !showInput()}>
         <span class="badge badge-ghost badge-sm shrink-0">{props.origin}</span>
       </Show>
-      <Show when={props.onDrillIn}>
+      <Show when={props.onDrillIn && !showInput()}>
         <button
           type="button"
           class="shrink-0 text-base-content/40 hover:text-base-content"

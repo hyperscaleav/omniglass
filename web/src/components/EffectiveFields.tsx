@@ -93,6 +93,10 @@ function FieldRow(props: {
   const canRevert = () => props.canClear && props.field.is_set && !!props.field.value_id;
   const hasValue = () => props.field.value !== null && props.field.value !== undefined;
   const label = () => props.field.display_name || props.field.name;
+  // The save is quiet by default (a loud accent on every row reads as "unsaved
+  // everywhere"); it goes accent only when the draft diverges from the effective
+  // value, i.e. there is actually something to save.
+  const dirty = () => draft() !== displayValue(props.field.value);
 
   async function save() {
     setSaving(true);
@@ -143,7 +147,7 @@ function FieldRow(props: {
           // Edit mode only: read mode is a pure scan with zero controls (rule 2).
           <Show when={props.editing}>
             <Show when={props.canSet}>
-              <Button type="button" intent="action" square icon={Save} class="join-item" loading={saving()} label="Set field value" title="Set" onClick={() => { void save(); }} />
+              <Button type="button" intent={dirty() ? "action" : "quiet"} square icon={Save} class="join-item" loading={saving()} label="Set field value" title="Set" onClick={() => { void save(); }} />
             </Show>
             <Show when={canRevert()}>
               <Button type="button" intent="quiet" square icon={RotateCcw} class="join-item" loading={clearing()} label="Revert to default" title="Revert to default" onClick={() => { void clear(); }} />

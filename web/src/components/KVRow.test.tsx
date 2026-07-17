@@ -82,4 +82,22 @@ describe("KVRow", () => {
     fireEvent.click(getByText("Gain")); // no row handler in edit mode
     expect(onDrillIn).not.toHaveBeenCalled();
   });
+
+  it("edit mode hides the origin badge and the drill-in chevron (read-mode affordances)", () => {
+    const onDrillIn = vi.fn();
+    const { container, queryByLabelText } = render(() => (
+      <KVRow label="Gain" value="-6 dB" input={<input data-testid="inp" />} origin="override" onDrillIn={onDrillIn} editing />
+    ));
+    expect(container.querySelector(".badge")).toBeNull(); // no origin badge while editing
+    expect(queryByLabelText("Show resolution")).toBeNull(); // no drill-in chevron while editing
+  });
+
+  it("read mode keeps the origin badge and the drill-in chevron", () => {
+    const onDrillIn = vi.fn();
+    const { container, getByLabelText } = render(() => (
+      <KVRow label="Gain" value="-6 dB" origin="override" onDrillIn={onDrillIn} editing={false} />
+    ));
+    expect(container.querySelector(".badge")?.textContent).toBe("override");
+    expect(getByLabelText("Show resolution")).toBeTruthy();
+  });
 });
