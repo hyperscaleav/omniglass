@@ -307,7 +307,7 @@ export default function Components() {
           />
         </Show>
         <Show when={can(me.data, "field", "read")}>
-          <EffectiveFields component={n().raw.name} />
+          <EffectiveFields component={n().raw.name} editing={editing()} />
         </Show>
 
         <TagAdder kind="component" name={n().raw.name} canUpdate={editing() && canUpdate()} canCreateKey={can(me.data, "tag", "create")} />

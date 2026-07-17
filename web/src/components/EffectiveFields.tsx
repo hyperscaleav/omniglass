@@ -2,20 +2,24 @@ import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { deleteFieldValue, effectiveFields, effectiveFieldsKey, setFieldValue, type EffectiveField } from "../lib/fields";
 import { displayValue, parseInput, type ValueType } from "../lib/variables";
-import { ValueDisplay, ValueInput } from "../pages/Variables";
+import { ValueInput } from "../pages/Variables";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
+import KVRow from "./KVRow";
 import Button from "./Button";
 import { RotateCcw, Save } from "./icons";
 
-// EffectiveFields lists the fields declared on a component's type, each resolved to
-// the value that applies to this component: the literal set on the component, or the
-// type-level default when unset (is_set marks the override). Unlike secrets and
-// variables, fields are a flat per-type schema, not a scope cascade, so this is a
-// plain table with no nested cascade blade. When the caller holds field:create,
-// each row carries an inline set control that writes a literal and refreshes it.
-
-export default function EffectiveFields(props: { component: string }): JSX.Element {
+// EffectiveFields lists the fields declared on a component's type, each resolved
+// to the value that applies to this component: the literal set on the component,
+// or the type-level default when unset (is_set marks the override). Unlike secrets
+// and variables, fields are a flat per-type schema, not a scope cascade, so this is
+// a plain list with no nested cascade blade. Each field renders through KVRow, so
+// the platform edit-mode rule holds: the setter input and the revert control appear
+// ONLY in edit mode (driven by the component-detail edit context, exactly as
+// TagAdder is), and read mode is a slim inline value scan (no box) even for a
+// field:create caller. An override reads with weight and an "override" badge; a
+// default is quiet.
+export default function EffectiveFields(props: { component: string; editing: boolean }): JSX.Element {
   const me = useMe();
   const q = useQuery(() => ({
     queryKey: effectiveFieldsKey(props.component),
@@ -31,7 +35,7 @@ export default function EffectiveFields(props: { component: string }): JSX.Eleme
   return (
     <div class="flex flex-col gap-2">
       <div class="flex items-baseline justify-between gap-2">
-        <span class="eyebrow">Effective fields</span>
+        <span class="eyebrow">Fields</span>
         <span class="shrink-0 text-[10.5px] text-base-content/40">the type schema, set or defaulted</span>
       </div>
       <Show when={q.error}>
@@ -44,7 +48,14 @@ export default function EffectiveFields(props: { component: string }): JSX.Eleme
         <div class="overflow-hidden rounded-box border border-base-300">
           <For each={rows()}>
             {(f, i) => (
-              <FieldRow component={props.component} field={f} first={i() === 0} canSet={canSet()} canClear={canClear()} />
+              <FieldRow
+                component={props.component}
+                field={f}
+                first={i() === 0}
+                editing={props.editing}
+                canSet={canSet()}
+                canClear={canClear()}
+              />
             )}
           </For>
         </div>
@@ -53,89 +64,41 @@ export default function EffectiveFields(props: { component: string }): JSX.Eleme
   );
 }
 
-// FieldRow is one effective-field row: the field's name and type, an override /
-// default badge, a revert control when the component overrides the default and the
-// caller may clear it (field:delete), and either the inline setter (field:create)
-// or a read-only value display. The revert control and the setter carry different
-// permissions, so a delete-only caller still sees the revert while reading the value.
+// FieldRow is one effective-field KVRow. Read mode shows the effective value (a
+// dash when unset with no default); edit mode swaps in the type-aware setter and,
+// on an override the caller may clear, a revert control, both riding the row's
+// daisyUI join as the inline-action family. The setter holds its own draft so
+// typing in one row never disturbs another; a refetch remounts the row and reseeds
+// from the new value. The revert and the setter carry different permissions, so a
+// delete-only caller still sees the revert while reading the value.
 function FieldRow(props: {
   component: string;
   field: EffectiveField;
   first: boolean;
+  editing: boolean;
   canSet: boolean;
   canClear: boolean;
 }): JSX.Element {
   const qc = useQueryClient();
-  const [clearing, setClearing] = createSignal(false);
-  const [clearErr, setClearErr] = createSignal<string | null>(null);
-  // A revert is offered only for a set row that carries the value_id to delete.
-  const canRevert = () => props.canClear && props.field.is_set && !!props.field.value_id;
-
-  async function clear() {
-    setClearing(true);
-    setClearErr(null);
-    try {
-      await deleteFieldValue(props.field.value_id as string);
-      await qc.invalidateQueries({ queryKey: effectiveFieldsKey(props.component) });
-    } catch (e) {
-      setClearErr(describeError(e));
-    } finally {
-      setClearing(false);
-    }
-  }
-
-  return (
-    <div class="flex flex-col gap-2 px-3 py-2.5" classList={{ "border-t border-base-300": !props.first }}>
-      <div class="flex items-center gap-2">
-        <span class="min-w-0 truncate text-sm">{props.field.display_name || props.field.name}</span>
-        <span class="badge badge-ghost badge-sm shrink-0">{props.field.data_type}</span>
-        <span class="flex-1" />
-        <Show when={canRevert()}>
-          <Button
-            type="button"
-            intent="quiet"
-            size="xs"
-            square
-            icon={RotateCcw}
-            label="Revert to default"
-            title="Revert to default"
-            loading={clearing()}
-            onClick={() => { void clear(); }}
-          />
-        </Show>
-        <span class="badge badge-sm shrink-0" classList={{ "badge-primary": props.field.is_set, "badge-ghost": !props.field.is_set }}>
-          {props.field.is_set ? "override" : "default"}
-        </span>
-      </div>
-      <Show when={props.canSet} fallback={<ValueDisplay valueType={props.field.data_type} value={props.field.value} />}>
-        <FieldSetControl component={props.component} field={props.field} />
-      </Show>
-      <Show when={clearErr()}>
-        <span class="text-[11px] text-error">{clearErr()}</span>
-      </Show>
-    </div>
-  );
-}
-
-// FieldSetControl is one row's inline setter: a type-aware input seeded from the
-// effective value and a Set that parses the text to the field's data_type, writes
-// the literal, and refreshes the panel. It holds its own draft so typing in one row
-// never disturbs another; a refetch remounts the row and reseeds from the new value.
-function FieldSetControl(props: { component: string; field: EffectiveField }): JSX.Element {
-  const qc = useQueryClient();
   const [draft, setDraft] = createSignal(displayValue(props.field.value));
-  const [busy, setBusy] = createSignal(false);
+  const [saving, setSaving] = createSignal(false);
+  const [clearing, setClearing] = createSignal(false);
   const [err, setErr] = createSignal<string | null>(null);
 
+  // A revert is offered only for a set row that carries the value_id to delete.
+  const canRevert = () => props.canClear && props.field.is_set && !!props.field.value_id;
+  const hasValue = () => props.field.value !== null && props.field.value !== undefined;
+  const label = () => props.field.display_name || props.field.name;
+
   async function save() {
-    setBusy(true);
+    setSaving(true);
     setErr(null);
     let parsed: unknown;
     try {
       parsed = parseInput(props.field.data_type as ValueType, draft());
     } catch (e) {
       setErr(describeError(e));
-      setBusy(false);
+      setSaving(false);
       return;
     }
     try {
@@ -144,21 +107,48 @@ function FieldSetControl(props: { component: string; field: EffectiveField }): J
     } catch (e) {
       setErr(describeError(e));
     } finally {
-      setBusy(false);
+      setSaving(false);
+    }
+  }
+
+  async function clear() {
+    setClearing(true);
+    setErr(null);
+    try {
+      await deleteFieldValue(props.field.value_id as string);
+      await qc.invalidateQueries({ queryKey: effectiveFieldsKey(props.component) });
+    } catch (e) {
+      setErr(describeError(e));
+    } finally {
+      setClearing(false);
     }
   }
 
   return (
-    <div class="flex flex-col gap-1">
-      <div class="flex items-start gap-2">
-        <div class="min-w-0 flex-1">
-          <ValueInput valueType={props.field.data_type as ValueType} value={draft()} onInput={setDraft} />
-        </div>
-        <Button type="button" intent="action" icon={Save} disabled={busy()} onClick={() => { void save(); }}>Set</Button>
-      </div>
+    <>
+      <KVRow
+        first={props.first}
+        label={label()}
+        emphasize={props.field.is_set}
+        origin={props.field.is_set ? "override" : ""}
+        editing={props.editing && props.canSet}
+        value={hasValue() ? displayValue(props.field.value) : "—"}
+        input={<ValueInput valueType={props.field.data_type as ValueType} value={draft()} onInput={setDraft} class="join-item grow" />}
+        actions={
+          // Edit mode only: read mode is a pure scan with zero controls (rule 2).
+          <Show when={props.editing}>
+            <Show when={props.canSet}>
+              <Button type="button" intent="action" square icon={Save} class="join-item" loading={saving()} label="Set field value" title="Set" onClick={() => { void save(); }} />
+            </Show>
+            <Show when={canRevert()}>
+              <Button type="button" intent="quiet" square icon={RotateCcw} class="join-item" loading={clearing()} label="Revert to default" title="Revert to default" onClick={() => { void clear(); }} />
+            </Show>
+          </Show>
+        }
+      />
       <Show when={err()}>
-        <span class="text-[11px] text-error">{err()}</span>
+        <div class="px-3 pb-2 text-[11px] text-error">{err()}</div>
       </Show>
-    </div>
+    </>
   );
 }
