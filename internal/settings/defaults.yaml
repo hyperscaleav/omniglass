@@ -1,0 +1,14 @@
+# The embedded code-default settings document: the base layer under the operator
+# file and the DB override. Every settable key has a default here so the resolved
+# effective document is always complete. Namespaces are declared in settings.go
+# (their domain and client-visibility); this file supplies their default values.
+ui:
+  theme: omniglass-dark
+  default_landing: /
+keybindings:
+  # The default keymap, as data only. No surface reads it yet; the future shortcut
+  # registry is the consumer. Shape: action -> key chord.
+  open_detail: d
+  open_edit: e
+  close_blade: Escape
+  command_palette: mod+k
