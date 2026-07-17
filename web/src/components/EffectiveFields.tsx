@@ -87,7 +87,7 @@ function FieldRow(props: {
   return (
     <div class="flex flex-col gap-2 px-3 py-2.5" classList={{ "border-t border-base-300": !props.first }}>
       <div class="flex items-center gap-2">
-        <span class="min-w-0 truncate font-data text-sm">{props.field.name}</span>
+        <span class="min-w-0 truncate text-sm">{props.field.display_name || props.field.name}</span>
         <span class="badge badge-ghost badge-sm shrink-0">{props.field.data_type}</span>
         <span class="flex-1" />
         <Show when={canRevert()}>

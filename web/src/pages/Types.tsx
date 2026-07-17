@@ -331,6 +331,7 @@ function ComponentTypeFields(props: { typeId: string; canCreate: boolean }): JSX
   );
 
   const [name, setName] = createSignal("");
+  const [displayName, setDisplayName] = createSignal("");
   const [dataType, setDataType] = createSignal<FieldDataType>("string");
   const [defaultText, setDefaultText] = createSignal("");
   const [busy, setBusy] = createSignal(false);
@@ -357,11 +358,13 @@ function ComponentTypeFields(props: { typeId: string; canCreate: boolean }): JSX
       await createFieldDefinition({
         component_type: props.typeId,
         name: name().trim(),
+        ...(displayName().trim() === "" ? {} : { display_name: displayName().trim() }),
         data_type: dataType(),
         ...(default_value === undefined ? {} : { default_value }),
       });
       await qc.invalidateQueries({ queryKey: FIELD_DEFINITIONS_KEY });
       setName("");
+      setDisplayName("");
       setDefaultText("");
       setDataType("string");
     } catch (er) {
@@ -378,7 +381,10 @@ function ComponentTypeFields(props: { typeId: string; canCreate: boolean }): JSX
         <For each={rows()} fallback={<span class="text-[11px] text-base-content/40">No fields declared.</span>}>
           {(d) => (
             <div class="flex items-center justify-between gap-2 text-sm">
-              <span class="font-data">{d.name}</span>
+              <span class="flex items-baseline gap-2">
+                <span class="text-sm">{d.display_name || d.name}</span>
+                <Show when={d.display_name}><span class="font-data text-[11px] text-base-content/40">{d.name}</span></Show>
+              </span>
               <span class="flex items-center gap-1.5 text-xs text-base-content/60">
                 <span class="badge badge-ghost badge-sm font-data">{d.data_type}</span>
                 <Show when={d.default_value !== undefined && d.default_value !== null}>
@@ -394,6 +400,12 @@ function ComponentTypeFields(props: { typeId: string; canCreate: boolean }): JSX
               <div role="alert" class="alert alert-error alert-soft text-xs"><span>{err()}</span></div>
             </Show>
             <div class="flex flex-wrap items-end gap-2">
+              <input
+                class="input input-bordered input-sm w-40"
+                placeholder="Display name (optional)"
+                value={displayName()}
+                onInput={(e) => setDisplayName(e.currentTarget.value)}
+              />
               <input
                 class="input input-bordered input-sm w-36 font-data"
                 placeholder="asset_tag"

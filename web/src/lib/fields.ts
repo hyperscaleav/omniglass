@@ -18,6 +18,7 @@ export type FieldDefinition = {
   id: string;
   component_type: string;
   name: string;
+  display_name?: string;
   data_type: string;
   default_value?: unknown;
 };
@@ -28,6 +29,7 @@ export type FieldDefinition = {
 export type EffectiveField = {
   field_id: string;
   name: string;
+  display_name?: string;
   data_type: string;
   value: unknown;
   set_value?: unknown;
@@ -49,6 +51,7 @@ export async function listFieldDefinitions(): Promise<FieldDefinition[]> {
 export type CreateFieldDefinition = {
   component_type: string;
   name: string;
+  display_name?: string;
   data_type: FieldDataType;
   default_value?: unknown;
 };
