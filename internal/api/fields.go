@@ -45,14 +45,15 @@ type fieldDefinitionOutput struct {
 // (the set literal or the type default), plus the override if the component set
 // one. Value and SetValue are polymorphic, shaped by data_type.
 type effectiveFieldBody struct {
-	FieldID     string `json:"field_id"`
-	Name        string `json:"name"`
-	DisplayName string `json:"display_name,omitempty" doc:"Optional human label; omitted when unset"`
-	DataType    string `json:"data_type"`
-	Value       any    `json:"value" doc:"The effective value: the set literal, or the type default when unset"`
-	SetValue    any    `json:"set_value,omitempty" doc:"The component's override; omitted when the field is unset"`
-	IsSet       bool   `json:"is_set" doc:"True when the component overrides the type default"`
-	ValueID     string `json:"value_id,omitempty" doc:"The field_value id when set; the id to DELETE to clear the override. Omitted when the field is unset"`
+	FieldID      string `json:"field_id"`
+	Name         string `json:"name"`
+	DisplayName  string `json:"display_name,omitempty" doc:"Optional human label; omitted when unset"`
+	DataType     string `json:"data_type"`
+	Value        any    `json:"value" doc:"The effective value: the set literal, or the type default when unset"`
+	SetValue     any    `json:"set_value,omitempty" doc:"The component's override; omitted when the field is unset"`
+	DefaultValue any    `json:"default_value,omitempty" doc:"The type-level default, shape given by data_type; the drill-in's type-default step. Omitted when the definition has no default"`
+	IsSet        bool   `json:"is_set" doc:"True when the component overrides the type default"`
+	ValueID      string `json:"value_id,omitempty" doc:"The field_value id when set; the id to DELETE to clear the override. Omitted when the field is unset"`
 }
 
 type effectiveFieldsOutput struct {
@@ -81,6 +82,9 @@ func toEffectiveFieldBody(ef *storage.EffectiveField) effectiveFieldBody {
 	}
 	if len(ef.SetValue) > 0 {
 		_ = json.Unmarshal(ef.SetValue, &b.SetValue)
+	}
+	if len(ef.DefaultValue) > 0 {
+		_ = json.Unmarshal(ef.DefaultValue, &b.DefaultValue)
 	}
 	return b
 }

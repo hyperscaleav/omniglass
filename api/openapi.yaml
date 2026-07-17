@@ -834,6 +834,8 @@ components:
       properties:
         data_type:
           type: string
+        default_value:
+          description: The type-level default, shape given by data_type; the drill-in's type-default step. Omitted when the definition has no default
         display_name:
           description: Optional human label; omitted when unset
           type: string

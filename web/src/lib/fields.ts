@@ -33,6 +33,9 @@ export type EffectiveField = {
   data_type: string;
   value: unknown;
   set_value?: unknown;
+  // The type-level default (the drill-in's type-default step); omitted when the
+  // field definition has no default.
+  default_value?: unknown;
   is_set: boolean;
   // The field_value id when set (is_set): the id to delete to clear the override
   // back to the type default. Omitted when the field is unset.

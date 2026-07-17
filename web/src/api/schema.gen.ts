@@ -2351,6 +2351,8 @@ export interface components {
         };
         EffectiveFieldBody: {
             data_type: string;
+            /** @description The type-level default, shape given by data_type; the drill-in's type-default step. Omitted when the definition has no default */
+            default_value?: unknown;
             /** @description Optional human label; omitted when unset */
             display_name?: string;
             field_id: string;

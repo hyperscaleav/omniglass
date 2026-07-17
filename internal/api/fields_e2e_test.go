@@ -80,13 +80,14 @@ func TestFieldDefinitionAPI(t *testing.T) {
 }
 
 type effectiveFieldResp struct {
-	FieldID  string `json:"field_id"`
-	Name     string `json:"name"`
-	DataType string `json:"data_type"`
-	Value    any    `json:"value"`
-	SetValue any    `json:"set_value"`
-	IsSet    bool   `json:"is_set"`
-	ValueID  string `json:"value_id"`
+	FieldID      string `json:"field_id"`
+	Name         string `json:"name"`
+	DataType     string `json:"data_type"`
+	Value        any    `json:"value"`
+	SetValue     any    `json:"set_value"`
+	DefaultValue any    `json:"default_value"`
+	IsSet        bool   `json:"is_set"`
+	ValueID      string `json:"value_id"`
 }
 
 // TestFieldValueAPI drives the field-value surface over HTTP: a component reads
@@ -131,9 +132,10 @@ func TestFieldValueAPI(t *testing.T) {
 		http.StatusCreated)
 
 	// Effective read before any override: the default, unset, with no value_id (the
-	// surface has nothing to clear).
-	if f := effectiveField(t, c, ownerTok, "lobby-display", "diagonal_inches"); f.Value.(float64) != 50 || f.IsSet || f.ValueID != "" {
-		t.Fatalf("want default 50 unset with empty value_id, got %+v", f)
+	// surface has nothing to clear). default_value carries the type default so the
+	// drill-in can render the type-default step of the chain.
+	if f := effectiveField(t, c, ownerTok, "lobby-display", "diagonal_inches"); f.Value.(float64) != 50 || f.IsSet || f.ValueID != "" || f.DefaultValue.(float64) != 50 {
+		t.Fatalf("want default 50 unset with empty value_id and default_value 50, got %+v", f)
 	}
 
 	// Set an override; the effective read now reports the set value and carries the
@@ -147,8 +149,10 @@ func TestFieldValueAPI(t *testing.T) {
 	if setBody.ID == "" || setBody.Value.(float64) != 80 {
 		t.Fatalf("set response = %+v, want value 80 with id", setBody)
 	}
-	if f := effectiveField(t, c, ownerTok, "lobby-display", "diagonal_inches"); f.Value.(float64) != 80 || !f.IsSet || f.ValueID != setBody.ID {
-		t.Fatalf("want set 80 with value_id %q, got %+v", setBody.ID, f)
+	// The effective value is now the override, but default_value still reports the
+	// type default (the drill-in shows it as the shadowed type-default step).
+	if f := effectiveField(t, c, ownerTok, "lobby-display", "diagonal_inches"); f.Value.(float64) != 80 || !f.IsSet || f.ValueID != setBody.ID || f.DefaultValue.(float64) != 50 {
+		t.Fatalf("want set 80 with value_id %q and default_value 50, got %+v", setBody.ID, f)
 	}
 
 	// A second value for the same field on the same component is a conflict.
