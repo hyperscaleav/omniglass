@@ -12,7 +12,10 @@ screenshots:
         selector: 'tr.cursor-pointer:has-text("Display")'
   - id: fields-effective
     path: /web/components/lobby-display
-    alt: "The Effective fields panel on a component's detail: each field its type declares, resolved to the set literal or the type default, an override-versus-default badge, and an inline setter."
+    alt: "The Effective fields panel on a component's detail: each field its type declares, resolved to the set literal or the type default, an override-versus-default badge, an inline setter, and a revert-to-default control on an overridden field."
+    steps:
+      - action: hover
+        selector: 'text=diagonal_inches'
 ---
 
 A **field** is an operator-defined **typed attribute declared on a type**: you add a field once to a
