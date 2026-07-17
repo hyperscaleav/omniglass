@@ -193,6 +193,21 @@ func TestFieldValueAPI(t *testing.T) {
 	c.do(viewerTok, http.MethodGet, "/components/lobby-display/fields", nil, http.StatusOK)
 	c.do(viewerTok, http.MethodPost, "/components/lobby-display/fields",
 		map[string]any{"field": "diagonal_inches", "value": 10}, http.StatusForbidden)
+
+	// Create-path scope split. A principal that HOLDS field:create but is scoped to a
+	// different component may not set a value on lobby-display: the component exists
+	// but is outside the create scope, so the create path forbids (403). This differs
+	// from the viewer above (a role-gate 403) and from the non-disclosing read path
+	// (404 for an out-of-scope component), and mirrors the variable create path.
+	otherRaw := c.do(ownerTok, http.MethodPost, "/components",
+		map[string]any{"name": "other-display", "component_type": "display"}, http.StatusCreated)
+	var other struct {
+		ID string `json:"id"`
+	}
+	json.Unmarshal(otherRaw, &other)
+	otherOpTok := setupScopedViewer(t, ctx, dsn, "operator-other", "operator", "component", other.ID)
+	c.do(otherOpTok, http.MethodPost, "/components/lobby-display/fields",
+		map[string]any{"field": "diagonal_inches", "value": 42}, http.StatusForbidden)
 }
 
 // effectiveField reads a component's effective fields and returns the one named,

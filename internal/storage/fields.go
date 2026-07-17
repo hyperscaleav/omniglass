@@ -269,9 +269,14 @@ func (p *PG) CreateFieldValue(ctx context.Context, actorID, componentName, field
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	compID, err := p.componentIDInScope(ctx, tx, componentName, create)
+	compID, inScope, err := p.componentIDResolved(ctx, tx, componentName, create)
 	if err != nil {
-		return nil, err
+		return nil, err // ErrComponentNotFound when the component is absent
+	}
+	if !inScope {
+		// The component exists but is outside the create scope: forbid (403), not the
+		// non-disclosing 404 the read path returns.
+		return nil, ErrComponentForbidden
 	}
 	// The field must be defined on this component's own type.
 	var fieldID, dataType string
@@ -373,9 +378,14 @@ func (p *PG) DeleteFieldValue(ctx context.Context, actorID, id string, read, act
 // override). The component must be within the read scope; an out-of-scope
 // component is the non-disclosing ErrComponentNotFound.
 func (p *PG) EffectiveFields(ctx context.Context, componentName string, read scope.Set) ([]EffectiveField, error) {
-	compID, err := p.componentIDInScope(ctx, p.pool, componentName, read)
+	compID, inScope, err := p.componentIDResolved(ctx, p.pool, componentName, read)
 	if err != nil {
 		return nil, err
+	}
+	if !inScope {
+		// The read path is non-disclosing: an out-of-scope component is not-found, not
+		// forbidden, so a reader cannot probe for components it cannot see.
+		return nil, ErrComponentNotFound
 	}
 	rows, err := p.pool.Query(ctx, `
 		select fd.id, fd.name, fd.data_type, fd.default_value,
@@ -415,22 +425,23 @@ func (p *PG) EffectiveFields(ctx context.Context, componentName string, read sco
 
 // --- field_value helpers -----------------------------------------------------
 
-// componentIDInScope resolves a component by name and requires it within the given
-// scope, returning the non-disclosing ErrComponentNotFound when absent or out of
-// scope. It runs on any querier so it works standalone or inside a transaction.
-func (p *PG) componentIDInScope(ctx context.Context, q querier, name string, s scope.Set) (string, error) {
+// componentIDResolved resolves a component by name to its id and reports whether it
+// falls within the given scope. An absent component is always ErrComponentNotFound
+// (nothing to disclose); an existing but out-of-scope component is returned with
+// inScope=false so each caller picks its own sentinel. This mirrors how the variable
+// create path (resolveVariableOwner) separates an absent owner from an out-of-scope
+// one: the create path forbids (403), the non-disclosing read path 404s. It runs on
+// any querier so it works standalone or inside a transaction.
+func (p *PG) componentIDResolved(ctx context.Context, q querier, name string, s scope.Set) (id string, inScope bool, err error) {
 	c, err := scopedByName(ctx, q, componentConfig, name)
 	if err != nil {
-		return "", err // ErrComponentNotFound when absent
+		return "", false, err // ErrComponentNotFound when absent
 	}
 	in, err := inScopeTree(ctx, q, componentTable, c.ID, s)
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
-	if !in {
-		return "", ErrComponentNotFound
-	}
-	return c.ID, nil
+	return c.ID, in, nil
 }
 
 // fieldValueRow is the raw field value plus its field's data_type, used by the
