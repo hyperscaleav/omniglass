@@ -194,8 +194,10 @@ export function ValueDisplay(p: { valueType: string; value: unknown }): JSX.Elem
 }
 
 // ValueInput is the type-aware editor: a checkbox toggle for bool, a textarea for
-// json, a number input for int/float, a text input for string.
-function ValueInput(p: { valueType: ValueType; value: string; onInput: (v: string) => void }): JSX.Element {
+// json, a number input for int/float, a text input for string. Exported so the
+// effective-fields panel reuses the same control (as EffectiveVariables reuses
+// ValueDisplay).
+export function ValueInput(p: { valueType: ValueType; value: string; onInput: (v: string) => void }): JSX.Element {
   return (
     <Show when={p.valueType !== "bool"} fallback={
       <label class="flex items-center gap-2">

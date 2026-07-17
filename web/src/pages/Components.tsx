@@ -25,6 +25,7 @@ import TagPills from "../components/TagPills";
 import { tagFilterKeys } from "../lib/predicate";
 import TagAdder from "../components/TagAdder";
 import EffectiveVariables, { variableCascadeBlade, varCascadeBladeId } from "../components/EffectiveVariables";
+import EffectiveFields from "../components/EffectiveFields";
 
 // Components: the device inventory, the first page built on the generic TreeList.
 // Components form a tree (parent_id) and each is bound to a primary system and a
@@ -304,6 +305,9 @@ export default function Components() {
             component={n().raw.name}
             onOpen={(variableName) => ctx.openBlade({ kind: "variable-cascade", id: varCascadeBladeId(n().raw.name, variableName) })}
           />
+        </Show>
+        <Show when={can(me.data, "field", "read")}>
+          <EffectiveFields component={n().raw.name} />
         </Show>
 
         <TagAdder kind="component" name={n().raw.name} canUpdate={editing() && canUpdate()} canCreateKey={can(me.data, "tag", "create")} />

@@ -17,8 +17,11 @@ and the operator surfaces. The **`variable`**
 member ([#183](https://github.com/hyperscaleav/omniglass/issues/183)): the typed **plaintext** cell on the same
 exclusive arc, resolved down the same cascade, with a Variables directory and a per-component effective-variables
 panel. Each member's section below marks what is built versus deferred; the
-[build progress](/architecture/status/#build-progress) note carries the shipped shape. The **config** member stays
-`Design`, so this page is `Partial`. (`secret` was renamed from `credential`; the ADR anchor keeps the old term.)
+[build progress](/architecture/status/#build-progress) note carries the shipped shape. A related primitive,
+the **`field`** (slice 0), a typed schema declared on a `component_type` and resolved on a component to
+set-or-default, also lands `Partial` (its macro interpolation and cross-type cascade are deferred); its
+section is below. The **config** member stays `Design`, so this page is `Partial`. (`secret` was renamed
+from `credential`; the ADR anchor keeps the old term.)
 :::
 
 Everything an operator **sets** resolves the same way: a typed value, owned at a scope, resolved
@@ -246,6 +249,47 @@ Scalar shapes (`string`, `int`, `float`, `bool`, `json`) cover the common case; 
 flagged secret (a free secret like a webhook signing token) without being a full secret cell, since it
 has no lifecycle.
 
+## field: an operator-defined typed schema on a type
+
+:::note[Partial: slice 0, schema on a `component_type` plus set-or-default on a component]
+The first cut is **built**: an operator declares a typed **`field_definition`** on a `component_type` (a
+`name`, a `data_type` of `string` / `int` / `float` / `bool` / `json`, and an optional type-level default
+validated against the `data_type`), unique per `(component_type, name)`; every component of that type
+carries it. A component sets a **literal** `field_value` for a field defined on its type, and the
+component's **effective** value resolves to the set literal or the type default (an `is_set` flag marks the
+override). The vertical is whole: storage (transactional, audited), the API (the definition catalog is flat
+and `field:<action>`-gated, the value routes are ABAC-scoped to the owning component), the generated CLI and
+typed client, and the UI (define on the component-type blade under [Types](/guides/admin/types/), plus an
+**Effective fields** panel on the component detail that sets a literal and shows override-versus-default).
+The rest of the design below is **deferred**, listed plainly so a built badge never hides drift.
+:::
+
+A **field** is an operator-defined **typed attribute declared on a type**, the schema layer over the value
+cells above: where a variable or a secret is a single cascaded cell, a field is a named slot every instance
+of a type carries, whose value the operator sets per instance. It revives the fixed-inventory idea (Zabbix's
+`inventory_1..40` that never fit and were never custom) as a schema an operator defines per type, so "add an
+`asset_tag` field to every `display` component" is one operation, not forty fixed slots.
+
+Slice 0 stores **literals only** and resolves on the **component alone**. What the design intends, and this
+slice does **not** yet do:
+
+- **Macro interpolation of a field value** (the consumer of `$var:` / `$sec:` / `$datapoint:`). A field's
+  eventual whole job is to be the consumer of the values above: a `field_value` will hold a `$var:` /
+  `$sec:` / `$datapoint:` macro string as readily as a literal, resolved through the same interpolation
+  engine at read. Slice 0 holds **literals only**; that consumer is deferred.
+- **The cross-type cascade** (`product → location → system → component`, deepest-wins). Slice 0 resolves a
+  field on the **component alone**, set-or-default with a single owner; there is no cascade across types yet.
+- **The `sources` model**: the per-field allowed origins (`literal` / `variable` / `secret` / `datapoint` /
+  `file`), the inline pickers they drive, and the override rules.
+- **File typing** (a `file` `data_type` with accepted MIME types and formats), which would give an attached
+  file a semantic role by the field it fills (a `floor_plan`, a `firmware`).
+- **Multi-type definitions.** Slice 0 defines fields on `component_type` only; the `location_type` /
+  `system_type` / `vendor` / `product` / `driver` schemas the exclusive-arc owner model allows come later.
+
+One **known limitation** in the shipped UI: the Effective fields panel can set and re-set a value but
+**cannot yet clear** it back to the type default. The effective read returns the field's id, not the
+`field_value` id the clear needs, so the `DELETE` route exists on the API but is not wired into the panel.
+
 ## tag: a normalized label vocabulary
 
 :::note[Built: slice 1, the registry, the bindings, and the cascade. See the [tags](/architecture/tags/) page.]
@@ -356,6 +400,8 @@ exclusive-arc scope either way.
 | `secret_type` | id, **official**, schema (per-field `{name, type, secret, origin}`) | **Built.** The secret **shape** registry (`snmp-community`, `basic-auth` seeded); `official` marks shipped-canonical versus org-local, like the datapoint and role registries |
 | `secret` | (name, **owner arc**), secret_type, **`admin_sensitive`**, **value** (secret fields as `{ciphertext, nonce, wrapped_dek, key_id}` envelopes, non-secret fields plaintext) | **Built.** The encrypted cell and the `$sec:` cascade key; scope is the exclusive arc (global/location/system/component). Read masked through a **scope-filtered** directory; decrypted only through the audited `:reveal` / `:copy` path. Visibility is placement scope plus the per-secret `admin_sensitive` flag (admin-only when set); `secret` is off the `*:read` floor ([ADR-0025](/architecture/decisions/#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier)) |
 | `variable` | (name, **owner arc**), **value_type** (`string`/`int`/`float`/`bool`/`json`), **value** (jsonb) | **Built.** The plaintext variable cell and the `$var:` cascade key; scope is the exclusive arc. Typed inline (no `variable_type` registry: the value is validated against `value_type` in the app), no observed side. The **config** cell (declared/observed/reconcile) is a separate, deferred member |
+| `field_definition` | (**component_type**, name), **data_type** (`string`/`int`/`float`/`bool`/`json`), **default_value** (jsonb) | **Built (slice 0).** The typed **schema on a `component_type`**: flat and unscoped like the type registries, unique per `(component_type, name)`, with an optional type-level default validated against `data_type`. Multi-type owners (`location_type`/`system_type`/`vendor`/`product`/`driver`) are deferred |
+| `field_value` | (**field**, **component**), **value** (jsonb) | **Built (slice 0).** A component's **literal** for a field on its type; the effective read is **set-or-default** (`is_set` marks the override), ABAC-scoped to the owning component. Macro-string values (`$var:`/`$sec:`/`$datapoint:`), the cross-type cascade, and clear-to-default in the UI are deferred |
 | `tag` | name, applies_to, propagates | **Built.** The **tenant-wide governed key vocabulary**; minting a key needs `tag:create` ([identity and access](/architecture/identity-access/)). No `_type`, no namespace; values bind via `tag_binding`. See [tags](/architecture/tags/) |
 | `tag_binding` | (tag, **owner arc**), value | **Built.** The `key: value` binding: **union on key, override on value** down the [cascade](/architecture/cascade/), owned on the exclusive arc (`global / location / system / component`); setting a value is the owner's own `update` write. Binding via groups and a `template` default are deferred |
 

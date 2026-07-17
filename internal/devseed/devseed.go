@@ -28,12 +28,45 @@ var fixturesYAML []byte
 
 // Doc is the parsed example-data fixture.
 type Doc struct {
-	Locations   []Location   `yaml:"locations"`
-	Users       []User       `yaml:"users"`
-	Variables   []Variable   `yaml:"variables"`
-	Tags        []Tag        `yaml:"tags"`
-	TagBindings []TagBinding `yaml:"tag_bindings"`
-	Files       []File       `yaml:"files"`
+	Locations        []Location        `yaml:"locations"`
+	Users            []User            `yaml:"users"`
+	Variables        []Variable        `yaml:"variables"`
+	Tags             []Tag             `yaml:"tags"`
+	TagBindings      []TagBinding      `yaml:"tag_bindings"`
+	Files            []File            `yaml:"files"`
+	FieldDefinitions []FieldDefinition `yaml:"field_definitions"`
+	Components       []Component       `yaml:"components"`
+	FieldValues      []FieldValue      `yaml:"field_values"`
+}
+
+// FieldDefinition is one example typed field declared on a component_type: the
+// schema half of the field primitive. Default is decoded from YAML and, when
+// present, re-encoded to jsonb (like a Variable); an omitted default leaves the
+// field with none, so the seed can teach a default-vs-plain contrast.
+type FieldDefinition struct {
+	ComponentType string `yaml:"component_type"`
+	Name          string `yaml:"name"`
+	DataType      string `yaml:"data_type"`
+	Default       any    `yaml:"default"`
+}
+
+// Component is one example device placed in the estate. Location names a fixture
+// location, resolved to its id at seed time (empty for an unplaced component); a
+// system binding is omitted for now (optional on create).
+type Component struct {
+	Name          string `yaml:"name"`
+	DisplayName   string `yaml:"display_name"`
+	ComponentType string `yaml:"component_type"`
+	Location      string `yaml:"location"`
+}
+
+// FieldValue is one example literal a component sets for a field defined on its
+// type: an override so the effective-values panel teaches direct-vs-inherited.
+// Value is decoded from YAML and re-encoded to jsonb, exactly like a Variable.
+type FieldValue struct {
+	Component string `yaml:"component"`
+	Field     string `yaml:"field"`
+	Value     any    `yaml:"value"`
 }
 
 // File is one example file handle over the blob store: its bytes ride inline in
@@ -246,6 +279,74 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 			Name: f.Name, ContentType: f.ContentType, Data: []byte(f.Content), Sensitive: f.Sensitive,
 		}, true); err != nil {
 			return fmt.Errorf("devseed: create file %q: %w", f.Name, err)
+		}
+	}
+
+	// Field definitions: a couple of typed fields on the display component_type, so
+	// the field primitive comes up with a schema to teach (a default vs a plain
+	// field). These are catalog rows, flat and unscoped like the type registries, so
+	// they need nothing seeded before them. A default is encoded to jsonb like a
+	// variable; an omitted default stays nil. A definition that already exists
+	// (ErrFieldDefinitionConflict) is left as is, so a re-run adds nothing.
+	for _, fd := range doc.FieldDefinitions {
+		spec := storage.FieldDefinitionSpec{
+			ComponentType: fd.ComponentType, Name: fd.Name, DataType: fd.DataType,
+		}
+		if fd.Default != nil {
+			raw, err := json.Marshal(fd.Default)
+			if err != nil {
+				return fmt.Errorf("devseed: encode field default %q: %w", fd.Name, err)
+			}
+			spec.DefaultValue = raw
+		}
+		_, err := gw.CreateFieldDefinition(ctx, actorID, spec)
+		if errors.Is(err, storage.ErrFieldDefinitionConflict) {
+			continue
+		}
+		if err != nil {
+			return fmt.Errorf("devseed: create field definition %q: %w", fd.Name, err)
+		}
+	}
+
+	// Components: an example device placed in the estate, so the Components directory
+	// comes up populated. Locations must already be seeded (above) for the placement
+	// to resolve. Like a location, a component has a stable name but no create-conflict
+	// sentinel, so check GetComponent for ErrComponentNotFound first and skip when
+	// already present, keeping the seed idempotent.
+	for _, c := range doc.Components {
+		if _, err := gw.GetComponent(ctx, c.Name, all); err == nil {
+			continue
+		} else if !errors.Is(err, storage.ErrComponentNotFound) {
+			return fmt.Errorf("devseed: check component %q: %w", c.Name, err)
+		}
+		spec := storage.ComponentSpec{
+			Name: c.Name, DisplayName: c.DisplayName, ComponentType: c.ComponentType,
+		}
+		if c.Location != "" {
+			loc := c.Location
+			spec.LocationName = &loc
+		}
+		if _, err := gw.CreateComponent(ctx, actorID, spec, all); err != nil {
+			return fmt.Errorf("devseed: create component %q: %w", c.Name, err)
+		}
+	}
+
+	// Field values: an override a component sets over a definition's default (last,
+	// since both the component and the field definition must exist first), so the
+	// effective-values panel teaches direct-vs-inherited. The value is encoded to
+	// jsonb like a variable. A value that already exists (ErrFieldValueConflict) is
+	// left as is, so a re-run adds nothing.
+	for _, fv := range doc.FieldValues {
+		raw, err := json.Marshal(fv.Value)
+		if err != nil {
+			return fmt.Errorf("devseed: encode field value %s/%s: %w", fv.Component, fv.Field, err)
+		}
+		_, err = gw.CreateFieldValue(ctx, actorID, fv.Component, fv.Field, raw, all)
+		if errors.Is(err, storage.ErrFieldValueConflict) {
+			continue
+		}
+		if err != nil {
+			return fmt.Errorf("devseed: create field value %s/%s: %w", fv.Component, fv.Field, err)
 		}
 	}
 	return nil
