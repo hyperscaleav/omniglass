@@ -12,10 +12,22 @@ screenshots:
         selector: 'tr.cursor-pointer:has-text("Display")'
   - id: fields-effective
     path: /web/components/lobby-display
-    alt: "The Effective fields panel on a component's detail: each field its type declares, resolved to the set literal or the type default, an override-versus-default badge, an inline setter, and a revert-to-default control on an overridden field."
+    alt: "The Fields panel on a component's detail: each field its type declares, rendered as a slim row through the shared key:value primitive, resolved to the set literal or the type default with an override badge."
     steps:
       - action: hover
-        selector: 'text=diagonal_inches'
+        selector: 'text=Diagonal inches'
+  - id: fields-drilldown
+    path: /web/components/lobby-display
+    alt: "The field resolution drill-in: clicking a field opens its resolution, showing the raw key, the type, and the type-default to component chain with the effective value marked."
+    steps:
+      - action: click
+        selector: 'text=Diagonal inches'
+  - id: fields-edit
+    path: /web/components/lobby-display
+    alt: "The Fields panel in edit mode: each field gains an inline setter, an overridden field gains revert. In read mode there are no inputs at all."
+    steps:
+      - action: click
+        selector: 'button:has-text("Edit")'
 ---
 
 A **field** is an operator-defined **typed attribute declared on a type**: you add a field once to a
@@ -38,9 +50,11 @@ set).
 ::screenshot{#fields-schema}
 
 - **Add a field** (with `field:create`, an **operator** permission) uses the inline add row: name the
-  field (unique on that type), pick its **data type**, and optionally type a **default**. The default is
-  coerced to the data type (an `int` default is a number, not a string) and applies to every component of
-  the type until that component sets its own value.
+  field (unique on that type), optionally give it a **display name** (a human label), pick its **data
+  type**, and optionally type a **default**. The raw name stays the unique key and the interpolation
+  handle; the display name is presentation only, and the console shows it wherever it is set, falling back
+  to the name when it is not. The default is coerced to the data type (an `int` default is a number, not a
+  string) and applies to every component of the type until that component sets its own value.
 - The Fields editor is **operator data layered onto the type**, so it is editable even on a **seed-owned
   (official) component type**, which is otherwise read-only. It renders only for the **Component** kind;
   the other type registries do not carry fields this slice.

@@ -2091,6 +2091,8 @@ export interface components {
             data_type: "string" | "int" | "float" | "bool" | "json";
             /** @description Optional type-level default, validated against data_type */
             default_value?: unknown;
+            /** @description Optional human label; falls back to name when unset */
+            display_name?: string;
             /** @description The field name; unique per component_type */
             name: string;
         };
@@ -2349,6 +2351,10 @@ export interface components {
         };
         EffectiveFieldBody: {
             data_type: string;
+            /** @description The type-level default, shape given by data_type; the drill-in's type-default step. Omitted when the definition has no default */
+            default_value?: unknown;
+            /** @description Optional human label; omitted when unset */
+            display_name?: string;
             field_id: string;
             /** @description True when the component overrides the type default */
             is_set: boolean;
@@ -2485,6 +2491,8 @@ export interface components {
             data_type: string;
             /** @description The type-level default, shape given by data_type; omitted when unset */
             default_value?: unknown;
+            /** @description Optional human label; the raw name is the key. Omitted when unset */
+            display_name?: string;
             id: string;
             name: string;
         };
@@ -3259,6 +3267,8 @@ export interface components {
             data_type: "string" | "int" | "float" | "bool" | "json";
             /** @description Optional type-level default, validated against data_type */
             default_value?: unknown;
+            /** @description Optional human label; falls back to name when unset */
+            display_name?: string;
         };
         UpdateFieldValueInputBody: {
             /**

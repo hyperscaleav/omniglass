@@ -261,6 +261,8 @@ override). The vertical is whole: storage (transactional, audited), the API (the
 and `field:<action>`-gated, the value routes are ABAC-scoped to the owning component), the generated CLI and
 typed client, and the UI (define on the component-type blade under [Types](/guides/admin/types/), plus an
 **Effective fields** panel on the component detail that sets a literal and shows override-versus-default).
+A field also carries an optional **`display_name`**, a human label: the raw `name` stays the unique key and
+the interpolation handle, while the console shows the `display_name`, falling back to the key when unset.
 The rest of the design below is **deferred**, listed plainly so a built badge never hides drift.
 :::
 
