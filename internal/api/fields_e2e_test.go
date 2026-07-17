@@ -210,6 +210,78 @@ func TestFieldValueAPI(t *testing.T) {
 		map[string]any{"field": "diagonal_inches", "value": 42}, http.StatusForbidden)
 }
 
+// TestFieldValueScopeSplit drives the read-then-action scope split on the field
+// value mutation routes (PATCH, DELETE). A value owned by a component OUTSIDE the
+// caller's read scope is the non-disclosing 404 (the caller cannot tell it from a
+// nonexistent id); a value the caller can READ but not ACT on (a broader read grant,
+// a narrower action grant) is the disclosing 403. This mirrors variableRowForAction.
+func TestFieldValueScopeSplit(t *testing.T) {
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	ownerTok, hash, prefix, err := auth.NewBearerToken()
+	if err != nil {
+		t.Fatalf("mint owner: %v", err)
+	}
+	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: hash, Prefix: prefix}); err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+
+	// A field on the display type and two display components: one in the caller's
+	// subtree (in-scope), one outside it (out-scope), which owns the value under test.
+	c.do(ownerTok, http.MethodPost, "/field-definitions",
+		map[string]any{"component_type": "display", "name": "diagonal_inches", "data_type": "int", "default_value": 50},
+		http.StatusCreated)
+	var inComp, outComp struct {
+		ID string `json:"id"`
+	}
+	json.Unmarshal(c.do(ownerTok, http.MethodPost, "/components",
+		map[string]any{"name": "in-scope", "component_type": "display"}, http.StatusCreated), &inComp)
+	json.Unmarshal(c.do(ownerTok, http.MethodPost, "/components",
+		map[string]any{"name": "out-scope", "component_type": "display"}, http.StatusCreated), &outComp)
+
+	// The owner sets a value on the out-of-scope component; capture its field-value id.
+	var fvID struct {
+		ID string `json:"id"`
+	}
+	json.Unmarshal(c.do(ownerTok, http.MethodPost, "/components/out-scope/fields",
+		map[string]any{"field": "diagonal_inches", "value": 80}, http.StatusCreated), &fvID)
+
+	// Out-of-read leg: an operator scoped to in-scope holds field:update, but the
+	// value's owner (out-scope) is outside its read scope, so PATCH is the
+	// non-disclosing 404, indistinguishable from a value that does not exist.
+	opTok := setupScopedViewer(t, ctx, dsn, "operator-in", "operator", "component", inComp.ID)
+	c.do(opTok, http.MethodPatch, "/field-values/"+fvID.ID,
+		map[string]any{"value": 60}, http.StatusNotFound)
+
+	// Same leg for DELETE. field:delete is admin/owner-only (operator lacks it), so
+	// scope an admin to in-scope: it holds field:delete but out-scope is still outside
+	// its read scope, so DELETE is also the non-disclosing 404 (not a role-gate 403).
+	adminTok := setupScopedViewer(t, ctx, dsn, "admin-in", "admin", "component", inComp.ID)
+	c.do(adminTok, http.MethodDelete, "/field-values/"+fvID.ID, nil, http.StatusNotFound)
+
+	// In-read-not-action leg: a principal that READS out-scope (a viewer grant there)
+	// but may only UPDATE in-scope (an operator grant there). The value's owner is now
+	// readable, so the split discloses a 403 rather than hiding it as a 404.
+	splitTok := setupScopedPrincipal(t, ctx, dsn, "reader-not-writer",
+		grantSpec{role: "operator", scopeKind: "component", scopeID: inComp.ID},
+		grantSpec{role: "viewer", scopeKind: "component", scopeID: outComp.ID})
+	c.do(splitTok, http.MethodPatch, "/field-values/"+fvID.ID,
+		map[string]any{"value": 60}, http.StatusForbidden)
+}
+
 // effectiveField reads a component's effective fields and returns the one named,
 // failing the test if it is absent.
 func effectiveField(t *testing.T, c *apiClient, tok, comp, name string) effectiveFieldResp {
