@@ -82,6 +82,7 @@ type effectiveFieldResp struct {
 	Value    any    `json:"value"`
 	SetValue any    `json:"set_value"`
 	IsSet    bool   `json:"is_set"`
+	ValueID  string `json:"value_id"`
 }
 
 // TestFieldValueAPI drives the field-value surface over HTTP: a component reads
@@ -125,12 +126,14 @@ func TestFieldValueAPI(t *testing.T) {
 		map[string]any{"component_type": "display", "name": "diagonal_inches", "data_type": "int", "default_value": 50},
 		http.StatusCreated)
 
-	// Effective read before any override: the default, unset.
-	if f := effectiveField(t, c, ownerTok, "lobby-display", "diagonal_inches"); f.Value.(float64) != 50 || f.IsSet {
-		t.Fatalf("want default 50 unset, got %+v", f)
+	// Effective read before any override: the default, unset, with no value_id (the
+	// surface has nothing to clear).
+	if f := effectiveField(t, c, ownerTok, "lobby-display", "diagonal_inches"); f.Value.(float64) != 50 || f.IsSet || f.ValueID != "" {
+		t.Fatalf("want default 50 unset with empty value_id, got %+v", f)
 	}
 
-	// Set an override; the effective read now reports the set value.
+	// Set an override; the effective read now reports the set value and carries the
+	// field_value id, so the surface can clear the override back to the default.
 	var setBody struct {
 		ID    string `json:"id"`
 		Value any    `json:"value"`
@@ -140,8 +143,8 @@ func TestFieldValueAPI(t *testing.T) {
 	if setBody.ID == "" || setBody.Value.(float64) != 80 {
 		t.Fatalf("set response = %+v, want value 80 with id", setBody)
 	}
-	if f := effectiveField(t, c, ownerTok, "lobby-display", "diagonal_inches"); f.Value.(float64) != 80 || !f.IsSet {
-		t.Fatalf("want set 80, got %+v", f)
+	if f := effectiveField(t, c, ownerTok, "lobby-display", "diagonal_inches"); f.Value.(float64) != 80 || !f.IsSet || f.ValueID != setBody.ID {
+		t.Fatalf("want set 80 with value_id %q, got %+v", setBody.ID, f)
 	}
 
 	// A second value for the same field on the same component is a conflict.
@@ -164,10 +167,16 @@ func TestFieldValueAPI(t *testing.T) {
 	c.do(ownerTok, http.MethodPatch, "/field-values/"+setBody.ID,
 		map[string]any{"value": "bright"}, http.StatusUnprocessableEntity)
 
-	// Delete the override; the field reverts to its default, unset.
-	c.do(ownerTok, http.MethodDelete, "/field-values/"+setBody.ID, nil, http.StatusNoContent)
-	if f := effectiveField(t, c, ownerTok, "lobby-display", "diagonal_inches"); f.Value.(float64) != 50 || f.IsSet {
-		t.Fatalf("after delete want default 50 unset, got %+v", f)
+	// Clear the override by the value_id the effective read carries (the UI clear
+	// path, which sees the effective row, not the create response). The field
+	// reverts to its default, unset.
+	clearID := effectiveField(t, c, ownerTok, "lobby-display", "diagonal_inches").ValueID
+	if clearID == "" {
+		t.Fatal("effective read carried no value_id to clear")
+	}
+	c.do(ownerTok, http.MethodDelete, "/field-values/"+clearID, nil, http.StatusNoContent)
+	if f := effectiveField(t, c, ownerTok, "lobby-display", "diagonal_inches"); f.Value.(float64) != 50 || f.IsSet || f.ValueID != "" {
+		t.Fatalf("after delete want default 50 unset with empty value_id, got %+v", f)
 	}
 
 	// The ABAC split. A component-scoped operator may set (its subtree contains the

@@ -2357,6 +2357,8 @@ export interface components {
             set_value?: unknown;
             /** @description The effective value: the set literal, or the type default when unset */
             value: unknown;
+            /** @description The field_value id when set; the id to DELETE to clear the override. Omitted when the field is unset */
+            value_id?: string;
         };
         EffectiveFieldsOutputBody: {
             /**

@@ -32,6 +32,9 @@ export type EffectiveField = {
   value: unknown;
   set_value?: unknown;
   is_set: boolean;
+  // The field_value id when set (is_set): the id to delete to clear the override
+  // back to the type default. Omitted when the field is unset.
+  value_id?: string;
 };
 
 export const FIELD_DEFINITIONS_KEY = ["field-definitions"] as const;
@@ -73,6 +76,16 @@ export async function setFieldValue(component: string, field: string, value: unk
   const { error } = await api.POST("/components/{name}/fields", {
     params: { path: { name: component } },
     body: { field, value },
+  });
+  if (error) throw error;
+}
+
+// deleteFieldValue clears a component's override for a field, reverting it to the
+// type-level default. The id is the effective row's value_id (present only when the
+// field is set).
+export async function deleteFieldValue(id: string): Promise<void> {
+  const { error } = await api.DELETE("/field-values/{id}", {
+    params: { path: { id } },
   });
   if (error) throw error;
 }

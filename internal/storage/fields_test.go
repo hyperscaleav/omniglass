@@ -128,7 +128,8 @@ func TestFieldValueEffective(t *testing.T) {
 		t.Fatalf("create camera component: %v", err)
 	}
 
-	// Before any value is set, the effective value is the default.
+	// Before any value is set, the effective value is the default, and ValueID is
+	// empty (nothing to clear).
 	eff, err := gw.EffectiveFields(ctx, "lobby-display", all)
 	if err != nil {
 		t.Fatalf("effective: %v", err)
@@ -136,14 +137,23 @@ func TestFieldValueEffective(t *testing.T) {
 	if len(eff) != 1 || eff[0].IsSet || string(eff[0].Value) != `50` {
 		t.Fatalf("want default 50 unset, got %+v", eff)
 	}
+	if eff[0].ValueID != "" {
+		t.Fatalf("want empty ValueID when unset, got %q", eff[0].ValueID)
+	}
 
 	// Set an override on the component.
-	if _, err := gw.CreateFieldValue(ctx, "", "lobby-display", "diagonal_inches", json.RawMessage(`80`), all); err != nil {
+	fv, err := gw.CreateFieldValue(ctx, "", "lobby-display", "diagonal_inches", json.RawMessage(`80`), all)
+	if err != nil {
 		t.Fatalf("set value: %v", err)
 	}
 	eff, _ = gw.EffectiveFields(ctx, "lobby-display", all)
 	if !eff[0].IsSet || string(eff[0].Value) != `80` || string(eff[0].SetValue) != `80` {
 		t.Fatalf("want set 80, got %+v", eff)
+	}
+	// ValueID carries the field_value id, so the surface can clear the override
+	// back to the type default.
+	if eff[0].ValueID != fv.ID {
+		t.Fatalf("want ValueID %q, got %q", fv.ID, eff[0].ValueID)
 	}
 
 	// A value that does not match the field's data_type is rejected (int field,

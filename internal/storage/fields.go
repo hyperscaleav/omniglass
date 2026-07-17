@@ -239,6 +239,7 @@ type EffectiveField struct {
 	SetValue     json.RawMessage // nil when the component has not overridden it
 	Value        json.RawMessage // coalesce(SetValue, DefaultValue)
 	IsSet        bool
+	ValueID      string // the field_value id when set; empty when the field is unset (the id the surface deletes to clear the override)
 }
 
 const fieldValueCols = `id, field_id, component_id, value, created_at, updated_at`
@@ -380,7 +381,8 @@ func (p *PG) EffectiveFields(ctx context.Context, componentName string, read sco
 		select fd.id, fd.name, fd.data_type, fd.default_value,
 		       fv.value as set_value,
 		       coalesce(fv.value, fd.default_value) as effective_value,
-		       (fv.id is not null) as is_set
+		       (fv.id is not null) as is_set,
+		       fv.id as value_id
 		from component c
 		join field_definition fd on fd.component_type = c.component_type
 		left join field_value fv on fv.field_id = fd.id and fv.component_id = c.id
@@ -395,13 +397,17 @@ func (p *PG) EffectiveFields(ctx context.Context, componentName string, read sco
 		var (
 			e             EffectiveField
 			def, set, val []byte
+			valueID       *string // NULL when the field is unset
 		)
-		if err := rows.Scan(&e.FieldID, &e.Name, &e.DataType, &def, &set, &val, &e.IsSet); err != nil {
+		if err := rows.Scan(&e.FieldID, &e.Name, &e.DataType, &def, &set, &val, &e.IsSet, &valueID); err != nil {
 			return nil, fmt.Errorf("storage: scan effective field: %w", err)
 		}
 		e.DefaultValue = copyRaw(def)
 		e.SetValue = copyRaw(set)
 		e.Value = copyRaw(val)
+		if valueID != nil {
+			e.ValueID = *valueID
+		}
 		out = append(out, e)
 	}
 	return out, rows.Err()

@@ -1,12 +1,12 @@
 import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
-import { effectiveFields, effectiveFieldsKey, setFieldValue, type EffectiveField } from "../lib/fields";
+import { deleteFieldValue, effectiveFields, effectiveFieldsKey, setFieldValue, type EffectiveField } from "../lib/fields";
 import { displayValue, parseInput, type ValueType } from "../lib/variables";
 import { ValueDisplay, ValueInput } from "../pages/Variables";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
 import Button from "./Button";
-import { Save } from "./icons";
+import { RotateCcw, Save } from "./icons";
 
 // EffectiveFields lists the fields declared on a component's type, each resolved to
 // the value that applies to this component: the literal set on the component, or the
@@ -26,6 +26,7 @@ export default function EffectiveFields(props: { component: string }): JSX.Eleme
   }));
   const rows = createMemo<EffectiveField[]>(() => q.data ?? []);
   const canSet = () => can(me.data, "field", "create");
+  const canClear = () => can(me.data, "field", "delete");
 
   return (
     <div class="flex flex-col gap-2">
@@ -43,22 +44,74 @@ export default function EffectiveFields(props: { component: string }): JSX.Eleme
         <div class="overflow-hidden rounded-box border border-base-300">
           <For each={rows()}>
             {(f, i) => (
-              <div class="flex flex-col gap-2 px-3 py-2.5" classList={{ "border-t border-base-300": i() > 0 }}>
-                <div class="flex items-center gap-2">
-                  <span class="min-w-0 truncate font-data text-sm">{f.name}</span>
-                  <span class="badge badge-ghost badge-sm shrink-0">{f.data_type}</span>
-                  <span class="flex-1" />
-                  <span class="badge badge-sm shrink-0" classList={{ "badge-primary": f.is_set, "badge-ghost": !f.is_set }}>
-                    {f.is_set ? "override" : "default"}
-                  </span>
-                </div>
-                <Show when={canSet()} fallback={<ValueDisplay valueType={f.data_type} value={f.value} />}>
-                  <FieldSetControl component={props.component} field={f} />
-                </Show>
-              </div>
+              <FieldRow component={props.component} field={f} first={i() === 0} canSet={canSet()} canClear={canClear()} />
             )}
           </For>
         </div>
+      </Show>
+    </div>
+  );
+}
+
+// FieldRow is one effective-field row: the field's name and type, an override /
+// default badge, a revert control when the component overrides the default and the
+// caller may clear it (field:delete), and either the inline setter (field:create)
+// or a read-only value display. The revert control and the setter carry different
+// permissions, so a delete-only caller still sees the revert while reading the value.
+function FieldRow(props: {
+  component: string;
+  field: EffectiveField;
+  first: boolean;
+  canSet: boolean;
+  canClear: boolean;
+}): JSX.Element {
+  const qc = useQueryClient();
+  const [clearing, setClearing] = createSignal(false);
+  const [clearErr, setClearErr] = createSignal<string | null>(null);
+  // A revert is offered only for a set row that carries the value_id to delete.
+  const canRevert = () => props.canClear && props.field.is_set && !!props.field.value_id;
+
+  async function clear() {
+    setClearing(true);
+    setClearErr(null);
+    try {
+      await deleteFieldValue(props.field.value_id as string);
+      await qc.invalidateQueries({ queryKey: effectiveFieldsKey(props.component) });
+    } catch (e) {
+      setClearErr(describeError(e));
+    } finally {
+      setClearing(false);
+    }
+  }
+
+  return (
+    <div class="flex flex-col gap-2 px-3 py-2.5" classList={{ "border-t border-base-300": !props.first }}>
+      <div class="flex items-center gap-2">
+        <span class="min-w-0 truncate font-data text-sm">{props.field.name}</span>
+        <span class="badge badge-ghost badge-sm shrink-0">{props.field.data_type}</span>
+        <span class="flex-1" />
+        <Show when={canRevert()}>
+          <Button
+            type="button"
+            intent="quiet"
+            size="xs"
+            square
+            icon={RotateCcw}
+            label="Revert to default"
+            title="Revert to default"
+            loading={clearing()}
+            onClick={() => { void clear(); }}
+          />
+        </Show>
+        <span class="badge badge-sm shrink-0" classList={{ "badge-primary": props.field.is_set, "badge-ghost": !props.field.is_set }}>
+          {props.field.is_set ? "override" : "default"}
+        </span>
+      </div>
+      <Show when={props.canSet} fallback={<ValueDisplay valueType={props.field.data_type} value={props.field.value} />}>
+        <FieldSetControl component={props.component} field={props.field} />
+      </Show>
+      <Show when={clearErr()}>
+        <span class="text-[11px] text-error">{clearErr()}</span>
       </Show>
     </div>
   );
