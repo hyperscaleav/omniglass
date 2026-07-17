@@ -1,6 +1,7 @@
 import { Show, For, createSignal, createEffect } from "solid-js";
 import Button from "../components/Button";
-import { RotateCcw, Save, ChevronDown } from "../components/icons";
+import KVRow from "../components/KVRow";
+import { RotateCcw, Save, Pencil, Check } from "../components/icons";
 import { useMe, can } from "../lib/auth";
 import {
   useSettings,
@@ -18,20 +19,26 @@ import {
 // it. Locks are shown when present (a broader level pinning a value); the write
 // path to set a lock lands with the group/user levels, so the chip is read-only in
 // slice-0.
+//
+// Each key renders through the shared KVRow primitive, so the surface reads like
+// Fields, Variables, and Secrets: read mode is a slim value scan with the origin
+// weighted, and an Edit toggle swaps in the inline inputs.
 
-// sourceBadge maps a provenance level to its operator-facing label and badge class.
-function sourceBadge(level: string): { label: string; cls: string } {
+// originLabel maps a provenance level to the neutral origin-badge text KVRow shows
+// (weight, not colour, carries the signal). The code default returns "" so KVRow
+// suppresses the badge entirely.
+function originLabel(level: string): string {
   switch (level) {
     case "global":
-      return { label: "Set in console", cls: "badge-primary" };
+      return "Set in console";
     case "file":
-      return { label: "From settings file", cls: "badge-info" };
+      return "From settings file";
     default:
-      return { label: "Default", cls: "badge-ghost" };
+      return "";
   }
 }
 
-// levelLabel names a cascade level for the expandable layer stack.
+// levelLabel names a cascade level for the drill-in layer stack.
 function levelLabel(level: string): string {
   switch (level) {
     case "global":
@@ -62,6 +69,7 @@ export default function Settings() {
 
   const canEdit = () => can(me.data, "settings", "update");
 
+  const [editing, setEditing] = createSignal(false);
   const [restoringAll, setRestoringAll] = createSignal(false);
   const [pageErr, setPageErr] = createSignal<string | null>(null);
 
@@ -91,15 +99,18 @@ export default function Settings() {
           layer below.
         </p>
         <Show when={canEdit()}>
-          <Button
-            intent="danger"
-            icon={RotateCcw}
-            loading={restoringAll()}
-            onClick={onRestoreAll}
-            class="flex-none"
-          >
-            Restore all defaults
-          </Button>
+          <div class="flex flex-none items-center gap-2">
+            <Button
+              intent={editing() ? "action" : "quiet"}
+              icon={editing() ? Check : Pencil}
+              onClick={() => setEditing((v) => !v)}
+            >
+              {editing() ? "Done" : "Edit"}
+            </Button>
+            <Button intent="danger" icon={RotateCcw} loading={restoringAll()} onClick={onRestoreAll}>
+              Restore all defaults
+            </Button>
+          </div>
         </Show>
       </div>
 
@@ -127,22 +138,23 @@ export default function Settings() {
                 <div class="card-body gap-3">
                   <div class="flex items-center justify-between gap-3">
                     <h2 class="card-title font-data text-base lowercase">{namespace}</h2>
-                    <Show when={canEdit()}>
+                    <Show when={canEdit() && editing()}>
                       <Button size="xs" icon={RotateCcw} onClick={() => onRestoreNamespace(namespace)}>
                         Restore section
                       </Button>
                     </Show>
                   </div>
-                  <div class="flex flex-col divide-y divide-base-300">
+                  <div class="overflow-hidden rounded-box border border-base-300 bg-base-100">
                     <For each={Object.keys(data().values[namespace]).sort()}>
-                      {(key) => (
+                      {(key, i) => (
                         <SettingRow
+                          first={i() === 0}
                           namespace={namespace}
                           settingKey={key}
                           value={data().values[namespace][key]}
                           source={data().sources[`${namespace}.${key}`] ?? "code"}
                           lockLevel={data().locks[`${namespace}.${key}`]}
-                          canEdit={canEdit()}
+                          editing={editing() && canEdit()}
                           onPatch={patchNamespace}
                         />
                       )}
@@ -158,17 +170,20 @@ export default function Settings() {
   );
 }
 
-// SettingRow is one settable key: its label, an editable control (a select for
-// ui.theme, else a text input), a provenance badge, a lock chip when the key is
-// locked, save and restore actions, and an expandable layer stack. It owns its own
-// draft so a keystroke is not clobbered when the read query settles.
+// SettingRow is one settable key rendered through KVRow: read mode shows the value
+// with its provenance origin (weighted when overridden) and a drill-in to the layer
+// stack; edit mode swaps in the control (a select for ui.theme, else a text input)
+// with inline save and restore in the daisyUI join. A locked key stays read-only
+// even in edit mode. It owns its own draft so a keystroke is not clobbered when the
+// read query settles.
 function SettingRow(props: {
+  first: boolean;
   namespace: string;
   settingKey: string;
   value: unknown;
   source: string;
   lockLevel?: string;
-  canEdit: boolean;
+  editing: boolean;
   onPatch: (namespace: string, patch: Record<string, unknown>) => Promise<{ ok: true } | { ok: false; message: string }>;
 }) {
   const current = () => (props.value == null ? "" : String(props.value));
@@ -179,19 +194,22 @@ function SettingRow(props: {
 
   // Re-seed the draft whenever the resolved value changes (a save or restore
   // elsewhere), unless the operator is mid-edit on this row. We track the
-  // last-seeded value rather than comparing against the new current, so a
-  // clean row (draft still equals what we last seeded) follows the new value
-  // while a row the operator has typed into keeps its unsaved edit.
+  // last-seeded value rather than comparing against the new current, so a clean
+  // row (draft still equals what we last seeded) follows the new value while a row
+  // the operator has typed into keeps its unsaved edit.
   let seeded = current();
   createEffect(() => {
     const next = current();
     if (draft() === seeded) setDraft(next);
     seeded = next;
   });
+
   const dirty = () => draft() !== current();
   const isThemeKey = () => props.namespace === "ui" && props.settingKey === "theme";
   const isOverridden = () => props.source === "global";
-  const badge = () => sourceBadge(props.source);
+  const locked = () => Boolean(props.lockLevel);
+  // A locked key is never editable, so it stays in read mode even on the edit pass.
+  const rowEditing = () => props.editing && !locked();
 
   async function save() {
     setBusy(true);
@@ -213,72 +231,56 @@ function SettingRow(props: {
   }
 
   return (
-    <div class="py-3 first:pt-0 last:pb-0">
-      <div class="flex flex-wrap items-center gap-3">
-        <div class="min-w-40 flex-1">
-          <label class="eyebrow mb-1.5 block" for={`set-${props.namespace}-${props.settingKey}`}>
-            {props.settingKey}
-          </label>
+    <>
+      <KVRow
+        first={props.first}
+        label={props.settingKey}
+        labelMono
+        typeBadge={locked() ? "Locked" : undefined}
+        editing={rowEditing()}
+        emphasize={isOverridden()}
+        origin={originLabel(props.source)}
+        onDrillIn={() => setExpanded((v) => !v)}
+        value={current() || <span class="text-base-content/40">not set</span>}
+        input={
           <Show
             when={isThemeKey()}
             fallback={
               <input
-                id={`set-${props.namespace}-${props.settingKey}`}
                 type="text"
-                class="input input-bordered input-sm w-full font-data"
+                class="input input-bordered input-sm join-item min-w-0 grow font-data"
                 value={draft()}
-                disabled={!props.canEdit || Boolean(props.lockLevel)}
                 onInput={(e) => setDraft(e.currentTarget.value)}
               />
             }
           >
             <select
-              id={`set-${props.namespace}-${props.settingKey}`}
-              class="select select-bordered select-sm w-full"
+              class="select select-bordered select-sm join-item min-w-0 grow"
               value={draft()}
-              disabled={!props.canEdit || Boolean(props.lockLevel)}
               onChange={(e) => setDraft(e.currentTarget.value)}
             >
-              <For each={THEME_OPTIONS}>
-                {(o) => <option value={o.value}>{o.label}</option>}
-              </For>
+              <For each={THEME_OPTIONS}>{(o) => <option value={o.value}>{o.label}</option>}</For>
             </select>
           </Show>
-        </div>
-
-        <div class="flex items-center gap-2 self-end pb-1">
-          <span class={`badge badge-sm ${badge().cls}`}>{badge().label}</span>
-          <Show when={props.lockLevel}>
-            <span class="badge badge-sm badge-warning" title={`Locked at the ${levelLabel(props.lockLevel!)} level`}>
-              Locked
-            </span>
+        }
+        actions={
+          <Show when={rowEditing()}>
+            <Show when={dirty()}>
+              <Button type="button" size="sm" square intent="action" icon={Save} class="join-item" loading={busy()} title="Save" label="Save" onClick={save} />
+            </Show>
+            <Show when={isOverridden()}>
+              <Button type="button" size="sm" square icon={RotateCcw} class="join-item" loading={busy()} title="Restore to default" label="Restore to default" onClick={restoreKey} />
+            </Show>
           </Show>
-          <Show when={props.canEdit && dirty() && !props.lockLevel}>
-            <Button size="xs" intent="action" icon={Save} loading={busy()} onClick={save}>
-              Save
-            </Button>
-          </Show>
-          <Show when={props.canEdit && isOverridden() && !props.lockLevel}>
-            <Button size="xs" icon={RotateCcw} loading={busy()} onClick={restoreKey} title="Restore to default">
-              Restore
-            </Button>
-          </Show>
-          <Button
-            size="xs"
-            square
-            icon={ChevronDown}
-            label={expanded() ? "Hide layer stack" : "Show layer stack"}
-            onClick={() => setExpanded((v) => !v)}
-          />
-        </div>
-      </div>
+        }
+      />
 
       <Show when={rowErr()}>
-        <p class="mt-1 text-[11px] text-error">{rowErr()}</p>
+        <p class="border-t border-base-300 px-3 py-1 text-[11px] text-error">{rowErr()}</p>
       </Show>
 
       <Show when={expanded()}>
-        <div class="mt-2 rounded-box bg-base-100 p-3 text-xs">
+        <div class="border-t border-base-300 bg-base-200/40 px-3 py-3 text-xs">
           <p class="eyebrow mb-2">Layer stack</p>
           <ul class="flex flex-col gap-1">
             <For each={CASCADE}>
@@ -297,13 +299,13 @@ function SettingRow(props: {
               )}
             </For>
           </ul>
-          <Show when={props.lockLevel}>
+          <Show when={locked()}>
             <p class="mt-2 text-base-content/60">
               Locked at the {levelLabel(props.lockLevel!)} level; more specific levels cannot override it.
             </p>
           </Show>
         </div>
       </Show>
-    </div>
+    </>
   );
 }

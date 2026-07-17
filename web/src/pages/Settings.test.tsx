@@ -6,11 +6,13 @@ import Settings from "./Settings";
 import { SETTINGS_KEY, type SettingsRead } from "../lib/settings";
 import { ME_KEY, type Me } from "../lib/auth";
 
-// The Settings page is a config over the settings engine read: one card per
-// namespace, one row per key, each row carrying an editable control, a provenance
-// badge, an optional lock chip, and a layer-stack expand. Data is seeded into the
-// query cache so no server is needed; `>` grants settings:update so every write
-// affordance is present.
+// The Settings page renders the settings-engine read through the shared KVRow
+// primitive: one card per namespace, one KVRow per key. Read mode is a value scan
+// with the origin weighted (no badge for the code default, a neutral "Set in
+// console" / "From settings file" badge otherwise) and a drill-in to the layer
+// stack; an Edit toggle swaps in the controls with inline save and restore. Data
+// is seeded into the query cache so no server is needed; `>` grants settings:update
+// so every write affordance is present.
 const me: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
 
 function mount(read: SettingsRead, principal: Me = me) {
@@ -32,54 +34,30 @@ const defaultRead: SettingsRead = {
   locks: {},
 };
 
+const enterEdit = () => fireEvent.click(screen.getByRole("button", { name: /edit/i }));
+
 describe("Settings page", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("renders a namespace section with a key label and a provenance badge", async () => {
+  it("read mode shows the namespace, key labels, and values with no badge for a code default", async () => {
     mount(defaultRead);
-    expect(await screen.findByText(/theme/i)).toBeTruthy(); // the key label
-    expect(screen.getByText("ui")).toBeTruthy(); // the namespace section title
-    expect(screen.getAllByText("Default").length).toBeGreaterThan(0); // code -> Default badge
+    expect(await screen.findByText("ui")).toBeTruthy(); // namespace section title
+    expect(screen.getByText("theme")).toBeTruthy(); // key label
+    expect(screen.getByText("omniglass-dark")).toBeTruthy(); // value, inline in read mode
+    // KVRow suppresses the origin badge for the code default (weight, not a badge).
+    expect(screen.queryByText("Default")).toBeNull();
+    expect(screen.queryByText("Set in console")).toBeNull();
+    // Read mode is a pure scan: no inputs and no Save until you enter Edit.
+    expect(screen.queryByRole("combobox")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
   });
 
-  it("renders a theme select of the two shipped themes for ui.theme", async () => {
-    mount(defaultRead);
-    const select = (await screen.findByLabelText("theme")) as HTMLSelectElement;
-    expect(select.tagName).toBe("SELECT");
-    expect(select.value).toBe("omniglass-dark");
-    const options = Array.from(select.options).map((o) => o.value);
-    expect(options).toEqual(["omniglass-dark", "omniglass-light"]);
-  });
-
-  it("shows a Set-in-console badge and a Save button after editing an overridden value", async () => {
-    const read: SettingsRead = {
-      values: { ui: { theme: "omniglass-light" } },
-      sources: { "ui.theme": "global" },
-      locks: {},
-    };
-    mount(read);
-    // A global source reads as an override, so its Restore affordance is present.
+  it("shows a neutral origin badge for an overridden value in read mode", async () => {
+    mount({ values: { ui: { theme: "omniglass-light" } }, sources: { "ui.theme": "global" }, locks: {} });
     expect(await screen.findByText("Set in console")).toBeTruthy();
-    expect(screen.getByText("Restore")).toBeTruthy();
-    // Editing the value surfaces Save (the row is dirty).
-    const select = (await screen.findByLabelText("theme")) as HTMLSelectElement;
-    fireEvent.change(select, { target: { value: "omniglass-dark" } });
-    expect(await screen.findByText("Save")).toBeTruthy();
   });
 
-  it("shows a lock chip and disables the control when a key is locked", async () => {
-    const read: SettingsRead = {
-      values: { ui: { theme: "omniglass-dark" } },
-      sources: { "ui.theme": "global" },
-      locks: { "ui.theme": "global" },
-    };
-    mount(read);
-    expect(await screen.findByText("Locked")).toBeTruthy();
-    const select = (await screen.findByLabelText("theme")) as HTMLSelectElement;
-    expect(select.disabled).toBe(true);
-  });
-
-  it("patches the namespace with the edited key when Save is clicked", async () => {
+  it("reveals the theme select in edit mode and patches the namespace on Save", async () => {
     const calls: { url: string; method: string; body: unknown }[] = [];
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === "string" ? input : input instanceof URL ? input.href : (input as Request).url;
@@ -92,20 +70,37 @@ describe("Settings page", () => {
       return new Response(JSON.stringify(defaultRead), { status: 200, headers: { "Content-Type": "application/json" } });
     });
     mount(defaultRead);
-    const select = (await screen.findByLabelText("theme")) as HTMLSelectElement;
+    enterEdit();
+    const select = (await screen.findByRole("combobox")) as HTMLSelectElement;
+    expect(select.value).toBe("omniglass-dark");
+    expect(Array.from(select.options).map((o) => o.value)).toEqual(["omniglass-dark", "omniglass-light"]);
     fireEvent.change(select, { target: { value: "omniglass-light" } });
-    fireEvent.click(await screen.findByText("Save"));
+    fireEvent.click(await screen.findByRole("button", { name: "Save" }));
     await waitFor(() => expect(calls.length).toBe(1));
     expect(calls[0].url).toContain("/settings/ui");
     expect(calls[0].body).toEqual({ theme: "omniglass-light" });
   });
 
+  it("marks a locked key and keeps it read-only even in edit mode", async () => {
+    mount({ values: { ui: { theme: "omniglass-dark" } }, sources: { "ui.theme": "global" }, locks: { "ui.theme": "global" } });
+    expect(await screen.findByText("Locked")).toBeTruthy();
+    enterEdit();
+    // The locked row stays in read mode, so no editable control appears for it.
+    expect(screen.queryByRole("combobox")).toBeNull();
+  });
+
+  it("drills in to the layer stack from a read row", async () => {
+    mount({ values: { ui: { theme: "omniglass-light" } }, sources: { "ui.theme": "global" }, locks: {} });
+    fireEvent.click(await screen.findByLabelText("Show resolution"));
+    expect(await screen.findByText("Layer stack")).toBeTruthy();
+    expect(screen.getByText("Console override (global)")).toBeTruthy();
+  });
+
   it("hides every write affordance for a principal without settings:update", async () => {
     const viewer: Me = { principal: { id: "u-v", kind: "human" }, human: { username: "vi" }, permissions: ["ui:read"], grants: [] };
     mount({ values: { ui: { theme: "omniglass-light" } }, sources: { "ui.theme": "global" }, locks: {} }, viewer);
-    expect(await screen.findByText(/theme/i)).toBeTruthy();
+    expect(await screen.findByText("theme")).toBeTruthy();
     expect(screen.queryByText("Restore all defaults")).toBeNull();
-    expect(screen.queryByText("Restore section")).toBeNull();
-    expect(screen.queryByText("Restore")).toBeNull();
+    expect(screen.queryByRole("button", { name: /edit/i })).toBeNull();
   });
 });
