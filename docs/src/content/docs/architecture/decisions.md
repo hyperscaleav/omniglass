@@ -65,6 +65,9 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0028](#adr-0028-rank-retired-from-the-type-registries-sort-is-alphabetical) | 2026-07-14 | Accepted | `rank` is dropped from `location_type`, `system_type`, and `component_type`; the three list operations sort by `display_name, id` instead |
 | [ADR-0029](#adr-0029-files-slice-1-a-content-addressed-blob-store-and-a-tenant-wide-file-handle) | 2026-07-14 | Accepted | Files slice 1: a content-addressed `blob` store primitive (pgblobs) and a tenant-wide `file` handle; no placement arc (a file is 1:many, its locality is a future attachment), a binary `sensitive` flag reusing the secret `:admin` tier (defaults off), a delete frees its unreferenced blob synchronously (async mark-sweep GC deferred), base64-in-JSON on the wire |
 | [ADR-0031](#adr-0031-component_make-registry-slice-1-an-official-boolean-a-deferred-referential-guard-and-website-scheme-validation) | 2026-07-14 | Accepted | `component_make` slice 1: an `official` boolean (not an `origin` enum) for consistency with the type registries; the in-use referential delete guard deferred to the `component_model` slice (nothing references a make yet); `website` scheme-validated to `http`/`https`, client and server, against stored XSS |
+| [ADR-0032](#adr-0032-settings-persist-only-the-override-level-base-layers-are-recomputed-in-memory) | 2026-07-17 | Accepted | The settings engine persists only the override level; the `code` and `file` base layers are recomputed in memory each boot, so restore is a delete (diverges from scaling.md's "materialized in Postgres") |
+| [ADR-0033](#adr-0033-the-settings-gateway-is-unscoped-only-the-permission-gates-it) | 2026-07-17 | Accepted | Settings Gateway methods are unscoped: ABAC storage-scope is not applicable to platform / principal config; only the `settings:<action>` permission gates them |
+| [ADR-0034](#adr-0034-settings-resolve-as-a-cascade-over-principals-with-a-broader-wins-lock) | 2026-07-17 | Accepted | Settings resolve down the principal hierarchy reusing the cascade primitive, with per-key provenance and a top-down broader-wins lock |
 
 ## Entries
 
@@ -821,3 +824,67 @@ below from the project's history. From here it grows one slice at a time.
   [#255](https://github.com/hyperscaleav/omniglass/issues/255). Design:
   `docs/superpowers/specs/2026-07-14-component-make-model-catalog-design.md`. Plan:
   `docs/superpowers/plans/2026-07-14-component-make-registry.md`.
+
+### ADR-0032: settings persist only the override level; base layers are recomputed in memory
+
+- **Date:** 2026-07-17 | **Status:** Accepted | **Pages:** [settings](/architecture/settings/), [scaling and deployment](/architecture/scaling/)
+- **Decision:** The settings engine stores **only the override level** in Postgres (`setting_override`). The two
+  base layers, the embedded `code` defaults and the operator `file`, are **recomputed into memory on every boot**
+  and never written to the table, so the effective document is the in-memory base layers merged with the live DB
+  override. Restore is therefore a `DELETE`: dropping a namespace's override row (or truncating the scope)
+  re-exposes the base defaults, with no separate reset column and no re-seed of the file into the store.
+- **Context:** The [scaling](/architecture/scaling/) page sketched a single settings store "materialized in
+  Postgres ... seeded declaratively from a settings file reconciled on every boot" (an `ON CONFLICT DO UPDATE` of
+  the file into the table). Building the engine showed that materializing the file into the DB is the wrong shape:
+  it duplicates the GitOps source into a second authoritative copy that can drift, and it conflates ship-with
+  defaults (a compile-time asset) with operator changes (the only thing worth persisting). Keeping the base layers
+  in memory makes the file always-fresh (a ConfigMap change lands on restart), keeps the store lean (it holds only
+  what an operator actually changed), and makes restore fall out of the model as a delete rather than a re-seed.
+  This diverges from the scaling page's "materialized in Postgres" wording; the settings page carries the corrected
+  model and the scaling page moves to `Partial`.
+- **Closes:** issue [#271](https://github.com/hyperscaleav/omniglass/issues/271) (settings engine slice-0), under
+  epic [#270](https://github.com/hyperscaleav/omniglass/issues/270). Design:
+  `docs/superpowers/specs/2026-07-17-settings-engine-design.md`.
+
+### ADR-0033: the settings Gateway is unscoped; only the permission gates it
+
+- **Date:** 2026-07-17 | **Status:** Accepted | **Pages:** [settings](/architecture/settings/), [storage](/architecture/storage/), [identity and access](/architecture/identity-access/)
+- **Decision:** The Storage Gateway methods for settings (`GetSettingOverrides`, `UpsertSettingOverride`,
+  `DeleteSettingOverride`, `DeleteAllSettingOverrides`) are **unscoped**: no ABAC storage-scope predicate is
+  injected. Only the `settings:<action>` permission at the route gates them (`settings:read` admin read with
+  provenance, `settings:update` write / restore / lock, both admin-tier; the client-safe `/settings/me` is
+  authn-only). This is a deliberate carve-out from the "scope on every applicable query" invariant, recorded so it
+  reads as intentional.
+- **Context:** The two authorization layers ([identity and access](/architecture/identity-access/)) are a
+  `<resource>:<action>` permission on every route and an ABAC **scope** injected on every **applicable** query.
+  Platform and cascade settings describe the **platform and its principals**, not the estate, so there is no
+  location / system / component subtree to scope them by, exactly as with the registry-type reads
+  (`GET /types/...`), which are also unscoped. Forcing a scope predicate here would be meaningless (there is
+  nothing to filter on) and would misrepresent settings as estate data. The carve-out is narrow: it applies only
+  because the data is platform config. When the group and user override rungs land, override reads and writes
+  **will** be constrained by the acting principal (a user edits only their own `user` row), but that is a
+  per-principal ownership check, a different mechanism than estate ABAC, not a return of tree scope.
+- **Closes:** issue [#271](https://github.com/hyperscaleav/omniglass/issues/271) (settings engine slice-0).
+
+### ADR-0034: settings resolve as a cascade over principals with a broader-wins lock
+
+- **Date:** 2026-07-17 | **Status:** Accepted | **Pages:** [settings](/architecture/settings/), [cascade](/architecture/cascade/)
+- **Decision:** A setting's effective value resolves down the **principal** hierarchy (global to group to user),
+  reusing the same [cascade](/architecture/cascade/) primitive the estate uses down location to system to
+  component: ordered layers deep-merged in JSON map-space (most-specific-wins by key presence), with per-key
+  **provenance** (the winning level) reported alongside the value. Layered on top is a **top-down lock**: an admin
+  locks a key at a level, pinning that level's value and forbidding any more-specific level from overriding it, and
+  when two levels lock the same key the **broader level wins** (a `global` lock supersedes a `group` lock, so
+  top-down admin authority is absolute). Slice-0 ships the global rung; group and user are a fast-follow.
+- **Context:** Omniglass already had one cascade resolver (the estate's secrets / variables / tags / config,
+  [config and credentials](/architecture/variables/)). Rather than write a second resolver for settings, the engine
+  points the same primitive at the identity axis (doctrine 5, primitive-first): a value defined once at a broad
+  scope inherits below, which is exactly the reuse a variable-reference model (Windmill-style) would buy, provided
+  here by inheritance for free. The **lock** is the piece the estate cascade did not need: settings are governance
+  (an admin enforcing an org default a user cannot escape), so the engine adds a per-key lock with a broader-wins
+  conflict rule, the inverse of the most-specific-wins value rule, applied to the enforcement axis. Provenance
+  reuses the estate's effective-values vocabulary (the winning level per key), extended from three estate bands to
+  five principal levels plus a lock chip. The pure `settings` package is the primary unit-test target; the DB
+  override is supplied through a narrow function seam so the package never imports storage.
+- **Closes:** issue [#271](https://github.com/hyperscaleav/omniglass/issues/271) (settings engine slice-0), under
+  epic [#270](https://github.com/hyperscaleav/omniglass/issues/270).
