@@ -169,6 +169,12 @@ export type Role = {
   // What the role actually confers, flattened by the server (inheritance, wildcard,
   // and the :read floor resolved). Present on GET /roles.
   effective_permissions?: string[];
+  // held is the subset of permission_universe this role covers, resolved by the
+  // server. permission_universe is the full set of capabilities the API enforces,
+  // the same for every role (folded onto each so the blade can show held vs
+  // missing without a second query). Both present on GET /roles.
+  held?: string[];
+  permission_universe?: string[];
 };
 
 export const ROLES_KEY = ["roles"] as const;
@@ -176,7 +182,10 @@ export const ROLES_KEY = ["roles"] as const;
 export async function listRoles(): Promise<Role[]> {
   const { data, error } = await api.GET("/roles");
   if (error) throw error;
-  return (data?.roles ?? []) as Role[];
+  // permission_universe is a payload-level field, identical for every role; fold it
+  // onto each so the detail blade reads role.permission_universe alongside role.held.
+  const universe = data?.permission_universe ?? [];
+  return (data?.roles ?? []).map((r) => ({ ...r, permission_universe: universe })) as Role[];
 }
 
 // effectivePerms is what a role actually confers: the server-flattened set

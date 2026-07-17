@@ -3030,6 +3030,7 @@ export interface components {
             description?: string;
             display_name?: string;
             effective_permissions: string[] | null;
+            held: string[] | null;
             id: string;
             inherits: string[] | null;
             official: boolean;
@@ -3042,6 +3043,7 @@ export interface components {
              * @example /api/v1/schemas/RolesOutputBody.json
              */
             readonly $schema?: string;
+            permission_universe: string[] | null;
             roles: components["schemas"]["RoleBody"][] | null;
         };
         SecretBody: {

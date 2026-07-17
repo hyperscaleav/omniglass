@@ -2103,6 +2103,12 @@ components:
           type:
             - array
             - "null"
+        held:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
         id:
           type: string
         inherits:
@@ -2125,6 +2131,7 @@ components:
         - permissions
         - inherits
         - effective_permissions
+        - held
       type: object
     RolesOutputBody:
       additionalProperties: false
@@ -2136,6 +2143,12 @@ components:
           format: uri
           readOnly: true
           type: string
+        permission_universe:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
         roles:
           items:
             $ref: "#/components/schemas/RoleBody"
@@ -2143,6 +2156,7 @@ components:
             - array
             - "null"
       required:
+        - permission_universe
         - roles
       type: object
     SecretBody:
@@ -2866,6 +2880,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List audit-trail events
+      x-omniglass-permission: audit:read:admin
   /auth/login:
     post:
       description: Verifies a human's password and sets an httpOnly session cookie. Public; a bad credential is a flat 401, and a correct password against a disabled account is a distinct 403 so the screen can explain it.
@@ -3200,6 +3215,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List component makes
+      x-omniglass-permission: make:read
     post:
       description: Creates a custom (non-official) component_make. Gated by make:create.
       operationId: create-component-make
@@ -3223,6 +3239,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Create a component make
+      x-omniglass-permission: make:create
   /component-makes/{id}:
     delete:
       description: Deletes a custom component_make, refused if official (422). Gated by make:delete.
@@ -3245,6 +3262,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Delete a component make
+      x-omniglass-permission: make:delete
     get:
       description: Fetches a component_make by id. Gated by make:read.
       operationId: get-component-make
@@ -3270,6 +3288,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Get a component make
+      x-omniglass-permission: make:read
     patch:
       description: Patches a custom component_make's display_name, icon, support_phone, or website. Official makes are read-only (422). Gated by make:update.
       operationId: update-component-make
@@ -3299,6 +3318,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Update a component make
+      x-omniglass-permission: make:update
   /components:
     get:
       description: Lists the components the caller may read, each filtered to its scope subtree. Gated by component:read.
@@ -3317,6 +3337,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List components in scope
+      x-omniglass-permission: component:read
     post:
       description: Creates a component, optionally under a parent (a root needs an all-scoped grant), bound to a system and a location. Gated by component:create.
       operationId: create-component
@@ -3340,6 +3361,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Create a component
+      x-omniglass-permission: component:create
   /components/{name}:
     delete:
       description: Deletes a component, refused while it still has child components. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.
@@ -3362,6 +3384,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Delete a component
+      x-omniglass-permission: component:delete
     get:
       description: Fetches a component by name within the caller's read scope. Out of scope is a non-disclosing 404. Gated by component:read.
       operationId: get-component
@@ -3387,6 +3410,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Get a component
+      x-omniglass-permission: component:read
     patch:
       description: Patches a component's display_name or component_type. Gated by component:update; read and update scopes drive the 404 versus 403 split.
       operationId: update-component
@@ -3416,6 +3440,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Update a component
+      x-omniglass-permission: component:update
   /components/{name}/effective-secrets:
     get:
       description: Resolves the secrets that cascade onto a component (global -> location -> system -> component, most-specific winning), each masked, winner and shadowed candidates. Gated by secret:read; the component must be in the caller's component read scope.
@@ -3442,6 +3467,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Effective secrets for a component
+      x-omniglass-permission: secret:read
   /components/{name}/effective-tags:
     get:
       description: "Resolves the tags that cascade onto a component (global -> location -> system -> component): keys union, values override most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves only from a binding on the component itself. Gated by component:read; the component must be in the caller's component read scope."
@@ -3468,6 +3494,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Effective tags for a component
+      x-omniglass-permission: component:read
   /components/{name}/effective-variables:
     get:
       description: Resolves the variables that cascade onto a component (global -> location -> system -> component, most-specific winning), winner and shadowed candidates. Gated by variable:read; the component must be in the caller's component read scope.
@@ -3494,6 +3521,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Effective variables for a component
+      x-omniglass-permission: variable:read
   /components/{name}/fields:
     get:
       description: Each field defined on the component's type, resolved to the set literal or the type default (is_set marks the override). Gated by field:read; the component must be in the caller's field read scope.
@@ -3520,6 +3548,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List a component's effective fields
+      x-omniglass-permission: field:read
     post:
       description: Sets a literal for a field defined on the component's type, validated against its data_type. Gated by field:create; the component must be in the caller's field create scope.
       operationId: set-field-value
@@ -3551,6 +3580,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Set a field value on a component
+      x-omniglass-permission: field:create
   /components/{name}:listTags:
     get:
       description: Lists the tags bound directly on a component (not the resolved cascade). Gated by component:read.
@@ -3577,6 +3607,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List tags on a component
+      x-omniglass-permission: component:read
   /components/{name}:removeTag:
     post:
       description: Removes a key's value from a component. Gated by component:update.
@@ -3605,6 +3636,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Remove a tag value from a component
+      x-omniglass-permission: component:update
   /components/{name}:setTag:
     post:
       description: Binds a value for a key on a component. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by component:update.
@@ -3637,6 +3669,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Set a tag value on a component
+      x-omniglass-permission: component:update
   /components:checkName:
     post:
       description: Reports whether a proposed technical name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by component:update.
@@ -3661,6 +3694,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Check a component technical name
+      x-omniglass-permission: component:update
   /field-definitions:
     get:
       description: Lists every field defined on any component_type (the catalog directory). Gated by field:read.
@@ -3679,6 +3713,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List field definitions
+      x-omniglass-permission: field:read
     post:
       description: Declares a typed field on a component_type. The default, if given, is validated against data_type. Gated by field:create.
       operationId: create-field-definition
@@ -3702,6 +3737,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Define a field
+      x-omniglass-permission: field:create
   /field-definitions/{id}:
     delete:
       description: Removes a field definition by id. Gated by field:delete.
@@ -3724,6 +3760,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Delete a field definition
+      x-omniglass-permission: field:delete
     patch:
       description: Replaces a field's data_type and default value, revalidating the default. component_type and name are fixed at creation. Gated by field:update.
       operationId: update-field-definition
@@ -3755,6 +3792,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Update a field definition
+      x-omniglass-permission: field:update
   /field-values/{id}:
     delete:
       description: Clears a component's override for a field, reverting it to the type default. Gated by field:delete; read and delete scopes on the owning component drive the 404 versus 403 split.
@@ -3777,6 +3815,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Delete a field value
+      x-omniglass-permission: field:delete
     patch:
       description: Replaces a field value's literal, revalidated against the field's fixed data_type. Gated by field:update; read and update scopes on the owning component drive the 404 versus 403 split.
       operationId: update-field-value
@@ -3808,6 +3847,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Update a field value
+      x-omniglass-permission: field:update
   /files:
     get:
       description: Lists the file handles the caller may see (searchable metadata, no bytes). Sensitive files appear only to the admin tier. Gated by file:read.
@@ -3826,6 +3866,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List files
+      x-omniglass-permission: file:read
     post:
       description: Stores the uploaded bytes as a content-addressed blob (identical bytes dedup to one blob) and writes the file handle pointing at it. Gated by file:create; a sensitive file additionally needs the admin tier (file:create:admin).
       operationId: create-file
@@ -3849,6 +3890,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Create a file from an upload
+      x-omniglass-permission: file:create
   /files/{id}:
     delete:
       description: Removes a file handle. The underlying blob is left in place (garbage collection is a later slice). A sensitive file is a non-disclosing 404 without the admin tier. Gated by file:delete.
@@ -3871,6 +3913,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Delete a file
+      x-omniglass-permission: file:delete
     get:
       description: Returns one file handle's searchable metadata (no bytes). A sensitive file is a non-disclosing 404 without the admin tier. Gated by file:read.
       operationId: get-file
@@ -3896,6 +3939,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Get a file's metadata
+      x-omniglass-permission: file:read
   /files/{id}:download:
     get:
       description: Returns a file's bytes (base64-encoded) read from the blob it points at, the hash verified on read. A sensitive file is a non-disclosing 404 without the admin tier. Gated by file:read.
@@ -3922,6 +3966,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Download a file's bytes
+      x-omniglass-permission: file:read
   /healthz:
     get:
       description: Reports process health and the database leg, pinged through the Storage Gateway.
@@ -3958,6 +4003,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List locations in scope
+      x-omniglass-permission: location:read
     post:
       description: Creates a location, optionally under a parent (a root needs an all-scoped grant). Gated by location:create.
       operationId: create-location
@@ -3981,6 +4027,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Create a location
+      x-omniglass-permission: location:create
   /locations/{name}:
     delete:
       description: Deletes a location, refused while it still has child locations. Gated by location:delete; read and delete scopes drive the 404 versus 403 split.
@@ -4003,6 +4050,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Delete a location
+      x-omniglass-permission: location:delete
     get:
       description: Fetches a location by name within the caller's read scope. Out of scope is a non-disclosing 404. Gated by location:read.
       operationId: get-location
@@ -4028,6 +4076,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Get a location
+      x-omniglass-permission: location:read
     patch:
       description: Patches a location's display_name, location_type, or parent (a move). Gated by location:update; the read and update scopes drive the 404 versus 403 split.
       operationId: update-location
@@ -4057,6 +4106,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Update a location
+      x-omniglass-permission: location:update
   /locations/{name}:listTags:
     get:
       description: Lists the tags bound directly on a location (not the resolved cascade). Gated by location:read.
@@ -4083,6 +4133,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List tags on a location
+      x-omniglass-permission: location:read
   /locations/{name}:removeTag:
     post:
       description: Removes a key's value from a location. Gated by location:update.
@@ -4111,6 +4162,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Remove a tag value from a location
+      x-omniglass-permission: location:update
   /locations/{name}:setTag:
     post:
       description: Binds a value for a key on a location. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by location:update.
@@ -4143,6 +4195,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Set a tag value on a location
+      x-omniglass-permission: location:update
   /locations:checkName:
     post:
       description: Reports whether a proposed technical name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by location:update.
@@ -4167,6 +4220,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Check a location technical name
+      x-omniglass-permission: location:update
   /principal-groups:
     get:
       description: Every principal group. Gated by principal_group:read:admin.
@@ -4185,6 +4239,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List principal groups
+      x-omniglass-permission: principal_group:read:admin
     post:
       description: Creates a principal group. Gated by principal_group:create (all-scope). A duplicate name is 409.
       operationId: create-group
@@ -4208,6 +4263,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Create a principal group
+      x-omniglass-permission: principal_group:create
   /principal-groups/{id}:
     delete:
       description: Removes a group and, by cascade, its memberships and grants. Gated by principal_group:delete (all-scope).
@@ -4230,6 +4286,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Delete a principal group
+      x-omniglass-permission: principal_group:delete
     get:
       description: One principal group by id. Gated by principal_group:read:admin.
       operationId: get-group
@@ -4255,6 +4312,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Get a principal group
+      x-omniglass-permission: principal_group:read:admin
     patch:
       description: Updates a group's name and presentational fields. Gated by principal_group:update (all-scope). A duplicate name is 409.
       operationId: update-group
@@ -4286,6 +4344,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Update a principal group
+      x-omniglass-permission: principal_group:update
   /principal-groups/{id}/grants:
     get:
       description: The role x scope grants a group confers on its members. Gated by principal_group:read:admin.
@@ -4312,6 +4371,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List a group's grants
+      x-omniglass-permission: principal_group:read:admin
     post:
       description: Assigns a role at a scope to a group; its members inherit it. Gated by principal_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own, exactly as for a direct grant. A duplicate is 409.
       operationId: create-group-grant
@@ -4343,6 +4403,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Grant a role to a group
+      x-omniglass-permission: principal_grant:create
   /principal-groups/{id}/grants/{grantId}:
     delete:
       description: Removes one grant from a group. Gated by principal_grant:delete (all-scope).
@@ -4372,6 +4433,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Revoke a group grant
+      x-omniglass-permission: principal_grant:delete
   /principal-groups/{id}/members:
     get:
       description: The principals in a group. Gated by principal_group:read:admin.
@@ -4398,6 +4460,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List a group's members
+      x-omniglass-permission: principal_group:read:admin
     post:
       description: Adds a principal to a group; its members inherit the group's grants. Gated by principal_group:update (all-scope). Idempotent.
       operationId: add-group-member
@@ -4425,6 +4488,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Add a member to a group
+      x-omniglass-permission: principal_group:update
   /principal-groups/{id}/members/{principalId}:
     delete:
       description: Removes a principal from a group; it stops inheriting the group's grants. Gated by principal_group:update (all-scope).
@@ -4454,6 +4518,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Remove a member from a group
+      x-omniglass-permission: principal_group:update
   /principals:
     get:
       description: Lists all principals (humans and service accounts) with their grants. Gated by principal:read:admin.
@@ -4490,6 +4555,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List principals
+      x-omniglass-permission: principal:read:admin
     post:
       description: Creates a human principal with an optional initial password. Gated by principal:create (all-scope). The new principal holds no grants; assign roles separately.
       operationId: create-principal
@@ -4513,6 +4579,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Create a human principal
+      x-omniglass-permission: principal:create
   /principals/{id}:
     get:
       description: Fetches one principal by id with its profile and grants. Gated by principal:read:admin.
@@ -4539,6 +4606,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Get a principal
+      x-omniglass-permission: principal:read:admin
     patch:
       description: "Updates a human principal's display name, email, and username. Gated by principal:update (all-scope). Renaming is safe: nothing keys on the username."
       operationId: update-principal
@@ -4570,6 +4638,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Update a principal
+      x-omniglass-permission: principal:update
   /principals/{id}/avatar:
     get:
       description: Returns the principal's profile picture as a base64-encoded JPEG. Gated by principal:read:admin. A principal without a picture is a 404.
@@ -4596,6 +4665,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Get a principal's profile picture
+      x-omniglass-permission: principal:read:admin
   /principals/{id}/grants:
     post:
       description: Assigns a role at a scope to a principal. Gated by principal_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own (no promoting anyone, including yourself, to a higher tier such as owner). A duplicate is 409, an unknown role or bad scope 422.
@@ -4628,6 +4698,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Grant a role to a principal
+      x-omniglass-permission: principal_grant:create
   /principals/{id}/grants/{grantId}:
     delete:
       description: Removes one grant from a principal. Gated by principal_grant:delete (all-scope). The last owner grant cannot be revoked.
@@ -4657,6 +4728,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Revoke a grant
+      x-omniglass-permission: principal_grant:delete
   /principals/{id}/sessions:
     get:
       description: Lists another principal's active bearer credentials (login sessions and API tokens) with their non-secret metadata, newest first, so an administrator can see where an account is signed in and revoke a session that should not be. Gated by principal:revoke-session (all-scope). The token secret is never returned, and current is always false (there is no "this request's own session" when viewing another principal).
@@ -4701,6 +4773,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Internal Server Error
       summary: List a principal's sessions
+      x-omniglass-permission: principal:revoke-session
   /principals/{id}/sessions/{sid}:revoke:
     post:
       description: Revokes one of another principal's sessions or tokens by id (an administrator action; the target is immediately signed out of that credential). Gated by principal:revoke-session (all-scope). Bounded to the target, so a credential id that is not theirs is a non-disclosing 404, never a cross-principal revoke. Refused (403) on an owner (an owner's sessions cannot be revoked by anyone, the takeover guard shared with impersonation and password reset) or when it would exceed the caller's own capabilities. Audited with the administrator as the actor.
@@ -4748,6 +4821,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Internal Server Error
       summary: Revoke a principal's session
+      x-omniglass-permission: principal:revoke-session
   /principals/{id}/sessions:revokeAll:
     post:
       description: Revokes every one of another principal's web-login sessions, or every one of its CLI/API tokens (chosen by purpose), in a single administrator action, returning how many were ended. Gated by principal:revoke-session (all-scope). Bounded to the target and never crosses purpose (revoking sessions leaves tokens, and vice versa). Refused (403) on an owner (the takeover guard shared with impersonation and the password reset) or when it would exceed the caller's own capabilities. Audited with the administrator as the actor.
@@ -4798,6 +4872,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Internal Server Error
       summary: Revoke all of a principal's sessions or tokens
+      x-omniglass-permission: principal:revoke-session
   /principals/{id}:archive:
     post:
       description: "Soft-deletes a principal: it is hidden from the directory, can no longer authenticate, and its rows stay intact, reversibly (restore) until purged. Gated by principal:archive (all-scope). The last active owner cannot be archived."
@@ -4820,6 +4895,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Archive a principal
+      x-omniglass-permission: principal:archive
   /principals/{id}:disable:
     post:
       description: Soft-disables a principal so it can no longer authenticate; its audit trail is kept. Gated by principal:update (all-scope). The last active owner cannot be disabled.
@@ -4842,6 +4918,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Disable a principal
+      x-omniglass-permission: principal:update
   /principals/{id}:enable:
     post:
       description: Re-enables a disabled principal, restoring its ability to authenticate. Gated by principal:update (all-scope).
@@ -4864,6 +4941,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Enable a principal
+      x-omniglass-permission: principal:update
   /principals/{id}:impersonate:
     post:
       description: Mints a bounded, revocable token to view as (read-only) or act as (full) the target. Gated by principal:impersonate (all-scope). Refused on self, on an owner target (owners are un-impersonatable by anyone), when it would grant a capability the caller lacks (the escalation guard), or from within an existing impersonation.
@@ -4914,6 +4992,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Internal Server Error
       summary: Impersonate a principal (view-as or act-as)
+      x-omniglass-permission: principal:impersonate
   /principals/{id}:purge:
     post:
       description: Hard-deletes an archived principal and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. Gated by principal:purge (admin-sensitive, all-scope), and the principal must be archived first.
@@ -4936,6 +5015,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Purge a principal
+      x-omniglass-permission: principal:purge:admin
   /principals/{id}:removeAvatar:
     post:
       description: Clears another human principal's profile picture. Gated by principal:set-avatar (all-scope). Removing an absent picture is a no-op. Audited with the administrator as the actor.
@@ -4958,6 +5038,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Remove a principal's profile picture
+      x-omniglass-permission: principal:set-avatar
   /principals/{id}:resetPassword:
     post:
       description: Sets a new password for another human principal (an administrator action; the target's current password is not required). Gated by principal:reset-password (all-scope). The new password must meet the password policy; a violation is a 422. Refused on yourself (change your own password from your profile, which verifies your current one), on an owner (owners cannot be reset by anyone), or when it would exceed the caller's own capabilities (the takeover guard, shared with impersonation). The action is audited with the administrator as the actor.
@@ -4986,6 +5067,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Reset a principal's password
+      x-omniglass-permission: principal:reset-password
   /principals/{id}:restore:
     post:
       description: "Reverses an archive: the account is restored to active and can authenticate again. Gated by principal:archive (all-scope)."
@@ -5008,6 +5090,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Restore a principal
+      x-omniglass-permission: principal:archive
   /principals/{id}:setAvatar:
     post:
       description: Sets another human principal's profile picture (an administrator action). Gated by principal:set-avatar (all-scope). The image (JPEG, PNG, or WebP, base64-encoded) is normalized server-side to a 256x256 JPEG; a bad or oversize image is a 422. Audited with the administrator as the actor.
@@ -5036,6 +5119,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Set a principal's profile picture
+      x-omniglass-permission: principal:set-avatar
   /roles:
     get:
       description: Lists the roles with their metadata and effective (flattened) permissions. Gated by the role:read:admin capability.
@@ -5054,6 +5138,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List roles
+      x-omniglass-permission: role:read:admin
   /secrets:
     get:
       description: Lists the secrets the caller may see, with masked fields, filtered to the read scope; admin-sensitive secrets appear only to the admin tier. Gated by secret:read, which the viewer floor does not carry (secret is a sensitive resource).
@@ -5072,6 +5157,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List secrets
+      x-omniglass-permission: secret:read
     post:
       description: Seals a secret at an owner scope (a global secret needs an all-scoped grant). Fields are validated and encrypted against the type shape. Gated by secret:create.
       operationId: create-secret
@@ -5095,6 +5181,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Create a secret
+      x-omniglass-permission: secret:create
   /secrets/{id}:
     delete:
       description: Removes a secret by id. Gated by secret:delete; read and delete scopes on the owner drive the 404 versus 403 split.
@@ -5117,6 +5204,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Delete a secret
+      x-omniglass-permission: secret:delete
     patch:
       description: Replaces the given field values on a secret, re-sealing secret fields. Only values change; name, type, and owner are fixed at creation. An omitted field keeps its value. Gated by secret:update.
       operationId: update-secret
@@ -5148,6 +5236,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Update a secret's field values
+      x-omniglass-permission: secret:update
   /secrets/{id}:copy:
     post:
       description: Decrypts and returns a secret's field values for a clipboard copy, audited under the copy verb (distinct from an on-screen reveal). Same exposure and the same secret:reveal gate as reveal.
@@ -5174,6 +5263,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Decrypt a secret for clipboard copy
+      x-omniglass-permission: secret:reveal
   /secrets/{id}:reveal:
     post:
       description: Decrypts and returns a secret's field values, auditing the decrypt. Gated by secret:reveal at the caller's scope; an admin-sensitive secret additionally needs the admin tier (secret:reveal:admin), so a scoped operator reveals device secrets but never a platform credential.
@@ -5200,6 +5290,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Reveal a secret's plaintext
+      x-omniglass-permission: secret:reveal
   /systems:
     get:
       description: Lists the systems the caller may read, each filtered to its scope subtree. Gated by system:read.
@@ -5218,6 +5309,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List systems in scope
+      x-omniglass-permission: system:read
     post:
       description: Creates a system, optionally under a parent (a root needs an all-scoped grant) and at a location. Gated by system:create.
       operationId: create-system
@@ -5241,6 +5333,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Create a system
+      x-omniglass-permission: system:create
   /systems/{name}:
     delete:
       description: Deletes a system, refused while it still has child systems. Gated by system:delete; read and delete scopes drive the 404 versus 403 split.
@@ -5263,6 +5356,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Delete a system
+      x-omniglass-permission: system:delete
     get:
       description: Fetches a system by name within the caller's read scope. Out of scope is a non-disclosing 404. Gated by system:read.
       operationId: get-system
@@ -5288,6 +5382,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Get a system
+      x-omniglass-permission: system:read
     patch:
       description: Patches a system's display_name or system_type. Gated by system:update; read and update scopes drive the 404 versus 403 split.
       operationId: update-system
@@ -5317,6 +5412,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Update a system
+      x-omniglass-permission: system:update
   /systems/{name}:listTags:
     get:
       description: Lists the tags bound directly on a system (not the resolved cascade). Gated by system:read.
@@ -5343,6 +5439,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List tags on a system
+      x-omniglass-permission: system:read
   /systems/{name}:removeTag:
     post:
       description: Removes a key's value from a system. Gated by system:update.
@@ -5371,6 +5468,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Remove a tag value from a system
+      x-omniglass-permission: system:update
   /systems/{name}:setTag:
     post:
       description: Binds a value for a key on a system. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by system:update.
@@ -5403,6 +5501,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Set a tag value on a system
+      x-omniglass-permission: system:update
   /systems:checkName:
     post:
       description: Reports whether a proposed technical name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by system:update.
@@ -5427,6 +5526,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Check a system technical name
+      x-omniglass-permission: system:update
   /tags:
     get:
       description: Lists the governed key vocabulary. Rides the tag:read floor.
@@ -5445,6 +5545,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List tag keys
+      x-omniglass-permission: tag:read
     post:
       description: Adds a key to the governed vocabulary. The name is normalized (a lowercase identifier). Gated by tag:create (all-scope, an admin action).
       operationId: create-tag
@@ -5468,6 +5569,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Mint a tag key
+      x-omniglass-permission: tag:create
   /tags/{name}:
     delete:
       description: Removes a key from the vocabulary, cascading its bindings. Gated by tag:delete (all-scope).
@@ -5490,6 +5592,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Delete a tag key
+      x-omniglass-permission: tag:delete
     patch:
       description: Replaces a key's governance fields (applies_to, propagates); the name is fixed. Gated by tag:update (all-scope).
       operationId: update-tag
@@ -5521,6 +5624,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Update a tag key
+      x-omniglass-permission: tag:update
   /tags/{name}:clearGlobal:
     post:
       description: Removes the global binding for a key. Gated by tag:update (all-scope).
@@ -5543,6 +5647,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Clear a global tag value
+      x-omniglass-permission: tag:update
   /tags/{name}:setGlobal:
     post:
       description: Binds a tenant-wide default value for a key at the global scope. Gated by tag:update (all-scope).
@@ -5575,6 +5680,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Set a global tag value
+      x-omniglass-permission: tag:update
   /tags/{name}:values:
     get:
       description: Returns the distinct values already bound for a key across the estate, for value autocomplete on a free-text key (an enum key carries its allowed set on the key itself). Rides the tag:read floor.
@@ -5601,6 +5707,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List the distinct values bound for a key
+      x-omniglass-permission: tag:read
   /types/component:
     get:
       description: Lists the component_type registry, ordered alphabetically by display name. Populates the type picker on the component form. Gated by type:read.
@@ -5619,6 +5726,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List component types
+      x-omniglass-permission: type:read
     post:
       description: Creates a custom (non-official) component_type. Gated by type:create.
       operationId: create-component-type
@@ -5642,6 +5750,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Create a component type
+      x-omniglass-permission: type:create
   /types/component/{id}:
     delete:
       description: Deletes a custom component_type, refused if official (422) or referenced by a component (409). Gated by type:delete.
@@ -5664,6 +5773,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Delete a component type
+      x-omniglass-permission: type:delete
     patch:
       description: Patches a custom component_type's display_name. Official types are read-only (422). Gated by type:update.
       operationId: update-component-type
@@ -5693,6 +5803,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Update a component type
+      x-omniglass-permission: type:update
   /types/location:
     get:
       description: Lists the location_type registry (the shape-definers a location is classified by), ordered alphabetically by display name. Populates the type picker on the location form. Gated by type:read.
@@ -5711,6 +5822,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List location types
+      x-omniglass-permission: type:read
     post:
       description: Creates a custom (non-official) location_type. Gated by type:create.
       operationId: create-location-type
@@ -5734,6 +5846,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Create a location type
+      x-omniglass-permission: type:create
   /types/location/{id}:
     delete:
       description: Deletes a custom location_type, refused if official (422) or still referenced by a location (409). Gated by type:delete.
@@ -5756,6 +5869,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Delete a location type
+      x-omniglass-permission: type:delete
     patch:
       description: Patches a custom location_type's display_name or icon. Official types are read-only (422). Gated by type:update.
       operationId: update-location-type
@@ -5785,6 +5899,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Update a location type
+      x-omniglass-permission: type:update
   /types/secret:
     get:
       description: Lists the secret_type shapes a secret can take, for the create form. Gated by secret:read.
@@ -5803,6 +5918,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List secret types
+      x-omniglass-permission: secret:read
   /types/system:
     get:
       description: Lists the system_type registry, ordered alphabetically by display name. Populates the type picker on the system form. Gated by type:read.
@@ -5821,6 +5937,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List system types
+      x-omniglass-permission: type:read
     post:
       description: Creates a custom (non-official) system_type. Gated by type:create.
       operationId: create-system-type
@@ -5844,6 +5961,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Create a system type
+      x-omniglass-permission: type:create
   /types/system/{id}:
     delete:
       description: Deletes a custom system_type, refused if official (422) or referenced by a system (409). Gated by type:delete.
@@ -5866,6 +5984,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Delete a system type
+      x-omniglass-permission: type:delete
     patch:
       description: Patches a custom system_type's display_name. Official types are read-only (422). Gated by type:update.
       operationId: update-system-type
@@ -5895,6 +6014,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Update a system type
+      x-omniglass-permission: type:update
   /variables:
     get:
       description: Lists every variable. Requires an all-scope read; the scoped, per-component view is the effective-variables route. Gated by variable:read.
@@ -5913,6 +6033,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List variables (admin directory)
+      x-omniglass-permission: variable:read
     post:
       description: Sets a variable at an owner scope (a global variable needs an all-scoped grant). The value is validated against value_type. Gated by variable:create.
       operationId: create-variable
@@ -5936,6 +6057,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Create a variable
+      x-omniglass-permission: variable:create
   /variables/{id}:
     delete:
       description: Removes a variable by id. Gated by variable:delete; read and delete scopes on the owner drive the 404 versus 403 split.
@@ -5958,6 +6080,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Delete a variable
+      x-omniglass-permission: variable:delete
     patch:
       description: Replaces a variable's value, validated against its fixed value_type. Only the value changes; name, type, and owner are fixed at creation. Gated by variable:update.
       operationId: update-variable
@@ -5989,6 +6112,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Update a variable's value
+      x-omniglass-permission: variable:update
 servers:
   - url: /api/v1
 

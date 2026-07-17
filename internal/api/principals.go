@@ -170,14 +170,13 @@ type revokeAllPrincipalSessionsOutput struct {
 // all-scope grant only (a principal is not a scope-tree entity), so the gateway
 // refuses a location or system scope with a 403.
 func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-principals",
 		Method:      http.MethodGet,
 		Path:        "/principals",
 		Summary:     "List principals",
 		Description: "Lists all principals (humans and service accounts) with their grants. Gated by principal:read:admin.",
-		Middlewares: huma.Middlewares{a.authn, a.require("principal", "read", "admin")},
-	}, func(ctx context.Context, in *listPrincipalsInput) (*listPrincipalsOutput, error) {
+	}, "principal", "read", "admin"), func(ctx context.Context, in *listPrincipalsInput) (*listPrincipalsOutput, error) {
 		prs, err := gw.ListPrincipals(ctx, a.scopeFor(ctx, "principal", "read"), in.IncludeArchived)
 		if err != nil {
 			return nil, mapPrincipalErr(err)
@@ -193,14 +192,13 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		return out, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "get-principal",
 		Method:      http.MethodGet,
 		Path:        "/principals/{id}",
 		Summary:     "Get a principal",
 		Description: "Fetches one principal by id with its profile and grants. Gated by principal:read:admin.",
-		Middlewares: huma.Middlewares{a.authn, a.require("principal", "read", "admin")},
-	}, func(ctx context.Context, in *principalPathInput) (*principalOutput, error) {
+	}, "principal", "read", "admin"), func(ctx context.Context, in *principalPathInput) (*principalOutput, error) {
 		id, rerr := a.resolvePrincipalRef(ctx, in.ID)
 		if rerr != nil {
 			return nil, rerr
@@ -213,15 +211,14 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		return &principalOutput{Body: toPrincipalBody(pr)}, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "create-principal",
 		Method:        http.MethodPost,
 		Path:          "/principals",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Create a human principal",
 		Description:   "Creates a human principal with an optional initial password. Gated by principal:create (all-scope). The new principal holds no grants; assign roles separately.",
-		Middlewares:   huma.Middlewares{a.authn, a.require("principal", "create")},
-	}, func(ctx context.Context, in *createPrincipalInput) (*principalOutput, error) {
+	}, "principal", "create"), func(ctx context.Context, in *createPrincipalInput) (*principalOutput, error) {
 		spec := storage.HumanSpec{
 			Username:    in.Body.Username,
 			Email:       in.Body.Email,
@@ -244,14 +241,13 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		return &principalOutput{Body: toPrincipalBody(pr)}, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "update-principal",
 		Method:      http.MethodPatch,
 		Path:        "/principals/{id}",
 		Summary:     "Update a principal",
 		Description: "Updates a human principal's display name, email, and username. Gated by principal:update (all-scope). Renaming is safe: nothing keys on the username.",
-		Middlewares: huma.Middlewares{a.authn, a.require("principal", "update")},
-	}, func(ctx context.Context, in *updatePrincipalInput) (*principalOutput, error) {
+	}, "principal", "update"), func(ctx context.Context, in *updatePrincipalInput) (*principalOutput, error) {
 		id, rerr := a.resolvePrincipalRef(ctx, in.ID)
 		if rerr != nil {
 			return nil, rerr
@@ -268,15 +264,14 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		return &principalOutput{Body: toPrincipalBody(pr)}, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "create-grant",
 		Method:        http.MethodPost,
 		Path:          "/principals/{id}/grants",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Grant a role to a principal",
 		Description:   "Assigns a role at a scope to a principal. Gated by principal_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own (no promoting anyone, including yourself, to a higher tier such as owner). A duplicate is 409, an unknown role or bad scope 422.",
-		Middlewares:   huma.Middlewares{a.authn, a.require("principal_grant", "create")},
-	}, func(ctx context.Context, in *createGrantInput) (*grantOutput, error) {
+	}, "principal_grant", "create"), func(ctx context.Context, in *createGrantInput) (*grantOutput, error) {
 		id, rerr := a.resolvePrincipalRef(ctx, in.ID)
 		if rerr != nil {
 			return nil, rerr
@@ -298,15 +293,14 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		return &grantOutput{Body: toGrantBody(g)}, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "revoke-grant",
 		Method:        http.MethodDelete,
 		Path:          "/principals/{id}/grants/{grantId}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Revoke a grant",
 		Description:   "Removes one grant from a principal. Gated by principal_grant:delete (all-scope). The last owner grant cannot be revoked.",
-		Middlewares:   huma.Middlewares{a.authn, a.require("principal_grant", "delete")},
-	}, func(ctx context.Context, in *revokeGrantInput) (*struct{}, error) {
+	}, "principal_grant", "delete"), func(ctx context.Context, in *revokeGrantInput) (*struct{}, error) {
 		id, rerr := a.resolvePrincipalRef(ctx, in.ID)
 		if rerr != nil {
 			return nil, rerr
@@ -318,15 +312,14 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		return nil, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "disable-principal",
 		Method:        http.MethodPost,
 		Path:          "/principals/{id}:disable",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Disable a principal",
 		Description:   "Soft-disables a principal so it can no longer authenticate; its audit trail is kept. Gated by principal:update (all-scope). The last active owner cannot be disabled.",
-		Middlewares:   huma.Middlewares{a.authn, a.require("principal", "update")},
-	}, func(ctx context.Context, in *principalPathInput) (*struct{}, error) {
+	}, "principal", "update"), func(ctx context.Context, in *principalPathInput) (*struct{}, error) {
 		id, rerr := a.resolvePrincipalRef(ctx, in.ID)
 		if rerr != nil {
 			return nil, rerr
@@ -338,15 +331,14 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		return nil, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "enable-principal",
 		Method:        http.MethodPost,
 		Path:          "/principals/{id}:enable",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Enable a principal",
 		Description:   "Re-enables a disabled principal, restoring its ability to authenticate. Gated by principal:update (all-scope).",
-		Middlewares:   huma.Middlewares{a.authn, a.require("principal", "update")},
-	}, func(ctx context.Context, in *principalPathInput) (*struct{}, error) {
+	}, "principal", "update"), func(ctx context.Context, in *principalPathInput) (*struct{}, error) {
 		id, rerr := a.resolvePrincipalRef(ctx, in.ID)
 		if rerr != nil {
 			return nil, rerr
@@ -358,15 +350,14 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		return nil, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "archive-principal",
 		Method:        http.MethodPost,
 		Path:          "/principals/{id}:archive",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Archive a principal",
 		Description:   "Soft-deletes a principal: it is hidden from the directory, can no longer authenticate, and its rows stay intact, reversibly (restore) until purged. Gated by principal:archive (all-scope). The last active owner cannot be archived.",
-		Middlewares:   huma.Middlewares{a.authn, a.require("principal", "archive")},
-	}, func(ctx context.Context, in *principalPathInput) (*struct{}, error) {
+	}, "principal", "archive"), func(ctx context.Context, in *principalPathInput) (*struct{}, error) {
 		id, rerr := a.resolvePrincipalRef(ctx, in.ID)
 		if rerr != nil {
 			return nil, rerr
@@ -378,15 +369,14 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		return nil, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "restore-principal",
 		Method:        http.MethodPost,
 		Path:          "/principals/{id}:restore",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Restore a principal",
 		Description:   "Reverses an archive: the account is restored to active and can authenticate again. Gated by principal:archive (all-scope).",
-		Middlewares:   huma.Middlewares{a.authn, a.require("principal", "archive")},
-	}, func(ctx context.Context, in *principalPathInput) (*struct{}, error) {
+	}, "principal", "archive"), func(ctx context.Context, in *principalPathInput) (*struct{}, error) {
 		id, rerr := a.resolvePrincipalRef(ctx, in.ID)
 		if rerr != nil {
 			return nil, rerr
@@ -398,15 +388,14 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		return nil, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "purge-principal",
 		Method:        http.MethodPost,
 		Path:          "/principals/{id}:purge",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Purge a principal",
 		Description:   "Hard-deletes an archived principal and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. Gated by principal:purge (admin-sensitive, all-scope), and the principal must be archived first.",
-		Middlewares:   huma.Middlewares{a.authn, a.require("principal", "purge", "admin")},
-	}, func(ctx context.Context, in *principalPathInput) (*struct{}, error) {
+	}, "principal", "purge", "admin"), func(ctx context.Context, in *principalPathInput) (*struct{}, error) {
 		id, rerr := a.resolvePrincipalRef(ctx, in.ID)
 		if rerr != nil {
 			return nil, rerr
@@ -418,15 +407,14 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		return nil, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "reset-principal-password",
 		Method:        http.MethodPost,
 		Path:          "/principals/{id}:resetPassword",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Reset a principal's password",
 		Description:   "Sets a new password for another human principal (an administrator action; the target's current password is not required). Gated by principal:reset-password (all-scope). The new password must meet the password policy; a violation is a 422. Refused on yourself (change your own password from your profile, which verifies your current one), on an owner (owners cannot be reset by anyone), or when it would exceed the caller's own capabilities (the takeover guard, shared with impersonation). The action is audited with the administrator as the actor.",
-		Middlewares:   huma.Middlewares{a.authn, a.require("principal", "reset-password")},
-	}, func(ctx context.Context, in *resetPasswordInput) (*struct{}, error) {
+	}, "principal", "reset-password"), func(ctx context.Context, in *resetPasswordInput) (*struct{}, error) {
 		// Resolve the target first so the self-check below catches addressing yourself
 		// by username as well as by uuid.
 		id, rerr := a.resolvePrincipalRef(ctx, in.ID)
@@ -482,15 +470,14 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		return nil, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "set-principal-avatar",
 		Method:        http.MethodPost,
 		Path:          "/principals/{id}:setAvatar",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Set a principal's profile picture",
 		Description:   "Sets another human principal's profile picture (an administrator action). Gated by principal:set-avatar (all-scope). The image (JPEG, PNG, or WebP, base64-encoded) is normalized server-side to a 256x256 JPEG; a bad or oversize image is a 422. Audited with the administrator as the actor.",
-		Middlewares:   huma.Middlewares{a.authn, a.require("principal", "set-avatar")},
-	}, func(ctx context.Context, in *setAvatarInput) (*struct{}, error) {
+	}, "principal", "set-avatar"), func(ctx context.Context, in *setAvatarInput) (*struct{}, error) {
 		id, rerr := a.resolvePrincipalRef(ctx, in.ID)
 		if rerr != nil {
 			return nil, rerr
@@ -505,15 +492,14 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		return nil, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "remove-principal-avatar",
 		Method:        http.MethodPost,
 		Path:          "/principals/{id}:removeAvatar",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Remove a principal's profile picture",
 		Description:   "Clears another human principal's profile picture. Gated by principal:set-avatar (all-scope). Removing an absent picture is a no-op. Audited with the administrator as the actor.",
-		Middlewares:   huma.Middlewares{a.authn, a.require("principal", "set-avatar")},
-	}, func(ctx context.Context, in *avatarPathInput) (*struct{}, error) {
+	}, "principal", "set-avatar"), func(ctx context.Context, in *avatarPathInput) (*struct{}, error) {
 		id, rerr := a.resolvePrincipalRef(ctx, in.ID)
 		if rerr != nil {
 			return nil, rerr
@@ -524,14 +510,13 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		return nil, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "get-principal-avatar",
 		Method:      http.MethodGet,
 		Path:        "/principals/{id}/avatar",
 		Summary:     "Get a principal's profile picture",
 		Description: "Returns the principal's profile picture as a base64-encoded JPEG. Gated by principal:read:admin. A principal without a picture is a 404.",
-		Middlewares: huma.Middlewares{a.authn, a.require("principal", "read", "admin")},
-	}, func(ctx context.Context, in *avatarPathInput) (*avatarOutput, error) {
+	}, "principal", "read", "admin"), func(ctx context.Context, in *avatarPathInput) (*avatarOutput, error) {
 		id, rerr := a.resolvePrincipalRef(ctx, in.ID)
 		if rerr != nil {
 			return nil, rerr
@@ -548,15 +533,14 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		return out, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-principal-sessions",
 		Method:      http.MethodGet,
 		Path:        "/principals/{id}/sessions",
 		Summary:     "List a principal's sessions",
 		Description: "Lists another principal's active bearer credentials (login sessions and API tokens) with their non-secret metadata, newest first, so an administrator can see where an account is signed in and revoke a session that should not be. Gated by principal:revoke-session (all-scope). The token secret is never returned, and current is always false (there is no \"this request's own session\" when viewing another principal).",
 		Errors:      []int{http.StatusForbidden, http.StatusNotFound},
-		Middlewares: huma.Middlewares{a.authn, a.require("principal", "revoke-session")},
-	}, func(ctx context.Context, in *principalPathInput) (*listPrincipalSessionsOutput, error) {
+	}, "principal", "revoke-session"), func(ctx context.Context, in *principalPathInput) (*listPrincipalSessionsOutput, error) {
 		id, rerr := a.resolvePrincipalRef(ctx, in.ID)
 		if rerr != nil {
 			return nil, rerr
@@ -578,7 +562,7 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		return out, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "revoke-principal-session",
 		Method:        http.MethodPost,
 		Path:          "/principals/{id}/sessions/{sid}:revoke",
@@ -586,8 +570,7 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Summary:       "Revoke a principal's session",
 		Description:   "Revokes one of another principal's sessions or tokens by id (an administrator action; the target is immediately signed out of that credential). Gated by principal:revoke-session (all-scope). Bounded to the target, so a credential id that is not theirs is a non-disclosing 404, never a cross-principal revoke. Refused (403) on an owner (an owner's sessions cannot be revoked by anyone, the takeover guard shared with impersonation and password reset) or when it would exceed the caller's own capabilities. Audited with the administrator as the actor.",
 		Errors:        []int{http.StatusForbidden, http.StatusNotFound},
-		Middlewares:   huma.Middlewares{a.authn, a.require("principal", "revoke-session")},
-	}, func(ctx context.Context, in *revokePrincipalSessionInput) (*struct{}, error) {
+	}, "principal", "revoke-session"), func(ctx context.Context, in *revokePrincipalSessionInput) (*struct{}, error) {
 		id, rerr := a.resolvePrincipalRef(ctx, in.ID)
 		if rerr != nil {
 			return nil, rerr
@@ -627,15 +610,14 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		return nil, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "revoke-all-principal-sessions",
 		Method:      http.MethodPost,
 		Path:        "/principals/{id}/sessions:revokeAll",
 		Summary:     "Revoke all of a principal's sessions or tokens",
 		Description: "Revokes every one of another principal's web-login sessions, or every one of its CLI/API tokens (chosen by purpose), in a single administrator action, returning how many were ended. Gated by principal:revoke-session (all-scope). Bounded to the target and never crosses purpose (revoking sessions leaves tokens, and vice versa). Refused (403) on an owner (the takeover guard shared with impersonation and the password reset) or when it would exceed the caller's own capabilities. Audited with the administrator as the actor.",
 		Errors:      []int{http.StatusForbidden, http.StatusNotFound},
-		Middlewares: huma.Middlewares{a.authn, a.require("principal", "revoke-session")},
-	}, func(ctx context.Context, in *revokeAllPrincipalSessionsInput) (*revokeAllPrincipalSessionsOutput, error) {
+	}, "principal", "revoke-session"), func(ctx context.Context, in *revokeAllPrincipalSessionsInput) (*revokeAllPrincipalSessionsOutput, error) {
 		id, rerr := a.resolvePrincipalRef(ctx, in.ID)
 		if rerr != nil {
 			return nil, rerr

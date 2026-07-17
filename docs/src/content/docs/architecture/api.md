@@ -154,7 +154,11 @@ flows back the same way to advance the row. The caller sees one model, the trans
   change, a gateway responsibility, so it cannot be forgotten or bypassed.
 - Every route **declares its permission** (checked before the handler runs) and every query **carries the
   caller's scope** (injected by the gateway). Both are [identity and access](/architecture/identity-access/)
-  invariants, and the API is the gateway's only caller, so there is no unscoped path.
+  invariants, and the API is the gateway's only caller, so there is no unscoped path. That declared permission
+  is also **published in the generated spec**: each gated operation carries an `x-omniglass-permission`
+  extension (for example `role:read:admin` on `GET /roles`), so `api/openapi.json` is a machine-readable map of
+  the authz contract, and the set of all stamps is the **permission universe** the [Roles
+  view](/architecture/identity-access/#the-permission-universe-published-per-route) reports.
 
 ## Secrets: masked reads, an audited reveal
 
