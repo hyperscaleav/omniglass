@@ -12,10 +12,22 @@ screenshots:
         selector: 'tr.cursor-pointer:has-text("Display")'
   - id: fields-effective
     path: /web/components/lobby-display
-    alt: "The Effective fields panel on a component's detail: each field its type declares, resolved to the set literal or the type default, an override-versus-default badge, an inline setter, and a revert-to-default control on an overridden field."
+    alt: "The Fields panel on a component's detail: each field its type declares, rendered as a slim row through the shared key:value primitive, resolved to the set literal or the type default with an override badge."
     steps:
       - action: hover
-        selector: 'text=diagonal_inches'
+        selector: 'text=Diagonal inches'
+  - id: fields-drilldown
+    path: /web/components/lobby-display
+    alt: "The field resolution drill-in: clicking a field opens its resolution, showing the raw key, the type, and the type-default to component chain with the effective value marked."
+    steps:
+      - action: click
+        selector: 'text=Diagonal inches'
+  - id: fields-edit
+    path: /web/components/lobby-display
+    alt: "The Fields panel in edit mode: each field gains an inline setter, an overridden field gains revert. In read mode there are no inputs at all."
+    steps:
+      - action: click
+        selector: 'button:has-text("Edit")'
 ---
 
 A **field** is an operator-defined **typed attribute declared on a type**: you add a field once to a
