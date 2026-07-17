@@ -194,7 +194,7 @@ func registerFieldRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		if err != nil {
 			return nil, err
 		}
-		fd, err := gw.UpdateFieldDefinition(ctx, actorID(ctx), in.ID, in.Body.DataType, def)
+		fd, err := gw.UpdateFieldDefinition(ctx, actorID(ctx), in.ID, in.Body.DataType, "", def)
 		if err != nil {
 			return nil, mapFieldErr(err)
 		}
