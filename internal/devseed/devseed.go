@@ -46,6 +46,7 @@ type Doc struct {
 type FieldDefinition struct {
 	ComponentType string `yaml:"component_type"`
 	Name          string `yaml:"name"`
+	DisplayName   string `yaml:"display_name"`
 	DataType      string `yaml:"data_type"`
 	Default       any    `yaml:"default"`
 }
@@ -290,7 +291,7 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 	// (ErrFieldDefinitionConflict) is left as is, so a re-run adds nothing.
 	for _, fd := range doc.FieldDefinitions {
 		spec := storage.FieldDefinitionSpec{
-			ComponentType: fd.ComponentType, Name: fd.Name, DataType: fd.DataType,
+			ComponentType: fd.ComponentType, Name: fd.Name, DisplayName: fd.DisplayName, DataType: fd.DataType,
 		}
 		if fd.Default != nil {
 			raw, err := json.Marshal(fd.Default)
