@@ -16,6 +16,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/go-chi/chi/v5"
+	"github.com/hyperscaleav/omniglass/internal/settings"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/webui"
 )
@@ -31,7 +32,10 @@ type healthOutput struct {
 }
 
 // options are the handler's tunables, set with the Option functions.
-type options struct{ secureCookies bool }
+type options struct {
+	secureCookies bool
+	settingsSvc   *settings.Service
+}
 
 // Option configures NewHandler.
 type Option func(*options)
@@ -39,13 +43,24 @@ type Option func(*options)
 // WithSecureCookies marks the session cookie Secure (set behind TLS).
 func WithSecureCookies(b bool) Option { return func(o *options) { o.secureCookies = b } }
 
-// NewHandler builds the routed HTTP handler. The gateway is the only dependency
-// for the walking skeleton: healthz pings it. Later slices pass more
-// collaborators here behind the same constructor.
+// WithSettingsService supplies the settings engine service that backs the
+// settings routes. When unset, NewHandler builds a code-defaults-only service so
+// the handler always resolves settings (the boot path passes the real one, wired
+// over the Storage Gateway).
+func WithSettingsService(svc *settings.Service) Option {
+	return func(o *options) { o.settingsSvc = svc }
+}
+
+// NewHandler builds the routed HTTP handler. The gateway backs data routes and
+// healthz; the settings service backs the settings engine routes. Later slices
+// pass more collaborators here behind the same constructor.
 func NewHandler(gw storage.Gateway, opts ...Option) http.Handler {
 	var o options
 	for _, f := range opts {
 		f(&o)
+	}
+	if o.settingsSvc == nil {
+		o.settingsSvc = defaultSettingsService()
 	}
 	r := chi.NewRouter()
 	r.Route("/api/v1", func(sub chi.Router) {
@@ -53,7 +68,7 @@ func NewHandler(gw storage.Gateway, opts ...Option) http.Handler {
 		// token creation can stamp a credential with the device and address behind it.
 		sub.Use(captureClientMeta)
 		api := humachi.New(sub, apiConfig())
-		registerRoutes(api, gw, o)
+		registerRoutes(api, gw, o.settingsSvc, o)
 	})
 
 	// The operator console SPA is nested under /web/* (namespaces stay explicit:
@@ -74,8 +89,9 @@ func NewHandler(gw storage.Gateway, opts ...Option) http.Handler {
 // registerRoutes wires every Huma operation onto the API. Shared by NewHandler
 // (the live server) and OpenAPIJSON (the server-less spec dump), so the routed
 // surface and the generated spec can never drift.
-func registerRoutes(api huma.API, gw storage.Gateway, o options) {
+func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o options) {
 	a := &authenticator{gw: gw, api: api, secureCookies: o.secureCookies}
+	_ = svc // consumed by registerSettingsRoutes in the settings-routes slice
 
 	huma.Register(api, huma.Operation{
 		OperationID: "get-healthz",
@@ -257,8 +273,18 @@ func apiConfig() huma.Config {
 // handlers (never invoked here), so a nil-backed stub is fine.
 func specAPI(gw storage.Gateway) huma.API {
 	api := humachi.New(chi.NewRouter(), apiConfig())
-	registerRoutes(api, gw, options{})
+	registerRoutes(api, gw, defaultSettingsService(), options{})
 	return api
+}
+
+// defaultSettingsService builds a settings service with no operator file and an
+// empty override reader, so it resolves the embedded code defaults only. It is
+// the fallback when no service is wired (tests, the spec dump); the boot path
+// supplies a Gateway-backed service instead.
+func defaultSettingsService() *settings.Service {
+	return settings.NewService(nil, func(context.Context, string) (settings.Doc, map[string][]string, error) {
+		return settings.Doc{}, nil, nil
+	})
 }
 
 // OpenAPIJSON returns the OpenAPI 3.1 document as JSON, the source downstream

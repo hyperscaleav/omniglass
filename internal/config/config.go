@@ -22,6 +22,11 @@ const (
 	// OMNIGLASS_DATA_DIR; a real deployment sets OMNIGLASS_SECRET_KEY_FILE and
 	// never touches this.
 	DefaultDataDir = ".omniglass"
+	// DefaultSettingsFile is empty: most deployments have no operator settings
+	// file, so the settings engine's base layer is just the embedded code
+	// defaults. Point OMNIGLASS_SETTINGS_FILE at a JSON or YAML file to add the
+	// file layer between code defaults and the DB override.
+	DefaultSettingsFile = ""
 )
 
 // Config is the resolved runtime configuration for one process.
@@ -36,6 +41,10 @@ type Config struct {
 	// DataDir is the directory for local, non-Postgres server state (the fallback
 	// secret key). Override with OMNIGLASS_DATA_DIR.
 	DataDir string
+	// SettingsFile is the path to an optional operator settings file, the middle
+	// layer of the settings engine (between embedded code defaults and the DB
+	// override). Empty means no file layer. Set OMNIGLASS_SETTINGS_FILE.
+	SettingsFile string
 }
 
 // Load resolves the configuration from the environment, applying defaults for
@@ -52,6 +61,7 @@ func Load() Config {
 		Addr:          firstNonEmpty(os.Getenv("OMNIGLASS_ADDR"), DefaultAddr),
 		SecureCookies: os.Getenv("OMNIGLASS_SECURE_COOKIES") == "true",
 		DataDir:       firstNonEmpty(os.Getenv("OMNIGLASS_DATA_DIR"), DefaultDataDir),
+		SettingsFile:  firstNonEmpty(os.Getenv("OMNIGLASS_SETTINGS_FILE"), DefaultSettingsFile),
 	}
 }
 
