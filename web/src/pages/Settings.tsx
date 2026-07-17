@@ -1,4 +1,4 @@
-import { Show, For, createSignal } from "solid-js";
+import { Show, For, createSignal, createEffect } from "solid-js";
 import Button from "../components/Button";
 import { RotateCcw, Save, ChevronDown } from "../components/icons";
 import { useMe, can } from "../lib/auth";
@@ -178,7 +178,16 @@ function SettingRow(props: {
   const [rowErr, setRowErr] = createSignal<string | null>(null);
 
   // Re-seed the draft whenever the resolved value changes (a save or restore
-  // elsewhere), unless the operator is mid-edit on this row.
+  // elsewhere), unless the operator is mid-edit on this row. We track the
+  // last-seeded value rather than comparing against the new current, so a
+  // clean row (draft still equals what we last seeded) follows the new value
+  // while a row the operator has typed into keeps its unsaved edit.
+  let seeded = current();
+  createEffect(() => {
+    const next = current();
+    if (draft() === seeded) setDraft(next);
+    seeded = next;
+  });
   const dirty = () => draft() !== current();
   const isThemeKey = () => props.namespace === "ui" && props.settingKey === "theme";
   const isOverridden = () => props.source === "global";
