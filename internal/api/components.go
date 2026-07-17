@@ -101,14 +101,13 @@ type componentTypeOutput struct {
 // registerComponentRoutes wires the component CRUD surface, on the same pattern
 // as locations and systems.
 func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-components",
 		Method:      http.MethodGet,
 		Path:        "/components",
 		Summary:     "List components in scope",
 		Description: "Lists the components the caller may read, each filtered to its scope subtree. Gated by component:read.",
-		Middlewares: huma.Middlewares{a.authn, a.require("component", "read")},
-	}, func(ctx context.Context, _ *struct{}) (*listComponentsOutput, error) {
+	}, "component", "read"), func(ctx context.Context, _ *struct{}) (*listComponentsOutput, error) {
 		comps, err := gw.ListComponents(ctx, a.scopeFor(ctx, "component", "read"))
 		if err != nil {
 			return nil, huma.Error500InternalServerError("list components")
@@ -136,14 +135,13 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		return out, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-component-types",
 		Method:      http.MethodGet,
 		Path:        "/types/component",
 		Summary:     "List component types",
 		Description: "Lists the component_type registry, ordered alphabetically by display name. Populates the type picker on the component form. Gated by type:read.",
-		Middlewares: huma.Middlewares{a.authn, a.require("type", "read")},
-	}, func(ctx context.Context, _ *struct{}) (*listComponentTypesOutput, error) {
+	}, "type", "read"), func(ctx context.Context, _ *struct{}) (*listComponentTypesOutput, error) {
 		types, err := gw.ListComponentTypes(ctx)
 		if err != nil {
 			return nil, huma.Error500InternalServerError("list component types")
@@ -158,15 +156,14 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		return out, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "create-component-type",
 		Method:        http.MethodPost,
 		Path:          "/types/component",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Create a component type",
 		Description:   "Creates a custom (non-official) component_type. Gated by type:create.",
-		Middlewares:   huma.Middlewares{a.authn, a.require("type", "create")},
-	}, func(ctx context.Context, in *createComponentTypeInput) (*componentTypeOutput, error) {
+	}, "type", "create"), func(ctx context.Context, in *createComponentTypeInput) (*componentTypeOutput, error) {
 		ct, err := gw.CreateComponentType(ctx, actorID(ctx), storage.ComponentType{
 			ID: in.Body.ID, DisplayName: in.Body.DisplayName,
 		})
@@ -176,14 +173,13 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		return &componentTypeOutput{Body: componentTypeBody{ID: ct.ID, DisplayName: ct.DisplayName, Official: ct.Official}}, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "update-component-type",
 		Method:      http.MethodPatch,
 		Path:        "/types/component/{id}",
 		Summary:     "Update a component type",
 		Description: "Patches a custom component_type's display_name. Official types are read-only (422). Gated by type:update.",
-		Middlewares: huma.Middlewares{a.authn, a.require("type", "update")},
-	}, func(ctx context.Context, in *updateComponentTypeInput) (*componentTypeOutput, error) {
+	}, "type", "update"), func(ctx context.Context, in *updateComponentTypeInput) (*componentTypeOutput, error) {
 		ct, err := gw.UpdateComponentType(ctx, actorID(ctx), in.ID, storage.ComponentTypePatch{
 			DisplayName: in.Body.DisplayName,
 		})
@@ -193,29 +189,27 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		return &componentTypeOutput{Body: componentTypeBody{ID: ct.ID, DisplayName: ct.DisplayName, Official: ct.Official}}, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "delete-component-type",
 		Method:        http.MethodDelete,
 		Path:          "/types/component/{id}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete a component type",
 		Description:   "Deletes a custom component_type, refused if official (422) or referenced by a component (409). Gated by type:delete.",
-		Middlewares:   huma.Middlewares{a.authn, a.require("type", "delete")},
-	}, func(ctx context.Context, in *componentTypePathInput) (*struct{}, error) {
+	}, "type", "delete"), func(ctx context.Context, in *componentTypePathInput) (*struct{}, error) {
 		if err := gw.DeleteComponentType(ctx, actorID(ctx), in.ID); err != nil {
 			return nil, mapTypeErr(err, "component_type")
 		}
 		return nil, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "get-component",
 		Method:      http.MethodGet,
 		Path:        "/components/{name}",
 		Summary:     "Get a component",
 		Description: "Fetches a component by name within the caller's read scope. Out of scope is a non-disclosing 404. Gated by component:read.",
-		Middlewares: huma.Middlewares{a.authn, a.require("component", "read")},
-	}, func(ctx context.Context, in *componentPathInput) (*componentOutput, error) {
+	}, "component", "read"), func(ctx context.Context, in *componentPathInput) (*componentOutput, error) {
 		c, err := gw.GetComponent(ctx, in.Name, a.scopeFor(ctx, "component", "read"))
 		if err != nil {
 			return nil, mapComponentErr(err)
@@ -223,15 +217,14 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		return &componentOutput{Body: toComponentBody(c)}, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "create-component",
 		Method:        http.MethodPost,
 		Path:          "/components",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Create a component",
 		Description:   "Creates a component, optionally under a parent (a root needs an all-scoped grant), bound to a system and a location. Gated by component:create.",
-		Middlewares:   huma.Middlewares{a.authn, a.require("component", "create")},
-	}, func(ctx context.Context, in *createComponentInput) (*componentOutput, error) {
+	}, "component", "create"), func(ctx context.Context, in *createComponentInput) (*componentOutput, error) {
 		c, err := gw.CreateComponent(ctx, actorID(ctx), storage.ComponentSpec{
 			Name:          in.Body.Name,
 			DisplayName:   in.Body.DisplayName,
@@ -246,14 +239,13 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		return &componentOutput{Body: toComponentBody(c)}, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "update-component",
 		Method:      http.MethodPatch,
 		Path:        "/components/{name}",
 		Summary:     "Update a component",
 		Description: "Patches a component's display_name or component_type. Gated by component:update; read and update scopes drive the 404 versus 403 split.",
-		Middlewares: huma.Middlewares{a.authn, a.require("component", "update")},
-	}, func(ctx context.Context, in *updateComponentInput) (*componentOutput, error) {
+	}, "component", "update"), func(ctx context.Context, in *updateComponentInput) (*componentOutput, error) {
 		c, err := gw.UpdateComponent(ctx, actorID(ctx), in.Name, storage.ComponentPatch{
 			Name:          in.Body.Name,
 			DisplayName:   in.Body.DisplayName,
@@ -265,14 +257,13 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		return &componentOutput{Body: toComponentBody(c)}, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "check-component-name",
 		Method:      http.MethodPost,
 		Path:        "/components:checkName",
 		Summary:     "Check a component technical name",
 		Description: "Reports whether a proposed technical name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by component:update.",
-		Middlewares: huma.Middlewares{a.authn, a.require("component", "update")},
-	}, func(ctx context.Context, in *checkNameInput) (*checkNameOutput, error) {
+	}, "component", "update"), func(ctx context.Context, in *checkNameInput) (*checkNameOutput, error) {
 		out := &checkNameOutput{}
 		if err := storage.ValidateEntityName(in.Body.Name); err != nil {
 			out.Body.Valid = false
@@ -291,15 +282,14 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		return out, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "delete-component",
 		Method:        http.MethodDelete,
 		Path:          "/components/{name}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete a component",
 		Description:   "Deletes a component, refused while it still has child components. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.",
-		Middlewares:   huma.Middlewares{a.authn, a.require("component", "delete")},
-	}, func(ctx context.Context, in *componentPathInput) (*struct{}, error) {
+	}, "component", "delete"), func(ctx context.Context, in *componentPathInput) (*struct{}, error) {
 		if err := gw.DeleteComponent(ctx, actorID(ctx), in.Name,
 			a.scopeFor(ctx, "component", "read"), a.scopeFor(ctx, "component", "delete")); err != nil {
 			return nil, mapComponentErr(err)

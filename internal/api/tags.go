@@ -123,14 +123,13 @@ type effectiveTagsOutput struct {
 // per-component effective-tags cascade. Reading the vocabulary and an entity's
 // tags rides the viewer floor.
 func registerTagRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-tags",
 		Method:      http.MethodGet,
 		Path:        "/tags",
 		Summary:     "List tag keys",
 		Description: "Lists the governed key vocabulary. Rides the tag:read floor.",
-		Middlewares: huma.Middlewares{a.authn, a.require("tag", "read")},
-	}, func(ctx context.Context, _ *struct{}) (*listTagsOutput, error) {
+	}, "tag", "read"), func(ctx context.Context, _ *struct{}) (*listTagsOutput, error) {
 		tags, err := gw.ListTags(ctx)
 		if err != nil {
 			return nil, mapTagErr(err)
@@ -143,14 +142,13 @@ func registerTagRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		return out, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-tag-values",
 		Method:      http.MethodGet,
 		Path:        "/tags/{name}:values",
 		Summary:     "List the distinct values bound for a key",
 		Description: "Returns the distinct values already bound for a key across the estate, for value autocomplete on a free-text key (an enum key carries its allowed set on the key itself). Rides the tag:read floor.",
-		Middlewares: huma.Middlewares{a.authn, a.require("tag", "read")},
-	}, func(ctx context.Context, in *tagNameInput) (*tagValuesOutput, error) {
+	}, "tag", "read"), func(ctx context.Context, in *tagNameInput) (*tagValuesOutput, error) {
 		vals, err := gw.DistinctTagValues(ctx, in.Name)
 		if err != nil {
 			return nil, mapTagErr(err)
@@ -160,15 +158,14 @@ func registerTagRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		return out, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "create-tag",
 		Method:        http.MethodPost,
 		Path:          "/tags",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Mint a tag key",
 		Description:   "Adds a key to the governed vocabulary. The name is normalized (a lowercase identifier). Gated by tag:create (all-scope, an admin action).",
-		Middlewares:   huma.Middlewares{a.authn, a.require("tag", "create")},
-	}, func(ctx context.Context, in *createTagInput) (*tagOutput, error) {
+	}, "tag", "create"), func(ctx context.Context, in *createTagInput) (*tagOutput, error) {
 		t, err := gw.CreateTag(ctx, actorID(ctx), storage.TagSpec{
 			Name:          in.Body.Name,
 			AppliesTo:     in.Body.AppliesTo,
@@ -181,14 +178,13 @@ func registerTagRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		return &tagOutput{Body: toTagBody(t)}, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "update-tag",
 		Method:      http.MethodPatch,
 		Path:        "/tags/{name}",
 		Summary:     "Update a tag key",
 		Description: "Replaces a key's governance fields (applies_to, propagates); the name is fixed. Gated by tag:update (all-scope).",
-		Middlewares: huma.Middlewares{a.authn, a.require("tag", "update")},
-	}, func(ctx context.Context, in *updateTagInput) (*tagOutput, error) {
+	}, "tag", "update"), func(ctx context.Context, in *updateTagInput) (*tagOutput, error) {
 		t, err := gw.UpdateTag(ctx, actorID(ctx), in.Name, storage.TagSpec{
 			AppliesTo:     in.Body.AppliesTo,
 			Propagates:    propagatesOr(in.Body.Propagates),
@@ -200,15 +196,14 @@ func registerTagRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		return &tagOutput{Body: toTagBody(t)}, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "delete-tag",
 		Method:        http.MethodDelete,
 		Path:          "/tags/{name}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete a tag key",
 		Description:   "Removes a key from the vocabulary, cascading its bindings. Gated by tag:delete (all-scope).",
-		Middlewares:   huma.Middlewares{a.authn, a.require("tag", "delete")},
-	}, func(ctx context.Context, in *tagNameInput) (*struct{}, error) {
+	}, "tag", "delete"), func(ctx context.Context, in *tagNameInput) (*struct{}, error) {
 		if err := gw.DeleteTag(ctx, actorID(ctx), in.Name, a.scopeFor(ctx, "tag", "delete")); err != nil {
 			return nil, mapTagErr(err)
 		}
@@ -218,14 +213,13 @@ func registerTagRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	// Global binding: a tenant-wide default value for a key, gated by tag:update
 	// (there is no owning entity to defer to). Modeled as custom methods on the
 	// key so the generated CLI reads `tag set-global <key>` / `tag clear-global`.
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "set-global-tag",
 		Method:      http.MethodPost,
 		Path:        "/tags/{name}:setGlobal",
 		Summary:     "Set a global tag value",
 		Description: "Binds a tenant-wide default value for a key at the global scope. Gated by tag:update (all-scope).",
-		Middlewares: huma.Middlewares{a.authn, a.require("tag", "update")},
-	}, func(ctx context.Context, in *globalBindingInput) (*tagBindingOutput, error) {
+	}, "tag", "update"), func(ctx context.Context, in *globalBindingInput) (*tagBindingOutput, error) {
 		b, err := gw.SetTagBinding(ctx, actorID(ctx), in.Name, "global", nil, in.Body.Value,
 			a.scopeFor(ctx, "tag", "update"), a.scopeFor(ctx, "tag", "update"))
 		if err != nil {
@@ -234,15 +228,14 @@ func registerTagRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		return &tagBindingOutput{Body: toTagBindingBody(b)}, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "clear-global-tag",
 		Method:        http.MethodPost,
 		Path:          "/tags/{name}:clearGlobal",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Clear a global tag value",
 		Description:   "Removes the global binding for a key. Gated by tag:update (all-scope).",
-		Middlewares:   huma.Middlewares{a.authn, a.require("tag", "update")},
-	}, func(ctx context.Context, in *tagNameInput) (*struct{}, error) {
+	}, "tag", "update"), func(ctx context.Context, in *tagNameInput) (*struct{}, error) {
 		if err := gw.DeleteTagBinding(ctx, actorID(ctx), in.Name, "global", nil,
 			a.scopeFor(ctx, "tag", "update"), a.scopeFor(ctx, "tag", "update")); err != nil {
 			return nil, mapTagErr(err)
@@ -255,14 +248,13 @@ func registerTagRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	registerEntityTagRoutes(api, a, gw, "system")
 	registerEntityTagRoutes(api, a, gw, "location")
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "effective-tags",
 		Method:      http.MethodGet,
 		Path:        "/components/{name}/effective-tags",
 		Summary:     "Effective tags for a component",
 		Description: "Resolves the tags that cascade onto a component (global -> location -> system -> component): keys union, values override most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves only from a binding on the component itself. Gated by component:read; the component must be in the caller's component read scope.",
-		Middlewares: huma.Middlewares{a.authn, a.require("component", "read")},
-	}, func(ctx context.Context, in *effectiveTagsInput) (*effectiveTagsOutput, error) {
+	}, "component", "read"), func(ctx context.Context, in *effectiveTagsInput) (*effectiveTagsOutput, error) {
 		comp, err := gw.GetComponent(ctx, in.Name, a.scopeFor(ctx, "component", "read"))
 		if err != nil {
 			return nil, mapComponentErr(err)
@@ -316,14 +308,13 @@ type entityNameInput struct {
 func registerEntityTagRoutes(api huma.API, a *authenticator, gw storage.Gateway, kind string) {
 	base := "/" + kind + "s/{name}"
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-" + kind + "-tags",
 		Method:      http.MethodGet,
 		Path:        base + ":listTags",
 		Summary:     "List tags on a " + kind,
 		Description: "Lists the tags bound directly on a " + kind + " (not the resolved cascade). Gated by " + kind + ":read.",
-		Middlewares: huma.Middlewares{a.authn, a.require(kind, "read")},
-	}, func(ctx context.Context, in *entityNameInput) (*entityTagsOutput, error) {
+	}, kind, "read"), func(ctx context.Context, in *entityNameInput) (*entityTagsOutput, error) {
 		binds, err := gw.ListEntityTags(ctx, kind, &in.Name, a.scopeFor(ctx, kind, "read"))
 		if err != nil {
 			return nil, mapTagErr(err)
@@ -336,14 +327,13 @@ func registerEntityTagRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 		return out, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "set-" + kind + "-tag",
 		Method:      http.MethodPost,
 		Path:        base + ":setTag",
 		Summary:     "Set a tag value on a " + kind,
 		Description: "Binds a value for a key on a " + kind + ". The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by " + kind + ":update.",
-		Middlewares: huma.Middlewares{a.authn, a.require(kind, "update")},
-	}, func(ctx context.Context, in *entitySetTagInput) (*tagBindingOutput, error) {
+	}, kind, "update"), func(ctx context.Context, in *entitySetTagInput) (*tagBindingOutput, error) {
 		b, err := gw.SetTagBinding(ctx, actorID(ctx), in.Body.Key, kind, &in.Name, in.Body.Value,
 			a.scopeFor(ctx, kind, "read"), a.scopeFor(ctx, kind, "update"))
 		if err != nil {
@@ -352,15 +342,14 @@ func registerEntityTagRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 		return &tagBindingOutput{Body: toTagBindingBody(b)}, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "remove-" + kind + "-tag",
 		Method:        http.MethodPost,
 		Path:          base + ":removeTag",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Remove a tag value from a " + kind,
 		Description:   "Removes a key's value from a " + kind + ". Gated by " + kind + ":update.",
-		Middlewares:   huma.Middlewares{a.authn, a.require(kind, "update")},
-	}, func(ctx context.Context, in *entityRemoveTagInput) (*struct{}, error) {
+	}, kind, "update"), func(ctx context.Context, in *entityRemoveTagInput) (*struct{}, error) {
 		if err := gw.DeleteTagBinding(ctx, actorID(ctx), in.Body.Key, kind, &in.Name,
 			a.scopeFor(ctx, kind, "read"), a.scopeFor(ctx, kind, "update")); err != nil {
 			return nil, mapTagErr(err)

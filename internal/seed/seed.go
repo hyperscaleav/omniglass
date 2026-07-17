@@ -187,6 +187,30 @@ func seedSystemTypes(ctx context.Context, gw storage.Gateway) error {
 	return nil
 }
 
+// SeedRole is one official role as declared in roles.yaml, before the DB upsert.
+type SeedRole struct {
+	ID          string
+	Permissions []string
+	Inherits    []string
+}
+
+// SeededRoles parses the embedded roles.yaml and returns the official roles as
+// declared. It is the same source seedRoles upserts, exposed so a test can assert
+// the seed against other invariants (e.g. that every granted permission maps to a
+// routed capability) without standing up a database. A parse failure is a
+// build-time bug in an embedded asset, so it panics rather than returning an error.
+func SeededRoles() []SeedRole {
+	var doc rolesDoc
+	if err := yaml.Unmarshal(rolesYAML, &doc); err != nil {
+		panic("seed: parse roles.yaml: " + err.Error())
+	}
+	out := make([]SeedRole, 0, len(doc.Roles))
+	for _, r := range doc.Roles {
+		out = append(out, SeedRole{ID: r.ID, Permissions: r.Permissions, Inherits: r.Inherits})
+	}
+	return out
+}
+
 func seedRoles(ctx context.Context, gw storage.Gateway) error {
 	var doc rolesDoc
 	if err := yaml.Unmarshal(rolesYAML, &doc); err != nil {

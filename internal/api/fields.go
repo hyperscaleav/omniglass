@@ -140,14 +140,13 @@ type updateFieldValueInput struct {
 // a field:<action> permission; there is no ABAC scope (the catalog is estate-wide
 // like the type registries).
 func registerFieldRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-field-definitions",
 		Method:      http.MethodGet,
 		Path:        "/field-definitions",
 		Summary:     "List field definitions",
 		Description: "Lists every field defined on any component_type (the catalog directory). Gated by field:read.",
-		Middlewares: huma.Middlewares{a.authn, a.require("field", "read")},
-	}, func(ctx context.Context, _ *struct{}) (*listFieldDefinitionsOutput, error) {
+	}, "field", "read"), func(ctx context.Context, _ *struct{}) (*listFieldDefinitionsOutput, error) {
 		defs, err := gw.ListFieldDefinitions(ctx)
 		if err != nil {
 			return nil, mapFieldErr(err)
@@ -160,15 +159,14 @@ func registerFieldRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		return out, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "create-field-definition",
 		Method:        http.MethodPost,
 		Path:          "/field-definitions",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Define a field",
 		Description:   "Declares a typed field on a component_type. The default, if given, is validated against data_type. Gated by field:create.",
-		Middlewares:   huma.Middlewares{a.authn, a.require("field", "create")},
-	}, func(ctx context.Context, in *createFieldDefinitionInput) (*fieldDefinitionOutput, error) {
+	}, "field", "create"), func(ctx context.Context, in *createFieldDefinitionInput) (*fieldDefinitionOutput, error) {
 		def, err := encodeFieldDefault(in.Body.DefaultValue)
 		if err != nil {
 			return nil, err
@@ -185,14 +183,13 @@ func registerFieldRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		return &fieldDefinitionOutput{Body: toFieldDefinitionBody(fd)}, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "update-field-definition",
 		Method:      http.MethodPatch,
 		Path:        "/field-definitions/{id}",
 		Summary:     "Update a field definition",
 		Description: "Replaces a field's data_type and default value, revalidating the default. component_type and name are fixed at creation. Gated by field:update.",
-		Middlewares: huma.Middlewares{a.authn, a.require("field", "update")},
-	}, func(ctx context.Context, in *updateFieldDefinitionInput) (*fieldDefinitionOutput, error) {
+	}, "field", "update"), func(ctx context.Context, in *updateFieldDefinitionInput) (*fieldDefinitionOutput, error) {
 		def, err := encodeFieldDefault(in.Body.DefaultValue)
 		if err != nil {
 			return nil, err
@@ -204,15 +201,14 @@ func registerFieldRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		return &fieldDefinitionOutput{Body: toFieldDefinitionBody(fd)}, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "delete-field-definition",
 		Method:        http.MethodDelete,
 		Path:          "/field-definitions/{id}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete a field definition",
 		Description:   "Removes a field definition by id. Gated by field:delete.",
-		Middlewares:   huma.Middlewares{a.authn, a.require("field", "delete")},
-	}, func(ctx context.Context, in *fieldDefinitionIDInput) (*struct{}, error) {
+	}, "field", "delete"), func(ctx context.Context, in *fieldDefinitionIDInput) (*struct{}, error) {
 		if err := gw.DeleteFieldDefinition(ctx, actorID(ctx), in.ID); err != nil {
 			return nil, mapFieldErr(err)
 		}
@@ -222,14 +218,13 @@ func registerFieldRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	// Value routes. Unlike the definition catalog these are ABAC-scoped to the
 	// component: the field:<action> scope contains the owning component (the arc),
 	// mirroring the variable value routes.
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-effective-fields",
 		Method:      http.MethodGet,
 		Path:        "/components/{name}/fields",
 		Summary:     "List a component's effective fields",
 		Description: "Each field defined on the component's type, resolved to the set literal or the type default (is_set marks the override). Gated by field:read; the component must be in the caller's field read scope.",
-		Middlewares: huma.Middlewares{a.authn, a.require("field", "read")},
-	}, func(ctx context.Context, in *effectiveFieldsInput) (*effectiveFieldsOutput, error) {
+	}, "field", "read"), func(ctx context.Context, in *effectiveFieldsInput) (*effectiveFieldsOutput, error) {
 		eff, err := gw.EffectiveFields(ctx, in.Name, a.scopeFor(ctx, "field", "read"))
 		if err != nil {
 			return nil, mapFieldErr(err)
@@ -242,15 +237,14 @@ func registerFieldRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		return out, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "set-field-value",
 		Method:        http.MethodPost,
 		Path:          "/components/{name}/fields",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Set a field value on a component",
 		Description:   "Sets a literal for a field defined on the component's type, validated against its data_type. Gated by field:create; the component must be in the caller's field create scope.",
-		Middlewares:   huma.Middlewares{a.authn, a.require("field", "create")},
-	}, func(ctx context.Context, in *setFieldValueInput) (*fieldValueOutput, error) {
+	}, "field", "create"), func(ctx context.Context, in *setFieldValueInput) (*fieldValueOutput, error) {
 		raw, err := json.Marshal(in.Body.Value)
 		if err != nil {
 			return nil, huma.Error422UnprocessableEntity("value is not encodable")
@@ -262,14 +256,13 @@ func registerFieldRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		return &fieldValueOutput{Body: toFieldValueBody(fv)}, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "update-field-value",
 		Method:      http.MethodPatch,
 		Path:        "/field-values/{id}",
 		Summary:     "Update a field value",
 		Description: "Replaces a field value's literal, revalidated against the field's fixed data_type. Gated by field:update; read and update scopes on the owning component drive the 404 versus 403 split.",
-		Middlewares: huma.Middlewares{a.authn, a.require("field", "update")},
-	}, func(ctx context.Context, in *updateFieldValueInput) (*fieldValueOutput, error) {
+	}, "field", "update"), func(ctx context.Context, in *updateFieldValueInput) (*fieldValueOutput, error) {
 		raw, err := json.Marshal(in.Body.Value)
 		if err != nil {
 			return nil, huma.Error422UnprocessableEntity("value is not encodable")
@@ -282,15 +275,14 @@ func registerFieldRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		return &fieldValueOutput{Body: toFieldValueBody(fv)}, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "delete-field-value",
 		Method:        http.MethodDelete,
 		Path:          "/field-values/{id}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete a field value",
 		Description:   "Clears a component's override for a field, reverting it to the type default. Gated by field:delete; read and delete scopes on the owning component drive the 404 versus 403 split.",
-		Middlewares:   huma.Middlewares{a.authn, a.require("field", "delete")},
-	}, func(ctx context.Context, in *fieldValueIDInput) (*struct{}, error) {
+	}, "field", "delete"), func(ctx context.Context, in *fieldValueIDInput) (*struct{}, error) {
 		if err := gw.DeleteFieldValue(ctx, actorID(ctx), in.ID,
 			a.scopeFor(ctx, "field", "read"), a.scopeFor(ctx, "field", "delete")); err != nil {
 			return nil, mapFieldErr(err)

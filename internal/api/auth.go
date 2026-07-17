@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -111,6 +112,15 @@ type authenticator struct {
 	once   sync.Once
 	index  rbac.RoleIndex
 	idxErr error
+
+	// perms is the set of every capability the route surface declares through
+	// gated(), keyed by the ":"-joined token string ("location:read",
+	// "audit:read:admin"). It is the permission universe: the read side (the roles
+	// view) reports it so an operator can see held-vs-missing capabilities, and it
+	// is exactly the set stamped onto the OpenAPI operations. Populated once per
+	// process during route registration (single-threaded, before the first
+	// request), so no mutex; many routes share a permission, so a set dedupes.
+	perms map[string]struct{}
 }
 
 func (a *authenticator) roleIndex(ctx context.Context) (rbac.RoleIndex, error) {
@@ -240,6 +250,40 @@ func (a *authenticator) require(tokens ...string) func(huma.Context, func(huma.C
 		}
 		next(ctx)
 	}
+}
+
+// gated is the single registration helper for a capability-gated route. It takes
+// the operation and the required permission tokens and returns the operation with
+// three things set together so they can never drift: the authn+require middleware
+// stack (unchanged enforcement), the "x-omniglass-permission" OpenAPI extension so
+// the required permission is published per-operation in the generated spec, and a
+// record in the permission registry (a.perms) so the read side can report the full
+// universe. Every gated route MUST register through gated(...); the authn-only
+// self-scoped routes and the public routes do not, so they carry no stamp and no
+// registry entry (the invariant the spec-contract test asserts).
+func (a *authenticator) gated(op huma.Operation, tokens ...string) huma.Operation {
+	perm := strings.Join(tokens, ":")
+	if a.perms != nil {
+		a.perms[perm] = struct{}{}
+	}
+	if op.Extensions == nil {
+		op.Extensions = map[string]any{}
+	}
+	op.Extensions["x-omniglass-permission"] = perm
+	// authn then require, ahead of any operation-specific middleware the caller set.
+	op.Middlewares = append(huma.Middlewares{a.authn, a.require(tokens...)}, op.Middlewares...)
+	return op
+}
+
+// registeredPerms returns the permission universe (every capability declared via
+// gated()) as a sorted, deduped slice, for the roles view's held-vs-missing report.
+func (a *authenticator) registeredPerms() []string {
+	out := make([]string, 0, len(a.perms))
+	for p := range a.perms {
+		out = append(out, p)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // scopeFor resolves visible_set(P, action) for a resource from the request
@@ -871,7 +915,12 @@ func mapPasswordErr(err error) error {
 // rolesOutput is the body of GET /api/v1/roles.
 type rolesOutput struct {
 	Body struct {
-		Roles []roleBody `json:"roles"`
+		// PermissionUniverse is every capability the route surface enforces (the same
+		// set stamped onto the OpenAPI operations), sorted. It is the denominator for
+		// the net view: a role's Held is a subset of it, and the missing set is the
+		// remainder. Sent once, identical for every role.
+		PermissionUniverse []string   `json:"permission_universe"`
+		Roles              []roleBody `json:"roles"`
 	}
 }
 
@@ -886,6 +935,11 @@ type roleBody struct {
 	// role index (inheritance, wildcard, and the :read floor resolved), so the UI
 	// shows a role's real reach without re-implementing the resolution.
 	EffectivePermissions []string `json:"effective_permissions"`
+	// Held is the subset of permission_universe this role covers, resolved with the
+	// same rbac matcher as EffectivePermissions (so wildcard, the :read floor, and
+	// the > tail are honoured). The UI renders the universe with these lit and the
+	// remainder dimmed; missing = universe - held is computed client-side.
+	Held []string `json:"held"`
 }
 
 func (a *authenticator) rolesHandler(gw storage.Gateway) func(context.Context, *struct{}) (*rolesOutput, error) {
@@ -898,13 +952,23 @@ func (a *authenticator) rolesHandler(gw storage.Gateway) func(context.Context, *
 		if err != nil {
 			return nil, huma.Error500InternalServerError("list roles")
 		}
+		universe := a.registeredPerms()
 		out := &rolesOutput{}
+		out.Body.PermissionUniverse = universe
 		out.Body.Roles = make([]roleBody, 0, len(roles))
 		for _, r := range roles {
+			eff := idx.Flatten([]string{r.ID})
+			held := make([]string, 0, len(universe))
+			for _, p := range universe {
+				if eff.Allows(strings.Split(p, ":")...) {
+					held = append(held, p)
+				}
+			}
 			out.Body.Roles = append(out.Body.Roles, roleBody{
 				ID: r.ID, DisplayName: r.DisplayName, Description: r.Description,
 				Official: r.Official, Permissions: r.Permissions, Inherits: r.Inherits,
-				EffectivePermissions: idx.Flatten([]string{r.ID}).Strings(),
+				EffectivePermissions: eff.Strings(),
+				Held:                 held,
 			})
 		}
 		return out, nil
