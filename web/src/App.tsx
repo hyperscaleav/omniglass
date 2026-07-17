@@ -5,7 +5,8 @@ import TopBar from "./components/TopBar";
 import ImpersonationBanner from "./components/ImpersonationBanner";
 import CommandPalette from "./components/CommandPalette";
 import { sectionLabel } from "./lib/nav";
-import { useTheme, applyTheme } from "./lib/theme";
+import { useTheme, applyTheme, themeFromMe } from "./lib/theme";
+import { useSettingsMe } from "./lib/settings";
 
 // App is the authenticated shell: the nav rail, the sticky top bar, the routed
 // page, and the global ⌘K command palette. It owns the rail collapse state, the
@@ -14,11 +15,17 @@ const App: ParentComponent = (props) => {
   const location = useLocation();
   const section = createMemo(() => sectionLabel(location.pathname));
   const theme = useTheme();
+  // The effective theme comes from the settings engine (/settings/me). Until it
+  // resolves (or for a value it does not carry), the dark-only default holds.
+  const settingsMe = useSettingsMe();
 
   const [collapsed, setCollapsed] = createSignal(localStorage.getItem("og-collapsed") === "1");
   const [paletteOpen, setPaletteOpen] = createSignal(false);
 
-  createEffect(() => applyTheme(theme()));
+  createEffect(() => {
+    const me = settingsMe.data;
+    applyTheme(me ? themeFromMe(me) : theme());
+  });
   createEffect(() => localStorage.setItem("og-collapsed", collapsed() ? "1" : "0"));
 
   // Global ⌘K / Ctrl-K toggles the command palette.
