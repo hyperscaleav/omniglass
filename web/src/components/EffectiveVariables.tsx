@@ -4,7 +4,8 @@ import { effectiveVariables, effectiveVariablesKey, displayValue, type ResolvedV
 import { ValueDisplay } from "../pages/Variables";
 import { type BladeDef } from "../lib/blades";
 import { describeError } from "../lib/format";
-import { ChevronRight, Check } from "./icons";
+import KVRow from "./KVRow";
+import { Check } from "./icons";
 
 // EffectiveVariables lists the variables that resolve onto a component down the
 // cascade, one row per name (the winner). A row opens the variable's cascade as a
@@ -67,18 +68,15 @@ export default function EffectiveVariables(props: { component: string; onOpen: (
         <div class="overflow-hidden rounded-box border border-base-300">
           <For each={groups()}>
             {(g, i) => (
-              <button
-                class="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-base-content/5"
-                classList={{ "border-t border-base-300": i() > 0 }}
-                onClick={() => props.onOpen(g.name)}
-              >
-                <span class="min-w-0 truncate font-data text-sm">{g.name}</span>
-                <span class="badge badge-ghost badge-sm shrink-0">{g.winner.value_type}</span>
-                <span class="flex-1" />
-                <span class="hidden max-w-40 truncate font-data text-xs text-base-content/50 sm:inline">{displayValue(g.winner.value)}</span>
-                <span class="badge badge-primary badge-sm shrink-0">{tierLabel(g.winner)}</span>
-                <span class="shrink-0 text-base-content/40"><ChevronRight size={14} /></span>
-              </button>
+              <KVRow
+                first={i() === 0}
+                label={g.name}
+                labelMono
+                typeBadge={g.winner.value_type}
+                value={displayValue(g.winner.value)}
+                origin={tierLabel(g.winner)}
+                onDrillIn={() => props.onOpen(g.name)}
+              />
             )}
           </For>
         </div>

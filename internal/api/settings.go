@@ -37,14 +37,13 @@ type settingsNamespaceInput struct {
 // (merge-patch a namespace, restore a namespace, factory reset). Writes act on the
 // global scope in slice-0.
 func registerSettingsRoutes(api huma.API, a *authenticator, gw storage.Gateway, svc *settings.Service) {
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "get-settings",
 		Method:      http.MethodGet,
 		Path:        "/settings",
 		Summary:     "Get effective settings with provenance",
 		Description: "The effective settings document plus per-key provenance (which level won) and lock state. Gated by settings:read (admin).",
-		Middlewares: huma.Middlewares{a.authn, a.require("settings", "read")},
-	}, func(ctx context.Context, _ *struct{}) (*settingsReadOutput, error) {
+	}, "settings", "read"), func(ctx context.Context, _ *struct{}) (*settingsReadOutput, error) {
 		return resolveOutput(ctx, svc)
 	})
 
@@ -65,14 +64,13 @@ func registerSettingsRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 		return out, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "patch-settings-namespace",
 		Method:      http.MethodPatch,
 		Path:        "/settings/{namespace}",
 		Summary:     "Update a settings namespace",
 		Description: "Applies an RFC 7386 JSON Merge Patch to the namespace's global override; null on a key restores it. Gated by settings:update.",
-		Middlewares: huma.Middlewares{a.authn, a.require("settings", "update")},
-	}, func(ctx context.Context, in *settingsPatchInput) (*settingsReadOutput, error) {
+	}, "settings", "update"), func(ctx context.Context, in *settingsPatchInput) (*settingsReadOutput, error) {
 		// The merge is a single atomic read-modify-write in the Gateway, serialized
 		// against concurrent patches to the same namespace so no update is lost.
 		if _, err := gw.MergePatchSettingOverride(ctx, actorID(ctx), "global", in.Namespace, in.Body); err != nil {
@@ -81,30 +79,28 @@ func registerSettingsRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 		return resolveOutput(ctx, svc)
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "delete-settings-namespace",
 		Method:        http.MethodDelete,
 		Path:          "/settings/{namespace}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Restore a settings namespace to defaults",
 		Description:   "Drops the namespace's global override, restoring file and code defaults. Gated by settings:update.",
-		Middlewares:   huma.Middlewares{a.authn, a.require("settings", "update")},
-	}, func(ctx context.Context, in *settingsNamespaceInput) (*struct{}, error) {
+	}, "settings", "update"), func(ctx context.Context, in *settingsNamespaceInput) (*struct{}, error) {
 		if err := gw.DeleteSettingOverride(ctx, actorID(ctx), "global", in.Namespace); err != nil {
 			return nil, err
 		}
 		return nil, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "restore-settings-defaults",
 		Method:        http.MethodPost,
 		Path:          "/settings:restoreDefaults",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Restore all settings to defaults",
 		Description:   "Removes every global override (a factory reset). Gated by settings:update.",
-		Middlewares:   huma.Middlewares{a.authn, a.require("settings", "update")},
-	}, func(ctx context.Context, _ *struct{}) (*struct{}, error) {
+	}, "settings", "update"), func(ctx context.Context, _ *struct{}) (*struct{}, error) {
 		if err := gw.DeleteAllSettingOverrides(ctx, actorID(ctx), "global"); err != nil {
 			return nil, err
 		}

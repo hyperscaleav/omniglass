@@ -284,7 +284,7 @@ type Gateway interface {
 	// The value a component carries for it lives in field_value (a later slice).
 	ListFieldDefinitions(ctx context.Context) ([]FieldDefinition, error)
 	CreateFieldDefinition(ctx context.Context, actorID string, spec FieldDefinitionSpec) (*FieldDefinition, error)
-	UpdateFieldDefinition(ctx context.Context, actorID, id, dataType string, def json.RawMessage) (*FieldDefinition, error)
+	UpdateFieldDefinition(ctx context.Context, actorID, id, dataType, displayName string, def json.RawMessage) (*FieldDefinition, error)
 	DeleteFieldDefinition(ctx context.Context, actorID, id string) error
 
 	// field values: the literal a component sets for a field defined on its

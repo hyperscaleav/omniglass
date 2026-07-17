@@ -1072,11 +1072,11 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   `code` defaults, an optional operator `file`, and the `global` DB override) most-specific-wins in JSON map-space, tracking
   per-key **provenance** and enforcing a top-down **lock** (broader level wins). The single **`setting_override`** table holds
   only the override level, since the base layers are recomputed in memory each boot and restore is therefore a delete
-  ([ADR-0032](/architecture/decisions/#adr-0032-settings-persist-only-the-override-level-base-layers-are-recomputed-in-memory)),
+  ([ADR-0032](/architecture/decisions/#adr-0033-settings-persist-only-the-override-level-base-layers-are-recomputed-in-memory)),
   and its Gateway methods are **unscoped**, gated by the `settings:<action>` permission alone
-  ([ADR-0033](/architecture/decisions/#adr-0033-the-settings-gateway-is-unscoped-only-the-permission-gates-it)), reusing the
+  ([ADR-0033](/architecture/decisions/#adr-0034-the-settings-gateway-is-unscoped-only-the-permission-gates-it)), reusing the
   [cascade](/architecture/cascade/) primitive on the principal axis
-  ([ADR-0034](/architecture/decisions/#adr-0034-settings-resolve-as-a-cascade-over-principals-with-a-broader-wins-lock)). The
+  ([ADR-0034](/architecture/decisions/#adr-0035-settings-resolve-as-a-cascade-over-principals-with-a-broader-wins-lock)). The
   API exposes an admin **`GET /settings`** with provenance, a client-safe authn-only **`GET /settings/me`**, and **`PATCH`** /
   **`DELETE`** / **`POST /settings:restoreDefaults`** writes under `settings:read` / `settings:update`; the generated CLI and
   typed client follow. Two `profile`-domain namespaces seed (**`ui`** and **`keybindings`**), and **`ui.theme` is wired end to
@@ -1088,3 +1088,12 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   forbidden to a viewer), and web tests (the page renders a provenance badge; the theme mapper). Deferred to the fast-follow:
   the **group** and **user** override rungs and the Profile preferences tab, the `settings:lock` split for group-admins,
   `platform`-domain namespaces (`retention`, `integrations`), a GitOps read-only mode, and live file reload (SIGHUP).
+- **Field: an optional `display_name` on a definition.** A `field_definition` gains a nullable
+  **`display_name`**, a human label threaded schema through UI: the console shows the label wherever it is
+  set (the Fields editor on the component-type blade and the **Effective fields** panel), while the raw
+  `name` stays the unique key and the interpolation handle, so an unset label falls back to the key. The
+  column is additive and idempotent, presentation only. Proven by the storage round-trip (the definition
+  create and update carry the label, an unset label stores NULL), the HTTP e2e (the create body accepts
+  `display_name` and it round-trips through the catalog list), and the dev seed (the seeded display fields
+  carry labels without changing row counts). The [config, secrets, and variables](/architecture/variables/)
+  page keeps its `Partial` field badge.

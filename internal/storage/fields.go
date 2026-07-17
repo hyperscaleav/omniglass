@@ -32,6 +32,7 @@ type FieldDefinition struct {
 	ID            string
 	ComponentType string
 	Name          string
+	DisplayName   string          // optional human label; empty when unset (falls back to Name in the UI)
 	DataType      string          // string | int | float | bool | json
 	DefaultValue  json.RawMessage // nil when the field has no default
 	CreatedAt     time.Time
@@ -42,16 +43,32 @@ type FieldDefinition struct {
 type FieldDefinitionSpec struct {
 	ComponentType string
 	Name          string
+	DisplayName   string
 	DataType      string
 	DefaultValue  json.RawMessage
 }
 
-const fieldDefinitionCols = `id, component_type, name, data_type, default_value, created_at, updated_at`
+// nilIfEmpty maps an empty string to a SQL NULL, so an unset display_name stores
+// NULL (not ""), keeping "unset" and "" indistinguishable at the UI fallback.
+func nilIfEmpty(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
+const fieldDefinitionCols = `id, component_type, name, display_name, data_type, default_value, created_at, updated_at`
 
 func scanFieldDefinition(row pgx.Row) (*FieldDefinition, error) {
-	var fd FieldDefinition
-	if err := row.Scan(&fd.ID, &fd.ComponentType, &fd.Name, &fd.DataType, &fd.DefaultValue, &fd.CreatedAt, &fd.UpdatedAt); err != nil {
+	var (
+		fd          FieldDefinition
+		displayName *string // NULL when unset
+	)
+	if err := row.Scan(&fd.ID, &fd.ComponentType, &fd.Name, &displayName, &fd.DataType, &fd.DefaultValue, &fd.CreatedAt, &fd.UpdatedAt); err != nil {
 		return nil, err
+	}
+	if displayName != nil {
+		fd.DisplayName = *displayName
 	}
 	return &fd, nil
 }
@@ -94,10 +111,10 @@ func (p *PG) CreateFieldDefinition(ctx context.Context, actorID string, spec Fie
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	fd, err := scanFieldDefinition(tx.QueryRow(ctx, `
-		insert into field_definition (component_type, name, data_type, default_value)
-		values ($1, $2, $3, $4)
+		insert into field_definition (component_type, name, display_name, data_type, default_value)
+		values ($1, $2, $3, $4, $5)
 		returning `+fieldDefinitionCols,
-		spec.ComponentType, spec.Name, spec.DataType, []byte(spec.DefaultValue)))
+		spec.ComponentType, spec.Name, nilIfEmpty(spec.DisplayName), spec.DataType, []byte(spec.DefaultValue)))
 	if err != nil {
 		return nil, mapFieldDefinitionWriteErr(err)
 	}
@@ -114,7 +131,7 @@ func (p *PG) CreateFieldDefinition(ctx context.Context, actorID string, spec Fie
 // value, revalidating the default against the new data_type. component_type and
 // name are fixed at creation (renaming or reparenting a field is a later
 // slice). An unknown id is ErrFieldDefinitionNotFound.
-func (p *PG) UpdateFieldDefinition(ctx context.Context, actorID, id, dataType string, def json.RawMessage) (*FieldDefinition, error) {
+func (p *PG) UpdateFieldDefinition(ctx context.Context, actorID, id, dataType, displayName string, def json.RawMessage) (*FieldDefinition, error) {
 	if len(def) > 0 {
 		if err := variable.ValidateValue(variable.ValueType(dataType), def); err != nil {
 			return nil, fmt.Errorf("%w: %v", ErrInvalidValue, err)
@@ -128,9 +145,9 @@ func (p *PG) UpdateFieldDefinition(ctx context.Context, actorID, id, dataType st
 
 	fd, err := scanFieldDefinition(tx.QueryRow(ctx, `
 		update field_definition
-		set data_type = $2, default_value = $3, updated_at = now()
+		set data_type = $2, display_name = $3, default_value = $4, updated_at = now()
 		where id = $1
-		returning `+fieldDefinitionCols, id, dataType, []byte(def)))
+		returning `+fieldDefinitionCols, id, dataType, nilIfEmpty(displayName), []byte(def)))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrFieldDefinitionNotFound
 	}
@@ -183,6 +200,7 @@ func auditFieldDefinition(fd *FieldDefinition) map[string]any {
 		"id":             fd.ID,
 		"component_type": fd.ComponentType,
 		"name":           fd.Name,
+		"display_name":   fd.DisplayName,
 		"data_type":      fd.DataType,
 	}
 }
@@ -234,6 +252,7 @@ type FieldValue struct {
 type EffectiveField struct {
 	FieldID      string
 	Name         string
+	DisplayName  string // optional human label; empty when unset
 	DataType     string
 	DefaultValue json.RawMessage
 	SetValue     json.RawMessage // nil when the component has not overridden it
@@ -388,7 +407,7 @@ func (p *PG) EffectiveFields(ctx context.Context, componentName string, read sco
 		return nil, ErrComponentNotFound
 	}
 	rows, err := p.pool.Query(ctx, `
-		select fd.id, fd.name, fd.data_type, fd.default_value,
+		select fd.id, fd.name, fd.display_name, fd.data_type, fd.default_value,
 		       fv.value as set_value,
 		       coalesce(fv.value, fd.default_value) as effective_value,
 		       (fv.id is not null) as is_set,
@@ -407,10 +426,14 @@ func (p *PG) EffectiveFields(ctx context.Context, componentName string, read sco
 		var (
 			e             EffectiveField
 			def, set, val []byte
+			displayName   *string // NULL when unset
 			valueID       *string // NULL when the field is unset
 		)
-		if err := rows.Scan(&e.FieldID, &e.Name, &e.DataType, &def, &set, &val, &e.IsSet, &valueID); err != nil {
+		if err := rows.Scan(&e.FieldID, &e.Name, &displayName, &e.DataType, &def, &set, &val, &e.IsSet, &valueID); err != nil {
 			return nil, fmt.Errorf("storage: scan effective field: %w", err)
+		}
+		if displayName != nil {
+			e.DisplayName = *displayName
 		}
 		e.DefaultValue = copyRaw(def)
 		e.SetValue = copyRaw(set)

@@ -574,6 +574,7 @@ Declares a typed field on a component_type. The default, if given, is validated 
 | `--component-type` | string | (none) | The component_type this field is defined on |
 | `--data-type` | string | (none) | The declared value type |
 | `--default-value` | string | (none) | Optional type-level default, validated against data_type |
+| `--display-name` | string | (none) | Optional human label; falls back to name when unset |
 | `--name` | string | (none) | The field name; unique per component_type |
 
 Example:
@@ -628,6 +629,7 @@ Replaces a field's data_type and default value, revalidating the default. compon
 |---|---|---|---|
 | `--data-type` | string | (none) | The declared value type |
 | `--default-value` | string | (none) | Optional type-level default, validated against data_type |
+| `--display-name` | string | (none) | Optional human label; falls back to name when unset |
 
 Example:
 

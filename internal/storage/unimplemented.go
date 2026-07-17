@@ -297,7 +297,7 @@ func (UnimplementedGateway) ListFieldDefinitions(context.Context) ([]FieldDefini
 func (UnimplementedGateway) CreateFieldDefinition(context.Context, string, FieldDefinitionSpec) (*FieldDefinition, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) UpdateFieldDefinition(context.Context, string, string, string, json.RawMessage) (*FieldDefinition, error) {
+func (UnimplementedGateway) UpdateFieldDefinition(context.Context, string, string, string, string, json.RawMessage) (*FieldDefinition, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) DeleteFieldDefinition(context.Context, string, string) error {

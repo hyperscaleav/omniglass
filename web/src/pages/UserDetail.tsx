@@ -1,7 +1,8 @@
 import { type JSX, For, Show, createEffect, createMemo, createResource, createSignal, on } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import GrantBuilder from "../components/GrantBuilder";
-import { Fact, RelatedList } from "../components/DetailShell";
+import { RelatedList } from "../components/DetailShell";
+import KVStacked from "../components/KVStacked";
 import { Ban, Eye, Key, LogOut, Mask, Trash, X } from "../components/icons";
 import PasswordField from "../components/PasswordField";
 import Button from "../components/Button";
@@ -355,11 +356,11 @@ export function UserDetail(props: { id: string }) {
             fallback={
               <div class="grid grid-cols-2 gap-3 text-sm">
                 <Show when={pr().human}>
-                  <Fact label="Username" value={<span class="font-data">{pr().human!.username}</span>} />
-                  <Fact label="Email" value={pr().human!.email || <span class="text-base-content/40">not set</span>} />
+                  <KVStacked label="Username" value={<span class="font-data">{pr().human!.username}</span>} />
+                  <KVStacked label="Email" value={pr().human!.email || <span class="text-base-content/40">not set</span>} />
                 </Show>
                 <Show when={pr().service}>
-                  <Fact label="Label" value={<span class="font-data">{pr().service!.label}</span>} />
+                  <KVStacked label="Label" value={<span class="font-data">{pr().service!.label}</span>} />
                 </Show>
               </div>
             }

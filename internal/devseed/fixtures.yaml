@@ -166,13 +166,16 @@ files:
 field_definitions:
   - component_type: display
     name: asset_tag
+    display_name: Asset tag
     data_type: string
   - component_type: display
     name: diagonal_inches
+    display_name: Diagonal inches
     data_type: int
     default: 55
   - component_type: display
     name: location_note
+    display_name: Location note
     data_type: string
 
 # Components: one example device placed in the estate, so the Components directory

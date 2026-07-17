@@ -32,17 +32,19 @@ func TestFieldDefinitionCRUD(t *testing.T) {
 	gw := fieldGateway(t)
 	ctx := context.Background()
 
-	// "display" is an official seeded component_type.
+	// "display" is an official seeded component_type. A display_name is optional
+	// and presentation-only; the raw name stays the unique key.
 	fd, err := gw.CreateFieldDefinition(ctx, "", storage.FieldDefinitionSpec{
 		ComponentType: "display",
 		Name:          "asset_tag",
+		DisplayName:   "Asset tag",
 		DataType:      "string",
 		DefaultValue:  nil,
 	})
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	if fd.ID == "" || fd.Name != "asset_tag" || fd.ComponentType != "display" {
+	if fd.ID == "" || fd.Name != "asset_tag" || fd.DisplayName != "Asset tag" || fd.ComponentType != "display" {
 		t.Fatalf("unexpected definition: %+v", fd)
 	}
 
@@ -69,18 +71,18 @@ func TestFieldDefinitionCRUD(t *testing.T) {
 		t.Fatalf("want ErrInvalidValue on create, got %v", err)
 	}
 
-	// update the data_type + default.
+	// update the data_type, default, and display_name.
 	def := json.RawMessage(`"unknown"`)
-	up, err := gw.UpdateFieldDefinition(ctx, "", fd.ID, "string", def)
+	up, err := gw.UpdateFieldDefinition(ctx, "", fd.ID, "string", "Asset Tag (label)", def)
 	if err != nil {
 		t.Fatalf("update: %v", err)
 	}
-	if string(up.DefaultValue) != `"unknown"` {
-		t.Fatalf("default not updated: %s", up.DefaultValue)
+	if string(up.DefaultValue) != `"unknown"` || up.DisplayName != "Asset Tag (label)" {
+		t.Fatalf("update did not apply: %+v", up)
 	}
 
 	// the same validation gates update: a mismatched default is refused.
-	if _, err := gw.UpdateFieldDefinition(ctx, "", fd.ID, "int", json.RawMessage(`"nope"`)); !errors.Is(err, storage.ErrInvalidValue) {
+	if _, err := gw.UpdateFieldDefinition(ctx, "", fd.ID, "int", "", json.RawMessage(`"nope"`)); !errors.Is(err, storage.ErrInvalidValue) {
 		t.Fatalf("want ErrInvalidValue on update, got %v", err)
 	}
 

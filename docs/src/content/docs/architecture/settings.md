@@ -7,7 +7,7 @@ sidebar:
     variant: note
 ---
 
-:::note[Partial: the pure resolution engine, the `setting_override` store, the admin API (read-with-provenance, client-safe `/settings/me`, merge-patch writes, restore), the two permissions, the seeded `ui` and `keybindings` namespaces, and the Admin settings page are built at the **global** level ([ADR-0032](/architecture/decisions/#adr-0032-settings-persist-only-the-override-level-base-layers-are-recomputed-in-memory), [ADR-0033](/architecture/decisions/#adr-0033-the-settings-gateway-is-unscoped-only-the-permission-gates-it), [ADR-0034](/architecture/decisions/#adr-0034-settings-resolve-as-a-cascade-over-principals-with-a-broader-wins-lock)); the group and user rungs are a fast-follow]
+:::note[Partial: the pure resolution engine, the `setting_override` store, the admin API (read-with-provenance, client-safe `/settings/me`, merge-patch writes, restore), the two permissions, the seeded `ui` and `keybindings` namespaces, and the Admin settings page are built at the **global** level ([ADR-0033](/architecture/decisions/#adr-0033-settings-persist-only-the-override-level-base-layers-are-recomputed-in-memory), [ADR-0034](/architecture/decisions/#adr-0034-the-settings-gateway-is-unscoped-only-the-permission-gates-it), [ADR-0035](/architecture/decisions/#adr-0035-settings-resolve-as-a-cascade-over-principals-with-a-broader-wins-lock)); the group and user rungs are a fast-follow]
 Slice-0 ships the **global** rung of the cascade end to end: the pure `settings` merge and resolve primitive, the single unscoped `setting_override` table, the Huma routes, the two `settings:<action>` permissions, the two seeded `profile`-domain namespaces (`ui`, `keybindings`), `ui.theme` wired through to re-theme the SPA, and the Admin settings page (namespace sections, provenance badges, lock chips, restore). Deferred to the fast-follow: the **group** and **user** override rungs and the Profile preferences tab, the `settings:lock` split for group-admins, `platform`-domain namespaces (`retention`, `integrations`) with their features, a GitOps read-only mode, and live file reload (SIGHUP) instead of restart-to-reload.
 :::
 
@@ -17,7 +17,7 @@ resolves down location to system to component; the settings engine resolves down
 global to group to user. It is the same primitive (doctrine 5) pointed at identity instead of the estate.
 
 This generalizes the narrower "platform settings store" the [scaling](/architecture/scaling/) page sketched
-(see [ADR-0032](/architecture/decisions/#adr-0032-settings-persist-only-the-override-level-base-layers-are-recomputed-in-memory)):
+(see [ADR-0033](/architecture/decisions/#adr-0033-settings-persist-only-the-override-level-base-layers-are-recomputed-in-memory)):
 platform settings become one **domain** within the engine (global-only, admin-owned), and user preferences become
 the other (settings that cascade to groups and users).
 
@@ -83,7 +83,7 @@ Base layers live in memory, so Postgres holds **only the override levels**: a si
 model: **restore a namespace** is a `DELETE` of its row, **restore everything** truncates the scope, and the base
 layers re-supply the defaults. The table is **never boot-seeded**: it is operator data, and the seeding doctrine's
 "operator rows untouched" rule applies. Persisting only the override (not the file) is a recorded call
-([ADR-0032](/architecture/decisions/#adr-0032-settings-persist-only-the-override-level-base-layers-are-recomputed-in-memory)),
+([ADR-0033](/architecture/decisions/#adr-0033-settings-persist-only-the-override-level-base-layers-are-recomputed-in-memory)),
 diverging from the scaling page's "materialized in Postgres" sketch.
 
 ### The unscoped-Gateway carve-out
@@ -93,7 +93,7 @@ applicable query) has one deliberate exception here. Settings Gateway methods ar
 cascade settings describe the platform and its principals, not the estate, so the ABAC storage-scope invariant is
 **not applicable**, the same as the registry-type reads (`GET /types/...`). Only the `settings:<action>`
 permission gates them. This is a recorded carve-out
-([ADR-0033](/architecture/decisions/#adr-0033-the-settings-gateway-is-unscoped-only-the-permission-gates-it)),
+([ADR-0034](/architecture/decisions/#adr-0034-the-settings-gateway-is-unscoped-only-the-permission-gates-it)),
 not a missed invariant. The group and user levels will constrain override reads and writes by the acting principal
 (a user edits only their own `user` row), a per-principal ownership check that is a different mechanism than
 estate ABAC.
@@ -131,7 +131,7 @@ permission; the client-safe values reach ordinary users through `/settings/me`, 
 
 Reusing the [cascade](/architecture/cascade/) primitive on the principal axis, rather than writing a second
 resolver, is the deliberate call
-([ADR-0034](/architecture/decisions/#adr-0034-settings-resolve-as-a-cascade-over-principals-with-a-broader-wins-lock)):
+([ADR-0035](/architecture/decisions/#adr-0035-settings-resolve-as-a-cascade-over-principals-with-a-broader-wins-lock)):
 resolution, provenance, and the broader-wins lock are one mechanism the estate and the settings engine share. The
 engine itself is a **pure `settings` package** (no I/O beyond reading the operator file): the deep merge, the
 merge-patch, the cascade resolution, and the lock enforcement are the primary unit-test target, and the DB layer

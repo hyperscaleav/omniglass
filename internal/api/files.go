@@ -77,14 +77,13 @@ func (a *authenticator) canFileAdmin(ctx context.Context, action string) bool {
 // resource); create and delete are gated by file:create / file:delete; the
 // sensitive flag then fences individual rows to the admin tier.
 func registerFileRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-files",
 		Method:      http.MethodGet,
 		Path:        "/files",
 		Summary:     "List files",
 		Description: "Lists the file handles the caller may see (searchable metadata, no bytes). Sensitive files appear only to the admin tier. Gated by file:read.",
-		Middlewares: huma.Middlewares{a.authn, a.require("file", "read")},
-	}, func(ctx context.Context, _ *struct{}) (*listFilesOutput, error) {
+	}, "file", "read"), func(ctx context.Context, _ *struct{}) (*listFilesOutput, error) {
 		files, err := gw.ListFiles(ctx, a.canFileAdmin(ctx, "read"))
 		if err != nil {
 			return nil, mapFileErr(err)
@@ -97,15 +96,14 @@ func registerFileRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		return out, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "create-file",
 		Method:        http.MethodPost,
 		Path:          "/files",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Create a file from an upload",
 		Description:   "Stores the uploaded bytes as a content-addressed blob (identical bytes dedup to one blob) and writes the file handle pointing at it. Gated by file:create; a sensitive file additionally needs the admin tier (file:create:admin).",
-		Middlewares:   huma.Middlewares{a.authn, a.require("file", "create")},
-	}, func(ctx context.Context, in *createFileInput) (*fileOutput, error) {
+	}, "file", "create"), func(ctx context.Context, in *createFileInput) (*fileOutput, error) {
 		data, err := base64.StdEncoding.DecodeString(in.Body.Content)
 		if err != nil {
 			return nil, huma.Error422UnprocessableEntity("content is not valid base64")
@@ -126,14 +124,13 @@ func registerFileRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		return &fileOutput{Body: toFileBody(f)}, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "get-file",
 		Method:      http.MethodGet,
 		Path:        "/files/{id}",
 		Summary:     "Get a file's metadata",
 		Description: "Returns one file handle's searchable metadata (no bytes). A sensitive file is a non-disclosing 404 without the admin tier. Gated by file:read.",
-		Middlewares: huma.Middlewares{a.authn, a.require("file", "read")},
-	}, func(ctx context.Context, in *fileIDInput) (*fileOutput, error) {
+	}, "file", "read"), func(ctx context.Context, in *fileIDInput) (*fileOutput, error) {
 		f, err := gw.GetFile(ctx, in.ID, a.canFileAdmin(ctx, "read"))
 		if err != nil {
 			return nil, mapFileErr(err)
@@ -141,14 +138,13 @@ func registerFileRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		return &fileOutput{Body: toFileBody(f)}, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "download-file",
 		Method:      http.MethodGet,
 		Path:        "/files/{id}:download",
 		Summary:     "Download a file's bytes",
 		Description: "Returns a file's bytes (base64-encoded) read from the blob it points at, the hash verified on read. A sensitive file is a non-disclosing 404 without the admin tier. Gated by file:read.",
-		Middlewares: huma.Middlewares{a.authn, a.require("file", "read")},
-	}, func(ctx context.Context, in *fileIDInput) (*downloadFileOutput, error) {
+	}, "file", "read"), func(ctx context.Context, in *fileIDInput) (*downloadFileOutput, error) {
 		f, data, err := gw.DownloadFile(ctx, in.ID, a.canFileAdmin(ctx, "read"))
 		if err != nil {
 			return nil, mapFileErr(err)
@@ -160,15 +156,14 @@ func registerFileRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		return out, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "delete-file",
 		Method:        http.MethodDelete,
 		Path:          "/files/{id}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete a file",
 		Description:   "Removes a file handle. The underlying blob is left in place (garbage collection is a later slice). A sensitive file is a non-disclosing 404 without the admin tier. Gated by file:delete.",
-		Middlewares:   huma.Middlewares{a.authn, a.require("file", "delete")},
-	}, func(ctx context.Context, in *fileIDInput) (*struct{}, error) {
+	}, "file", "delete"), func(ctx context.Context, in *fileIDInput) (*struct{}, error) {
 		if err := gw.DeleteFile(ctx, actorID(ctx), in.ID, a.canFileAdmin(ctx, "delete")); err != nil {
 			return nil, mapFileErr(err)
 		}

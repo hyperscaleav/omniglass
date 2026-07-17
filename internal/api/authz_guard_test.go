@@ -34,6 +34,7 @@ var ungated = map[string]bool{
 	"POST /auth/me/sessions/{id}:revoke": true, // authn-only, self-scoped: revokes only the caller's own (a foreign id is a 404)
 	"POST /auth/me/sessions:revokeAll":   true, // authn-only, self-scoped: bulk-revokes only the caller's own, keeping the current one
 	"POST /auth/me/tokens":               true, // authn-only, self-scoped: mints a token only for the caller
+	"POST /auth/me:stopImpersonation":    true, // authn-only, self-scoped: ends only the caller's own impersonation session (identified by the request token)
 	"GET /settings/me":                   true, // authn-only: the caller's own client-visible effective settings (feeds the SPA at boot)
 }
 
@@ -93,6 +94,7 @@ type apiOp struct {
 	method     string
 	path       string // base-relative (the apiClient prepends /api/v1)
 	pathParams []string
+	perm       string // the x-omniglass-permission stamp, empty when unstamped
 }
 
 // operations parses the generated OpenAPI for the live operation set, so the
@@ -109,6 +111,7 @@ func operations(t *testing.T, gw storage.Gateway) []apiOp {
 				Name string `json:"name"`
 				In   string `json:"in"`
 			} `json:"parameters"`
+			Permission string `json:"x-omniglass-permission"`
 		} `json:"paths"`
 	}
 	if err := json.Unmarshal(raw, &doc); err != nil {
@@ -123,8 +126,37 @@ func operations(t *testing.T, gw storage.Gateway) []apiOp {
 					params = append(params, pa.Name)
 				}
 			}
-			out = append(out, apiOp{method: strings.ToUpper(m), path: p, pathParams: params})
+			out = append(out, apiOp{method: strings.ToUpper(m), path: p, pathParams: params, perm: op.Permission})
 		}
 	}
 	return out
+}
+
+// TestEveryGateIsPublished is the companion to TestEveryRouteIsGated: that guard
+// proves every route enforces a permission (403 for a no-grant principal); this
+// one proves every enforced permission is PUBLISHED in the generated OpenAPI as
+// the x-omniglass-permission extension, and that the ungated routes carry no such
+// stamp. Together they make "gated" and "stamped" the same set, so the spec is a
+// faithful, machine-readable map of the authz contract (goal 1 of the slice).
+func TestEveryGateIsPublished(t *testing.T) {
+	// Spec generation only registers routes; it never queries the gateway, so a
+	// stub keeps this a fast no-DB unit test.
+	var gw storage.Gateway = storage.UnimplementedGateway{}
+	for _, op := range operations(t, gw) {
+		key := op.method + " " + op.path
+		if ungated[key] {
+			if op.perm != "" {
+				t.Errorf("%s is in the ungated allow-list but carries x-omniglass-permission %q; an ungated route must not be stamped", key, op.perm)
+			}
+			continue
+		}
+		if op.perm == "" {
+			t.Errorf("%s carries no x-omniglass-permission; every gated route must register through gated(...) so its required permission is published in the spec", key)
+			continue
+		}
+		// The stamp must be a well-formed <resource>:<action>[:tier] permission.
+		if n := len(strings.Split(op.perm, ":")); n < 2 || n > 3 {
+			t.Errorf("%s has malformed x-omniglass-permission %q (want <resource>:<action>[:tier])", key, op.perm)
+		}
+	}
 }

@@ -23,11 +23,15 @@ model underneath is [identity and access](/architecture/identity-access/).
 **Admin > Roles** (with `role:read:admin`) is the catalog of the built-in roles on the same list surface as Users
 and Groups: a directory row per role (its id, whether it is **official**, what it inherits, and how many
 permissions it confers), ordered least to most powerful (viewer, operator, deploy, admin, owner). Open a row for
-its read-only **blade**: the description and its **effective permissions**, the full set it confers once
-inheritance, wildcards, and the read floor are resolved (so `owner` reads as `> everything`, while `admin` is
-broad but not the superuser, and an admin-sensitive permission like `audit:read:admin` is marked with its
-`:admin` tier). It is a teaching surface: it renders the real seeded roles, not a static table. Custom-role
-creation and editing are coming; today the built-in roles are read-only.
+its read-only **blade**, which shows the role's permissions as a **net** view against the full set of
+capabilities the platform enforces (the **permission universe**). A `Held / Missing / All` toggle switches
+between the permissions the role **holds**, the ones it is **missing**, and the whole universe with each lit or
+dimmed, listed one per line in alphabetical order. Held is resolved the same way the role acts at runtime
+(inheritance, wildcards, and the read floor applied), so `viewer` holds only the reads it can reach (no
+`secret:read`, no admin-tier reads), `admin` holds nearly everything, `owner` holds all of it, and an
+admin-sensitive permission like `audit:read:admin` is tinted for its `:admin` tier. It is a teaching surface: it
+renders the real seeded roles against the real routed capabilities, not a static table. Custom-role creation and
+editing are coming; today the built-in roles are read-only.
 
 ## Groups
 

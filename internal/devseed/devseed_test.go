@@ -63,6 +63,7 @@ func TestFixturesShape(t *testing.T) {
 	// check its field is actually declared in the same document.
 	validDataTypes := map[string]bool{"string": true, "int": true, "float": true, "bool": true, "json": true}
 	seenField := map[string]bool{}
+	var assetTagDisplay string
 	for _, fd := range doc.FieldDefinitions {
 		if fd.Name == "" || fd.ComponentType == "" {
 			t.Errorf("field definition %+v missing name or component_type", fd)
@@ -70,7 +71,14 @@ func TestFixturesShape(t *testing.T) {
 		if !validDataTypes[fd.DataType] {
 			t.Errorf("field definition %q has unsupported data_type %q", fd.Name, fd.DataType)
 		}
+		if fd.Name == "asset_tag" {
+			assetTagDisplay = fd.DisplayName
+		}
 		seenField[fd.Name] = true
+	}
+	// A field carries an optional human label; the seed sets one on asset_tag.
+	if assetTagDisplay != "Asset tag" {
+		t.Errorf("asset_tag display_name = %q, want \"Asset tag\"", assetTagDisplay)
 	}
 
 	// Components place a device in the estate; a component that names a location must

@@ -34,7 +34,7 @@ type impersonateOutput struct {
 // all-scope) is the middleware; the escalation guard (the caller must cover the
 // target's capabilities) is enforced in the handler.
 func registerImpersonationRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "impersonate-principal",
 		Method:        http.MethodPost,
 		Path:          "/principals/{id}:impersonate",
@@ -42,8 +42,7 @@ func registerImpersonationRoutes(api huma.API, a *authenticator, gw storage.Gate
 		Summary:       "Impersonate a principal (view-as or act-as)",
 		Description:   "Mints a bounded, revocable token to view as (read-only) or act as (full) the target. Gated by principal:impersonate (all-scope). Refused on self, on an owner target (owners are un-impersonatable by anyone), when it would grant a capability the caller lacks (the escalation guard), or from within an existing impersonation.",
 		Errors:        []int{http.StatusForbidden, http.StatusNotFound, http.StatusUnprocessableEntity},
-		Middlewares:   huma.Middlewares{a.authn, a.require("principal", "impersonate")},
-	}, func(ctx context.Context, in *impersonateInput) (*impersonateOutput, error) {
+	}, "principal", "impersonate"), func(ctx context.Context, in *impersonateInput) (*impersonateOutput, error) {
 		actor, ok := principalFrom(ctx)
 		if !ok {
 			return nil, huma.Error401Unauthorized("unauthenticated")

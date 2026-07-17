@@ -42,9 +42,9 @@ func TestFieldDefinitionAPI(t *testing.T) {
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
-	// Define a field on the "display" type.
+	// Define a field on the "display" type, with an optional human label.
 	c.do(ownerTok, http.MethodPost, "/field-definitions",
-		map[string]any{"component_type": "display", "name": "asset_tag", "data_type": "string"},
+		map[string]any{"component_type": "display", "name": "asset_tag", "display_name": "Asset tag", "data_type": "string"},
 		http.StatusCreated)
 
 	// A duplicate name on the same type conflicts.
@@ -63,6 +63,7 @@ func TestFieldDefinitionAPI(t *testing.T) {
 			ID            string `json:"id"`
 			ComponentType string `json:"component_type"`
 			Name          string `json:"name"`
+			DisplayName   string `json:"display_name"`
 			DataType      string `json:"data_type"`
 		} `json:"field_definitions"`
 	}
@@ -73,16 +74,20 @@ func TestFieldDefinitionAPI(t *testing.T) {
 	if fd := listed.FieldDefinitions[0]; fd.ComponentType != "display" || fd.Name != "asset_tag" || fd.DataType != "string" {
 		t.Fatalf("listed definition = %+v, want display/asset_tag/string", fd)
 	}
+	if listed.FieldDefinitions[0].DisplayName != "Asset tag" {
+		t.Fatalf("display_name = %q, want \"Asset tag\"", listed.FieldDefinitions[0].DisplayName)
+	}
 }
 
 type effectiveFieldResp struct {
-	FieldID  string `json:"field_id"`
-	Name     string `json:"name"`
-	DataType string `json:"data_type"`
-	Value    any    `json:"value"`
-	SetValue any    `json:"set_value"`
-	IsSet    bool   `json:"is_set"`
-	ValueID  string `json:"value_id"`
+	FieldID      string `json:"field_id"`
+	Name         string `json:"name"`
+	DataType     string `json:"data_type"`
+	Value        any    `json:"value"`
+	SetValue     any    `json:"set_value"`
+	DefaultValue any    `json:"default_value"`
+	IsSet        bool   `json:"is_set"`
+	ValueID      string `json:"value_id"`
 }
 
 // TestFieldValueAPI drives the field-value surface over HTTP: a component reads
@@ -127,9 +132,10 @@ func TestFieldValueAPI(t *testing.T) {
 		http.StatusCreated)
 
 	// Effective read before any override: the default, unset, with no value_id (the
-	// surface has nothing to clear).
-	if f := effectiveField(t, c, ownerTok, "lobby-display", "diagonal_inches"); f.Value.(float64) != 50 || f.IsSet || f.ValueID != "" {
-		t.Fatalf("want default 50 unset with empty value_id, got %+v", f)
+	// surface has nothing to clear). default_value carries the type default so the
+	// drill-in can render the type-default step of the chain.
+	if f := effectiveField(t, c, ownerTok, "lobby-display", "diagonal_inches"); f.Value.(float64) != 50 || f.IsSet || f.ValueID != "" || f.DefaultValue.(float64) != 50 {
+		t.Fatalf("want default 50 unset with empty value_id and default_value 50, got %+v", f)
 	}
 
 	// Set an override; the effective read now reports the set value and carries the
@@ -143,8 +149,10 @@ func TestFieldValueAPI(t *testing.T) {
 	if setBody.ID == "" || setBody.Value.(float64) != 80 {
 		t.Fatalf("set response = %+v, want value 80 with id", setBody)
 	}
-	if f := effectiveField(t, c, ownerTok, "lobby-display", "diagonal_inches"); f.Value.(float64) != 80 || !f.IsSet || f.ValueID != setBody.ID {
-		t.Fatalf("want set 80 with value_id %q, got %+v", setBody.ID, f)
+	// The effective value is now the override, but default_value still reports the
+	// type default (the drill-in shows it as the shadowed type-default step).
+	if f := effectiveField(t, c, ownerTok, "lobby-display", "diagonal_inches"); f.Value.(float64) != 80 || !f.IsSet || f.ValueID != setBody.ID || f.DefaultValue.(float64) != 50 {
+		t.Fatalf("want set 80 with value_id %q and default_value 50, got %+v", setBody.ID, f)
 	}
 
 	// A second value for the same field on the same component is a conflict.

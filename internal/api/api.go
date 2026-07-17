@@ -90,7 +90,7 @@ func NewHandler(gw storage.Gateway, opts ...Option) http.Handler {
 // (the live server) and OpenAPIJSON (the server-less spec dump), so the routed
 // surface and the generated spec can never drift.
 func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o options) {
-	a := &authenticator{gw: gw, api: api, secureCookies: o.secureCookies}
+	a := &authenticator{gw: gw, api: api, secureCookies: o.secureCookies, perms: map[string]struct{}{}}
 
 	huma.Register(api, huma.Operation{
 		OperationID: "get-healthz",
@@ -233,14 +233,13 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 		Middlewares: huma.Middlewares{a.authn},
 	}, a.meAvatarHandler)
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-roles",
 		Method:      http.MethodGet,
 		Path:        "/roles",
 		Summary:     "List roles",
 		Description: "Lists the roles with their metadata and effective (flattened) permissions. Gated by the role:read:admin capability.",
-		Middlewares: huma.Middlewares{a.authn, a.require("role", "read", "admin")},
-	}, a.rolesHandler(gw))
+	}, "role", "read", "admin"), a.rolesHandler(gw))
 
 	registerLocationRoutes(api, a, gw)
 	registerSystemRoutes(api, a, gw)
