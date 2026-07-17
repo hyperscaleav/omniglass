@@ -38,9 +38,11 @@ set).
 ::screenshot{#fields-schema}
 
 - **Add a field** (with `field:create`, an **operator** permission) uses the inline add row: name the
-  field (unique on that type), pick its **data type**, and optionally type a **default**. The default is
-  coerced to the data type (an `int` default is a number, not a string) and applies to every component of
-  the type until that component sets its own value.
+  field (unique on that type), optionally give it a **display name** (a human label), pick its **data
+  type**, and optionally type a **default**. The raw name stays the unique key and the interpolation
+  handle; the display name is presentation only, and the console shows it wherever it is set, falling back
+  to the name when it is not. The default is coerced to the data type (an `int` default is a number, not a
+  string) and applies to every component of the type until that component sets its own value.
 - The Fields editor is **operator data layered onto the type**, so it is editable even on a **seed-owned
   (official) component type**, which is otherwise read-only. It renders only for the **Component** kind;
   the other type registries do not carry fields this slice.
