@@ -16,23 +16,10 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
-type resolvedSecretResp struct {
-	Name      string `json:"name"`
-	OwnerKind string `json:"owner_kind"`
-	OwnerName string `json:"owner_name"`
-	Band      int    `json:"band"`
-	Winner    bool   `json:"winner"`
-	Fields    []struct {
-		Name   string `json:"name"`
-		Value  string `json:"value"`
-		Secret bool   `json:"secret"`
-	} `json:"fields"`
-}
-
 // TestSecretAPI drives the secret surface over HTTP: an owner seals secrets at
-// several scopes and reads the effective-secrets cascade for a component
-// (masked, winner resolved), while a component-scoped viewer may read the
-// cascade but is forbidden create and the all-scope directory.
+// several scopes, reads them masked in the directory, reveals and updates them
+// (plaintext only through the audited reveal / copy), while a component-scoped
+// viewer is forbidden every secret surface.
 func TestSecretAPI(t *testing.T) {
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
@@ -85,46 +72,34 @@ func TestSecretAPI(t *testing.T) {
 	// An unknown owner is a 422.
 	c.do(ownerTok, http.MethodPost, "/secrets", secretReq("poll", "location", "ghost", "x"), http.StatusUnprocessableEntity)
 
-	// The effective-secrets cascade for the codec: component wins over room over global.
-	resolved := effectiveSecrets(t, c, ownerTok, "codec-1")
-	if len(resolved) != 3 {
-		t.Fatalf("resolved = %d, want 3 candidates", len(resolved))
-	}
-	var winner *resolvedSecretResp
-	for i := range resolved {
-		if resolved[i].Winner {
-			if winner != nil {
-				t.Fatalf("more than one winner")
-			}
-			winner = &resolved[i]
-		}
-	}
-	if winner == nil || winner.OwnerKind != "component" || winner.Band != 3 {
-		t.Fatalf("winner = %+v, want component band 3", winner)
-	}
-	// Masked over the wire: the plaintext never appears.
-	for _, f := range winner.Fields {
-		if f.Name == "community" {
-			if !f.Secret || f.Value == "codec-community" {
-				t.Errorf("community field leaked: %+v", f)
-			}
-			if f.Value != secret.Masked {
-				t.Errorf("community value = %q, want mask", f.Value)
-			}
-		}
-	}
-
-	// Owner directory lists all three.
+	// Owner directory lists all three, masked over the wire: a secret field never
+	// carries plaintext in a read; the clear value comes only through the audited
+	// reveal / copy below.
 	var listed struct {
 		Secrets []struct {
 			ID        string `json:"id"`
 			Name      string `json:"name"`
 			OwnerKind string `json:"owner_kind"`
+			Fields    []struct {
+				Name   string `json:"name"`
+				Value  string `json:"value"`
+				Secret bool   `json:"secret"`
+			} `json:"fields"`
 		} `json:"secrets"`
 	}
 	json.Unmarshal(c.do(ownerTok, http.MethodGet, "/secrets", nil, http.StatusOK), &listed)
 	if len(listed.Secrets) != 3 {
 		t.Fatalf("owner list = %d, want 3", len(listed.Secrets))
+	}
+	for _, s := range listed.Secrets {
+		for _, f := range s.Fields {
+			if f.Secret && f.Value != secret.Masked {
+				t.Errorf("secret field %s/%s not masked: %q", s.Name, f.Name, f.Value)
+			}
+			if f.Value == "codec-community" {
+				t.Errorf("plaintext leaked in directory read: %s/%s", s.Name, f.Name)
+			}
+		}
 	}
 	// Find the component-owned poll so we know its plaintext.
 	var compPollID string
@@ -162,11 +137,10 @@ func TestSecretAPI(t *testing.T) {
 	}
 
 	// A component-scoped viewer: secret is off the *:read floor, so viewer has no
-	// secret:read at all. It reads none of the secret surfaces: not the effective-
-	// secrets cascade (which names secrets), not the directory, and it cannot create,
-	// reveal, copy, or update. This is the reported IAM leak closed for secrets too.
+	// secret:read at all. It reads none of the secret surfaces: not the directory,
+	// and it cannot create, reveal, copy, or update. This is the reported IAM leak
+	// closed for secrets too.
 	viewerTok := setupScopedViewer(t, ctx, dsn, "viewer-codec", "viewer", "component", comp.ID)
-	c.do(viewerTok, http.MethodGet, "/components/codec-1/effective-secrets", nil, http.StatusForbidden)
 	c.do(viewerTok, http.MethodPost, "/secrets", secretReq("nope", "component", "codec-1", "x"), http.StatusForbidden)
 	c.do(viewerTok, http.MethodGet, "/secrets", nil, http.StatusForbidden)
 	c.do(viewerTok, http.MethodPost, "/secrets/"+compPollID+":reveal", nil, http.StatusForbidden)
@@ -211,11 +185,6 @@ func TestSecretAPI(t *testing.T) {
 		if s.OwnerKind != "component" {
 			t.Errorf("operator saw an out-of-subtree secret: %s", s.OwnerKind)
 		}
-	}
-	// The operator keeps the pedagogical cascade view (it holds secret:read): the
-	// codec resolves poll at three tiers plus its own op-poll.
-	if got := effectiveSecrets(t, c, opTok, "codec-1"); len(got) != 4 {
-		t.Errorf("operator cascade = %d, want 4 (poll x3 + op-poll)", len(got))
 	}
 	// Delete stays admin-only.
 	c.do(opTok, http.MethodDelete, "/secrets/"+opCreated.ID, nil, http.StatusForbidden)
@@ -411,18 +380,6 @@ func listSecrets(t *testing.T, c *apiClient, tok string) []secretListItem {
 	}
 	if err := json.Unmarshal(raw, &out); err != nil {
 		t.Fatalf("decode secrets list: %v", err)
-	}
-	return out.Secrets
-}
-
-func effectiveSecrets(t *testing.T, c *apiClient, tok, comp string) []resolvedSecretResp {
-	t.Helper()
-	raw := c.do(tok, http.MethodGet, "/components/"+comp+"/effective-secrets", nil, http.StatusOK)
-	var out struct {
-		Secrets []resolvedSecretResp `json:"secrets"`
-	}
-	if err := json.Unmarshal(raw, &out); err != nil {
-		t.Fatalf("decode effective-secrets: %v", err)
 	}
 	return out.Secrets
 }

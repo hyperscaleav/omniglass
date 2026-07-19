@@ -845,11 +845,13 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   masking, no reveal). Typing is **inline**: a `value_type` of `string` / `int` / `float` / `bool` / `json` plus a
   jsonb `value`, validated against the type in a pure `internal/variable` package (no shape registry, unlike the
   secret). `GET|POST /variables`, `PATCH|DELETE /variables/{id}`, and `GET /components/{name}/effective-variables`
-  (the per-component cascade view). Reads ride the viewer floor; **create and update are granted to operators**
+  (the per-component cascade view, **since retired**, [#281](https://github.com/hyperscaleav/omniglass/issues/281)).
+  Reads ride the viewer floor; **create and update are granted to operators**
   (`variable:create,update`), delete stays `variable:delete` (admin, owner), the same split the secret got.
   Scoping a variable required wiring `variable` into the ABAC resolver's owner-arc tiers, exactly as the secret
-  did. The console adds a **Variables** directory (type in its own column) with a type-aware value editor and, on a
-  component's detail, the **effective-variables** cascade panel (top-to-bottom, the deepest winning). Deferred
+  did. The console adds a **Variables** directory (type in its own column) with a type-aware value editor; a
+  per-component **effective-variables** cascade panel also shipped and was **later retired**
+  ([#281](https://github.com/hyperscaleav/omniglass/issues/281), the panel-retirement note below). Deferred
   (ADR-0020): the **`template`** owner scope and cascade groups ([#184](https://github.com/hyperscaleav/omniglass/issues/184)),
   a `variable_type` registry (types are inline), the **`$var:`** interpolation consumer, and the secret-flagged
   variable.
@@ -867,7 +869,8 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   ciphertext cannot be lifted between rows. The load-bearing new piece is the **cascade resolver**: it walks the
   three owner trees up from a component, tags each owner with a band and depth, and ranks per name (highest tier,
   then deepest), returning the winner and the shadowed candidates. `GET /types/secret`, `/secrets` (all-scope
-  list, create, update, delete), `GET /components/{name}/effective-secrets` (the masked cascade view), and the
+  list, create, update, delete), `GET /components/{name}/effective-secrets` (the masked cascade view, **since
+  retired**, [#281](https://github.com/hyperscaleav/omniglass/issues/281)), and the
   audited decrypts `POST /secrets/{id}:reveal` and `:copy` (a clipboard copy, recorded under a distinct `copy`
   verb). Masked reads ride the viewer floor; **create and update** are gated by `secret:create` / `secret:update`
   and granted to **operators** in their scope; **delete** stays `secret:delete` (admin, owner); **reveal** and
@@ -875,9 +878,10 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   and owner may decrypt. Scoping a secret required wiring `secret` into the ABAC resolver's owner-arc tiers
   (location / system / component), so a scoped grant now confers secret scope over its subtree (before, only an
   all-scope owner could). The console adds a **Secrets** directory (type in its own column) with per-field
-  in-place reveal + copy adornments, and, on a component's detail, the **effective-secrets** list: each resolved
-  secret opens a blade that decrypts the value and shows the full cascade top-to-bottom (global to component,
-  the deepest winning). Renamed **credential to secret** (ADR-0017).
+  in-place reveal + copy adornments; a per-component **effective-secrets** list also shipped (each resolved
+  secret opening a blade that decrypts the value and shows the full cascade top-to-bottom) and was **later
+  retired** ([#281](https://github.com/hyperscaleav/omniglass/issues/281), the panel-retirement note below).
+  Renamed **credential to secret** (ADR-0017).
   Proven by a real-crypto testcontainer test (seal, jsonb round-trip, unseal; encrypted-at-rest; full cascade
   precedence), an HTTP e2e (the cascade, the authz split incl. the scoped-operator create / update, and the
   reveal / copy round-trips plus their 403s), a scope-resolver unit test for the owner-arc kinds, and the web
@@ -1094,7 +1098,8 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   `/<entity>/<id>` in **edit mode** via a one-shot pending-edit flag, so you tag and finish configuring in place.
   The detail is one accordion, **read-only in view and the sole writer in edit**: the own-field inputs and the
   `TagAdder` write controls appear only in edit (the footer Edit/Delete and the read-only effective-secrets/variables
-  panels are exempt), which retires the old drawer-reopen edit and the mutation-in-view. This is the Users
+  panels, both since retired ([#281](https://github.com/hyperscaleav/omniglass/issues/281)), were exempt), which
+  retires the old drawer-reopen edit and the mutation-in-view. This is the Users
   inline-blade-edit model generalised to inventory, on both the docked blade and the full page
   ([ADR-0027](/architecture/decisions/#adr-0027-create-is-a-route-inventory-create-and-edit-unify-on-the-detail-accordion),
   [#231](https://github.com/hyperscaleav/omniglass/issues/231)). The shared `TreeList` gains a per-surface edit slot
@@ -1287,3 +1292,19 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   (contributors flush before the primary save, and a throwing contributor aborts and keeps the blade in
   edit). The [config, secrets, and variables](/architecture/variables/) page keeps its `Partial` field
   badge.
+- **Config, secrets, and variables: the per-component effective-secrets and effective-variables panels retire.**
+  The standalone **Effective secrets** and **Effective variables** panels on the component detail, and their
+  `GET /components/{name}/effective-secrets` / `GET /components/{name}/effective-variables` routes (with the
+  generated `omniglass effective-secret list` / `effective-variable list` commands and the matching typed-client
+  methods), are **removed** ([#281](https://github.com/hyperscaleav/omniglass/issues/281), under the
+  [field](/architecture/variables/#field-an-operator-defined-typed-schema-on-a-type) epic
+  [#266](https://github.com/hyperscaleav/omniglass/issues/266)). The panels listed **every** cascade-resolving cell
+  that reached a component, mostly inherited noise; the **field** primitive is the schema-over-cells consumer, so a
+  component's values are now its **fields** (override versus type-default, the **Effective fields** panel), and a
+  secret or variable reaches a component by being **sourced into a field** (the deferred field `sources` model) or
+  **bound to a collection interface input**, not through a per-component cascade-browse panel. **Kept:** the storage
+  cascade **resolvers** (`ResolveSecrets` / `ResolveVariables`) as the internal primitive the future `$sec:` /
+  `$var:` interpolation consumer will call, and the **Secrets** and **Variables** directories (browse, create,
+  edit, reveal) with all their routes and CLI. The [config, secrets, and variables](/architecture/variables/) page
+  drops the retired-panel claims and the [decision log](/architecture/decisions/) records the call. No schema
+  change: the value cells, the resolvers, and the directories are all unchanged.

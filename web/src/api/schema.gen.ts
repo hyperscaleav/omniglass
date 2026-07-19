@@ -392,26 +392,6 @@ export interface paths {
         patch: operations["update-component"];
         trace?: never;
     };
-    "/components/{name}/effective-secrets": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Effective secrets for a component
-         * @description Resolves the secrets that cascade onto a component (global -> location -> system -> component, most-specific winning), each masked, winner and shadowed candidates. Gated by secret:read; the component must be in the caller's component read scope.
-         */
-        get: operations["effective-secrets"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/components/{name}/effective-tags": {
         parameters: {
             query?: never;
@@ -424,26 +404,6 @@ export interface paths {
          * @description Resolves the tags that cascade onto a component (global -> location -> system -> component): keys union, values override most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves only from a binding on the component itself. Gated by component:read; the component must be in the caller's component read scope.
          */
         get: operations["effective-tags"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/components/{name}/effective-variables": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Effective variables for a component
-         * @description Resolves the variables that cascade onto a component (global -> location -> system -> component, most-specific winning), winner and shadowed candidates. Gated by variable:read; the component must be in the caller's component read scope.
-         */
-        get: operations["effective-variables"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2137,7 +2097,7 @@ export interface paths {
         };
         /**
          * List variables (admin directory)
-         * @description Lists every variable. Requires an all-scope read; the scoped, per-component view is the effective-variables route. Gated by variable:read.
+         * @description Lists every variable. Requires an all-scope read. Gated by variable:read.
          */
         get: operations["list-variables"];
         put?: never;
@@ -2706,15 +2666,6 @@ export interface components {
             readonly $schema?: string;
             fields: components["schemas"]["EffectiveFieldBody"][] | null;
         };
-        EffectiveSecretsOutputBody: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/EffectiveSecretsOutputBody.json
-             */
-            readonly $schema?: string;
-            secrets: components["schemas"]["ResolvedSecretBody"][] | null;
-        };
         EffectiveTagsOutputBody: {
             /**
              * Format: uri
@@ -2723,15 +2674,6 @@ export interface components {
              */
             readonly $schema?: string;
             tags: components["schemas"]["ResolvedTagBody"][] | null;
-        };
-        EffectiveVariablesOutputBody: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/EffectiveVariablesOutputBody.json
-             */
-            readonly $schema?: string;
-            variables: components["schemas"]["ResolvedVariableBody"][] | null;
         };
         EnrollOutputBody: {
             /**
@@ -3369,27 +3311,6 @@ export interface components {
             /** @description The new password (at least 12 characters, not a common password, not containing the username) */
             password: string;
         };
-        ResolvedSecretBody: {
-            /**
-             * Format: int64
-             * @description Cascade tier: 0 global, 1 location, 2 system, 3 component
-             */
-            band: number;
-            /**
-             * Format: int64
-             * @description Distance up the tier's tree from the component (0 nearest)
-             */
-            depth: number;
-            fields: components["schemas"]["SecretFieldBody"][] | null;
-            id: string;
-            name: string;
-            owner_id?: string;
-            owner_kind: string;
-            owner_name?: string;
-            secret_type: string;
-            /** @description True for the resolved value; false for a shadowed candidate */
-            winner: boolean;
-        };
         ResolvedTagBody: {
             /**
              * Format: int64
@@ -3406,28 +3327,6 @@ export interface components {
             owner_kind: string;
             owner_name?: string;
             value: string;
-            /** @description True for the resolved value; false for a shadowed candidate */
-            winner: boolean;
-        };
-        ResolvedVariableBody: {
-            /**
-             * Format: int64
-             * @description Cascade tier: 0 global, 1 location, 2 system, 3 component
-             */
-            band: number;
-            /**
-             * Format: int64
-             * @description Distance up the tier's tree from the component (0 nearest)
-             */
-            depth: number;
-            id: string;
-            name: string;
-            owner_id?: string;
-            owner_kind: string;
-            owner_name?: string;
-            /** @description The value, shape given by value_type */
-            value: unknown;
-            value_type: string;
             /** @description True for the resolved value; false for a shadowed candidate */
             winner: boolean;
         };
@@ -4784,38 +4683,6 @@ export interface operations {
             };
         };
     };
-    "effective-secrets": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The component's name */
-                name: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EffectiveSecretsOutputBody"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
     "effective-tags": {
         parameters: {
             query?: never;
@@ -4835,38 +4702,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EffectiveTagsOutputBody"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "effective-variables": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The component's name */
-                name: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EffectiveVariablesOutputBody"];
                 };
             };
             /** @description Error */

@@ -1,6 +1,6 @@
 ---
 title: Variables
-description: "Plaintext typed free values owned at one scope and resolved down the cascade: the directory, create, edit, and the effective view on a component."
+description: "Plaintext typed free values owned at one scope and resolved down the cascade: the directory, create, and edit."
 screenshots:
   - id: variables
     path: /web/variables
@@ -27,10 +27,5 @@ attaches to), and the **value in the clear** (no mask, no reveal).
   operator permission) opens the type-aware value editor; **Delete** (with `variable:delete`, admin and
   owner) sits behind a confirm.
 
-**Effective variables on a component.** A component's detail carries an **Effective variables** list,
-below Effective secrets: the variables that resolve onto it through the cascade. Click one to open a
-nested blade showing the resolved value and the **full cascade**, the winning tier and the shadowed
-candidates, read **most-specific wins: component > system > location > global**.
-
-From the CLI the same surface is `omniglass variable list` / `create` / `update` / `delete` and
-`omniglass effective-variable list <component>` (see the [CLI reference](/reference/cli/)).
+From the CLI the same surface is `omniglass variable list` / `create` / `update` / `delete` (see the
+[CLI reference](/reference/cli/)).
