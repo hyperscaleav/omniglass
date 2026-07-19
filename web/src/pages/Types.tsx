@@ -377,14 +377,13 @@ function ComponentTypeFields(props: { typeId: string; canCreate: boolean }): JSX
           {(d) => (
             <div class="flex items-center justify-between gap-2 text-sm">
               <span class="flex items-baseline gap-2">
-                <span class="text-sm">{d.display_name || d.name}</span>
+                <span class="text-sm">{d.display_name || d.name}<Show when={d.required}><span class="ml-0.5 font-semibold text-error" aria-label="required">*</span></Show></span>
                 <Show when={d.display_name}><span class="font-data text-[11px] text-base-content/40">{d.name}</span></Show>
               </span>
               <span class="flex items-center gap-2 text-xs text-base-content/60">
                 <Show when={d.default_value !== undefined && d.default_value !== null}>
                   <span class="text-base-content/40">default {displayValue(d.default_value)}</span>
                 </Show>
-                <Show when={d.required}><span class="font-semibold text-error">required</span></Show>
                 <span class="badge badge-ghost badge-sm font-data">{d.data_type}</span>
               </span>
             </div>

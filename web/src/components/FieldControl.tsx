@@ -92,6 +92,7 @@ export default function FieldControl(props: {
           <span class="text-[13px] font-medium">
             {props.label}
             <Show when={props.required}><span class="ml-1 font-semibold text-error" aria-label="required">*</span></Show>
+            <span class="ml-2 font-data text-[10px] font-normal text-base-content/40">{props.dataType}</span>
           </span>
           <label
             class="flex shrink-0 items-center gap-1.5 text-[11px]"
@@ -110,7 +111,12 @@ export default function FieldControl(props: {
         <div class="mt-2">
           <Show
             when={overriding()}
-            fallback={<div class="font-data text-sm text-base-content/60">{hasResolved() ? props.resolved : "unset"}</div>}
+            fallback={
+              <div class="flex items-center gap-2">
+                <span class="font-data text-sm text-base-content/60">{hasResolved() ? props.resolved : "unset"}</span>
+                <span class="rounded border border-base-300 px-1.5 py-px text-[10px] text-base-content/40">{hasResolved() ? "default" : "no default"}</span>
+              </div>
+            }
           >
             <ValueInput
               valueType={props.dataType}
