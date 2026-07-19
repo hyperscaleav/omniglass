@@ -15,7 +15,9 @@ import (
 
 type nodeBody struct {
 	Name            string     `json:"name"`
+	DisplayName     string     `json:"display_name,omitempty"`
 	Description     string     `json:"description,omitempty"`
+	Location        *string    `json:"location,omitempty" doc:"The location the node sits in (descriptive placement, not scope)"`
 	Enrolled        bool       `json:"enrolled"`
 	LastHeartbeatAt *time.Time `json:"last_heartbeat_at,omitempty"`
 	EnrolledAt      *time.Time `json:"enrolled_at,omitempty"`
@@ -23,8 +25,8 @@ type nodeBody struct {
 
 func toNodeBody(n *storage.Node) nodeBody {
 	return nodeBody{
-		Name: n.Name, Description: n.Description, Enrolled: n.Enrolled,
-		LastHeartbeatAt: n.LastHeartbeatAt, EnrolledAt: n.EnrolledAt,
+		Name: n.Name, DisplayName: n.DisplayName, Description: n.Description, Location: n.LocationName,
+		Enrolled: n.Enrolled, LastHeartbeatAt: n.LastHeartbeatAt, EnrolledAt: n.EnrolledAt,
 	}
 }
 
@@ -44,8 +46,21 @@ type nodePathInput struct {
 
 type createNodeInput struct {
 	Body struct {
-		Name        string `json:"name" minLength:"1" doc:"Globally unique node name (also its NATS subject token, so no dots or whitespace)"`
-		Description string `json:"description,omitempty"`
+		Name        string  `json:"name" minLength:"1" doc:"Globally unique node name (also its NATS subject token, so no dots or whitespace)"`
+		DisplayName string  `json:"display_name,omitempty" doc:"Operator label; falls back to the name when empty"`
+		Description string  `json:"description,omitempty"`
+		Location    *string `json:"location,omitempty" doc:"Optional location the node sits in (descriptive placement, not scope)"`
+	}
+}
+
+// updateNodeInput is the PATCH body: a nil field is left unchanged. Name is not
+// patchable (the immutable estate address). A Location of "" clears the placement.
+type updateNodeInput struct {
+	Name string `path:"name"`
+	Body struct {
+		DisplayName *string `json:"display_name,omitempty"`
+		Description *string `json:"description,omitempty"`
+		Location    *string `json:"location,omitempty" doc:"Set the node's location, or \"\" to clear it"`
 	}
 }
 
@@ -121,8 +136,24 @@ func registerNodeRoutes(api huma.API, a *authenticator, gw storage.Gateway, nats
 			return nil, huma.Error422UnprocessableEntity("node name must be a single subject token (no dots, whitespace, or wildcards)")
 		}
 		n, err := gw.CreateNode(ctx, actorID(ctx), storage.NodeSpec{
-			Name: in.Body.Name, Description: in.Body.Description,
+			Name: in.Body.Name, DisplayName: in.Body.DisplayName, Description: in.Body.Description, LocationName: in.Body.Location,
 		}, a.scopeFor(ctx, "node", "create"))
+		if err != nil {
+			return nil, mapNodeErr(err)
+		}
+		return &nodeOutput{Body: toNodeBody(n)}, nil
+	})
+
+	huma.Register(api, a.gated(huma.Operation{
+		OperationID: "update-node",
+		Method:      http.MethodPatch,
+		Path:        "/nodes/{name}",
+		Summary:     "Update a node",
+		Description: "Patches a node's display name, description, and location (a nil field is unchanged; a location of \"\" clears it). The name is immutable. Requires an all-scope action. Gated by node:update.",
+	}, "node", "update"), func(ctx context.Context, in *updateNodeInput) (*nodeOutput, error) {
+		n, err := gw.UpdateNode(ctx, actorID(ctx), in.Name, storage.NodePatch{
+			DisplayName: in.Body.DisplayName, Description: in.Body.Description, LocationName: in.Body.Location,
+		}, a.scopeFor(ctx, "node", "read"), a.scopeFor(ctx, "node", "update"))
 		if err != nil {
 			return nil, mapNodeErr(err)
 		}
@@ -190,6 +221,8 @@ func mapNodeErr(err error) error {
 		return huma.Error401Unauthorized("invalid enrollment token")
 	case errors.Is(err, storage.ErrInvalidNodeName):
 		return huma.Error422UnprocessableEntity("node name must be a single subject token (no dots, whitespace, or wildcards)")
+	case errors.Is(err, storage.ErrLocationNotFound):
+		return huma.Error422UnprocessableEntity("location not found")
 	default:
 		return huma.Error500InternalServerError("node operation failed")
 	}

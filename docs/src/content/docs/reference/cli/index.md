@@ -1332,6 +1332,8 @@ Registers an edge node server-side (day-one enrollment: create, then :enroll to 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--description` | string | (none) |  |
+| `--display-name` | string | (none) | Operator label; falls back to the name when empty |
+| `--location` | string | (none) | Optional location the node sits in (descriptive placement, not scope) |
 | `--name` | string | (none) | Globally unique node name (also its NATS subject token, so no dots or whitespace) |
 
 Example:
@@ -1386,6 +1388,28 @@ Example:
 
 ```sh
 omniglass node list
+```
+
+### `omniglass node update`
+
+Update a node
+
+```
+omniglass node update <name> [flags]
+```
+
+Patches a node's display name, description, and location (a nil field is unchanged; a location of "" clears it). The name is immutable. Requires an all-scope action. Gated by node:update.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--description` | string | (none) |  |
+| `--display-name` | string | (none) |  |
+| `--location` | string | (none) | Set the node's location, or "" to clear it |
+
+Example:
+
+```sh
+omniglass node update <name>
 ```
 
 ## `omniglass node`

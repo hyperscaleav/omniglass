@@ -30,7 +30,9 @@ var (
 type Node struct {
 	PrincipalID     string
 	Name            string
+	DisplayName     string
 	Description     string
+	LocationName    *string
 	LastHeartbeatAt *time.Time
 	EnrolledAt      *time.Time
 	Enrolled        bool
@@ -38,10 +40,22 @@ type Node struct {
 	UpdatedAt       time.Time
 }
 
-// NodeSpec is the create input.
+// NodeSpec is the create input. DisplayName is the operator label (empty falls
+// back to the name on read); LocationName is an optional descriptive placement.
 type NodeSpec struct {
-	Name        string
-	Description string
+	Name         string
+	DisplayName  string
+	Description  string
+	LocationName *string
+}
+
+// NodePatch is the update input: a nil field is left unchanged. Name is not
+// patchable (it is the immutable estate address and enrollment identity). A
+// LocationName pointing at "" clears the placement.
+type NodePatch struct {
+	DisplayName  *string
+	Description  *string
+	LocationName *string
 }
 
 // WorklistTask is one enabled task resolved for a node: the content-addressed
@@ -65,11 +79,11 @@ type Worklist struct {
 	ConfigGeneration int64
 }
 
-const nodeCols = `principal_id, name, description, last_heartbeat_at, enrolled_at, created_at, updated_at`
+const nodeCols = `principal_id, name, coalesce(display_name, ''), description, location_name, last_heartbeat_at, enrolled_at, created_at, updated_at`
 
 func scanNode(row pgx.Row) (*Node, error) {
 	var n Node
-	if err := row.Scan(&n.PrincipalID, &n.Name, &n.Description, &n.LastHeartbeatAt, &n.EnrolledAt, &n.CreatedAt, &n.UpdatedAt); err != nil {
+	if err := row.Scan(&n.PrincipalID, &n.Name, &n.DisplayName, &n.Description, &n.LocationName, &n.LastHeartbeatAt, &n.EnrolledAt, &n.CreatedAt, &n.UpdatedAt); err != nil {
 		return nil, err
 	}
 	n.Enrolled = n.EnrolledAt != nil
@@ -95,9 +109,9 @@ func (p *PG) CreateNode(ctx context.Context, actorID string, spec NodeSpec, crea
 		return nil, fmt.Errorf("storage: create node principal: %w", err)
 	}
 	n, err := scanNode(tx.QueryRow(ctx, `
-		insert into node (principal_id, name, description)
-		values ($1, $2, $3)
-		returning `+nodeCols, pid, spec.Name, spec.Description))
+		insert into node (principal_id, name, display_name, description, location_name)
+		values ($1, $2, nullif($3, ''), $4, nullif($5, ''))
+		returning `+nodeCols, pid, spec.Name, spec.DisplayName, spec.Description, spec.LocationName))
 	if err != nil {
 		return nil, mapNodeWriteErr(err)
 	}
@@ -108,6 +122,48 @@ func (p *PG) CreateNode(ctx context.Context, actorID string, spec NodeSpec, crea
 		return nil, fmt.Errorf("storage: commit create node: %w", err)
 	}
 	return n, nil
+}
+
+// UpdateNode patches a node's display_name, description, and location (a nil
+// field is left unchanged; a LocationName of "" clears the placement). name is
+// not patched: it is the immutable estate address and enrollment identity. A
+// node is estate-wide, so the update requires an all scope, like create. An
+// unknown name is ErrNodeNotFound; an unknown location is ErrLocationNotFound.
+func (p *PG) UpdateNode(ctx context.Context, actorID, name string, patch NodePatch, read, action scope.Set) (*Node, error) {
+	if !read.All || !action.All {
+		return nil, ErrNodeForbidden
+	}
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("storage: begin update node: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	before, err := scanNode(tx.QueryRow(ctx, `select `+nodeCols+` from node where name = $1`, name))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNodeNotFound
+	} else if err != nil {
+		return nil, fmt.Errorf("storage: read node for update %q: %w", name, err)
+	}
+	after, err := scanNode(tx.QueryRow(ctx, `
+		update node set
+			display_name  = coalesce($2, display_name),
+			description   = coalesce($3, description),
+			location_name = case when $4 then nullif($5, '') else location_name end,
+			updated_at    = now()
+		where name = $1
+		returning `+nodeCols,
+		name, patch.DisplayName, patch.Description, patch.LocationName != nil, patch.LocationName))
+	if err != nil {
+		return nil, mapNodeWriteErr(err)
+	}
+	if err := writeAuditRes(ctx, tx, actorID, "update", "node", after.Name, before, after); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("storage: commit update node: %w", err)
+	}
+	return after, nil
 }
 
 // SetEnrollmentToken installs the node's enrollment secret as a bearer
@@ -319,6 +375,8 @@ func mapNodeWriteErr(err error) error {
 			return ErrNodeExists
 		case "23514": // check_violation (node_name_subject_safe_check)
 			return ErrInvalidNodeName
+		case "23503": // foreign_key_violation (location_name references a missing location)
+			return ErrLocationNotFound
 		}
 	}
 	return fmt.Errorf("storage: node write: %w", err)
