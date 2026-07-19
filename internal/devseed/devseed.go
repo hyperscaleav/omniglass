@@ -447,6 +447,15 @@ func seedReachability(ctx context.Context, gw storage.Gateway, actorID string) e
 		if _, err := gw.ClaimNode(ctx, reachNode, hex.EncodeToString(auth.HashToken(token))); err != nil {
 			return fmt.Errorf("devseed: claim reachability node: %w", err)
 		}
+		// Node tags (N2): a couple of governed tags so the console shows the node's
+		// Tags panel and the list's Tags column populated. Idempotent upserts.
+		nodeName := reachNode
+		if _, err := gw.SetTagBinding(ctx, actorID, "environment", "node", &nodeName, "prod", all, all); err != nil {
+			return fmt.Errorf("devseed: tag reachability node environment: %w", err)
+		}
+		if _, err := gw.SetTagBinding(ctx, actorID, "asset_id", "node", &nodeName, "NODE-EDGE-HQ", all, all); err != nil {
+			return fmt.Errorf("devseed: tag reachability node asset_id: %w", err)
+		}
 	} else if err != nil {
 		return fmt.Errorf("devseed: check reachability node: %w", err)
 	}

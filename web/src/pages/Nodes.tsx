@@ -288,15 +288,12 @@ function NodeBladeBody(props: { name: string; onEnrolled: (out: EnrollOutput) =>
             </Show>
           </div>
 
-          <div class="flex flex-col gap-1.5">
-            <span class="eyebrow">Tags</span>
-            <TagAdder
-              kind="node"
-              name={node().name}
-              canUpdate={edit.editing() && can(me.data, "node", "update")}
-              canCreateKey={can(me.data, "tag", "create")}
-            />
-          </div>
+          <TagAdder
+            kind="node"
+            name={node().name}
+            canUpdate={edit.editing() && can(me.data, "node", "update")}
+            canCreateKey={can(me.data, "tag", "create")}
+          />
 
           <div class="flex flex-col gap-1.5">
             <div class="flex items-baseline gap-1.5">
