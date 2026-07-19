@@ -139,6 +139,7 @@ export default defineConfig({
             { label: 'Sign in and your profile', slug: 'guides/operator/sign-in' },
             { label: 'Find things in your estate', slug: 'guides/operator/inventory' },
             { label: 'Work with an entity', slug: 'guides/operator/entities' },
+            { label: 'Nodes and reachability', slug: 'guides/operator/collection' },
             { label: 'The CLI', slug: 'guides/cli' },
           ],
         },

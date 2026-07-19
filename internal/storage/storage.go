@@ -232,6 +232,10 @@ type Gateway interface {
 	DeleteComponentType(ctx context.Context, actorID, id string) error
 	ListComponents(ctx context.Context, read scope.Set) ([]Component, error)
 	GetComponent(ctx context.Context, name string, read scope.Set) (*Component, error)
+	// ListComponentInterfaces returns a component's interfaces (the reachability
+	// panel's rows). Not scope-injected: the caller gates on the component being
+	// in read scope first, then reads its interfaces by the verified name.
+	ListComponentInterfaces(ctx context.Context, componentName string) ([]ComponentInterface, error)
 	CreateComponent(ctx context.Context, actorID string, spec ComponentSpec, create scope.Set) (*Component, error)
 	UpdateComponent(ctx context.Context, actorID, name string, patch ComponentPatch, read, action scope.Set) (*Component, error)
 	ComponentNameTaken(ctx context.Context, name string) (bool, error)
@@ -247,6 +251,66 @@ type Gateway interface {
 	CreateComponentMake(ctx context.Context, actorID string, m ComponentMake) (*ComponentMake, error)
 	UpdateComponentMake(ctx context.Context, actorID, id string, patch ComponentMakePatch) (*ComponentMake, error)
 	DeleteComponentMake(ctx context.Context, actorID, id string) error
+
+	// The interface tier: operator CRUD over placement-bound connections. An
+	// interface is not a scope-tree entity of its own; it hangs off a component
+	// (interface.component), so every method's scope cascades THROUGH that component
+	// (a component-tier scope.Set, from applicableKinds). A component-less
+	// (server-hosted) interface is reachable only under an all scope. The read/action
+	// split drives the non-disclosing 404 versus 403.
+	ListInterfaces(ctx context.Context, read scope.Set) ([]Interface, error)
+	GetInterface(ctx context.Context, id string, read scope.Set) (*Interface, error)
+	CreateInterface(ctx context.Context, actorID string, spec InterfaceSpec, create scope.Set) (*Interface, error)
+	UpdateInterface(ctx context.Context, actorID, id string, patch InterfacePatch, read, action scope.Set) (*Interface, error)
+	DeleteInterface(ctx context.Context, actorID, id string, read, action scope.Set) error
+
+	// The task tier: read-only over DERIVED collection work. A task is not
+	// operator-authored: it is derived when an interface is created (the node's
+	// unit of work over that connection) and carries no node column (its placement
+	// projects from the interface). Reads cascade through the interface's owning
+	// component, the same component-tier cascade as the interface itself.
+	ListTasks(ctx context.Context, read scope.Set) ([]Task, error)
+	GetTask(ctx context.Context, id string, read scope.Set) (*Task, error)
+
+	// The collection registries: estate-wide reference data (no scope.Set),
+	// seeded official and operator-extensible at org/template scope later.
+	UpsertDatapointType(ctx context.Context, dt DatapointType) error
+	ListDatapointTypes(ctx context.Context) ([]DatapointType, error)
+	UpsertInterfaceType(ctx context.Context, it InterfaceType) error
+	ListInterfaceTypes(ctx context.Context) ([]InterfaceType, error)
+
+	// The observed-metric sink. reject-not-project is applied by the caller
+	// (collection.Registry) before the write.
+	InsertMetricDatapoints(ctx context.Context, evs []MetricDatapointEvent) error
+	LatestMetric(ctx context.Context, componentName, key string) (*MetricDatapoint, error)
+	// LatestMetricInstance is the instance-scoped LatestMetric: the reachability
+	// layer signals are per-interface, so each interface resolves its own latest.
+	LatestMetricInstance(ctx context.Context, componentName, key, instance string) (*MetricDatapoint, error)
+
+	// The observed-state sink: the mirror of the metric sink for categorical
+	// verdicts (interface.reachable). reject-not-project and the transition-only
+	// guard are applied by the caller before the write. LatestState backs the
+	// ingest-side transition guard; StateTransitions is the ordered flip series
+	// the availability strip reads.
+	InsertStateDatapoints(ctx context.Context, evs []StateDatapointEvent) error
+	LatestState(ctx context.Context, componentName, key, instance string) (*StateDatapoint, error)
+	StateTransitions(ctx context.Context, componentName, key, instance string, since time.Time) ([]StateDatapoint, error)
+
+	// The node tier: the edge runtime's enrollment lifecycle and worklist. A node
+	// is estate-wide (all-scope create/enroll/read, like a principal). The claim,
+	// authenticate, heartbeat, and worklist paths are the node's own lane (gated by
+	// the enrollment token or the node's NATS subject grant, not RBAC scope).
+	CreateNode(ctx context.Context, actorID string, spec NodeSpec, create scope.Set) (*Node, error)
+	SetEnrollmentToken(ctx context.Context, actorID, name, tokenHashHex string, action scope.Set) (*Node, error)
+	ClaimNode(ctx context.Context, name, tokenHashHex string) (*Node, error)
+	AuthenticateNode(ctx context.Context, name, tokenHashHex string) (bool, error)
+	RecordHeartbeat(ctx context.Context, name string) error
+	NodeWorklist(ctx context.Context, name string) (Worklist, error)
+	// ResolveTaskOwner binds a task's owner component and confines the node to its
+	// own tasks, for the telemetry ingest consumer.
+	ResolveTaskOwner(ctx context.Context, taskID, nodeName string) (TaskOwner, bool, error)
+	GetNode(ctx context.Context, name string, read scope.Set) (*Node, error)
+	ListNodes(ctx context.Context, read scope.Set) ([]Node, error)
 
 	// The secret tier: a shape registry, scoped CRUD, an audited reveal, and the
 	// cascade resolver. A secret is owned on the exclusive arc (global or one of

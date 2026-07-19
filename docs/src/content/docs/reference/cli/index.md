@@ -842,6 +842,102 @@ Example:
 omniglass healthz
 ```
 
+## `omniglass interface`
+
+Commands for the interface resource
+
+### `omniglass interface create`
+
+Create an interface
+
+```
+omniglass interface create [flags]
+```
+
+Creates an interface owned by a component (or a server-hosted one, which needs an all-scoped grant). The create scope cascades through the owning component. Gated by interface:create.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--component` | string | (none) | Owning component name; omit for a server-hosted interface (needs an all-scoped grant) |
+| `--node` | string | (none) | Node placement name |
+| `--params` | string | (none) | Endpoint/target settings (jsonb) |
+| `--type` | string | (none) | An interface_type name (the protocol); the interface is named by it, unique within the component |
+
+Example:
+
+```sh
+omniglass interface create --type type
+```
+
+### `omniglass interface delete`
+
+Delete an interface
+
+```
+omniglass interface delete <id>
+```
+
+Deletes an interface, refused while a task still references it. Gated by interface:delete; read and delete scopes (through the component) drive the 404 versus 403 split.
+
+Example:
+
+```sh
+omniglass interface delete <id>
+```
+
+### `omniglass interface get`
+
+Get an interface
+
+```
+omniglass interface get <id>
+```
+
+Fetches an interface by id. An interface whose component is out of the caller's read scope is a non-disclosing 404. Gated by interface:read.
+
+Example:
+
+```sh
+omniglass interface get <id>
+```
+
+### `omniglass interface list`
+
+List interfaces in scope
+
+```
+omniglass interface list
+```
+
+Lists the interfaces whose owning component the caller may read (the component cascade). Gated by interface:read.
+
+Example:
+
+```sh
+omniglass interface list
+```
+
+### `omniglass interface update`
+
+Update an interface
+
+```
+omniglass interface update <id> [flags]
+```
+
+Patches an interface's node placement or params. Gated by interface:update; read and update scopes (through the component) drive the 404 versus 403 split.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--node` | string | (none) | Reassign the node placement |
+| `--params` | string | (none) | Replace the endpoint/target settings (jsonb) |
+
+Example:
+
+```sh
+omniglass interface update <id>
+```
+
 ## `omniglass location`
 
 Commands for the location resource
@@ -1197,6 +1293,116 @@ Apply embedded database migrations (dbmate)
 ```
 omniglass migrate
 ```
+
+## `omniglass node`
+
+Commands for the node resource
+
+### `omniglass node claim`
+
+Claim a node identity in exchange for its NATS credential
+
+```
+omniglass node claim [flags]
+```
+
+The node-facing exchange: a node presents its enrollment token and receives its NATS credential (url, username, password). Public (the token is the authentication); an invalid token is a 401.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--name` | string | (none) |  |
+| `--token` | string | (none) |  |
+
+Example:
+
+```sh
+omniglass node claim --name name --token token
+```
+
+### `omniglass node create`
+
+Create a node
+
+```
+omniglass node create [flags]
+```
+
+Registers an edge node server-side (day-one enrollment: create, then :enroll to mint its token). Gated by node:create.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--description` | string | (none) |  |
+| `--name` | string | (none) | Globally unique node name (also its NATS subject token, so no dots or whitespace) |
+
+Example:
+
+```sh
+omniglass node create --name name
+```
+
+### `omniglass node enroll`
+
+Mint a node's enrollment token
+
+```
+omniglass node enroll <name>
+```
+
+Mints (or re-mints) the node's enrollment token and returns it once. The token is stored only as a hash; it is never logged. Gated by node:enroll.
+
+Example:
+
+```sh
+omniglass node enroll <name>
+```
+
+### `omniglass node get`
+
+Get a node
+
+```
+omniglass node get <name>
+```
+
+Fetches a node by name. Requires an all-scope read. Gated by node:read.
+
+Example:
+
+```sh
+omniglass node get <name>
+```
+
+### `omniglass node list`
+
+List nodes
+
+```
+omniglass node list
+```
+
+Lists the edge nodes. A node is estate-wide, so listing requires an all-scope read. Gated by node:read.
+
+Example:
+
+```sh
+omniglass node list
+```
+
+## `omniglass node`
+
+Run the edge node: claim, pull the worklist, and heartbeat over NATS
+
+```
+omniglass node [flags]
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--heartbeat` | duration | `30s` | heartbeat interval |
+| `--name` | string | (none) | this node's registered name (env OMNIGLASS_NODE_NAME) |
+| `--once` | bool | `false` | run a single claim + pull + heartbeat cycle and exit |
+| `--server` | string | (none) | Omniglass server base URL (env OMNIGLASS_SERVER) |
+| `--token` | string | (none) | enrollment token from POST /nodes/{name}:enroll (env OMNIGLASS_NODE_TOKEN) |
 
 ## `omniglass principal`
 
@@ -1587,6 +1793,26 @@ Example:
 
 ```sh
 omniglass principal-group update <id>
+```
+
+## `omniglass reachability`
+
+Commands for the reachability resource
+
+### `omniglass reachability list`
+
+Read a component's per-interface reachability
+
+```
+omniglass reachability list <name>
+```
+
+Composes, per interface, the latest reachability verdict, the probe-layer signals that compose it, and the recent verdict transitions for the availability strip. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+
+Example:
+
+```sh
+omniglass reachability list <name>
 ```
 
 ## `omniglass role`
@@ -2204,6 +2430,42 @@ Example:
 
 ```sh
 omniglass tag values <name>
+```
+
+## `omniglass task`
+
+Commands for the task resource
+
+### `omniglass task get`
+
+Get a task
+
+```
+omniglass task get <id>
+```
+
+Fetches a task by id. A task whose component is out of the caller's read scope is a non-disclosing 404. Gated by task:read.
+
+Example:
+
+```sh
+omniglass task get <id>
+```
+
+### `omniglass task list`
+
+List tasks in scope
+
+```
+omniglass task list
+```
+
+Lists the tasks whose interface's owning component the caller may read (the component cascade). Tasks are derived from interfaces, not authored. Gated by task:read.
+
+Example:
+
+```sh
+omniglass task list
 ```
 
 ## `omniglass token`

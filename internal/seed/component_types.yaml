@@ -11,6 +11,8 @@ component_types:
     display_name: Microphone
   - id: speaker
     display_name: Speaker
+  - id: dsp
+    display_name: Audio DSP
   - id: codec
     display_name: Codec
   - id: control-processor

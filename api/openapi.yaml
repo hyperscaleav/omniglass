@@ -155,6 +155,50 @@ components:
         - valid
         - available
       type: object
+    ClaimNodeInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ClaimNodeInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        name:
+          minLength: 1
+          type: string
+        token:
+          minLength: 1
+          type: string
+      required:
+        - name
+        - token
+      type: object
+    ClaimOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ClaimOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        nats_url:
+          description: The NATS URL the node dials
+          type: string
+        password:
+          description: The node's NATS password (its enrollment token)
+          type: string
+        username:
+          description: The node's NATS username (its node name)
+          type: string
+      required:
+        - nats_url
+        - username
+        - password
+      type: object
     ComponentBody:
       additionalProperties: false
       properties:
@@ -492,6 +536,31 @@ components:
       required:
         - name
       type: object
+    CreateInterfaceInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateInterfaceInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        component:
+          description: Owning component name; omit for a server-hosted interface (needs an all-scoped grant)
+          type: string
+        node:
+          description: Node placement name
+          type: string
+        params:
+          description: Endpoint/target settings (jsonb)
+        type:
+          description: An interface_type name (the protocol); the interface is named by it, unique within the component
+          minLength: 1
+          type: string
+      required:
+        - type
+      type: object
     CreateLocationInputBody:
       additionalProperties: false
       properties:
@@ -603,6 +672,25 @@ components:
         - prefix
         - description
         - expires_at
+      type: object
+    CreateNodeInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateNodeInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        description:
+          type: string
+        name:
+          description: Globally unique node name (also its NATS subject token, so no dots or whitespace)
+          minLength: 1
+          type: string
+      required:
+        - name
       type: object
     CreatePrincipalInputBody:
       additionalProperties: false
@@ -897,6 +985,25 @@ components:
             - "null"
       required:
         - tags
+      type: object
+    EnrollOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/EnrollOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        name:
+          type: string
+        token:
+          description: The enrollment token, shown once. Hand it to the node deployment; the node presents it to claim its NATS credential.
+          type: string
+      required:
+        - name
+        - token
       type: object
     EntityRemoveTagInputBody:
       additionalProperties: false
@@ -1283,6 +1390,37 @@ components:
         - target_id
         - expires_at
       type: object
+    InterfaceBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/InterfaceBody.json
+          format: uri
+          readOnly: true
+          type: string
+        component:
+          description: The owning component name; absent for a server-hosted interface
+          type: string
+        id:
+          description: The interface's surrogate id (the address)
+          type: string
+        name:
+          description: The friendly name, unique within the owning component
+          type: string
+        node:
+          description: The node placement name, if assigned
+          type: string
+        params:
+          description: The endpoint/target settings (jsonb)
+        type:
+          type: string
+      required:
+        - id
+        - name
+        - type
+      type: object
     ListComponentMakesOutputBody:
       additionalProperties: false
       properties:
@@ -1416,6 +1554,25 @@ components:
       required:
         - groups
       type: object
+    ListInterfacesOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListInterfacesOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        interfaces:
+          items:
+            $ref: "#/components/schemas/InterfaceBody"
+          type:
+            - array
+            - "null"
+      required:
+        - interfaces
+      type: object
     ListLocationTypesOutputBody:
       additionalProperties: false
       properties:
@@ -1491,6 +1648,25 @@ components:
             - "null"
       required:
         - members
+      type: object
+    ListNodesOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListNodesOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        nodes:
+          items:
+            $ref: "#/components/schemas/NodeBody"
+          type:
+            - array
+            - "null"
+      required:
+        - nodes
       type: object
     ListPrincipalSessionsOutputBody:
       additionalProperties: false
@@ -1624,6 +1800,25 @@ components:
             - "null"
       required:
         - tags
+      type: object
+    ListTasksOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListTasksOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        tasks:
+          items:
+            $ref: "#/components/schemas/TaskBody"
+          type:
+            - array
+            - "null"
+      required:
+        - tasks
       type: object
     ListVariablesOutputBody:
       additionalProperties: false
@@ -1778,6 +1973,32 @@ components:
         - principal_id
         - kind
       type: object
+    NodeBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/NodeBody.json
+          format: uri
+          readOnly: true
+          type: string
+        description:
+          type: string
+        enrolled:
+          type: boolean
+        enrolled_at:
+          format: date-time
+          type: string
+        last_heartbeat_at:
+          format: date-time
+          type: string
+        name:
+          type: string
+      required:
+        - name
+        - enrolled
+      type: object
     PrincipalBody:
       additionalProperties: false
       properties:
@@ -1842,6 +2063,119 @@ components:
       required:
         - id
         - kind
+      type: object
+    ReachHistoryBody:
+      additionalProperties: false
+      properties:
+        ts:
+          format: date-time
+          type: string
+        value:
+          type: string
+      required:
+        - ts
+        - value
+      type: object
+    ReachInterfaceBody:
+      additionalProperties: false
+      properties:
+        endpoint:
+          description: The probed endpoint (target[:port]) from the interface params
+          type: string
+        history:
+          description: The recent verdict transitions, oldest first, for the availability strip
+          items:
+            $ref: "#/components/schemas/ReachHistoryBody"
+          type:
+            - array
+            - "null"
+        interface:
+          description: The interface name
+          type: string
+        layers:
+          description: The per-layer probe signals that compose the verdict
+          items:
+            $ref: "#/components/schemas/ReachLayerBody"
+          type:
+            - array
+            - "null"
+        node:
+          description: The node that probes this interface
+          type: string
+        type:
+          description: The interface type (icmp, tcp, ...)
+          type: string
+        verdict:
+          $ref: "#/components/schemas/ReachVerdictBody"
+          description: The latest reachability verdict, or null if none yet
+      required:
+        - interface
+        - type
+        - verdict
+        - layers
+        - history
+      type: object
+    ReachLayerBody:
+      additionalProperties: false
+      properties:
+        check:
+          description: The datapoint_type key of the primary signal
+          type: string
+        detail:
+          description: A human timing detail (rtt / connect time), when present
+          type: string
+        layer:
+          description: The probe layer word (ping, port)
+          type: string
+        ts:
+          description: When the signal was observed
+          format: date-time
+          type: string
+        value:
+          description: The latest signal value (1 = reachable/open, 0 = not)
+          format: double
+          type: number
+      required:
+        - layer
+        - check
+        - value
+        - ts
+      type: object
+    ReachVerdictBody:
+      additionalProperties: false
+      properties:
+        ts:
+          description: When the verdict was observed
+          format: date-time
+          type: string
+        value:
+          description: The latest stored verdict value (up/down)
+          type: string
+      required:
+        - value
+        - ts
+      type: object
+    ReachabilityOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ReachabilityOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        component:
+          type: string
+        interfaces:
+          items:
+            $ref: "#/components/schemas/ReachInterfaceBody"
+          type:
+            - array
+            - "null"
+      required:
+        - component
+        - interfaces
       type: object
     ResetPasswordInputBody:
       additionalProperties: false
@@ -2441,6 +2775,38 @@ components:
       required:
         - values
       type: object
+    TaskBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/TaskBody.json
+          format: uri
+          readOnly: true
+          type: string
+        display_name:
+          type: string
+        enabled:
+          type: boolean
+        id:
+          type: string
+        interface_id:
+          description: The interface's surrogate id this task runs over
+          type: string
+        mode:
+          type: string
+        node:
+          description: The node placement, projected from the interface
+          type: string
+        spec:
+          description: The inline probe settings (jsonb)
+      required:
+        - id
+        - mode
+        - interface_id
+        - enabled
+      type: object
     UpdateComponentInputBody:
       additionalProperties: false
       properties:
@@ -2560,6 +2926,22 @@ components:
           minLength: 1
           pattern: ^[a-z0-9][a-z0-9._-]*$
           type: string
+      type: object
+    UpdateInterfaceInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/UpdateInterfaceInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        node:
+          description: Reassign the node placement
+          type: string
+        params:
+          description: Replace the endpoint/target settings (jsonb)
       type: object
     UpdateLocationInputBody:
       additionalProperties: false
@@ -3471,6 +3853,33 @@ paths:
           description: Error
       summary: Set a field value on a component
       x-omniglass-permission: field:create
+  /components/{name}/reachability:
+    get:
+      description: Composes, per interface, the latest reachability verdict, the probe-layer signals that compose it, and the recent verdict transitions for the availability strip. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+      operationId: get-component-reachability
+      parameters:
+        - description: The component's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The component's unique name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReachabilityOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Read a component's per-interface reachability
+      x-omniglass-permission: component:read
   /components/{name}:listTags:
     get:
       description: Lists the tags bound directly on a component (not the resolved cascade). Gated by component:read.
@@ -3875,6 +4284,128 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Liveness and database-reachability probe
+  /interfaces:
+    get:
+      description: Lists the interfaces whose owning component the caller may read (the component cascade). Gated by interface:read.
+      operationId: list-interfaces
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListInterfacesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List interfaces in scope
+      x-omniglass-permission: interface:read
+    post:
+      description: Creates an interface owned by a component (or a server-hosted one, which needs an all-scoped grant). The create scope cascades through the owning component. Gated by interface:create.
+      operationId: create-interface
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateInterfaceInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InterfaceBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Create an interface
+      x-omniglass-permission: interface:create
+  /interfaces/{id}:
+    delete:
+      description: Deletes an interface, refused while a task still references it. Gated by interface:delete; read and delete scopes (through the component) drive the 404 versus 403 split.
+      operationId: delete-interface
+      parameters:
+        - description: The interface's surrogate id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The interface's surrogate id
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Delete an interface
+      x-omniglass-permission: interface:delete
+    get:
+      description: Fetches an interface by id. An interface whose component is out of the caller's read scope is a non-disclosing 404. Gated by interface:read.
+      operationId: get-interface
+      parameters:
+        - description: The interface's surrogate id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The interface's surrogate id
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InterfaceBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get an interface
+      x-omniglass-permission: interface:read
+    patch:
+      description: Patches an interface's node placement or params. Gated by interface:update; read and update scopes (through the component) drive the 404 versus 403 split.
+      operationId: update-interface
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateInterfaceInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InterfaceBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Update an interface
+      x-omniglass-permission: interface:update
   /locations:
     get:
       description: Lists the locations the caller may read, each filtered to its scope subtree. Gated by location:read.
@@ -4111,6 +4642,139 @@ paths:
           description: Error
       summary: Check a location technical name
       x-omniglass-permission: location:update
+  /nodes:
+    get:
+      description: Lists the edge nodes. A node is estate-wide, so listing requires an all-scope read. Gated by node:read.
+      operationId: list-nodes
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListNodesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List nodes
+      x-omniglass-permission: node:read
+    post:
+      description: "Registers an edge node server-side (day-one enrollment: create, then :enroll to mint its token). Gated by node:create."
+      operationId: create-node
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateNodeInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NodeBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Create a node
+      x-omniglass-permission: node:create
+  /nodes/{name}:
+    get:
+      description: Fetches a node by name. Requires an all-scope read. Gated by node:read.
+      operationId: get-node
+      parameters:
+        - description: The node's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The node's unique name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NodeBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get a node
+      x-omniglass-permission: node:read
+  /nodes/{name}:enroll:
+    post:
+      description: Mints (or re-mints) the node's enrollment token and returns it once. The token is stored only as a hash; it is never logged. Gated by node:enroll.
+      operationId: enroll-node
+      parameters:
+        - description: The node's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The node's unique name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnrollOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Mint a node's enrollment token
+      x-omniglass-permission: node:enroll
+  /nodes:claim:
+    post:
+      description: "The node-facing exchange: a node presents its enrollment token and receives its NATS credential (url, username, password). Public (the token is the authentication); an invalid token is a 401."
+      operationId: claim-node
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClaimNodeInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClaimOutputBody"
+          description: OK
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Unauthorized
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Internal Server Error
+      summary: Claim a node identity in exchange for its NATS credential
   /principal-groups:
     get:
       description: Every principal group. Gated by principal_group:read:admin.
@@ -5707,6 +6371,52 @@ paths:
           description: Error
       summary: List the distinct values bound for a key
       x-omniglass-permission: tag:read
+  /tasks:
+    get:
+      description: Lists the tasks whose interface's owning component the caller may read (the component cascade). Tasks are derived from interfaces, not authored. Gated by task:read.
+      operationId: list-tasks
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListTasksOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List tasks in scope
+      x-omniglass-permission: task:read
+  /tasks/{id}:
+    get:
+      description: Fetches a task by id. A task whose component is out of the caller's read scope is a non-disclosing 404. Gated by task:read.
+      operationId: get-task
+      parameters:
+        - description: The task's content-addressed id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The task's content-addressed id
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get a task
+      x-omniglass-permission: task:read
   /types/component:
     get:
       description: Lists the component_type registry, ordered alphabetically by display name. Populates the type picker on the component form. Gated by type:read.

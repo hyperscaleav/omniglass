@@ -20,7 +20,9 @@ live in [API first](/contributing/api-first/); this page is the conventions that
 :::note[Partial]
 Built today: the Huma-over-chi API with the OpenAPI 3.1 document generated from the Go structs
 (`make gen`), the AIP-style resource and `:verb` routing, and the problem+json error envelope, proven
-on `/auth`, `/roles`, `/locations`, `/systems`, `/components`, and the type registries. Still `Design`:
+on `/auth`, `/roles`, `/locations`, `/systems`, `/components`, `/nodes`, `/interfaces`, `/tasks`, and the
+per-component reachability read, plus the type registries. The node `:enroll` and `:claim` custom methods
+are the first `:verb` routes in the wild. Still `Design`:
 the expression `filter` language, idempotency keys, long-running operations over the `action` row, the
 MCP surface, the SSE relay, and the NATS node contract. See [implementation status](/architecture/status/).
 :::
@@ -160,6 +162,66 @@ flows back the same way to advance the row. The caller sees one model, the trans
   the authz contract, and the set of all stamps is the **permission universe** the [Roles
   view](/architecture/identity-access/#the-permission-universe-published-per-route) reports.
 
+## The collection surface: nodes, interfaces, tasks
+
+The [collection](/architecture/collection/) authoring routes are the first concrete resources that exercise
+every convention above at once: standard methods by primary key, the first `:verb` custom methods, the
+non-disclosing 404, a declared permission per route, and injected scope per query. They ship in the AIP
+shape the [Shape](#shape-resources-and-verb-methods) section describes.
+
+| Method | Path | Permission |
+|---|---|---|
+| GET | `/nodes` | `node:read` |
+| GET | `/nodes/{name}` | `node:read` |
+| POST | `/nodes` | `node:create` |
+| POST | `/nodes/{name}:enroll` | `node:enroll` |
+| POST | `/nodes:claim` | none (public) |
+| GET | `/interfaces` | `interface:read` |
+| GET | `/interfaces/{id}` | `interface:read` |
+| POST | `/interfaces` | `interface:create` |
+| PATCH | `/interfaces/{id}` | `interface:update` |
+| DELETE | `/interfaces/{id}` | `interface:delete` |
+| GET | `/tasks` | `task:read` |
+| GET | `/tasks/{id}` | `task:read` |
+| GET | `/components/{name}/reachability` | `component:read` |
+
+**The node custom methods are the day-one enrollment handshake.** `POST /nodes/{name}:enroll` mints (or
+re-mints) the node's enrollment token and returns it **once**; the server stores only its hash and never
+logs it, so a re-enroll invalidates the previous token. It is gated by `node:enroll`, the verb-is-the-permission
+rule. `POST /nodes:claim` is the **node-facing** side of the exchange: a node presents its token and receives
+its NATS credential (url, username, password). It is the surface's **one public route**, unauthenticated
+because the token itself is the authentication, so it carries no permission and an invalid token is a
+**401** (a claim must not disclose which nodes exist). A node is estate-wide, so `node:read` and `node:create`
+require an **all-scope** grant, not a tree-scoped one.
+
+**The interface is authored; the task is derived.** An interface is addressed by a surrogate `id` and is
+**named by its protocol**: its `name` derives from its `interface_type` and is unique **within its component**
+(so create takes a type, not a name, and a duplicate protocol on one component is a **409**). Creating an
+interface **derives its one poll task**, so the task surface is **read-only** (`GET /tasks`, `GET /tasks/{id}`):
+there are no task create, update, or delete routes and no `task:create` / `task:update` grants. A task references
+its interface by `interface_id`, its id is **content-addressed** over its interface, mode, and spec, and it
+carries **no node column**: its placement **projects from the interface**. An interface belongs to a component
+(or is server-hosted, which needs an all-scoped grant), and a task belongs to an interface, so both inherit the
+component's [scope](/architecture/identity-access/): an out-of-read-scope component's interface or task is a
+non-disclosing **404**, exactly the [403/404 split](#errors-one-problemjson-envelope) above.
+
+**The reachability read is a typed composed read, not yet a view.** `GET /components/{name}/reachability`
+composes, per interface, the latest verdict state (`interface.reachable`), the probe-layer signals that
+compose it (the raw `icmp`/`tcp` metrics), and the recent verdict transitions the availability strip reads.
+It is gated by `component:read` and scope-injected through the component, so an out-of-scope component is a
+non-disclosing 404 and the datapoint reads only ever run on a verified, in-scope component. It is a
+hand-written typed `GET`, an early and deliberate exception to [reads beyond one resource are
+views](#reads-beyond-one-resource-are-views), standing in until the `ViewResult` framework lands.
+
+:::note[Thin cuts today]
+These routes ship the operationally useful slice, not the full CRUD matrix. A **node** has create, list, get,
+`:enroll`, and `:claim`, but no update or delete; a node **purge cascades** its interfaces and their derived
+tasks. An **interface** `PATCH` changes only its node placement and its params (target); the type (and so the
+name it derives) and the owning component are fixed at creation, and a delete is refused while a task still
+references it (a **409**). A **task** is **derived and read-only**: it is created with its interface and has no
+write routes, and its placement follows the interface's rather than being set on the task. The four built
+interface types are `icmp`, `tcp`, `ssh`, and `http`; there is no `interface_type` list route yet.
+:::
 ## Secrets: masked reads, an audited reveal
 
 A **secret** is a typed, encrypted-at-rest operator value ([config, credentials, and

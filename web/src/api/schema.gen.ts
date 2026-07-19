@@ -436,6 +436,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/components/{name}/reachability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read a component's per-interface reachability
+         * @description Composes, per interface, the latest reachability verdict, the probe-layer signals that compose it, and the recent verdict transitions for the availability strip. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+         */
+        get: operations["get-component-reachability"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/components/{name}:listTags": {
         parameters: {
             query?: never;
@@ -676,6 +696,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/interfaces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List interfaces in scope
+         * @description Lists the interfaces whose owning component the caller may read (the component cascade). Gated by interface:read.
+         */
+        get: operations["list-interfaces"];
+        put?: never;
+        /**
+         * Create an interface
+         * @description Creates an interface owned by a component (or a server-hosted one, which needs an all-scoped grant). The create scope cascades through the owning component. Gated by interface:create.
+         */
+        post: operations["create-interface"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/interfaces/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get an interface
+         * @description Fetches an interface by id. An interface whose component is out of the caller's read scope is a non-disclosing 404. Gated by interface:read.
+         */
+        get: operations["get-interface"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete an interface
+         * @description Deletes an interface, refused while a task still references it. Gated by interface:delete; read and delete scopes (through the component) drive the 404 versus 403 split.
+         */
+        delete: operations["delete-interface"];
+        options?: never;
+        head?: never;
+        /**
+         * Update an interface
+         * @description Patches an interface's node placement or params. Gated by interface:update; read and update scopes (through the component) drive the 404 versus 403 split.
+         */
+        patch: operations["update-interface"];
+        trace?: never;
+    };
     "/locations": {
         parameters: {
             query?: never;
@@ -802,6 +874,90 @@ export interface paths {
          * @description Reports whether a proposed technical name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by location:update.
          */
         post: operations["check-location-name"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/nodes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List nodes
+         * @description Lists the edge nodes. A node is estate-wide, so listing requires an all-scope read. Gated by node:read.
+         */
+        get: operations["list-nodes"];
+        put?: never;
+        /**
+         * Create a node
+         * @description Registers an edge node server-side (day-one enrollment: create, then :enroll to mint its token). Gated by node:create.
+         */
+        post: operations["create-node"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/nodes/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a node
+         * @description Fetches a node by name. Requires an all-scope read. Gated by node:read.
+         */
+        get: operations["get-node"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/nodes/{name}:enroll": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mint a node's enrollment token
+         * @description Mints (or re-mints) the node's enrollment token and returns it once. The token is stored only as a hash; it is never logged. Gated by node:enroll.
+         */
+        post: operations["enroll-node"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/nodes:claim": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Claim a node identity in exchange for its NATS credential
+         * @description The node-facing exchange: a node presents its enrollment token and receives its NATS credential (url, username, password). Public (the token is the authentication); an invalid token is a 401.
+         */
+        post: operations["claim-node"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1728,6 +1884,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List tasks in scope
+         * @description Lists the tasks whose interface's owning component the caller may read (the component cascade). Tasks are derived from interfaces, not authored. Gated by task:read.
+         */
+        get: operations["list-tasks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tasks/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a task
+         * @description Fetches a task by id. A task whose component is out of the caller's read scope is a non-disclosing 404. Gated by task:read.
+         */
+        get: operations["get-task"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/types/component": {
         parameters: {
             query?: never;
@@ -2029,6 +2225,30 @@ export interface components {
             /** @description Whether the name matches the slug rule */
             valid: boolean;
         };
+        ClaimNodeInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ClaimNodeInputBody.json
+             */
+            readonly $schema?: string;
+            name: string;
+            token: string;
+        };
+        ClaimOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ClaimOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The NATS URL the node dials */
+            nats_url: string;
+            /** @description The node's NATS password (its enrollment token) */
+            password: string;
+            /** @description The node's NATS username (its node name) */
+            username: string;
+        };
         ComponentBody: {
             /**
              * Format: uri
@@ -2212,6 +2432,22 @@ export interface components {
             /** @description Unique group name (lowercase letters, digits, and . _ -) */
             name: string;
         };
+        CreateInterfaceInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateInterfaceInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Owning component name; omit for a server-hosted interface (needs an all-scoped grant) */
+            component?: string;
+            /** @description Node placement name */
+            node?: string;
+            /** @description Endpoint/target settings (jsonb) */
+            params?: unknown;
+            /** @description An interface_type name (the protocol); the interface is named by it, unique within the component */
+            type: string;
+        };
         CreateLocationInputBody: {
             /**
              * Format: uri
@@ -2272,6 +2508,17 @@ export interface components {
             prefix: string;
             /** @description The bearer token, shown once. Store it now: it cannot be retrieved again. */
             token: string;
+        };
+        CreateNodeInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateNodeInputBody.json
+             */
+            readonly $schema?: string;
+            description?: string;
+            /** @description Globally unique node name (also its NATS subject token, so no dots or whitespace) */
+            name: string;
         };
         CreatePrincipalInputBody: {
             /**
@@ -2427,6 +2674,17 @@ export interface components {
              */
             readonly $schema?: string;
             tags: components["schemas"]["ResolvedTagBody"][] | null;
+        };
+        EnrollOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/EnrollOutputBody.json
+             */
+            readonly $schema?: string;
+            name: string;
+            /** @description The enrollment token, shown once. Hand it to the node deployment; the node presents it to claim its NATS credential. */
+            token: string;
         };
         EntityRemoveTagInputBody: {
             /**
@@ -2664,6 +2922,25 @@ export interface components {
             /** @description The bearer token to send while impersonating; shown once */
             token: string;
         };
+        InterfaceBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/InterfaceBody.json
+             */
+            readonly $schema?: string;
+            /** @description The owning component name; absent for a server-hosted interface */
+            component?: string;
+            /** @description The interface's surrogate id (the address) */
+            id: string;
+            /** @description The friendly name, unique within the owning component */
+            name: string;
+            /** @description The node placement name, if assigned */
+            node?: string;
+            /** @description The endpoint/target settings (jsonb) */
+            params?: unknown;
+            type: string;
+        };
         ListComponentMakesOutputBody: {
             /**
              * Format: uri
@@ -2727,6 +3004,15 @@ export interface components {
             readonly $schema?: string;
             groups: components["schemas"]["GroupBody"][] | null;
         };
+        ListInterfacesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListInterfacesOutputBody.json
+             */
+            readonly $schema?: string;
+            interfaces: components["schemas"]["InterfaceBody"][] | null;
+        };
         ListLocationTypesOutputBody: {
             /**
              * Format: uri
@@ -2762,6 +3048,15 @@ export interface components {
              */
             readonly $schema?: string;
             members: components["schemas"]["MemberBody"][] | null;
+        };
+        ListNodesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListNodesOutputBody.json
+             */
+            readonly $schema?: string;
+            nodes: components["schemas"]["NodeBody"][] | null;
         };
         ListPrincipalSessionsOutputBody: {
             /**
@@ -2825,6 +3120,15 @@ export interface components {
              */
             readonly $schema?: string;
             tags: components["schemas"]["TagBody"][] | null;
+        };
+        ListTasksOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListTasksOutputBody.json
+             */
+            readonly $schema?: string;
+            tasks: components["schemas"]["TaskBody"][] | null;
         };
         ListVariablesOutputBody: {
             /**
@@ -2896,6 +3200,21 @@ export interface components {
             principal_id: string;
             username?: string;
         };
+        NodeBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/NodeBody.json
+             */
+            readonly $schema?: string;
+            description?: string;
+            enrolled: boolean;
+            /** Format: date-time */
+            enrolled_at?: string;
+            /** Format: date-time */
+            last_heartbeat_at?: string;
+            name: string;
+        };
         PrincipalBody: {
             /**
              * Format: uri
@@ -2923,6 +3242,64 @@ export interface components {
         PrincipalStruct: {
             id: string;
             kind: string;
+        };
+        ReachHistoryBody: {
+            /** Format: date-time */
+            ts: string;
+            value: string;
+        };
+        ReachInterfaceBody: {
+            /** @description The probed endpoint (target[:port]) from the interface params */
+            endpoint?: string;
+            /** @description The recent verdict transitions, oldest first, for the availability strip */
+            history: components["schemas"]["ReachHistoryBody"][] | null;
+            /** @description The interface name */
+            interface: string;
+            /** @description The per-layer probe signals that compose the verdict */
+            layers: components["schemas"]["ReachLayerBody"][] | null;
+            /** @description The node that probes this interface */
+            node?: string;
+            /** @description The interface type (icmp, tcp, ...) */
+            type: string;
+            /** @description The latest reachability verdict, or null if none yet */
+            verdict: components["schemas"]["ReachVerdictBody"];
+        };
+        ReachLayerBody: {
+            /** @description The datapoint_type key of the primary signal */
+            check: string;
+            /** @description A human timing detail (rtt / connect time), when present */
+            detail?: string;
+            /** @description The probe layer word (ping, port) */
+            layer: string;
+            /**
+             * Format: date-time
+             * @description When the signal was observed
+             */
+            ts: string;
+            /**
+             * Format: double
+             * @description The latest signal value (1 = reachable/open, 0 = not)
+             */
+            value: number;
+        };
+        ReachVerdictBody: {
+            /**
+             * Format: date-time
+             * @description When the verdict was observed
+             */
+            ts: string;
+            /** @description The latest stored verdict value (up/down) */
+            value: string;
+        };
+        ReachabilityOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ReachabilityOutputBody.json
+             */
+            readonly $schema?: string;
+            component: string;
+            interfaces: components["schemas"]["ReachInterfaceBody"][] | null;
         };
         ResetPasswordInputBody: {
             /**
@@ -3237,6 +3614,24 @@ export interface components {
             readonly $schema?: string;
             values: string[] | null;
         };
+        TaskBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/TaskBody.json
+             */
+            readonly $schema?: string;
+            display_name?: string;
+            enabled: boolean;
+            id: string;
+            /** @description The interface's surrogate id this task runs over */
+            interface_id: string;
+            mode: string;
+            /** @description The node placement, projected from the interface */
+            node?: string;
+            /** @description The inline probe settings (jsonb) */
+            spec?: unknown;
+        };
         UpdateComponentInputBody: {
             /**
              * Format: uri
@@ -3310,6 +3705,18 @@ export interface components {
             display_name?: string;
             /** @description Group name (lowercase letters, digits, and . _ -); renaming is safe */
             name?: string;
+        };
+        UpdateInterfaceInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/UpdateInterfaceInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Reassign the node placement */
+            node?: string;
+            /** @description Replace the endpoint/target settings (jsonb) */
+            params?: unknown;
         };
         UpdateLocationInputBody: {
             /**
@@ -4376,6 +4783,38 @@ export interface operations {
             };
         };
     };
+    "get-component-reachability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The component's unique name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReachabilityOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "list-component-tags": {
         parameters: {
             query?: never;
@@ -4890,6 +5329,165 @@ export interface operations {
             };
         };
     };
+    "list-interfaces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListInterfacesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-interface": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateInterfaceInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterfaceBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-interface": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The interface's surrogate id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterfaceBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-interface": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The interface's surrogate id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "update-interface": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateInterfaceInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterfaceBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "list-locations": {
         parameters: {
             query?: never;
@@ -5175,6 +5773,183 @@ export interface operations {
             };
             /** @description Error */
             default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-nodes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListNodesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-node": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateNodeInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NodeBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-node": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The node's unique name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NodeBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "enroll-node": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The node's unique name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnrollOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "claim-node": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClaimNodeInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClaimOutputBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7150,6 +7925,67 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TagValuesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListTasksOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-task": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The task's content-addressed id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskBody"];
                 };
             };
             /** @description Error */

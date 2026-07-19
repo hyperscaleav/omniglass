@@ -98,6 +98,18 @@ also needs a darker teal for teal **text** on white (a `[data-theme=light] .text
 since the bright teal is unreadable as small text on white (1.9:1) while it reads 8.3:1 as a fill
 with dark ink; that rule is inert while the console is dark-only.
 
+## Status pills
+
+Status badges use `badge badge-sm` with a **soft hue** for a signalled state (`badge-soft
+badge-success` for up/enabled/responding, `badge-soft badge-error` for down, `badge-soft
+badge-warning` for stale). A **neutral** state (a node that has never checked in, a disabled task,
+an unknown verdict) does **not** use `badge-neutral` or `badge-ghost`: against this theme's dark
+`base-100` (`#080c16`), `badge-neutral` renders near-black and `badge-ghost` renders transparent, so
+both read as invisible. Use a soft grey fill tinted from the text color instead
+(`bg-base-content/10 text-base-content/70 border-transparent`), which reads as a visible pill in both
+themes at the same weight as the soft hues. The same reason keeps `type` values (interface/task
+`type`) as plain `font-data` text, not a `badge-neutral` chip.
+
 ## Primitives (the reuse target)
 
 `ListView`, `FilterBar`, `Drawer`, `Donut`, `Badge`, `Fact`, `Page`, `DataTable`,

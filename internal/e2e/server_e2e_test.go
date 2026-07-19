@@ -50,6 +50,10 @@ func TestServerHealthzEndToEnd(t *testing.T) {
 	cmd.Env = append(os.Environ(),
 		"OMNIGLASS_DSN="+dsn,
 		"OMNIGLASS_ADDR="+addr,
+		// Ephemeral NATS on a free port with an isolated JetStream store, so the
+		// embedded bus never binds the fixed default port across parallel runs.
+		"OMNIGLASS_NATS_ADDR=127.0.0.1:"+freePort(t),
+		"OMNIGLASS_NATS_STORE_DIR="+t.TempDir(),
 		// Keep the fallback secret key out of the source tree (the server's cwd is
 		// this package dir under `go test`).
 		"OMNIGLASS_DATA_DIR="+t.TempDir(),

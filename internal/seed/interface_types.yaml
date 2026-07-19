@@ -1,0 +1,20 @@
+# The official interface_types, seeded idempotently at boot. An interface_type is
+# the TRANSPORT (the wire an interface speaks over), not the protocol driver: it
+# carries the reachability probe (the first gate), and a later collection layer (a
+# driver = protocol handler + transports + normalized menu) speaks a protocol over
+# it. built marks that a node-side reachability probe ships. Slice 1 reaches over
+# tcp/ssh/http by opening the tcp port and pings over icmp; snmp/udp/telnet and the
+# richer collection drivers arrive with their slices.
+interface_types:
+  - name: icmp
+    description: ICMP echo / ping reachability and RTT.
+    built: true
+  - name: tcp
+    description: Raw TCP connect / port-open check.
+    built: true
+  - name: ssh
+    description: SSH transport; reachability opens the tcp port (a driver speaks the CLI over it later).
+    built: true
+  - name: http
+    description: HTTP/HTTPS transport; reachability opens the tcp port (a driver calls the API over it later).
+    built: true

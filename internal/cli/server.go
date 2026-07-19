@@ -5,13 +5,17 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/api"
+	"github.com/hyperscaleav/omniglass/internal/bus"
+	"github.com/hyperscaleav/omniglass/internal/config"
 	"github.com/hyperscaleav/omniglass/internal/migrate"
 	"github.com/hyperscaleav/omniglass/internal/secret"
 	"github.com/hyperscaleav/omniglass/internal/seed"
@@ -58,6 +62,16 @@ func runServer(ctx context.Context, _ string) error {
 	}
 	log.Info("boot seed applied")
 
+	// The embedded NATS server carries the node-server protocol (worklist,
+	// heartbeat, and the checkpoint-3 telemetry stream). It is hosted in-process
+	// and shut down with the server.
+	busSrv, err := startBus(c, gw)
+	if err != nil {
+		return err
+	}
+	defer busSrv.Shutdown()
+	log.Info("embedded nats-server listening", "addr", c.NatsAddr)
+
 	// Settings engine: the operator file layer is captured once at boot; the code
 	// defaults are embedded; the global DB override is read live per request via a
 	// closure over the Gateway (a function seam so settings does not import storage).
@@ -83,7 +97,7 @@ func runServer(ctx context.Context, _ string) error {
 
 	srv := &http.Server{
 		Addr:              c.Addr,
-		Handler:           api.NewHandler(gw, api.WithSettingsService(settingsSvc), api.WithSecureCookies(c.SecureCookies)),
+		Handler:           api.NewHandler(gw, api.WithSecureCookies(c.SecureCookies), api.WithNatsURL(c.NatsURL), api.WithSettingsService(settingsSvc)),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
@@ -107,4 +121,19 @@ func runServer(ctx context.Context, _ string) error {
 		defer cancel()
 		return srv.Shutdown(sctx)
 	}
+}
+
+// startBus parses the configured NATS listen address and starts the embedded
+// server. A "host:" or bare port resolves through net.SplitHostPort; a parse
+// failure is a config error surfaced at boot.
+func startBus(c config.Config, gw storage.Gateway) (*bus.Server, error) {
+	host, portStr, err := net.SplitHostPort(c.NatsAddr)
+	if err != nil {
+		return nil, err
+	}
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		return nil, err
+	}
+	return bus.New(bus.Config{Host: host, Port: port, StoreDir: c.NatsStoreDir}, gw)
 }

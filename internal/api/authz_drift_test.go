@@ -18,8 +18,6 @@ import (
 // A NEW entry here is a decision to ship a grant ahead of its enforcement.
 var aheadOfRoutes = map[string]string{
 	// operator day-two capabilities whose subsystems have no HTTP surface yet.
-	"interface:create,update":  "no interface routes yet (collection engine)",
-	"task:create,update":       "no task routes yet (collection engine)",
 	"rule:create,update":       "no rule routes yet (event engine)",
 	"config:create,update":     "no config routes yet (settings engine)",
 	"alarm:ack,snooze,resolve": "no alarm routes yet (alarm engine)",

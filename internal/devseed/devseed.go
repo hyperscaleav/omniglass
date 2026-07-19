@@ -1,7 +1,7 @@
-// Package devseed installs a small example estate (locations, users, grants) for
-// a dev environment, applied by `make dev` through the trusted direct-DB lane. It
-// is idempotent: rows that already exist are left untouched, so it runs safely on
-// every start.
+// Package devseed installs a small example estate (locations, users, grants, and a
+// worked reachability check) for a dev environment, applied by `make dev` through the
+// trusted direct-DB lane. It is idempotent: rows that already exist are left untouched,
+// so it runs safely on every start.
 //
 // It is deliberately separate from the boot seed (internal/seed), which installs
 // ship-with reference data on every server start in every environment. These are
@@ -13,9 +13,11 @@ package devseed
 import (
 	"context"
 	_ "embed"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/auth"
 	"github.com/hyperscaleav/omniglass/internal/scope"
@@ -282,7 +284,6 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 			return fmt.Errorf("devseed: create file %q: %w", f.Name, err)
 		}
 	}
-
 	// Field definitions: a couple of typed fields on the display component_type, so
 	// the field primitive comes up with a schema to teach (a default vs a plain
 	// field). These are catalog rows, flat and unscoped like the type registries, so
@@ -344,6 +345,158 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 		if _, err := gw.SetFieldValue(ctx, actorID, fv.Component, fv.Field, raw, all); err != nil {
 			return fmt.Errorf("devseed: set field value %s/%s: %w", fv.Component, fv.Field, err)
 		}
+	}
+	// A worked reachability check on a component, so the console's Reachability panel
+	// renders a real verdict + availability strip instead of an empty "unknown".
+	if err := seedReachability(ctx, gw, actorID); err != nil {
+		return err
+	}
+	return nil
+}
+
+// The worked reachability check the dev seed installs: an enrolled node and a lab
+// DSP (a polaris-class 16-channel audio DSP) under the HQ boardroom, exposing two
+// APIs. Each API is a protocol-named interface over its transport: `web` (the HTTP
+// management API) and `qrc` (the Q-SYS-style control protocol over raw tcp). Two
+// interfaces on one device is the "APIs on this box" story: an interface is an API
+// we intend to call, named by its protocol, not a network interface. Each has a poll
+// task and enough datapoints for the panel to render a live verdict + availability
+// strip.
+const (
+	reachComponent = "hq-boardroom-dsp"
+	reachLocation  = "hq-west-2-boardroom"
+	reachNode      = "edge-hq"
+	reachHost      = "10.20.4.12"
+)
+
+// reachChecks are the DSP's interfaces: each named by the protocol it speaks and
+// typed by its transport (the reachability axis; the driver that speaks the protocol
+// over the transport is a later collection layer). flapped seeds the availability
+// history with a brief-outage-then-recovered story (mostly up with a thin blip); an
+// unflapped interface reads cleanly up. rttMs is the shared host ping; connMs is the
+// per-port connect time.
+var reachChecks = []struct {
+	name    string
+	itype   string
+	port    int
+	flapped bool
+	rttMs   float64
+	connMs  float64
+}{
+	{name: "web", itype: "http", port: 80, flapped: false, rttMs: 6.1, connMs: 2.2},
+	{name: "qrc", itype: "tcp", port: 1710, flapped: true, rttMs: 6.1, connMs: 4.8},
+}
+
+// seedReachability installs the worked reachability checks idempotently through the
+// Storage Gateway. Its sentinel is the first interface: datapoints are append-only,
+// so once it exists the whole block has run and a re-run is a no-op (a second
+// `make dev` must not double the datapoints). It authors each check the way a node
+// runs one (interface + poll task) and writes a handful of datapoints keyed by the
+// component (owner) and interface (instance), using ONLY registered canonical
+// datapoint_type names, so a wrong name would reject-not-project.
+func seedReachability(ctx context.Context, gw storage.Gateway, actorID string) error {
+	all := scope.Set{All: true}
+
+	// Sentinel: the first interface. Present means this block ran on an earlier start.
+	existing, err := gw.ListComponentInterfaces(ctx, reachComponent)
+	if err != nil {
+		return fmt.Errorf("devseed: check reachability interfaces: %w", err)
+	}
+	for _, it := range existing {
+		if it.Name == reachChecks[0].itype {
+			return nil
+		}
+	}
+
+	// The DSP the checks hang on, placed in the HQ boardroom. Tolerate an existing
+	// component from a partial earlier run.
+	if _, err := gw.GetComponent(ctx, reachComponent, all); errors.Is(err, storage.ErrComponentNotFound) {
+		loc := reachLocation
+		if _, err := gw.CreateComponent(ctx, actorID, storage.ComponentSpec{
+			Name:          reachComponent,
+			DisplayName:   "Boardroom DSP",
+			ComponentType: "dsp",
+			LocationName:  &loc,
+		}, all); err != nil {
+			return fmt.Errorf("devseed: create reachability component: %w", err)
+		}
+	} else if err != nil {
+		return fmt.Errorf("devseed: check reachability component: %w", err)
+	}
+
+	// The node, created then enrolled and claimed so it reads as enrolled in the
+	// console (enrolled_at is stamped by a claim). The token lives only long enough to
+	// claim; it is never returned or stored in cleartext. Tolerate an existing node.
+	if _, err := gw.GetNode(ctx, reachNode, all); errors.Is(err, storage.ErrNodeNotFound) {
+		if _, err := gw.CreateNode(ctx, actorID, storage.NodeSpec{
+			Name:        reachNode,
+			Description: "HQ network closet",
+		}, all); err != nil {
+			return fmt.Errorf("devseed: create reachability node: %w", err)
+		}
+		token, hash, _, err := auth.NewBearerToken()
+		if err != nil {
+			return fmt.Errorf("devseed: mint node token: %w", err)
+		}
+		if _, err := gw.SetEnrollmentToken(ctx, actorID, reachNode, hex.EncodeToString(hash), all); err != nil {
+			return fmt.Errorf("devseed: enroll reachability node: %w", err)
+		}
+		if _, err := gw.ClaimNode(ctx, reachNode, hex.EncodeToString(auth.HashToken(token))); err != nil {
+			return fmt.Errorf("devseed: claim reachability node: %w", err)
+		}
+	} else if err != nil {
+		return fmt.Errorf("devseed: check reachability node: %w", err)
+	}
+
+	// Each interface: named by its protocol, typed by its transport, target = the DSP
+	// host at the protocol's port. A poll task rides each; datapoints tell its story.
+	comp := reachComponent
+	node := reachNode
+	now := time.Now().UTC()
+	for _, c := range reachChecks {
+		// The interface is protocol-named: its name is DERIVED from its transport
+		// (c.itype). Its poll task derives automatically from creating it, so the
+		// datapoints are instanced by the interface name (the transport).
+		if _, err := gw.CreateInterface(ctx, actorID, storage.InterfaceSpec{
+			Type:      c.itype,
+			Component: &comp,
+			Node:      &node,
+			Params:    []byte(fmt.Sprintf(`{"target":"%s:%d"}`, reachHost, c.port)),
+		}, all); err != nil {
+			return fmt.Errorf("devseed: create %s interface: %w", c.itype, err)
+		}
+		if err := seedReachDatapoints(ctx, gw, c.itype, c.flapped, c.rttMs, c.connMs, now); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// seedReachDatapoints writes one interface's reachability datapoints: the
+// interface.reachable state (a fresh "up"; when flapped, an up baseline then a brief
+// outage then the recovery, so the strip reads mostly up with a thin blip) and the
+// probe-layer metrics (ping + port). Owner = the component, instance = the interface
+// name. Only canonical datapoint_type names are used (reject-not-project).
+func seedReachDatapoints(ctx context.Context, gw storage.Gateway, iface string, flapped bool, rttMs, connMs float64, now time.Time) error {
+	recovered := now.Add(-30 * time.Second)
+	states := []storage.StateDatapointEvent{}
+	if flapped {
+		states = append(states,
+			storage.StateDatapointEvent{OwnerKind: "component", OwnerID: reachComponent, Key: "interface.reachable", Instance: iface, Value: "up", Source: "reachability", TS: now.Add(-2 * time.Hour)},
+			storage.StateDatapointEvent{OwnerKind: "component", OwnerID: reachComponent, Key: "interface.reachable", Instance: iface, Value: "down", Source: "reachability", TS: now.Add(-6 * time.Minute)},
+		)
+	}
+	states = append(states, storage.StateDatapointEvent{OwnerKind: "component", OwnerID: reachComponent, Key: "interface.reachable", Instance: iface, Value: "up", Source: "reachability", TS: recovered})
+	if err := gw.InsertStateDatapoints(ctx, states); err != nil {
+		return fmt.Errorf("devseed: insert %s state datapoints: %w", iface, err)
+	}
+	if err := gw.InsertMetricDatapoints(ctx, []storage.MetricDatapointEvent{
+		{OwnerKind: "component", OwnerID: reachComponent, Key: "icmp.reachable", Instance: iface, Value: 1, Source: "icmp", TS: recovered},
+		{OwnerKind: "component", OwnerID: reachComponent, Key: "icmp.rtt_avg", Instance: iface, Value: rttMs, Source: "icmp", TS: recovered},
+		{OwnerKind: "component", OwnerID: reachComponent, Key: "tcp.open", Instance: iface, Value: 1, Source: "tcp", TS: recovered},
+		{OwnerKind: "component", OwnerID: reachComponent, Key: "tcp.connect_time", Instance: iface, Value: connMs, Source: "tcp", TS: recovered},
+	}); err != nil {
+		return fmt.Errorf("devseed: insert %s metric datapoints: %w", iface, err)
 	}
 	return nil
 }

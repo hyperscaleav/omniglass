@@ -129,6 +129,9 @@ export const Maximize: Component<P> = (p) => (
 export const Check: Component<P> = (p) => (
   <Svg size={p.size}><path d="m20 6-11 11-5-5" /></Svg>
 );
+export const Server: Component<P> = (p) => (
+  <Svg size={p.size}><rect x="3" y="4" width="18" height="7" rx="1.5" /><rect x="3" y="13" width="18" height="7" rx="1.5" /><path d="M7 7.5h.01M7 16.5h.01" /></Svg>
+);
 export const Columns: Component<P> = (p) => (
   <Svg size={p.size}><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M12 3v18" /></Svg>
 );

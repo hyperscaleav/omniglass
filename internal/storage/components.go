@@ -319,6 +319,45 @@ func (p *PG) UpdateComponent(ctx context.Context, actorID, name string, patch Co
 	return after, nil
 }
 
+// ComponentInterface is one placement-bound connection owned by a component: the
+// unit the reachability panel iterates. Params is the raw endpoint jsonb (target,
+// port, and settings); NodeName is the probing node (nullable). The verdict,
+// layer signals, and history are read separately per (component, key, interface).
+type ComponentInterface struct {
+	Name     string
+	Type     string
+	NodeName string
+	Params   []byte
+}
+
+// ListComponentInterfaces returns a component's interfaces ordered by name, the
+// rows the reachability read composes over. It is not scope-injected: the caller
+// gates on the component being in read scope (GetComponent) first, then reads its
+// interfaces by the verified name.
+func (p *PG) ListComponentInterfaces(ctx context.Context, componentName string) ([]ComponentInterface, error) {
+	rows, err := p.pool.Query(ctx, `
+		select name, type, coalesce(node_name, ''), params
+		from interface
+		where component = $1
+		order by name asc`, componentName)
+	if err != nil {
+		return nil, fmt.Errorf("storage: list interfaces for %s: %w", componentName, err)
+	}
+	defer rows.Close()
+	var out []ComponentInterface
+	for rows.Next() {
+		var it ComponentInterface
+		if err := rows.Scan(&it.Name, &it.Type, &it.NodeName, &it.Params); err != nil {
+			return nil, fmt.Errorf("storage: scan interface for %s: %w", componentName, err)
+		}
+		out = append(out, it)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("storage: iterate interfaces for %s: %w", componentName, err)
+	}
+	return out, nil
+}
+
 func mapComponentWriteErr(err error) error {
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) {

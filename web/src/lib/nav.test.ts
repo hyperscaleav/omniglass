@@ -51,7 +51,7 @@ describe("filterNav", () => {
     expect(labels).not.toContain("Systems");
     expect(labels).not.toContain("Components");
     expect(labels).not.toContain("Locations");
-    expect(labels).toContain("Nodes"); // a resource-less stub stays
+    expect(labels).toContain("Nodes"); // gated on node:read, which this filter allows
   });
 
   // The owner regression (owner's only grant is the `>` tail): every gated tab must
@@ -178,6 +178,6 @@ describe("nav IA rework", () => {
     expect(routeTokens("/web/variables")).toEqual(["variable", "read"]);
     expect(routeTokens("/web/config")).toBeNull();
     expect(routeTokens("/web/settings")).toBeNull();
-    expect(routeTokens("/web/nodes")).toBeNull(); // node directory is an ungated stub until its backend lands
+    expect(routeTokens("/web/nodes")).toEqual(["node", "read"]); // node directory is live, gated on node:read
   });
 });

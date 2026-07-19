@@ -23,6 +23,8 @@ import Button from "../components/Button";
 import TagPills from "../components/TagPills";
 import { tagFilterKeys } from "../lib/predicate";
 import TagAdder from "../components/TagAdder";
+import ReachabilityPanel from "../components/ReachabilityPanel";
+import { interfaceBlade, interfaceCreateBlade } from "../components/interfaceBlades";
 import EffectiveFields, { fieldResolutionBlade, fieldBladeId } from "../components/EffectiveFields";
 
 // Components: the device inventory, the first page built on the generic TreeList.
@@ -291,7 +293,11 @@ export default function Components() {
             </div>
           </div>
         </Show>
-
+        <ReachabilityPanel
+          name={n().raw.name}
+          onAdd={can(me.data, "interface", "create") ? () => ctx.openBlade({ kind: "interface-create", id: n().raw.name }) : undefined}
+          onOpenInterface={can(me.data, "interface", "read") ? (id) => ctx.openBlade({ kind: "interface", id }) : undefined}
+        />
         <Show when={can(me.data, "field", "read")}>
           <EffectiveFields
             component={n().raw.name}
@@ -471,7 +477,11 @@ export default function Components() {
     onEdit: (n) => { openInEdit(n.raw.name); navigate(`/components/${encodeURIComponent(n.raw.name)}`); },
     renderCreate: () => <ComponentCreate />,
     renderDetail: (n, ctx) => <ComponentDetail node={n} ctx={ctx} />,
-    extraBlades: { "field-resolution": fieldResolutionBlade },
+    extraBlades: {
+      "field-resolution": fieldResolutionBlade,
+      interface: interfaceBlade,
+      "interface-create": interfaceCreateBlade,
+    },
   };
 
   // No page H1: inventory pages built on TreeList let the top bar label them, and
