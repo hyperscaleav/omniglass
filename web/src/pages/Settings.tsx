@@ -9,6 +9,7 @@ import {
   useRestoreNamespace,
   useRestoreAllDefaults,
 } from "../lib/settings";
+import { constraintFor, validateField } from "../lib/settingsValidation";
 
 // Settings is the Admin platform-settings surface (issue #271). It resolves the
 // effective settings document from the cascade (code defaults, the operator file,
@@ -52,13 +53,6 @@ function levelLabel(level: string): string {
 
 // The cascade order, broad to specific, for the layer-stack display.
 const CASCADE = ["code", "file", "global"] as const;
-
-// The theme key is a select, not a free input: only the two shipped daisyUI themes
-// are valid, and the SPA reads the effective value at boot.
-const THEME_OPTIONS = [
-  { value: "omniglass-dark", label: "Dark" },
-  { value: "omniglass-light", label: "Light" },
-];
 
 export default function Settings() {
   const me = useMe();
@@ -172,10 +166,12 @@ export default function Settings() {
 
 // SettingRow is one settable key rendered through KVRow: read mode shows the value
 // with its provenance origin (weighted when overridden) and a drill-in to the layer
-// stack; edit mode swaps in the control (a select for ui.theme, else a text input)
-// with inline save and restore in the daisyUI join. A locked key stays read-only
-// even in edit mode. It owns its own draft so a keystroke is not clobbered when the
-// read query settles.
+// stack; edit mode swaps in the control (an enum field renders as a select of the
+// generated options, else a text input) with inline save and restore in the daisyUI
+// join. The draft validates inline against the generated per-field constraint, so a
+// bad value shows an error under the row and blocks Save before submission. A locked
+// key stays read-only even in edit mode. It owns its own draft so a keystroke is not
+// clobbered when the read query settles.
 function SettingRow(props: {
   first: boolean;
   namespace: string;
@@ -205,11 +201,15 @@ function SettingRow(props: {
   });
 
   const dirty = () => draft() !== current();
-  const isThemeKey = () => props.namespace === "ui" && props.settingKey === "theme";
   const isOverridden = () => props.source === "global";
   const locked = () => Boolean(props.lockLevel);
   // A locked key is never editable, so it stays in read mode even on the edit pass.
   const rowEditing = () => props.editing && !locked();
+  // The generated per-field constraint drives both the control (an enum renders as a
+  // select) and inline validation. A field is only validated while it is being
+  // edited, so read mode never shows an error.
+  const constraint = () => constraintFor(props.namespace, props.settingKey);
+  const fieldErr = () => (rowEditing() ? validateField(constraint(), draft()) : null);
 
   async function save() {
     setBusy(true);
@@ -244,11 +244,12 @@ function SettingRow(props: {
         value={current() || <span class="text-base-content/40">not set</span>}
         input={
           <Show
-            when={isThemeKey()}
+            when={constraint()?.enum}
             fallback={
               <input
                 type="text"
                 class="input input-bordered input-sm join-item min-w-0 grow font-data"
+                classList={{ "input-error": !!fieldErr() }}
                 value={draft()}
                 onInput={(e) => setDraft(e.currentTarget.value)}
               />
@@ -256,16 +257,17 @@ function SettingRow(props: {
           >
             <select
               class="select select-bordered select-sm join-item min-w-0 grow"
+              classList={{ "select-error": !!fieldErr() }}
               value={draft()}
               onChange={(e) => setDraft(e.currentTarget.value)}
             >
-              <For each={THEME_OPTIONS}>{(o) => <option value={o.value}>{o.label}</option>}</For>
+              <For each={constraint()!.enum!}>{(o) => <option value={o}>{o}</option>}</For>
             </select>
           </Show>
         }
         actions={
           <Show when={rowEditing()}>
-            <Show when={dirty()}>
+            <Show when={dirty() && !fieldErr()}>
               <Button type="button" size="sm" square intent="action" icon={Save} class="join-item" loading={busy()} title="Save" label="Save" onClick={save} />
             </Show>
             <Show when={isOverridden()}>
@@ -275,8 +277,8 @@ function SettingRow(props: {
         }
       />
 
-      <Show when={rowErr()}>
-        <p class="border-t border-base-300 px-3 py-1 text-[11px] text-error">{rowErr()}</p>
+      <Show when={fieldErr() || rowErr()}>
+        <p class="border-t border-base-300 px-3 py-1 text-[11px] text-error">{fieldErr() || rowErr()}</p>
       </Show>
 
       <Show when={expanded()}>

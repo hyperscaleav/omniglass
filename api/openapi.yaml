@@ -1427,6 +1427,31 @@ components:
         - name
         - type
       type: object
+    Keybindings:
+      additionalProperties: false
+      properties:
+        close_blade:
+          default: Escape
+          description: Close the top blade
+          type: string
+        command_palette:
+          default: mod+k
+          description: Open the command palette
+          type: string
+        open_detail:
+          default: d
+          description: Open the detail blade
+          type: string
+        open_edit:
+          default: e
+          description: Open the edit pane
+          type: string
+      required:
+        - open_detail
+        - open_edit
+        - close_blade
+        - command_palette
+      type: object
     ListComponentMakesOutputBody:
       additionalProperties: false
       properties:
@@ -2593,6 +2618,17 @@ components:
         - field
         - value
       type: object
+    Settings:
+      additionalProperties: false
+      properties:
+        keybindings:
+          $ref: "#/components/schemas/Keybindings"
+        ui:
+          $ref: "#/components/schemas/UISettings"
+      required:
+        - ui
+        - keybindings
+      type: object
     SettingsMeOutputBody:
       additionalProperties: false
       properties:
@@ -2604,10 +2640,7 @@ components:
           readOnly: true
           type: string
         values:
-          additionalProperties:
-            additionalProperties: {}
-            type: object
-          type: object
+          $ref: "#/components/schemas/Settings"
       required:
         - values
       type: object
@@ -2632,10 +2665,7 @@ components:
           description: key 'namespace.key' to the winning level (code|file|global)
           type: object
         values:
-          additionalProperties:
-            additionalProperties: {}
-            type: object
-          type: object
+          $ref: "#/components/schemas/Settings"
       required:
         - values
         - sources
@@ -2822,6 +2852,25 @@ components:
         - mode
         - interface_id
         - enabled
+      type: object
+    UISettings:
+      additionalProperties: false
+      properties:
+        default_landing:
+          default: /
+          description: Route the console opens to (an absolute path)
+          pattern: ^/
+          type: string
+        theme:
+          default: omniglass-dark
+          description: Console color theme
+          enum:
+            - omniglass-dark
+            - omniglass-light
+          type: string
+      required:
+        - theme
+        - default_landing
       type: object
     UpdateComponentInputBody:
       additionalProperties: false

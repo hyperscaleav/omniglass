@@ -81,6 +81,26 @@ describe("Settings page", () => {
     expect(calls[0].body).toEqual({ theme: "omniglass-light" });
   });
 
+  it("sources the theme select options from the generated schema", async () => {
+    mount(defaultRead);
+    enterEdit();
+    const select = (await screen.findByRole("combobox")) as HTMLSelectElement;
+    // The options come from settings.schema.gen.ts (the reflected enum), not a
+    // hand-kept list, so a struct-tag change reflows the control.
+    expect(Array.from(select.options).map((o) => o.value)).toEqual(["omniglass-dark", "omniglass-light"]);
+  });
+
+  it("shows an inline error and blocks Save for an out-of-enum value", async () => {
+    mount(defaultRead);
+    enterEdit();
+    const select = (await screen.findByRole("combobox")) as HTMLSelectElement;
+    // Drive the draft off the enum: an out-of-schema value must surface an inline
+    // error and remove the Save affordance so the invalid write cannot be submitted.
+    fireEvent.change(select, { target: { value: "purple" } });
+    expect(await screen.findByText(/must be one of/i)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
+  });
+
   it("marks a locked key and keeps it read-only even in edit mode", async () => {
     mount({ values: { ui: { theme: "omniglass-dark" } }, sources: { "ui.theme": "global" }, locks: { "ui.theme": "global" } });
     expect(await screen.findByText("Locked")).toBeTruthy();

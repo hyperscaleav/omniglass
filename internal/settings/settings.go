@@ -7,17 +7,15 @@
 package settings
 
 import (
-	_ "embed"
 	"errors"
 	"fmt"
 	"io/fs"
 	"os"
+	"reflect"
+	"strconv"
 
 	"gopkg.in/yaml.v3"
 )
-
-//go:embed defaults.yaml
-var defaultsYAML []byte
 
 // Doc is a settings document: namespace to key to value. Values stay as decoded
 // generic types so merge is presence-based (a key present overrides; a key absent
@@ -34,13 +32,41 @@ type Namespace struct {
 	ClientVisible bool
 }
 
-// Namespaces is the slice-0 registry. Platform-domain namespaces (retention,
-// integrations) land with their features.
+// Namespaces reflects the namespace registry from the Settings top-level fields:
+// the json tag names the namespace, the settings tag carries the domain and
+// client-visibility. Platform-domain namespaces (retention, integrations) land as
+// fields with their features.
 func Namespaces() []Namespace {
-	return []Namespace{
-		{Name: "ui", Domain: "profile", ClientVisible: true},
-		{Name: "keybindings", Domain: "profile", ClientVisible: true},
+	var out []Namespace
+	t := reflect.TypeOf(Settings{})
+	for i := 0; i < t.NumField(); i++ {
+		f := t.Field(i)
+		ns := Namespace{Name: jsonName(f)}
+		for _, tok := range splitComma(f.Tag.Get("settings")) {
+			switch tok {
+			case "profile", "platform":
+				ns.Domain = tok
+			case "client":
+				ns.ClientVisible = true
+			}
+		}
+		out = append(out, ns)
 	}
+	return out
+}
+
+func splitComma(s string) []string {
+	var out []string
+	start := 0
+	for i := 0; i <= len(s); i++ {
+		if i == len(s) || s[i] == ',' {
+			if i > start {
+				out = append(out, s[start:i])
+			}
+			start = i + 1
+		}
+	}
+	return out
 }
 
 // ClientVisibleNamespaces indexes the registry by client-visibility.
@@ -52,15 +78,73 @@ func ClientVisibleNamespaces() map[string]bool {
 	return out
 }
 
-// Defaults returns the parsed embedded code-default document. It panics on a
-// malformed embed: defaults.yaml is a compile-time asset, so a parse failure is a
-// build defect, not a runtime condition.
+// Defaults reflects the code-default layer from the Settings struct: each leaf's
+// default tag, coerced to the field's Go kind. This is the single declaration point
+// for a setting's default. A field with no default tag contributes nothing.
 func Defaults() Doc {
-	var d Doc
-	if err := yaml.Unmarshal(defaultsYAML, &d); err != nil {
-		panic(fmt.Sprintf("settings: parse embedded defaults: %v", err))
+	d := Doc{}
+	t := reflect.TypeOf(Settings{})
+	for i := 0; i < t.NumField(); i++ {
+		nsField := t.Field(i)
+		nsType := nsField.Type
+		m := map[string]any{}
+		for j := 0; j < nsType.NumField(); j++ {
+			f := nsType.Field(j)
+			tag, ok := f.Tag.Lookup("default")
+			if !ok {
+				continue
+			}
+			v, err := coerceDefault(tag, f.Type.Kind())
+			if err != nil {
+				panic("settings: bad default tag on " + nsType.Name() + "." + f.Name + ": " + err.Error())
+			}
+			m[jsonName(f)] = v
+		}
+		if len(m) > 0 {
+			d[jsonName(nsField)] = m
+		}
 	}
 	return d
+}
+
+// coerceDefault parses a default tag string into the field's Go kind, so the code
+// layer holds typed values (an int default merges and reads as an int, not a
+// string).
+func coerceDefault(s string, k reflect.Kind) (any, error) {
+	switch k {
+	case reflect.String:
+		return s, nil
+	case reflect.Bool:
+		return strconv.ParseBool(s)
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		i, err := strconv.ParseInt(s, 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		switch k {
+		case reflect.Int:
+			return int(i), nil
+		case reflect.Int8:
+			return int8(i), nil
+		case reflect.Int16:
+			return int16(i), nil
+		case reflect.Int32:
+			return int32(i), nil
+		default:
+			return i, nil
+		}
+	case reflect.Float32, reflect.Float64:
+		f, err := strconv.ParseFloat(s, 64)
+		if err != nil {
+			return nil, err
+		}
+		if k == reflect.Float32 {
+			return float32(f), nil
+		}
+		return f, nil
+	default:
+		return s, nil
+	}
 }
 
 // LoadFile reads and parses an operator settings file (JSON or YAML; YAML is a
