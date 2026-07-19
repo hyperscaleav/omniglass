@@ -147,10 +147,10 @@ function FieldRow(props: {
           // Edit mode only: read mode is a pure scan with zero controls (rule 2).
           <Show when={props.editing}>
             <Show when={props.canSet}>
-              <Button type="button" intent={dirty() ? "action" : "quiet"} square icon={Save} class="join-item" loading={saving()} label="Set field value" title="Set" onClick={() => { void save(); }} />
+              <Button type="button" size="md" intent={dirty() ? "action" : "quiet"} square icon={Save} class="join-item" loading={saving()} label="Set field value" title="Set" onClick={() => { void save(); }} />
             </Show>
             <Show when={canRevert()}>
-              <Button type="button" intent="quiet" square icon={RotateCcw} class="join-item" loading={clearing()} label="Revert to default" title="Revert to default" onClick={() => { void clear(); }} />
+              <Button type="button" size="md" intent="quiet" square icon={RotateCcw} class="join-item" loading={clearing()} label="Revert to default" title="Revert to default" onClick={() => { void clear(); }} />
             </Show>
           </Show>
         }
