@@ -155,3 +155,24 @@ func TestSettingsConcurrentPatchesNoLostUpdate(t *testing.T) {
 		}
 	}
 }
+
+// TestSettingsPatchRejectsInvalidValue drives the schema-validation reject path end
+// to end: a value outside a field's enum is refused with 422 before it is stored, so
+// the typed schema (reflected from the Settings struct) is enforced at the HTTP edge,
+// not only in the pure Validate unit.
+func TestSettingsPatchRejectsInvalidValue(t *testing.T) {
+	f := newSettingsFixture(t)
+	f.c.do(f.admin, http.MethodPatch, "/settings/ui", map[string]any{"theme": "chartreuse"}, http.StatusUnprocessableEntity)
+	// The rejected write left no override: the value still resolves to the default.
+	raw := f.c.do(f.admin, http.MethodGet, "/settings", nil, http.StatusOK)
+	if body := decodeSettings(t, raw); body.Values["ui"]["theme"] != "omniglass-dark" {
+		t.Fatalf("after a rejected patch ui.theme = %v, want the unchanged default omniglass-dark", body.Values["ui"]["theme"])
+	}
+}
+
+// TestSettingsPatchUnknownNamespaceIs404 confirms a write to a namespace that is not
+// in the Settings struct is a 404, distinct from a 422 on a known namespace's bad key.
+func TestSettingsPatchUnknownNamespaceIs404(t *testing.T) {
+	f := newSettingsFixture(t)
+	f.c.do(f.admin, http.MethodPatch, "/settings/bogus", map[string]any{"whatever": "x"}, http.StatusNotFound)
+}
