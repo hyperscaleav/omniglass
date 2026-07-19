@@ -526,7 +526,7 @@ Set a field value on a component
 omniglass field create <name> [flags]
 ```
 
-Sets a literal for a field defined on the component's type, validated against its data_type. Gated by field:create; the component must be in the caller's field create scope.
+Sets a literal for a field defined on the component's type, validated against its data_type. Idempotent: the first set creates the value, a later set patches it in place. Gated by field:create; the component must be in the caller's field create scope.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|

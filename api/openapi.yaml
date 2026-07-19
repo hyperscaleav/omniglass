@@ -3612,7 +3612,7 @@ paths:
       summary: List a component's effective fields
       x-omniglass-permission: field:read
     post:
-      description: Sets a literal for a field defined on the component's type, validated against its data_type. Gated by field:create; the component must be in the caller's field create scope.
+      description: "Sets a literal for a field defined on the component's type, validated against its data_type. Idempotent: the first set creates the value, a later set patches it in place. Gated by field:create; the component must be in the caller's field create scope."
       operationId: set-field-value
       parameters:
         - description: The component's name
@@ -3629,12 +3629,12 @@ paths:
               $ref: "#/components/schemas/SetFieldValueInputBody"
         required: true
       responses:
-        "201":
+        "200":
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/FieldValueBody"
-          description: Created
+          description: OK
         default:
           content:
             application/problem+json:

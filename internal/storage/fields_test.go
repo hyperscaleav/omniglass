@@ -144,7 +144,7 @@ func TestFieldValueEffective(t *testing.T) {
 	}
 
 	// Set an override on the component.
-	fv, err := gw.CreateFieldValue(ctx, "", "lobby-display", "diagonal_inches", json.RawMessage(`80`), all)
+	fv, err := gw.SetFieldValue(ctx, "", "lobby-display", "diagonal_inches", json.RawMessage(`80`), all)
 	if err != nil {
 		t.Fatalf("set value: %v", err)
 	}
@@ -160,12 +160,12 @@ func TestFieldValueEffective(t *testing.T) {
 
 	// A value that does not match the field's data_type is rejected (int field,
 	// string value).
-	if _, err := gw.CreateFieldValue(ctx, "", "lobby-display", "diagonal_inches", json.RawMessage(`"bright"`), all); !errors.Is(err, storage.ErrInvalidValue) {
+	if _, err := gw.SetFieldValue(ctx, "", "lobby-display", "diagonal_inches", json.RawMessage(`"bright"`), all); !errors.Is(err, storage.ErrInvalidValue) {
 		t.Fatalf("want ErrInvalidValue, got %v", err)
 	}
 
 	// A field defined on "display" cannot be set on a "camera" component.
-	if _, err := gw.CreateFieldValue(ctx, "", "lobby-cam", "diagonal_inches", json.RawMessage(`10`), all); !errors.Is(err, storage.ErrFieldNotApplicable) {
+	if _, err := gw.SetFieldValue(ctx, "", "lobby-cam", "diagonal_inches", json.RawMessage(`10`), all); !errors.Is(err, storage.ErrFieldNotApplicable) {
 		t.Fatalf("want ErrFieldNotApplicable, got %v", err)
 	}
 
@@ -175,6 +175,78 @@ func TestFieldValueEffective(t *testing.T) {
 		t.Fatalf("want no fields on camera, got %+v", camEff)
 	}
 	_ = fd
+}
+
+// TestSetFieldValueUpsert covers the idempotent set: the first set creates, a
+// second set with a different value patches it in place (no conflict, same id),
+// and a set with the unchanged value is a no-op that writes no audit row.
+func TestSetFieldValueUpsert(t *testing.T) {
+	gw := fieldGateway(t)
+	ctx := context.Background()
+
+	if _, err := gw.CreateFieldDefinition(ctx, "", storage.FieldDefinitionSpec{
+		ComponentType: "display", Name: "diagonal_inches", DataType: "int",
+		DefaultValue: json.RawMessage(`50`),
+	}); err != nil {
+		t.Fatalf("define: %v", err)
+	}
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
+		Name: "lobby-display", ComponentType: "display",
+	}, all); err != nil {
+		t.Fatalf("create component: %v", err)
+	}
+
+	// First set creates the value.
+	fv1, err := gw.SetFieldValue(ctx, "", "lobby-display", "diagonal_inches", json.RawMessage(`80`), all)
+	if err != nil {
+		t.Fatalf("first set: %v", err)
+	}
+	// A second set with a different value patches in place: no conflict, same row id.
+	fv2, err := gw.SetFieldValue(ctx, "", "lobby-display", "diagonal_inches", json.RawMessage(`90`), all)
+	if err != nil {
+		t.Fatalf("second set (upsert) should patch, got: %v", err)
+	}
+	if fv2.ID != fv1.ID {
+		t.Fatalf("upsert changed the row id: %q -> %q", fv1.ID, fv2.ID)
+	}
+	if eff, _ := gw.EffectiveFields(ctx, "lobby-display", all); string(eff[0].Value) != `90` || !eff[0].IsSet {
+		t.Fatalf("want effective 90 set after upsert, got %+v", eff)
+	}
+
+	// The audit records a create then an update for this field_value, not two creates.
+	if verbs := fieldValueAuditVerbs(t, gw, fv1.ID); len(verbs) != 2 || verbs[0] != "create" || verbs[1] != "update" {
+		t.Fatalf("want audit [create update], got %v", verbs)
+	}
+
+	// A set with the unchanged value is a no-op: no third audit row.
+	if _, err := gw.SetFieldValue(ctx, "", "lobby-display", "diagonal_inches", json.RawMessage(`90`), all); err != nil {
+		t.Fatalf("no-op set: %v", err)
+	}
+	if verbs := fieldValueAuditVerbs(t, gw, fv1.ID); len(verbs) != 2 {
+		t.Fatalf("no-op set must not audit, got %v", verbs)
+	}
+
+	// The set still validates against the field's data_type.
+	if _, err := gw.SetFieldValue(ctx, "", "lobby-display", "diagonal_inches", json.RawMessage(`"bright"`), all); !errors.Is(err, storage.ErrInvalidValue) {
+		t.Fatalf("want ErrInvalidValue, got %v", err)
+	}
+}
+
+// fieldValueAuditVerbs returns the audit verbs recorded for a field_value id, in
+// chronological order (ListAuditLog is newest-first).
+func fieldValueAuditVerbs(t *testing.T, gw storage.Gateway, id string) []string {
+	t.Helper()
+	entries, err := gw.ListAuditLog(context.Background(), storage.AuditFilter{Resource: "field_value", Limit: 500})
+	if err != nil {
+		t.Fatalf("list audit: %v", err)
+	}
+	var verbs []string
+	for i := len(entries) - 1; i >= 0; i-- {
+		if entries[i].ResourceID == id {
+			verbs = append(verbs, entries[i].Verb)
+		}
+	}
+	return verbs
 }
 
 // TestFieldValueUpdateDelete covers the mutation half: an update revalidates
@@ -197,7 +269,7 @@ func TestFieldValueUpdateDelete(t *testing.T) {
 	}, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
-	fv, err := gw.CreateFieldValue(ctx, "", "lobby-display", "diagonal_inches", json.RawMessage(`80`), all)
+	fv, err := gw.SetFieldValue(ctx, "", "lobby-display", "diagonal_inches", json.RawMessage(`80`), all)
 	if err != nil {
 		t.Fatalf("set value: %v", err)
 	}

@@ -291,7 +291,7 @@ type Gateway interface {
 	// type (field_value, the variable table narrowed to a component owner: no
 	// owner arc, no cascade), plus the effective read that coalesces the set
 	// value with the definition's default for a component.
-	CreateFieldValue(ctx context.Context, actorID, componentName, fieldName string, value json.RawMessage, create scope.Set) (*FieldValue, error)
+	SetFieldValue(ctx context.Context, actorID, componentName, fieldName string, value json.RawMessage, create scope.Set) (*FieldValue, error)
 	UpdateFieldValue(ctx context.Context, actorID, id string, value json.RawMessage, read, action scope.Set) (*FieldValue, error)
 	DeleteFieldValue(ctx context.Context, actorID, id string, read, action scope.Set) error
 	EffectiveFields(ctx context.Context, componentName string, read scope.Set) ([]EffectiveField, error)
