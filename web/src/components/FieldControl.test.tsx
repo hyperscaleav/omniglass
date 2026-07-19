@@ -64,6 +64,18 @@ describe("FieldControl edit mode", () => {
     // On: the Override switch AND the editable bool toggle.
     expect(overridden.getAllByRole("checkbox").length).toBe(2);
   });
+
+  it("locks the switch on for a persisted override the operator cannot delete", () => {
+    const noDelete = render(() => (
+      <FieldControl label="Diagonal inches" dataType="int" resolved="65" isSet editing overriding draft="65" canToggle canRevert={false} />
+    ));
+    expect((noDelete.getByRole("checkbox") as HTMLInputElement).disabled).toBe(true);
+
+    const canDelete = render(() => (
+      <FieldControl label="Diagonal inches" dataType="int" resolved="65" isSet editing overriding draft="65" canToggle canRevert />
+    ));
+    expect((canDelete.getByRole("checkbox") as HTMLInputElement).disabled).toBe(false);
+  });
 });
 
 describe("FieldControl required", () => {

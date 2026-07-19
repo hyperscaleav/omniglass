@@ -33,15 +33,20 @@ export default function FieldControl(props: {
   invalid?: boolean;
   // The caller may toggle the override (holds field:create); read-only otherwise.
   canToggle?: boolean;
+  // The caller may clear a persisted override (holds field:delete). When false, a
+  // field that is already set stays overridden (turning it off would delete, which
+  // the operator cannot do), so the switch is locked on.
+  canRevert?: boolean;
   onToggle?: (on: boolean) => void;
   onInput?: (v: string) => void;
   onDrillIn?: () => void;
   first?: boolean;
 }): JSX.Element {
   const overriding = () => !!props.overriding;
-  // A required field must carry a value, so it stays overridden and its switch
-  // cannot be turned off (there is nothing safe to fall back to).
-  const lockOn = () => !!props.required;
+  // The switch cannot be turned off (the field stays overridden) when it is
+  // required (it must carry a value) or when it is a persisted override the
+  // operator lacks field:delete to clear.
+  const lockOn = () => !!props.required || (!!props.isSet && props.canRevert === false);
   const hasResolved = () => props.resolved !== "";
 
   return (

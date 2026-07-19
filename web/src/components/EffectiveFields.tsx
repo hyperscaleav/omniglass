@@ -33,6 +33,7 @@ export default function EffectiveFields(props: { component: string; edit?: Blade
   const rows = createMemo<EffectiveField[]>(() => q.data ?? []);
   const editing = () => props.edit?.editing() ?? false;
   const canSet = () => can(me.data, "field", "create");
+  const canClear = () => can(me.data, "field", "delete");
   // Rows accept input only in edit mode and only with the set permission.
   const editable = () => editing() && canSet();
 
@@ -134,6 +135,7 @@ export default function EffectiveFields(props: { component: string; edit?: Blade
                   draft={draftOf(f)}
                   invalid={invalid[f.name]}
                   canToggle={canSet()}
+                  canRevert={canClear()}
                   onToggle={(on) => setOverriding(f.name, on)}
                   onInput={(v) => setDrafts(f.name, v)}
                   onDrillIn={() => props.onOpen(f.name)}
