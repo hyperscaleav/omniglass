@@ -227,7 +227,7 @@ function FieldResolutionDetail(props: { field: EffectiveField }): JSX.Element {
 
       <div class="flex flex-col gap-1.5">
         <span class="eyebrow">Resolution</span>
-        <p class="text-[11px] text-base-content/40">falls type default &rsaquo; this component; the deepest set wins</p>
+        <p class="text-[11px] text-base-content/40">type default &rsaquo; this component; the deepest set wins</p>
         <div class="overflow-hidden rounded-box border border-base-300">
           {/* Type default: shadowed (struck, dim) once the component overrides it. */}
           <div class="flex items-center gap-2 px-3 py-2">
