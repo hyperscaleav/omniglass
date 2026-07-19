@@ -8,11 +8,20 @@ import type { FilterKey } from "./predicate";
 // token from :enroll, which is returned to the caller and never cached or logged.
 export type Node = {
   name: string;
+  display_name?: string;
   description?: string;
+  location?: string;
   enrolled: boolean;
   enrolled_at?: string;
   last_heartbeat_at?: string;
 };
+
+// nodeLabel is the node's human label: its display_name, falling back to the
+// name (the key/estate address) when unset. Used as the blade title and the list
+// row label, mirroring how component/system/location present name vs display_name.
+export function nodeLabel(n: Node): string {
+  return n.display_name?.trim() || n.name;
+}
 
 // The once-shown enrollment token exchange result. It is deliberately NOT stored
 // in the query cache: enrollNode returns it to the caller, which reveals it once
@@ -33,10 +42,20 @@ export async function getNode(name: string): Promise<Node> {
   return data as Node;
 }
 
-export type CreateNode = { name: string; description?: string };
+export type CreateNode = { name: string; display_name?: string; description?: string; location?: string };
 
 export async function createNode(body: CreateNode): Promise<Node> {
   const { data, error } = await api.POST("/nodes", { body });
+  if (error) throw error;
+  return data as Node;
+}
+
+// The node update patch: only the mutable fields (name is the immutable key). A
+// field left undefined is unchanged; location set to "" clears the placement.
+export type NodePatch = { display_name?: string; description?: string; location?: string };
+
+export async function updateNode(name: string, body: NodePatch): Promise<Node> {
+  const { data, error } = await api.PATCH("/nodes/{name}", { params: { path: { name } }, body });
   if (error) throw error;
   return data as Node;
 }
@@ -73,6 +92,7 @@ export function nodeStatus(n: Node, now: number = Date.now()): NodeStatus {
 // (exact, over the derived pill). Matching is client-side over the loaded rows via
 // lib/predicate.
 export const nodeFilterKeys: FilterKey<Node>[] = [
-  { key: "name", type: "string", hint: "substring", get: (n) => n.name },
+  { key: "name", type: "string", hint: "substring", get: (n) => `${nodeLabel(n)} ${n.name}` },
   { key: "status", type: "string", hint: "exact", get: (n) => nodeStatus(n), values: () => ["down", "never", "up"] },
+  { key: "location", type: "string", hint: "exact", get: (n) => n.location ?? "", values: (rows) => [...new Set(rows.map((r) => r.location).filter(Boolean) as string[])].sort() },
 ];
