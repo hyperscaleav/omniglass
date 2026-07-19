@@ -2594,7 +2594,8 @@ components:
       properties:
         default_landing:
           default: /
-          description: Route the console opens to
+          description: Route the console opens to (an absolute path)
+          pattern: ^/
           type: string
         theme:
           default: omniglass-dark

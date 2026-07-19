@@ -16,7 +16,8 @@ export const settingsSchema = {
   },
   "ui": {
     "default_landing": {
-      "type": "string"
+      "type": "string",
+      "pattern": "^/"
     },
     "theme": {
       "type": "string",

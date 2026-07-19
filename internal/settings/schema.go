@@ -18,7 +18,7 @@ type Settings struct {
 // UISettings is the ui namespace.
 type UISettings struct {
 	Theme          string `json:"theme" enum:"omniglass-dark,omniglass-light" default:"omniglass-dark" doc:"Console color theme"`
-	DefaultLanding string `json:"default_landing" default:"/" doc:"Route the console opens to"`
+	DefaultLanding string `json:"default_landing" pattern:"^/" default:"/" doc:"Route the console opens to (an absolute path)"`
 }
 
 // Keybindings is the keymap namespace: a closed set of developer-defined actions.

@@ -3358,7 +3358,7 @@ export interface components {
         };
         UISettings: {
             /**
-             * @description Route the console opens to
+             * @description Route the console opens to (an absolute path)
              * @default /
              */
             default_landing: string;
