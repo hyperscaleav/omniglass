@@ -24,7 +24,7 @@ screenshots:
         selector: 'text=Diagonal inches'
   - id: fields-edit
     path: /web/components/lobby-display
-    alt: "The Fields panel in edit mode: each field gains an inline setter, an overridden field gains revert. In read mode there are no inputs at all."
+    alt: "The Fields panel in edit mode: each field becomes an input, an inherited field shows a greyed 'unset' placeholder while a set field shows its value with a clear (x). There is no per-field save; the blade's Save changes commits every touched field. In read mode there are no inputs."
     steps:
       - action: click
         selector: 'button:has-text("Edit")'
@@ -61,20 +61,25 @@ set).
 
 ## Set a field on a component
 
-Open a component from the **Components** inventory. Its detail carries an **Effective fields** panel: one
-row per field its type declares, each resolved to the value that applies to this component, the **literal
-set on the component** or the **type default** when unset. A badge marks each row **override** (the
-component set its own value) or **default** (it inherits the type default).
+Open a component from the **Components** inventory. Its detail carries a **Fields** panel: one row per
+field its type declares, each resolved to the value that applies to this component, the **literal set on
+the component** or the **type default** when unset. In read mode an **override** reads with weight and an
+`override` badge; a defaulted field is quiet.
 
 ::screenshot{#fields-effective}
 
-- With `field:create` (an **operator** permission) each row carries an **inline setter**: a type-aware
-  input (a number input, a bool toggle, a JSON textarea) seeded from the current value, and a **Set** that
-  writes the literal and refreshes the row. Setting a value flips the row to **override**; the value is
-  validated against the field's data type, and a bad value is a per-row error, not a lost edit.
-- With `field:delete` (an **admin** permission) each **override** row also carries a **revert** control that
-  clears the component's value and returns the field to its type default. The effective read returns the
-  `field_value` id (`value_id`) next to the literal, so the panel knows which value the revert deletes.
+Field edits are **batched with the component's edit**, not saved per field. Click **Edit** on the
+component and the fields become inputs; the blade's **Save changes** commits every field you touched
+alongside the rest of the component detail, and **Cancel** discards them.
+
+- With `field:create` (an **operator** permission) each field is an editable input in edit mode. An
+  **inherited** field is empty with a greyed `unset` placeholder, so it reads as distinct from a field
+  that is actually set; typing a value stages an override. Setting a value is an **idempotent upsert**, so
+  changing an already-set field patches it in place rather than failing on a second write. Each value is
+  validated against the field's data type on save; a bad value is a per-row error, not a lost edit.
+- With `field:delete` (an **admin** permission) a **set** field carries a **clear** (×) that stages a
+  revert to the type default, applied on **Save changes**. The effective read returns the `field_value` id
+  (`value_id`) next to the literal, so the panel knows which value the clear deletes.
 - A component in a scope you cannot reach is **not found**, not forbidden: the panel resolves fields only
   for components within your `field` read scope, mirroring secrets and variables.
 

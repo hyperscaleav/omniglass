@@ -303,7 +303,7 @@ func (UnimplementedGateway) UpdateFieldDefinition(context.Context, string, strin
 func (UnimplementedGateway) DeleteFieldDefinition(context.Context, string, string) error {
 	return nil
 }
-func (UnimplementedGateway) CreateFieldValue(context.Context, string, string, string, json.RawMessage, scope.Set) (*FieldValue, error) {
+func (UnimplementedGateway) SetFieldValue(context.Context, string, string, string, json.RawMessage, scope.Set) (*FieldValue, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) UpdateFieldValue(context.Context, string, string, json.RawMessage, scope.Set, scope.Set) (*FieldValue, error) {

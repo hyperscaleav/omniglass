@@ -611,7 +611,7 @@ func generatedCommands() []*cobra.Command {
 			cmd := &cobra.Command{
 				Use:     "create <name>",
 				Short:   "Set a field value on a component",
-				Long:    "Sets a literal for a field defined on the component's type, validated against its data_type. Gated by field:create; the component must be in the caller's field create scope.",
+				Long:    "Sets a literal for a field defined on the component's type, validated against its data_type. Idempotent: the first set creates the value, a later set patches it in place. Gated by field:create; the component must be in the caller's field create scope.",
 				Example: "  omniglass field create <name> --field field --value value",
 				Args:    cobra.ExactArgs(1),
 				RunE: func(cmd *cobra.Command, args []string) error {

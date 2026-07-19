@@ -250,15 +250,15 @@ func registerFieldRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		OperationID:   "set-field-value",
 		Method:        http.MethodPost,
 		Path:          "/components/{name}/fields",
-		DefaultStatus: http.StatusCreated,
+		DefaultStatus: http.StatusOK,
 		Summary:       "Set a field value on a component",
-		Description:   "Sets a literal for a field defined on the component's type, validated against its data_type. Gated by field:create; the component must be in the caller's field create scope.",
+		Description:   "Sets a literal for a field defined on the component's type, validated against its data_type. Idempotent: the first set creates the value, a later set patches it in place. Gated by field:create; the component must be in the caller's field create scope.",
 	}, "field", "create"), func(ctx context.Context, in *setFieldValueInput) (*fieldValueOutput, error) {
 		raw, err := json.Marshal(in.Body.Value)
 		if err != nil {
 			return nil, huma.Error422UnprocessableEntity("value is not encodable")
 		}
-		fv, err := gw.CreateFieldValue(ctx, actorID(ctx), in.Name, in.Body.Field, raw, a.scopeFor(ctx, "field", "create"))
+		fv, err := gw.SetFieldValue(ctx, actorID(ctx), in.Name, in.Body.Field, raw, a.scopeFor(ctx, "field", "create"))
 		if err != nil {
 			return nil, mapFieldErr(err)
 		}

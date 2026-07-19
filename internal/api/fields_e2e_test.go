@@ -145,7 +145,7 @@ func TestFieldValueAPI(t *testing.T) {
 		Value any    `json:"value"`
 	}
 	json.Unmarshal(c.do(ownerTok, http.MethodPost, "/components/lobby-display/fields",
-		map[string]any{"field": "diagonal_inches", "value": 80}, http.StatusCreated), &setBody)
+		map[string]any{"field": "diagonal_inches", "value": 80}, http.StatusOK), &setBody)
 	if setBody.ID == "" || setBody.Value.(float64) != 80 {
 		t.Fatalf("set response = %+v, want value 80 with id", setBody)
 	}
@@ -155,9 +155,13 @@ func TestFieldValueAPI(t *testing.T) {
 		t.Fatalf("want set 80 with value_id %q and default_value 50, got %+v", setBody.ID, f)
 	}
 
-	// A second value for the same field on the same component is a conflict.
+	// A second set patches the existing value in place (idempotent upsert), not a
+	// conflict: the same value_id keeps its literal moved to 90.
 	c.do(ownerTok, http.MethodPost, "/components/lobby-display/fields",
-		map[string]any{"field": "diagonal_inches", "value": 90}, http.StatusConflict)
+		map[string]any{"field": "diagonal_inches", "value": 90}, http.StatusOK)
+	if f := effectiveField(t, c, ownerTok, "lobby-display", "diagonal_inches"); f.Value.(float64) != 90 || f.ValueID != setBody.ID {
+		t.Fatalf("want upsert to patch to 90 keeping value_id %q, got %+v", setBody.ID, f)
+	}
 	// A value for a field not defined on the type is a request fault.
 	c.do(ownerTok, http.MethodPost, "/components/lobby-display/fields",
 		map[string]any{"field": "nope", "value": 1}, http.StatusUnprocessableEntity)
@@ -192,7 +196,7 @@ func TestFieldValueAPI(t *testing.T) {
 	// forbidden to set (403 at the field:create gate, before any handler runs).
 	opTok := setupScopedViewer(t, ctx, dsn, "operator-display", "operator", "component", comp.ID)
 	c.do(opTok, http.MethodPost, "/components/lobby-display/fields",
-		map[string]any{"field": "diagonal_inches", "value": 70}, http.StatusCreated)
+		map[string]any{"field": "diagonal_inches", "value": 70}, http.StatusOK)
 	if f := effectiveField(t, c, opTok, "lobby-display", "diagonal_inches"); f.Value.(float64) != 70 || !f.IsSet {
 		t.Fatalf("operator set = %+v, want 70 set", f)
 	}
@@ -265,7 +269,7 @@ func TestFieldValueScopeSplit(t *testing.T) {
 		ID string `json:"id"`
 	}
 	json.Unmarshal(c.do(ownerTok, http.MethodPost, "/components/out-scope/fields",
-		map[string]any{"field": "diagonal_inches", "value": 80}, http.StatusCreated), &fvID)
+		map[string]any{"field": "diagonal_inches", "value": 80}, http.StatusOK), &fvID)
 
 	// Out-of-read leg: an operator scoped to in-scope holds field:update, but the
 	// value's owner (out-scope) is outside its read scope, so PATCH is the

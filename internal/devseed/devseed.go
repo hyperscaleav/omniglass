@@ -335,19 +335,14 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 	// Field values: an override a component sets over a definition's default (last,
 	// since both the component and the field definition must exist first), so the
 	// effective-values panel teaches direct-vs-inherited. The value is encoded to
-	// jsonb like a variable. A value that already exists (ErrFieldValueConflict) is
-	// left as is, so a re-run adds nothing.
+	// jsonb like a variable. The set is idempotent, so a re-run changes nothing.
 	for _, fv := range doc.FieldValues {
 		raw, err := json.Marshal(fv.Value)
 		if err != nil {
 			return fmt.Errorf("devseed: encode field value %s/%s: %w", fv.Component, fv.Field, err)
 		}
-		_, err = gw.CreateFieldValue(ctx, actorID, fv.Component, fv.Field, raw, all)
-		if errors.Is(err, storage.ErrFieldValueConflict) {
-			continue
-		}
-		if err != nil {
-			return fmt.Errorf("devseed: create field value %s/%s: %w", fv.Component, fv.Field, err)
+		if _, err := gw.SetFieldValue(ctx, actorID, fv.Component, fv.Field, raw, all); err != nil {
+			return fmt.Errorf("devseed: set field value %s/%s: %w", fv.Component, fv.Field, err)
 		}
 	}
 	return nil
