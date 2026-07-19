@@ -20,6 +20,7 @@ import (
 // operation MUST reject a no-permission principal. Keep this list short and
 // justified; a new entry is a security decision.
 var ungated = map[string]bool{
+	"POST /nodes:claim":                  true, // public by necessity: the node is not yet a principal; the enrollment token is the authentication, exchanged for its NATS credential
 	"GET /healthz":                       true, // public, no auth
 	"GET /auth/status":                   true, // public: drives the login screen's bootstrap hint
 	"GET /auth/me":                       true, // authn-only: returns the caller's own principal

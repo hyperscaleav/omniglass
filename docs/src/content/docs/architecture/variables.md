@@ -15,8 +15,11 @@ pluggable KEK provider, the masked-with-audited-decrypt read path, the two-axis 
 per-secret `admin_sensitive` flag, with a scope-filtered directory, [ADR-0025](/architecture/decisions/#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier)),
 and the operator surfaces. The **`variable`**
 member ([#183](https://github.com/hyperscaleav/omniglass/issues/183)): the typed **plaintext** cell on the same
-exclusive arc, resolved down the same cascade, with a Variables directory and a per-component effective-variables
-panel. Each member's section below marks what is built versus deferred; the
+exclusive arc, resolved down the same cascade, with a Variables directory. The built operator surfaces for both
+members are the Secrets and Variables **directories** (browse, create, edit the cells), plus the **field** slot that
+consumes a cell into a component's value surface; the standalone per-component effective-secrets and
+effective-variables panels were retired ([#281](https://github.com/hyperscaleav/omniglass/issues/281),
+[decision log](/architecture/decisions/)). Each member's section below marks what is built versus deferred; the
 [build progress](/architecture/status/#build-progress) note carries the shipped shape. A related primitive,
 the **`field`** (slice 0), a typed schema declared on a `component_type` and resolved on a component to
 set-or-default, also lands `Partial` (its macro interpolation and cross-type cascade are deferred); its
@@ -166,7 +169,7 @@ mechanism (define once high, inherit below). Interpolation lives at the **consum
 slice.)
 
 **Masked everywhere except an audited decrypt.** A secret's value is masked (`••••••`) in every read:
-the directory, the per-component effective-secrets view, the type list. Reading the plaintext is a
+the directory and the type list. Reading the plaintext is a
 separate, privileged action: `secret:reveal` gates the decrypt (both an on-screen **reveal** and a
 clipboard **copy**, recorded under distinct `reveal` and `copy` verbs), and **every decrypt writes an
 [audit](/architecture/audit/) row**.
@@ -219,8 +222,8 @@ split to model; it is the cascade, like everything else.
 :::note[Built: slice 1, plaintext cell + cascade]
 The first slice ([#183](https://github.com/hyperscaleav/omniglass/issues/183)) is **built**: the typed plaintext
 cell (a `value_type` of `string` / `int` / `float` / `bool` / `json`, its value stored as jsonb and validated
-against the type in the app), owned on the exclusive arc and resolved down the cascade, with a Variables directory
-and the per-component effective-variables panel. It **grants `variable:create,update` to operators** (delete stays
+against the type in the app), owned on the exclusive arc and resolved down the cascade, with a Variables directory.
+It **grants `variable:create,update` to operators** (delete stays
 admin and owner), mirroring the secret member. Three parts of the design below are deferred: the **`template`**
 owner scope (slice 1 mirrors the secret arc, `global | location | system | component`; template scope and cascade
 groups are [#184](https://github.com/hyperscaleav/omniglass/issues/184)); a **`variable_type` registry** (slice 1

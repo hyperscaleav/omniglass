@@ -92,8 +92,8 @@ func TestAuditLogAPI(t *testing.T) {
 			r.Body.Close()
 		}
 	}
-	postLogin("alice", "wrong-password")   // real account, wrong pw -> audited
-	postLogin("ghost", "whatever")         // unknown user -> not audited
+	postLogin("alice", "wrong-password") // real account, wrong pw -> audited
+	postLogin("ghost", "whatever")       // unknown user -> not audited
 	failed := 0
 	for _, e := range list(ownerTok, "?verb=login_failed") {
 		failed++

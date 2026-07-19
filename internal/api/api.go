@@ -34,7 +34,10 @@ type healthOutput struct {
 // options are the handler's tunables, set with the Option functions.
 type options struct {
 	secureCookies bool
-	settingsSvc   *settings.Service
+	// natsURL is the address the node-claim reply hands back, so a node needs only
+	// the server URL to reach both the API and the bus.
+	natsURL     string
+	settingsSvc *settings.Service
 }
 
 // Option configures NewHandler.
@@ -42,6 +45,9 @@ type Option func(*options)
 
 // WithSecureCookies marks the session cookie Secure (set behind TLS).
 func WithSecureCookies(b bool) Option { return func(o *options) { o.secureCookies = b } }
+
+// WithNatsURL sets the advertised NATS URL returned by the node-claim exchange.
+func WithNatsURL(u string) Option { return func(o *options) { o.natsURL = u } }
 
 // WithSettingsService supplies the settings engine service that backs the
 // settings routes. When unset, NewHandler builds a code-defaults-only service so
@@ -245,6 +251,10 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 	registerSystemRoutes(api, a, gw)
 	registerComponentRoutes(api, a, gw)
 	registerComponentMakeRoutes(api, a, gw)
+	registerInterfaceRoutes(api, a, gw)
+	registerTaskRoutes(api, a, gw)
+	registerReachabilityRoutes(api, a, gw)
+	registerNodeRoutes(api, a, gw, o.natsURL)
 	registerSecretRoutes(api, a, gw)
 	registerVariableRoutes(api, a, gw)
 	registerFieldRoutes(api, a, gw)

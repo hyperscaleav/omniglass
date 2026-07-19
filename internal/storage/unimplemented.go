@@ -222,6 +222,9 @@ func (UnimplementedGateway) ListComponents(context.Context, scope.Set) ([]Compon
 func (UnimplementedGateway) GetComponent(context.Context, string, scope.Set) (*Component, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) ListComponentInterfaces(context.Context, string) ([]ComponentInterface, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) CreateComponent(context.Context, string, ComponentSpec, scope.Set) (*Component, error) {
 	return nil, nil
 }
@@ -233,6 +236,82 @@ func (UnimplementedGateway) ComponentNameTaken(context.Context, string) (bool, e
 }
 func (UnimplementedGateway) DeleteComponent(context.Context, string, string, scope.Set, scope.Set) error {
 	return nil
+}
+func (UnimplementedGateway) ListInterfaces(context.Context, scope.Set) ([]Interface, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) GetInterface(context.Context, string, scope.Set) (*Interface, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) CreateInterface(context.Context, string, InterfaceSpec, scope.Set) (*Interface, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) UpdateInterface(context.Context, string, string, InterfacePatch, scope.Set, scope.Set) (*Interface, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteInterface(context.Context, string, string, scope.Set, scope.Set) error {
+	return nil
+}
+func (UnimplementedGateway) ListTasks(context.Context, scope.Set) ([]Task, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) GetTask(context.Context, string, scope.Set) (*Task, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) UpsertDatapointType(context.Context, DatapointType) error {
+	return nil
+}
+func (UnimplementedGateway) ListDatapointTypes(context.Context) ([]DatapointType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) UpsertInterfaceType(context.Context, InterfaceType) error {
+	return nil
+}
+func (UnimplementedGateway) ListInterfaceTypes(context.Context) ([]InterfaceType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) InsertMetricDatapoints(context.Context, []MetricDatapointEvent) error {
+	return nil
+}
+func (UnimplementedGateway) LatestMetric(context.Context, string, string) (*MetricDatapoint, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) LatestMetricInstance(context.Context, string, string, string) (*MetricDatapoint, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) InsertStateDatapoints(context.Context, []StateDatapointEvent) error {
+	return nil
+}
+func (UnimplementedGateway) LatestState(context.Context, string, string, string) (*StateDatapoint, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) StateTransitions(context.Context, string, string, string, time.Time) ([]StateDatapoint, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) CreateNode(context.Context, string, NodeSpec, scope.Set) (*Node, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) SetEnrollmentToken(context.Context, string, string, string, scope.Set) (*Node, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) ClaimNode(context.Context, string, string) (*Node, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) AuthenticateNode(context.Context, string, string) (bool, error) {
+	return false, nil
+}
+func (UnimplementedGateway) RecordHeartbeat(context.Context, string) error { return nil }
+func (UnimplementedGateway) NodeWorklist(context.Context, string) (Worklist, error) {
+	return Worklist{}, nil
+}
+func (UnimplementedGateway) ResolveTaskOwner(context.Context, string, string) (TaskOwner, bool, error) {
+	return TaskOwner{}, false, nil
+}
+func (UnimplementedGateway) GetNode(context.Context, string, scope.Set) (*Node, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) ListNodes(context.Context, scope.Set) ([]Node, error) {
+	return nil, nil
 }
 func (UnimplementedGateway) UpsertComponentMake(context.Context, ComponentMake) error { return nil }
 func (UnimplementedGateway) ListComponentMakes(context.Context) ([]ComponentMake, error) {
@@ -248,7 +327,7 @@ func (UnimplementedGateway) UpdateComponentMake(context.Context, string, string,
 	return nil, nil
 }
 func (UnimplementedGateway) DeleteComponentMake(context.Context, string, string) error { return nil }
-func (UnimplementedGateway) UpsertSecretType(context.Context, SecretType) error        { return nil }
+func (UnimplementedGateway) UpsertSecretType(context.Context, SecretType) error         { return nil }
 func (UnimplementedGateway) ListSecretTypes(context.Context) ([]SecretType, error) {
 	return nil, nil
 }

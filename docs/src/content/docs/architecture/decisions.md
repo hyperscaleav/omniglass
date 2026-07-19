@@ -68,6 +68,11 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0032](#adr-0032-settings-persist-only-the-override-level-base-layers-are-recomputed-in-memory) | 2026-07-17 | Accepted | The settings engine persists only the override level; the `code` and `file` base layers are recomputed in memory each boot, so restore is a delete (diverges from scaling.md's "materialized in Postgres") |
 | [ADR-0033](#adr-0033-the-settings-gateway-is-unscoped-only-the-permission-gates-it) | 2026-07-17 | Accepted | Settings Gateway methods are unscoped: ABAC storage-scope is not applicable to platform / principal config; only the `settings:<action>` permission gates them |
 | [ADR-0034](#adr-0034-settings-resolve-as-a-cascade-over-principals-with-a-broader-wins-lock) | 2026-07-17 | Accepted | Settings resolve down the principal hierarchy reusing the cascade primitive, with per-key provenance and a top-down broader-wins lock |
+| [ADR-0036](#adr-0036-a-node-is-a-kindnode-principal-with-an-interim-bearer-credential-and-static-per-connection-nats-subject-permissions) | 2026-07-07 | Accepted | A node is a `principal` of `kind=node` with a 1:1 detail table and a bearer `credential` row (interim shared secret), and per-node NATS isolation is static per-connection subject permissions via an in-process auth callback; nkey/JWT deferred |
+| [ADR-0037](#adr-0037-telemetry-is-a-protobuf-event-over-jetstream-with-an-inline-owner-confining-consumer) | 2026-07-07 | Accepted | Telemetry is a protobuf `Event` over a JetStream durable consumer; the consumer binds the owner from the task's interface and confines a node to its own tasks inline (no separate raw-telemetry table or Postgres queue); raw persistence + replay and label-based multi-owner routing deferred |
+| [ADR-0038](#adr-0038-the-reachability-verdict-is-a-built-in-state) | 2026-07-07 | Accepted | The per-interface reachability verdict `interface.reachable` is a built-in **state** (not a metric); availability is `time_in_state` over it; readiness is interface-type-defaulted and interface-overridable, node-executed, not a `calc_rule` |
+| [ADR-0039](#adr-0039-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver) | 2026-07-08 | Accepted | An interface is a device **API** named by its protocol (not a NIC); `interface_type` = its **transport** (the reach gate), a **driver** = the collect layer (protocol handler + transports + normalized menu, what a device CAN do), a template **curates** (SHOULD), the instance holds what **IS** there; OIDs/commands live in the driver, not the template |
+| [ADR-0040](#adr-0040-the-task-is-derived-read-only-plumbing-projected-from-its-interface) | 2026-07-14 | Accepted | The `task` is **derived** read-only plumbing: creating an `interface` derives its one poll task, so task create/update/delete routes and the `task:create` / `:update` grants are dropped; `task.node_name` is removed and **projected** from `interface.node_name` (the worklist and telemetry owner-confinement join the interface), and a node purge cascades its interfaces and their tasks. Reverses the checkpoint-5d task-CRUD build; refines ADR-0039 |
 
 ## Entries
 
@@ -785,6 +790,182 @@ below from the project's history. From here it grows one slice at a time.
 - **Closes:** issue [#239](https://github.com/hyperscaleav/omniglass/issues/239). Design:
   `docs/superpowers/specs/2026-07-14-type-placement-constraints-design.md`.
 
+### ADR-0036: A node is a kind=node principal with an interim bearer credential and static per-connection NATS subject permissions
+
+- **Date:** 2026-07-07 | **Status:** Accepted | **Pages:** [nodes](/architecture/nodes/), [identity and access](/architecture/identity-access/)
+- **Decision:** A node is a first-class `principal` of `kind='node'` with a 1:1 `node` detail table (keyed by
+  `principal_id`, alongside `human` and `service`), exactly as [identity and access](/architecture/identity-access/)
+  describes. Its `name` is `not null unique` on the detail table and stays the estate address the collection FKs
+  (`interface.node_name`, `task.node_name`, `metric_datapoint.node_id`) reference. The node runtime ships with
+  two deliberate calls that diverge from the present-tense design, both reversible in a later hardening slice.
+  (1) The node's credential is a **bearer `credential` row** on its principal, minted, stored (only as
+  `sha256`), and verified through the **same helpers a service bearer token uses** (`AuthenticateBearer`), and
+  the enrollment token **doubles as the node's NATS password** (a shared secret), rather than being a single-use
+  bootstrap exchanged for a distinct long-lived credential. The decentralized **nkey/JWT operator-account**
+  model that identity and access describes for nodes (a `nats` credential kind, a signed nonce, a JWT carrying
+  the node's subject permissions) is deferred; the `credential` kind CHECK is **not** widened for it here. (2)
+  Per-node NATS isolation is **static per-connection subject permissions**: the embedded `nats-server` runs an
+  in-process `CustomClientAuthentication` callback that resolves each connecting node by name, verifies its
+  bearer credential, and registers a user whose publish/subscribe grants are scoped to that node's own
+  `og.v1.*.<node>` subjects, so a node cannot publish or pull as another.
+- **Context:** Checkpoint 2 of the reachability slice needed a real, negatively-tested per-node isolation
+  mechanic against an embedded server, without carrying the full JWT/nkey machinery a single slice should not.
+  The auth-callback path adds per-node users **dynamically at enrollment time with no config reload**, which is
+  the simplest mechanism that keeps the isolation invariant real: the negative test proves node A cannot use
+  node B's subjects (and a confused-deputy reply cannot forge another node's liveness), and a wrong credential
+  is rejected at connect. The subject encodes the node name in its last token and the callback grants only that
+  node's subjects, so the subject **is** the transport isolation boundary (the payload-owner admission fence is
+  a later checkpoint). Modeling the node as a `kind=node` principal (rather than the standalone table an earlier
+  checkpoint built) puts it on the shared identity spine from the start: it has a real `principal_id` so it can
+  be an audit actor, its credential rides the audited human/service machinery, and only the credential *scheme*
+  (interim bearer vs nkey/JWT) remains to tighten. JetStream is enabled on the server now (it boots and shuts
+  down cleanly), but the control-plane messages (worklist, heartbeat) are JSON over core NATS; the protobuf
+  telemetry `Event` over JetStream is the next checkpoint.
+- **Closes the gap:** the nkey/JWT node identity (the `nats` credential kind and the signed-nonce admission)
+  and the single-use enrollment token are tracked with the node-identity hardening slice.
+
+### ADR-0037: Telemetry is a protobuf Event over JetStream with an inline owner-confining consumer
+
+- **Date:** 2026-07-07 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [datapoints](/architecture/datapoints/)
+- **Decision:** A node ships each collected batch as a protobuf `Event` (proto3, `proto/og/v1/event.proto`,
+  `Event` + `Datapoint` messages only, no gRPC service) published to `og.v1.telemetry.<node>`. This is
+  omniglass's first protobuf; the wire is generated with `protoc` + `protoc-gen-go` via a `gen-proto` stage on
+  `make gen`, and the generated `event.pb.go` is committed. The server hosts a JetStream stream
+  (`OG_TELEMETRY` over `og.v1.telemetry.*`) and a **single durable consumer** (`og-telemetry-worker`,
+  AckExplicit) whose handler, per Event, **derives and writes inline**: it decodes the batch, resolves the
+  owner as the task's interface component, **confines** the node to its own tasks, applies reject-not-project
+  against the `datapoint_type` registry, writes the surviving typed rows through the checkpoint-1
+  `InsertMetricDatapoints` path (`owner_kind=component`, `provenance=observed`), and acks. A permanent
+  condition (an undecodable payload, or an orphan the confinement fence drops) is terminated/acked so it is not
+  redelivered; only a transient failure (a DB error) is left unacked so JetStream redelivers. **The node stamps
+  no component identity**: its only assertion is the publishing subject (its own name) plus the `task_id`; the
+  server binds and confines.
+- **Context:** The prior (v2) design split telemetry into a hot path that persisted a raw event to a
+  `telemetry` table and an async Postgres queue worker that derived from it. Checkpoint 3 deliberately
+  **collapses that split**: the JetStream durable consumer **is** the at-least-once worklist, so there is no
+  raw-telemetry table and no Postgres queue in this checkpoint; the handler derives, confines, writes, and acks
+  in one place. This keeps the reachability slice small while keeping the two invariants **real and negatively
+  tested**: a node cannot land a datapoint for a component it holds no task for (an Event carrying another
+  node's `task_id` is orphan-dropped, no row written), and an unregistered datapoint name is dropped, not
+  projected. Owner binding is the **interface-prebind path only** (task -> interface -> component); there is no
+  separately-authored `transform_rule` (omniglass has none), so label-based multi-owner routing, discovery
+  rules, and node-self binding are a later checkpoint.
+- **Closes the gap:** raw-`Event` persistence (backfill/replay) and the raw -> admission -> trusted two-lane
+  topology, plus label-based multi-owner resolution, are tracked with a later collection checkpoint.
+
+### ADR-0038: The reachability verdict is a built-in state
+
+- **Date:** 2026-07-07 | **Status:** Accepted | **Pages:** [datapoints](/architecture/datapoints/), [collection](/architecture/collection/)
+- **Decision:** The per-interface reachability verdict `interface.reachable` (value domain `up` / `down`) is a
+  first-class **state** datapoint, not a metric, seeded as an official `datapoint_type` at `kind=state`,
+  `value_type=text`, `validation: {values:[up,down]}`. It is gated **per interface**: the verdict is the AND of
+  that interface's applicable probe results (for the inline tcp/icmp interfaces this is degenerate, one probe
+  drives the verdict; it generalizes to an interface with several probes). The **node** computes it after running
+  the interface's probe(s) and emits it as an `observed` state datapoint instanced by the interface; the ingest
+  consumer **routes by the registry kind** (a metric name to `metric_datapoint`, a state name to
+  `state_datapoint`) after the same owner-confinement and reject-not-project, so a foreign or unregistered state
+  is dropped identically to a metric. The series is **transition-only**: the node remembers the last verdict per
+  interface and emits only on a flip or first observation, and the ingest side re-guards by skipping a write whose
+  value equals the latest stored value (the net for a node restart). Availability is `time_in_state` over this
+  state (health's primitive one tier down), a later slice; the raw probe metrics (`tcp.open`, `icmp.reachable`,
+  the rtts) keep emitting unchanged. Readiness config (an ssh command + regex, an snmp OID) is an
+  **interface-type default, interface-overridable** concern executed **on the node**, not a server-side
+  `calc_rule`; 5a builds no readiness-config column, its verdict is the inline probe result.
+- **Context:** Reachability history is only honest if the verdict is a **dwell-measurable** signal: availability
+  is time-in-state, which needs a categorical state with transitions, not a numeric sample per tick. Modelling
+  the verdict as a metric would conflate the raw per-probe reading (`tcp.open`, a firehose sample) with the
+  interface-level judgement (an availability substrate), and it would make `time_in_state` a re-derivation over a
+  numeric series rather than a read over the state's own transitions. Making it a state, and computing it at the
+  node as the AND of the interface's probes, keeps the verdict where the probe results are, keeps the raw metrics
+  untouched, and lets the read side reconstruct the availability strip directly from `state_datapoint`.
+- **Divergence:** checkpoint 1 seeded the `datapoint_type` canon **metric-only** (the reachability probe metrics),
+  and cp3's ingest consumer assumed every surviving datapoint was a metric (`InsertMetricDatapoints` for all).
+  This entry records the divergence: 5a adds the first **state** to the seed and makes the ingest consumer route
+  by kind (the cp3-deferred "route by kind, not assume metric" note now come due). The `state_datapoint` table
+  mirrors `metric_datapoint` (same owner exclusive-arc, same lineage CHECK) with a categorical `value text` plus
+  an optional `value_json`.
+- **Closes the gap:** the availability SLI (`time_in_state` over `interface.reachable`) and the operator surfaces
+  that render the transitions are a later slice (5b); readiness config as an interface-type default is a later
+  interface-type concern.
+
+### ADR-0039: An interface is a device API; the interface type is its transport, not its driver
+
+- **Date:** 2026-07-08 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [nodes](/architecture/nodes/)
+- **Decision:** An `interface` is an **API endpoint we intend to call** on a component, identified by the
+  **protocol it speaks** (`web`, `qrc`, `ttp`, `snmp`), not a network interface; a host or IP is a variable it
+  consumes, not its identity. It is named by that protocol and is unique within its component
+  (`unique(component, name)`), never a hand-typed label. Two axes are **decoupled**: the **transport** (how bytes
+  move) and the **driver** (the protocol handler that produces the normalized functions and datapoints).
+  `interface_type` is the **transport** (`ssh`, `tcp`, `http`, `snmp`, `udp`, `telnet`, `icmp`): a node-side wire
+  capability that also carries the default **reachability** probe (tcp/ssh/http open the port, icmp pings).
+  Reachability is the **first gate of a ladder** (reach to auth to responds to collecting) and needs only the
+  transport. A **driver** is the **collect** layer: a protocol handler plus the transport(s) it can run over plus
+  the normalized catalog (functions and datapoints, how to fetch them as commands/OIDs/paths, parse, a version).
+  The same handler can run over several transports (a CLI over `ssh` or `telnet`), so the driver declares its
+  transports and the instance picks one; a genuinely different grammar over a different transport (an ssh CLI vs a
+  tcp JSON-RPC) is a **different driver** producing the same catalog. Device-specific fetch detail lives in the
+  driver, never the template: `snmp` is the transport, a `biamp-snmp` (or `generic-snmp`) **driver** holds the OID
+  map. The entities then split on **CAN / SHOULD / IS**: the **driver** owns what a device family CAN do and how
+  (transports, catalog, normalization, discovery rules, version); a **template** (per model) owns what an operator
+  SHOULD watch and how it looks (curate the driver's menu to a default subset, thresholds and event rules, an
+  icon); the `interface` instance owns what IS actually there (transport, host, credentials, a driver when it
+  collects, the discovered subset, per-device overrides). Discovery is a driver rule whose **result lands on the
+  instance**; filtering-for-choice is a template default plus an instance override; capability is the driver. The
+  reusable driver is **data on one generic engine** (a declarative `canonical datapoint <- fetch <- parse`),
+  official or org-custom via the `(namespace, id)` shadow registry, with a pluggable-Go escape hatch only for a
+  wire the engine cannot express; a "device pack" bundles a driver plus a template, and a template **declares its
+  driver deps** (version-pinned) so a missing or shadowed driver surfaces, never silently misbinds. The house
+  `<entity>` / `<entity>_type` pattern holds: `interface_type` is the transport (a reachability interface's type
+  genuinely is its transport), and `driver` earns its own registry (SNMP and multi-transport protocols prove it
+  folds into neither transport nor template).
+- **Context:** The 5a build named interfaces by a hand-typed string (`boardroom-tcp`) with `type` = the probe
+  (tcp/icmp), which conflated identity with transport and implied operators name and wire-configure devices by
+  hand. The reframe: operators are not programmers, so the value is a **driver that normalizes a device family
+  into a pick-from menu**, which makes the template a light curation, policy, and presentation layer and means the
+  operator never authors a protocol. You cannot cleanly split "how you talk" from "what you say" (the command is
+  both), so the seam is elsewhere: the **transport** is the reusable connection, the **driver** is the reusable
+  normalized menu over it, and the **template** is a selection plus policy. Keeping the driver as data (not Go per
+  family) is what makes it community-shippable;
+  growing the canonical menu device-by-device (not a universal ontology up front) is what keeps it honest;
+  separating menu-of-types from discovered-instances is what fits programmable devices (a DSP's blocks are
+  per-install); versioning the driver is what lets a template's picks resolve as the menu matures.
+- **Scope now (tier-0):** this slice (#114) ships only the first gate. `interface_type` is the transport
+  primitive (`icmp`, `tcp`, `ssh`, `http` seeded `built`), each carrying a tcp-connect or ping reachability probe;
+  an `interface` is named by its protocol and typed by its transport; the dev seed models a lab **polaris DSP**
+  with a `web` (http) and a `qrc` (tcp) interface, the "two APIs on one device" story. The driver catalog,
+  normalization, discovery, templates, versioning, and the shadow-resolved device pack are later slices of the
+  [collection epic](https://github.com/hyperscaleav/omniglass/issues/113) (slices 2 to 4 realize this model).
+- **Refines:** [ADR-0038](#adr-0038-the-reachability-verdict-is-a-built-in-state) (the reachability verdict is the
+  first rung of the gate ladder this ADR names).
+- **Status note (2026-07-08):** the `interface = API` / `interface_type = transport` half is **built and stable**
+  (this slice). The **driver / collect layer** (the separate `driver` entity, the normalized menu, and the
+  driver-centric split itself) is **under active design**: it departs from the original template-centric
+  architecture (where protocol handling lived in the template), which is a serious enough change to redesign
+  deliberately rather than on momentum. Recorded here as the current-best direction, **not a locked gate**;
+  driver-centric vs template-centric is re-examined, and this ADR revised or superseded, in a later ADR before
+  the collect layer is built.
+
+### ADR-0040: The task is derived read-only plumbing, projected from its interface
+
+- **Date:** 2026-07-14 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [api](/architecture/api/)
+- **Decision:** The `interface` is the **only authored** collection primitive; the `task` is **derived**.
+  Creating an interface **derives its one poll task**, so the task surface is read-only (`GET /tasks`,
+  `GET /tasks/{id}` only): the `POST` / `PATCH` / `DELETE /tasks` routes and the `task:create` / `task:update`
+  grants are removed. A task carries **no node column**; `task.node_name` is dropped and its placement is
+  **projected** from `interface.node_name`, so the worklist and the telemetry owner-confinement join the
+  interface rather than reading a task-local node. A **node purge cascades** its interfaces and their derived
+  tasks (`interface.node_name` and `task.interface_id` are `ON DELETE CASCADE`).
+- **Context:** The checkpoint-5d build gave both primitives a full CRUD surface and a node placement of their
+  own. That let an operator author a task divorced from its interface, and left a task's node and its interface's
+  node as two independently-set fields that could disagree. The reframe makes the interface the one thing an
+  operator authors (an API on a component, [ADR-0039](#adr-0039-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver)):
+  a reachability check is an interface, its poll task is the plumbing that runs it, and placement is a property
+  of where the interface is reached from, stated once. This is the honest shape for the reach tier; the richer
+  driver-authored collection surface (multiple functions over one interface) is a later slice and does not
+  reintroduce operator task CRUD.
+- **Refines:** [ADR-0039](#adr-0039-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver)
+  (the interface is the authored API; this ADR settles that its task is derived, not co-authored).
+
 ### ADR-0031: `component_make` registry slice 1, an `official` boolean, a deferred referential guard, and website scheme validation
 
 - **Date:** 2026-07-14 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/), [Makes guide](/guides/admin/makes/)
@@ -917,7 +1098,36 @@ below from the project's history. From here it grows one slice at a time.
 - **Closes:** issue [#271](https://github.com/hyperscaleav/omniglass/issues/271) (settings engine slice-0), under
   epic [#270](https://github.com/hyperscaleav/omniglass/issues/270).
 
-### ADR-0036: settings are a reflected typed struct with generated client and server validation
+### ADR-0036: retire the standalone effective-secrets and effective-variables per-component panels; fields become the component value surface
+
+- **Date:** 2026-07-16 | **Status:** Accepted | **Pages:** [config, secrets, and variables](/architecture/variables/), [identity and access](/architecture/identity-access/), [API](/architecture/api/)
+- **Decision:** The standalone per-component **Effective secrets** and **Effective variables** panels are removed,
+  along with their `GET /components/{name}/effective-secrets` and `GET /components/{name}/effective-variables` routes
+  (and the generated `omniglass effective-secret list` / `effective-variable list` commands and the matching
+  typed-client methods). A component's value surface is the **field** primitive: a component's values are its
+  **fields**, each resolving override-versus-type-default and shown in the **Effective fields** panel. A secret or a
+  variable reaches a component by being **sourced into a field** (the deferred field `sources` model) or **bound to a
+  collection interface input**, not through a per-component cascade-browse panel. **Kept** unchanged: the storage
+  cascade **resolvers** (`ResolveSecrets` / `ResolveVariables`) as the internal primitive the future `$sec:` /
+  `$var:` interpolation consumer will call, and the **Secrets** and **Variables** directories (browse, create, edit,
+  reveal) with all their routes and CLI.
+- **Context:** The per-component effective-* panels predated the field primitive and listed **every**
+  cascade-resolving cell that reached a component, which at any real depth is mostly inherited noise (a global SNMP
+  community, a location poll interval) rather than anything set on that component. The
+  [field](/architecture/variables/#field-an-operator-defined-typed-schema-on-a-type) primitive
+  ([#266](https://github.com/hyperscaleav/omniglass/issues/266)) is the schema-over-cells consumer the design always
+  intended: a component carries a typed set of fields, each resolving to a set literal or its type default, and the
+  intended `sources` model lets a field draw its value from a variable, a secret, a datapoint, or a file. Once fields
+  are the value surface, a second per-component cascade browser over the raw cells is redundant and misleading (it
+  reads as though the cells attach to the component when they only resolve onto it). Retiring the panels narrows the
+  component detail to its fields and keeps the cells' own management on the Secrets and Variables directories, where
+  the cascade is authored. The resolvers stay because the interpolation consumer (`$sec:` / `$var:`) still needs
+  them; only the browse-panel surface retires.
+- **Closes:** issue [#281](https://github.com/hyperscaleav/omniglass/issues/281) (retire the per-component
+  effective-secrets / effective-variables panels), under the field epic
+  [#266](https://github.com/hyperscaleav/omniglass/issues/266).
+
+### ADR-0041: settings are a reflected typed struct with generated client and server validation
 
 - **Date:** 2026-07-19 | **Status:** Accepted | **Pages:** [settings](/architecture/settings/)
 - **Decision:** A setting is declared **once**, as a tagged field on a canonical `Settings` Go struct

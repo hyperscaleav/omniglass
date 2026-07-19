@@ -15,7 +15,7 @@ roles:
     display_name: Operator
     description: >-
       Day-to-day operations: acknowledge, snooze, and resolve alarms, and create
-      or edit components, interfaces, tasks, rules, config, secrets, variables, and
+      or edit components, interfaces, rules, config, secrets, variables, and
       fields.
       Sees and reveals the device secrets in its scope (never the admin-sensitive
       platform credentials). Inherits Viewer.
@@ -23,7 +23,6 @@ roles:
     permissions:
       - "component:create,update"
       - "interface:create,update"
-      - "task:create,update"
       - "rule:create,update"
       - "config:create,update"
       - "secret:read,reveal,create,update"
@@ -59,6 +58,8 @@ roles:
     inherits: ["operator"]
     permissions:
       - "component:delete"
+      - "interface:*"
+      - "task:*"
       - "system:create,update,delete"
       - "location:create,update,delete"
       - "principal:*"
@@ -85,6 +86,7 @@ roles:
       - "principal_group:*"
       - "principal_group:read:admin"
       - "role:*"
+      - "node:*"
       - "role:read:admin"
       - "audit:read:admin"
       - "datapoint_type:create"

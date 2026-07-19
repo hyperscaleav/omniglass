@@ -4,7 +4,6 @@ import {
   createVariable,
   updateVariable,
   deleteVariable,
-  effectiveVariables,
   displayValue,
   parseInput,
 } from "./variables";
@@ -54,16 +53,6 @@ describe("variables data layer", () => {
     expect(req.url).toContain("/api/v1/variables/v1");
     const sent = await req.json();
     expect(sent).toMatchObject({ value: 60 });
-  });
-
-  it("resolves the effective-variables cascade for a component", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ variables: [{ name: "poll", value_type: "int", owner_kind: "component", band: 3, depth: 0, winner: true, value: 30 }] }),
-    );
-    const resolved = await effectiveVariables("codec-1");
-    expect(resolved[0].winner).toBe(true);
-    const req = fetchMock.mock.calls[0][0] as Request;
-    expect(req.url).toContain("/api/v1/components/codec-1/effective-variables");
   });
 
   it("throws on an error status", async () => {

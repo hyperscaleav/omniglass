@@ -3,9 +3,44 @@ title: Data collection
 description: "Data collection is built from functions: a versioned component template declares interfaces and a set of functions, each a trigger plus a DAG of steps that runs at the edge and parses on the spot."
 sidebar:
   badge:
-    text: Design
-    variant: caution
+    text: Partial
+    variant: note
 ---
+
+:::note[Partial]
+The first collection path is live end to end: an edge node runs real **reachability probes** against a
+component's interfaces (each an **API named by the protocol it speaks** and typed by its **transport**: `tcp`,
+`ssh`, and `http` interfaces reach by opening the tcp port, `icmp` pings), ships the result as a protobuf
+`Event` over a JetStream durable consumer, and the `tcp.open` / `tcp.connect_time` and `icmp.reachable` /
+`icmp.rtt_avg` datapoints land in `metric_datapoint` owned by the target component. The owner is
+bound **server-side** from the task's interface (the node stamps no component identity), and the ingest consumer
+confines a node to its own tasks (an Event carrying another node's `task_id` is orphan-dropped) and rejects
+unregistered datapoint names. The icmp probe rides the same pipeline unchanged (the consumer does not branch on
+probe type); a target that does not answer is DATA (`icmp.reachable=0` with a reason), and an error is reserved
+for a node that cannot do ICMP at all, told apart by a once-cached loopback capability self-check. On top of the
+raw probe metrics the node now computes the per-interface **reachability verdict** `interface.reachable` (up/down,
+the AND of that interface's probe results) and emits it as a built-in **state** datapoint; the ingest consumer
+**routes by the registry kind** (metric to `metric_datapoint`, state to `state_datapoint`) under the same
+confinement, and the state series is **transition-only** (one row per flip, guarded both at the node and at
+ingest). Of the two collection primitives this pipeline reads, the **interface** is the authored one and the
+**task** is **derived**. An interface has an operator **CRUD API** (gateway + Huma routes at `/interfaces`,
+generated into the OpenAPI document, the cobra CLI, and the typed client); it is **named by its protocol** (the
+name derives from its `interface_type`, unique within its component, never a hand-typed label), so create takes a
+type, not a name. A **task** is **read-only plumbing**: creating an interface **derives its one poll task**, so
+there are no operator create/update/delete task routes, only `GET /tasks` and `GET /tasks/{id}`. A task carries
+**no node column**; its placement **projects from its interface** (the worklist and telemetry owner-confinement
+join the interface), and a **node purge cascades** its interfaces and their derived tasks. Both surfaces carry
+the two authorization layers, with **scope cascading through the owning component** (the interface and its derived
+task inherit the component's read/action scope, so an out-of-scope component's interface or task is a
+non-disclosing 404, reusing the component tier with no new scope kind). The full function/DAG authoring model below (multi-step, cross-interface, branching) is still design;
+what is built is the reach gate over four transports (`tcp`/`ssh`/`http` open the port, `icmp` pings). The
+protocol **drivers** that collect a normalized menu of datapoints and functions over a transport are the next
+slices. See
+[ADR-0033](/architecture/decisions/#adr-0037-telemetry-is-a-protobuf-event-over-jetstream-with-an-inline-owner-confining-consumer),
+[ADR-0034](/architecture/decisions/#adr-0038-the-reachability-verdict-is-a-built-in-state),
+[ADR-0035](/architecture/decisions/#adr-0039-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver),
+and [ADR-0036](/architecture/decisions/#adr-0040-the-task-is-derived-read-only-plumbing-projected-from-its-interface).
+:::
 
 Collection is built from **functions**. A versioned `ComponentTemplate` declares how to reach a
 class of device (its interfaces) and a set of **functions**, each a discrete unit of device logic
@@ -45,13 +80,17 @@ A **function** is the device-level unit. The platform-level workflow that *respo
 the thing that opens tickets, notifies, and orchestrates, is a [flow](/architecture/alarms-actions/);
 a flow can call a function, but the two live at different layers.
 
-## Interfaces: connections, declared once
+## Interfaces: the device's APIs, declared once
 
-A top-level `interfaces` array, each a named connection. The connection is **decoupled from the
-work**: a function's steps reference an interface by `id`; the interface owns the connection, not
-the step. Declaring it once removes per-step duplication, and the decoupling lets a
-**persistent session outlive any single function run**, so subscriptions and inbound streams
-attach to a connection established once.
+An **interface is an API we intend to call** on a component (its `web`, `qrc`, `ttp`, `snmp`
+endpoint), **not** a network interface; a host or IP is a variable it consumes, not its identity. It
+is **named by the protocol it speaks**, unique within its component (so a device has one `web`, one
+`qrc`), never a hand-typed label. Reachability is the **first gate of a ladder** (reach, then auth,
+then responds, then collecting), and it needs only the interface's transport. A top-level
+`interfaces` array declares each one; the connection is **decoupled from the work**: a function's
+steps reference an interface by `id`, the interface owns the connection, not the step. Declaring it
+once removes per-step duplication, and the decoupling lets a **persistent session outlive any single
+function run**, so subscriptions and inbound streams attach to a connection established once.
 
 ```yaml
 interfaces:
@@ -68,10 +107,13 @@ interfaces:
     persistent: true               # stateful session, outlives function runs
 ```
 
-- **Type is an `interface_type` registry entry**: the registry knows which protocol adapters exist
-  and carries each one's connection-param schema. It covers `snmp`, `http`, `ssh`, `telnet`, `tcp`,
-  `icmp`, `webhook`, `mqtt`, `syslog`, and `websocket`. The per-type schema is registry-driven, so
-  config lints against exactly the adapter the registry holds.
+- **Type is the `interface_type`, which is the transport**: the wire the interface speaks over, not
+  the protocol driver. The registry covers `snmp`, `http`, `ssh`, `telnet`, `tcp`, `icmp`, `webhook`,
+  `mqtt`, `syslog`, and `websocket`, and carries each transport's connection-param schema and its
+  default reachability probe. The protocol handler that turns a device's API into a normalized menu of
+  datapoints and functions (the OIDs, the commands, the parse) is a separate **driver** layer, so the
+  same protocol can run over several transports and a device's OIDs live in its driver, never on a
+  template. See [ADR-0035](/architecture/decisions/#adr-0039-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver).
 - **`liveness`** is the per-interface reachability gate; it decides whether the interface's
   functions run. See [nodes](/architecture/nodes/).
 - **`persistent: true`** keeps a session open across function runs (interface lifecycle contains
@@ -493,5 +535,5 @@ The connection registry, the declared connections, and the node's units of work;
 | Table | Key columns | Notes |
 |---|---|---|
 | `interface_type` | name, **built**, direction (in/out), param_schema (jsonb) | the protocol-and-style registry (`ssh`, `http`, `snmp`, `mqtt`, `webhook`, ...); generates the template config schema |
-| `interface` | name (per component), interface_type, **component** (nullable: set = pre-bound, null = shared/match-key), params (jsonb), **node** (server-assigned placement) | the connection, declared once ([nodes](/architecture/nodes/)) |
-| `task` | **id = content hash**, interface, **mode (poll/listen)**, spec (jsonb), enabled | a node's unit of collection work; dedupes identical work. Parsing to datapoints is the **edge function**, not the task's job |
+| `interface` | **id** (surrogate), **name derived from interface_type** (unique per component, never hand-typed), **component** (nullable: set = pre-bound, null = shared/match-key), params (jsonb), **node** (placement, `ON DELETE CASCADE` so a node purge drops its interfaces) | the connection, the **authored** primitive ([nodes](/architecture/nodes/)) |
+| `task` | **id = content hash**, **interface** (`ON DELETE CASCADE`), **mode (poll/listen)**, spec (jsonb), enabled | a **derived** unit of collection work: created with its interface, read-only (no operator CRUD). **No node column**, placement **projects from the interface**. Parsing to datapoints is the **edge function**, not the task's job |

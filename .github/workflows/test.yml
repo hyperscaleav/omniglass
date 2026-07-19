@@ -33,5 +33,12 @@ jobs:
       - name: Build
         run: go build ./...
 
+      # The collection tier's icmp probe opens an unprivileged SOCK_DGRAM ICMP
+      # socket, which its real-capability test exercises. Runners disallow that by
+      # default (net.ipv4.ping_group_range excludes the runner gid), so widen the
+      # range to let the gate actually run on CI rather than skip it.
+      - name: Allow unprivileged ICMP (for the icmp capability gate)
+        run: sudo sysctl -w net.ipv4.ping_group_range="0 2147483647"
+
       - name: Test
         run: go test ./...

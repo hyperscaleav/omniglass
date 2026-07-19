@@ -83,6 +83,133 @@ omniglass set-password ops 'set-a-strong-one' --revoke-tokens   # full lockout: 
 ```
 
 Once a server is running, a signed-in principal manages **its own** account through the
+generated self-scoped commands (each edits only the caller's own profile):
+
+```sh
+omniglass auth me                                    # your principal, permissions, and grants
+omniglass auth update-profile --display-name "Ops Lead"
+omniglass auth change-password --current-password 'orange-boat-42x' --new-password 'purple-canyon-7'
+omniglass me setAvatar --image-base64 "$(base64 -w0 me.jpg)"   # set your profile picture
+omniglass me removeAvatar                            # clear it, falling back to initials
+omniglass avatar list                                # read your picture back as { image_base64 }
+```
+
+## Collection commands
+
+The [collection](/architecture/collection/) surface regenerates into four command groups:
+`node`, `interface`, `task`, and `reachability`. They follow the same derivation as every
+other resource (`POST /interfaces` is `interface create`, `GET /tasks/{id}` is `task get
+<id>`), so nothing here is special-cased. All examples require the matching permission on
+the running server.
+
+Register and enroll an edge node (the day-one handshake):
+
+```sh
+omniglass node list
+omniglass node create --name edge-hq --description "HQ network closet"   # needs node:create (all-scope)
+omniglass node get edge-hq
+```
+
+The node-facing `claim` exchange is public (the enrollment token is the authentication), so
+a node presents its name and token to receive its NATS credential:
+
+```sh
+omniglass node claim --name edge-hq --token ogp_...
+```
+
+:::note[Thin cut: `node enroll`]
+`omniglass node enroll` regenerates as a command, but the `{name}` path parameter of the
+`:enroll` custom method is not yet bound (it takes no positional argument), so it cannot
+target a specific node from the CLI today. Mint an enrollment token from the console (the
+Nodes page) or against the API until that binding lands. `node claim`, which carries its
+name in the body, works as shown.
+:::
+
+Author a reachability check by **creating an interface** (its poll task is derived
+automatically):
+
+```sh
+# An interface owned by a component, placed on a node, with its probe target in params.
+# It is named by its protocol: --type is the interface_type, there is no --name flag.
+omniglass interface create \
+  --type tcp --component disp-1 --node edge-hq \
+  --params '{"target":"10.0.0.1:22"}'                          # needs interface:create
+
+omniglass interface list
+omniglass interface get <id>                                    # interfaces are addressed by id
+omniglass interface update <id> --node edge-hq --params '{"target":"10.0.0.2:22"}'
+omniglass interface delete <id>                                 # refused (409) while its task references it
+
+# The poll task is derived from the interface, so the task surface is read-only.
+omniglass task list
+omniglass task get <id>
+```
+
+The four built interface types are `icmp`, `tcp`, `ssh`, and `http`, and an interface is
+**named by its protocol** (the `--type`), unique within its component. An interface `update`
+changes only its node placement and params. A **task** is **derived** when its interface is
+created, so there is no `task create`, `update`, or `delete`; its placement follows the
+interface's. A node purge cascades its interfaces and their derived tasks.
+
+Read a component's composed reachability (the verdict, the probe-layer signals, and the
+recent transitions the availability strip draws):
+
+```sh
+omniglass reachability list disp-1                              # needs component:read
+```
+`--image-base64` takes a plain base64 string, not a file path (base64-encode the image
+yourself, as the `$(base64 …)` above does); the server accepts JPEG, PNG, or WebP and
+normalizes it to a 256x256 JPEG. An administrator manages **any** principal's picture with
+`omniglass principal setAvatar <id> --image-base64 …` and `omniglass principal removeAvatar <id>`
+(gated by `principal:set-avatar`), reading one back with `omniglass avatar list <id>` (gated by
+`principal:read`). A principal with no picture is a 404.
+
+## Secrets
+
+The [secret](/architecture/variables/) commands are generated like every other resource. `secret`
+covers the encrypted values, `secret-type` lists the shape registry, and `effective-secret` reads the
+masked cascade onto one component. Output is masked JSON, the same as the console; plaintext lives
+behind `reveal`, which the server audits and which only admin and owner may call.
+
+```sh
+omniglass secret-type list                          # the shape registry (snmp-community, basic-auth)
+omniglass secret list                               # the all-scope admin directory (masked fields)
+omniglass secret create --name core-snmp --secret-type snmp-community \
+  --owner-kind location --owner hq --fields '{"community":"public"}'
+omniglass secret update <id> --fields '{"community":"s3cret"}'   # an omitted field keeps its value
+omniglass secret reveal <id>                        # audited plaintext decrypt (secret:reveal)
+omniglass secret delete <id>
+
+omniglass effective-secret list <component>         # the masked cascade resolved onto a component
+```
+
+`--owner-kind` is one of `global | location | system | component`; `--owner` names the owning entity
+and is omitted for a `global` secret (which needs an all-scope grant). Field maps pass as a JSON object
+to `--fields`, validated against the type's shape.
+
+## Variables
+
+The [variable](/architecture/variables/) commands are generated the same way. `variable` covers the
+plaintext values and `effective-variable` reads the cascade onto one component. There is no reveal:
+the value is shown in the clear.
+
+```sh
+omniglass variable list                             # the all-scope admin directory
+omniglass variable create --name poll_interval --value-type int \
+  --owner-kind system --owner east-auditorium-av --value 30
+omniglass variable create --name retry --value-type json --owner-kind global \
+  --value '{"retries":3,"backoff":"1s"}'
+omniglass variable update <id> --value 60           # validated against the fixed value_type
+omniglass variable delete <id>
+
+omniglass effective-variable list <component>       # the cascade resolved onto a component
+```
+
+`--value-type` is one of `string | int | float | bool | json`. `--value` is **parsed as JSON**, so a
+bare `30`, `true`, or `{"k":"v"}` sends the number, the boolean, or the object; a bare word like `HDMI1`
+falls back to a string, so the common case needs no quoting. A string value that would otherwise parse
+as JSON (`30`, `true`) is quoted to force a string: `--value '"30"'`. (`secret create --fields` parses
+the same way.)
 generated self-scoped commands (`omniglass auth me`, `auth update-profile`,
 `auth change-password`, `me setAvatar` / `removeAvatar`); an administrator manages other
 principals, roles, groups, secrets, and variables through the resource commands, all covered

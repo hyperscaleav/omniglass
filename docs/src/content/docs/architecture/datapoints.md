@@ -3,9 +3,23 @@ title: Datapoints
 description: "The core data model: datapoints and their three kinds, provenance, the registries, key scope, divergence, fusion, and how a value reads back."
 sidebar:
   badge:
-    text: Design
-    variant: caution
+    text: Partial
+    variant: note
 ---
+
+:::note[Partial]
+The observed **metric** path is built for reachability: a node's tcp probe produces `tcp.open` /
+`tcp.connect_time` and its icmp (ping) probe produces `icmp.reachable` / `icmp.rtt_avg`, and the ingest consumer writes them to `metric_datapoint` with `provenance=observed`, the
+owner bound server-side from the task's interface (`owner_kind=component`) and reject-not-project enforced
+against the `datapoint_type` registry. The observed **state** path now has its first producer too: the node
+computes the per-interface reachability verdict `interface.reachable` (up/down, the AND of the interface's probe
+results), and the ingest consumer **routes by the `datapoint_type` kind** (metric to `metric_datapoint`, state to
+`state_datapoint`), so the verdict lands in `state_datapoint` under the same owner-confinement, **transition-only**
+(one row per flip, guarded at the node and again at ingest). Log datapoints, calculated provenance, fusion, and
+the live NATS data-lane described below are still design. See
+[ADR-0033](/architecture/decisions/#adr-0037-telemetry-is-a-protobuf-event-over-jetstream-with-an-inline-owner-confining-consumer)
+and [ADR-0034](/architecture/decisions/#adr-0038-the-reachability-verdict-is-a-built-in-state).
+:::
 
 This is the heart of the authoritative data model: what a datapoint is, the two axes that define it, how we know a value (provenance), and how values reconcile, diverge, and read back. The physical layout (tables, partitioning, the lineage CHECK, tiering) lives in storage; the spine is [the architecture overview](/architecture/). Events, calc rules, and the response layer get their own pages: [events](/architecture/events/), [calculations](/architecture/calculations/), and [alarms and actions](/architecture/alarms-actions/).
 

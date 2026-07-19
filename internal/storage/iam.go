@@ -189,9 +189,10 @@ type Principal struct {
 	// reversible until purged). Nil means live. Distinct from Active, which is the
 	// reversible disable (suspend) toggle.
 	ArchivedAt *time.Time
-	Human      *HumanProfile
-	Service    *ServiceProfile
-	Grants     []Grant
+	Human   *HumanProfile
+	Service *ServiceProfile
+	Node    *NodeProfile
+	Grants  []Grant
 	// Groups are the principal groups this principal belongs to (id + label), so the
 	// admin directory can show membership without a per-row fetch. The grants those
 	// groups confer already ride Grants (tagged with GroupID); this names them.
@@ -201,7 +202,8 @@ type Principal struct {
 // PrincipalGroupRef is a lightweight reference to a group a principal belongs to.
 type PrincipalGroupRef struct{ ID, Name string }
 
-// HumanProfile and ServiceProfile carry the kind-specific attributes.
+// HumanProfile, ServiceProfile, and NodeProfile carry the kind-specific
+// attributes. A node's operator-facing label is its name (the estate address).
 type HumanProfile struct {
 	Username, Email, DisplayName string
 	// MustChangePassword is set by an admin reset and cleared by the user's own
@@ -214,6 +216,7 @@ type HumanProfile struct {
 	AvatarUpdatedAt *time.Time
 }
 type ServiceProfile struct{ Label string }
+type NodeProfile struct{ Name string }
 
 // Grant is one (role x scope) pairing on a principal, addressable by its id (so
 // the admin surface can revoke a specific one).
@@ -1400,6 +1403,13 @@ func (p *PG) loadPrincipal(ctx context.Context, pr *Principal) error {
 			return fmt.Errorf("storage: load service: %w", err)
 		}
 		pr.Service = &s
+	case "node":
+		var n NodeProfile
+		if err := p.pool.QueryRow(ctx,
+			`select name from node where principal_id = $1`, pr.ID).Scan(&n.Name); err != nil {
+			return fmt.Errorf("storage: load node: %w", err)
+		}
+		pr.Node = &n
 	}
 
 	// A principal's effective grants are its direct grants unioned with the grants
