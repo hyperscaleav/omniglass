@@ -12,7 +12,7 @@ screenshots:
         selector: 'tr.cursor-pointer:has-text("Display")'
   - id: fields-effective
     path: /web/components/lobby-display
-    alt: "The Fields panel on a component's detail: each field its type declares, rendered as a slim row through the shared key:value primitive, resolved to the set literal or the type default with an override badge."
+    alt: "The Fields panel on a component's detail: each field its type declares, rendered as a slim row through the shared FieldControl primitive; an override reads with an accent dot on its key and its value in the accent colour, while an inherited (defaulted) field stays muted."
     steps:
       - action: hover
         selector: 'text=Diagonal inches'
@@ -24,7 +24,7 @@ screenshots:
         selector: 'text=Diagonal inches'
   - id: fields-edit
     path: /web/components/lobby-display
-    alt: "The Fields panel in edit mode: each field becomes an input, an inherited field shows a greyed 'unset' placeholder while a set field shows its value with a clear (x). There is no per-field save; the blade's Save changes commits every touched field. In read mode there are no inputs."
+    alt: "The Fields panel in edit mode: each field is a stacked cell with a right-aligned Override switch. Off inherits the resolved value (the type default) shown muted; on reveals a type-aware input seeded from that value, and revert is the switch off. There is no per-field save; the blade's Save changes commits every touched field."
     steps:
       - action: click
         selector: 'button:has-text("Edit")'
@@ -63,25 +63,38 @@ set).
 
 Open a component from the **Components** inventory. Its detail carries a **Fields** panel: one row per
 field its type declares, each resolved to the value that applies to this component, the **literal set on
-the component** or the **type default** when unset. In read mode an **override** reads with weight and an
-`override` badge; a defaulted field is quiet.
+the component** or the **type default** when nothing is set. In read mode each field renders through the
+shared **FieldControl** primitive as a slim row: an **override** reads with an accent **dot on its key**
+and its value in the **accent colour**, while an inherited (defaulted) field stays muted.
 
 ::screenshot{#fields-effective}
 
 Field edits are **batched with the component's edit**, not saved per field. Click **Edit** on the
-component and the fields become inputs; the blade's **Save changes** commits every field you touched
-alongside the rest of the component detail, and **Cancel** discards them.
+component and each field becomes a **stacked cell**: a key row with a right-aligned **Override** switch,
+and a value row below it. The blade's **Save changes** commits every field you touched alongside the rest
+of the component detail, and **Cancel** discards them.
 
-- With `field:create` (an **operator** permission) each field is an editable input in edit mode. An
-  **inherited** field is empty with a greyed `unset` placeholder, so it reads as distinct from a field
-  that is actually set; typing a value stages an override. Setting a value is an **idempotent upsert**, so
-  changing an already-set field patches it in place rather than failing on a second write. Each value is
-  validated against the field's data type on save; a bad value is a per-row error, not a lost edit.
-- With `field:delete` (an **admin** permission) a **set** field carries a **clear** (×) that stages a
-  revert to the type default, applied on **Save changes**. The effective read returns the `field_value` id
-  (`value_id`) next to the literal, so the panel knows which value the clear deletes.
+- **The Override switch is the choice.** With the switch **off** the field inherits the resolved value
+  (the type default this slice), shown muted with no editable input. Flip it **on** and a type-aware input
+  appears, seeded from that resolved value, and the row now reads as your own value. **Revert is the switch
+  off**: there is no separate clear. Overriding a field (the switch on) is `field:create`, an **operator**
+  permission, and setting a value stays an **idempotent upsert**, so overriding an already-set field
+  patches it in place rather than failing on a second write; reverting (the switch off on a set field,
+  which deletes the stored value) is `field:delete`, an **admin** permission.
+- **A bool reads as a word, overrides as a toggle.** Inherited, a bool shows the resolved word (`true` /
+  `false`) muted, not a switch you appear to have set; override on gives you a real editable toggle. This
+  is the case the override model exists to fix.
+- **A required field must be filled.** A field its definition marks `required` (the new
+  `field_definition.required`) carries a red **`*`** by its key, stays overridden, and cannot be switched
+  off until it holds a value. The red input box and a "This value is required" label appear only after a
+  **Save** attempt leaves it empty (standard form behaviour); **Save is blocked** while any required field
+  is unfilled.
 - A component in a scope you cannot reach is **not found**, not forbidden: the panel resolves fields only
   for components within your `field` read scope, mirroring secrets and variables.
+
+Sourcing a field's value from a variable, secret, or file (a **`$` picker** on the field's edge that lists
+those sources, and a sourced value shown as a symbol plus a name rather than the stored `$sec:name`) is
+drawn in the control but **wired in a later slice**; this slice sets literals only.
 
 From the CLI the same surface is `omniglass field-definition list` / `create` / `update` / `delete` to
 manage a type's schema, `omniglass field list <component>` to read a component's effective fields, and

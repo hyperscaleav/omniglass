@@ -73,7 +73,7 @@ func TestFieldDefinitionCRUD(t *testing.T) {
 
 	// update the data_type, default, and display_name.
 	def := json.RawMessage(`"unknown"`)
-	up, err := gw.UpdateFieldDefinition(ctx, "", fd.ID, "string", "Asset Tag (label)", def)
+	up, err := gw.UpdateFieldDefinition(ctx, "", fd.ID, "string", "Asset Tag (label)", false, def)
 	if err != nil {
 		t.Fatalf("update: %v", err)
 	}
@@ -82,7 +82,7 @@ func TestFieldDefinitionCRUD(t *testing.T) {
 	}
 
 	// the same validation gates update: a mismatched default is refused.
-	if _, err := gw.UpdateFieldDefinition(ctx, "", fd.ID, "int", "", json.RawMessage(`"nope"`)); !errors.Is(err, storage.ErrInvalidValue) {
+	if _, err := gw.UpdateFieldDefinition(ctx, "", fd.ID, "int", "", false, json.RawMessage(`"nope"`)); !errors.Is(err, storage.ErrInvalidValue) {
 		t.Fatalf("want ErrInvalidValue on update, got %v", err)
 	}
 
@@ -96,6 +96,72 @@ func TestFieldDefinitionCRUD(t *testing.T) {
 	}
 	if err := gw.DeleteFieldDefinition(ctx, "", fd.ID); !errors.Is(err, storage.ErrFieldDefinitionNotFound) {
 		t.Fatalf("want ErrFieldDefinitionNotFound, got %v", err)
+	}
+}
+
+// TestFieldDefinitionRequired covers the required flag through the definition
+// tier: a field created with Required:true reads back true, a field created
+// without it defaults to false, and UpdateFieldDefinition can toggle it. required
+// is a plain not-null bool (unlike the nullable display_name), so "unset" is false,
+// not NULL.
+func TestFieldDefinitionRequired(t *testing.T) {
+	gw := fieldGateway(t)
+	ctx := context.Background()
+
+	// A field declared required on the "display" type reads back required.
+	req, err := gw.CreateFieldDefinition(ctx, "", storage.FieldDefinitionSpec{
+		ComponentType: "display", Name: "asset_tag", DataType: "string", Required: true,
+	})
+	if err != nil {
+		t.Fatalf("create required: %v", err)
+	}
+	if !req.Required {
+		t.Fatalf("want Required true on create, got %+v", req)
+	}
+
+	// A field created without the flag defaults to false (the not-null column default).
+	opt, err := gw.CreateFieldDefinition(ctx, "", storage.FieldDefinitionSpec{
+		ComponentType: "display", Name: "notes", DataType: "string",
+	})
+	if err != nil {
+		t.Fatalf("create optional: %v", err)
+	}
+	if opt.Required {
+		t.Fatalf("want Required false when unset, got %+v", opt)
+	}
+
+	// The flag survives a read-back through the list directory.
+	list, err := gw.ListFieldDefinitions(ctx)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	for _, fd := range list {
+		switch fd.Name {
+		case "asset_tag":
+			if !fd.Required {
+				t.Fatalf("listed asset_tag not required: %+v", fd)
+			}
+		case "notes":
+			if fd.Required {
+				t.Fatalf("listed notes unexpectedly required: %+v", fd)
+			}
+		}
+	}
+
+	// Update can toggle required off, and back on for the optional field.
+	off, err := gw.UpdateFieldDefinition(ctx, "", req.ID, "string", "", false, nil)
+	if err != nil {
+		t.Fatalf("update off: %v", err)
+	}
+	if off.Required {
+		t.Fatalf("want Required false after update, got %+v", off)
+	}
+	on, err := gw.UpdateFieldDefinition(ctx, "", opt.ID, "string", "", true, nil)
+	if err != nil {
+		t.Fatalf("update on: %v", err)
+	}
+	if !on.Required {
+		t.Fatalf("want Required true after update, got %+v", on)
 	}
 }
 

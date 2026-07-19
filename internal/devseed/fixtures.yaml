@@ -177,6 +177,16 @@ field_definitions:
     name: location_note
     display_name: Location note
     data_type: string
+  - component_type: display
+    name: wall_mounted
+    display_name: Wall mounted
+    data_type: bool
+    default: true
+  - component_type: display
+    name: serial_number
+    display_name: Serial number
+    data_type: string
+    required: true
 
 # Components: one example device placed in the estate, so the Components directory
 # comes up populated. The Lobby Display sits in the Boardroom under the west
@@ -196,3 +206,6 @@ field_values:
   - component: lobby-display
     field: diagonal_inches
     value: 65
+  - component: lobby-display
+    field: serial_number
+    value: SN-1183

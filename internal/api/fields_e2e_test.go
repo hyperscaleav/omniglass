@@ -79,10 +79,78 @@ func TestFieldDefinitionAPI(t *testing.T) {
 	}
 }
 
+// TestFieldDefinitionRequiredAPI drives the required flag over HTTP: the
+// create-definition body accepts required:true, the admin directory reports it,
+// and a component's effective read carries the flag so the surface can render a
+// field as mandatory. A field created without the flag reports required:false.
+func TestFieldDefinitionRequiredAPI(t *testing.T) {
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	ownerTok, hash, prefix, err := auth.NewBearerToken()
+	if err != nil {
+		t.Fatalf("mint owner: %v", err)
+	}
+	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: hash, Prefix: prefix}); err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+
+	// A required field and an optional field on the "display" type.
+	c.do(ownerTok, http.MethodPost, "/field-definitions",
+		map[string]any{"component_type": "display", "name": "asset_tag", "data_type": "string", "required": true},
+		http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/field-definitions",
+		map[string]any{"component_type": "display", "name": "notes", "data_type": "string"},
+		http.StatusCreated)
+
+	// The directory reports the required flag per definition.
+	var listed struct {
+		FieldDefinitions []struct {
+			Name     string `json:"name"`
+			Required bool   `json:"required"`
+		} `json:"field_definitions"`
+	}
+	json.Unmarshal(c.do(ownerTok, http.MethodGet, "/field-definitions", nil, http.StatusOK), &listed)
+	required := map[string]bool{}
+	for _, fd := range listed.FieldDefinitions {
+		required[fd.Name] = fd.Required
+	}
+	if !required["asset_tag"] {
+		t.Fatalf("asset_tag should list as required, got %+v", listed.FieldDefinitions)
+	}
+	if required["notes"] {
+		t.Fatalf("notes should list as optional, got %+v", listed.FieldDefinitions)
+	}
+
+	// A component's effective read carries the flag, so the surface knows which
+	// fields are mandatory.
+	c.do(ownerTok, http.MethodPost, "/components",
+		map[string]any{"name": "lobby-display", "component_type": "display"}, http.StatusCreated)
+	if f := effectiveField(t, c, ownerTok, "lobby-display", "asset_tag"); !f.Required {
+		t.Fatalf("effective asset_tag should be required, got %+v", f)
+	}
+	if f := effectiveField(t, c, ownerTok, "lobby-display", "notes"); f.Required {
+		t.Fatalf("effective notes should be optional, got %+v", f)
+	}
+}
+
 type effectiveFieldResp struct {
 	FieldID      string `json:"field_id"`
 	Name         string `json:"name"`
 	DataType     string `json:"data_type"`
+	Required     bool   `json:"required"`
 	Value        any    `json:"value"`
 	SetValue     any    `json:"set_value"`
 	DefaultValue any    `json:"default_value"`

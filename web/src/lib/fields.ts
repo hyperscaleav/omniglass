@@ -21,6 +21,7 @@ export type FieldDefinition = {
   display_name?: string;
   data_type: string;
   default_value?: unknown;
+  required: boolean;
 };
 
 // EffectiveField is one row of a component's effective fields: the declared field,
@@ -37,6 +38,9 @@ export type EffectiveField = {
   // field definition has no default.
   default_value?: unknown;
   is_set: boolean;
+  // Whether the field is required: it must resolve to a value, so it stays
+  // overridden and blocks Save while empty.
+  required: boolean;
   // The field_value id when set (is_set): the id to delete to clear the override
   // back to the type default. Omitted when the field is unset.
   value_id?: string;
@@ -57,6 +61,7 @@ export type CreateFieldDefinition = {
   display_name?: string;
   data_type: FieldDataType;
   default_value?: unknown;
+  required?: boolean;
 };
 
 export async function createFieldDefinition(body: CreateFieldDefinition): Promise<FieldDefinition> {

@@ -403,6 +403,9 @@ components:
           description: The field name; unique per component_type
           minLength: 1
           type: string
+        required:
+          description: Whether every component of this type must set the field; defaults to false
+          type: boolean
       required:
         - component_type
         - name
@@ -940,6 +943,9 @@ components:
           type: boolean
         name:
           type: string
+        required:
+          description: Whether every component of this type must set the field
+          type: boolean
         set_value:
           description: The component's override; omitted when the field is unset
         value:
@@ -951,6 +957,7 @@ components:
         - field_id
         - name
         - data_type
+        - required
         - value
         - is_set
       type: object
@@ -1151,11 +1158,15 @@ components:
           type: string
         name:
           type: string
+        required:
+          description: Whether every component of this type must set the field
+          type: boolean
       required:
         - id
         - component_type
         - name
         - data_type
+        - required
       type: object
     FieldValueBody:
       additionalProperties: false
@@ -2949,6 +2960,9 @@ components:
         display_name:
           description: Optional human label; falls back to name when unset
           type: string
+        required:
+          description: Whether every component of this type must set the field; defaults to false
+          type: boolean
       required:
         - data_type
       type: object

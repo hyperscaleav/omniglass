@@ -73,6 +73,8 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0038](#adr-0038-the-reachability-verdict-is-a-built-in-state) | 2026-07-07 | Accepted | The per-interface reachability verdict `interface.reachable` is a built-in **state** (not a metric); availability is `time_in_state` over it; readiness is interface-type-defaulted and interface-overridable, node-executed, not a `calc_rule` |
 | [ADR-0039](#adr-0039-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver) | 2026-07-08 | Accepted | An interface is a device **API** named by its protocol (not a NIC); `interface_type` = its **transport** (the reach gate), a **driver** = the collect layer (protocol handler + transports + normalized menu, what a device CAN do), a template **curates** (SHOULD), the instance holds what **IS** there; OIDs/commands live in the driver, not the template |
 | [ADR-0040](#adr-0040-the-task-is-derived-read-only-plumbing-projected-from-its-interface) | 2026-07-14 | Accepted | The `task` is **derived** read-only plumbing: creating an `interface` derives its one poll task, so task create/update/delete routes and the `task:create` / `:update` grants are dropped; `task.node_name` is removed and **projected** from `interface.node_name` (the worklist and telemetry owner-confinement join the interface), and a node purge cascades its interfaces and their tasks. Reverses the checkpoint-5d task-CRUD build; refines ADR-0039 |
+| [ADR-0041](#adr-0041-settings-are-a-reflected-typed-struct-with-generated-client-and-server-validation) | 2026-07-19 | Accepted | A setting is declared **once**, as a tagged field on a canonical `Settings` Go struct; reflection produces the `code` defaults layer and the namespace registry, Huma reflects the struct into the OpenAPI schema so the typed client `values` is a `Settings` struct, and both the server PATCH and the generated client validate against that **same reflected schema**. Closes the slice-0 write-validation thin cut; retires the hand-kept `defaults.yaml` and `Namespaces()` slice |
+| [ADR-0042](#adr-0042-field-cascade-and-the-type-default-floor) | 2026-07-19 | Accepted | A field's resolved value is deepest-set-wins down `product -> location -> system -> component`, falling to the field's **type default** when nothing is set at any scope; the type default is the **floor** of the cascade, not a competitor to it. This slice is component-only (resolved = the component's set value, else the type default); the multi-scope cascade is tracked by #291 |
 
 ## Entries
 
@@ -1158,3 +1160,23 @@ below from the project's history. From here it grows one slice at a time.
   map with a `Default()` method) and the group and user cascade rungs; none is built here.
 - **Closes:** issue [#288](https://github.com/hyperscaleav/omniglass/issues/288) (settings engine slice-1), under
   epic [#270](https://github.com/hyperscaleav/omniglass/issues/270).
+### ADR-0042: Field cascade and the type-default floor
+
+- **Date:** 2026-07-19 | **Status:** Accepted | **Pages:** [config, secrets, and variables](/architecture/variables/)
+- **Decision:** A field's **resolved value** is **deepest-set-wins** down the field arc
+  `product -> location -> system -> component`: a value set at any scope beats every broader scope. When
+  **nothing is set at any scope**, the value falls to the field's **type default**. The type default is
+  therefore the **floor** of the cascade, not a competitor to it: a value set at any higher scope always
+  beats the default, and no cascade rule is bent to make that true. Raised during design as "does a value
+  set higher in the cascade beat the type default?", the answer is **yes**, and it costs the model nothing,
+  because the default is simply the bottom rung.
+- **Context:** The override-rendering slice needed the resolution rule pinned before the renderer could say
+  what "inherited" means. Modelling the type default as a **competing scope** would force an ordering
+  question at every read (does a `location` value or the type default win?); modelling it as the **floor**
+  removes the question: any set value at any scope wins, and the default is what remains when the arc is
+  empty. This slice is **component-only**: resolved = this component's set value, else the type default, so
+  the deeper arc (`product`, `location`, `system`) is drawn in the model but not yet walked. The
+  multi-scope cascade itself lands later.
+- **Closes the gap:** the multi-scope cascade is tracked by
+  [#291](https://github.com/hyperscaleav/omniglass/issues/291); this ADR settles only the resolution rule
+  and the type-default floor.

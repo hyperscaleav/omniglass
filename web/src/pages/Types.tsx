@@ -326,6 +326,7 @@ function ComponentTypeFields(props: { typeId: string; canCreate: boolean }): JSX
   const [displayName, setDisplayName] = createSignal("");
   const [dataType, setDataType] = createSignal<FieldDataType>("string");
   const [defaultText, setDefaultText] = createSignal("");
+  const [required, setRequired] = createSignal(false);
   const [busy, setBusy] = createSignal(false);
   const [err, setErr] = createSignal<string | null>(null);
 
@@ -353,12 +354,14 @@ function ComponentTypeFields(props: { typeId: string; canCreate: boolean }): JSX
         ...(displayName().trim() === "" ? {} : { display_name: displayName().trim() }),
         data_type: dataType(),
         ...(default_value === undefined ? {} : { default_value }),
+        required: required(),
       });
       await qc.invalidateQueries({ queryKey: FIELD_DEFINITIONS_KEY });
       setName("");
       setDisplayName("");
       setDefaultText("");
       setDataType("string");
+      setRequired(false);
     } catch (er) {
       setErr(describeError(er));
     } finally {
@@ -372,17 +375,20 @@ function ComponentTypeFields(props: { typeId: string; canCreate: boolean }): JSX
       <div class="flex flex-col gap-2 rounded-box border border-base-300 p-2.5">
         <For each={rows()} fallback={<span class="text-[11px] text-base-content/40">No fields declared.</span>}>
           {(d) => (
-            <div class="flex items-center justify-between gap-2 text-sm">
-              <span class="flex items-baseline gap-2">
-                <span class="text-sm">{d.display_name || d.name}</span>
-                <Show when={d.display_name}><span class="font-data text-[11px] text-base-content/40">{d.name}</span></Show>
+            <div class="flex items-center gap-2 text-sm">
+              <span class="min-w-0 truncate">
+                {d.display_name || d.name}
+                <Show when={d.required}><span class="ml-1 font-semibold text-error" aria-label="required">*</span></Show>
+                <span class="ml-2 font-data text-[10px] font-normal text-base-content/40">{d.data_type}</span>
               </span>
-              <span class="flex items-center gap-1.5 text-xs text-base-content/60">
-                <span class="badge badge-ghost badge-sm font-data">{d.data_type}</span>
-                <Show when={d.default_value !== undefined && d.default_value !== null}>
-                  <span class="text-base-content/40">default {displayValue(d.default_value)}</span>
-                </Show>
-              </span>
+              <Show when={d.display_name}><span class="shrink-0 font-data text-[11px] text-base-content/40">{d.name}</span></Show>
+              <span class="flex-1" />
+              <Show
+                when={d.default_value !== undefined && d.default_value !== null}
+                fallback={<span class="shrink-0 text-[11px] text-base-content/40">no default</span>}
+              >
+                <span class="shrink-0 font-data text-sm text-base-content/60">{displayValue(d.default_value)}</span>
+              </Show>
             </div>
           )}
         </For>
@@ -418,6 +424,10 @@ function ComponentTypeFields(props: { typeId: string; canCreate: boolean }): JSX
                 value={defaultText()}
                 onInput={(e) => setDefaultText(e.currentTarget.value)}
               />
+              <label class="flex items-center gap-1.5 text-xs text-base-content/70">
+                <input type="checkbox" class="checkbox checkbox-sm" checked={required()} onChange={(e) => setRequired(e.currentTarget.checked)} />
+                required
+              </label>
               <Button type="submit" intent="action" icon={Plus} disabled={busy() || !name().trim()}>Add</Button>
             </div>
             <span class="text-[11px] text-base-content/40">A default applies to every component of this type until the component sets its own value.</span>

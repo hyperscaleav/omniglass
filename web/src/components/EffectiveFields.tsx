@@ -3,28 +3,23 @@ import { createStore, reconcile } from "solid-js/store";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { deleteFieldValue, effectiveFields, effectiveFieldsKey, setFieldValue, type EffectiveField } from "../lib/fields";
 import { displayValue, parseInput, type ValueType } from "../lib/variables";
-import { ValueInput } from "../pages/Variables";
 import { useMe, can } from "../lib/auth";
 import { type BladeDef, type BladeEdit } from "../lib/blades";
 import { describeError } from "../lib/format";
-import KVRow from "./KVRow";
-import Button from "./Button";
-import { Check, X } from "./icons";
+import FieldControl from "./FieldControl";
+import { Check } from "./icons";
 
 // EffectiveFields lists the fields declared on a component's type, each resolved
 // to the value that applies to this component: the literal set on the component,
 // or the type-level default when unset (is_set marks the override). Fields are a
 // flat per-type schema, not a scope cascade, so a row drills in to a small
-// resolution blade (kind "field-resolution", via ctx.openBlade) rather than the
-// deep global/location/system/component cascade the secrets and variables rows
-// open. Each field renders through KVRow, so the platform edit-mode rule holds:
-// inputs appear ONLY in edit mode. Editing is BATCHED, not per-field: the row has
-// no inline save, and the panel registers one saver with the blade edit slot, so
-// the blade's Save flushes every staged field alongside the component core. In
-// edit mode an inherited field is an empty input (a greyed "unset" placeholder);
-// a set field shows its value with a clear (x) that stages a revert to the
-// default. Read mode is a slim inline value scan: an override reads with weight
-// and an "override" badge, a default is quiet.
+// resolution blade (kind "field-resolution", via ctx.openBlade). Every row renders
+// through the shared FieldControl primitive: read mode is a slim value scan (an
+// override reads with an accent dot and colour), edit mode is a stacked cell with
+// an explicit Override switch. Editing is BATCHED: the panel registers one saver
+// with the blade edit slot, so the blade's Save flushes every staged field
+// alongside the component core. The switch on upserts, the switch off reverts (a
+// delete); required fields are validated on that Save, not before.
 export default function EffectiveFields(props: { component: string; edit?: BladeEdit; onOpen: (fieldName: string) => void }): JSX.Element {
   const me = useMe();
   const qc = useQueryClient();
@@ -40,40 +35,65 @@ export default function EffectiveFields(props: { component: string; edit?: Blade
   const canSet = () => can(me.data, "field", "create");
   const canClear = () => can(me.data, "field", "delete");
   // Rows accept input only in edit mode and only with the set permission.
-  const rowsEditable = () => editing() && canSet();
+  const editable = () => editing() && canSet();
 
-  // Staged edits keyed by field name (the draft text) and per-row errors. A
-  // draft defaults to the effective set value; typing stages an override, and
-  // emptying a set field's draft (the clear) stages a revert to the default.
+  // Per-field staged edit state: the override switch, the draft value, a write
+  // error, and a required-validation flag (set only on a submit attempt).
+  const [overriding, setOverriding] = createStore<Record<string, boolean>>({});
   const [drafts, setDrafts] = createStore<Record<string, string>>({});
   const [errs, setErrs] = createStore<Record<string, string | undefined>>({});
-  const originalDraft = (f: EffectiveField) => (f.is_set ? displayValue(f.value) : "");
-  const draftOf = (f: EffectiveField) => (f.name in drafts ? drafts[f.name] : originalDraft(f));
+  const [invalid, setInvalid] = createStore<Record<string, boolean>>({});
+
+  const resolvedStr = (f: EffectiveField) => (f.value !== null && f.value !== undefined ? displayValue(f.value) : "");
+  const hasDefault = (f: EffectiveField) => f.default_value !== null && f.default_value !== undefined;
+  // A required field is always overridden; otherwise the toggled state, else the
+  // persisted is_set.
+  const overridingOf = (f: EffectiveField) => (f.required ? true : (f.name in overriding ? overriding[f.name] : f.is_set));
+  // The override input seeds from the resolved value (the set literal or default).
+  const draftOf = (f: EffectiveField) => (f.name in drafts ? drafts[f.name] : resolvedStr(f));
 
   // Leaving edit mode (Cancel, or the refetch after a committed Save) discards
-  // any staged drafts so the rows re-seed from the effective values.
+  // all staged state so the rows re-seed from the effective values.
   createEffect(on(editing, (isEditing) => {
-    if (!isEditing) { setDrafts(reconcile({})); setErrs(reconcile({})); }
+    if (!isEditing) {
+      setOverriding(reconcile({}));
+      setDrafts(reconcile({}));
+      setErrs(reconcile({}));
+      setInvalid(reconcile({}));
+    }
   }));
 
-  // The Fields panel contributes one saver to the blade's Save: it flushes every
-  // dirty row (an upsert for a set-or-changed value, a delete for a cleared
-  // override), records per-row errors, and refetches. A row error aborts the
-  // blade save so the operator stays in edit and can fix it. The set is an
-  // idempotent upsert, so a retry after a partial failure is safe.
+  // The Fields panel contributes one saver to the blade's Save. It validates
+  // required fields first, setting the per-row invalid flag and aborting before
+  // any write, so the red box appears only on a submit attempt. Then it applies:
+  // an override switched on upserts its value (idempotent, so a retry is safe),
+  // an override switched off (or left blank) reverts by deleting. A write error
+  // aborts and keeps the blade in edit.
   const flush = async () => {
+    setInvalid(reconcile({}));
+    let anyInvalid = false;
+    for (const f of rows()) {
+      if (!f.required) continue;
+      const empty = overridingOf(f) ? draftOf(f).trim() === "" : !hasDefault(f);
+      if (empty) { setInvalid(f.name, true); anyInvalid = true; }
+    }
+    if (anyInvalid) throw new Error("A required field is missing a value.");
+
     let firstErr: string | undefined;
     setErrs(reconcile({}));
     for (const f of rows()) {
+      const on = overridingOf(f);
       const draft = draftOf(f);
-      if (draft === originalDraft(f)) continue; // not dirty
       try {
-        if (draft.trim() === "") {
-          // Cleared: delete the persisted override. An inherited field that was
-          // never set is not dirty, so this runs only for a set field.
+        if (!on || draft.trim() === "") {
+          // Inherit: delete a persisted override. An unset field is a no-op.
           if (f.is_set && f.value_id) await deleteFieldValue(f.value_id);
         } else {
-          await setFieldValue(props.component, f.name, parseInput(f.data_type as ValueType, draft));
+          // Override: upsert when new or the value changed (the set is idempotent).
+          const current = f.is_set ? displayValue(f.value) : null;
+          if (current === null || draft !== current) {
+            await setFieldValue(props.component, f.name, parseInput(f.data_type as ValueType, draft));
+          }
         }
       } catch (e) {
         const msg = describeError(e);
@@ -91,7 +111,7 @@ export default function EffectiveFields(props: { component: string; edit?: Blade
     <div class="flex flex-col gap-2">
       <div class="flex items-baseline justify-between gap-2">
         <span class="eyebrow">Fields</span>
-        <span class="shrink-0 text-[10.5px] text-base-content/40">the type schema, set or defaulted</span>
+        <span class="shrink-0 text-[10.5px] text-base-content/40">the type schema, resolved</span>
       </div>
       <Show when={q.error}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{describeError(q.error)}</span></div>
@@ -103,74 +123,33 @@ export default function EffectiveFields(props: { component: string; edit?: Blade
         <div class="overflow-hidden rounded-box border border-base-300">
           <For each={rows()}>
             {(f, i) => (
-              <FieldRow
-                field={f}
-                first={i() === 0}
-                editing={rowsEditable()}
-                canClear={canClear()}
-                draft={draftOf(f)}
-                err={errs[f.name]}
-                onInput={(v) => setDrafts(f.name, v)}
-                onClear={() => setDrafts(f.name, "")}
-                onOpen={props.onOpen}
-              />
+              <>
+                <FieldControl
+                  label={f.display_name || f.name}
+                  dataType={f.data_type as ValueType}
+                  resolved={resolvedStr(f)}
+                  isSet={f.is_set}
+                  required={f.required}
+                  editing={editable()}
+                  overriding={overridingOf(f)}
+                  draft={draftOf(f)}
+                  invalid={invalid[f.name]}
+                  canToggle={canSet()}
+                  canRevert={canClear()}
+                  onToggle={(on) => setOverriding(f.name, on)}
+                  onInput={(v) => setDrafts(f.name, v)}
+                  onDrillIn={() => props.onOpen(f.name)}
+                  first={i() === 0}
+                />
+                <Show when={errs[f.name]}>
+                  <div class="px-3 pb-2 text-[11px] text-error">{errs[f.name]}</div>
+                </Show>
+              </>
             )}
           </For>
         </div>
       </Show>
     </div>
-  );
-}
-
-// FieldRow is one effective-field KVRow, a presentational row over the panel's
-// staged draft (the panel owns the drafts and flushes them on the blade's Save,
-// so the row has no save button of its own). Read mode shows the effective value
-// (a dash when unset with no default). Edit mode swaps in the type-aware input
-// seeded from the draft: an inherited field is empty with a greyed "unset"
-// placeholder, a set field shows its value with a clear (x) that empties the
-// draft, staging a revert to the type default. Clearing a persisted override
-// needs field:delete; clearing a value only typed this session is a local reset.
-function FieldRow(props: {
-  field: EffectiveField;
-  first: boolean;
-  editing: boolean;
-  canClear: boolean;
-  draft: string;
-  err: string | undefined;
-  onInput: (v: string) => void;
-  onClear: () => void;
-  onOpen: (fieldName: string) => void;
-}): JSX.Element {
-  const f = () => props.field;
-  const hasValue = () => f().value !== null && f().value !== undefined;
-  const label = () => f().display_name || f().name;
-  // The clear (x) shows when there is a value in the box to remove: a set field
-  // (a delete on Save, so it needs field:delete) or a value typed into an
-  // inherited field (a local reset, always allowed).
-  const showClear = () => props.editing && props.draft.trim() !== "" && (!f().is_set || props.canClear);
-  return (
-    <>
-      <KVRow
-        first={props.first}
-        label={label()}
-        emphasize={f().is_set}
-        origin={f().is_set ? "override" : ""}
-        editing={props.editing}
-        onDrillIn={() => props.onOpen(f().name)}
-        value={hasValue() ? displayValue(f().value) : "—"}
-        input={<ValueInput valueType={f().data_type as ValueType} value={props.draft} onInput={props.onInput} placeholder="unset" class="join-item grow" />}
-        actions={
-          // Edit mode only (read mode is a pure scan): the clear that stages a
-          // revert to the type default.
-          <Show when={showClear()}>
-            <Button type="button" size="md" square intent="quiet" icon={X} class="join-item" label="Clear override" title="Clear override" onClick={props.onClear} />
-          </Show>
-        }
-      />
-      <Show when={props.err}>
-        <div class="px-3 pb-2 text-[11px] text-error">{props.err}</div>
-      </Show>
-    </>
   );
 }
 
