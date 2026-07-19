@@ -7,7 +7,7 @@ sidebar:
     variant: note
 ---
 
-:::note[Partial: the registry, the bindings, the cascade, the console key directory, the per-entity binding editor, value-domain enums, and the directory Tags column and tag filter are built; the cascade provenance panel and the cross-primitive cascade extensions are deferred]
+:::note[Partial]
 The first slice ([ADR-0021](/architecture/decisions/#adr-0021-tag-slice-1-a-governed-key-registry-with-entity-update-gated-bindings)) is
 **built**: the governed **`tag`** key registry, the per-entity **`tag_binding`** cell on the exclusive arc, and the
 union-on-key / override-on-value **cascade** resolver, over the API and the generated CLI. On top of it, the **console
