@@ -64,6 +64,11 @@ export async function updateNode(name: string, body: NodePatch): Promise<Node> {
   return data as Node;
 }
 
+export async function deleteNode(name: string): Promise<void> {
+  const { error } = await api.DELETE("/nodes/{name}", { params: { path: { name } } });
+  if (error) throw error;
+}
+
 // enrollNode mints (or re-mints) the node's enrollment token and returns it ONCE.
 // The token is a secret: the server stores only its hash and never logs it, and
 // this wrapper hands it straight back without caching it. The caller reveals it in

@@ -16,6 +16,7 @@ import {
   listNodes,
   createNode,
   updateNode,
+  deleteNode,
   enrollNode,
   nodeStatus,
   nodeLabel,
@@ -26,7 +27,7 @@ import { TASKS_KEY, listTasks } from "../lib/tasks";
 import { INTERFACES_KEY, listInterfaces } from "../lib/interfaces";
 import { useMe, can } from "../lib/auth";
 import { describeError, rel } from "../lib/format";
-import { type BladeDef, useBladeEdit } from "../lib/blades";
+import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
 // Nodes: the collection-daemon inventory, a config over the shared FlatList (the
 // flat sibling of the inventory TreeList). A row per node with its liveness pill
@@ -157,6 +158,7 @@ function NodeBladeBody(props: { name: string; onEnrolled: (out: EnrollOutput) =>
   const qc = useQueryClient();
   const me = useMe();
   const edit = useBladeEdit();
+  const blades = useBlades();
   const nodes = useQuery(() => ({ queryKey: NODES_KEY, queryFn: () => listNodes() }));
   const tasks = useQuery(() => ({ queryKey: TASKS_KEY, queryFn: () => listTasks() }));
   const interfaces = useQuery(() => ({ queryKey: INTERFACES_KEY, queryFn: () => listInterfaces() }));
@@ -164,6 +166,24 @@ function NodeBladeBody(props: { name: string; onEnrolled: (out: EnrollOutput) =>
   const [err, setErr] = createSignal<string | null>(null);
   const [busy, setBusy] = createSignal(false);
   const canEnroll = () => can(me.data, "node", "enroll");
+  const canDelete = () => can(me.data, "node", "delete");
+
+  // Decommission: a hard delete that cascades the node's interfaces, tasks, tags,
+  // and enrollment credential (the server does the cascade). Confirmed, then the
+  // blade closes and the list refreshes.
+  async function removeNode() {
+    const node = n();
+    if (!node) return;
+    if (!confirm(`Delete node "${nodeLabel(node)}"? Its interfaces, tasks, and enrollment are removed. This cannot be undone.`)) return;
+    setErr(null);
+    try {
+      await deleteNode(node.name);
+      blades.close();
+      await qc.invalidateQueries({ queryKey: NODES_KEY });
+    } catch (e) {
+      setErr(describeError(e));
+    }
+  }
 
   // The editable identity fields (display_name, description, location), the same
   // read-edit-save shape the component/location blades use. The location options
@@ -229,6 +249,7 @@ function NodeBladeBody(props: { name: string; onEnrolled: (out: EnrollOutput) =>
   edit.bind({
     editable: () => !!n() && can(me.data, "node", "update"),
     save,
+    destructive: () => (canDelete() && n() ? { label: "Delete", tone: "danger", onClick: () => void removeNode() } : undefined),
     secondary: () =>
       canEnroll() && n()
         ? [{ label: n()!.enrolled ? "Re-enroll" : "Enroll", onClick: () => void doEnroll() }]

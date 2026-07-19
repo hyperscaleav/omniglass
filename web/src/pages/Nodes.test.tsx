@@ -109,6 +109,29 @@ describe("Nodes page", () => {
     await within(blade).findByText("Enrolled");
     expect(within(blade).queryByLabelText("Edit")).toBeNull();
     expect(within(blade).queryByText(/Re-?enroll/i)).toBeNull();
+    expect(within(blade).queryByText("Delete")).toBeNull(); // no node:delete
+  });
+
+  it("offers a gated Delete that confirms then calls DELETE /nodes/{name}", async () => {
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      const url = typeof input === "string" ? input : req.url;
+      const method = typeof input === "string" ? "GET" : req.method;
+      if (url.includes("/nodes/edge-hq") && method === "DELETE") return new Response(null, { status: 204 });
+      return json({ nodes: seed });
+    });
+
+    mount(owner);
+    fireEvent.click(screen.getByText("HQ Edge Node"));
+    const blade = await screen.findByRole("dialog");
+    fireEvent.click(within(blade).getByText("Delete"));
+
+    await waitFor(() => {
+      expect(confirmSpy).toHaveBeenCalled();
+      const del = vi.mocked(fetch).mock.calls.find(([i]) => (i as Request)?.method === "DELETE");
+      expect(del).toBeTruthy();
+    });
   });
 
   it("folds the node's derived tasks into a read-only panel on the detail blade", async () => {
