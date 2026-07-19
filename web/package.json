@@ -8,7 +8,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "gen:api": "openapi-typescript ../api/openapi.json -o src/api/schema.gen.ts",
+    "gen:api": "openapi-typescript ../api/openapi.json -o src/api/schema.gen.ts && npm run gen:settings-schema",
+    "gen:settings-schema": "node scripts/gen-settings-schema.mjs",
     "test:e2e": "playwright test"
   },
   "dependencies": {

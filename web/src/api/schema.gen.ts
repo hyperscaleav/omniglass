@@ -3013,6 +3013,28 @@ export interface components {
             params?: unknown;
             type: string;
         };
+        Keybindings: {
+            /**
+             * @description Close the top blade
+             * @default Escape
+             */
+            close_blade: string;
+            /**
+             * @description Open the command palette
+             * @default mod+k
+             */
+            command_palette: string;
+            /**
+             * @description Open the detail blade
+             * @default d
+             */
+            open_detail: string;
+            /**
+             * @description Open the edit pane
+             * @default e
+             */
+            open_edit: string;
+        };
         ListComponentMakesOutputBody: {
             /**
              * Format: uri
@@ -3587,6 +3609,10 @@ export interface components {
             /** @description The literal, validated against the field's data_type */
             value: unknown;
         };
+        Settings: {
+            keybindings: components["schemas"]["Keybindings"];
+            ui: components["schemas"]["UISettings"];
+        };
         SettingsMeOutputBody: {
             /**
              * Format: uri
@@ -3594,11 +3620,7 @@ export interface components {
              * @example /api/v1/schemas/SettingsMeOutputBody.json
              */
             readonly $schema?: string;
-            values: {
-                [key: string]: {
-                    [key: string]: unknown;
-                };
-            };
+            values: components["schemas"]["Settings"];
         };
         SettingsReadOutputBody: {
             /**
@@ -3615,11 +3637,7 @@ export interface components {
             sources: {
                 [key: string]: string;
             };
-            values: {
-                [key: string]: {
-                    [key: string]: unknown;
-                };
-            };
+            values: components["schemas"]["Settings"];
         };
         SvcBody: {
             label: string;
@@ -3710,6 +3728,19 @@ export interface components {
             node?: string;
             /** @description The inline probe settings (jsonb) */
             spec?: unknown;
+        };
+        UISettings: {
+            /**
+             * @description Route the console opens to (an absolute path)
+             * @default /
+             */
+            default_landing: string;
+            /**
+             * @description Console color theme
+             * @default omniglass-dark
+             * @enum {string}
+             */
+            theme: "omniglass-dark" | "omniglass-light";
         };
         UpdateComponentInputBody: {
             /**

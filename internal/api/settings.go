@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -11,7 +12,7 @@ import (
 
 type settingsReadOutput struct {
 	Body struct {
-		Values  settings.Doc      `json:"values"`
+		Values  settings.Settings `json:"values"`
 		Sources map[string]string `json:"sources" doc:"key 'namespace.key' to the winning level (code|file|global)"`
 		Locks   map[string]string `json:"locks" doc:"key 'namespace.key' to the locking level, when locked"`
 	}
@@ -19,7 +20,7 @@ type settingsReadOutput struct {
 
 type settingsMeOutput struct {
 	Body struct {
-		Values settings.Doc `json:"values"`
+		Values settings.Settings `json:"values"`
 	}
 }
 
@@ -59,8 +60,12 @@ func registerSettingsRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 		if err != nil {
 			return nil, err
 		}
+		typed, err := settings.Typed(vals)
+		if err != nil {
+			return nil, err
+		}
 		out := &settingsMeOutput{}
-		out.Body.Values = vals
+		out.Body.Values = typed
 		return out, nil
 	})
 
@@ -71,6 +76,18 @@ func registerSettingsRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 		Summary:     "Update a settings namespace",
 		Description: "Applies an RFC 7386 JSON Merge Patch to the namespace's global override; null on a key restores it. Gated by settings:update.",
 	}, "settings", "update"), func(ctx context.Context, in *settingsPatchInput) (*settingsReadOutput, error) {
+		// Validate the patch against the namespace's reflected schema before storing:
+		// an unknown namespace is a 404, a bad key or value a 422.
+		if err := settings.Validate(in.Namespace, in.Body); err != nil {
+			if errors.Is(err, settings.ErrUnknownNamespace) {
+				return nil, huma.Error404NotFound("unknown settings namespace")
+			}
+			var fe *settings.FieldError
+			if errors.As(err, &fe) {
+				return nil, huma.Error422UnprocessableEntity(fe.Error())
+			}
+			return nil, err
+		}
 		// The merge is a single atomic read-modify-write in the Gateway, serialized
 		// against concurrent patches to the same namespace so no update is lost.
 		if _, err := gw.MergePatchSettingOverride(ctx, actorID(ctx), "global", in.Namespace, in.Body); err != nil {
@@ -115,8 +132,12 @@ func resolveOutput(ctx context.Context, svc *settings.Service) (*settingsReadOut
 	if err != nil {
 		return nil, err
 	}
+	typed, err := settings.Typed(r.Values)
+	if err != nil {
+		return nil, err
+	}
 	out := &settingsReadOutput{}
-	out.Body.Values = r.Values
+	out.Body.Values = typed
 	out.Body.Sources = r.Sources
 	out.Body.Locks = r.Locks
 	return out, nil

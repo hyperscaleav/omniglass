@@ -8,7 +8,7 @@ sidebar:
 ---
 
 :::note[Partial: the pure resolution engine, the `setting_override` store, the admin API (read-with-provenance, client-safe `/settings/me`, merge-patch writes, restore), the two permissions, the seeded `ui` and `keybindings` namespaces, and the Admin settings page are built at the **global** level ([ADR-0033](/architecture/decisions/#adr-0033-settings-persist-only-the-override-level-base-layers-are-recomputed-in-memory), [ADR-0034](/architecture/decisions/#adr-0034-the-settings-gateway-is-unscoped-only-the-permission-gates-it), [ADR-0035](/architecture/decisions/#adr-0035-settings-resolve-as-a-cascade-over-principals-with-a-broader-wins-lock)); the group and user rungs are a fast-follow]
-Slice-0 ships the **global** rung of the cascade end to end: the pure `settings` merge and resolve primitive, the single unscoped `setting_override` table, the Huma routes, the two `settings:<action>` permissions, the two seeded `profile`-domain namespaces (`ui`, `keybindings`), `ui.theme` wired through to re-theme the SPA, and the Admin settings page (namespace sections, provenance badges, lock chips, restore). Deferred to the fast-follow: the **group** and **user** override rungs and the Profile preferences tab, the `settings:lock` split for group-admins, `platform`-domain namespaces (`retention`, `integrations`) with their features, a GitOps read-only mode, and live file reload (SIGHUP) instead of restart-to-reload.
+Slice-0 ships the **global** rung of the cascade end to end: the pure `settings` merge and resolve primitive, the single unscoped `setting_override` table, the Huma routes, the two `settings:<action>` permissions, the two seeded `profile`-domain namespaces (`ui`, `keybindings`), `ui.theme` wired through to re-theme the SPA, and the Admin settings page (namespace sections, provenance badges, lock chips, restore). Deferred to the fast-follow: the **group** and **user** override rungs and the Profile preferences tab, the `settings:lock` split for group-admins, `platform`-domain namespaces (`retention`, `integrations`) with their features, a GitOps read-only mode, and live file reload (SIGHUP) instead of restart-to-reload. Slice-1 makes a setting a reflected **typed struct** ([ADR-0041](/architecture/decisions/#adr-0041-settings-are-a-reflected-typed-struct-with-generated-client-and-server-validation)): one canonical `Settings` type is the single source for the default, the OpenAPI schema, the typed client, and validation, and both the console write path and the settings form now validate against that generated schema (the `defaults.yaml` and hand-kept namespace list are retired).
 :::
 
 Omniglass resolves a **setting** the same way it resolves a secret or a variable: down a cascade,
@@ -27,8 +27,9 @@ An effective value is resolved from ordered contributions of two kinds.
 
 **Base layers** are recomputed into memory on every boot and never stored in the override table:
 
-1. **`code`**: embedded YAML shipped in the binary. Every settable key has a default here, so the effective
-   document is always complete.
+1. **`code`**: the defaults reflected from the canonical `Settings` struct (see [the single-source
+   struct](#the-single-source-struct)). Every settable key has a default here, so the effective document is
+   always complete.
 2. **`file`**: an operator settings file (`settings.json` or YAML) at a bootstrap-configured path, optional (a
    laptop run has none). This is the GitOps / Kubernetes ConfigMap layer; a change lands on pod restart.
 
@@ -101,6 +102,75 @@ estate ABAC.
 Every override write and delete writes an `audit_log` row in the same transaction (the existing `writeAuditRes`
 pattern), so every settings edit carries change history.
 
+## The single-source struct
+
+A setting is declared **once**, as a tagged field on a canonical Go struct in
+`internal/settings/schema.go`. That one declaration is the whole source of truth: reflection over the struct
+builds the `code` defaults layer and the namespace registry, Huma reflects the struct into the OpenAPI schema,
+and the schema generates the typed SPA client and the write validator. There is no second place (no hand-kept
+`defaults.yaml`, no hand-kept `Namespaces()` slice) to drift.
+
+```go
+// Settings is the canonical settings document: one field per namespace.
+type Settings struct {
+	UI          UISettings  `json:"ui"          settings:"profile,client"`
+	Keybindings Keybindings `json:"keybindings" settings:"profile,client"`
+}
+
+// UISettings is the ui namespace. Adding a setting is one tagged field.
+type UISettings struct {
+	Theme          string `json:"theme" enum:"omniglass-dark,omniglass-light" default:"omniglass-dark" doc:"Console color theme"`
+	DefaultLanding string `json:"default_landing" default:"/" doc:"Route the console opens to"`
+}
+```
+
+Each namespace is a struct, a closed set of developer-defined keys. The `settings:"<domain>,<visibility>"` tag
+carries the metadata: `domain` is `profile` or `platform`, and `client` marks a client-visible namespace fed to
+`/settings/me`. A small reflect pass in the pure `settings` package produces two things from the tags, so the
+tags are the only declaration:
+
+- **`Defaults()`** walks each leaf's `default:` tag and coerces it to the field's Go kind (string, int, float,
+  bool), building the `code` layer as a generic map. A field with no `default:` tag contributes no default.
+  This replaces the retired embedded `defaults.yaml`.
+- **`Namespaces()`** reflects the top-level fields: the `json` tag names the namespace, the `settings:` tag
+  carries its `domain` and client-visibility. This replaces the hand-kept slice.
+
+Reflection walks a compile-time type, so a malformed tag is a boot panic (a compile-time asset, like the old
+embedded YAML), never a runtime branch.
+
+### Typed at the edges, maps in the middle
+
+The cascade merges **partial** layers (the file and the DB override each carry only the keys an operator set),
+and a Go struct cannot express "unset" versus a zero value, so the layers stay generic maps and the merge
+engine is unchanged. Typing lives only at the edges. The effective (fully-merged) document unmarshals into
+`Settings`, so the API `values` field is the typed struct (the generated client reads `values.ui.theme` as the
+enum union), and Go code calls `settingsSvc.EffectiveTyped(ctx)` and reads `s.UI.Theme` typed, anywhere in the
+codebase. `sources` and `locks` stay flat maps keyed by `namespace.key`, since provenance is inherently
+dynamic.
+
+## Generated validation, one rule set from the struct
+
+A write is validated against the **same reflected schema** on both sides, so the client and the server enforce
+identical rules from the single Go source, with no hand-authored second copy.
+
+- **Server (the backstop).** `PATCH /settings/{namespace}` validates the merge-patch before storing it. An
+  unknown namespace in the path is a **404**; an unknown key, a wrong type, or an `enum` or `pattern` violation
+  is a **422** naming the offending `namespace.key`. A `null` value is a delete and is always allowed. The
+  validator reflects the namespace's sub-struct into a Huma schema and checks each non-null key against its
+  field schema. This closes the slice-0 write-validation thin cut, where the PATCH accepted any namespace, key,
+  or value and stored it as-is.
+- **Client (caught before submit).** `make gen` gains a step that slices the settings field constraints (the
+  per-field `type`, `enum`, `pattern`, `minLength`, and so on) out of the generated `api/openapi.json` into a
+  committed artifact, `web/src/api/settings.schema.gen.ts`. It is diff-checked exactly like the other generated
+  artifacts, so a struct-tag change reflows to the form with no hand edits. In edit mode each row validates its
+  draft against that field's generated constraints and shows an inline error, an `enum` field renders as a
+  select of the generated options (retiring the hard-coded theme list), and Save is blocked while a field is
+  invalid. The server 422 remains the backstop for anything the client does not catch (a direct API call, a
+  stale client) and maps back to the same field.
+
+The generation chain is the Go struct to OpenAPI to `settings.schema.gen.ts` to inline form validation, one
+rule set with the server 422 behind it.
+
 ## API surface
 
 Two read audiences, two read endpoints, and merge-patch writes:
@@ -119,8 +189,10 @@ Two read audiences, two read endpoints, and merge-patch writes:
   scope.
 
 Per doctrine 1 the effective document is a Huma struct, so the OpenAPI, the typed SPA client, the CLI command, and
-the JSONSchema all generate from it (`make gen`). Because `code` defaults fill every key, the effective document
-is always fully populated; only the override **storage** is raw JSONB partials.
+the JSONSchema all generate from it (`make gen`). The `values` field is the typed `Settings` struct: the generated
+client reads a known field like `values.ui.theme` as a union (slice-0 exposed `values` as a free-form object).
+Because `code` defaults fill every key, the effective document is always fully populated; only the override
+**storage** is raw JSONB partials.
 
 The two permissions live on the admin role: `settings:read` (admin read with provenance) and `settings:update`
 (write, restore, lock and unlock). The store is a singleton, so there is no create or delete-of-resource
@@ -149,3 +221,20 @@ effective read, PATCH / DELETE / `:restoreDefaults`), the two permissions, the t
 user-scoped Gateway reads), the `settings:lock` permission split for group-admins, `platform`-domain namespaces
 (`retention`, `integrations`) with their features, a GitOps read-only mode (a setting that locks the page to
 file-only editing), and live file reload (SIGHUP) instead of restart-to-reload.
+
+## Slice-1 boundary
+
+Slice-1 makes settings a reflected typed struct without touching the merge engine, the cascade precedence, the
+permissions, or the routes ([ADR-0041](/architecture/decisions/#adr-0041-settings-are-a-reflected-typed-struct-with-generated-client-and-server-validation)).
+
+**In:** the canonical `Settings` struct as the single source; reflected `Defaults()` and `Namespaces()` (the
+embedded `defaults.yaml` and the hand-kept namespace slice retired); the typed effective read (`values` is
+`Settings`, plus the `EffectiveTyped` app accessor); server write validation (404 unknown namespace, 422 bad
+key / type / enum); and the generated client constraint artifact (`web/src/api/settings.schema.gen.ts`) driving
+schema-derived inline form validation with Save blocked on an invalid field.
+
+**Deferred (future slices, tracked on [#270](https://github.com/hyperscaleav/omniglass/issues/270)):** the
+declarative operator-file machinery (a generated JSONSchema for the operator `settings.json`, validation of the
+**file** layer at boot, and letting the file layer take precedence over the database, the GitOps-wins /
+read-only lever); operator-open namespaces (a typed map with a `Default()` method); and the group and user
+cascade rungs, all unchanged by slice-1.
