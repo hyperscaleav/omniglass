@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/seed"
@@ -309,5 +310,119 @@ func TestNodeIdentityAndEdit(t *testing.T) {
 	}
 	if got.LocationName != nil {
 		t.Fatalf("ON DELETE SET NULL: want nil location, got %v", *got.LocationName)
+	}
+}
+
+// TestDeleteNode covers node decommission (N3): a hard delete of the node
+// principal cascades its interfaces, their derived tasks, and its node-owned tag
+// bindings, while a component's own telemetry (owner arc = component, node_id
+// null) survives. Plus the all-scope gate and the unknown-node not-found.
+func TestDeleteNode(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	dsn := storagetest.NewDSN(t)
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	all := scope.Set{All: true}
+
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "dsp-1", ComponentType: "dsp"}, all); err != nil {
+		t.Fatalf("component: %v", err)
+	}
+	node, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-del"}, all)
+	if err != nil {
+		t.Fatalf("create node: %v", err)
+	}
+	comp, nodeName := "dsp-1", "edge-del"
+	if _, err := gw.CreateInterface(ctx, "", storage.InterfaceSpec{
+		Type: "tcp", Component: &comp, Node: &nodeName, Params: []byte(`{"target":"10.0.0.1:80"}`),
+	}, all); err != nil {
+		t.Fatalf("create interface: %v", err)
+	}
+	// A component-owned datapoint (owner arc = component, node_id null): it must
+	// survive the node's deletion.
+	if err := gw.InsertMetricDatapoints(ctx, []storage.MetricDatapointEvent{
+		{OwnerKind: "component", OwnerID: "dsp-1", Key: "tcp.open", Instance: "tcp", Value: 1, Source: "tcp", TS: time.Now().UTC()},
+	}); err != nil {
+		t.Fatalf("insert component datapoint: %v", err)
+	}
+	// A node-owned tag binding (cascades on delete).
+	mustNodeTag(t, gw, node.Name)
+
+	probe, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatalf("probe connect: %v", err)
+	}
+	defer probe.Close(ctx)
+	count := func(q string, args ...any) int {
+		var n int
+		if err := probe.QueryRow(ctx, q, args...).Scan(&n); err != nil {
+			t.Fatalf("count (%s): %v", q, err)
+		}
+		return n
+	}
+	if count(`select count(*) from interface where node_name = $1`, nodeName) != 1 {
+		t.Fatalf("precondition: want 1 interface on the node")
+	}
+	if count(`select count(*) from task`) != 1 {
+		t.Fatalf("precondition: want 1 derived task")
+	}
+	if count(`select count(*) from tag_binding where node_id = $1`, node.PrincipalID) != 1 {
+		t.Fatalf("precondition: want 1 node tag binding")
+	}
+
+	// The all-scope gate and unknown-node, then the delete.
+	if err := gw.DeleteNode(ctx, "", nodeName, scope.Set{}, scope.Set{}); !errors.Is(err, storage.ErrNodeForbidden) {
+		t.Fatalf("delete without all-scope: want ErrNodeForbidden, got %v", err)
+	}
+	if err := gw.DeleteNode(ctx, "", "ghost", all, all); !errors.Is(err, storage.ErrNodeNotFound) {
+		t.Fatalf("delete unknown node: want ErrNodeNotFound, got %v", err)
+	}
+	if err := gw.DeleteNode(ctx, "", nodeName, all, all); err != nil {
+		t.Fatalf("delete node: %v", err)
+	}
+
+	// The node and everything keyed to it are gone; the node principal too.
+	if _, err := gw.GetNode(ctx, nodeName, all); !errors.Is(err, storage.ErrNodeNotFound) {
+		t.Errorf("node still present after delete: %v", err)
+	}
+	if n := count(`select count(*) from node where name = $1`, nodeName); n != 0 {
+		t.Errorf("node rows = %d, want 0", n)
+	}
+	if n := count(`select count(*) from principal where id = $1`, node.PrincipalID); n != 0 {
+		t.Errorf("node principal rows = %d, want 0", n)
+	}
+	if n := count(`select count(*) from interface where node_name = $1`, nodeName); n != 0 {
+		t.Errorf("interfaces = %d, want 0 (cascade)", n)
+	}
+	if n := count(`select count(*) from task`); n != 0 {
+		t.Errorf("tasks = %d, want 0 (cascade through the interface)", n)
+	}
+	if n := count(`select count(*) from tag_binding where node_id = $1`, node.PrincipalID); n != 0 {
+		t.Errorf("node tag bindings = %d, want 0 (cascade)", n)
+	}
+	// The component's own telemetry survives (owner arc = component, not the node).
+	if n := count(`select count(*) from metric_datapoint where owner_kind = 'component'`); n != 1 {
+		t.Errorf("component datapoints = %d, want 1 (must survive the node delete)", n)
+	}
+}
+
+// mustNodeTag mints a node-applicable key and binds it to the node.
+func mustNodeTag(t *testing.T, gw storage.Gateway, nodeName string) {
+	t.Helper()
+	ctx := context.Background()
+	all := scope.Set{All: true}
+	if _, err := gw.CreateTag(ctx, "", storage.TagSpec{Name: "rack", AppliesTo: []string{"node"}}, all); err != nil {
+		t.Fatalf("create tag: %v", err)
+	}
+	if _, err := gw.SetTagBinding(ctx, "", "rack", "node", &nodeName, "r5", all, all); err != nil {
+		t.Fatalf("bind node tag: %v", err)
 	}
 }

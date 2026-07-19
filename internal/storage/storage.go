@@ -302,6 +302,7 @@ type Gateway interface {
 	// the enrollment token or the node's NATS subject grant, not RBAC scope).
 	CreateNode(ctx context.Context, actorID string, spec NodeSpec, create scope.Set) (*Node, error)
 	UpdateNode(ctx context.Context, actorID, name string, patch NodePatch, read, action scope.Set) (*Node, error)
+	DeleteNode(ctx context.Context, actorID, name string, read, action scope.Set) error
 	SetEnrollmentToken(ctx context.Context, actorID, name, tokenHashHex string, action scope.Set) (*Node, error)
 	ClaimNode(ctx context.Context, name, tokenHashHex string) (*Node, error)
 	AuthenticateNode(ctx context.Context, name, tokenHashHex string) (bool, error)

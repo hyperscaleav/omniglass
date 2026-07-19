@@ -294,6 +294,9 @@ func (UnimplementedGateway) CreateNode(context.Context, string, NodeSpec, scope.
 func (UnimplementedGateway) UpdateNode(context.Context, string, string, NodePatch, scope.Set, scope.Set) (*Node, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) DeleteNode(context.Context, string, string, scope.Set, scope.Set) error {
+	return nil
+}
 func (UnimplementedGateway) SetEnrollmentToken(context.Context, string, string, string, scope.Set) (*Node, error) {
 	return nil, nil
 }
