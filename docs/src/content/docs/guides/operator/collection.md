@@ -28,6 +28,9 @@ A row opens the node's detail.
   changes the node's **display name**, **description**, and **location** (a descriptive
   placement picked from the estate's locations, not a scope); the **name is immutable** (it is
   the estate address and enrollment identity). The location clears if that location is deleted.
+- The detail carries a **Tags** panel: with `node:update`, edit mode adds and removes governed
+  [tags](/guides/operator/inventory/) (keys whose vocabulary allows nodes), the same tag editor the
+  component and location details use. The node list shows a Tags column and filters by any tag key.
 - **Enroll** (or **Re-enroll**, if it is already enrolled) is a secondary action in the detail's
   kebab: it re-mints the token, invalidating the previous one.
 - The detail also shows whether the node is enrolled and when it last sent a heartbeat.

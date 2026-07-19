@@ -14,6 +14,10 @@ export type Node = {
   enrolled: boolean;
   enrolled_at?: string;
   last_heartbeat_at?: string;
+  // The resolved effective tags (its direct bindings plus propagating globals),
+  // mapped from the API `effective_tags` so the row satisfies the shared tag-facet
+  // and TagPills contract, exactly as the component row does.
+  tags: Record<string, string>;
 };
 
 // nodeLabel is the node's human label: its display_name, falling back to the
@@ -33,13 +37,13 @@ export const NODES_KEY = ["nodes"] as const;
 export async function listNodes(): Promise<Node[]> {
   const { data, error } = await api.GET("/nodes");
   if (error) throw error;
-  return (data?.nodes ?? []) as Node[];
+  return (data?.nodes ?? []).map((n) => ({ ...n, tags: n.effective_tags ?? {} })) as Node[];
 }
 
 export async function getNode(name: string): Promise<Node> {
   const { data, error } = await api.GET("/nodes/{name}", { params: { path: { name } } });
   if (error) throw error;
-  return data as Node;
+  return { ...data, tags: data?.effective_tags ?? {} } as Node;
 }
 
 export type CreateNode = { name: string; display_name?: string; description?: string; location?: string };

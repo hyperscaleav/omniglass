@@ -70,7 +70,7 @@ describe("nodes data layer", () => {
 // the server's down window (OMNIGLASS_NODE_DOWN_AFTER, default 90s). It is pure, so
 // a fixed `now` pins the three outcomes and the exact boundary.
 describe("nodeStatus", () => {
-  const node = (last?: string): Node => ({ name: "n", enrolled: true, last_heartbeat_at: last });
+  const node = (last?: string): Node => ({ name: "n", enrolled: true, last_heartbeat_at: last, tags: {} });
   const now = Date.parse("2026-07-07T12:00:00Z");
 
   it("is `never` when the node has never heartbeated", () => {
@@ -94,9 +94,9 @@ describe("nodeStatus", () => {
 // (substring, the default) and status (exact, derived). Matching is client-side via
 // lib/predicate, exactly as the other lists drive it.
 const nodes: Node[] = [
-  { name: "edge-hq", enrolled: true, last_heartbeat_at: new Date().toISOString() }, // up
-  { name: "edge-east", enrolled: true, last_heartbeat_at: new Date(Date.now() - 10 * 60_000).toISOString() }, // down
-  { name: "edge-new", enrolled: false }, // never
+  { name: "edge-hq", enrolled: true, last_heartbeat_at: new Date().toISOString(), tags: {} }, // up
+  { name: "edge-east", enrolled: true, last_heartbeat_at: new Date(Date.now() - 10 * 60_000).toISOString(), tags: {} }, // down
+  { name: "edge-new", enrolled: false, tags: {} }, // never
 ];
 const matched = (chips: Chip[]): string[] => nodes.filter(buildPredicate(nodeFilterKeys, chips)).map((n) => n.name);
 

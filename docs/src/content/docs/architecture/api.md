@@ -286,9 +286,9 @@ owning entity's own write. The key vocabulary and an entity's tags read on the v
 - `POST /tags/{name}:setGlobal` sets the **global** value for a key from `{value}` (`tag:update`);
   `POST /tags/{name}:clearGlobal` removes it (204). A global binding has no owning entity, so it gates on
   `tag:update`.
-- `GET /{components,systems,locations}/{name}:listTags` lists the bindings set **directly** on one entity
+- `GET /{components,systems,locations,nodes}/{name}:listTags` lists the bindings set **directly** on one entity
   (`{tags: [tagBinding]}`, the entity's `:read`).
-- `POST /{components,systems,locations}/{name}:setTag` binds a value from `{key, value}` on the entity;
+- `POST /{components,systems,locations,nodes}/{name}:setTag` binds a value from `{key, value}` on the entity;
   the key must exist and its `applies_to` must admit the kind (a 422 otherwise). Setting a value is the
   entity's own write, so it gates on the entity's **`:update`** (`component:update` and friends), not a
   tag permission. `POST /{...}/{name}:removeTag` from `{key}` removes the binding (204). Bindings are

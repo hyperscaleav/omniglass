@@ -1993,6 +1993,11 @@ components:
           type: string
         display_name:
           type: string
+        effective_tags:
+          additionalProperties:
+            type: string
+          description: "The resolved effective tags (key -> winning value) on this node: its direct bindings plus propagating global tags. For the Tags column and the blade pills."
+          type: object
         enrolled:
           type: boolean
         enrolled_at:
@@ -4798,6 +4803,95 @@ paths:
           description: Error
       summary: Mint a node's enrollment token
       x-omniglass-permission: node:enroll
+  /nodes/{name}:listTags:
+    get:
+      description: Lists the tags bound directly on a node (not the resolved cascade). Gated by node:read.
+      operationId: list-node-tags
+      parameters:
+        - description: The entity's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The entity's name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntityTagsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List tags on a node
+      x-omniglass-permission: node:read
+  /nodes/{name}:removeTag:
+    post:
+      description: Removes a key's value from a node. Gated by node:update.
+      operationId: remove-node-tag
+      parameters:
+        - description: The entity's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The entity's name
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EntityRemoveTagInputBody"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Remove a tag value from a node
+      x-omniglass-permission: node:update
+  /nodes/{name}:setTag:
+    post:
+      description: Binds a value for a key on a node. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by node:update.
+      operationId: set-node-tag
+      parameters:
+        - description: The entity's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The entity's name
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EntitySetTagInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TagBindingBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Set a tag value on a node
+      x-omniglass-permission: node:update
   /nodes:claim:
     post:
       description: "The node-facing exchange: a node presents its enrollment token and receives its NATS credential (url, username, password). Public (the token is the authentication); an invalid token is a 401."

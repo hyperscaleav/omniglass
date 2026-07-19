@@ -89,6 +89,7 @@ var tagBindingConflictArc = map[string]string{
 	"component": "(tag_id, component_id) where owner_kind = 'component'",
 	"system":    "(tag_id, system_id) where owner_kind = 'system'",
 	"location":  "(tag_id, location_id) where owner_kind = 'location'",
+	"node":      "(tag_id, node_id) where owner_kind = 'node'",
 }
 
 // CreateTag mints a new key in the governed vocabulary. Minting is a tenant-wide
@@ -289,12 +290,13 @@ func (p *PG) SetTagBinding(ctx context.Context, actorID, key, ownerKind string, 
 		return nil, ErrTagForbidden
 	}
 	compID, sysID, locID := arcColumns(ownerKind, ownerID)
+	nodeID := nodeArc(ownerKind, ownerID)
 	b, err := scanBindingRow(tx.QueryRow(ctx, `
-		insert into tag_binding (tag_id, owner_kind, component_id, system_id, location_id, value)
-		values ($1, $2, $3, $4, $5, $6)
+		insert into tag_binding (tag_id, owner_kind, component_id, system_id, location_id, node_id, value)
+		values ($1, $2, $3, $4, $5, $6, $7)
 		on conflict `+conflict+` do update set value = excluded.value, updated_at = now()
-		returning id, owner_kind, component_id, system_id, location_id, value, created_at, updated_at`,
-		t.ID, ownerKind, compID, sysID, locID, value))
+		returning id, owner_kind, component_id, system_id, location_id, node_id, value, created_at, updated_at`,
+		t.ID, ownerKind, compID, sysID, locID, nodeID, value))
 	if err != nil {
 		return nil, fmt.Errorf("storage: write tag binding: %w", err)
 	}
@@ -331,14 +333,16 @@ func (p *PG) DeleteTagBinding(ctx context.Context, actorID, key, ownerKind strin
 		return err
 	}
 	compID, sysID, locID := arcColumns(ownerKind, ownerID)
+	nodeID := nodeArc(ownerKind, ownerID)
 	b, err := scanBindingRow(tx.QueryRow(ctx, `
 		delete from tag_binding
 		where tag_id = $1 and owner_kind = $2
 		  and component_id is not distinct from $3
 		  and system_id    is not distinct from $4
 		  and location_id  is not distinct from $5
-		returning id, owner_kind, component_id, system_id, location_id, value, created_at, updated_at`,
-		t.ID, ownerKind, compID, sysID, locID))
+		  and node_id      is not distinct from $6
+		returning id, owner_kind, component_id, system_id, location_id, node_id, value, created_at, updated_at`,
+		t.ID, ownerKind, compID, sysID, locID, nodeID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrTagBindingNotFound
 	}
@@ -365,16 +369,18 @@ func (p *PG) ListEntityTags(ctx context.Context, ownerKind string, ownerName *st
 		return nil, err
 	}
 	compID, sysID, locID := arcColumns(ownerKind, ownerID)
+	nodeID := nodeArc(ownerKind, ownerID)
 	rows, err := p.pool.Query(ctx, `
-		select b.id, b.owner_kind, b.component_id, b.system_id, b.location_id, b.value, b.created_at, b.updated_at, t.name
+		select b.id, b.owner_kind, b.component_id, b.system_id, b.location_id, b.node_id, b.value, b.created_at, b.updated_at, t.name
 		from tag_binding b
 		join tag t on t.id = b.tag_id
 		where b.owner_kind = $1
 		  and b.component_id is not distinct from $2
 		  and b.system_id   is not distinct from $3
 		  and b.location_id is not distinct from $4
+		  and b.node_id     is not distinct from $5
 		order by t.name`,
-		ownerKind, compID, sysID, locID)
+		ownerKind, compID, sysID, locID, nodeID)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list entity tags: %w", err)
 	}
@@ -515,6 +521,8 @@ func (p *PG) EffectiveTags(ctx context.Context, kind string, ownerIDs []string) 
 		sql = effectiveSystemTagsSQL
 	case "location":
 		sql = effectiveLocationTagsSQL
+	case "node":
+		sql = effectiveNodeTagsSQL
 	default:
 		return nil, fmt.Errorf("storage: effective tags: unknown kind %q", kind)
 	}
@@ -586,6 +594,31 @@ ranked as (
       on o.owner_kind = b.owner_kind
      and o.owner_id is not distinct from coalesce(b.component_id, b.system_id, b.location_id)
     where t.propagates or (o.owner_kind = 'component' and o.depth = 0)
+)
+select target_id::text, key, value from ranked where rnk = 1 order by target_id, key`
+
+// A node is estate-wide, not a scope tree, so its effective tags are just the
+// global layer plus its own direct bindings (a node-direct value wins over a
+// propagating global). No recursion: there is nothing above a node to inherit
+// from. Targets and owner ids are node.principal_id.
+const effectiveNodeTagsSQL = `
+with
+targets as (
+    select principal_id as target_id from node where principal_id = any($1)
+),
+owners(target_id, owner_kind, owner_id, band) as (
+                select target_id, 'global', null::uuid, 0 from targets
+    union all   select target_id, 'node',   target_id, 1 from targets
+),
+ranked as (
+    select o.target_id, t.name as key, b.value,
+           row_number() over (partition by o.target_id, t.id order by o.band desc) as rnk
+    from tag_binding b
+    join tag t on t.id = b.tag_id
+    join owners o
+      on o.owner_kind = b.owner_kind
+     and o.owner_id is not distinct from b.node_id
+    where t.propagates or (o.owner_kind = 'node' and o.band = 1)
 )
 select target_id::text, key, value from ranked where rnk = 1 order by target_id, key`
 
@@ -686,6 +719,20 @@ func resolveTagBindingOwner(ctx context.Context, q querier, kind string, name *s
 			return nil, "", err
 		}
 		return &l.ID, l.Name, nil
+	case "node":
+		// A node is estate-wide (not a scope tree), so tagging it needs an all
+		// scope on both legs, like a global owner; the owner id is its principal_id.
+		if !read.All || !action.All {
+			return nil, "", ErrNodeForbidden
+		}
+		var pid string
+		err := q.QueryRow(ctx, `select principal_id from node where name = $1`, *name).Scan(&pid)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, "", ErrNodeNotFound
+		} else if err != nil {
+			return nil, "", fmt.Errorf("storage: resolve node tag owner %q: %w", *name, err)
+		}
+		return &pid, *name, nil
 	}
 	return nil, "", ErrTagForbidden
 }
@@ -727,26 +774,36 @@ func scanTagRow(row pgx.Row) (*Tag, error) {
 
 func scanBindingRow(row pgx.Row) (*TagBinding, error) {
 	var (
-		b              TagBinding
-		comp, sys, loc *string
+		b                    TagBinding
+		comp, sys, loc, node *string
 	)
-	if err := row.Scan(&b.ID, &b.OwnerKind, &comp, &sys, &loc, &b.Value, &b.CreatedAt, &b.UpdatedAt); err != nil {
+	if err := row.Scan(&b.ID, &b.OwnerKind, &comp, &sys, &loc, &node, &b.Value, &b.CreatedAt, &b.UpdatedAt); err != nil {
 		return nil, err
 	}
-	b.OwnerID = firstNonNil(comp, sys, loc)
+	b.OwnerID = firstNonNil(comp, sys, loc, node)
 	return &b, nil
+}
+
+// nodeArc is the node leg of the tag-binding owner arc: the owner id when the
+// owner is a node, else nil (the shared arcColumns covers component/system/
+// location, which a node binding leaves null).
+func nodeArc(kind string, id *string) *string {
+	if kind == "node" {
+		return id
+	}
+	return nil
 }
 
 func scanBindingListRow(row pgx.Row) (*TagBinding, string, error) {
 	var (
-		b              TagBinding
-		comp, sys, loc *string
-		key            string
+		b                    TagBinding
+		comp, sys, loc, node *string
+		key                  string
 	)
-	if err := row.Scan(&b.ID, &b.OwnerKind, &comp, &sys, &loc, &b.Value, &b.CreatedAt, &b.UpdatedAt, &key); err != nil {
+	if err := row.Scan(&b.ID, &b.OwnerKind, &comp, &sys, &loc, &node, &b.Value, &b.CreatedAt, &b.UpdatedAt, &key); err != nil {
 		return nil, "", err
 	}
-	b.OwnerID = firstNonNil(comp, sys, loc)
+	b.OwnerID = firstNonNil(comp, sys, loc, node)
 	return &b, key, nil
 }
 
