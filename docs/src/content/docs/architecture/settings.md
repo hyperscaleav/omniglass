@@ -148,6 +148,64 @@ enum union), and Go code calls `settingsSvc.EffectiveTyped(ctx)` and reads `s.UI
 codebase. `sources` and `locks` stay flat maps keyed by `namespace.key`, since provenance is inherently
 dynamic.
 
+## Adding a setting
+
+Everything about a setting lives on its struct field in `internal/settings/schema.go`. Add the field, run
+`make gen`, and it is discovered everywhere. There is no registry to update, no `defaults.yaml`, no second
+place.
+
+**Add a key to an existing namespace.** Add one tagged field to the namespace's sub-struct. The tags are the
+whole declaration:
+
+```go
+type UISettings struct {
+	Theme          string `json:"theme" enum:"omniglass-dark,omniglass-light" default:"omniglass-dark" doc:"Console color theme"`
+	DefaultLanding string `json:"default_landing" pattern:"^/" default:"/" doc:"Route the console opens to (an absolute path)"`
+	// add a field here.
+}
+```
+
+- `json:"<key>"` (**required**) is the setting's key: its name in the merge-patch, the API, and the client.
+  Use snake_case. The key is the `json` tag, not the Go field name.
+- `default:"<value>"` is the `code`-layer default, coerced to the field's Go kind (string, int, float, bool).
+  Omit for no default. Do not seed a default anywhere else.
+- `enum:"a,b,c"` constrains the value to a set. It renders as a select in the console and is rejected
+  (inline, and 422 on the server) otherwise.
+- `pattern:"^regex$"` constrains a free-string value. A value that fails it is rejected inline and 422 on the
+  server.
+- `doc:"..."` is the human description, carried into the schema and the generated client.
+
+**Add a namespace.** A namespace is a struct. Define the sub-struct, then add it as a field on `Settings`:
+
+```go
+type Settings struct {
+	UI          UISettings         `json:"ui"          settings:"profile,client"`
+	Keybindings Keybindings        `json:"keybindings" settings:"profile,client"`
+	Retention   RetentionSettings  `json:"retention"   settings:"platform"` // new: global-only, admin-read
+}
+```
+
+The `settings:"<domain>[,client]"` tag carries the namespace metadata:
+
+- `domain` is `profile` (cascades to groups and users, user-overridable) or `platform` (global-only, admin).
+- Add `client` to make the namespace's effective values readable at `/settings/me` (the SPA's boot read);
+  omit it for admin-only-read (a `settings:read` gate).
+
+**Then run `make gen`** and commit the drift. That one field now drives, with no further edits: the `code`
+default (`Defaults()`), the namespace registry (`Namespaces()`), the OpenAPI schema, the typed SPA client
+(`values.<namespace>.<key>`), the server write-validator, the inline form validation
+(`web/src/api/settings.schema.gen.ts`), and the typed Go accessor `settingsSvc.EffectiveTyped(ctx)`.
+
+**Rules and gotchas.**
+
+- Every namespace is a struct, a closed set of developer-defined keys; there is no operator-open namespace.
+- A malformed tag is a boot panic (the struct is a compile-time asset), so a typo surfaces immediately, never
+  as a silent runtime branch.
+- Prefer `enum` or `pattern` over a bare string whenever the value is constrained: one tag buys the console
+  picker, the inline validation, and the server 422 together.
+- Never seed a default outside the tag (no `defaults.yaml`, no boot-seed `ON CONFLICT`); the `default:` tag is
+  the code layer, and a second source is exactly the drift the single-source struct exists to prevent.
+
 ## Generated validation, one rule set from the struct
 
 A write is validated against the **same reflected schema** on both sides, so the client and the server enforce
