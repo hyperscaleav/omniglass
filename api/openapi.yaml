@@ -2361,6 +2361,54 @@ components:
         - field
         - value
       type: object
+    SettingsMeOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/SettingsMeOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        values:
+          additionalProperties:
+            additionalProperties: {}
+            type: object
+          type: object
+      required:
+        - values
+      type: object
+    SettingsReadOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/SettingsReadOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        locks:
+          additionalProperties:
+            type: string
+          description: key 'namespace.key' to the locking level, when locked
+          type: object
+        sources:
+          additionalProperties:
+            type: string
+          description: key 'namespace.key' to the winning level (code|file|global)
+          type: object
+        values:
+          additionalProperties:
+            additionalProperties: {}
+            type: object
+          type: object
+      required:
+        - values
+        - sources
+        - locks
+      type: object
     SvcBody:
       additionalProperties: false
       properties:
@@ -5305,6 +5353,115 @@ paths:
           description: Error
       summary: Reveal a secret's plaintext
       x-omniglass-permission: secret:reveal
+  /settings:
+    get:
+      description: The effective settings document plus per-key provenance (which level won) and lock state. Gated by settings:read (admin).
+      operationId: get-settings
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SettingsReadOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get effective settings with provenance
+      x-omniglass-permission: settings:read
+  /settings/me:
+    get:
+      description: The current principal's resolved settings, client-visible namespaces only, no provenance. Feeds the SPA at boot. Requires authentication.
+      operationId: get-settings-me
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SettingsMeOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get the caller's effective settings
+  /settings/{namespace}:
+    delete:
+      description: Drops the namespace's global override, restoring file and code defaults. Gated by settings:update.
+      operationId: delete-settings-namespace
+      parameters:
+        - description: the settings namespace
+          in: path
+          name: namespace
+          required: true
+          schema:
+            description: the settings namespace
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Restore a settings namespace to defaults
+      x-omniglass-permission: settings:update
+    patch:
+      description: Applies an RFC 7386 JSON Merge Patch to the namespace's global override; null on a key restores it. Gated by settings:update.
+      operationId: patch-settings-namespace
+      parameters:
+        - description: the settings namespace, e.g. ui
+          in: path
+          name: namespace
+          required: true
+          schema:
+            description: the settings namespace, e.g. ui
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              additionalProperties: {}
+              description: an RFC 7386 JSON Merge Patch for the namespace; null on a key restores it
+              type: object
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SettingsReadOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Update a settings namespace
+      x-omniglass-permission: settings:update
+  /settings:restoreDefaults:
+    post:
+      description: Removes every global override (a factory reset). Gated by settings:update.
+      operationId: restore-settings-defaults
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Restore all settings to defaults
+      x-omniglass-permission: settings:update
   /systems:
     get:
       description: Lists the systems the caller may read, each filtered to its scope subtree. Gated by system:read.

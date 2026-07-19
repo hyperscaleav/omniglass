@@ -327,6 +327,20 @@ type Gateway interface {
 	DownloadFile(ctx context.Context, id string, canAdmin bool) (*File, []byte, error)
 	DeleteFile(ctx context.Context, actorID, id string, canAdmin bool) error
 
+	// The settings engine (unscoped: platform config, not estate data, so no ABAC
+	// scope applies; the route gates on settings:<action> only). The single
+	// setting_override table holds only what an operator changed at a cascade level;
+	// the base layers (code defaults, operator file) live in memory. Slice-0 uses
+	// scope "global" (principal_id NULL). Every write is audited.
+	GetSettingOverrides(ctx context.Context, scope string) ([]SettingOverride, error)
+	UpsertSettingOverride(ctx context.Context, actorID, scope, namespace string, doc map[string]any, locks []string) (*SettingOverride, error)
+	// MergePatchSettingOverride applies an RFC 7386 merge patch to the (scope,
+	// namespace) global override as one atomic read-modify-write, serialized against
+	// concurrent patches to the same namespace so no update is lost.
+	MergePatchSettingOverride(ctx context.Context, actorID, scope, namespace string, patch map[string]any) (*SettingOverride, error)
+	DeleteSettingOverride(ctx context.Context, actorID, scope, namespace string) error
+	DeleteAllSettingOverrides(ctx context.Context, actorID, scope string) error
+
 	// Close releases the underlying connection pool. Idempotent at the pool
 	// level; call once on shutdown.
 	Close()

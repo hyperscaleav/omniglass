@@ -356,4 +356,19 @@ func (UnimplementedGateway) DownloadFile(context.Context, string, bool) (*File, 
 	return nil, nil, nil
 }
 func (UnimplementedGateway) DeleteFile(context.Context, string, string, bool) error { return nil }
-func (UnimplementedGateway) Close()                                                 {}
+func (UnimplementedGateway) GetSettingOverrides(context.Context, string) ([]SettingOverride, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) UpsertSettingOverride(context.Context, string, string, string, map[string]any, []string) (*SettingOverride, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) MergePatchSettingOverride(context.Context, string, string, string, map[string]any) (*SettingOverride, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteSettingOverride(context.Context, string, string, string) error {
+	return nil
+}
+func (UnimplementedGateway) DeleteAllSettingOverrides(context.Context, string, string) error {
+	return nil
+}
+func (UnimplementedGateway) Close() {}

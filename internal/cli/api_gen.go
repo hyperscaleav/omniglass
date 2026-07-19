@@ -1289,6 +1289,20 @@ func generatedCommands() []*cobra.Command {
 		}
 		parent.AddCommand(func() *cobra.Command {
 			cmd := &cobra.Command{
+				Use:     "list",
+				Short:   "Get the caller's effective settings",
+				Long:    "The current principal's resolved settings, client-visible namespaces only, no provenance. Feeds the SPA at boot. Requires authentication.",
+				Example: "  omniglass me list",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/settings/me")
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
 				Use:     "removeAvatar",
 				Short:   "Remove your own profile picture",
 				Long:    "Clears the caller's profile picture. Requires authentication; self-scoped.",
@@ -2026,6 +2040,69 @@ func generatedCommands() []*cobra.Command {
 			}
 			cmd.Flags().StringVar(&fPurpose, "purpose", "", "Which of your own credentials to revoke: all your web-login sessions, or all your CLI/API tokens")
 			_ = cmd.MarkFlagRequired("purpose")
+			return cmd
+		}())
+		roots = append(roots, parent)
+	}
+	{
+		parent := &cobra.Command{
+			Use:   "setting",
+			Short: "Commands for the setting resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "delete <namespace>",
+				Short:   "Restore a settings namespace to defaults",
+				Long:    "Drops the namespace's global override, restoring file and code defaults. Gated by settings:update.",
+				Example: "  omniglass setting delete <namespace>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/settings/%s", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "DELETE", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "list",
+				Short:   "Get effective settings with provenance",
+				Long:    "The effective settings document plus per-key provenance (which level won) and lock state. Gated by settings:read (admin).",
+				Example: "  omniglass setting list",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/settings")
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "restoreDefaults",
+				Short:   "Restore all settings to defaults",
+				Long:    "Removes every global override (a factory reset). Gated by settings:update.",
+				Example: "  omniglass setting restoreDefaults",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/settings:restoreDefaults")
+					return runAPICommand(cmd, "POST", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "update <namespace>",
+				Short:   "Update a settings namespace",
+				Long:    "Applies an RFC 7386 JSON Merge Patch to the namespace's global override; null on a key restores it. Gated by settings:update.",
+				Example: "  omniglass setting update <namespace>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/settings/%s", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "PATCH", path, nil)
+				},
+			}
 			return cmd
 		}())
 		roots = append(roots, parent)

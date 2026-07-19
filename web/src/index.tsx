@@ -25,6 +25,7 @@ import Types from "./pages/Types";
 import ComponentMakes from "./pages/ComponentMakes";
 import Files from "./pages/Files";
 import Audit from "./pages/Audit";
+import Settings from "./pages/Settings";
 import SectionStub from "./pages/SectionStub";
 import NotFound from "./pages/NotFound";
 
@@ -56,7 +57,7 @@ const ProtectedShell: ParentComponent = (props) => (
 const STUBS = [
   "/dashboards", "/alarms", "/nodes",
   "/templates", "/rules", "/explore", "/learn",
-  "/config", "/settings",
+  "/config",
 ];
 
 render(
@@ -88,6 +89,7 @@ render(
           <Route path="/types" component={Types} />
           <Route path="/component-makes" component={ComponentMakes} />
           <Route path="/audit" component={Audit} />
+          <Route path="/settings" component={Settings} />
           {STUBS.map((p) => <Route path={p} component={SectionStub} />)}
           <Route path="*" component={NotFound} />
         </Route>

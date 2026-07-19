@@ -1106,6 +1106,22 @@ omniglass logout create
 
 Commands for the me resource
 
+### `omniglass me list`
+
+Get the caller's effective settings
+
+```
+omniglass me list
+```
+
+The current principal's resolved settings, client-visible namespaces only, no provenance. Feeds the SPA at boot. Requires authentication.
+
+Example:
+
+```sh
+omniglass me list
+```
+
 ### `omniglass me removeAvatar`
 
 Remove your own profile picture
@@ -1833,6 +1849,74 @@ Installs or replaces a human's password credential (argon2id), addressed by user
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--revoke-tokens` | bool | `false` | also revoke the user's API tokens (a full lockout of a compromised account) |
+
+## `omniglass setting`
+
+Commands for the setting resource
+
+### `omniglass setting delete`
+
+Restore a settings namespace to defaults
+
+```
+omniglass setting delete <namespace>
+```
+
+Drops the namespace's global override, restoring file and code defaults. Gated by settings:update.
+
+Example:
+
+```sh
+omniglass setting delete <namespace>
+```
+
+### `omniglass setting list`
+
+Get effective settings with provenance
+
+```
+omniglass setting list
+```
+
+The effective settings document plus per-key provenance (which level won) and lock state. Gated by settings:read (admin).
+
+Example:
+
+```sh
+omniglass setting list
+```
+
+### `omniglass setting restoreDefaults`
+
+Restore all settings to defaults
+
+```
+omniglass setting restoreDefaults
+```
+
+Removes every global override (a factory reset). Gated by settings:update.
+
+Example:
+
+```sh
+omniglass setting restoreDefaults
+```
+
+### `omniglass setting update`
+
+Update a settings namespace
+
+```
+omniglass setting update <namespace>
+```
+
+Applies an RFC 7386 JSON Merge Patch to the namespace's global override; null on a key restores it. Gated by settings:update.
+
+Example:
+
+```sh
+omniglass setting update <namespace>
+```
 
 ## `omniglass statu`
 
