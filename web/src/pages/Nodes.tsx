@@ -226,12 +226,6 @@ function NodeBladeBody(props: { name: string; onEnrolled: (out: EnrollOutput) =>
               </div>
             </Show>
           </div>
-
-          <Show when={canEnroll()}>
-            <p class="text-xs text-base-content/50">
-              {node().enrolled ? "Re-mint the enrollment token (the old one stops working)." : "Mint the enrollment token to connect this node."}
-            </p>
-          </Show>
         </div>
       )}
     </Show>
@@ -320,7 +314,7 @@ function EnrollTokenModal(props: { result: EnrollOutput | null; onClose: () => v
           <Dialog.Content class="flex w-full max-w-lg flex-col gap-4 rounded-box border border-base-300 bg-base-100 p-6 shadow-2xl">
             <Dialog.Title class="text-base font-semibold">Enrollment token for <span class="font-data">{props.result?.name}</span></Dialog.Title>
             <div role="alert" class="alert alert-warning alert-soft text-sm">
-              <span>This token is shown once. Copy it now; it cannot be retrieved again.</span>
+              <span>This token is shown once. Copy it now; it cannot be retrieved again. Any previously issued token for this node stops working.</span>
             </div>
             <div class="flex items-stretch gap-2">
               <input readonly value={props.result?.token ?? ""} aria-label="Enrollment token" class="input input-bordered w-full font-data text-xs" onFocus={(e) => e.currentTarget.select()} />
