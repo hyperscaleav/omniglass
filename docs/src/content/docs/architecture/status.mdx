@@ -571,6 +571,9 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   derivation), both pages (rows, the create gate hidden without the perm, the type / mode / interface pickers),
   and the Add-check affordance (the gate needs both perms, submit fires the interface then the task create with
   the right bodies, and the two-step error path surfaces). This closes the collection slice's authoring surfaces.
+  (Superseded before the PR: checkpoint 5f removes the Add-check affordance, and 5g folds the standalone
+  Interfaces and Tasks pages into the component and node details and **derives** the task, so these standalone
+  surfaces and the `task:create` gate do not ship; the flat pages became detail panels.)
 - **Collection slice (checkpoint 5e): the interface model reframe.** Before its PR, the interface model was
   corrected: an **interface is an API we intend to call** (named by the protocol it speaks, `web` / `qrc`,
   unique per component), **not** a network interface; `interface_type` is the **transport** (the reach gate), not
@@ -587,8 +590,9 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   authoring flow (attach a driver to a component, fill its inputs) replaces, and the driver/collect layer is
   under active design (template-centric vs driver-centric), decided deliberately rather than on momentum
   ([ADR-0020](/architecture/decisions/) status note). So the reachability panel is now **read-only display**; a
-  reachability check is authored from the raw **Interfaces** and **Tasks** pages (create an interface, then a poll
-  task over it), which stay as low-level primitives. The slice lands as **remote node reachability**: enroll a
+  reachability check is authored by adding an **interface** to its component (checkpoint 5g settles the interface
+  as the only authored primitive, its poll task **derived**, and folds the interface and task surfaces into the
+  component and node details). The slice lands as **remote node reachability**: enroll a
   node, it probes, the operator sees per-interface reachability. The collect layer (drivers, the normalized menu,
   SNMP) is its own slice after the driver design.
   out of `TreeList` into a standalone `BladeStack` primitive over a `createBladeController`, and both the
