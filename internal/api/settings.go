@@ -11,7 +11,7 @@ import (
 
 type settingsReadOutput struct {
 	Body struct {
-		Values  settings.Doc      `json:"values"`
+		Values  settings.Settings `json:"values"`
 		Sources map[string]string `json:"sources" doc:"key 'namespace.key' to the winning level (code|file|global)"`
 		Locks   map[string]string `json:"locks" doc:"key 'namespace.key' to the locking level, when locked"`
 	}
@@ -19,7 +19,7 @@ type settingsReadOutput struct {
 
 type settingsMeOutput struct {
 	Body struct {
-		Values settings.Doc `json:"values"`
+		Values settings.Settings `json:"values"`
 	}
 }
 
@@ -59,8 +59,12 @@ func registerSettingsRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 		if err != nil {
 			return nil, err
 		}
+		typed, err := settings.Typed(vals)
+		if err != nil {
+			return nil, err
+		}
 		out := &settingsMeOutput{}
-		out.Body.Values = vals
+		out.Body.Values = typed
 		return out, nil
 	})
 
@@ -115,8 +119,12 @@ func resolveOutput(ctx context.Context, svc *settings.Service) (*settingsReadOut
 	if err != nil {
 		return nil, err
 	}
+	typed, err := settings.Typed(r.Values)
+	if err != nil {
+		return nil, err
+	}
 	out := &settingsReadOutput{}
-	out.Body.Values = r.Values
+	out.Body.Values = typed
 	out.Body.Sources = r.Sources
 	out.Body.Locks = r.Locks
 	return out, nil
