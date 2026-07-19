@@ -34,7 +34,7 @@ rather than a single most-specific value.
 - **`tag`** is the **governed key vocabulary**: one row per key (`category`, `environment`), shared across the whole
   tenant (one registry per database, which is the tenant boundary). It owns no value.
 - **`tag_binding`** is the **value cell**: it sets a value for a key at one owner on the exclusive arc
-  (`global | location | system | component`), exactly the arc a [variable](/architecture/variables/) or a secret is
+  (`global | location | system | component | node`), exactly the arc a [variable](/architecture/variables/) or a secret is
   owned at.
 
 Splitting them is what keeps the vocabulary **normalized**: the key `environment` is minted once and reused, so no one
@@ -61,7 +61,7 @@ viewer floor (`tag:read`, `component:read`).
 
 Two fields on the key shape how its bindings behave:
 
-- **`applies_to`** narrows a key to a subset of entity kinds (`component`, `system`, `location`). An empty set is
+- **`applies_to`** narrows a key to a subset of entity kinds (`component`, `system`, `location`, `node`). An empty set is
   **universal** (the key applies everywhere); a non-empty set rejects a binding on any other kind at write time (a
   `rack_position` key that `applies_to: [location]` cannot be bound onto a component). The vocabulary carries its own
   scoping rules, so a key means the same thing wherever it is legal.
@@ -89,8 +89,8 @@ candidates); `GET /components/{name}/tags` returns only the bindings set **direc
 **Systems and locations resolve too.** A component walks the full arc, but every entity has an effective set. A
 **location** resolves `global` plus its own location tree. A **system** resolves `global`, its own system tree, and
 **the location it is placed at** (its `location_id` tree): a system in a PCI building surfaces `compliance: pci`, the
-same way a component picks up its own location's tags. This is the read behind the directory **Tags column**: the list
-routes (`GET /components`, `/systems`, `/locations`) each carry an **`effective_tags`** map (key to winning value,
+same way a component picks up its own location's tags. A **node** is estate-wide, not a scope tree, so it resolves `global` plus its own direct bindings only (no inheritance). This is the read behind the directory **Tags column**: the list
+routes (`GET /components`, `/systems`, `/locations`, `/nodes`) each carry an **`effective_tags`** map (key to winning value,
 winners only) per row, resolved for the whole page in **one batched query** (a `Gateway.EffectiveTags` per kind, no
 per-row fetch). Provenance (which scope a value came from) stays in the per-entity effective-tags detail view, not the
 column.
