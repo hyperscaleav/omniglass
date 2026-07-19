@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -103,11 +102,21 @@ func TestSettingsAdminReadForbiddenToViewer(t *testing.T) {
 }
 
 // TestSettingsConcurrentPatchesNoLostUpdate fires many PATCHes at the same namespace
-// at once, each setting a distinct key. A non-atomic read-modify-write loses updates:
-// each PATCH reads the same stale doc, then the ON CONFLICT upsert overwrites the rest.
-// An atomic gateway merge-patch serializes them so every key survives.
+// at once, cycling across its distinct keys. A non-atomic read-modify-write loses
+// updates: each PATCH reads the same stale doc, then the ON CONFLICT upsert overwrites
+// the rest. An atomic gateway merge-patch serializes them so every key survives. The
+// keys must be real fields of the namespace schema (the keybindings namespace has four
+// free-string keys), else validation rejects the patch with 422 before the race is
+// even reached.
 func TestSettingsConcurrentPatchesNoLostUpdate(t *testing.T) {
 	f := newSettingsFixture(t)
+	keys := []string{"open_detail", "open_edit", "close_blade", "command_palette"}
+	want := map[string]string{
+		"open_detail":     "F1",
+		"open_edit":       "F2",
+		"close_blade":     "F3",
+		"command_palette": "F4",
+	}
 	const n = 16
 
 	var wg sync.WaitGroup
@@ -115,10 +124,10 @@ func TestSettingsConcurrentPatchesNoLostUpdate(t *testing.T) {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			key := fmt.Sprintf("k%d", i)
-			body, _ := json.Marshal(map[string]any{key: fmt.Sprintf("v%d", i)})
+			key := keys[i%len(keys)]
+			body, _ := json.Marshal(map[string]any{key: want[key]})
 			req, err := http.NewRequestWithContext(f.c.ctx, http.MethodPatch,
-				f.c.base+"/api/v1/settings/ui", bytes.NewReader(body))
+				f.c.base+"/api/v1/settings/keybindings", bytes.NewReader(body))
 			if err != nil {
 				t.Errorf("build request: %v", err)
 				return
@@ -140,10 +149,9 @@ func TestSettingsConcurrentPatchesNoLostUpdate(t *testing.T) {
 
 	raw := f.c.do(f.admin, http.MethodGet, "/settings", nil, http.StatusOK)
 	body := decodeSettings(t, raw)
-	for i := 0; i < n; i++ {
-		key := fmt.Sprintf("k%d", i)
-		if got := body.Values["ui"][key]; got != fmt.Sprintf("v%d", i) {
-			t.Fatalf("ui.%s = %v, want v%d (a concurrent patch was lost)", key, got, i)
+	for _, key := range keys {
+		if got := body.Values["keybindings"][key]; got != want[key] {
+			t.Fatalf("keybindings.%s = %v, want %s (a concurrent patch was lost)", key, got, want[key])
 		}
 	}
 }

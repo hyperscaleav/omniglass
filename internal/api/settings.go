@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -75,6 +76,18 @@ func registerSettingsRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 		Summary:     "Update a settings namespace",
 		Description: "Applies an RFC 7386 JSON Merge Patch to the namespace's global override; null on a key restores it. Gated by settings:update.",
 	}, "settings", "update"), func(ctx context.Context, in *settingsPatchInput) (*settingsReadOutput, error) {
+		// Validate the patch against the namespace's reflected schema before storing:
+		// an unknown namespace is a 404, a bad key or value a 422.
+		if err := settings.Validate(in.Namespace, in.Body); err != nil {
+			if errors.Is(err, settings.ErrUnknownNamespace) {
+				return nil, huma.Error404NotFound("unknown settings namespace")
+			}
+			var fe *settings.FieldError
+			if errors.As(err, &fe) {
+				return nil, huma.Error422UnprocessableEntity(fe.Error())
+			}
+			return nil, err
+		}
 		// The merge is a single atomic read-modify-write in the Gateway, serialized
 		// against concurrent patches to the same namespace so no update is lost.
 		if _, err := gw.MergePatchSettingOverride(ctx, actorID(ctx), "global", in.Namespace, in.Body); err != nil {
