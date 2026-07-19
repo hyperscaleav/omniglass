@@ -10,11 +10,11 @@ import { effectiveFieldsKey, type EffectiveField } from "../lib/fields";
 // tests seed the query cache directly (the TagAdder pattern) so no network runs.
 const fields: EffectiveField[] = [
   // Overridden: this component wins, the type default is shadowed.
-  { field_id: "f1", name: "gain", display_name: "Gain", data_type: "int", value: -6, set_value: -6, default_value: 0, is_set: true, value_id: "v1" },
+  { field_id: "f1", name: "gain", display_name: "Gain", data_type: "int", value: -6, set_value: -6, default_value: 0, is_set: true, required: false, value_id: "v1" },
   // Unset with a type default: the default wins.
-  { field_id: "f2", name: "phantom", data_type: "bool", value: false, default_value: false, is_set: false },
+  { field_id: "f2", name: "phantom", data_type: "bool", value: false, default_value: false, is_set: false, required: false },
   // Unset with no type default: the default step shows a dash.
-  { field_id: "f3", name: "serial", data_type: "string", value: null, is_set: false },
+  { field_id: "f3", name: "serial", data_type: "string", value: null, is_set: false, required: false },
 ];
 
 const Body = fieldResolutionBlade.Body;

@@ -37,6 +37,9 @@ export type EffectiveField = {
   // field definition has no default.
   default_value?: unknown;
   is_set: boolean;
+  // Whether the field is required: it must resolve to a value, so it stays
+  // overridden and blocks Save while empty.
+  required: boolean;
   // The field_value id when set (is_set): the id to delete to clear the override
   // back to the type default. Omitted when the field is unset.
   value_id?: string;
