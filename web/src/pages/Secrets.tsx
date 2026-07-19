@@ -30,8 +30,8 @@ import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 // Secrets: the shared-credential directory on the FlatList surface. A secret is a
 // typed, encrypted-at-rest value owned at one scope (global, or a location /
 // system / component) and resolved down the cascade; this page is the admin
-// directory (create, inspect masked, delete). The per-component effective view
-// (which value actually wins where) is the cascade panel on a component's detail.
+// directory (create, inspect masked, delete). A secret reaches a component by
+// being sourced into a field; this directory manages the cells themselves.
 
 const OWNER_KINDS: OwnerKind[] = ["global", "location", "system", "component"];
 
@@ -155,10 +155,7 @@ function SecretBladeBody(p: { id: string }): JSX.Element {
     setErr(null);
     try {
       await updateSecret(s.id, fields);
-      await Promise.all([
-        qc.invalidateQueries({ queryKey: SECRETS_KEY }),
-        qc.invalidateQueries({ queryKey: ["effective-secrets"] }),
-      ]);
+      await qc.invalidateQueries({ queryKey: SECRETS_KEY });
     } catch (e) {
       setErr(describeError(e));
       throw e; // keep the blade in edit mode on failure

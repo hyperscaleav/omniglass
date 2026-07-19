@@ -8,7 +8,7 @@ import { RevealButton, CopyButton } from "./InlineActions";
 // toggle (reveal) and a copy button, both of which decrypt through the audited
 // reveal endpoint, so revealing OR copying a secret value writes an audit row.
 // A non-secret field is plaintext and copies client-side (no decrypt, no audit).
-// Shared by the Secrets directory detail and the component effective-secrets blade.
+// Used by the Secrets directory detail blade.
 export default function SecretFields(props: { secretId: string; fields: SecretField[]; canReveal: boolean }): JSX.Element {
   // Per-field revealed plaintext, populated only after an audited decrypt.
   const [shown, setShown] = createSignal<Record<string, string>>({});

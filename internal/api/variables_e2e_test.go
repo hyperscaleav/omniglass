@@ -14,20 +14,9 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
-type resolvedVariableResp struct {
-	Name      string `json:"name"`
-	ValueType string `json:"value_type"`
-	OwnerKind string `json:"owner_kind"`
-	OwnerName string `json:"owner_name"`
-	Band      int    `json:"band"`
-	Winner    bool   `json:"winner"`
-	Value     any    `json:"value"`
-}
-
 // TestVariableAPI drives the variable surface over HTTP: an owner sets variables
-// at several scopes and reads the effective-variables cascade for a component
-// (winner resolved), a scoped operator may set and edit but a viewer is forbidden
-// create and the all-scope directory.
+// at several scopes and lists the all-scope directory, a scoped operator may set
+// and edit but a viewer is forbidden create and the all-scope directory.
 func TestVariableAPI(t *testing.T) {
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
@@ -75,28 +64,6 @@ func TestVariableAPI(t *testing.T) {
 	// An unknown owner is a 422.
 	c.do(ownerTok, http.MethodPost, "/variables", varReq("poll", "int", "location", "ghost", 1), http.StatusUnprocessableEntity)
 
-	// The effective-variables cascade for the codec: component wins over room over global.
-	resolved := effectiveVariables(t, c, ownerTok, "codec-1")
-	if len(resolved) != 3 {
-		t.Fatalf("resolved = %d, want 3 candidates", len(resolved))
-	}
-	var winner *resolvedVariableResp
-	for i := range resolved {
-		if resolved[i].Winner {
-			if winner != nil {
-				t.Fatalf("more than one winner")
-			}
-			winner = &resolved[i]
-		}
-	}
-	if winner == nil || winner.OwnerKind != "component" || winner.Band != 3 {
-		t.Fatalf("winner = %+v, want component band 3", winner)
-	}
-	// The value crosses in the clear as a JSON number.
-	if n, ok := winner.Value.(float64); !ok || n != 30 {
-		t.Errorf("winner value = %v, want 30", winner.Value)
-	}
-
 	// Owner directory lists all three.
 	var listed struct {
 		Variables []struct {
@@ -143,12 +110,9 @@ func TestVariableAPI(t *testing.T) {
 	c.do(opTok, http.MethodPatch, "/variables/"+opCreated.ID, map[string]any{"value": 8}, http.StatusOK)
 	c.do(opTok, http.MethodDelete, "/variables/"+opCreated.ID, nil, http.StatusForbidden)
 
-	// A component-scoped viewer: may read the cascade, forbidden to create, to list
-	// the all-scope directory, or to delete.
+	// A component-scoped viewer: forbidden to create, to list the all-scope
+	// directory, or to delete.
 	viewerTok := setupScopedViewer(t, ctx, dsn, "viewer-codec", "viewer", "component", comp.ID)
-	if got := effectiveVariables(t, c, viewerTok, "codec-1"); len(got) != 4 {
-		t.Errorf("viewer cascade = %d, want 4 (poll x3 + op-poll)", len(got))
-	}
 	c.do(viewerTok, http.MethodPost, "/variables", varReq("nope", "int", "component", "codec-1", 1), http.StatusForbidden)
 	c.do(viewerTok, http.MethodGet, "/variables", nil, http.StatusForbidden)
 	c.do(viewerTok, http.MethodDelete, "/variables/"+compPollID, nil, http.StatusForbidden)
@@ -165,16 +129,4 @@ func varReq(name, valueType, ownerKind, owner string, value any) map[string]any 
 		body["owner"] = owner
 	}
 	return body
-}
-
-func effectiveVariables(t *testing.T, c *apiClient, tok, comp string) []resolvedVariableResp {
-	t.Helper()
-	raw := c.do(tok, http.MethodGet, "/components/"+comp+"/effective-variables", nil, http.StatusOK)
-	var out struct {
-		Variables []resolvedVariableResp `json:"variables"`
-	}
-	if err := json.Unmarshal(raw, &out); err != nil {
-		t.Fatalf("decode effective-variables: %v", err)
-	}
-	return out.Variables
 }

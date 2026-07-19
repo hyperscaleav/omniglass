@@ -1,6 +1,6 @@
 ---
 title: Secrets
-description: "Encrypted-at-rest credentials owned at one scope and resolved down the cascade: the directory, create, reveal, rotate, and the effective view on a component."
+description: "Encrypted-at-rest credentials owned at one scope and resolved down the cascade: the directory, create, reveal, and rotate."
 screenshots:
   - id: secrets
     path: /web/secrets
@@ -42,12 +42,5 @@ anyone below admin, so their existence and field names never appear to an operat
   keeps its stored value, so you rotate one field without re-entering the rest. **Delete** (with
   `secret:delete`, admin and owner) sits in the footer behind a confirm.
 
-**Effective secrets on a component.** A component's detail carries an **Effective secrets** list: the
-secrets that resolve onto it through the cascade. Click one to open a nested blade showing the resolved
-(revealable) value and the **full cascade**, the winning tier and the candidates it shadowed, read as
-**most-specific wins: component > system > location > global**. It is the teaching view for why a given
-secret is the one in effect.
-
-From the CLI the same surface is `omniglass secret list` / `create` / `update` / `reveal` / `delete`,
-`omniglass secret-type list`, and `omniglass effective-secret list <component>` (see the [CLI
-reference](/reference/cli/)).
+From the CLI the same surface is `omniglass secret list` / `create` / `update` / `reveal` / `delete`
+and `omniglass secret-type list` (see the [CLI reference](/reference/cli/)).

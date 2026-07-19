@@ -23,22 +23,6 @@ type variableBody struct {
 	Value     any     `json:"value" doc:"The value, shape given by value_type"`
 }
 
-// resolvedVariableBody is one entry in a component's effective-variables cascade:
-// the variable, where in the chain its owner sits, and whether it is the winner or
-// a shadowed candidate.
-type resolvedVariableBody struct {
-	ID        string  `json:"id"`
-	Name      string  `json:"name"`
-	ValueType string  `json:"value_type"`
-	OwnerKind string  `json:"owner_kind"`
-	OwnerID   *string `json:"owner_id,omitempty"`
-	OwnerName string  `json:"owner_name,omitempty"`
-	Band      int     `json:"band" doc:"Cascade tier: 0 global, 1 location, 2 system, 3 component"`
-	Depth     int     `json:"depth" doc:"Distance up the tier's tree from the component (0 nearest)"`
-	Winner    bool    `json:"winner" doc:"True for the resolved value; false for a shadowed candidate"`
-	Value     any     `json:"value" doc:"The value, shape given by value_type"`
-}
-
 func toVariableBody(v *storage.Variable) variableBody {
 	return variableBody{
 		ID: v.ID, Name: v.Name, ValueType: v.ValueType,
@@ -87,28 +71,17 @@ type updateVariableInput struct {
 	}
 }
 
-type effectiveVariablesInput struct {
-	Name string `path:"name" doc:"The component's name"`
-}
-
-type effectiveVariablesOutput struct {
-	Body struct {
-		Variables []resolvedVariableBody `json:"variables"`
-	}
-}
-
 // registerVariableRoutes wires the variable surface: the all-scope admin
-// directory, scoped create/update/delete, and the per-component
-// effective-variables cascade. Read rides the viewer floor; create and update are
-// gated by variable:create / variable:update (granted to operators), delete by
-// variable:delete (admin, owner).
+// directory and scoped create/update/delete. Read rides the viewer floor; create
+// and update are gated by variable:create / variable:update (granted to
+// operators), delete by variable:delete (admin, owner).
 func registerVariableRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-variables",
 		Method:      http.MethodGet,
 		Path:        "/variables",
 		Summary:     "List variables (admin directory)",
-		Description: "Lists every variable. Requires an all-scope read; the scoped, per-component view is the effective-variables route. Gated by variable:read.",
+		Description: "Lists every variable. Requires an all-scope read. Gated by variable:read.",
 	}, "variable", "read"), func(ctx context.Context, _ *struct{}) (*listVariablesOutput, error) {
 		vars, err := gw.ListVariables(ctx, a.scopeFor(ctx, "variable", "read"))
 		if err != nil {
@@ -179,35 +152,6 @@ func registerVariableRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 			return nil, mapVariableErr(err)
 		}
 		return nil, nil
-	})
-
-	huma.Register(api, a.gated(huma.Operation{
-		OperationID: "effective-variables",
-		Method:      http.MethodGet,
-		Path:        "/components/{name}/effective-variables",
-		Summary:     "Effective variables for a component",
-		Description: "Resolves the variables that cascade onto a component (global -> location -> system -> component, most-specific winning), winner and shadowed candidates. Gated by variable:read; the component must be in the caller's component read scope.",
-	}, "variable", "read"), func(ctx context.Context, in *effectiveVariablesInput) (*effectiveVariablesOutput, error) {
-		comp, err := gw.GetComponent(ctx, in.Name, a.scopeFor(ctx, "component", "read"))
-		if err != nil {
-			return nil, mapComponentErr(err)
-		}
-		resolved, err := gw.ResolveVariables(ctx, comp.ID, a.scopeFor(ctx, "component", "read"))
-		if err != nil {
-			return nil, mapVariableErr(err)
-		}
-		out := &effectiveVariablesOutput{}
-		out.Body.Variables = make([]resolvedVariableBody, 0, len(resolved))
-		for _, r := range resolved {
-			out.Body.Variables = append(out.Body.Variables, resolvedVariableBody{
-				ID:   r.ID,
-				Name: r.Name, ValueType: r.ValueType, OwnerKind: r.OwnerKind,
-				OwnerID: r.OwnerID, OwnerName: r.OwnerName,
-				Band: r.Band, Depth: r.Depth, Winner: r.Winner,
-				Value: decodeVariableValue(r.Value),
-			})
-		}
-		return out, nil
 	})
 }
 

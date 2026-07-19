@@ -165,8 +165,8 @@ flows back the same way to advance the row. The caller sees one model, the trans
 A **secret** is a typed, encrypted-at-rest operator value ([config, credentials, and
 variables](/architecture/variables/)), and its routes are a worked instance of the conventions above:
 the AIP resource plus a `:verb` custom method, the verb-is-the-permission rule, the implicit `PATCH`
-write mask, same-transaction audit, and a scoped read. The registry, the directory, and the
-per-component cascade read all ride the **viewer read floor** (`secret:read`, which `*:read` satisfies);
+write mask, same-transaction audit, and a scoped read. The registry and the directory read ride the
+**viewer read floor** (`secret:read`, which `*:read` satisfies);
 the three writes gate on `secret:create` / `secret:update` / `secret:delete`; the plaintext decrypt
 gates on **`secret:reveal`**, a permission the `*:read` floor does **not** carry, so a plain "read
 everything" grant sees only masks and **only admin (`secret:*`) and owner (`>`) reveal**. Every
@@ -183,10 +183,6 @@ everything" grant sees only masks and **only admin (`secret:*`) and owner (`>`) 
 - `DELETE /secrets/{id}` removes it (204, `secret:delete`).
 - `POST /secrets/{id}:reveal` returns the decrypted `{fields: {name: plaintext}}` (`secret:reveal`,
   audited).
-- `GET /components/{name}/effective-secrets` is the **masked cascade** for one component: the secrets
-  that resolve onto it, each a `resolvedSecret` (`{id, name, secret_type, owner_kind, owner_id?,
-  owner_name?, band, depth, winner, fields}`) marking the winner and the shadowed candidates
-  (`secret:read`; the component must be in the caller's component read-scope).
 
 A secret's fields are masked in every read: the `secret` body (`{id, name, secret_type, owner_kind,
 owner_id?, owner_name?, fields:[{name, value, secret}]}`) returns `••••••` for a secret field, and only
@@ -194,7 +190,7 @@ owner_id?, owner_name?, fields:[{name, value, secret}]}`) returns `••••�
 
 A **variable** is the plaintext sibling of a secret ([config, secrets, and
 variables](/architecture/variables/)): the same owner arc and cascade, but shown in the clear (no
-registry, no mask, no reveal). The directory and the per-component cascade read ride the viewer floor
+registry, no mask, no reveal). The directory read rides the viewer floor
 (`variable:read`); `POST` / `PATCH` gate on `variable:create` / `variable:update` (granted to
 operators); `DELETE` gates on `variable:delete` (admin, owner). The value is polymorphic JSON typed by
 `value_type`.
@@ -207,10 +203,6 @@ operators); `DELETE` gates on `variable:delete` (admin, owner). The value is pol
 - `PATCH /variables/{id}` replaces the `value` (validated against the fixed `value_type`;
   `variable:update`).
 - `DELETE /variables/{id}` removes it (204, `variable:delete`).
-- `GET /components/{name}/effective-variables` is the **cascade** for one component: each a
-  `resolvedVariable` (`{id, name, value_type, owner_kind, owner_id?, owner_name?, band, depth, winner,
-  value}`) marking the winner and the shadowed candidates (`variable:read`; the component must be in the
-  caller's component read-scope).
 
 A `variable` body is `{id, name, value_type, owner_kind, owner_id?, owner_name?, value}`, the `value` in
 the clear.
