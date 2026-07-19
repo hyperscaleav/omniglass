@@ -1,8 +1,9 @@
-import { For, Show, createEffect, createMemo, createSignal, createUniqueId, on, type JSX } from "solid-js";
+import { For, Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import TreeSelect from "../components/TreeSelect";
-import InfoTip from "../components/InfoTip";
+import KVStacked from "../components/KVStacked";
+import FieldRow from "../components/FieldRow";
 import Button from "../components/Button";
 import { DrawerFooter } from "../components/Drawer";
 import { Plus } from "../components/icons";
@@ -162,8 +163,8 @@ function VariableBladeBody(p: { id: string }): JSX.Element {
             <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
           </Show>
           <div class="grid grid-cols-2 gap-3 text-sm">
-            <Fact label="Type"><span class="badge badge-ghost badge-sm">{v().value_type}</span></Fact>
-            <Fact label="Scope"><span>{ownerLabel(v())}</span></Fact>
+            <KVStacked label="Type" value={<span class="badge badge-ghost badge-sm">{v().value_type}</span>} />
+            <KVStacked label="Scope" value={<span>{ownerLabel(v())}</span>} />
           </div>
           <div class="flex flex-col gap-1.5">
             <span class="eyebrow">Value</span>
@@ -217,15 +218,6 @@ export function ValueInput(p: { valueType: ValueType; value: string; onInput: (v
         <textarea class={["textarea textarea-bordered w-full font-data text-sm", p.class].filter(Boolean).join(" ")} rows={4} value={p.value} onInput={(e) => p.onInput(e.currentTarget.value)} />
       </Show>
     </Show>
-  );
-}
-
-function Fact(p: { label: string; children: JSX.Element }): JSX.Element {
-  return (
-    <div class="flex flex-col gap-0.5">
-      <span class="text-[11px] uppercase tracking-wide text-base-content/40">{p.label}</span>
-      <span>{p.children}</span>
-    </div>
   );
 }
 
@@ -289,16 +281,16 @@ function CreateVariableForm(p: { onCreated: () => void }): JSX.Element {
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <Field label="Name" hint="The cascade key; unique per owner.">
+      <FieldRow label="Name" hint="The cascade key; unique per owner.">
         <input class="input input-bordered w-full font-data" value={name()} placeholder="poll_interval" onInput={(e) => setName(e.currentTarget.value)} />
-      </Field>
+      </FieldRow>
       <div class="grid grid-cols-2 gap-3">
-        <Field label="Type">
+        <FieldRow label="Type">
           <select class="select select-bordered w-full" value={valueType()} onChange={(e) => { setValueType(e.currentTarget.value as ValueType); setValue(""); }}>
             <For each={VALUE_TYPES}>{(t) => <option value={t}>{t}</option>}</For>
           </select>
-        </Field>
-        <Field
+        </FieldRow>
+        <FieldRow
           label="Scope"
           info="The estate scope this variable attaches to. It cascades down onto the components below it: global, or a location, system, or component."
           docHref="https://docs.omniglass.hyperscaleav.com/architecture/variables/"
@@ -306,39 +298,19 @@ function CreateVariableForm(p: { onCreated: () => void }): JSX.Element {
           <select class="select select-bordered w-full" value={ownerKind()} onChange={(e) => { setOwnerKind(e.currentTarget.value as OwnerKind); setOwner(""); }}>
             <For each={OWNER_KINDS}>{(k) => <option value={k}>{k.charAt(0).toUpperCase() + k.slice(1)}</option>}</For>
           </select>
-        </Field>
+        </FieldRow>
       </div>
       <Show when={ownerKind() !== "global"}>
-        <Field label={ownerKind().charAt(0).toUpperCase() + ownerKind().slice(1)}>
+        <FieldRow label={ownerKind().charAt(0).toUpperCase() + ownerKind().slice(1)}>
           <TreeSelect items={ownerTree()} value={owner()} onChange={setOwner} rootLabel="Choose…" />
-        </Field>
+        </FieldRow>
       </Show>
-      <Field label="Value" hint={valueType() === "json" ? "A JSON object, array, or scalar." : valueType() === "bool" ? "true or false." : undefined}>
+      <FieldRow label="Value" hint={valueType() === "json" ? "A JSON object, array, or scalar." : valueType() === "bool" ? "true or false." : undefined}>
         <ValueInput valueType={valueType()} value={value()} onInput={setValue} />
-      </Field>
+      </FieldRow>
       <DrawerFooter>
         <Button type="submit" intent="action" icon={Plus} disabled={busy() || !name().trim() || (ownerKind() !== "global" && !owner())}>Create variable</Button>
       </DrawerFooter>
     </form>
-  );
-}
-
-// Field labels a form control. An optional `info` renders the (i) tooltip beside
-// the label (with an optional `docHref` "learn more" link); the tooltip trigger
-// sits OUTSIDE the <label> and the label associates by `for`, so a labelable
-// button never steals the control's accessible name.
-function Field(p: { label: string; hint?: string; info?: string; docHref?: string; children: JSX.Element }): JSX.Element {
-  const id = createUniqueId();
-  const target = p.children instanceof Element ? p.children : undefined;
-  if (target && !target.id) target.id = id;
-  return (
-    <div class="flex flex-col gap-1">
-      <span class="flex items-center gap-1.5">
-        <label class="text-[12px] font-medium text-base-content/70" for={target?.id ?? id}>{p.label}</label>
-        <Show when={p.info}><InfoTip text={p.info!} label={p.label} href={p.docHref} hrefText="Docs" /></Show>
-      </span>
-      {p.children}
-      <Show when={p.hint}><span class="text-[11px] text-base-content/40">{p.hint}</span></Show>
-    </div>
   );
 }

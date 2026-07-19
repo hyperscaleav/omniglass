@@ -1,5 +1,5 @@
 import { createSignal, Show } from "solid-js";
-import { Eye, EyeOff, Copy, Check, RefreshCw } from "./icons";
+import { RevealButton, CopyButton, GenerateButton } from "./InlineActions";
 import { generatePassword } from "../lib/password";
 import { passwordError } from "../lib/validate";
 
@@ -26,7 +26,6 @@ export default function PasswordField(props: {
   serverError?: string | null;
 }) {
   const [reveal, setReveal] = createSignal(false);
-  const [copied, setCopied] = createSignal(false);
   const error = () => passwordError(props.value, props.username) ?? props.serverError ?? null;
 
   const doGenerate = () => {
@@ -34,15 +33,15 @@ export default function PasswordField(props: {
     // Stay masked: the admin copies it with the Copy button, or reveals on demand
     // with the show/hide toggle, rather than having it shown by default.
   };
-  const doCopy = async () => {
-    if (!props.value) return;
+  const doCopy = async (): Promise<boolean> => {
+    if (!props.value) return false;
     try {
       await navigator.clipboard.writeText(props.value);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
+      return true;
     } catch {
       // Clipboard unavailable (insecure context or denied); the revealed field still
       // lets the admin copy by hand.
+      return false;
     }
   };
 
@@ -61,36 +60,10 @@ export default function PasswordField(props: {
           disabled={props.disabled}
           required={props.required}
         />
-        <button
-          type="button"
-          class="btn btn-bordered join-item btn-square"
-          aria-label={reveal() ? "Hide password" : "Show password"}
-          onClick={() => setReveal((r) => !r)}
-          disabled={props.disabled}
-        >
-          <Show when={reveal()} fallback={<Eye size={15} />}><EyeOff size={15} /></Show>
-        </button>
+        <RevealButton revealed={reveal()} onToggle={() => setReveal((r) => !r)} label="password" disabled={props.disabled} />
         <Show when={props.generate}>
-          <button
-            type="button"
-            class="btn btn-bordered join-item btn-square"
-            aria-label="Copy password"
-            title="Copy"
-            onClick={doCopy}
-            disabled={props.disabled || !props.value}
-          >
-            <Show when={copied()} fallback={<Copy size={15} />}><Check size={15} /></Show>
-          </button>
-          <button
-            type="button"
-            class="btn btn-bordered join-item btn-square"
-            aria-label="Generate a strong password"
-            title="Generate a strong password"
-            onClick={doGenerate}
-            disabled={props.disabled}
-          >
-            <RefreshCw size={15} />
-          </button>
+          <CopyButton onCopy={doCopy} label="password" disabled={props.disabled || !props.value} />
+          <GenerateButton onGenerate={doGenerate} label="Generate a strong password" disabled={props.disabled} />
         </Show>
       </div>
       <Show when={error()}>{(msg) => <p class="mt-1 text-[11px] text-error">{msg()}</p>}</Show>

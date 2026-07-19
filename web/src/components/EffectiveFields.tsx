@@ -147,10 +147,10 @@ function FieldRow(props: {
           // Edit mode only: read mode is a pure scan with zero controls (rule 2).
           <Show when={props.editing}>
             <Show when={props.canSet}>
-              <Button type="button" intent={dirty() ? "action" : "quiet"} square icon={Save} class="join-item" loading={saving()} label="Set field value" title="Set" onClick={() => { void save(); }} />
+              <Button type="button" size="md" intent={dirty() ? "action" : "quiet"} square icon={Save} class="join-item" loading={saving()} label="Set field value" title="Set" onClick={() => { void save(); }} />
             </Show>
             <Show when={canRevert()}>
-              <Button type="button" intent="quiet" square icon={RotateCcw} class="join-item" loading={clearing()} label="Revert to default" title="Revert to default" onClick={() => { void clear(); }} />
+              <Button type="button" size="md" intent="quiet" square icon={RotateCcw} class="join-item" loading={clearing()} label="Revert to default" title="Revert to default" onClick={() => { void clear(); }} />
             </Show>
           </Show>
         }
@@ -227,7 +227,7 @@ function FieldResolutionDetail(props: { field: EffectiveField }): JSX.Element {
 
       <div class="flex flex-col gap-1.5">
         <span class="eyebrow">Resolution</span>
-        <p class="text-[11px] text-base-content/40">falls type default &rsaquo; this component; the deepest set wins</p>
+        <p class="text-[11px] text-base-content/40">type default &rsaquo; this component; the deepest set wins</p>
         <div class="overflow-hidden rounded-box border border-base-300">
           {/* Type default: shadowed (struck, dim) once the component overrides it. */}
           <div class="flex items-center gap-2 px-3 py-2">

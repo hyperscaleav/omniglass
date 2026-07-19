@@ -1,7 +1,7 @@
 import { For, Show, createSignal, type JSX } from "solid-js";
 import { revealSecret, copySecret, type SecretField } from "../lib/secrets";
 import { describeError } from "../lib/format";
-import { Eye, EyeOff, Copy, Check } from "./icons";
+import { RevealButton, CopyButton } from "./InlineActions";
 
 // SecretFields renders a secret's fields as read-only value inputs with in-field
 // adornments, matching the PasswordField pattern: a secret field carries an eye
@@ -13,7 +13,6 @@ export default function SecretFields(props: { secretId: string; fields: SecretFi
   // Per-field revealed plaintext, populated only after an audited decrypt.
   const [shown, setShown] = createSignal<Record<string, string>>({});
   const [busy, setBusy] = createSignal<string | null>(null);
-  const [copied, setCopied] = createSignal<string | null>(null);
   const [err, setErr] = createSignal<string | null>(null);
 
   // Decrypt through the audited endpoints: the eye reveals (verb `reveal`), the
@@ -38,17 +37,17 @@ export default function SecretFields(props: { secretId: string; fields: SecretFi
     }
   }
 
-  async function copyField(f: SecretField) {
+  async function copyField(f: SecretField): Promise<boolean> {
     setErr(null);
     try {
       // A secret field decrypts through the audited copy endpoint on every copy;
       // a non-secret field is already plaintext.
       const value = f.secret ? (await copyPlain())[f.name] ?? "" : f.value;
       await navigator.clipboard.writeText(value);
-      setCopied(f.name);
-      setTimeout(() => copied() === f.name && setCopied(null), 1500);
+      return true;
     } catch (e) {
       setErr(describeError(e));
+      return false;
     }
   }
 
@@ -73,27 +72,15 @@ export default function SecretFields(props: { secretId: string; fields: SecretFi
                 title={shown()[f.name] ?? undefined}
               />
               <Show when={f.secret && props.canReveal}>
-                <button
-                  type="button"
-                  class="btn btn-bordered join-item btn-square"
-                  aria-label={shown()[f.name] !== undefined ? `Hide ${f.name}` : `Reveal ${f.name}`}
-                  title={shown()[f.name] !== undefined ? "Hide" : "Reveal"}
-                  onClick={() => toggleReveal(f.name)}
+                <RevealButton
+                  revealed={shown()[f.name] !== undefined}
+                  onToggle={() => toggleReveal(f.name)}
+                  label={f.name}
                   disabled={busy() === f.name}
-                >
-                  <Show when={shown()[f.name] !== undefined} fallback={<Eye size={15} />}><EyeOff size={15} /></Show>
-                </button>
+                />
               </Show>
               <Show when={canCopy(f)}>
-                <button
-                  type="button"
-                  class="btn btn-bordered join-item btn-square"
-                  aria-label={`Copy ${f.name}`}
-                  title="Copy"
-                  onClick={() => copyField(f)}
-                >
-                  <Show when={copied() === f.name} fallback={<Copy size={15} />}><Check size={15} /></Show>
-                </button>
+                <CopyButton onCopy={() => copyField(f)} label={f.name} />
               </Show>
             </div>
           </label>
