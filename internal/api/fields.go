@@ -20,11 +20,12 @@ type fieldDefinitionBody struct {
 	Name          string `json:"name"`
 	DisplayName   string `json:"display_name,omitempty" doc:"Optional human label; the raw name is the key. Omitted when unset"`
 	DataType      string `json:"data_type"`
+	Required      bool   `json:"required" doc:"Whether every component of this type must set the field"`
 	DefaultValue  any    `json:"default_value,omitempty" doc:"The type-level default, shape given by data_type; omitted when unset"`
 }
 
 func toFieldDefinitionBody(fd *storage.FieldDefinition) fieldDefinitionBody {
-	b := fieldDefinitionBody{ID: fd.ID, ComponentType: fd.ComponentType, Name: fd.Name, DisplayName: fd.DisplayName, DataType: fd.DataType}
+	b := fieldDefinitionBody{ID: fd.ID, ComponentType: fd.ComponentType, Name: fd.Name, DisplayName: fd.DisplayName, DataType: fd.DataType, Required: fd.Required}
 	if len(fd.DefaultValue) > 0 {
 		_ = json.Unmarshal(fd.DefaultValue, &b.DefaultValue)
 	}
@@ -49,6 +50,7 @@ type effectiveFieldBody struct {
 	Name         string `json:"name"`
 	DisplayName  string `json:"display_name,omitempty" doc:"Optional human label; omitted when unset"`
 	DataType     string `json:"data_type"`
+	Required     bool   `json:"required" doc:"Whether every component of this type must set the field"`
 	Value        any    `json:"value" doc:"The effective value: the set literal, or the type default when unset"`
 	SetValue     any    `json:"set_value,omitempty" doc:"The component's override; omitted when the field is unset"`
 	DefaultValue any    `json:"default_value,omitempty" doc:"The type-level default, shape given by data_type; the drill-in's type-default step. Omitted when the definition has no default"`
@@ -76,7 +78,7 @@ type fieldValueOutput struct {
 }
 
 func toEffectiveFieldBody(ef *storage.EffectiveField) effectiveFieldBody {
-	b := effectiveFieldBody{FieldID: ef.FieldID, Name: ef.Name, DisplayName: ef.DisplayName, DataType: ef.DataType, IsSet: ef.IsSet, ValueID: ef.ValueID}
+	b := effectiveFieldBody{FieldID: ef.FieldID, Name: ef.Name, DisplayName: ef.DisplayName, DataType: ef.DataType, Required: ef.Required, IsSet: ef.IsSet, ValueID: ef.ValueID}
 	if len(ef.Value) > 0 {
 		_ = json.Unmarshal(ef.Value, &b.Value)
 	}
@@ -103,6 +105,7 @@ type createFieldDefinitionInput struct {
 		Name          string `json:"name" minLength:"1" doc:"The field name; unique per component_type"`
 		DisplayName   string `json:"display_name,omitempty" doc:"Optional human label; falls back to name when unset"`
 		DataType      string `json:"data_type" enum:"string,int,float,bool,json" doc:"The declared value type"`
+		Required      bool   `json:"required,omitempty" doc:"Whether every component of this type must set the field; defaults to false"`
 		DefaultValue  any    `json:"default_value,omitempty" doc:"Optional type-level default, validated against data_type"`
 	}
 }
@@ -112,6 +115,7 @@ type updateFieldDefinitionInput struct {
 	Body struct {
 		DataType     string `json:"data_type" enum:"string,int,float,bool,json" doc:"The declared value type"`
 		DisplayName  string `json:"display_name,omitempty" doc:"Optional human label; falls back to name when unset"`
+		Required     bool   `json:"required,omitempty" doc:"Whether every component of this type must set the field; defaults to false"`
 		DefaultValue any    `json:"default_value,omitempty" doc:"Optional type-level default, validated against data_type"`
 	}
 }
@@ -184,6 +188,7 @@ func registerFieldRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 			Name:          in.Body.Name,
 			DisplayName:   in.Body.DisplayName,
 			DataType:      in.Body.DataType,
+			Required:      in.Body.Required,
 			DefaultValue:  def,
 		})
 		if err != nil {
@@ -203,7 +208,7 @@ func registerFieldRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		if err != nil {
 			return nil, err
 		}
-		fd, err := gw.UpdateFieldDefinition(ctx, actorID(ctx), in.ID, in.Body.DataType, in.Body.DisplayName, def)
+		fd, err := gw.UpdateFieldDefinition(ctx, actorID(ctx), in.ID, in.Body.DataType, in.Body.DisplayName, in.Body.Required, def)
 		if err != nil {
 			return nil, mapFieldErr(err)
 		}
