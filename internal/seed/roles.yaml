@@ -81,6 +81,7 @@ roles:
       - "file:>"
       - "variable:*"
       - "field:*"
+      - "settings:read,update"
       - "principal_grant:*"
       - "principal_group:*"
       - "principal_group:read:admin"

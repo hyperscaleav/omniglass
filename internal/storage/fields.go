@@ -275,16 +275,18 @@ func scanFieldValue(row pgx.Row) (*FieldValue, error) {
 	return &fv, nil
 }
 
-// CreateFieldValue sets a literal for (componentName, fieldName). It resolves the
+// SetFieldValue sets a literal for (componentName, fieldName), idempotently: the
+// first set creates the value, a later set patches it in place (setting a field
+// that already carries a value updates it rather than conflicting), and a set to
+// the unchanged value is a no-op that writes no row and no audit. It resolves the
 // component within the create scope, requires the field to be defined on that
-// component's own type (else ErrFieldNotApplicable), validates the value against
-// the definition's data_type, then inserts the row plus its audit in one
-// transaction. A second value for the same field and component is
-// ErrFieldValueConflict.
-func (p *PG) CreateFieldValue(ctx context.Context, actorID, componentName, fieldName string, value json.RawMessage, create scope.Set) (*FieldValue, error) {
+// component's own type (else ErrFieldNotApplicable), and validates the value
+// against the definition's data_type. The write and its audit (create or update)
+// are one transaction.
+func (p *PG) SetFieldValue(ctx context.Context, actorID, componentName, fieldName string, value json.RawMessage, create scope.Set) (*FieldValue, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("storage: begin create field value: %w", err)
+		return nil, fmt.Errorf("storage: begin set field value: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
@@ -313,20 +315,61 @@ func (p *PG) CreateFieldValue(ctx context.Context, actorID, componentName, field
 	if err := variable.ValidateValue(variable.ValueType(dataType), value); err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrInvalidValue, err)
 	}
-	fv, err := scanFieldValue(tx.QueryRow(ctx, `
-		insert into field_value (field_id, component_id, value)
-		values ($1, $2, $3)
-		returning `+fieldValueCols, fieldID, compID, []byte(value)))
-	if err != nil {
-		return nil, mapFieldValueWriteErr(err)
+
+	// An existing row for this (field, component) decides create vs update; its
+	// jsonb equality with the incoming value decides update vs no-op. FOR UPDATE
+	// serializes concurrent sets on the same field.
+	var (
+		existing FieldValue
+		raw      []byte
+		changed  bool
+	)
+	err = tx.QueryRow(ctx, `
+		select id, field_id, component_id, value, created_at, updated_at,
+		       value is distinct from $3::jsonb
+		from field_value where field_id = $1 and component_id = $2 for update`,
+		fieldID, compID, []byte(value)).Scan(&existing.ID, &existing.FieldID, &existing.ComponentID, &raw, &existing.CreatedAt, &existing.UpdatedAt, &changed)
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		fv, err := scanFieldValue(tx.QueryRow(ctx, `
+			insert into field_value (field_id, component_id, value)
+			values ($1, $2, $3)
+			returning `+fieldValueCols, fieldID, compID, []byte(value)))
+		if err != nil {
+			return nil, mapFieldValueWriteErr(err)
+		}
+		if err := writeAuditRes(ctx, tx, actorID, "create", "field_value", fv.ID, nil, auditFieldValue(fv)); err != nil {
+			return nil, err
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return nil, fmt.Errorf("storage: commit set field value: %w", err)
+		}
+		return fv, nil
+	case err != nil:
+		return nil, fmt.Errorf("storage: load existing field value: %w", err)
+	case !changed:
+		// The value already matches: a successful set, but nothing to write or audit.
+		existing.Value = copyRaw(raw)
+		if err := tx.Commit(ctx); err != nil {
+			return nil, fmt.Errorf("storage: commit set field value: %w", err)
+		}
+		return &existing, nil
+	default:
+		fv, err := scanFieldValue(tx.QueryRow(ctx, `
+			update field_value set value = $2, updated_at = now()
+			where id = $1
+			returning `+fieldValueCols, existing.ID, []byte(value)))
+		if err != nil {
+			return nil, mapFieldValueWriteErr(err)
+		}
+		if err := writeAuditRes(ctx, tx, actorID, "update", "field_value", fv.ID, nil, auditFieldValue(fv)); err != nil {
+			return nil, err
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return nil, fmt.Errorf("storage: commit set field value: %w", err)
+		}
+		return fv, nil
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "create", "field_value", fv.ID, nil, auditFieldValue(fv)); err != nil {
-		return nil, err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("storage: commit create field value: %w", err)
-	}
-	return fv, nil
 }
 
 // UpdateFieldValue replaces a field value's literal, revalidating it against the

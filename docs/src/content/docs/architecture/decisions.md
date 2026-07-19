@@ -65,11 +65,14 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0028](#adr-0028-rank-retired-from-the-type-registries-sort-is-alphabetical) | 2026-07-14 | Accepted | `rank` is dropped from `location_type`, `system_type`, and `component_type`; the three list operations sort by `display_name, id` instead |
 | [ADR-0029](#adr-0029-files-slice-1-a-content-addressed-blob-store-and-a-tenant-wide-file-handle) | 2026-07-14 | Accepted | Files slice 1: a content-addressed `blob` store primitive (pgblobs) and a tenant-wide `file` handle; no placement arc (a file is 1:many, its locality is a future attachment), a binary `sensitive` flag reusing the secret `:admin` tier (defaults off), a delete frees its unreferenced blob synchronously (async mark-sweep GC deferred), base64-in-JSON on the wire |
 | [ADR-0031](#adr-0031-component_make-registry-slice-1-an-official-boolean-a-deferred-referential-guard-and-website-scheme-validation) | 2026-07-14 | Accepted | `component_make` slice 1: an `official` boolean (not an `origin` enum) for consistency with the type registries; the in-use referential delete guard deferred to the `component_model` slice (nothing references a make yet); `website` scheme-validated to `http`/`https`, client and server, against stored XSS |
-| [ADR-0032](#adr-0032-a-node-is-a-kindnode-principal-with-an-interim-bearer-credential-and-static-per-connection-nats-subject-permissions) | 2026-07-07 | Accepted | A node is a `principal` of `kind=node` with a 1:1 detail table and a bearer `credential` row (interim shared secret), and per-node NATS isolation is static per-connection subject permissions via an in-process auth callback; nkey/JWT deferred |
-| [ADR-0033](#adr-0033-telemetry-is-a-protobuf-event-over-jetstream-with-an-inline-owner-confining-consumer) | 2026-07-07 | Accepted | Telemetry is a protobuf `Event` over a JetStream durable consumer; the consumer binds the owner from the task's interface and confines a node to its own tasks inline (no separate raw-telemetry table or Postgres queue); raw persistence + replay and label-based multi-owner routing deferred |
-| [ADR-0034](#adr-0034-the-reachability-verdict-is-a-built-in-state) | 2026-07-07 | Accepted | The per-interface reachability verdict `interface.reachable` is a built-in **state** (not a metric); availability is `time_in_state` over it; readiness is interface-type-defaulted and interface-overridable, node-executed, not a `calc_rule` |
-| [ADR-0035](#adr-0035-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver) | 2026-07-08 | Accepted | An interface is a device **API** named by its protocol (not a NIC); `interface_type` = its **transport** (the reach gate), a **driver** = the collect layer (protocol handler + transports + normalized menu, what a device CAN do), a template **curates** (SHOULD), the instance holds what **IS** there; OIDs/commands live in the driver, not the template |
-| [ADR-0036](#adr-0036-the-task-is-derived-read-only-plumbing-projected-from-its-interface) | 2026-07-14 | Accepted | The `task` is **derived** read-only plumbing: creating an `interface` derives its one poll task, so task create/update/delete routes and the `task:create` / `:update` grants are dropped; `task.node_name` is removed and **projected** from `interface.node_name` (the worklist and telemetry owner-confinement join the interface), and a node purge cascades its interfaces and their tasks. Reverses the checkpoint-5d task-CRUD build; refines ADR-0035 |
+| [ADR-0032](#adr-0032-settings-persist-only-the-override-level-base-layers-are-recomputed-in-memory) | 2026-07-17 | Accepted | The settings engine persists only the override level; the `code` and `file` base layers are recomputed in memory each boot, so restore is a delete (diverges from scaling.md's "materialized in Postgres") |
+| [ADR-0033](#adr-0033-the-settings-gateway-is-unscoped-only-the-permission-gates-it) | 2026-07-17 | Accepted | Settings Gateway methods are unscoped: ABAC storage-scope is not applicable to platform / principal config; only the `settings:<action>` permission gates them |
+| [ADR-0034](#adr-0034-settings-resolve-as-a-cascade-over-principals-with-a-broader-wins-lock) | 2026-07-17 | Accepted | Settings resolve down the principal hierarchy reusing the cascade primitive, with per-key provenance and a top-down broader-wins lock |
+| [ADR-0036](#adr-0036-a-node-is-a-kindnode-principal-with-an-interim-bearer-credential-and-static-per-connection-nats-subject-permissions) | 2026-07-07 | Accepted | A node is a `principal` of `kind=node` with a 1:1 detail table and a bearer `credential` row (interim shared secret), and per-node NATS isolation is static per-connection subject permissions via an in-process auth callback; nkey/JWT deferred |
+| [ADR-0037](#adr-0037-telemetry-is-a-protobuf-event-over-jetstream-with-an-inline-owner-confining-consumer) | 2026-07-07 | Accepted | Telemetry is a protobuf `Event` over a JetStream durable consumer; the consumer binds the owner from the task's interface and confines a node to its own tasks inline (no separate raw-telemetry table or Postgres queue); raw persistence + replay and label-based multi-owner routing deferred |
+| [ADR-0038](#adr-0038-the-reachability-verdict-is-a-built-in-state) | 2026-07-07 | Accepted | The per-interface reachability verdict `interface.reachable` is a built-in **state** (not a metric); availability is `time_in_state` over it; readiness is interface-type-defaulted and interface-overridable, node-executed, not a `calc_rule` |
+| [ADR-0039](#adr-0039-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver) | 2026-07-08 | Accepted | An interface is a device **API** named by its protocol (not a NIC); `interface_type` = its **transport** (the reach gate), a **driver** = the collect layer (protocol handler + transports + normalized menu, what a device CAN do), a template **curates** (SHOULD), the instance holds what **IS** there; OIDs/commands live in the driver, not the template |
+| [ADR-0040](#adr-0040-the-task-is-derived-read-only-plumbing-projected-from-its-interface) | 2026-07-14 | Accepted | The `task` is **derived** read-only plumbing: creating an `interface` derives its one poll task, so task create/update/delete routes and the `task:create` / `:update` grants are dropped; `task.node_name` is removed and **projected** from `interface.node_name` (the worklist and telemetry owner-confinement join the interface), and a node purge cascades its interfaces and their tasks. Reverses the checkpoint-5d task-CRUD build; refines ADR-0039 |
 
 ## Entries
 
@@ -787,7 +790,7 @@ below from the project's history. From here it grows one slice at a time.
 - **Closes:** issue [#239](https://github.com/hyperscaleav/omniglass/issues/239). Design:
   `docs/superpowers/specs/2026-07-14-type-placement-constraints-design.md`.
 
-### ADR-0032: A node is a kind=node principal with an interim bearer credential and static per-connection NATS subject permissions
+### ADR-0036: A node is a kind=node principal with an interim bearer credential and static per-connection NATS subject permissions
 
 - **Date:** 2026-07-07 | **Status:** Accepted | **Pages:** [nodes](/architecture/nodes/), [identity and access](/architecture/identity-access/)
 - **Decision:** A node is a first-class `principal` of `kind='node'` with a 1:1 `node` detail table (keyed by
@@ -821,7 +824,7 @@ below from the project's history. From here it grows one slice at a time.
 - **Closes the gap:** the nkey/JWT node identity (the `nats` credential kind and the signed-nonce admission)
   and the single-use enrollment token are tracked with the node-identity hardening slice.
 
-### ADR-0033: Telemetry is a protobuf Event over JetStream with an inline owner-confining consumer
+### ADR-0037: Telemetry is a protobuf Event over JetStream with an inline owner-confining consumer
 
 - **Date:** 2026-07-07 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [datapoints](/architecture/datapoints/)
 - **Decision:** A node ships each collected batch as a protobuf `Event` (proto3, `proto/og/v1/event.proto`,
@@ -850,7 +853,7 @@ below from the project's history. From here it grows one slice at a time.
 - **Closes the gap:** raw-`Event` persistence (backfill/replay) and the raw -> admission -> trusted two-lane
   topology, plus label-based multi-owner resolution, are tracked with a later collection checkpoint.
 
-### ADR-0034: The reachability verdict is a built-in state
+### ADR-0038: The reachability verdict is a built-in state
 
 - **Date:** 2026-07-07 | **Status:** Accepted | **Pages:** [datapoints](/architecture/datapoints/), [collection](/architecture/collection/)
 - **Decision:** The per-interface reachability verdict `interface.reachable` (value domain `up` / `down`) is a
@@ -885,7 +888,7 @@ below from the project's history. From here it grows one slice at a time.
   that render the transitions are a later slice (5b); readiness config as an interface-type default is a later
   interface-type concern.
 
-### ADR-0035: An interface is a device API; the interface type is its transport, not its driver
+### ADR-0039: An interface is a device API; the interface type is its transport, not its driver
 
 - **Date:** 2026-07-08 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [nodes](/architecture/nodes/)
 - **Decision:** An `interface` is an **API endpoint we intend to call** on a component, identified by the
@@ -932,7 +935,7 @@ below from the project's history. From here it grows one slice at a time.
   with a `web` (http) and a `qrc` (tcp) interface, the "two APIs on one device" story. The driver catalog,
   normalization, discovery, templates, versioning, and the shadow-resolved device pack are later slices of the
   [collection epic](https://github.com/hyperscaleav/omniglass/issues/113) (slices 2 to 4 realize this model).
-- **Refines:** [ADR-0034](#adr-0034-the-reachability-verdict-is-a-built-in-state) (the reachability verdict is the
+- **Refines:** [ADR-0038](#adr-0038-the-reachability-verdict-is-a-built-in-state) (the reachability verdict is the
   first rung of the gate ladder this ADR names).
 - **Status note (2026-07-08):** the `interface = API` / `interface_type = transport` half is **built and stable**
   (this slice). The **driver / collect layer** (the separate `driver` entity, the normalized menu, and the
@@ -942,7 +945,7 @@ below from the project's history. From here it grows one slice at a time.
   driver-centric vs template-centric is re-examined, and this ADR revised or superseded, in a later ADR before
   the collect layer is built.
 
-### ADR-0036: The task is derived read-only plumbing, projected from its interface
+### ADR-0040: The task is derived read-only plumbing, projected from its interface
 
 - **Date:** 2026-07-14 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [api](/architecture/api/)
 - **Decision:** The `interface` is the **only authored** collection primitive; the `task` is **derived**.
@@ -955,12 +958,12 @@ below from the project's history. From here it grows one slice at a time.
 - **Context:** The checkpoint-5d build gave both primitives a full CRUD surface and a node placement of their
   own. That let an operator author a task divorced from its interface, and left a task's node and its interface's
   node as two independently-set fields that could disagree. The reframe makes the interface the one thing an
-  operator authors (an API on a component, [ADR-0035](#adr-0035-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver)):
+  operator authors (an API on a component, [ADR-0039](#adr-0039-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver)):
   a reachability check is an interface, its poll task is the plumbing that runs it, and placement is a property
   of where the interface is reached from, stated once. This is the honest shape for the reach tier; the richer
   driver-authored collection surface (multiple functions over one interface) is a later slice and does not
   reintroduce operator task CRUD.
-- **Refines:** [ADR-0035](#adr-0035-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver)
+- **Refines:** [ADR-0039](#adr-0039-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver)
   (the interface is the authored API; this ADR settles that its task is derived, not co-authored).
 
 ### ADR-0031: `component_make` registry slice 1, an `official` boolean, a deferred referential guard, and website scheme validation
@@ -1030,3 +1033,67 @@ below from the project's history. From here it grows one slice at a time.
 - **Lands:** issue [#272](https://github.com/hyperscaleav/omniglass/issues/272) under epic
   [#27](https://github.com/hyperscaleav/omniglass/issues/27). Design:
   `docs/superpowers/specs/2026-07-17-net-permissions-role-blade-design.md`.
+
+### ADR-0033: settings persist only the override level; base layers are recomputed in memory
+
+- **Date:** 2026-07-17 | **Status:** Accepted | **Pages:** [settings](/architecture/settings/), [scaling and deployment](/architecture/scaling/)
+- **Decision:** The settings engine stores **only the override level** in Postgres (`setting_override`). The two
+  base layers, the embedded `code` defaults and the operator `file`, are **recomputed into memory on every boot**
+  and never written to the table, so the effective document is the in-memory base layers merged with the live DB
+  override. Restore is therefore a `DELETE`: dropping a namespace's override row (or truncating the scope)
+  re-exposes the base defaults, with no separate reset column and no re-seed of the file into the store.
+- **Context:** The [scaling](/architecture/scaling/) page sketched a single settings store "materialized in
+  Postgres ... seeded declaratively from a settings file reconciled on every boot" (an `ON CONFLICT DO UPDATE` of
+  the file into the table). Building the engine showed that materializing the file into the DB is the wrong shape:
+  it duplicates the GitOps source into a second authoritative copy that can drift, and it conflates ship-with
+  defaults (a compile-time asset) with operator changes (the only thing worth persisting). Keeping the base layers
+  in memory makes the file always-fresh (a ConfigMap change lands on restart), keeps the store lean (it holds only
+  what an operator actually changed), and makes restore fall out of the model as a delete rather than a re-seed.
+  This diverges from the scaling page's "materialized in Postgres" wording; the settings page carries the corrected
+  model and the scaling page moves to `Partial`.
+- **Closes:** issue [#271](https://github.com/hyperscaleav/omniglass/issues/271) (settings engine slice-0), under
+  epic [#270](https://github.com/hyperscaleav/omniglass/issues/270). Design:
+  `docs/superpowers/specs/2026-07-17-settings-engine-design.md`.
+
+### ADR-0034: the settings Gateway is unscoped; only the permission gates it
+
+- **Date:** 2026-07-17 | **Status:** Accepted | **Pages:** [settings](/architecture/settings/), [storage](/architecture/storage/), [identity and access](/architecture/identity-access/)
+- **Decision:** The Storage Gateway methods for settings (`GetSettingOverrides`, `UpsertSettingOverride`,
+  `DeleteSettingOverride`, `DeleteAllSettingOverrides`) are **unscoped**: no ABAC storage-scope predicate is
+  injected. Only the `settings:<action>` permission at the route gates them (`settings:read` admin read with
+  provenance, `settings:update` write / restore / lock, both admin-tier; the client-safe `/settings/me` is
+  authn-only). This is a deliberate carve-out from the "scope on every applicable query" invariant, recorded so it
+  reads as intentional.
+- **Context:** The two authorization layers ([identity and access](/architecture/identity-access/)) are a
+  `<resource>:<action>` permission on every route and an ABAC **scope** injected on every **applicable** query.
+  Platform and cascade settings describe the **platform and its principals**, not the estate, so there is no
+  location / system / component subtree to scope them by, exactly as with the registry-type reads
+  (`GET /types/...`), which are also unscoped. Forcing a scope predicate here would be meaningless (there is
+  nothing to filter on) and would misrepresent settings as estate data. The carve-out is narrow: it applies only
+  because the data is platform config. When the group and user override rungs land, override reads and writes
+  **will** be constrained by the acting principal (a user edits only their own `user` row), but that is a
+  per-principal ownership check, a different mechanism than estate ABAC, not a return of tree scope.
+- **Closes:** issue [#271](https://github.com/hyperscaleav/omniglass/issues/271) (settings engine slice-0).
+
+### ADR-0035: settings resolve as a cascade over principals with a broader-wins lock
+
+- **Date:** 2026-07-17 | **Status:** Accepted | **Pages:** [settings](/architecture/settings/), [cascade](/architecture/cascade/)
+- **Decision:** A setting's effective value resolves down the **principal** hierarchy (global to group to user),
+  reusing the same [cascade](/architecture/cascade/) primitive the estate uses down location to system to
+  component: ordered layers deep-merged in JSON map-space (most-specific-wins by key presence), with per-key
+  **provenance** (the winning level) reported alongside the value. Layered on top is a **top-down lock**: an admin
+  locks a key at a level, pinning that level's value and forbidding any more-specific level from overriding it, and
+  when two levels lock the same key the **broader level wins** (a `global` lock supersedes a `group` lock, so
+  top-down admin authority is absolute). Slice-0 ships the global rung; group and user are a fast-follow.
+- **Context:** Omniglass already had one cascade resolver (the estate's secrets / variables / tags / config,
+  [config and credentials](/architecture/variables/)). Rather than write a second resolver for settings, the engine
+  points the same primitive at the identity axis (doctrine 5, primitive-first): a value defined once at a broad
+  scope inherits below, which is exactly the reuse a variable-reference model (Windmill-style) would buy, provided
+  here by inheritance for free. The **lock** is the piece the estate cascade did not need: settings are governance
+  (an admin enforcing an org default a user cannot escape), so the engine adds a per-key lock with a broader-wins
+  conflict rule, the inverse of the most-specific-wins value rule, applied to the enforcement axis. Provenance
+  reuses the estate's effective-values vocabulary (the winning level per key), extended from three estate bands to
+  five principal levels plus a lock chip. The pure `settings` package is the primary unit-test target; the DB
+  override is supplied through a narrow function seam so the package never imports storage.
+- **Closes:** issue [#271](https://github.com/hyperscaleav/omniglass/issues/271) (settings engine slice-0), under
+  epic [#270](https://github.com/hyperscaleav/omniglass/issues/270).

@@ -382,7 +382,7 @@ func (UnimplementedGateway) UpdateFieldDefinition(context.Context, string, strin
 func (UnimplementedGateway) DeleteFieldDefinition(context.Context, string, string) error {
 	return nil
 }
-func (UnimplementedGateway) CreateFieldValue(context.Context, string, string, string, json.RawMessage, scope.Set) (*FieldValue, error) {
+func (UnimplementedGateway) SetFieldValue(context.Context, string, string, string, json.RawMessage, scope.Set) (*FieldValue, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) UpdateFieldValue(context.Context, string, string, json.RawMessage, scope.Set, scope.Set) (*FieldValue, error) {
@@ -435,4 +435,19 @@ func (UnimplementedGateway) DownloadFile(context.Context, string, bool) (*File, 
 	return nil, nil, nil
 }
 func (UnimplementedGateway) DeleteFile(context.Context, string, string, bool) error { return nil }
-func (UnimplementedGateway) Close()                                                 {}
+func (UnimplementedGateway) GetSettingOverrides(context.Context, string) ([]SettingOverride, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) UpsertSettingOverride(context.Context, string, string, string, map[string]any, []string) (*SettingOverride, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) MergePatchSettingOverride(context.Context, string, string, string, map[string]any) (*SettingOverride, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteSettingOverride(context.Context, string, string, string) error {
+	return nil
+}
+func (UnimplementedGateway) DeleteAllSettingOverrides(context.Context, string, string) error {
+	return nil
+}
+func (UnimplementedGateway) Close() {}

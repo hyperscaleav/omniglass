@@ -1,8 +1,9 @@
-import { For, Show, createEffect, createMemo, createSignal, createUniqueId, on, type JSX } from "solid-js";
+import { For, Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import TreeSelect from "../components/TreeSelect";
-import InfoTip from "../components/InfoTip";
+import FieldRow from "../components/FieldRow";
+import KVStacked from "../components/KVStacked";
 import SecretFields from "../components/SecretFields";
 import Button from "../components/Button";
 import { DrawerFooter } from "../components/Drawer";
@@ -180,8 +181,8 @@ function SecretBladeBody(p: { id: string }): JSX.Element {
             <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
           </Show>
           <div class="grid grid-cols-2 gap-3 text-sm">
-            <Fact label="Type"><span class="badge badge-ghost badge-sm">{s().secret_type}</span></Fact>
-            <Fact label="Scope"><span>{ownerLabel(s())}</span></Fact>
+            <KVStacked label="Type" value={<span class="badge badge-ghost badge-sm">{s().secret_type}</span>} />
+            <KVStacked label="Scope" value={<span>{ownerLabel(s())}</span>} />
           </div>
           <div class="flex flex-col gap-1.5">
             <span class="eyebrow">Fields</span>
@@ -192,7 +193,7 @@ function SecretBladeBody(p: { id: string }): JSX.Element {
               <div class="flex flex-col gap-3">
                 <For each={s().fields}>
                   {(f) => (
-                    <Field label={f.name} hint={f.secret ? "Leave blank to keep the current value." : undefined}>
+                    <FieldRow label={f.name} hint={f.secret ? "Leave blank to keep the current value." : undefined}>
                       <input
                         class="input input-bordered w-full font-data"
                         type={f.secret ? "password" : "text"}
@@ -200,7 +201,7 @@ function SecretBladeBody(p: { id: string }): JSX.Element {
                         value={inputs()[f.name] ?? ""}
                         onInput={(e) => setInputs({ ...inputs(), [f.name]: e.currentTarget.value })}
                       />
-                    </Field>
+                    </FieldRow>
                   )}
                 </For>
               </div>
@@ -209,15 +210,6 @@ function SecretBladeBody(p: { id: string }): JSX.Element {
         </div>
       )}
     </Show>
-  );
-}
-
-function Fact(p: { label: string; children: JSX.Element }): JSX.Element {
-  return (
-    <div class="flex flex-col gap-0.5">
-      <span class="text-[11px] uppercase tracking-wide text-base-content/40">{p.label}</span>
-      <span>{p.children}</span>
-    </div>
   );
 }
 
@@ -280,17 +272,17 @@ function CreateSecretForm(p: { onCreated: () => void }): JSX.Element {
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <Field label="Name" hint="The cascade key; unique per owner.">
+      <FieldRow label="Name" hint="The cascade key; unique per owner.">
         <input class="input input-bordered w-full font-data" value={name()} placeholder="poll-community" onInput={(e) => setName(e.currentTarget.value)} />
-      </Field>
-      <Field label="Type">
+      </FieldRow>
+      <FieldRow label="Type">
         <select class="select select-bordered w-full" value={typeId()} onChange={(e) => { setTypeId(e.currentTarget.value); setFields({}); }}>
           <option value="" disabled>Choose a type…</option>
           <For each={types.data}>{(t) => <option value={t.id}>{t.display_name}</option>}</For>
         </select>
-      </Field>
+      </FieldRow>
       <div class="grid grid-cols-2 gap-3">
-        <Field
+        <FieldRow
           label="Scope"
           info="The estate scope this secret attaches to. It cascades down onto the components below it: global, or a location, system, or component."
           docHref="https://docs.omniglass.hyperscaleav.com/architecture/variables/"
@@ -298,11 +290,11 @@ function CreateSecretForm(p: { onCreated: () => void }): JSX.Element {
           <select class="select select-bordered w-full" value={ownerKind()} onChange={(e) => { setOwnerKind(e.currentTarget.value as OwnerKind); setOwner(""); }}>
             <For each={OWNER_KINDS}>{(k) => <option value={k}>{k.charAt(0).toUpperCase() + k.slice(1)}</option>}</For>
           </select>
-        </Field>
+        </FieldRow>
         <Show when={ownerKind() !== "global"}>
-          <Field label={ownerKind().charAt(0).toUpperCase() + ownerKind().slice(1)}>
+          <FieldRow label={ownerKind().charAt(0).toUpperCase() + ownerKind().slice(1)}>
             <TreeSelect items={ownerTree()} value={owner()} onChange={setOwner} rootLabel="Choose…" />
-          </Field>
+          </FieldRow>
         </Show>
       </div>
       <Show when={shape()}>
@@ -310,14 +302,14 @@ function CreateSecretForm(p: { onCreated: () => void }): JSX.Element {
           <span class="eyebrow">Fields</span>
           <For each={operatorFields()}>
             {(f) => (
-              <Field label={f.name} hint={f.secret ? "Encrypted at rest." : undefined}>
+              <FieldRow label={f.name} hint={f.secret ? "Encrypted at rest." : undefined}>
                 <input
                   class="input input-bordered w-full font-data"
                   type={f.secret ? "password" : "text"}
                   value={fields()[f.name] ?? ""}
                   onInput={(e) => setFields({ ...fields(), [f.name]: e.currentTarget.value })}
                 />
-              </Field>
+              </FieldRow>
             )}
           </For>
         </div>
@@ -329,22 +321,3 @@ function CreateSecretForm(p: { onCreated: () => void }): JSX.Element {
   );
 }
 
-// Field labels a form control. An optional `info` renders the (i) tooltip beside
-// the label (with an optional `docHref` "learn more" link); the tooltip trigger
-// sits OUTSIDE the <label> and the label associates by `for`, so a labelable
-// button never steals the control's accessible name.
-function Field(p: { label: string; hint?: string; info?: string; docHref?: string; children: JSX.Element }): JSX.Element {
-  const id = createUniqueId();
-  const target = p.children instanceof Element ? p.children : undefined;
-  if (target && !target.id) target.id = id;
-  return (
-    <div class="flex flex-col gap-1">
-      <span class="flex items-center gap-1.5">
-        <label class="text-[12px] font-medium text-base-content/70" for={target?.id ?? id}>{p.label}</label>
-        <Show when={p.info}><InfoTip text={p.info!} label={p.label} href={p.docHref} hrefText="Docs" /></Show>
-      </span>
-      {p.children}
-      <Show when={p.hint}><span class="text-[11px] text-base-content/40">{p.hint}</span></Show>
-    </div>
-  );
-}

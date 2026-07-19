@@ -1,6 +1,7 @@
 import { For, Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
+import KVStacked from "../components/KVStacked";
 import Button from "../components/Button";
 import { DrawerFooter } from "../components/Drawer";
 import { Plus } from "../components/icons";
@@ -224,8 +225,8 @@ function TypeBladeBody(p: { id: string }): JSX.Element {
             <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
           </Show>
           <div class="grid grid-cols-2 gap-3 text-sm">
-            <Fact label="Kind">{kindBadge(r().kind)}</Fact>
-            <Fact label="Origin">{officialBadge(r().official)}</Fact>
+            <KVStacked label="Kind" value={kindBadge(r().kind)} />
+            <KVStacked label="Origin" value={officialBadge(r().official)} />
           </div>
           <div class="flex flex-col gap-1.5">
             <span class="eyebrow">Display name</span>
@@ -303,15 +304,6 @@ function TypeBladeBody(p: { id: string }): JSX.Element {
         </div>
       )}
     </Show>
-  );
-}
-
-function Fact(p: { label: string; children: JSX.Element }): JSX.Element {
-  return (
-    <div class="flex flex-col gap-0.5">
-      <span class="text-[11px] uppercase tracking-wide text-base-content/40">{p.label}</span>
-      <span>{p.children}</span>
-    </div>
   );
 }
 

@@ -467,7 +467,7 @@ export interface paths {
         put?: never;
         /**
          * Set a field value on a component
-         * @description Sets a literal for a field defined on the component's type, validated against its data_type. Gated by field:create; the component must be in the caller's field create scope.
+         * @description Sets a literal for a field defined on the component's type, validated against its data_type. Idempotent: the first set creates the value, a later set patches it in place. Gated by field:create; the component must be in the caller's field create scope.
          */
         post: operations["set-field-value"];
         delete?: never;
@@ -1594,6 +1594,90 @@ export interface paths {
          * @description Decrypts and returns a secret's field values, auditing the decrypt. Gated by secret:reveal at the caller's scope; an admin-sensitive secret additionally needs the admin tier (secret:reveal:admin), so a scoped operator reveals device secrets but never a platform credential.
          */
         post: operations["reveal-secret"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get effective settings with provenance
+         * @description The effective settings document plus per-key provenance (which level won) and lock state. Gated by settings:read (admin).
+         */
+        get: operations["get-settings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/settings/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the caller's effective settings
+         * @description The current principal's resolved settings, client-visible namespaces only, no provenance. Feeds the SPA at boot. Requires authentication.
+         */
+        get: operations["get-settings-me"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/settings/{namespace}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Restore a settings namespace to defaults
+         * @description Drops the namespace's global override, restoring file and code defaults. Gated by settings:update.
+         */
+        delete: operations["delete-settings-namespace"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a settings namespace
+         * @description Applies an RFC 7386 JSON Merge Patch to the namespace's global override; null on a key restores it. Gated by settings:update.
+         */
+        patch: operations["patch-settings-namespace"];
+        trace?: never;
+    };
+    "/settings:restoreDefaults": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore all settings to defaults
+         * @description Removes every global override (a factory reset). Gated by settings:update.
+         */
+        post: operations["restore-settings-defaults"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3525,6 +3609,40 @@ export interface components {
             /** @description The literal, validated against the field's data_type */
             value: unknown;
         };
+        SettingsMeOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/SettingsMeOutputBody.json
+             */
+            readonly $schema?: string;
+            values: {
+                [key: string]: {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        SettingsReadOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/SettingsReadOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description key 'namespace.key' to the locking level, when locked */
+            locks: {
+                [key: string]: string;
+            };
+            /** @description key 'namespace.key' to the winning level (code|file|global) */
+            sources: {
+                [key: string]: string;
+            };
+            values: {
+                [key: string]: {
+                    [key: string]: unknown;
+                };
+            };
+        };
         SvcBody: {
             label: string;
         };
@@ -4810,8 +4928,8 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Created */
-            201: {
+            /** @description OK */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7300,6 +7418,159 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["RevealSecretOutputBody"];
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettingsReadOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-settings-me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettingsMeOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-settings-namespace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description the settings namespace */
+                namespace: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "patch-settings-namespace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description the settings namespace, e.g. ui */
+                namespace: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettingsReadOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "restore-settings-defaults": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {

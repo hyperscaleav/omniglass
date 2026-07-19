@@ -1,4 +1,4 @@
-import { type Accessor, type Component, type JSX, For, Show, createEffect, createMemo, createSignal, createUniqueId, untrack } from "solid-js";
+import { type Accessor, type Component, type JSX, For, Show, createEffect, createMemo, createSignal, untrack } from "solid-js";
 import { Dynamic } from "solid-js/web";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
@@ -10,7 +10,7 @@ import {
 import ListShell from "./ListShell";
 import Drawer from "./Drawer";
 import ColumnMenu from "./ColumnMenu";
-import InfoTip from "./InfoTip";
+import FieldRow from "./FieldRow";
 import {
   ChevronDown, ChevronLeft, ChevronsDownUp, ChevronsUpDown, Columns, Check, ListTree, Rows, Maximize, Plus, Pencil, Trash,
 } from "./icons";
@@ -294,25 +294,11 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
 
   const baseCtx = {
     fact: (label: string, value: JSX.Element) => <KVStacked label={label} value={value} />,
-    field: (label: string, control: JSX.Element, hint?: string) => {
-      // Associate the visible label with the control by id, and keep the (i) help
-      // affordance OUTSIDE the label: a labelable button inside the label would
-      // steal the label's target and pollute the control's accessible name.
-      const fieldId = createUniqueId();
-      const target = control instanceof Element ? control
-        : Array.isArray(control) ? control.find((c): c is Element => c instanceof Element)
-        : undefined;
-      if (target && !target.id) target.id = fieldId;
-      return (
-        <div class="flex flex-col gap-1.5">
-          <span class="flex items-center gap-1.5">
-            <label class="eyebrow" for={target?.id ?? fieldId}>{label}</label>
-            <Show when={hint}><InfoTip text={hint!} label={label} /></Show>
-          </span>
-          {control}
-        </div>
-      );
-    },
+    // The blade forms render their fields through the shared FieldRow wrapper.
+    // TreeList's `hint` is the (i) tooltip text (not a below-field hint), so it
+    // maps to FieldRow's `info`.
+    field: (label: string, control: JSX.Element, hint?: string) =>
+      <FieldRow label={label} info={hint}>{control}</FieldRow>,
     facetActive: (key: string, val: string) => facetActiveFn(chips(), key, val),
     toggleFacet: (key: string, val: string) => setChips(toggleFacetFn(chips(), key, val)),
     // Close any open blade before the form Drawer opens (the Drawer would

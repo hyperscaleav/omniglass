@@ -1,14 +1,15 @@
-import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
+import { For, Show, createEffect, createMemo, on, onCleanup, type JSX } from "solid-js";
+import { createStore, reconcile } from "solid-js/store";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { deleteFieldValue, effectiveFields, effectiveFieldsKey, setFieldValue, type EffectiveField } from "../lib/fields";
 import { displayValue, parseInput, type ValueType } from "../lib/variables";
 import { ValueInput } from "../pages/Variables";
 import { useMe, can } from "../lib/auth";
-import { type BladeDef } from "../lib/blades";
+import { type BladeDef, type BladeEdit } from "../lib/blades";
 import { describeError } from "../lib/format";
 import KVRow from "./KVRow";
 import Button from "./Button";
-import { Check, RotateCcw, Save } from "./icons";
+import { Check, X } from "./icons";
 
 // EffectiveFields lists the fields declared on a component's type, each resolved
 // to the value that applies to this component: the literal set on the component,
@@ -17,12 +18,16 @@ import { Check, RotateCcw, Save } from "./icons";
 // resolution blade (kind "field-resolution", via ctx.openBlade) rather than the
 // deep global/location/system/component cascade the secrets and variables rows
 // open. Each field renders through KVRow, so the platform edit-mode rule holds:
-// the setter input and the revert control appear ONLY in edit mode (driven by the
-// component-detail edit context, exactly as TagAdder is), and read mode is a slim
-// inline value scan (no box) even for a field:create caller. An override reads
-// with weight and an "override" badge; a default is quiet.
-export default function EffectiveFields(props: { component: string; editing: boolean; onOpen: (fieldName: string) => void }): JSX.Element {
+// inputs appear ONLY in edit mode. Editing is BATCHED, not per-field: the row has
+// no inline save, and the panel registers one saver with the blade edit slot, so
+// the blade's Save flushes every staged field alongside the component core. In
+// edit mode an inherited field is an empty input (a greyed "unset" placeholder);
+// a set field shows its value with a clear (x) that stages a revert to the
+// default. Read mode is a slim inline value scan: an override reads with weight
+// and an "override" badge, a default is quiet.
+export default function EffectiveFields(props: { component: string; edit?: BladeEdit; onOpen: (fieldName: string) => void }): JSX.Element {
   const me = useMe();
+  const qc = useQueryClient();
   const q = useQuery(() => ({
     queryKey: effectiveFieldsKey(props.component),
     queryFn: () => effectiveFields(props.component),
@@ -31,8 +36,56 @@ export default function EffectiveFields(props: { component: string; editing: boo
     refetchOnWindowFocus: false,
   }));
   const rows = createMemo<EffectiveField[]>(() => q.data ?? []);
+  const editing = () => props.edit?.editing() ?? false;
   const canSet = () => can(me.data, "field", "create");
   const canClear = () => can(me.data, "field", "delete");
+  // Rows accept input only in edit mode and only with the set permission.
+  const rowsEditable = () => editing() && canSet();
+
+  // Staged edits keyed by field name (the draft text) and per-row errors. A
+  // draft defaults to the effective set value; typing stages an override, and
+  // emptying a set field's draft (the clear) stages a revert to the default.
+  const [drafts, setDrafts] = createStore<Record<string, string>>({});
+  const [errs, setErrs] = createStore<Record<string, string | undefined>>({});
+  const originalDraft = (f: EffectiveField) => (f.is_set ? displayValue(f.value) : "");
+  const draftOf = (f: EffectiveField) => (f.name in drafts ? drafts[f.name] : originalDraft(f));
+
+  // Leaving edit mode (Cancel, or the refetch after a committed Save) discards
+  // any staged drafts so the rows re-seed from the effective values.
+  createEffect(on(editing, (isEditing) => {
+    if (!isEditing) { setDrafts(reconcile({})); setErrs(reconcile({})); }
+  }));
+
+  // The Fields panel contributes one saver to the blade's Save: it flushes every
+  // dirty row (an upsert for a set-or-changed value, a delete for a cleared
+  // override), records per-row errors, and refetches. A row error aborts the
+  // blade save so the operator stays in edit and can fix it. The set is an
+  // idempotent upsert, so a retry after a partial failure is safe.
+  const flush = async () => {
+    let firstErr: string | undefined;
+    setErrs(reconcile({}));
+    for (const f of rows()) {
+      const draft = draftOf(f);
+      if (draft === originalDraft(f)) continue; // not dirty
+      try {
+        if (draft.trim() === "") {
+          // Cleared: delete the persisted override. An inherited field that was
+          // never set is not dirty, so this runs only for a set field.
+          if (f.is_set && f.value_id) await deleteFieldValue(f.value_id);
+        } else {
+          await setFieldValue(props.component, f.name, parseInput(f.data_type as ValueType, draft));
+        }
+      } catch (e) {
+        const msg = describeError(e);
+        setErrs(f.name, msg);
+        if (!firstErr) firstErr = msg;
+      }
+    }
+    await qc.invalidateQueries({ queryKey: effectiveFieldsKey(props.component) });
+    if (firstErr) throw new Error(firstErr);
+  };
+  const off = props.edit?.onSave(flush);
+  onCleanup(() => off?.());
 
   return (
     <div class="flex flex-col gap-2">
@@ -51,12 +104,14 @@ export default function EffectiveFields(props: { component: string; editing: boo
           <For each={rows()}>
             {(f, i) => (
               <FieldRow
-                component={props.component}
                 field={f}
                 first={i() === 0}
-                editing={props.editing}
-                canSet={canSet()}
+                editing={rowsEditable()}
                 canClear={canClear()}
+                draft={draftOf(f)}
+                err={errs[f.name]}
+                onInput={(v) => setDrafts(f.name, v)}
+                onClear={() => setDrafts(f.name, "")}
                 onOpen={props.onOpen}
               />
             )}
@@ -67,96 +122,53 @@ export default function EffectiveFields(props: { component: string; editing: boo
   );
 }
 
-// FieldRow is one effective-field KVRow. Read mode shows the effective value (a
-// dash when unset with no default); edit mode swaps in the type-aware setter and,
-// on an override the caller may clear, a revert control, both riding the row's
-// daisyUI join as the inline-action family. The setter holds its own draft so
-// typing in one row never disturbs another; a refetch remounts the row and reseeds
-// from the new value. The revert and the setter carry different permissions, so a
-// delete-only caller still sees the revert while reading the value.
+// FieldRow is one effective-field KVRow, a presentational row over the panel's
+// staged draft (the panel owns the drafts and flushes them on the blade's Save,
+// so the row has no save button of its own). Read mode shows the effective value
+// (a dash when unset with no default). Edit mode swaps in the type-aware input
+// seeded from the draft: an inherited field is empty with a greyed "unset"
+// placeholder, a set field shows its value with a clear (x) that empties the
+// draft, staging a revert to the type default. Clearing a persisted override
+// needs field:delete; clearing a value only typed this session is a local reset.
 function FieldRow(props: {
-  component: string;
   field: EffectiveField;
   first: boolean;
   editing: boolean;
-  canSet: boolean;
   canClear: boolean;
+  draft: string;
+  err: string | undefined;
+  onInput: (v: string) => void;
+  onClear: () => void;
   onOpen: (fieldName: string) => void;
 }): JSX.Element {
-  const qc = useQueryClient();
-  const [draft, setDraft] = createSignal(displayValue(props.field.value));
-  const [saving, setSaving] = createSignal(false);
-  const [clearing, setClearing] = createSignal(false);
-  const [err, setErr] = createSignal<string | null>(null);
-
-  // A revert is offered only for a set row that carries the value_id to delete.
-  const canRevert = () => props.canClear && props.field.is_set && !!props.field.value_id;
-  const hasValue = () => props.field.value !== null && props.field.value !== undefined;
-  const label = () => props.field.display_name || props.field.name;
-  // The save is quiet by default (a loud accent on every row reads as "unsaved
-  // everywhere"); it goes accent only when the draft diverges from the effective
-  // value, i.e. there is actually something to save.
-  const dirty = () => draft() !== displayValue(props.field.value);
-
-  async function save() {
-    setSaving(true);
-    setErr(null);
-    let parsed: unknown;
-    try {
-      parsed = parseInput(props.field.data_type as ValueType, draft());
-    } catch (e) {
-      setErr(describeError(e));
-      setSaving(false);
-      return;
-    }
-    try {
-      await setFieldValue(props.component, props.field.name, parsed);
-      await qc.invalidateQueries({ queryKey: effectiveFieldsKey(props.component) });
-    } catch (e) {
-      setErr(describeError(e));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function clear() {
-    setClearing(true);
-    setErr(null);
-    try {
-      await deleteFieldValue(props.field.value_id as string);
-      await qc.invalidateQueries({ queryKey: effectiveFieldsKey(props.component) });
-    } catch (e) {
-      setErr(describeError(e));
-    } finally {
-      setClearing(false);
-    }
-  }
-
+  const f = () => props.field;
+  const hasValue = () => f().value !== null && f().value !== undefined;
+  const label = () => f().display_name || f().name;
+  // The clear (x) shows when there is a value in the box to remove: a set field
+  // (a delete on Save, so it needs field:delete) or a value typed into an
+  // inherited field (a local reset, always allowed).
+  const showClear = () => props.editing && props.draft.trim() !== "" && (!f().is_set || props.canClear);
   return (
     <>
       <KVRow
         first={props.first}
         label={label()}
-        emphasize={props.field.is_set}
-        origin={props.field.is_set ? "override" : ""}
-        editing={props.editing && props.canSet}
-        onDrillIn={() => props.onOpen(props.field.name)}
-        value={hasValue() ? displayValue(props.field.value) : "—"}
-        input={<ValueInput valueType={props.field.data_type as ValueType} value={draft()} onInput={setDraft} class="join-item grow" />}
+        emphasize={f().is_set}
+        origin={f().is_set ? "override" : ""}
+        editing={props.editing}
+        onDrillIn={() => props.onOpen(f().name)}
+        value={hasValue() ? displayValue(f().value) : "—"}
+        input={<ValueInput valueType={f().data_type as ValueType} value={props.draft} onInput={props.onInput} placeholder="unset" class="join-item grow" />}
         actions={
-          // Edit mode only: read mode is a pure scan with zero controls (rule 2).
-          <Show when={props.editing}>
-            <Show when={props.canSet}>
-              <Button type="button" intent={dirty() ? "action" : "quiet"} square icon={Save} class="join-item" loading={saving()} label="Set field value" title="Set" onClick={() => { void save(); }} />
-            </Show>
-            <Show when={canRevert()}>
-              <Button type="button" intent="quiet" square icon={RotateCcw} class="join-item" loading={clearing()} label="Revert to default" title="Revert to default" onClick={() => { void clear(); }} />
-            </Show>
+          // Edit mode only (read mode is a pure scan): the clear that stages a
+          // revert to the type default.
+          <Show when={showClear()}>
+            <Button type="button" size="md" square intent="quiet" icon={X} class="join-item" label="Clear override" title="Clear override" onClick={props.onClear} />
           </Show>
         }
       />
-      <Show when={err()}>
-        <div class="px-3 pb-2 text-[11px] text-error">{err()}</div>
+      <Show when={props.err}>
+        <div class="px-3 pb-2 text-[11px] text-error">{props.err}</div>
       </Show>
     </>
   );
@@ -227,7 +239,7 @@ function FieldResolutionDetail(props: { field: EffectiveField }): JSX.Element {
 
       <div class="flex flex-col gap-1.5">
         <span class="eyebrow">Resolution</span>
-        <p class="text-[11px] text-base-content/40">falls type default &rsaquo; this component; the deepest set wins</p>
+        <p class="text-[11px] text-base-content/40">type default &rsaquo; this component; the deepest set wins</p>
         <div class="overflow-hidden rounded-box border border-base-300">
           {/* Type default: shadowed (struck, dim) once the component overrides it. */}
           <div class="flex items-center gap-2 px-3 py-2">

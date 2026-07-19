@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
@@ -18,6 +19,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/migrate"
 	"github.com/hyperscaleav/omniglass/internal/secret"
 	"github.com/hyperscaleav/omniglass/internal/seed"
+	"github.com/hyperscaleav/omniglass/internal/settings"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/spf13/cobra"
 )
@@ -70,9 +72,32 @@ func runServer(ctx context.Context, _ string) error {
 	defer busSrv.Shutdown()
 	log.Info("embedded nats-server listening", "addr", c.NatsAddr)
 
+	// Settings engine: the operator file layer is captured once at boot; the code
+	// defaults are embedded; the global DB override is read live per request via a
+	// closure over the Gateway (a function seam so settings does not import storage).
+	settingsFile, err := settings.LoadFile(c.SettingsFile)
+	if err != nil {
+		return fmt.Errorf("server: load settings file: %w", err)
+	}
+	settingsSvc := settings.NewService(settingsFile, func(ctx context.Context, scope string) (settings.Doc, map[string][]string, error) {
+		rows, err := gw.GetSettingOverrides(ctx, scope)
+		if err != nil {
+			return nil, nil, err
+		}
+		doc := settings.Doc{}
+		locks := map[string][]string{}
+		for _, r := range rows {
+			doc[r.Namespace] = r.Doc
+			if len(r.Locks) > 0 {
+				locks[r.Namespace] = r.Locks
+			}
+		}
+		return doc, locks, nil
+	})
+
 	srv := &http.Server{
 		Addr:              c.Addr,
-		Handler:           api.NewHandler(gw, api.WithSecureCookies(c.SecureCookies), api.WithNatsURL(c.NatsURL)),
+		Handler:           api.NewHandler(gw, api.WithSecureCookies(c.SecureCookies), api.WithNatsURL(c.NatsURL), api.WithSettingsService(settingsSvc)),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

@@ -17,3 +17,14 @@ export const useTheme = () => theme;
 export function applyTheme(mode: ThemeMode): void {
   document.documentElement.dataset.theme = `omniglass-${mode}`;
 }
+
+// themeFromMe extracts the daisyUI mode from a /settings/me payload. The stored
+// value is the full theme name (omniglass-dark|omniglass-light); the mode is the
+// suffix. Falls back to dark when unset. The top-bar toggle is not restored, but
+// the effective value now comes from the settings engine, so an admin setting the
+// org default to omniglass-light re-themes the SPA on the next load.
+export function themeFromMe(me: { values?: Record<string, Record<string, unknown>> }): ThemeMode {
+  const name = me?.values?.ui?.theme;
+  if (name === "omniglass-light") return "light";
+  return "dark";
+}

@@ -355,7 +355,7 @@ type Gateway interface {
 	// type (field_value, the variable table narrowed to a component owner: no
 	// owner arc, no cascade), plus the effective read that coalesces the set
 	// value with the definition's default for a component.
-	CreateFieldValue(ctx context.Context, actorID, componentName, fieldName string, value json.RawMessage, create scope.Set) (*FieldValue, error)
+	SetFieldValue(ctx context.Context, actorID, componentName, fieldName string, value json.RawMessage, create scope.Set) (*FieldValue, error)
 	UpdateFieldValue(ctx context.Context, actorID, id string, value json.RawMessage, read, action scope.Set) (*FieldValue, error)
 	DeleteFieldValue(ctx context.Context, actorID, id string, read, action scope.Set) error
 	EffectiveFields(ctx context.Context, componentName string, read scope.Set) ([]EffectiveField, error)
@@ -390,6 +390,20 @@ type Gateway interface {
 	CreateFile(ctx context.Context, actorID string, spec FileSpec, canAdmin bool) (*File, error)
 	DownloadFile(ctx context.Context, id string, canAdmin bool) (*File, []byte, error)
 	DeleteFile(ctx context.Context, actorID, id string, canAdmin bool) error
+
+	// The settings engine (unscoped: platform config, not estate data, so no ABAC
+	// scope applies; the route gates on settings:<action> only). The single
+	// setting_override table holds only what an operator changed at a cascade level;
+	// the base layers (code defaults, operator file) live in memory. Slice-0 uses
+	// scope "global" (principal_id NULL). Every write is audited.
+	GetSettingOverrides(ctx context.Context, scope string) ([]SettingOverride, error)
+	UpsertSettingOverride(ctx context.Context, actorID, scope, namespace string, doc map[string]any, locks []string) (*SettingOverride, error)
+	// MergePatchSettingOverride applies an RFC 7386 merge patch to the (scope,
+	// namespace) global override as one atomic read-modify-write, serialized against
+	// concurrent patches to the same namespace so no update is lost.
+	MergePatchSettingOverride(ctx context.Context, actorID, scope, namespace string, patch map[string]any) (*SettingOverride, error)
+	DeleteSettingOverride(ctx context.Context, actorID, scope, namespace string) error
+	DeleteAllSettingOverrides(ctx context.Context, actorID, scope string) error
 
 	// Close releases the underlying connection pool. Idempotent at the pool
 	// level; call once on shutdown.

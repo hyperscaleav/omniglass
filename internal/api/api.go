@@ -16,6 +16,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/go-chi/chi/v5"
+	"github.com/hyperscaleav/omniglass/internal/settings"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/webui"
 )
@@ -35,7 +36,8 @@ type options struct {
 	secureCookies bool
 	// natsURL is the address the node-claim reply hands back, so a node needs only
 	// the server URL to reach both the API and the bus.
-	natsURL string
+	natsURL     string
+	settingsSvc *settings.Service
 }
 
 // Option configures NewHandler.
@@ -47,13 +49,24 @@ func WithSecureCookies(b bool) Option { return func(o *options) { o.secureCookie
 // WithNatsURL sets the advertised NATS URL returned by the node-claim exchange.
 func WithNatsURL(u string) Option { return func(o *options) { o.natsURL = u } }
 
-// NewHandler builds the routed HTTP handler. The gateway is the only dependency
-// for the walking skeleton: healthz pings it. Later slices pass more
-// collaborators here behind the same constructor.
+// WithSettingsService supplies the settings engine service that backs the
+// settings routes. When unset, NewHandler builds a code-defaults-only service so
+// the handler always resolves settings (the boot path passes the real one, wired
+// over the Storage Gateway).
+func WithSettingsService(svc *settings.Service) Option {
+	return func(o *options) { o.settingsSvc = svc }
+}
+
+// NewHandler builds the routed HTTP handler. The gateway backs data routes and
+// healthz; the settings service backs the settings engine routes. Later slices
+// pass more collaborators here behind the same constructor.
 func NewHandler(gw storage.Gateway, opts ...Option) http.Handler {
 	var o options
 	for _, f := range opts {
 		f(&o)
+	}
+	if o.settingsSvc == nil {
+		o.settingsSvc = defaultSettingsService(gw)
 	}
 	r := chi.NewRouter()
 	r.Route("/api/v1", func(sub chi.Router) {
@@ -61,7 +74,7 @@ func NewHandler(gw storage.Gateway, opts ...Option) http.Handler {
 		// token creation can stamp a credential with the device and address behind it.
 		sub.Use(captureClientMeta)
 		api := humachi.New(sub, apiConfig())
-		registerRoutes(api, gw, o)
+		registerRoutes(api, gw, o.settingsSvc, o)
 	})
 
 	// The operator console SPA is nested under /web/* (namespaces stay explicit:
@@ -82,7 +95,7 @@ func NewHandler(gw storage.Gateway, opts ...Option) http.Handler {
 // registerRoutes wires every Huma operation onto the API. Shared by NewHandler
 // (the live server) and OpenAPIJSON (the server-less spec dump), so the routed
 // surface and the generated spec can never drift.
-func registerRoutes(api huma.API, gw storage.Gateway, o options) {
+func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o options) {
 	a := &authenticator{gw: gw, api: api, secureCookies: o.secureCookies, perms: map[string]struct{}{}}
 
 	huma.Register(api, huma.Operation{
@@ -251,6 +264,7 @@ func registerRoutes(api huma.API, gw storage.Gateway, o options) {
 	registerPrincipalGroupRoutes(api, a, gw)
 	registerImpersonationRoutes(api, a, gw)
 	registerAuditRoutes(api, a, gw)
+	registerSettingsRoutes(api, a, gw, svc)
 }
 
 // apiConfig is the shared Huma config for the live server and the spec dump. It
@@ -268,8 +282,33 @@ func apiConfig() huma.Config {
 // handlers (never invoked here), so a nil-backed stub is fine.
 func specAPI(gw storage.Gateway) huma.API {
 	api := humachi.New(chi.NewRouter(), apiConfig())
-	registerRoutes(api, gw, options{})
+	registerRoutes(api, gw, defaultSettingsService(gw), options{})
 	return api
+}
+
+// defaultSettingsService builds a settings service with no operator file, reading
+// the global override live from the Gateway (the same seam the boot path uses,
+// minus the operator file). It is the fallback when no service is wired via
+// WithSettingsService, so NewHandler(gw) resolves real overrides; the boot path
+// supplies a file-aware service instead. The override reader is never invoked
+// during the server-less spec dump (handlers are only registered, not called), so
+// specAPI's stub gateway is fine.
+func defaultSettingsService(gw storage.Gateway) *settings.Service {
+	return settings.NewService(nil, func(ctx context.Context, scope string) (settings.Doc, map[string][]string, error) {
+		rows, err := gw.GetSettingOverrides(ctx, scope)
+		if err != nil {
+			return nil, nil, err
+		}
+		doc := settings.Doc{}
+		locks := map[string][]string{}
+		for _, r := range rows {
+			doc[r.Namespace] = r.Doc
+			if len(r.Locks) > 0 {
+				locks[r.Namespace] = r.Locks
+			}
+		}
+		return doc, locks, nil
+	})
 }
 
 // OpenAPIJSON returns the OpenAPI 3.1 document as JSON, the source downstream

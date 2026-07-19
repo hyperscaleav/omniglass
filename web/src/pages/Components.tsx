@@ -315,7 +315,7 @@ export default function Components() {
         <Show when={can(me.data, "field", "read")}>
           <EffectiveFields
             component={n().raw.name}
-            editing={editing()}
+            edit={edit}
             onOpen={(fieldName) => ctx.openBlade({ kind: "field-resolution", id: fieldBladeId(n().raw.name, fieldName) })}
           />
         </Show>

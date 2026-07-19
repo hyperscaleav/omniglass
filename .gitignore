@@ -38,6 +38,9 @@ coverage.txt
 # Claude Code worktrees (local, never committed)
 .claude/worktrees/
 
+# Superpowers
+.claude/superpowers/
+
 # Playwright MCP scratch (screenshots, logs)
 /.playwright-mcp/
 /web/.playwright-mcp/

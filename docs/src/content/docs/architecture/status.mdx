@@ -498,7 +498,7 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   re-guards by skipping a write whose value equals the latest stored value (the net for a node restart), proven
   by a negative test that repeated identical verdicts produce one row per transition, not per tick. Availability
   as `time_in_state` over this state, and the operator surfaces that render the transitions, are checkpoint 5b.
-  See [ADR-0034](/architecture/decisions/#adr-0034-the-reachability-verdict-is-a-built-in-state).
+  See [ADR-0034](/architecture/decisions/#adr-0038-the-reachability-verdict-is-a-built-in-state).
 - **Collection slice (checkpoint 5b): the reachability surface, seen.** The first datapoint read surface. A
   per-component read BFF `GET /components/{name}/reachability` (permission `component:read`, scope-injected, so a
   viewer gets a 404 on a component outside its scope) composes, per interface, the latest verdict (`LatestState`
@@ -583,7 +583,7 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   models a lab **polaris DSP** with two protocol-named APIs on one device (`web` over http, `qrc` over tcp) so
   `make dev` shows the "two APIs on one box" story. The driver layer that turns a device API into a normalized
   menu of datapoints and functions (OIDs, commands, parse) is a separate, later concern, decided in
-  [ADR-0035](/architecture/decisions/#adr-0035-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver);
+  [ADR-0035](/architecture/decisions/#adr-0039-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver);
   this slice ships only the transport / reach tier of it.
 - **Collection slice (checkpoint 5f): reachability lands read-only; check authoring deferred.** Before the PR, the
   component-scoped **Add check** affordance was **removed**: it was a stopgap that a proper **driver**-based
@@ -1184,7 +1184,7 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   on Systems and Components, and a drag-to-reparent affordance (this slice's picker is a select,
   not a drag surface).
 - **Collection slice (checkpoint 5g): the derived interface/task model.** The reachability primitives were
-  reframed to their honest shape ([ADR-0036](/architecture/decisions/#adr-0036-the-task-is-derived-read-only-plumbing-projected-from-its-interface)):
+  reframed to their honest shape ([ADR-0036](/architecture/decisions/#adr-0040-the-task-is-derived-read-only-plumbing-projected-from-its-interface)):
   the **interface** is the only authored primitive and the **task** is **derived**. An interface is now
   **named by its protocol** (the name derives from its `interface_type`, unique per component), so the create
   surface takes a type, not a free-text name. Creating an interface **derives its one poll task**, so the task
@@ -1243,6 +1243,27 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   not-applicable guard, and value update/delete reverting the component to the default), an HTTP e2e (the effective read, the
   override set path, and the viewer-reads / operator-sets authz split at the `field:create` gate), and a scope-resolver unit
   test for the field arc kinds (a component-scoped operator resolves a subtree scope, a viewer resolves empty).
+- **Platform: the settings engine (global level).** The [settings](/architecture/settings/) subsystem ships its first
+  slice: a pure `settings` package that resolves an effective configuration document by deep-merging ordered layers (embedded
+  `code` defaults, an optional operator `file`, and the `global` DB override) most-specific-wins in JSON map-space, tracking
+  per-key **provenance** and enforcing a top-down **lock** (broader level wins). The single **`setting_override`** table holds
+  only the override level, since the base layers are recomputed in memory each boot and restore is therefore a delete
+  ([ADR-0032](/architecture/decisions/#adr-0033-settings-persist-only-the-override-level-base-layers-are-recomputed-in-memory)),
+  and its Gateway methods are **unscoped**, gated by the `settings:<action>` permission alone
+  ([ADR-0033](/architecture/decisions/#adr-0034-the-settings-gateway-is-unscoped-only-the-permission-gates-it)), reusing the
+  [cascade](/architecture/cascade/) primitive on the principal axis
+  ([ADR-0034](/architecture/decisions/#adr-0035-settings-resolve-as-a-cascade-over-principals-with-a-broader-wins-lock)). The
+  API exposes an admin **`GET /settings`** with provenance, a client-safe authn-only **`GET /settings/me`**, and **`PATCH`** /
+  **`DELETE`** / **`POST /settings:restoreDefaults`** writes under `settings:read` / `settings:update`; the generated CLI and
+  typed client follow. Two `profile`-domain namespaces seed (**`ui`** and **`keybindings`**), and **`ui.theme` is wired end to
+  end**: the console reads its theme from `/settings/me`, so an admin setting the org theme default re-themes the SPA on next
+  load. The Admin **Settings** page (namespace sections, provenance badges, lock chips, restore-to-default) replaces the
+  `/settings` nav stub. Proven by the pure engine unit suite (deep merge, RFC 7386 merge-patch, cascade resolution, lock
+  enforcement, provenance), a testcontainer override round-trip (upsert, audit-in-transaction, delete-restores), an HTTP e2e
+  (admin read with provenance, patch-then-read reflects the override, `/settings/me` readable by a non-admin, the admin read
+  forbidden to a viewer), and web tests (the page renders a provenance badge; the theme mapper). Deferred to the fast-follow:
+  the **group** and **user** override rungs and the Profile preferences tab, the `settings:lock` split for group-admins,
+  `platform`-domain namespaces (`retention`, `integrations`), a GitOps read-only mode, and live file reload (SIGHUP).
 - **Field: an optional `display_name` on a definition.** A `field_definition` gains a nullable
   **`display_name`**, a human label threaded schema through UI: the console shows the label wherever it is
   set (the Fields editor on the component-type blade and the **Effective fields** panel), while the raw
@@ -1252,3 +1273,17 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   `display_name` and it round-trips through the catalog list), and the dev seed (the seeded display fields
   carry labels without changing row counts). The [config, secrets, and variables](/architecture/variables/)
   page keeps its `Partial` field badge.
+- **Field: batched edit, upsert, and inherited-versus-set clarity.** The Fields panel's edit flow is
+  reworked. Setting a value is now an **idempotent upsert** (`SetFieldValue`): the first set creates, a
+  later set patches in place (no more `409 field already exists` on a second set), and a set to the
+  unchanged value is a no-op, so the `set-field-value` route returns `200` and stays `field:create`-gated.
+  In the UI the per-field save is gone: a field's edit **stages a draft** and the blade's **Save changes**
+  flushes every touched field (an upsert, or a delete for a cleared override) alongside the component core,
+  through a new `onSave` contributor on the blade edit slot. Edit mode now tells **inherited** from
+  **set**: an inherited field is an empty input with a greyed `unset` placeholder, a set field shows its
+  value with a **clear (×)** that stages a revert to the type default (replacing the revert arrow). Proven
+  by a storage integration test (a second set patches in place, a same-value set writes no audit row), the
+  updated HTTP e2e (the second POST upserts to `200` keeping its `value_id`), and a blade-slot unit test
+  (contributors flush before the primary save, and a throwing contributor aborts and keeps the blade in
+  edit). The [config, secrets, and variables](/architecture/variables/) page keeps its `Partial` field
+  badge.

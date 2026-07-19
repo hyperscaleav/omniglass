@@ -93,6 +93,12 @@ export type BladeEdit = {
   begin: () => void;
   cancel: () => void;
   save: () => Promise<void>;
+  // Register an extra saver a panel contributes to the blade's Save (e.g. the
+  // Fields panel flushing its staged field values). Contributors run before the
+  // bound primary save, so they target the entity's current name before a rename;
+  // a contributor that throws aborts the save and keeps the blade in edit mode.
+  // Returns an unregister function for onCleanup.
+  onSave: (saver: () => Promise<void>) => () => void;
   destructive: () => BladeDestructive | undefined;
   secondary: () => BladeSecondary[];
   primary: () => BladePrimary | undefined;
@@ -117,6 +123,9 @@ export function createEditSlot(): BladeEdit {
   let destructivePred: () => BladeDestructive | undefined = () => undefined;
   let secondaryPred: () => BladeSecondary[] = () => [];
   let primaryPred: () => BladePrimary | undefined = () => undefined;
+  // Extra savers panels contribute (the fields panel, etc.), flushed before the
+  // primary save.
+  const contributors = new Set<() => Promise<void>>();
   return {
     editable: () => bound() && editablePred(),
     editing,
@@ -130,11 +139,16 @@ export function createEditSlot(): BladeEdit {
     save: async () => {
       setSaving(true);
       try {
+        for (const contribute of [...contributors]) await contribute();
         await handler.save();
         setEditing(false);
       } finally {
         setSaving(false);
       }
+    },
+    onSave: (saver) => {
+      contributors.add(saver);
+      return () => contributors.delete(saver);
     },
     destructive: () => (bound() ? destructivePred() : undefined),
     secondary: () => (bound() ? secondaryPred() : []),

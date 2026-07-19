@@ -108,6 +108,7 @@ export default defineConfig({
             { label: 'Storage', slug: 'architecture/storage' },
             { label: 'Workers', slug: 'architecture/workers' },
             { label: 'Scaling and deployment', slug: 'architecture/scaling' },
+            { label: 'Settings', slug: 'architecture/settings' },
             { label: 'Time', slug: 'architecture/time' },
             { label: 'Identity and access', slug: 'architecture/identity-access' },
             { label: 'Audit', slug: 'architecture/audit' },
