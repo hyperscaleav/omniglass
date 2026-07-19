@@ -84,4 +84,37 @@ describe("edit slot", () => {
       expect(slot.editing()).toBe(false);
       dispose();
     }));
+
+  it("runs onSave contributors before the primary save; unregister removes them", async () => {
+    const order: string[] = [];
+    let disposeFn = () => {};
+    const slot = createRoot((dispose) => { disposeFn = dispose; return createEditSlot(); });
+    slot.bind({ save: async () => { order.push("primary"); } });
+    const off = slot.onSave(async () => { order.push("contrib"); });
+    slot.begin();
+    await slot.save();
+    expect(order).toEqual(["contrib", "primary"]); // contributors flush first
+    expect(slot.editing()).toBe(false);
+    // Unregister: the contributor no longer runs.
+    order.length = 0;
+    off();
+    slot.begin();
+    await slot.save();
+    expect(order).toEqual(["primary"]);
+    disposeFn();
+  });
+
+  it("a throwing onSave contributor aborts the save and stays in edit", async () => {
+    let primary = 0;
+    let disposeFn = () => {};
+    const slot = createRoot((dispose) => { disposeFn = dispose; return createEditSlot(); });
+    slot.bind({ save: async () => { primary++; } });
+    slot.onSave(async () => { throw new Error("field flush failed"); });
+    slot.begin();
+    await expect(slot.save()).rejects.toThrow("field flush failed");
+    expect(primary).toBe(0); // the primary save is not reached
+    expect(slot.editing()).toBe(true); // stays in edit so the operator can retry
+    expect(slot.saving()).toBe(false); // the saving flag is cleared in finally
+    disposeFn();
+  });
 });

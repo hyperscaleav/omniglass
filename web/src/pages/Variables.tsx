@@ -199,7 +199,7 @@ export function ValueDisplay(p: { valueType: string; value: unknown }): JSX.Elem
 // effective-fields panel reuses the same control (as EffectiveVariables reuses
 // ValueDisplay). The optional `class` rides on the rendered control so a caller
 // can enrol it as a daisyUI `join-item` (KVRow does this).
-export function ValueInput(p: { valueType: ValueType; value: string; onInput: (v: string) => void; class?: string }): JSX.Element {
+export function ValueInput(p: { valueType: ValueType; value: string; onInput: (v: string) => void; class?: string; placeholder?: string }): JSX.Element {
   return (
     <Show when={p.valueType !== "bool"} fallback={
       <label class={["flex items-center gap-2", p.class].filter(Boolean).join(" ")}>
@@ -212,10 +212,11 @@ export function ValueInput(p: { valueType: ValueType; value: string; onInput: (v
           class={["input input-bordered w-full font-data", p.class].filter(Boolean).join(" ")}
           type={p.valueType === "int" || p.valueType === "float" ? "number" : "text"}
           value={p.value}
+          placeholder={p.placeholder}
           onInput={(e) => p.onInput(e.currentTarget.value)}
         />
       }>
-        <textarea class={["textarea textarea-bordered w-full font-data text-sm", p.class].filter(Boolean).join(" ")} rows={4} value={p.value} onInput={(e) => p.onInput(e.currentTarget.value)} />
+        <textarea class={["textarea textarea-bordered w-full font-data text-sm", p.class].filter(Boolean).join(" ")} rows={4} value={p.value} placeholder={p.placeholder} onInput={(e) => p.onInput(e.currentTarget.value)} />
       </Show>
     </Show>
   );
