@@ -8,8 +8,6 @@ import { SYSTEMS_KEY } from "../lib/systems";
 import { LOCATIONS_KEY } from "../lib/locations";
 import { ME_KEY, type Me } from "../lib/auth";
 import { TAGS_KEY, entityTagsKey } from "../lib/tags";
-import { effectiveSecretsKey } from "../lib/secrets";
-import { effectiveVariablesKey } from "../lib/variables";
 
 // The Components page on the shared TreeList in the create-as-route model: New routes
 // to /components/create (a draft accordion), Save hands off to /components/<name> in
@@ -27,9 +25,6 @@ function mount(path: string) {
   qc.setQueryData([...ME_KEY], me);
   qc.setQueryData([...TAGS_KEY], []);
   qc.setQueryData([...entityTagsKey("component", "mic-2")], []);
-  // The detail's read-only cascade panels self-fetch; seed empty so no network runs.
-  qc.setQueryData([...effectiveSecretsKey("mic-2")], []);
-  qc.setQueryData([...effectiveVariablesKey("mic-2")], []);
   window.history.pushState({}, "", path);
   return render(() => (
     <QueryClientProvider client={qc}>

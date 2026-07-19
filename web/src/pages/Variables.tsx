@@ -31,8 +31,8 @@ import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 // Variables: the macro directory on the FlatList surface. A variable is a typed,
 // plaintext free value owned at one scope (global, or a location / system /
 // component) and resolved down the cascade; this page is the admin directory
-// (create, inspect, edit, delete). The per-component effective view (which value
-// actually wins where) is the cascade panel on a component's detail.
+// (create, inspect, edit, delete). A variable reaches a component by being sourced
+// into a field; this directory manages the cells themselves.
 
 const OWNER_KINDS: OwnerKind[] = ["global", "location", "system", "component"];
 
@@ -139,10 +139,7 @@ function VariableBladeBody(p: { id: string }): JSX.Element {
     }
     try {
       await updateVariable(v.id, value);
-      await Promise.all([
-        qc.invalidateQueries({ queryKey: VARIABLES_KEY }),
-        qc.invalidateQueries({ queryKey: ["effective-variables"] }),
-      ]);
+      await qc.invalidateQueries({ queryKey: VARIABLES_KEY });
     } catch (e) {
       setErr(describeError(e));
       throw e; // keep the blade in edit mode on failure
@@ -196,8 +193,8 @@ export function ValueDisplay(p: { valueType: string; value: unknown }): JSX.Elem
 
 // ValueInput is the type-aware editor: a checkbox toggle for bool, a textarea for
 // json, a number input for int/float, a text input for string. Exported so the
-// effective-fields panel reuses the same control (as EffectiveVariables reuses
-// ValueDisplay). The optional `class` rides on the rendered control so a caller
+// effective-fields panel reuses the same control. The optional `class` rides on
+// the rendered control so a caller
 // can enrol it as a daisyUI `join-item` (KVRow does this).
 export function ValueInput(p: { valueType: ValueType; value: string; onInput: (v: string) => void; class?: string; placeholder?: string }): JSX.Element {
   return (

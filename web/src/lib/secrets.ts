@@ -36,25 +36,8 @@ export type Secret = {
   fields: SecretField[];
 };
 
-// ResolvedSecret is one entry in a component's effective-secrets cascade: where
-// the owner sits (band 0 global .. 3 component, depth up the tier's tree) and
-// whether it is the resolved winner or a shadowed candidate.
-export type ResolvedSecret = {
-  id: string;
-  name: string;
-  secret_type: string;
-  owner_kind: string;
-  owner_id?: string;
-  owner_name?: string;
-  band: number;
-  depth: number;
-  winner: boolean;
-  fields: SecretField[];
-};
-
 export const SECRETS_KEY = ["secrets"] as const;
 export const SECRET_TYPES_KEY = ["types", "secret"] as const;
-export const effectiveSecretsKey = (component: string) => ["effective-secrets", component] as const;
 
 export async function listSecretTypes(): Promise<SecretType[]> {
   const { data, error } = await api.GET("/types/secret");
@@ -111,12 +94,4 @@ export async function copySecret(id: string): Promise<Record<string, string>> {
   const { data, error } = await api.POST("/secrets/{id}:copy", { params: { path: { id } } });
   if (error) throw error;
   return (data?.fields ?? {}) as Record<string, string>;
-}
-
-export async function effectiveSecrets(component: string): Promise<ResolvedSecret[]> {
-  const { data, error } = await api.GET("/components/{name}/effective-secrets", {
-    params: { path: { name: component } },
-  });
-  if (error) throw error;
-  return (data?.secrets ?? []) as ResolvedSecret[];
 }

@@ -454,26 +454,6 @@ Example:
 omniglass component-make update <id>
 ```
 
-## `omniglass effective-secret`
-
-Commands for the effective-secret resource
-
-### `omniglass effective-secret list`
-
-Effective secrets for a component
-
-```
-omniglass effective-secret list <name>
-```
-
-Resolves the secrets that cascade onto a component (global -> location -> system -> component, most-specific winning), each masked, winner and shadowed candidates. Gated by secret:read; the component must be in the caller's component read scope.
-
-Example:
-
-```sh
-omniglass effective-secret list <name>
-```
-
 ## `omniglass effective-tag`
 
 Commands for the effective-tag resource
@@ -492,26 +472,6 @@ Example:
 
 ```sh
 omniglass effective-tag list <name>
-```
-
-## `omniglass effective-variable`
-
-Commands for the effective-variable resource
-
-### `omniglass effective-variable list`
-
-Effective variables for a component
-
-```
-omniglass effective-variable list <name>
-```
-
-Resolves the variables that cascade onto a component (global -> location -> system -> component, most-specific winning), winner and shadowed candidates. Gated by variable:read; the component must be in the caller's component read scope.
-
-Example:
-
-```sh
-omniglass effective-variable list <name>
 ```
 
 ## `omniglass field`
@@ -2556,7 +2516,7 @@ List variables (admin directory)
 omniglass variable list
 ```
 
-Lists every variable. Requires an all-scope read; the scoped, per-component view is the effective-variables route. Gated by variable:read.
+Lists every variable. Requires an all-scope read. Gated by variable:read.
 
 Example:
 

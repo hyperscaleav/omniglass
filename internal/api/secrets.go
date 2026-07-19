@@ -46,22 +46,6 @@ type secretBody struct {
 	Fields         []secretFieldBody `json:"fields"`
 }
 
-// resolvedSecretBody is one entry in a component's effective-secrets cascade:
-// the secret, where in the chain its owner sits, and whether it is the winner or
-// a shadowed candidate.
-type resolvedSecretBody struct {
-	ID         string            `json:"id"`
-	Name       string            `json:"name"`
-	SecretType string            `json:"secret_type"`
-	OwnerKind  string            `json:"owner_kind"`
-	OwnerID    *string           `json:"owner_id,omitempty"`
-	OwnerName  string            `json:"owner_name,omitempty"`
-	Band       int               `json:"band" doc:"Cascade tier: 0 global, 1 location, 2 system, 3 component"`
-	Depth      int               `json:"depth" doc:"Distance up the tier's tree from the component (0 nearest)"`
-	Winner     bool              `json:"winner" doc:"True for the resolved value; false for a shadowed candidate"`
-	Fields     []secretFieldBody `json:"fields"`
-}
-
 func toSecretFieldBodies(fs []storage.ResolvedField) []secretFieldBody {
 	out := make([]secretFieldBody, 0, len(fs))
 	for _, f := range fs {
@@ -123,20 +107,10 @@ type revealSecretOutput struct {
 	}
 }
 
-type effectiveSecretsInput struct {
-	Name string `path:"name" doc:"The component's name"`
-}
-
-type effectiveSecretsOutput struct {
-	Body struct {
-		Secrets []resolvedSecretBody `json:"secrets"`
-	}
-}
-
 // registerSecretRoutes wires the secret surface: the shape registry, the
-// all-scope admin directory, scoped create/delete, and the per-component
-// effective-secrets cascade. Read (masked) rides the viewer floor; create and
-// delete are gated by the sensitive secret:create / secret:delete.
+// all-scope admin directory, and scoped create/delete. Read (masked) rides the
+// viewer floor; create and delete are gated by the sensitive secret:create /
+// secret:delete.
 // canSecretAdmin reports whether the caller holds the secret action at the admin
 // tier (secret:<action>:admin), which admin and owner reach via secret:> / >. It
 // gates admin-sensitive secrets: only such a caller may see, reveal, update,
@@ -275,34 +249,6 @@ func registerSecretRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		return out, nil
 	})
 
-	huma.Register(api, a.gated(huma.Operation{
-		OperationID: "effective-secrets",
-		Method:      http.MethodGet,
-		Path:        "/components/{name}/effective-secrets",
-		Summary:     "Effective secrets for a component",
-		Description: "Resolves the secrets that cascade onto a component (global -> location -> system -> component, most-specific winning), each masked, winner and shadowed candidates. Gated by secret:read; the component must be in the caller's component read scope.",
-	}, "secret", "read"), func(ctx context.Context, in *effectiveSecretsInput) (*effectiveSecretsOutput, error) {
-		comp, err := gw.GetComponent(ctx, in.Name, a.scopeFor(ctx, "component", "read"))
-		if err != nil {
-			return nil, mapComponentErr(err)
-		}
-		resolved, err := gw.ResolveSecrets(ctx, comp.ID, a.scopeFor(ctx, "component", "read"), a.canSecretAdmin(ctx, "read"))
-		if err != nil {
-			return nil, mapSecretErr(err)
-		}
-		out := &effectiveSecretsOutput{}
-		out.Body.Secrets = make([]resolvedSecretBody, 0, len(resolved))
-		for _, r := range resolved {
-			out.Body.Secrets = append(out.Body.Secrets, resolvedSecretBody{
-				ID:   r.ID,
-				Name: r.Name, SecretType: r.SecretType, OwnerKind: r.OwnerKind,
-				OwnerID: r.OwnerID, OwnerName: r.OwnerName,
-				Band: r.Band, Depth: r.Depth, Winner: r.Winner,
-				Fields: toSecretFieldBodies(r.Fields),
-			})
-		}
-		return out, nil
-	})
 }
 
 // mapSecretErr translates the gateway's secret sentinels into HTTP status.

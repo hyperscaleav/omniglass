@@ -20,11 +20,9 @@ import { describeError } from "../lib/format";
 import { openInEdit, consumePendingEdit } from "../lib/pendingedit";
 import { ChevronRight, Pencil, Plus, Save, Search, X } from "../components/icons";
 import Button from "../components/Button";
-import EffectiveSecrets, { secretCascadeBlade, cascadeBladeId } from "../components/EffectiveSecrets";
 import TagPills from "../components/TagPills";
 import { tagFilterKeys } from "../lib/predicate";
 import TagAdder from "../components/TagAdder";
-import EffectiveVariables, { variableCascadeBlade, varCascadeBladeId } from "../components/EffectiveVariables";
 import EffectiveFields, { fieldResolutionBlade, fieldBladeId } from "../components/EffectiveFields";
 
 // Components: the device inventory, the first page built on the generic TreeList.
@@ -131,9 +129,9 @@ export default function Components() {
   // ComponentDetail: the entity accordion, read-only in view, editable in edit. Own
   // fields (display name, type) are editable; placement is fixed at creation. The
   // Tags section is the shared TagAdder, whose write controls appear only in edit
-  // (canUpdate gates them), so view carries no mutation. The Effective secrets and
-  // variables panels are read-only and render in both modes. The full page renders
-  // its own Save/Cancel/Edit footer from ctx.edit; a blade gets those from BladeStack.
+  // (canUpdate gates them), so view carries no mutation. The Fields section is the
+  // component's value surface. The full page renders its own Save/Cancel/Edit footer
+  // from ctx.edit; a blade gets those from BladeStack.
   function ComponentDetail(props: { node: CompNode; ctx: ListCtx<CompNode> }): JSX.Element {
     const ctx = props.ctx;
     const edit = ctx.edit;
@@ -294,18 +292,6 @@ export default function Components() {
           </div>
         </Show>
 
-        <Show when={can(me.data, "secret", "read")}>
-          <EffectiveSecrets
-            component={n().raw.name}
-            onOpen={(secretName) => ctx.openBlade({ kind: "secret-cascade", id: cascadeBladeId(n().raw.name, secretName) })}
-          />
-        </Show>
-        <Show when={can(me.data, "variable", "read")}>
-          <EffectiveVariables
-            component={n().raw.name}
-            onOpen={(variableName) => ctx.openBlade({ kind: "variable-cascade", id: varCascadeBladeId(n().raw.name, variableName) })}
-          />
-        </Show>
         <Show when={can(me.data, "field", "read")}>
           <EffectiveFields
             component={n().raw.name}
@@ -485,7 +471,7 @@ export default function Components() {
     onEdit: (n) => { openInEdit(n.raw.name); navigate(`/components/${encodeURIComponent(n.raw.name)}`); },
     renderCreate: () => <ComponentCreate />,
     renderDetail: (n, ctx) => <ComponentDetail node={n} ctx={ctx} />,
-    extraBlades: { "secret-cascade": secretCascadeBlade, "variable-cascade": variableCascadeBlade, "field-resolution": fieldResolutionBlade },
+    extraBlades: { "field-resolution": fieldResolutionBlade },
   };
 
   // No page H1: inventory pages built on TreeList let the top bar label them, and

@@ -19,24 +19,7 @@ export type Variable = {
   value: unknown;
 };
 
-// ResolvedVariable is one entry in a component's effective-variables cascade:
-// where the owner sits (band 0 global .. 3 component, depth up the tier's tree)
-// and whether it is the resolved winner or a shadowed candidate.
-export type ResolvedVariable = {
-  id: string;
-  name: string;
-  value_type: string;
-  owner_kind: string;
-  owner_id?: string;
-  owner_name?: string;
-  band: number;
-  depth: number;
-  winner: boolean;
-  value: unknown;
-};
-
 export const VARIABLES_KEY = ["variables"] as const;
-export const effectiveVariablesKey = (component: string) => ["effective-variables", component] as const;
 
 export type OwnerKind = "global" | "location" | "system" | "component";
 
@@ -71,14 +54,6 @@ export async function updateVariable(id: string, value: unknown): Promise<Variab
 export async function deleteVariable(id: string): Promise<void> {
   const { error } = await api.DELETE("/variables/{id}", { params: { path: { id } } });
   if (error) throw error;
-}
-
-export async function effectiveVariables(component: string): Promise<ResolvedVariable[]> {
-  const { data, error } = await api.GET("/components/{name}/effective-variables", {
-    params: { path: { name: component } },
-  });
-  if (error) throw error;
-  return (data?.variables ?? []) as ResolvedVariable[];
 }
 
 // displayValue renders a variable's polymorphic value as a compact string for a
