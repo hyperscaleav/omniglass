@@ -247,6 +247,7 @@ func registerTagRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	registerEntityTagRoutes(api, a, gw, "component")
 	registerEntityTagRoutes(api, a, gw, "system")
 	registerEntityTagRoutes(api, a, gw, "location")
+	registerEntityTagRoutes(api, a, gw, "node")
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "effective-tags",
@@ -382,10 +383,13 @@ func mapTagErr(err error) error {
 		return huma.Error404NotFound("system not found")
 	case errors.Is(err, storage.ErrLocationNotFound):
 		return huma.Error404NotFound("location not found")
+	case errors.Is(err, storage.ErrNodeNotFound):
+		return huma.Error404NotFound("node not found")
 	case errors.Is(err, storage.ErrTagForbidden),
 		errors.Is(err, storage.ErrComponentForbidden),
 		errors.Is(err, storage.ErrSystemForbidden),
-		errors.Is(err, storage.ErrLocationForbidden):
+		errors.Is(err, storage.ErrLocationForbidden),
+		errors.Is(err, storage.ErrNodeForbidden):
 		return huma.Error403Forbidden("forbidden")
 	case errors.Is(err, storage.ErrTagExists):
 		return huma.Error409Conflict("a tag key with this name already exists")

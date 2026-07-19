@@ -948,6 +948,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/nodes/{name}:listTags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List tags on a node
+         * @description Lists the tags bound directly on a node (not the resolved cascade). Gated by node:read.
+         */
+        get: operations["list-node-tags"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/nodes/{name}:removeTag": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Remove a tag value from a node
+         * @description Removes a key's value from a node. Gated by node:update.
+         */
+        post: operations["remove-node-tag"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/nodes/{name}:setTag": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set a tag value on a node
+         * @description Binds a value for a key on a node. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by node:update.
+         */
+        post: operations["set-node-tag"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/nodes:claim": {
         parameters: {
             query?: never;
@@ -3239,6 +3299,10 @@ export interface components {
             readonly $schema?: string;
             description?: string;
             display_name?: string;
+            /** @description The resolved effective tags (key -> winning value) on this node: its direct bindings plus propagating global tags. For the Tags column and the blade pills. */
+            effective_tags?: {
+                [key: string]: string;
+            };
             enrolled: boolean;
             /** Format: date-time */
             enrolled_at?: string;
@@ -5984,6 +6048,108 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EnrollOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-node-tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The entity's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityTagsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "remove-node-tag": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The entity's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EntityRemoveTagInputBody"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "set-node-tag": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The entity's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EntitySetTagInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagBindingBody"];
                 };
             };
             /** @description Error */

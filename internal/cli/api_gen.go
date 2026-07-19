@@ -1587,6 +1587,68 @@ func generatedCommands() []*cobra.Command {
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "listTags <name>",
+				Short:   "List tags on a node",
+				Long:    "Lists the tags bound directly on a node (not the resolved cascade). Gated by node:read.",
+				Example: "  omniglass node listTags <name>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/nodes/%s:listTags", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			var fKey string
+			cmd := &cobra.Command{
+				Use:     "removeTag <name>",
+				Short:   "Remove a tag value from a node",
+				Long:    "Removes a key's value from a node. Gated by node:update.",
+				Example: "  omniglass node removeTag <name> --key key",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/nodes/%s:removeTag", url.PathEscape(args[0]))
+					body := map[string]any{}
+					if cmd.Flags().Changed("key") {
+						body["key"] = fKey
+					}
+					return runAPICommand(cmd, "POST", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fKey, "key", "", "The tag key to remove")
+			_ = cmd.MarkFlagRequired("key")
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			var fKey string
+			var fValue string
+			cmd := &cobra.Command{
+				Use:     "setTag <name>",
+				Short:   "Set a tag value on a node",
+				Long:    "Binds a value for a key on a node. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by node:update.",
+				Example: "  omniglass node setTag <name> --key key --value value",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/nodes/%s:setTag", url.PathEscape(args[0]))
+					body := map[string]any{}
+					if cmd.Flags().Changed("key") {
+						body["key"] = fKey
+					}
+					if cmd.Flags().Changed("value") {
+						body["value"] = fValue
+					}
+					return runAPICommand(cmd, "POST", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fKey, "key", "", "The tag key (must exist and apply to this kind)")
+			_ = cmd.MarkFlagRequired("key")
+			cmd.Flags().StringVar(&fValue, "value", "", "The bound value")
+			_ = cmd.MarkFlagRequired("value")
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
 			var fDescription string
 			var fDisplayName string
 			var fLocation string

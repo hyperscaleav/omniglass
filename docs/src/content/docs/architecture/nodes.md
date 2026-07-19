@@ -46,6 +46,11 @@ inventory entities (Edit is the primary action, gated `node:update`, editing dis
 description, and location; the name is read-only); enrolling is a secondary action. Editing goes
 through `PATCH /nodes/{name}`.
 
+A node is also a **taggable owner**: governed [tags](/architecture/tags/) whose `applies_to` includes
+`node` bind to it (estate-wide, all-scope, `node:update`), and its effective tags are the global layer
+plus its own direct bindings, no cascade (a node is not a scope tree). The blade carries a **Tags**
+panel and the list a Tags column and per-key filter facet, the same shape as the component list.
+
 ## Getting its instructions
 
 The node pulls a **worklist**: the tasks and commands resolved for the

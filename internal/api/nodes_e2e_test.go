@@ -152,4 +152,41 @@ func TestNodeAPI(t *testing.T) {
 	c.do(ownerTok, http.MethodPatch, "/nodes/site-c", map[string]any{"location": "ghost"}, http.StatusUnprocessableEntity)
 	// node:update is gated: the viewer cannot patch.
 	c.do(viewerTok, http.MethodPatch, "/nodes/site-c", map[string]any{"display_name": "x"}, http.StatusForbidden)
+
+	// N2: node is a taggable owner kind. A key that applies to nodes binds via
+	// :setTag (node:update), reads back on :listTags and in the node's effective_tags,
+	// and unbinds via :removeTag; the viewer is gated out of the write.
+	if _, err := gw.CreateTag(ctx, "", storage.TagSpec{Name: "environment", Propagates: true}, scope.Set{All: true}); err != nil {
+		t.Fatalf("create tag: %v", err)
+	}
+	c.do(ownerTok, http.MethodPost, "/nodes/site-a:setTag", map[string]any{"key": "environment", "value": "prod"}, http.StatusOK)
+	var tagsList struct {
+		Tags []struct {
+			Key   string `json:"key"`
+			Value string `json:"value"`
+		} `json:"tags"`
+	}
+	json.Unmarshal(c.do(ownerTok, http.MethodGet, "/nodes/site-a:listTags", nil, http.StatusOK), &tagsList)
+	if len(tagsList.Tags) != 1 || tagsList.Tags[0].Key != "environment" {
+		t.Fatalf("node direct tags = %+v, want environment", tagsList.Tags)
+	}
+	var withTags struct {
+		EffectiveTags map[string]string `json:"effective_tags"`
+	}
+	json.Unmarshal(c.do(ownerTok, http.MethodGet, "/nodes/site-a", nil, http.StatusOK), &withTags)
+	if withTags.EffectiveTags["environment"] != "prod" {
+		t.Fatalf("node effective_tags = %+v, want environment=prod", withTags.EffectiveTags)
+	}
+	// node:update gates the tag write: the viewer is forbidden.
+	c.do(viewerTok, http.MethodPost, "/nodes/site-a:setTag", map[string]any{"key": "environment", "value": "x"}, http.StatusForbidden)
+	// Unbind clears it (a fresh var: effective_tags is omitempty, so an empty map is
+	// absent from the JSON and would not overwrite a reused struct's stale map).
+	c.do(ownerTok, http.MethodPost, "/nodes/site-a:removeTag", map[string]any{"key": "environment"}, http.StatusNoContent)
+	var afterUnbind struct {
+		EffectiveTags map[string]string `json:"effective_tags"`
+	}
+	json.Unmarshal(c.do(ownerTok, http.MethodGet, "/nodes/site-a", nil, http.StatusOK), &afterUnbind)
+	if _, ok := afterUnbind.EffectiveTags["environment"]; ok {
+		t.Fatalf("environment still effective after unbind")
+	}
 }
