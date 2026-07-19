@@ -175,8 +175,8 @@ func TestRunIdempotent(t *testing.T) {
 	if err := conn.QueryRow(ctx, `select count(*) from field_definition`).Scan(&fieldDefs); err != nil {
 		t.Fatalf("count field definitions: %v", err)
 	}
-	if fieldDefs != 3 {
-		t.Errorf("field definitions = %d, want 3 (seed not idempotent or incomplete)", fieldDefs)
+	if fieldDefs != 5 {
+		t.Errorf("field definitions = %d, want 5 (seed not idempotent or incomplete)", fieldDefs)
 	}
 	if err := conn.QueryRow(ctx, `select count(*) from component where name = 'lobby-display'`).Scan(&comps); err != nil {
 		t.Fatalf("count field-seed components: %v", err)
@@ -187,8 +187,8 @@ func TestRunIdempotent(t *testing.T) {
 	if err := conn.QueryRow(ctx, `select count(*) from field_value`).Scan(&fieldVals); err != nil {
 		t.Fatalf("count field values: %v", err)
 	}
-	if fieldVals != 1 {
-		t.Errorf("field values = %d, want 1 (diagonal_inches override)", fieldVals)
+	if fieldVals != 2 {
+		t.Errorf("field values = %d, want 2 (diagonal_inches override, serial_number required)", fieldVals)
 	}
 
 	// The tree links resolve: the west building hangs under the hq campus.
