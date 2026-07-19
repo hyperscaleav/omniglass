@@ -1342,6 +1342,22 @@ Example:
 omniglass node create --name name
 ```
 
+### `omniglass node delete`
+
+Delete a node
+
+```
+omniglass node delete <name>
+```
+
+Decommissions a node: a hard delete that cascades its interfaces, their derived tasks, its node-owned tags and self-telemetry, and its enrollment credential. Component telemetry it collected is unaffected. Requires an all-scope action. Gated by node:delete.
+
+Example:
+
+```sh
+omniglass node delete <name>
+```
+
 ### `omniglass node enroll`
 
 Mint a node's enrollment token

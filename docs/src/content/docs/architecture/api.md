@@ -175,6 +175,7 @@ shape the [Shape](#shape-resources-and-verb-methods) section describes.
 | GET | `/nodes/{name}` | `node:read` |
 | POST | `/nodes` | `node:create` |
 | PATCH | `/nodes/{name}` | `node:update` |
+| DELETE | `/nodes/{name}` | `node:delete` |
 | POST | `/nodes/{name}:enroll` | `node:enroll` |
 | POST | `/nodes:claim` | none (public) |
 | GET | `/interfaces` | `interface:read` |

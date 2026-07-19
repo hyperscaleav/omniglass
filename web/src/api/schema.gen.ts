@@ -918,7 +918,11 @@ export interface paths {
         get: operations["get-node"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete a node
+         * @description Decommissions a node: a hard delete that cascades its interfaces, their derived tasks, its node-owned tags and self-telemetry, and its enrollment credential. Component telemetry it collected is unaffected. Requires an all-scope action. Gated by node:delete.
+         */
+        delete: operations["delete-node"];
         options?: never;
         head?: never;
         /**
@@ -5982,6 +5986,36 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["NodeBody"];
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-node": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The node's unique name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {

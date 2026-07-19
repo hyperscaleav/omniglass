@@ -166,6 +166,43 @@ func (p *PG) UpdateNode(ctx context.Context, actorID, name string, patch NodePat
 	return after, nil
 }
 
+// DeleteNode decommissions a node: a hard delete of its kind='node' principal,
+// which cascades the node detail row and, through it, everything keyed to the
+// node, its interfaces and their derived tasks, its node-owned datapoints and tag
+// bindings, and its enrollment credential (every referencing FK is ON DELETE
+// CASCADE). A node is estate-wide, so this requires an all scope, like create. An
+// unknown name is ErrNodeNotFound. Audited before the row is gone; the actor is
+// the deleter (unaffected by the cascade) and the node name is a plain text
+// resource id, not a foreign key.
+func (p *PG) DeleteNode(ctx context.Context, actorID, name string, read, action scope.Set) error {
+	if !read.All || !action.All {
+		return ErrNodeForbidden
+	}
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("storage: begin delete node: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var pid string
+	err = tx.QueryRow(ctx, `select principal_id from node where name = $1`, name).Scan(&pid)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNodeNotFound
+	} else if err != nil {
+		return fmt.Errorf("storage: delete node lookup %q: %w", name, err)
+	}
+	if err := writeAuditRes(ctx, tx, actorID, "delete", "node", name, nil, nil); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `delete from principal where id = $1`, pid); err != nil {
+		return fmt.Errorf("storage: delete node principal: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("storage: commit delete node: %w", err)
+	}
+	return nil
+}
+
 // SetEnrollmentToken installs the node's enrollment secret as a bearer
 // credential ROW on its principal (the same machinery a service bearer token
 // uses), taking the hex sha256 of a freshly minted token (the cleartext is shown

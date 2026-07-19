@@ -146,10 +146,17 @@
 @layer components {
   .btn-action { @apply btn-primary; }
   .btn-quiet  { @apply btn-ghost; }
-  .btn-danger { @apply btn-ghost text-error; }
-  .btn-warn   { @apply btn-ghost text-warning; }
-  .btn-ok     { @apply btn-ghost text-success; }
 }
+
+/* The ghost intents carry their emphasis through `text-error/warning/success`, but
+   daisyUI's own `.btn` color sits in the later `daisyui` layer and would override a
+   layered utility, so the destructive Delete/Revoke and the Disable/Enable state
+   toggles rendered daisyUI's near-white instead of their intent color. Define them
+   UNLAYERED (like the .btn-action foreground override below) so the intent color
+   wins once, at the source, with no per-intent patch. */
+.btn-danger { @apply btn-ghost text-error; }
+.btn-warn   { @apply btn-ghost text-warning; }
+.btn-ok     { @apply btn-ghost text-success; }
 
 /* The primary button takes the theme's own primary + primary-content (the brand
    teal fill with dark ink, both themes). daisyUI 5's `@apply btn-primary` drops the

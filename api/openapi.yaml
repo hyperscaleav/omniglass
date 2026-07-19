@@ -4769,6 +4769,28 @@ paths:
       summary: Create a node
       x-omniglass-permission: node:create
   /nodes/{name}:
+    delete:
+      description: "Decommissions a node: a hard delete that cascades its interfaces, their derived tasks, its node-owned tags and self-telemetry, and its enrollment credential. Component telemetry it collected is unaffected. Requires an all-scope action. Gated by node:delete."
+      operationId: delete-node
+      parameters:
+        - description: The node's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The node's unique name
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Delete a node
+      x-omniglass-permission: node:delete
     get:
       description: Fetches a node by name. Requires an all-scope read. Gated by node:read.
       operationId: get-node

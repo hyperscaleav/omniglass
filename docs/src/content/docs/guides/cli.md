@@ -109,6 +109,7 @@ omniglass node list
 omniglass node create --name edge-hq --display-name "HQ Edge Node" --location hq-west --description "HQ network closet"   # needs node:create (all-scope)
 omniglass node get edge-hq
 omniglass node update edge-hq --display-name "HQ Edge" --location hq-west   # needs node:update; the name is immutable
+omniglass node delete edge-hq   # needs node:delete; decommissions the node (cascades its interfaces, tasks, and enrollment)
 ```
 
 The node-facing `claim` exchange is public (the enrollment token is the authentication), so

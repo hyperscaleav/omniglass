@@ -31,6 +31,7 @@ A row opens the node's detail.
 - The detail carries a **Tags** panel: with `node:update`, edit mode adds and removes governed
   [tags](/guides/operator/inventory/) (keys whose vocabulary allows nodes), the same tag editor the
   component and location details use. The node list shows a Tags column and filters by any tag key.
+- With `node:delete`, **Delete** (the destructive action, left of the footer) **decommissions** the node after a confirm: its interfaces, derived tasks, tags, and enrollment are removed. The telemetry it collected for components stays.
 - **Enroll** (or **Re-enroll**, if it is already enrolled) is a secondary action in the detail's
   kebab: it re-mints the token, invalidating the previous one.
 - The detail also shows whether the node is enrolled and when it last sent a heartbeat.

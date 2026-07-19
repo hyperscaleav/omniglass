@@ -189,4 +189,12 @@ func TestNodeAPI(t *testing.T) {
 	if _, ok := afterUnbind.EffectiveTags["environment"]; ok {
 		t.Fatalf("environment still effective after unbind")
 	}
+
+	// N3: node decommission. node:delete gates it (the viewer is forbidden); the
+	// owner deletes and the node is then a 404.
+	c.do(viewerTok, http.MethodDelete, "/nodes/site-a", nil, http.StatusForbidden)
+	c.do(ownerTok, http.MethodDelete, "/nodes/site-a", nil, http.StatusNoContent)
+	c.do(ownerTok, http.MethodGet, "/nodes/site-a", nil, http.StatusNotFound)
+	// Deleting an unknown node is a 404.
+	c.do(ownerTok, http.MethodDelete, "/nodes/ghost", nil, http.StatusNotFound)
 }
