@@ -36,6 +36,16 @@ are confined to its **placement-derived `visible_set`** (the owners of the tasks
 assigned to it), so a node ingests in **node mode**, not all-visibility system mode
 (see [identity-access](/architecture/identity-access/)).
 
+A node carries the same **name / display_name** identity as a component, system, or location:
+`name` is its immutable key and estate address (the NATS subject token and enrollment identity, so
+it cannot be renamed), and `display_name` is an operator label the console titles it by (falling
+back to the name). It also holds an optional `location`, a **descriptive** placement (which room
+the box sits in), **not** a scope: a node stays estate-wide and its `location` clears if that
+location is deleted (`ON DELETE SET NULL`). The console blade is read-edit-save like the other
+inventory entities (Edit is the primary action, gated `node:update`, editing display_name,
+description, and location; the name is read-only); enrolling is a secondary action. Editing goes
+through `PATCH /nodes/{name}`.
+
 ## Getting its instructions
 
 The node pulls a **worklist**: the tasks and commands resolved for the

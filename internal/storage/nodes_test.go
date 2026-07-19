@@ -203,3 +203,111 @@ func TestNodeNameSubjectSafety(t *testing.T) {
 		t.Fatalf("create valid node: %v", err)
 	}
 }
+
+// TestNodeIdentityAndEdit covers the N1 identity fields (display_name, location)
+// and the UpdateNode patch path: nil-unchanged semantics, location set / change /
+// clear, an unknown location rejected, name immutability, and the location FK's
+// ON DELETE SET NULL. See .claude/superpowers/specs/2026-07-19-node-identity-and-edit-design.md.
+func TestNodeIdentityAndEdit(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	dsn := storagetest.NewDSN(t)
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	all := scope.Set{All: true}
+
+	closet, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq-closet", LocationType: "campus"}, all)
+	if err != nil {
+		t.Fatalf("create location: %v", err)
+	}
+	other, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "east-rack", LocationType: "campus"}, all)
+	if err != nil {
+		t.Fatalf("create other location: %v", err)
+	}
+
+	// Create carries display_name and location.
+	n, err := gw.CreateNode(ctx, "", storage.NodeSpec{
+		Name: "edge-hq", DisplayName: "HQ Closet Node", Description: "rack 3", LocationName: &closet.Name,
+	}, all)
+	if err != nil {
+		t.Fatalf("create node: %v", err)
+	}
+	if n.DisplayName != "HQ Closet Node" || n.LocationName == nil || *n.LocationName != "hq-closet" {
+		t.Fatalf("fresh node identity: got display=%q location=%v", n.DisplayName, n.LocationName)
+	}
+
+	str := func(s string) *string { return &s }
+
+	// Patch display_name only: description and location are untouched (nil = unchanged).
+	up, err := gw.UpdateNode(ctx, "", "edge-hq", storage.NodePatch{DisplayName: str("HQ Node")}, all, all)
+	if err != nil {
+		t.Fatalf("update display_name: %v", err)
+	}
+	if up.DisplayName != "HQ Node" || up.Description != "rack 3" || up.LocationName == nil || *up.LocationName != "hq-closet" {
+		t.Fatalf("patch display only: got %+v", up)
+	}
+	if up.Name != "edge-hq" {
+		t.Fatalf("name must be immutable, got %q", up.Name)
+	}
+
+	// Move the location to another valid one.
+	up, err = gw.UpdateNode(ctx, "", "edge-hq", storage.NodePatch{LocationName: &other.Name}, all, all)
+	if err != nil {
+		t.Fatalf("relocate: %v", err)
+	}
+	if up.LocationName == nil || *up.LocationName != "east-rack" {
+		t.Fatalf("relocate: got %v", up.LocationName)
+	}
+
+	// Clear the location (a pointer to "").
+	up, err = gw.UpdateNode(ctx, "", "edge-hq", storage.NodePatch{LocationName: str("")}, all, all)
+	if err != nil {
+		t.Fatalf("clear location: %v", err)
+	}
+	if up.LocationName != nil {
+		t.Fatalf("clear location: want nil, got %v", *up.LocationName)
+	}
+
+	// An unknown location is rejected (the location FK), not silently applied.
+	if _, err := gw.UpdateNode(ctx, "", "edge-hq", storage.NodePatch{LocationName: str("ghost-room")}, all, all); !errors.Is(err, storage.ErrLocationNotFound) {
+		t.Fatalf("unknown location: want ErrLocationNotFound, got %v", err)
+	}
+
+	// Estate-wide: an update without all-scope is forbidden; an unknown node is not found.
+	if _, err := gw.UpdateNode(ctx, "", "edge-hq", storage.NodePatch{DisplayName: str("x")}, scope.Set{}, scope.Set{}); !errors.Is(err, storage.ErrNodeForbidden) {
+		t.Fatalf("update without all-scope: want ErrNodeForbidden, got %v", err)
+	}
+	if _, err := gw.UpdateNode(ctx, "", "ghost", storage.NodePatch{DisplayName: str("x")}, all, all); !errors.Is(err, storage.ErrNodeNotFound) {
+		t.Fatalf("update unknown node: want ErrNodeNotFound, got %v", err)
+	}
+
+	// The location FK is ON DELETE SET NULL: place the node, delete its location,
+	// the node survives with a cleared placement (deleted via a probe, since
+	// location-delete guards are not the unit under test).
+	if _, err := gw.UpdateNode(ctx, "", "edge-hq", storage.NodePatch{LocationName: &closet.Name}, all, all); err != nil {
+		t.Fatalf("re-place before delete: %v", err)
+	}
+	probe, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer probe.Close(ctx)
+	if _, err := probe.Exec(ctx, `delete from location where name = 'hq-closet'`); err != nil {
+		t.Fatalf("delete location: %v", err)
+	}
+	got, err := gw.GetNode(ctx, "edge-hq", all)
+	if err != nil {
+		t.Fatalf("get node after location delete: %v", err)
+	}
+	if got.LocationName != nil {
+		t.Fatalf("ON DELETE SET NULL: want nil location, got %v", *got.LocationName)
+	}
+}

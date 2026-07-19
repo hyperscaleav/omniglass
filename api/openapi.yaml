@@ -685,6 +685,12 @@ components:
           type: string
         description:
           type: string
+        display_name:
+          description: Operator label; falls back to the name when empty
+          type: string
+        location:
+          description: Optional location the node sits in (descriptive placement, not scope)
+          type: string
         name:
           description: Globally unique node name (also its NATS subject token, so no dots or whitespace)
           minLength: 1
@@ -1985,6 +1991,8 @@ components:
           type: string
         description:
           type: string
+        display_name:
+          type: string
         enrolled:
           type: boolean
         enrolled_at:
@@ -1992,6 +2000,9 @@ components:
           type: string
         last_heartbeat_at:
           format: date-time
+          type: string
+        location:
+          description: The location the node sits in (descriptive placement, not scope)
           type: string
         name:
           type: string
@@ -3000,6 +3011,24 @@ components:
         display_name:
           description: Your display name; empty clears it
           maxLength: 200
+          type: string
+      type: object
+    UpdateNodeInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/UpdateNodeInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        description:
+          type: string
+        display_name:
+          type: string
+        location:
+          description: Set the node's location, or "" to clear it
           type: string
       type: object
     UpdatePrincipalInputBody:
@@ -4712,6 +4741,36 @@ paths:
           description: Error
       summary: Get a node
       x-omniglass-permission: node:read
+    patch:
+      description: Patches a node's display name, description, and location (a nil field is unchanged; a location of "" clears it). The name is immutable. Requires an all-scope action. Gated by node:update.
+      operationId: update-node
+      parameters:
+        - in: path
+          name: name
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateNodeInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NodeBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Update a node
+      x-omniglass-permission: node:update
   /nodes/{name}:enroll:
     post:
       description: Mints (or re-mints) the node's enrollment token and returns it once. The token is stored only as a hash; it is never logged. Gated by node:enroll.

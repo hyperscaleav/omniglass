@@ -921,7 +921,11 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Update a node
+         * @description Patches a node's display name, description, and location (a nil field is unchanged; a location of "" clears it). The name is immutable. Requires an all-scope action. Gated by node:update.
+         */
+        patch: operations["update-node"];
         trace?: never;
     };
     "/nodes/{name}:enroll": {
@@ -2517,6 +2521,10 @@ export interface components {
              */
             readonly $schema?: string;
             description?: string;
+            /** @description Operator label; falls back to the name when empty */
+            display_name?: string;
+            /** @description Optional location the node sits in (descriptive placement, not scope) */
+            location?: string;
             /** @description Globally unique node name (also its NATS subject token, so no dots or whitespace) */
             name: string;
         };
@@ -3208,11 +3216,14 @@ export interface components {
              */
             readonly $schema?: string;
             description?: string;
+            display_name?: string;
             enrolled: boolean;
             /** Format: date-time */
             enrolled_at?: string;
             /** Format: date-time */
             last_heartbeat_at?: string;
+            /** @description The location the node sits in (descriptive placement, not scope) */
+            location?: string;
             name: string;
         };
         PrincipalBody: {
@@ -3753,6 +3764,18 @@ export interface components {
             readonly $schema?: string;
             /** @description Your display name; empty clears it */
             display_name?: string;
+        };
+        UpdateNodeInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/UpdateNodeInputBody.json
+             */
+            readonly $schema?: string;
+            description?: string;
+            display_name?: string;
+            /** @description Set the node's location, or "" to clear it */
+            location?: string;
         };
         UpdatePrincipalInputBody: {
             /**
@@ -5855,6 +5878,41 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NodeBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "update-node": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateNodeInputBody"];
+            };
+        };
         responses: {
             /** @description OK */
             200: {

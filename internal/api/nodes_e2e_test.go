@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/auth"
+	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
@@ -118,4 +120,36 @@ func TestNodeAPI(t *testing.T) {
 	viewerTok := setupAllViewer(t, ctx, dsn, "viewer-1")
 	c.do(viewerTok, http.MethodPost, "/nodes", map[string]any{"name": "site-b"}, http.StatusForbidden)
 	c.do(viewerTok, http.MethodPost, "/nodes/site-a:enroll", nil, http.StatusForbidden)
+
+	// N1: create carries display_name + location, and the create response mints no token.
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq", LocationType: "campus"}, scope.Set{All: true}); err != nil {
+		t.Fatalf("seed location: %v", err)
+	}
+	created := c.do(ownerTok, http.MethodPost, "/nodes", map[string]any{"name": "site-c", "display_name": "Site C", "location": "hq"}, http.StatusCreated)
+	if strings.Contains(string(created), `"token"`) {
+		t.Fatalf("create must not mint a token: %s", created)
+	}
+	var cbody struct {
+		DisplayName string  `json:"display_name"`
+		Location    *string `json:"location"`
+	}
+	json.Unmarshal(created, &cbody)
+	if cbody.DisplayName != "Site C" || cbody.Location == nil || *cbody.Location != "hq" {
+		t.Fatalf("create identity: got %+v", cbody)
+	}
+
+	// N1: PATCH the display name and clear the location; the name stays immutable.
+	var patched struct {
+		Name        string  `json:"name"`
+		DisplayName string  `json:"display_name"`
+		Location    *string `json:"location"`
+	}
+	json.Unmarshal(c.do(ownerTok, http.MethodPatch, "/nodes/site-c", map[string]any{"display_name": "Site C prod", "location": ""}, http.StatusOK), &patched)
+	if patched.Name != "site-c" || patched.DisplayName != "Site C prod" || patched.Location != nil {
+		t.Fatalf("patch: got %+v", patched)
+	}
+	// An unknown location is a 422, not a silent apply.
+	c.do(ownerTok, http.MethodPatch, "/nodes/site-c", map[string]any{"location": "ghost"}, http.StatusUnprocessableEntity)
+	// node:update is gated: the viewer cannot patch.
+	c.do(viewerTok, http.MethodPatch, "/nodes/site-c", map[string]any{"display_name": "x"}, http.StatusForbidden)
 }
