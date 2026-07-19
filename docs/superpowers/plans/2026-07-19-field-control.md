@@ -21,7 +21,7 @@
 ### Task 1: Storage + API: `field_definition.required`
 
 **Files:**
-- Create: `db/migrations/20260719120000_field_definition_required.sql`
+- Create: `db/migrations/20260719130000_field_definition_required.sql`
 - Modify: `internal/storage/fields.go` (FieldDefinition, FieldDefinitionSpec, cols, scan, create/update), `internal/api/fields.go` (bodies/inputs/handlers), `internal/storage/storage.go` + `unimplemented.go` if the signature changes
 - Test: `internal/storage/fields_test.go`, `internal/api/fields_e2e_test.go`
 
