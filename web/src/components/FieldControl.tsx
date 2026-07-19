@@ -100,7 +100,7 @@ export default function FieldControl(props: {
             <span>Override</span>
             <input
               type="checkbox"
-              class="toggle toggle-sm"
+              class="toggle toggle-sm toggle-primary"
               checked={overriding()}
               disabled={!props.canToggle || lockOn()}
               onChange={(e) => props.onToggle?.(e.currentTarget.checked)}

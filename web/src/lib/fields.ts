@@ -21,6 +21,7 @@ export type FieldDefinition = {
   display_name?: string;
   data_type: string;
   default_value?: unknown;
+  required: boolean;
 };
 
 // EffectiveField is one row of a component's effective fields: the declared field,
@@ -60,6 +61,7 @@ export type CreateFieldDefinition = {
   display_name?: string;
   data_type: FieldDataType;
   default_value?: unknown;
+  required?: boolean;
 };
 
 export async function createFieldDefinition(body: CreateFieldDefinition): Promise<FieldDefinition> {
