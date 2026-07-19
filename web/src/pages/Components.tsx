@@ -27,6 +27,7 @@ import TagAdder from "../components/TagAdder";
 import EffectiveVariables, { variableCascadeBlade, varCascadeBladeId } from "../components/EffectiveVariables";
 import ReachabilityPanel from "../components/ReachabilityPanel";
 import { interfaceBlade, interfaceCreateBlade } from "../components/interfaceBlades";
+import EffectiveFields, { fieldResolutionBlade, fieldBladeId } from "../components/EffectiveFields";
 
 // Components: the device inventory, the first page built on the generic TreeList.
 // Components form a tree (parent_id) and each is bound to a primary system and a
@@ -311,6 +312,13 @@ export default function Components() {
             onOpen={(variableName) => ctx.openBlade({ kind: "variable-cascade", id: varCascadeBladeId(n().raw.name, variableName) })}
           />
         </Show>
+        <Show when={can(me.data, "field", "read")}>
+          <EffectiveFields
+            component={n().raw.name}
+            editing={editing()}
+            onOpen={(fieldName) => ctx.openBlade({ kind: "field-resolution", id: fieldBladeId(n().raw.name, fieldName) })}
+          />
+        </Show>
 
         <TagAdder kind="component" name={n().raw.name} canUpdate={editing() && canUpdate()} canCreateKey={can(me.data, "tag", "create")} />
 
@@ -486,6 +494,7 @@ export default function Components() {
     extraBlades: {
       "secret-cascade": secretCascadeBlade,
       "variable-cascade": variableCascadeBlade,
+      "field-resolution": fieldResolutionBlade,
       interface: interfaceBlade,
       "interface-create": interfaceCreateBlade,
     },

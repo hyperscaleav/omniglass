@@ -3,24 +3,16 @@ import { ChevronRight, Plus, Trash } from "./icons";
 import Button from "./Button";
 
 // DetailShell: the shared body chrome every entity detail wears, so a user, a
-// group, a role, and a location all read the same. Two pieces:
-//   Fact          a labelled value in the facts grid.
+// group, a role, and a location all read the same. One piece here:
 //   RelatedList   a list of related entities (members, groups, children): one row
 //                 idiom, an optional drill (onOpen -> a blade), an optional remove,
 //                 an optional add-picker. Group members and a user's groups both
 //                 render through this, so "related principals" looks identical
 //                 wherever it appears.
-// The footer action bar (Edit / Delete / secondary) is not here: it is chrome the
-// BladeStack owns, driven by what the body registers (see lib/blades).
-
-export function Fact(props: { label: string; value: JSX.Element }): JSX.Element {
-  return (
-    <div>
-      <div class="eyebrow mb-1.5">{props.label}</div>
-      <div class="text-sm">{props.value}</div>
-    </div>
-  );
-}
+// The labelled facts grid renders through the shared KVStacked primitive (its old
+// local `Fact` was a byte-identical copy of that markup). The footer action bar
+// (Edit / Delete / secondary) is not here: it is chrome the BladeStack owns,
+// driven by what the body registers (see lib/blades).
 
 export type RelatedItem = { id: string; kind: string; name: string; sub?: string; badge?: string };
 

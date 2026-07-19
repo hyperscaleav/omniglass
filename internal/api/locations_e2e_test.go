@@ -369,6 +369,21 @@ func mustIndex(t *testing.T, locs []locResp, name string) int {
 // grant and returns its bearer token, so the test can drive a scoped identity.
 func setupScopedViewer(t *testing.T, ctx context.Context, dsn, label, role, scopeKind, scopeID string) string {
 	t.Helper()
+	return setupScopedPrincipal(t, ctx, dsn, label, grantSpec{role: role, scopeKind: scopeKind, scopeID: scopeID})
+}
+
+// grantSpec is one (role @ scope) grant for setupScopedPrincipal.
+type grantSpec struct {
+	role      string
+	scopeKind string
+	scopeID   string
+}
+
+// setupScopedPrincipal inserts a service principal with one or more (role @ scope)
+// grants and returns its bearer token, so a test can drive an identity whose read
+// and action scopes differ (e.g. reads one subtree but may only modify another).
+func setupScopedPrincipal(t *testing.T, ctx context.Context, dsn, label string, grants ...grantSpec) string {
+	t.Helper()
 	conn, err := pgx.Connect(ctx, dsn)
 	if err != nil {
 		t.Fatalf("connect: %v", err)
@@ -390,10 +405,12 @@ func setupScopedViewer(t *testing.T, ctx context.Context, dsn, label, role, scop
 		pid, hash, prefix); err != nil {
 		t.Fatalf("insert credential: %v", err)
 	}
-	if _, err := conn.Exec(ctx,
-		`insert into principal_grant (principal_id, role_id, scope_kind, scope_id) values ($1, $2, $3, $4)`,
-		pid, role, scopeKind, scopeID); err != nil {
-		t.Fatalf("insert grant: %v", err)
+	for _, g := range grants {
+		if _, err := conn.Exec(ctx,
+			`insert into principal_grant (principal_id, role_id, scope_kind, scope_id) values ($1, $2, $3, $4)`,
+			pid, g.role, g.scopeKind, g.scopeID); err != nil {
+			t.Fatalf("insert grant: %v", err)
+		}
 	}
 	return tok
 }

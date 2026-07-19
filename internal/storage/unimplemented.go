@@ -370,6 +370,30 @@ func (UnimplementedGateway) DeleteVariable(context.Context, string, string, scop
 func (UnimplementedGateway) ResolveVariables(context.Context, string, scope.Set) ([]ResolvedVariable, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) ListFieldDefinitions(context.Context) ([]FieldDefinition, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) CreateFieldDefinition(context.Context, string, FieldDefinitionSpec) (*FieldDefinition, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) UpdateFieldDefinition(context.Context, string, string, string, string, json.RawMessage) (*FieldDefinition, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteFieldDefinition(context.Context, string, string) error {
+	return nil
+}
+func (UnimplementedGateway) CreateFieldValue(context.Context, string, string, string, json.RawMessage, scope.Set) (*FieldValue, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) UpdateFieldValue(context.Context, string, string, json.RawMessage, scope.Set, scope.Set) (*FieldValue, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteFieldValue(context.Context, string, string, scope.Set, scope.Set) error {
+	return nil
+}
+func (UnimplementedGateway) EffectiveFields(context.Context, string, scope.Set) ([]EffectiveField, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) ListTags(context.Context) ([]Tag, error) {
 	return nil, nil
 }

@@ -58,14 +58,13 @@ type taskPathInput struct {
 // scope-injected through the task's interface's owning component. Tasks are
 // derived (from creating an interface), so there is no write surface here.
 func registerTaskRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-tasks",
 		Method:      http.MethodGet,
 		Path:        "/tasks",
 		Summary:     "List tasks in scope",
 		Description: "Lists the tasks whose interface's owning component the caller may read (the component cascade). Tasks are derived from interfaces, not authored. Gated by task:read.",
-		Middlewares: huma.Middlewares{a.authn, a.require("task", "read")},
-	}, func(ctx context.Context, _ *struct{}) (*listTasksOutput, error) {
+	}, "task", "read"), func(ctx context.Context, _ *struct{}) (*listTasksOutput, error) {
 		tasks, err := gw.ListTasks(ctx, a.scopeFor(ctx, "task", "read"))
 		if err != nil {
 			return nil, mapTaskErr(err)
@@ -78,14 +77,13 @@ func registerTaskRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		return out, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "get-task",
 		Method:      http.MethodGet,
 		Path:        "/tasks/{id}",
 		Summary:     "Get a task",
 		Description: "Fetches a task by id. A task whose component is out of the caller's read scope is a non-disclosing 404. Gated by task:read.",
-		Middlewares: huma.Middlewares{a.authn, a.require("task", "read")},
-	}, func(ctx context.Context, in *taskPathInput) (*taskOutput, error) {
+	}, "task", "read"), func(ctx context.Context, in *taskPathInput) (*taskOutput, error) {
 		t, err := gw.GetTask(ctx, in.ID, a.scopeFor(ctx, "task", "read"))
 		if err != nil {
 			return nil, mapTaskErr(err)

@@ -77,14 +77,13 @@ type reachabilityOutput struct {
 // registerReachabilityRoutes wires the per-component reachability read, the
 // operator-facing surface over the collection verdict data.
 func registerReachabilityRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "get-component-reachability",
 		Method:      http.MethodGet,
 		Path:        "/components/{name}/reachability",
 		Summary:     "Read a component's per-interface reachability",
 		Description: "Composes, per interface, the latest reachability verdict, the probe-layer signals that compose it, and the recent verdict transitions for the availability strip. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
-		Middlewares: huma.Middlewares{a.authn, a.require("component", "read")},
-	}, func(ctx context.Context, in *componentPathInput) (*reachabilityOutput, error) {
+	}, "component", "read"), func(ctx context.Context, in *componentPathInput) (*reachabilityOutput, error) {
 		comp, err := gw.GetComponent(ctx, in.Name, a.scopeFor(ctx, "component", "read"))
 		if err != nil {
 			return nil, mapComponentErr(err)

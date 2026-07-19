@@ -59,6 +59,53 @@ func TestFixturesShape(t *testing.T) {
 			}
 		}
 	}
+
+	// Field definitions declare a typed field on a component_type; each needs a name
+	// and a data_type in the supported scalar set. seenField lets a later field_value
+	// check its field is actually declared in the same document.
+	validDataTypes := map[string]bool{"string": true, "int": true, "float": true, "bool": true, "json": true}
+	seenField := map[string]bool{}
+	var assetTagDisplay string
+	for _, fd := range doc.FieldDefinitions {
+		if fd.Name == "" || fd.ComponentType == "" {
+			t.Errorf("field definition %+v missing name or component_type", fd)
+		}
+		if !validDataTypes[fd.DataType] {
+			t.Errorf("field definition %q has unsupported data_type %q", fd.Name, fd.DataType)
+		}
+		if fd.Name == "asset_tag" {
+			assetTagDisplay = fd.DisplayName
+		}
+		seenField[fd.Name] = true
+	}
+	// A field carries an optional human label; the seed sets one on asset_tag.
+	if assetTagDisplay != "Asset tag" {
+		t.Errorf("asset_tag display_name = %q, want \"Asset tag\"", assetTagDisplay)
+	}
+
+	// Components place a device in the estate; a component that names a location must
+	// name one declared in this document (the seed resolves the placement by name).
+	seenComp := map[string]bool{}
+	for _, c := range doc.Components {
+		if c.Name == "" || c.ComponentType == "" {
+			t.Errorf("component %+v missing name or component_type", c)
+		}
+		if c.Location != "" && !seenLoc[c.Location] {
+			t.Errorf("component %q placed at location %q not in the fixtures", c.Name, c.Location)
+		}
+		seenComp[c.Name] = true
+	}
+
+	// Field values set a literal on a component for a field: both must be declared in
+	// this document, else the seed's create fails at run time.
+	for _, fv := range doc.FieldValues {
+		if !seenComp[fv.Component] {
+			t.Errorf("field value references component %q not in the fixtures", fv.Component)
+		}
+		if !seenField[fv.Field] {
+			t.Errorf("field value on %q references field %q not declared", fv.Component, fv.Field)
+		}
+	}
 }
 
 // TestRunIdempotent proves devseed.Run lands the example estate (and the worked
@@ -121,6 +168,29 @@ func TestRunIdempotent(t *testing.T) {
 		t.Errorf("grants = %d, want 3", grants)
 	}
 
+	// The field primitive seeds three definitions, one component, and one value
+	// override. The counts prove the second Run added none of them: the definition,
+	// component, and value loops are each idempotent.
+	var fieldDefs, comps, fieldVals int
+	if err := conn.QueryRow(ctx, `select count(*) from field_definition`).Scan(&fieldDefs); err != nil {
+		t.Fatalf("count field definitions: %v", err)
+	}
+	if fieldDefs != 3 {
+		t.Errorf("field definitions = %d, want 3 (seed not idempotent or incomplete)", fieldDefs)
+	}
+	if err := conn.QueryRow(ctx, `select count(*) from component where name = 'lobby-display'`).Scan(&comps); err != nil {
+		t.Fatalf("count field-seed components: %v", err)
+	}
+	if comps != 1 {
+		t.Errorf("field-seed components = %d, want 1 (lobby-display)", comps)
+	}
+	if err := conn.QueryRow(ctx, `select count(*) from field_value`).Scan(&fieldVals); err != nil {
+		t.Fatalf("count field values: %v", err)
+	}
+	if fieldVals != 1 {
+		t.Errorf("field values = %d, want 1 (diagonal_inches override)", fieldVals)
+	}
+
 	// The tree links resolve: the west building hangs under the hq campus.
 	var parentName string
 	if err := conn.QueryRow(ctx, `
@@ -159,12 +229,12 @@ func TestRunIdempotent(t *testing.T) {
 	all := scope.Set{All: true}
 
 	// The component the checks hang on, placed under the HQ boardroom.
-	var comps int
-	if err := conn.QueryRow(ctx, `select count(*) from component where name = 'hq-boardroom-dsp'`).Scan(&comps); err != nil {
+	var reachComps int
+	if err := conn.QueryRow(ctx, `select count(*) from component where name = 'hq-boardroom-dsp'`).Scan(&reachComps); err != nil {
 		t.Fatalf("count reachability component: %v", err)
 	}
-	if comps != 1 {
-		t.Errorf("reachability component rows = %d, want 1 (seed not idempotent)", comps)
+	if reachComps != 1 {
+		t.Errorf("reachability component rows = %d, want 1 (seed not idempotent)", reachComps)
 	}
 
 	// The node is created, enrolled, and claimed, so it reads as enrolled.

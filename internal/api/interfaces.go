@@ -68,14 +68,13 @@ type updateInterfaceInput struct {
 // registerInterfaceRoutes wires the interface CRUD surface, gated by
 // interface:<action> and scope-injected through the owning component.
 func registerInterfaceRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-interfaces",
 		Method:      http.MethodGet,
 		Path:        "/interfaces",
 		Summary:     "List interfaces in scope",
 		Description: "Lists the interfaces whose owning component the caller may read (the component cascade). Gated by interface:read.",
-		Middlewares: huma.Middlewares{a.authn, a.require("interface", "read")},
-	}, func(ctx context.Context, _ *struct{}) (*listInterfacesOutput, error) {
+	}, "interface", "read"), func(ctx context.Context, _ *struct{}) (*listInterfacesOutput, error) {
 		ifaces, err := gw.ListInterfaces(ctx, a.scopeFor(ctx, "interface", "read"))
 		if err != nil {
 			return nil, mapInterfaceErr(err)
@@ -88,14 +87,13 @@ func registerInterfaceRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		return out, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "get-interface",
 		Method:      http.MethodGet,
 		Path:        "/interfaces/{id}",
 		Summary:     "Get an interface",
 		Description: "Fetches an interface by id. An interface whose component is out of the caller's read scope is a non-disclosing 404. Gated by interface:read.",
-		Middlewares: huma.Middlewares{a.authn, a.require("interface", "read")},
-	}, func(ctx context.Context, in *interfacePathInput) (*interfaceOutput, error) {
+	}, "interface", "read"), func(ctx context.Context, in *interfacePathInput) (*interfaceOutput, error) {
 		it, err := gw.GetInterface(ctx, in.ID, a.scopeFor(ctx, "interface", "read"))
 		if err != nil {
 			return nil, mapInterfaceErr(err)
@@ -103,15 +101,14 @@ func registerInterfaceRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		return &interfaceOutput{Body: toInterfaceBody(it)}, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "create-interface",
 		Method:        http.MethodPost,
 		Path:          "/interfaces",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Create an interface",
 		Description:   "Creates an interface owned by a component (or a server-hosted one, which needs an all-scoped grant). The create scope cascades through the owning component. Gated by interface:create.",
-		Middlewares:   huma.Middlewares{a.authn, a.require("interface", "create")},
-	}, func(ctx context.Context, in *createInterfaceInput) (*interfaceOutput, error) {
+	}, "interface", "create"), func(ctx context.Context, in *createInterfaceInput) (*interfaceOutput, error) {
 		it, err := gw.CreateInterface(ctx, actorID(ctx), storage.InterfaceSpec{
 			Type:      in.Body.Type,
 			Component: in.Body.Component,
@@ -124,14 +121,13 @@ func registerInterfaceRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		return &interfaceOutput{Body: toInterfaceBody(it)}, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "update-interface",
 		Method:      http.MethodPatch,
 		Path:        "/interfaces/{id}",
 		Summary:     "Update an interface",
 		Description: "Patches an interface's node placement or params. Gated by interface:update; read and update scopes (through the component) drive the 404 versus 403 split.",
-		Middlewares: huma.Middlewares{a.authn, a.require("interface", "update")},
-	}, func(ctx context.Context, in *updateInterfaceInput) (*interfaceOutput, error) {
+	}, "interface", "update"), func(ctx context.Context, in *updateInterfaceInput) (*interfaceOutput, error) {
 		it, err := gw.UpdateInterface(ctx, actorID(ctx), in.ID, storage.InterfacePatch{
 			Node:   in.Body.Node,
 			Params: []byte(in.Body.Params),
@@ -142,15 +138,14 @@ func registerInterfaceRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		return &interfaceOutput{Body: toInterfaceBody(it)}, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "delete-interface",
 		Method:        http.MethodDelete,
 		Path:          "/interfaces/{id}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete an interface",
 		Description:   "Deletes an interface, refused while a task still references it. Gated by interface:delete; read and delete scopes (through the component) drive the 404 versus 403 split.",
-		Middlewares:   huma.Middlewares{a.authn, a.require("interface", "delete")},
-	}, func(ctx context.Context, in *interfacePathInput) (*struct{}, error) {
+	}, "interface", "delete"), func(ctx context.Context, in *interfacePathInput) (*struct{}, error) {
 		if err := gw.DeleteInterface(ctx, actorID(ctx), in.ID,
 			a.scopeFor(ctx, "interface", "read"), a.scopeFor(ctx, "interface", "delete")); err != nil {
 			return nil, mapInterfaceErr(err)

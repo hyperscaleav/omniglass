@@ -2,7 +2,7 @@ import { For, Show, createEffect, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import Button from "./Button";
 import { Sliders } from "./icons";
-import { Fact } from "./DetailShell";
+import KVStacked from "./KVStacked";
 import {
   type Interface,
   type UpdateInterface,
@@ -153,11 +153,11 @@ function InterfaceBladeBody(props: { id: string }): JSX.Element {
             when={edit.editing()}
             fallback={
               <div class="grid grid-cols-2 gap-4">
-                <Fact label="Name" value={<span class="font-data">{iface().name}</span>} />
-                <Fact label="Type" value={<span class="badge badge-ghost badge-sm">{iface().type}</span>} />
-                <Fact label="Component" value={iface().component ? <span class="font-data">{iface().component}</span> : <span class="text-base-content/40">server-hosted</span>} />
-                <Fact label="Node" value={iface().node ? <span class="font-data">{iface().node}</span> : <span class="text-base-content/40">unassigned</span>} />
-                <Fact label="Target" value={interfaceTarget(iface()) ? <span class="font-data">{interfaceTarget(iface())}</span> : <span class="text-base-content/40">not set</span>} />
+                <KVStacked label="Name" value={<span class="font-data">{iface().name}</span>} />
+                <KVStacked label="Type" value={<span class="badge badge-ghost badge-sm">{iface().type}</span>} />
+                <KVStacked label="Component" value={iface().component ? <span class="font-data">{iface().component}</span> : <span class="text-base-content/40">server-hosted</span>} />
+                <KVStacked label="Node" value={iface().node ? <span class="font-data">{iface().node}</span> : <span class="text-base-content/40">unassigned</span>} />
+                <KVStacked label="Target" value={interfaceTarget(iface()) ? <span class="font-data">{interfaceTarget(iface())}</span> : <span class="text-base-content/40">not set</span>} />
               </div>
             }
           >

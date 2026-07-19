@@ -1,71 +1,94 @@
-import { For, Show, createMemo } from "solid-js";
+import { For, Show, createMemo, createSignal } from "solid-js";
 import { useQuery } from "@tanstack/solid-query";
-import { Fact } from "../components/DetailShell";
+import KVStacked from "../components/KVStacked";
 import { type BladeDef } from "../lib/blades";
 import { type Role, ROLES_KEY, listRoles } from "../lib/principals";
 
 // RoleDetail is a role's blade body: read-only this slice (custom-role editing is a
-// later slice). It teaches the RBAC model against the real role by showing what the
-// role inherits and its effective (flattened) permissions, the same PermGrid the
-// catalog card used before Roles moved onto the shared list surface.
+// later slice). It teaches the RBAC model against the real role by showing its NET
+// permissions: what it holds alongside what it is missing, measured against the
+// universe of every capability the API enforces (the same set published per-route
+// in the OpenAPI spec as x-omniglass-permission).
 
-// groupPerms turns ["location:create,update", "system:read"] into a per-resource
-// map for legible display, keeping the admin tier: `location:create,update` groups
-// under location, `audit:read:admin` marks read as admin, and `>` (the superuser
-// tail) surfaces as a single "everything" entry.
-type PermAction = { action: string; admin: boolean };
-function groupPerms(perms: string[]): { all: boolean; groups: { resource: string; actions: PermAction[] }[] } {
-  let all = false;
-  const by = new Map<string, Map<string, boolean>>();
-  for (const p of perms) {
-    if (p === ">") {
-      all = true;
-      continue;
-    }
-    const [resource, actionSeg, tier] = p.split(":");
-    if (!resource || !actionSeg) continue;
-    const admin = tier === "admin";
-    const actions = by.get(resource) ?? new Map<string, boolean>();
-    for (const a of actionSeg.split(",")) {
-      const key = a.trim();
-      actions.set(key, (actions.get(key) ?? false) || admin);
-    }
-    by.set(resource, actions);
-  }
-  const groups = [...by.entries()]
-    .sort(([a], [b]) => (a === "*" ? -1 : b === "*" ? 1 : a.localeCompare(b)))
-    .map(([resource, actions]) => ({ resource, actions: [...actions].map(([action, admin]) => ({ action, admin })) }));
-  return { all, groups };
+type PermMode = "all" | "held" | "missing";
+
+// isAdminTier flags a three-token admin-sensitive permission (e.g.
+// audit:read:admin), so a held one can be tinted to signal its sensitivity.
+function isAdminTier(perm: string): boolean {
+  return perm.split(":").length >= 3;
 }
 
-export function PermGrid(props: { perms: string[] }) {
-  const grouped = createMemo(() => groupPerms(props.perms));
+// PermRow renders one permission, one line, no wrap: a status glyph (held vs not)
+// and the full resource:action[:tier] string, lit when held and dimmed+struck when
+// missing. Held admin-sensitive permissions carry a warning tint.
+function PermRow(props: { perm: string; held: boolean }) {
   return (
-    <div class="flex flex-wrap gap-1.5">
-      <Show when={grouped().all}>
-        <span class="inline-flex items-center gap-1 rounded-field border border-warning/40 bg-warning/10 py-[3px] pl-2 pr-2 font-data text-[11px] text-warning">
-          <span class="font-bold">&gt;</span> everything
-        </span>
-      </Show>
-      <For each={grouped().groups} fallback={<Show when={!grouped().all}><span class="text-xs text-base-content/40">No permissions.</span></Show>}>
-        {(g) => (
-          <span class="inline-flex items-center gap-1 rounded-field border border-base-300 bg-base-100 py-[3px] pl-2 pr-2 font-data text-[11px]">
-            <span class="text-base-content/70">{g.resource}</span>
-            <span class="text-base-content/30">:</span>
-            <span class="inline-flex flex-wrap gap-x-1">
-              <For each={g.actions}>
-                {(a, i) => (
-                  <span classList={{ "text-warning": a.action === "*", "text-base-content/90": a.action !== "*" }}>
-                    {a.action}
-                    <Show when={a.admin}><span class="ml-0.5 text-error/80" title="admin-sensitive">:admin</span></Show>
-                    <Show when={i() < g.actions.length - 1}>,</Show>
-                  </span>
-                )}
-              </For>
-            </span>
-          </span>
-        )}
-      </For>
+    <div class="flex items-center gap-2 whitespace-nowrap font-data text-[11px] leading-5">
+      <span class="w-3 shrink-0 text-center" classList={{ "text-success": props.held, "text-base-content/25": !props.held }}>
+        {props.held ? "✓" : "·"}
+      </span>
+      <span
+        classList={{
+          "text-base-content/90": props.held && !isAdminTier(props.perm),
+          "text-warning": props.held && isAdminTier(props.perm),
+          "text-base-content/40 line-through": !props.held,
+        }}
+        title={isAdminTier(props.perm) ? "admin-sensitive" : undefined}
+      >
+        {props.perm}
+      </span>
+    </div>
+  );
+}
+
+// PermGrid is the net permission view for a role: a flat, lexicographically sorted,
+// one-per-line list of the permission universe, filtered to Held, Missing, or All.
+// held is the server-resolved subset the role covers (wildcards, the :read floor,
+// and the > tail already applied); missing is universe - held, computed here.
+export function PermGrid(props: { universe: string[]; held: string[] }) {
+  const [mode, setMode] = createSignal<PermMode>("held");
+  const heldSet = createMemo(() => new Set(props.held));
+  const universe = createMemo(() => [...props.universe].sort());
+  const held = createMemo(() => universe().filter((p) => heldSet().has(p)));
+  const missing = createMemo(() => universe().filter((p) => !heldSet().has(p)));
+  const rows = createMemo(() => {
+    const m = mode();
+    if (m === "held") return held().map((perm) => ({ perm, held: true }));
+    if (m === "missing") return missing().map((perm) => ({ perm, held: false }));
+    return universe().map((perm) => ({ perm, held: heldSet().has(perm) }));
+  });
+  const emptyMsg = createMemo(() => {
+    if (mode() === "missing") return "Holds every permission.";
+    if (mode() === "held") return "Holds no permission.";
+    return "No permissions.";
+  });
+  const tabs: { key: PermMode; label: string; count: () => number }[] = [
+    { key: "all", label: "All", count: () => universe().length },
+    { key: "held", label: "Held", count: () => held().length },
+    { key: "missing", label: "Missing", count: () => missing().length },
+  ];
+  return (
+    <div class="flex flex-col gap-2">
+      <div role="tablist" class="tabs tabs-box tabs-xs w-fit">
+        <For each={tabs}>
+          {(t) => (
+            <button
+              role="tab"
+              class="tab"
+              classList={{ "tab-active": mode() === t.key }}
+              onClick={() => setMode(t.key)}
+            >
+              {t.label}
+              <span class="ml-1 tabular-nums text-base-content/50">{t.count()}</span>
+            </button>
+          )}
+        </For>
+      </div>
+      <div class="flex max-h-80 flex-col gap-0.5 overflow-y-auto">
+        <For each={rows()} fallback={<span class="text-xs text-base-content/40">{emptyMsg()}</span>}>
+          {(row) => <PermRow perm={row.perm} held={row.held} />}
+        </For>
+      </div>
     </div>
   );
 }
@@ -85,11 +108,11 @@ export function RoleDetail(props: { id: string }) {
             <p class="text-sm text-base-content/70">{role().description}</p>
           </Show>
           <Show when={role().inherits.length}>
-            <Fact label="Inherits" value={<span class="font-data text-sm text-base-content/70">{role().inherits.join(", ")}</span>} />
+            <KVStacked label="Inherits" value={<span class="font-data text-sm text-base-content/70">{role().inherits.join(", ")}</span>} />
           </Show>
           <div>
-            <div class="eyebrow mb-1.5">Effective permissions</div>
-            <PermGrid perms={role().effective_permissions ?? role().permissions} />
+            <div class="eyebrow mb-1.5">Permissions</div>
+            <PermGrid universe={role().permission_universe ?? []} held={role().held ?? []} />
           </div>
         </div>
       )}

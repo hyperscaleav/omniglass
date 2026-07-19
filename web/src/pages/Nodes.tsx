@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import Button from "../components/Button";
 import { Check, Copy, Server } from "../components/icons";
-import { Fact } from "../components/DetailShell";
+import KVStacked from "../components/KVStacked";
 import {
   type Node,
   type EnrollOutput,
@@ -190,12 +190,12 @@ function NodeBladeBody(props: { name: string; onEnrolled: (out: EnrollOutput) =>
           </Show>
 
           <div class="grid grid-cols-2 gap-4">
-            <Fact label="Name" value={<span class="font-data">{node().name}</span>} />
-            <Fact label="Status" value={STATUS[nodeStatus(node())].label} />
-            <Fact label="Last heartbeat" value={node().last_heartbeat_at ? rel(node().last_heartbeat_at!) : <span class="text-base-content/40">never</span>} />
-            <Fact label="Enrolled" value={node().enrolled ? (node().enrolled_at ? rel(node().enrolled_at!) : "yes") : <span class="text-base-content/40">not yet</span>} />
+            <KVStacked label="Name" value={<span class="font-data">{node().name}</span>} />
+            <KVStacked label="Status" value={STATUS[nodeStatus(node())].label} />
+            <KVStacked label="Last heartbeat" value={node().last_heartbeat_at ? rel(node().last_heartbeat_at!) : <span class="text-base-content/40">never</span>} />
+            <KVStacked label="Enrolled" value={node().enrolled ? (node().enrolled_at ? rel(node().enrolled_at!) : "yes") : <span class="text-base-content/40">not yet</span>} />
             <Show when={node().description}>
-              <Fact label="Description" value={node().description} />
+              <KVStacked label="Description" value={node().description} />
             </Show>
           </div>
 

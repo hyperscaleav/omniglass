@@ -14,7 +14,7 @@ func index() rbac.RoleIndex {
 	return rbac.NewRoleIndex([]rbac.Role{
 		{ID: "viewer", Permissions: []string{"*:read"}},
 		{ID: "loc-editor", Permissions: []string{"location:create,update,delete"}},
-		{ID: "operator", Inherits: []string{"viewer"}, Permissions: []string{"secret:create,update", "variable:create,update"}},
+		{ID: "operator", Inherits: []string{"viewer"}, Permissions: []string{"secret:create,update", "variable:create,update", "field:create,update"}},
 		{ID: "owner", Permissions: []string{"*:*"}},
 	})
 }
@@ -53,6 +53,26 @@ func TestResolveVariableArcKinds(t *testing.T) {
 	vr := scope.Resolve([]scope.Grant{{Role: "viewer", ScopeKind: "component", ScopeID: "C"}}, idx, "variable", "create")
 	if !vr.Empty() {
 		t.Fatalf("viewer variable:create scope = %+v, want empty", vr)
+	}
+}
+
+// A field value is owned on a component (the same exclusive arc as a secret or
+// variable), so a grant scoped to any owning tier (location / system /
+// component) confers field scope over that subtree; a component-scoped operator
+// resolves its own component as a create root, and a bare read floor carries no
+// create.
+func TestResolveFieldArcKinds(t *testing.T) {
+	idx := index()
+	for _, kind := range []string{"location", "system", "component"} {
+		g := []scope.Grant{{Role: "operator", ScopeKind: kind, ScopeID: "ROOT"}}
+		set := scope.Resolve(g, idx, "field", "create")
+		if len(set.IDs) != 1 || set.IDs[0] != "ROOT" {
+			t.Fatalf("operator@%s field:create scope = %+v, want ROOT", kind, set)
+		}
+	}
+	vr := scope.Resolve([]scope.Grant{{Role: "viewer", ScopeKind: "component", ScopeID: "C"}}, idx, "field", "create")
+	if !vr.Empty() {
+		t.Fatalf("viewer field:create scope = %+v, want empty", vr)
 	}
 }
 

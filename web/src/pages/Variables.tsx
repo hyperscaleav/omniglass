@@ -194,24 +194,27 @@ export function ValueDisplay(p: { valueType: string; value: unknown }): JSX.Elem
 }
 
 // ValueInput is the type-aware editor: a checkbox toggle for bool, a textarea for
-// json, a number input for int/float, a text input for string.
-function ValueInput(p: { valueType: ValueType; value: string; onInput: (v: string) => void }): JSX.Element {
+// json, a number input for int/float, a text input for string. Exported so the
+// effective-fields panel reuses the same control (as EffectiveVariables reuses
+// ValueDisplay). The optional `class` rides on the rendered control so a caller
+// can enrol it as a daisyUI `join-item` (KVRow does this).
+export function ValueInput(p: { valueType: ValueType; value: string; onInput: (v: string) => void; class?: string }): JSX.Element {
   return (
     <Show when={p.valueType !== "bool"} fallback={
-      <label class="flex items-center gap-2">
+      <label class={["flex items-center gap-2", p.class].filter(Boolean).join(" ")}>
         <input type="checkbox" class="toggle toggle-sm" checked={p.value === "true"} onChange={(e) => p.onInput(e.currentTarget.checked ? "true" : "false")} />
         <span class="font-data text-sm">{p.value === "true" ? "true" : "false"}</span>
       </label>
     }>
       <Show when={p.valueType === "json"} fallback={
         <input
-          class="input input-bordered w-full font-data"
+          class={["input input-bordered w-full font-data", p.class].filter(Boolean).join(" ")}
           type={p.valueType === "int" || p.valueType === "float" ? "number" : "text"}
           value={p.value}
           onInput={(e) => p.onInput(e.currentTarget.value)}
         />
       }>
-        <textarea class="textarea textarea-bordered w-full font-data text-sm" rows={4} value={p.value} onInput={(e) => p.onInput(e.currentTarget.value)} />
+        <textarea class={["textarea textarea-bordered w-full font-data text-sm", p.class].filter(Boolean).join(" ")} rows={4} value={p.value} onInput={(e) => p.onInput(e.currentTarget.value)} />
       </Show>
     </Show>
   );

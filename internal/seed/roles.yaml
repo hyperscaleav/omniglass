@@ -15,18 +15,19 @@ roles:
     display_name: Operator
     description: >-
       Day-to-day operations: acknowledge, snooze, and resolve alarms, and create
-      or edit components, interfaces, tasks, rules, config, secrets, and variables.
+      or edit components, interfaces, rules, config, secrets, variables, and
+      fields.
       Sees and reveals the device secrets in its scope (never the admin-sensitive
       platform credentials). Inherits Viewer.
     inherits: ["viewer"]
     permissions:
       - "component:create,update"
       - "interface:create,update"
-      - "task:create,update"
       - "rule:create,update"
       - "config:create,update"
       - "secret:read,reveal,create,update"
       - "variable:create,update"
+      - "field:create,update"
       - "alarm:ack,snooze,resolve"
       # files are shared knowledge (not in the sensitive-resource set), so the
       # viewer floor reads ordinary ones; operators upload and delete them. A
@@ -79,6 +80,7 @@ roles:
       # etc.) a two-token wildcard cannot; a sensitive file is thus admin/owner-only.
       - "file:>"
       - "variable:*"
+      - "field:*"
       - "principal_grant:*"
       - "principal_group:*"
       - "principal_group:read:admin"

@@ -147,11 +147,11 @@ func applicableKinds(resource string) map[string]bool {
 		return map[string]bool{"system": true}
 	case "component", "interface", "task":
 		return map[string]bool{"component": true}
-	case "secret", "variable":
-		// A secret or variable is owned on the exclusive arc (location, system, or
-		// component), so a grant scoped to any of those tiers can contain the
-		// owner: the gateway's inScopeTree walk resolves the specific owner within
-		// it.
+	case "secret", "variable", "field":
+		// A secret, variable, or field value is owned on the exclusive arc
+		// (location, system, or component), so a grant scoped to any of those
+		// tiers can contain the owner: the gateway's inScopeTree walk resolves
+		// the specific owner within it.
 		return map[string]bool{"location": true, "system": true, "component": true}
 	default:
 		return map[string]bool{}

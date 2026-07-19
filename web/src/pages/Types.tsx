@@ -1,4 +1,4 @@
-import { For, Show, createEffect, createSignal, on, type JSX } from "solid-js";
+import { For, Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import Button from "../components/Button";
@@ -15,6 +15,14 @@ import {
   updateType,
   deleteType,
 } from "../lib/types";
+import {
+  type FieldDataType,
+  FIELD_DATA_TYPES,
+  FIELD_DEFINITIONS_KEY,
+  listFieldDefinitions,
+  createFieldDefinition,
+} from "../lib/fields";
+import { displayValue, parseInput } from "../lib/variables";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
@@ -286,6 +294,9 @@ function TypeBladeBody(p: { id: string }): JSX.Element {
               <span class="text-[11px] text-base-content/40">Secret types are read-only here; editing the fields schema is a follow-up.</span>
             </div>
           </Show>
+          <Show when={r().kind === "component"}>
+            <ComponentTypeFields typeId={r().id} canCreate={can(me.data, "field", "create")} />
+          </Show>
           <Show when={r().official}>
             <div role="alert" class="alert alert-soft text-sm"><span>Seed-owned, read-only.</span></div>
           </Show>
@@ -300,6 +311,127 @@ function Fact(p: { label: string; children: JSX.Element }): JSX.Element {
     <div class="flex flex-col gap-0.5">
       <span class="text-[11px] uppercase tracking-wide text-base-content/40">{p.label}</span>
       <span>{p.children}</span>
+    </div>
+  );
+}
+
+// ComponentTypeFields is the field-definition editor on a component_type blade: it
+// lists the fields declared on this type (name, data_type, and default) and, when
+// the caller holds field:create, an inline add row (name + a data_type select +
+// optional default). It reads the whole field-definition catalog and filters to this
+// type's id. Rendered outside the type's edit mode: a field is operator data layered
+// onto the type, so it is editable even for a read-only (official) component_type.
+function ComponentTypeFields(props: { typeId: string; canCreate: boolean }): JSX.Element {
+  const qc = useQueryClient();
+  const defs = useQuery(() => ({ queryKey: FIELD_DEFINITIONS_KEY, queryFn: listFieldDefinitions }));
+  const rows = createMemo(() =>
+    (defs.data ?? [])
+      .filter((d) => d.component_type === props.typeId)
+      .sort((a, b) => a.name.localeCompare(b.name)),
+  );
+
+  const [name, setName] = createSignal("");
+  const [displayName, setDisplayName] = createSignal("");
+  const [dataType, setDataType] = createSignal<FieldDataType>("string");
+  const [defaultText, setDefaultText] = createSignal("");
+  const [busy, setBusy] = createSignal(false);
+  const [err, setErr] = createSignal<string | null>(null);
+
+  async function add(e: Event) {
+    e.preventDefault();
+    setBusy(true);
+    setErr(null);
+    // A blank default leaves the field with no type-level default; a non-blank one
+    // is coerced to the data_type (so an int default is a number, not a string).
+    let default_value: unknown;
+    const raw = defaultText().trim();
+    if (raw !== "") {
+      try {
+        default_value = parseInput(dataType(), defaultText());
+      } catch (er) {
+        setErr(describeError(er));
+        setBusy(false);
+        return;
+      }
+    }
+    try {
+      await createFieldDefinition({
+        component_type: props.typeId,
+        name: name().trim(),
+        ...(displayName().trim() === "" ? {} : { display_name: displayName().trim() }),
+        data_type: dataType(),
+        ...(default_value === undefined ? {} : { default_value }),
+      });
+      await qc.invalidateQueries({ queryKey: FIELD_DEFINITIONS_KEY });
+      setName("");
+      setDisplayName("");
+      setDefaultText("");
+      setDataType("string");
+    } catch (er) {
+      setErr(describeError(er));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div class="flex flex-col gap-1.5">
+      <span class="eyebrow">Fields</span>
+      <div class="flex flex-col gap-2 rounded-box border border-base-300 p-2.5">
+        <For each={rows()} fallback={<span class="text-[11px] text-base-content/40">No fields declared.</span>}>
+          {(d) => (
+            <div class="flex items-center justify-between gap-2 text-sm">
+              <span class="flex items-baseline gap-2">
+                <span class="text-sm">{d.display_name || d.name}</span>
+                <Show when={d.display_name}><span class="font-data text-[11px] text-base-content/40">{d.name}</span></Show>
+              </span>
+              <span class="flex items-center gap-1.5 text-xs text-base-content/60">
+                <span class="badge badge-ghost badge-sm font-data">{d.data_type}</span>
+                <Show when={d.default_value !== undefined && d.default_value !== null}>
+                  <span class="text-base-content/40">default {displayValue(d.default_value)}</span>
+                </Show>
+              </span>
+            </div>
+          )}
+        </For>
+        <Show when={props.canCreate}>
+          <form class="flex flex-col gap-2 border-t border-base-300 pt-2" onSubmit={add}>
+            <Show when={err()}>
+              <div role="alert" class="alert alert-error alert-soft text-xs"><span>{err()}</span></div>
+            </Show>
+            <div class="flex flex-wrap items-end gap-2">
+              <input
+                class="input input-bordered input-sm w-40"
+                placeholder="Display name (optional)"
+                value={displayName()}
+                onInput={(e) => setDisplayName(e.currentTarget.value)}
+              />
+              <input
+                class="input input-bordered input-sm w-36 font-data"
+                placeholder="asset_tag"
+                value={name()}
+                onInput={(e) => setName(e.currentTarget.value)}
+              />
+              <select
+                class="select select-bordered select-sm w-28"
+                value={dataType()}
+                onChange={(e) => { setDataType(e.currentTarget.value as FieldDataType); setDefaultText(""); }}
+              >
+                <For each={FIELD_DATA_TYPES}>{(t) => <option value={t}>{t}</option>}</For>
+              </select>
+              <input
+                class="input input-bordered input-sm w-32 font-data"
+                placeholder="default (optional)"
+                type={dataType() === "int" || dataType() === "float" ? "number" : "text"}
+                value={defaultText()}
+                onInput={(e) => setDefaultText(e.currentTarget.value)}
+              />
+              <Button type="submit" intent="action" icon={Plus} disabled={busy() || !name().trim()}>Add</Button>
+            </div>
+            <span class="text-[11px] text-base-content/40">A default applies to every component of this type until the component sets its own value.</span>
+          </form>
+        </Show>
+      </div>
     </div>
   );
 }

@@ -76,14 +76,13 @@ type claimOutput struct {
 // presents its token, gets its NATS credential). natsURL is the address the claim
 // reply hands back so the node needs only the server URL.
 func registerNodeRoutes(api huma.API, a *authenticator, gw storage.Gateway, natsURL string) {
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-nodes",
 		Method:      http.MethodGet,
 		Path:        "/nodes",
 		Summary:     "List nodes",
 		Description: "Lists the edge nodes. A node is estate-wide, so listing requires an all-scope read. Gated by node:read.",
-		Middlewares: huma.Middlewares{a.authn, a.require("node", "read")},
-	}, func(ctx context.Context, _ *struct{}) (*listNodesOutput, error) {
+	}, "node", "read"), func(ctx context.Context, _ *struct{}) (*listNodesOutput, error) {
 		nodes, err := gw.ListNodes(ctx, a.scopeFor(ctx, "node", "read"))
 		if err != nil {
 			return nil, mapNodeErr(err)
@@ -96,14 +95,13 @@ func registerNodeRoutes(api huma.API, a *authenticator, gw storage.Gateway, nats
 		return out, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "get-node",
 		Method:      http.MethodGet,
 		Path:        "/nodes/{name}",
 		Summary:     "Get a node",
 		Description: "Fetches a node by name. Requires an all-scope read. Gated by node:read.",
-		Middlewares: huma.Middlewares{a.authn, a.require("node", "read")},
-	}, func(ctx context.Context, in *nodePathInput) (*nodeOutput, error) {
+	}, "node", "read"), func(ctx context.Context, in *nodePathInput) (*nodeOutput, error) {
 		n, err := gw.GetNode(ctx, in.Name, a.scopeFor(ctx, "node", "read"))
 		if err != nil {
 			return nil, mapNodeErr(err)
@@ -111,15 +109,14 @@ func registerNodeRoutes(api huma.API, a *authenticator, gw storage.Gateway, nats
 		return &nodeOutput{Body: toNodeBody(n)}, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "create-node",
 		Method:        http.MethodPost,
 		Path:          "/nodes",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Create a node",
 		Description:   "Registers an edge node server-side (day-one enrollment: create, then :enroll to mint its token). Gated by node:create.",
-		Middlewares:   huma.Middlewares{a.authn, a.require("node", "create")},
-	}, func(ctx context.Context, in *createNodeInput) (*nodeOutput, error) {
+	}, "node", "create"), func(ctx context.Context, in *createNodeInput) (*nodeOutput, error) {
 		if !validNodeName(in.Body.Name) {
 			return nil, huma.Error422UnprocessableEntity("node name must be a single subject token (no dots, whitespace, or wildcards)")
 		}
@@ -132,14 +129,13 @@ func registerNodeRoutes(api huma.API, a *authenticator, gw storage.Gateway, nats
 		return &nodeOutput{Body: toNodeBody(n)}, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "enroll-node",
 		Method:      http.MethodPost,
 		Path:        "/nodes/{name}:enroll",
 		Summary:     "Mint a node's enrollment token",
 		Description: "Mints (or re-mints) the node's enrollment token and returns it once. The token is stored only as a hash; it is never logged. Gated by node:enroll.",
-		Middlewares: huma.Middlewares{a.authn, a.require("node", "enroll")},
-	}, func(ctx context.Context, in *nodePathInput) (*enrollOutput, error) {
+	}, "node", "enroll"), func(ctx context.Context, in *nodePathInput) (*enrollOutput, error) {
 		token, hash, _, err := auth.NewBearerToken()
 		if err != nil {
 			return nil, huma.Error500InternalServerError("mint enrollment token")

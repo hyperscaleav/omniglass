@@ -71,7 +71,7 @@ type updateLocationTypeInput struct {
 	ID   string `path:"id"`
 	Body struct {
 		DisplayName        *string   `json:"display_name,omitempty"`
-		Icon                *string   `json:"icon,omitempty"`
+		Icon               *string   `json:"icon,omitempty"`
 		AllowedParentTypes *[]string `json:"allowed_parent_types,omitempty" doc:"Replaces the allowed-parent set; omit to leave unchanged, [] to clear back to unconstrained"`
 	}
 }
@@ -112,14 +112,13 @@ type updateLocationInput struct {
 // caller's per-action scope and hands it to the gateway, which expands it to the
 // row filter and writes audit. The capability is necessary, the scope decides.
 func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-locations",
 		Method:      http.MethodGet,
 		Path:        "/locations",
 		Summary:     "List locations in scope",
 		Description: "Lists the locations the caller may read, each filtered to its scope subtree. Gated by location:read.",
-		Middlewares: huma.Middlewares{a.authn, a.require("location", "read")},
-	}, func(ctx context.Context, _ *struct{}) (*listLocationsOutput, error) {
+	}, "location", "read"), func(ctx context.Context, _ *struct{}) (*listLocationsOutput, error) {
 		locs, err := gw.ListLocations(ctx, a.scopeFor(ctx, "location", "read"))
 		if err != nil {
 			return nil, huma.Error500InternalServerError("list locations")
@@ -147,14 +146,13 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		return out, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-location-types",
 		Method:      http.MethodGet,
 		Path:        "/types/location",
 		Summary:     "List location types",
 		Description: "Lists the location_type registry (the shape-definers a location is classified by), ordered alphabetically by display name. Populates the type picker on the location form. Gated by type:read.",
-		Middlewares: huma.Middlewares{a.authn, a.require("type", "read")},
-	}, func(ctx context.Context, _ *struct{}) (*listLocationTypesOutput, error) {
+	}, "type", "read"), func(ctx context.Context, _ *struct{}) (*listLocationTypesOutput, error) {
 		types, err := gw.ListLocationTypes(ctx)
 		if err != nil {
 			return nil, huma.Error500InternalServerError("list location types")
@@ -170,15 +168,14 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		return out, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "create-location-type",
 		Method:        http.MethodPost,
 		Path:          "/types/location",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Create a location type",
 		Description:   "Creates a custom (non-official) location_type. Gated by type:create.",
-		Middlewares:   huma.Middlewares{a.authn, a.require("type", "create")},
-	}, func(ctx context.Context, in *createLocationTypeInput) (*locationTypeOutput, error) {
+	}, "type", "create"), func(ctx context.Context, in *createLocationTypeInput) (*locationTypeOutput, error) {
 		lt, err := gw.CreateLocationType(ctx, actorID(ctx), storage.LocationType{
 			ID: in.Body.ID, DisplayName: in.Body.DisplayName, Icon: in.Body.Icon,
 			AllowedParentTypes: in.Body.AllowedParentTypes,
@@ -192,14 +189,13 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		}}, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "update-location-type",
 		Method:      http.MethodPatch,
 		Path:        "/types/location/{id}",
 		Summary:     "Update a location type",
 		Description: "Patches a custom location_type's display_name or icon. Official types are read-only (422). Gated by type:update.",
-		Middlewares: huma.Middlewares{a.authn, a.require("type", "update")},
-	}, func(ctx context.Context, in *updateLocationTypeInput) (*locationTypeOutput, error) {
+	}, "type", "update"), func(ctx context.Context, in *updateLocationTypeInput) (*locationTypeOutput, error) {
 		lt, err := gw.UpdateLocationType(ctx, actorID(ctx), in.ID, storage.LocationTypePatch{
 			DisplayName: in.Body.DisplayName, Icon: in.Body.Icon,
 			AllowedParentTypes: in.Body.AllowedParentTypes,
@@ -213,29 +209,27 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		}}, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "delete-location-type",
 		Method:        http.MethodDelete,
 		Path:          "/types/location/{id}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete a location type",
 		Description:   "Deletes a custom location_type, refused if official (422) or still referenced by a location (409). Gated by type:delete.",
-		Middlewares:   huma.Middlewares{a.authn, a.require("type", "delete")},
-	}, func(ctx context.Context, in *locationTypePathInput) (*struct{}, error) {
+	}, "type", "delete"), func(ctx context.Context, in *locationTypePathInput) (*struct{}, error) {
 		if err := gw.DeleteLocationType(ctx, actorID(ctx), in.ID); err != nil {
 			return nil, mapTypeErr(err, "location_type")
 		}
 		return nil, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "get-location",
 		Method:      http.MethodGet,
 		Path:        "/locations/{name}",
 		Summary:     "Get a location",
 		Description: "Fetches a location by name within the caller's read scope. Out of scope is a non-disclosing 404. Gated by location:read.",
-		Middlewares: huma.Middlewares{a.authn, a.require("location", "read")},
-	}, func(ctx context.Context, in *locationPathInput) (*locationOutput, error) {
+	}, "location", "read"), func(ctx context.Context, in *locationPathInput) (*locationOutput, error) {
 		l, err := gw.GetLocation(ctx, in.Name, a.scopeFor(ctx, "location", "read"))
 		if err != nil {
 			return nil, mapLocationErr(err)
@@ -243,15 +237,14 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		return &locationOutput{Body: toLocationBody(l)}, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "create-location",
 		Method:        http.MethodPost,
 		Path:          "/locations",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Create a location",
 		Description:   "Creates a location, optionally under a parent (a root needs an all-scoped grant). Gated by location:create.",
-		Middlewares:   huma.Middlewares{a.authn, a.require("location", "create")},
-	}, func(ctx context.Context, in *createLocationInput) (*locationOutput, error) {
+	}, "location", "create"), func(ctx context.Context, in *createLocationInput) (*locationOutput, error) {
 		l, err := gw.CreateLocation(ctx, actorID(ctx), storage.LocationSpec{
 			Name:         in.Body.Name,
 			DisplayName:  in.Body.DisplayName,
@@ -264,14 +257,13 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		return &locationOutput{Body: toLocationBody(l)}, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "update-location",
 		Method:      http.MethodPatch,
 		Path:        "/locations/{name}",
 		Summary:     "Update a location",
 		Description: "Patches a location's display_name, location_type, or parent (a move). Gated by location:update; the read and update scopes drive the 404 versus 403 split.",
-		Middlewares: huma.Middlewares{a.authn, a.require("location", "update")},
-	}, func(ctx context.Context, in *updateLocationInput) (*locationOutput, error) {
+	}, "location", "update"), func(ctx context.Context, in *updateLocationInput) (*locationOutput, error) {
 		l, err := gw.UpdateLocation(ctx, actorID(ctx), in.Name, storage.LocationPatch{
 			Name:         in.Body.Name,
 			DisplayName:  in.Body.DisplayName,
@@ -284,14 +276,13 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		return &locationOutput{Body: toLocationBody(l)}, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "check-location-name",
 		Method:      http.MethodPost,
 		Path:        "/locations:checkName",
 		Summary:     "Check a location technical name",
 		Description: "Reports whether a proposed technical name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by location:update.",
-		Middlewares: huma.Middlewares{a.authn, a.require("location", "update")},
-	}, func(ctx context.Context, in *checkNameInput) (*checkNameOutput, error) {
+	}, "location", "update"), func(ctx context.Context, in *checkNameInput) (*checkNameOutput, error) {
 		out := &checkNameOutput{}
 		if err := storage.ValidateEntityName(in.Body.Name); err != nil {
 			out.Body.Valid = false
@@ -310,15 +301,14 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		return out, nil
 	})
 
-	huma.Register(api, huma.Operation{
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "delete-location",
 		Method:        http.MethodDelete,
 		Path:          "/locations/{name}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete a location",
 		Description:   "Deletes a location, refused while it still has child locations. Gated by location:delete; read and delete scopes drive the 404 versus 403 split.",
-		Middlewares:   huma.Middlewares{a.authn, a.require("location", "delete")},
-	}, func(ctx context.Context, in *locationPathInput) (*struct{}, error) {
+	}, "location", "delete"), func(ctx context.Context, in *locationPathInput) (*struct{}, error) {
 		if err := gw.DeleteLocation(ctx, actorID(ctx), in.Name,
 			a.scopeFor(ctx, "location", "read"), a.scopeFor(ctx, "location", "delete")); err != nil {
 			return nil, mapLocationErr(err)
