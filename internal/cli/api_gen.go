@@ -617,6 +617,7 @@ func generatedCommands() []*cobra.Command {
 			var fDefaultValue string
 			var fDisplayName string
 			var fName string
+			var fRequired string
 			cmd := &cobra.Command{
 				Use:     "create",
 				Short:   "Define a field",
@@ -641,6 +642,9 @@ func generatedCommands() []*cobra.Command {
 					if cmd.Flags().Changed("name") {
 						body["name"] = fName
 					}
+					if cmd.Flags().Changed("required") {
+						body["required"] = jsonOrString(fRequired)
+					}
 					return runAPICommand(cmd, "POST", path, body)
 				},
 			}
@@ -652,6 +656,7 @@ func generatedCommands() []*cobra.Command {
 			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "Optional human label; falls back to name when unset")
 			cmd.Flags().StringVar(&fName, "name", "", "The field name; unique per component_type")
 			_ = cmd.MarkFlagRequired("name")
+			cmd.Flags().StringVar(&fRequired, "required", "", "Whether every component of this type must set the field; defaults to false")
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
@@ -686,6 +691,7 @@ func generatedCommands() []*cobra.Command {
 			var fDataType string
 			var fDefaultValue string
 			var fDisplayName string
+			var fRequired string
 			cmd := &cobra.Command{
 				Use:     "update <id>",
 				Short:   "Update a field definition",
@@ -704,6 +710,9 @@ func generatedCommands() []*cobra.Command {
 					if cmd.Flags().Changed("display-name") {
 						body["display_name"] = fDisplayName
 					}
+					if cmd.Flags().Changed("required") {
+						body["required"] = jsonOrString(fRequired)
+					}
 					return runAPICommand(cmd, "PATCH", path, body)
 				},
 			}
@@ -711,6 +720,7 @@ func generatedCommands() []*cobra.Command {
 			_ = cmd.MarkFlagRequired("data-type")
 			cmd.Flags().StringVar(&fDefaultValue, "default-value", "", "Optional type-level default, validated against data_type")
 			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "Optional human label; falls back to name when unset")
+			cmd.Flags().StringVar(&fRequired, "required", "", "Whether every component of this type must set the field; defaults to false")
 			return cmd
 		}())
 		roots = append(roots, parent)

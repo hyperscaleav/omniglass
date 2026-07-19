@@ -2427,6 +2427,8 @@ export interface components {
             display_name?: string;
             /** @description The field name; unique per component_type */
             name: string;
+            /** @description Whether every component of this type must set the field; defaults to false */
+            required?: boolean;
         };
         CreateFileInputBody: {
             /**
@@ -2722,6 +2724,8 @@ export interface components {
             /** @description True when the component overrides the type default */
             is_set: boolean;
             name: string;
+            /** @description Whether every component of this type must set the field */
+            required: boolean;
             /** @description The component's override; omitted when the field is unset */
             set_value?: unknown;
             /** @description The effective value: the set literal, or the type default when unset */
@@ -2851,6 +2855,8 @@ export interface components {
             display_name?: string;
             id: string;
             name: string;
+            /** @description Whether every component of this type must set the field */
+            required: boolean;
         };
         FieldValueBody: {
             /**
@@ -3791,6 +3797,8 @@ export interface components {
             default_value?: unknown;
             /** @description Optional human label; falls back to name when unset */
             display_name?: string;
+            /** @description Whether every component of this type must set the field; defaults to false */
+            required?: boolean;
         };
         UpdateFieldValueInputBody: {
             /**
