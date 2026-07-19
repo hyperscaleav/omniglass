@@ -6,9 +6,9 @@ import { api } from "../api/client";
 // id, on the write paths. Value bindings and the effective-tags cascade are a
 // separate surface.
 
-export type EntityKind = "component" | "system" | "location";
+export type EntityKind = "component" | "system" | "location" | "node";
 
-export const ENTITY_KINDS: EntityKind[] = ["component", "system", "location"];
+export const ENTITY_KINDS: EntityKind[] = ["component", "system", "location", "node"];
 
 export type Tag = {
   id: string;
@@ -81,7 +81,8 @@ export async function listEntityTags(kind: EntityKind, name: string): Promise<Ta
   const r =
     kind === "component" ? await api.GET("/components/{name}:listTags", p)
     : kind === "system" ? await api.GET("/systems/{name}:listTags", p)
-    : await api.GET("/locations/{name}:listTags", p);
+    : kind === "location" ? await api.GET("/locations/{name}:listTags", p)
+    : await api.GET("/nodes/{name}:listTags", p);
   if (r.error) throw r.error;
   return (r.data?.tags ?? []).map((t) => ({ key: t.key, value: t.value })) as TagBinding[];
 }
@@ -91,7 +92,8 @@ export async function setTag(kind: EntityKind, name: string, key: string, value:
   const r =
     kind === "component" ? await api.POST("/components/{name}:setTag", p)
     : kind === "system" ? await api.POST("/systems/{name}:setTag", p)
-    : await api.POST("/locations/{name}:setTag", p);
+    : kind === "location" ? await api.POST("/locations/{name}:setTag", p)
+    : await api.POST("/nodes/{name}:setTag", p);
   if (r.error) throw r.error;
 }
 
@@ -113,6 +115,7 @@ export async function removeTag(kind: EntityKind, name: string, key: string): Pr
   const r =
     kind === "component" ? await api.POST("/components/{name}:removeTag", p)
     : kind === "system" ? await api.POST("/systems/{name}:removeTag", p)
-    : await api.POST("/locations/{name}:removeTag", p);
+    : kind === "location" ? await api.POST("/locations/{name}:removeTag", p)
+    : await api.POST("/nodes/{name}:removeTag", p);
   if (r.error) throw r.error;
 }

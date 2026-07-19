@@ -16,9 +16,9 @@ import { ME_KEY, type Me } from "../lib/auth";
 // test drives them.
 const now = Date.now();
 const seed: Node[] = [
-  { name: "edge-hq", display_name: "HQ Edge Node", location: "hq", enrolled: true, description: "HQ closet", last_heartbeat_at: new Date(now).toISOString() }, // up
-  { name: "edge-east", display_name: "East Edge", enrolled: true, last_heartbeat_at: new Date(now - 11 * 60_000).toISOString() }, // down (stale)
-  { name: "edge-new", enrolled: false }, // never checked in, no display_name -> labels by key
+  { name: "edge-hq", display_name: "HQ Edge Node", location: "hq", enrolled: true, description: "HQ closet", last_heartbeat_at: new Date(now).toISOString(), tags: { environment: "prod" } }, // up
+  { name: "edge-east", display_name: "East Edge", enrolled: true, last_heartbeat_at: new Date(now - 11 * 60_000).toISOString(), tags: {} }, // down (stale)
+  { name: "edge-new", enrolled: false, tags: {} }, // never checked in, no display_name -> labels by key
 ];
 const locSeed: Location[] = [
   { name: "hq", display_name: "HQ", location_type: "campus" } as Location,

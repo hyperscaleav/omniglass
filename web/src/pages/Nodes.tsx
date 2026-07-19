@@ -5,6 +5,9 @@ import FlatList, { type FlatColumn } from "../components/FlatList";
 import Button from "../components/Button";
 import { Check, Copy, Server } from "../components/icons";
 import KVStacked from "../components/KVStacked";
+import TagAdder from "../components/TagAdder";
+import TagPills from "../components/TagPills";
+import { tagFilterKeys } from "../lib/predicate";
 import {
   type Node,
   type EnrollOutput,
@@ -77,11 +80,25 @@ const columns: FlatColumn<Node>[] = [
     key: "heartbeat", label: "Last heartbeat", width: "160px", sortVal: (n) => n.last_heartbeat_at ?? "",
     cell: (n) => (n.last_heartbeat_at ? <span class="tnum text-base-content/60">{rel(n.last_heartbeat_at)}</span> : <span class="text-base-content/30">-</span>),
   },
+  {
+    key: "tags", label: "Tags", width: "300px",
+    sortVal: (n) => Object.keys(n.tags).sort().join(","),
+    cell: (n) => <TagPills tags={n.tags} />,
+  },
 ];
 
 export default function Nodes() {
   const me = useMe();
   const nodes = useQuery(() => ({ queryKey: NODES_KEY, queryFn: () => listNodes() }));
+
+  // One filter facet per tag key present across the nodes, derived from their
+  // effective tags, so the bar can filter by any tag like any other field
+  // (mirrors the Components list).
+  const tagFacets = createMemo(() => {
+    const keys = new Set<string>();
+    for (const n of nodes.data ?? []) for (const k of Object.keys(n.tags)) keys.add(k);
+    return tagFilterKeys<Node>([...keys].sort(), new Set(["name", "status", "location"]));
+  });
   // The once-shown enrollment token lives ONLY in this signal for the modal's
   // lifetime: enroll hands it here, the modal reveals it, and onClose clears it. It
   // is never written to the query cache, localStorage, or a log.
@@ -103,8 +120,8 @@ export default function Nodes() {
           rows: () => nodes.data ?? [],
           loading: () => nodes.isLoading,
           error: () => nodes.error,
-          filterKeys: nodeFilterKeys,
-          filterPlaceholder: "filter by name or status",
+          filterKeys: () => [...nodeFilterKeys, ...tagFacets()],
+          filterPlaceholder: "filter by name, status, or tag",
           columns,
           empty: "No nodes yet.",
           rowId: (n) => n.name,
@@ -269,6 +286,16 @@ function NodeBladeBody(props: { name: string; onEnrolled: (out: EnrollOutput) =>
             >
               <input class="input input-bordered w-full" value={description()} placeholder="HQ network closet" onInput={(e) => setDescription(e.currentTarget.value)} />
             </Show>
+          </div>
+
+          <div class="flex flex-col gap-1.5">
+            <span class="eyebrow">Tags</span>
+            <TagAdder
+              kind="node"
+              name={node().name}
+              canUpdate={edit.editing() && can(me.data, "node", "update")}
+              canCreateKey={can(me.data, "tag", "create")}
+            />
           </div>
 
           <div class="flex flex-col gap-1.5">
