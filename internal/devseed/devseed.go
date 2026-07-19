@@ -428,9 +428,12 @@ func seedReachability(ctx context.Context, gw storage.Gateway, actorID string) e
 	// console (enrolled_at is stamped by a claim). The token lives only long enough to
 	// claim; it is never returned or stored in cleartext. Tolerate an existing node.
 	if _, err := gw.GetNode(ctx, reachNode, all); errors.Is(err, storage.ErrNodeNotFound) {
+		reachNodeLoc := "hq-west"
 		if _, err := gw.CreateNode(ctx, actorID, storage.NodeSpec{
-			Name:        reachNode,
-			Description: "HQ network closet",
+			Name:         reachNode,
+			DisplayName:  "HQ Edge Node",
+			Description:  "HQ network closet",
+			LocationName: &reachNodeLoc,
 		}, all); err != nil {
 			return fmt.Errorf("devseed: create reachability node: %w", err)
 		}

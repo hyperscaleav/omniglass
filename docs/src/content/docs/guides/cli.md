@@ -106,8 +106,9 @@ Register and enroll an edge node (the day-one handshake):
 
 ```sh
 omniglass node list
-omniglass node create --name edge-hq --description "HQ network closet"   # needs node:create (all-scope)
+omniglass node create --name edge-hq --display-name "HQ Edge Node" --location hq-west --description "HQ network closet"   # needs node:create (all-scope)
 omniglass node get edge-hq
+omniglass node update edge-hq --display-name "HQ Edge" --location hq-west   # needs node:update; the name is immutable
 ```
 
 The node-facing `claim` exchange is public (the enrollment token is the authentication), so

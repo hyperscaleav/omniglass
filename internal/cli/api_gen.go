@@ -1510,6 +1510,8 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			var fDescription string
+			var fDisplayName string
+			var fLocation string
 			var fName string
 			cmd := &cobra.Command{
 				Use:     "create",
@@ -1523,6 +1525,12 @@ func generatedCommands() []*cobra.Command {
 					if cmd.Flags().Changed("description") {
 						body["description"] = fDescription
 					}
+					if cmd.Flags().Changed("display-name") {
+						body["display_name"] = fDisplayName
+					}
+					if cmd.Flags().Changed("location") {
+						body["location"] = fLocation
+					}
 					if cmd.Flags().Changed("name") {
 						body["name"] = fName
 					}
@@ -1530,6 +1538,8 @@ func generatedCommands() []*cobra.Command {
 				},
 			}
 			cmd.Flags().StringVar(&fDescription, "description", "", "")
+			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "Operator label; falls back to the name when empty")
+			cmd.Flags().StringVar(&fLocation, "location", "", "Optional location the node sits in (descriptive placement, not scope)")
 			cmd.Flags().StringVar(&fName, "name", "", "Globally unique node name (also its NATS subject token, so no dots or whitespace)")
 			_ = cmd.MarkFlagRequired("name")
 			return cmd
@@ -1574,6 +1584,36 @@ func generatedCommands() []*cobra.Command {
 					return runAPICommand(cmd, "GET", path, nil)
 				},
 			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			var fDescription string
+			var fDisplayName string
+			var fLocation string
+			cmd := &cobra.Command{
+				Use:     "update <name>",
+				Short:   "Update a node",
+				Long:    "Patches a node's display name, description, and location (a nil field is unchanged; a location of \"\" clears it). The name is immutable. Requires an all-scope action. Gated by node:update.",
+				Example: "  omniglass node update <name>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/nodes/%s", url.PathEscape(args[0]))
+					body := map[string]any{}
+					if cmd.Flags().Changed("description") {
+						body["description"] = fDescription
+					}
+					if cmd.Flags().Changed("display-name") {
+						body["display_name"] = fDisplayName
+					}
+					if cmd.Flags().Changed("location") {
+						body["location"] = fLocation
+					}
+					return runAPICommand(cmd, "PATCH", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fDescription, "description", "", "")
+			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
+			cmd.Flags().StringVar(&fLocation, "location", "", "Set the node's location, or \"\" to clear it")
 			return cmd
 		}())
 		roots = append(roots, parent)

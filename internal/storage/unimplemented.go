@@ -291,6 +291,9 @@ func (UnimplementedGateway) StateTransitions(context.Context, string, string, st
 func (UnimplementedGateway) CreateNode(context.Context, string, NodeSpec, scope.Set) (*Node, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) UpdateNode(context.Context, string, string, NodePatch, scope.Set, scope.Set) (*Node, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) SetEnrollmentToken(context.Context, string, string, string, scope.Set) (*Node, error) {
 	return nil, nil
 }

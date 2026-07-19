@@ -1,4 +1,4 @@
-import { Show, For, createMemo, createSignal, type JSX } from "solid-js";
+import { Show, For, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import { Dialog } from "@kobalte/core/dialog";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
@@ -12,10 +12,13 @@ import {
   NODES_KEY,
   listNodes,
   createNode,
+  updateNode,
   enrollNode,
   nodeStatus,
+  nodeLabel,
   nodeFilterKeys,
 } from "../lib/nodes";
+import { LOCATIONS_KEY, listLocations } from "../lib/locations";
 import { TASKS_KEY, listTasks } from "../lib/tasks";
 import { INTERFACES_KEY, listInterfaces } from "../lib/interfaces";
 import { useMe, can } from "../lib/auth";
@@ -52,13 +55,16 @@ function StatusPill(props: { node: Node }) {
 // relative time (or a muted dash for a node that has never checked in).
 const columns: FlatColumn<Node>[] = [
   {
-    key: "name", label: "Name", sortVal: (n) => n.name.toLowerCase(),
+    key: "name", label: "Name", sortVal: (n) => nodeLabel(n).toLowerCase(),
     cell: (n) => (
       <div class="flex items-center gap-2.5">
         <span class="text-base-content/40"><Server size={16} /></span>
         <div class="min-w-0 leading-tight">
-          <div class="truncate font-data text-sm font-medium">{n.name}</div>
-          <Show when={n.description}><div class="truncate text-[11px] text-base-content/40">{n.description}</div></Show>
+          <div class="truncate text-sm font-medium">{nodeLabel(n)}</div>
+          <div class="truncate font-data text-[11px] text-base-content/40">
+            {n.name}
+            <Show when={n.location}> · {n.location}</Show>
+          </div>
         </div>
       </div>
     ),
@@ -118,7 +124,9 @@ export default function Nodes() {
 function NodeBladeTitle(props: { name: string }): JSX.Element {
   const nodes = useQuery(() => ({ queryKey: NODES_KEY, queryFn: () => listNodes() }));
   const n = () => (nodes.data ?? []).find((x) => x.name === props.name);
-  return <span class="font-data">{n()?.name ?? props.name}</span>;
+  // The title is the node's label (display_name, falling back to its name/key),
+  // mirroring how the component/system/location blades title by display_name.
+  return <span>{n() ? nodeLabel(n()!) : props.name}</span>;
 }
 
 // NodeBladeBody is the node's detail on the shared blade stack (same chrome and
@@ -139,6 +147,35 @@ function NodeBladeBody(props: { name: string; onEnrolled: (out: EnrollOutput) =>
   const [err, setErr] = createSignal<string | null>(null);
   const [busy, setBusy] = createSignal(false);
   const canEnroll = () => can(me.data, "node", "enroll");
+
+  // The editable identity fields (display_name, description, location), the same
+  // read-edit-save shape the component/location blades use. The location options
+  // are the estate's locations (a descriptive placement, not scope). The signals
+  // re-sync from the live node whenever it changes or edit mode toggles, so Cancel
+  // reverts and a Save reflects.
+  const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: () => listLocations() }));
+  const [displayName, setDisplayName] = createSignal("");
+  const [description, setDescription] = createSignal("");
+  const [location, setLocation] = createSignal("");
+  createEffect(on([n, () => edit.editing()] as const, ([node]) => {
+    setDisplayName(node?.display_name ?? "");
+    setDescription(node?.description ?? "");
+    setLocation(node?.location ?? "");
+    setErr(null);
+  }));
+
+  async function save() {
+    const node = n();
+    if (!node) return;
+    setErr(null);
+    try {
+      await updateNode(node.name, { display_name: displayName().trim(), description: description().trim(), location: location() });
+      await qc.invalidateQueries({ queryKey: NODES_KEY });
+    } catch (e) {
+      setErr(describeError(e));
+      throw e; // keep the blade in edit mode on failure
+    }
+  }
 
   // The node's derived tasks. A task has no name: it is a binding, a function running
   // over an interface, so it reads as its interface (the anchor, resolved from the
@@ -168,12 +205,17 @@ function NodeBladeBody(props: { name: string; onEnrolled: (out: EnrollOutput) =>
     }
   }
 
-  // A node has no operator-editable fields (name / description are set at creation),
-  // so the body is never editable; its one prominent footer action is Enroll /
-  // Re-enroll, gated on node:enroll.
+  // Parity with the component/location blades: Edit is the primary action (gated on
+  // node:update; the name is the immutable key, so it stays read-only). Enroll /
+  // Re-enroll is a node-specific act, so it moves to the secondary kebab rather than
+  // occupying the primary slot.
   edit.bind({
-    editable: () => false,
-    primary: () => (canEnroll() && n() ? { label: n()!.enrolled ? "Re-enroll" : "Enroll", onClick: () => void doEnroll() } : undefined),
+    editable: () => !!n() && can(me.data, "node", "update"),
+    save,
+    secondary: () =>
+      canEnroll() && n()
+        ? [{ label: n()!.enrolled ? "Re-enroll" : "Enroll", onClick: () => void doEnroll() }]
+        : [],
   });
 
   return (
@@ -194,8 +236,38 @@ function NodeBladeBody(props: { name: string; onEnrolled: (out: EnrollOutput) =>
             <KVStacked label="Status" value={STATUS[nodeStatus(node())].label} />
             <KVStacked label="Last heartbeat" value={node().last_heartbeat_at ? rel(node().last_heartbeat_at!) : <span class="text-base-content/40">never</span>} />
             <KVStacked label="Enrolled" value={node().enrolled ? (node().enrolled_at ? rel(node().enrolled_at!) : "yes") : <span class="text-base-content/40">not yet</span>} />
-            <Show when={node().description}>
-              <KVStacked label="Description" value={node().description} />
+          </div>
+
+          <div class="flex flex-col gap-1.5">
+            <span class="eyebrow">Display name</span>
+            <Show
+              when={edit.editing()}
+              fallback={<div class="input input-bordered flex items-center text-sm">{node().display_name || <span class="text-base-content/40">{node().name}</span>}</div>}
+            >
+              <input class="input input-bordered w-full" value={displayName()} placeholder={node().name} onInput={(e) => setDisplayName(e.currentTarget.value)} />
+            </Show>
+          </div>
+
+          <div class="flex flex-col gap-1.5">
+            <span class="eyebrow">Location</span>
+            <Show
+              when={edit.editing()}
+              fallback={<div class="input input-bordered flex items-center text-sm">{node().location || <span class="text-base-content/40">unplaced</span>}</div>}
+            >
+              <select class="select select-bordered w-full" value={location()} onChange={(e) => setLocation(e.currentTarget.value)}>
+                <option value="">(unplaced)</option>
+                <For each={locations.data ?? []}>{(l) => <option value={l.name}>{l.display_name || l.name}</option>}</For>
+              </select>
+            </Show>
+          </div>
+
+          <div class="flex flex-col gap-1.5">
+            <span class="eyebrow">Description</span>
+            <Show
+              when={edit.editing()}
+              fallback={<div class="input input-bordered flex items-center text-sm">{node().description || <span class="text-base-content/40">—</span>}</div>}
+            >
+              <input class="input input-bordered w-full" value={description()} placeholder="HQ network closet" onInput={(e) => setDescription(e.currentTarget.value)} />
             </Show>
           </div>
 
@@ -239,7 +311,10 @@ function NodeBladeBody(props: { name: string; onEnrolled: (out: EnrollOutput) =>
 // Drawer). The token is never held here.
 function CreateNodeForm(props: { close: () => void; onEnrolled: (out: EnrollOutput) => void }) {
   const qc = useQueryClient();
+  const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: () => listLocations() }));
   const [name, setName] = createSignal("");
+  const [displayName, setDisplayName] = createSignal("");
+  const [location, setLocation] = createSignal("");
   const [description, setDescription] = createSignal("");
   const [busy, setBusy] = createSignal(false);
   const [err, setErr] = createSignal<string | null>(null);
@@ -249,7 +324,12 @@ function CreateNodeForm(props: { close: () => void; onEnrolled: (out: EnrollOutp
     setBusy(true);
     setErr(null);
     try {
-      const created = await createNode({ name: name().trim(), description: description().trim() || undefined });
+      const created = await createNode({
+        name: name().trim(),
+        display_name: displayName().trim() || undefined,
+        description: description().trim() || undefined,
+        location: location() || undefined,
+      });
       await qc.invalidateQueries({ queryKey: NODES_KEY });
       // Day-one enrollment: mint the token now so the operator can hand it to the
       // node deployment. Shown once (next), never cached.
@@ -271,6 +351,17 @@ function CreateNodeForm(props: { close: () => void; onEnrolled: (out: EnrollOutp
       <div>
         <label class="eyebrow mb-1.5 block" for="new-node-name">Name</label>
         <input id="new-node-name" autocomplete="off" class="input input-bordered w-full font-data" value={name()} placeholder="edge-hq-1" onInput={(e) => setName(e.currentTarget.value)} disabled={busy()} required />
+      </div>
+      <div>
+        <label class="eyebrow mb-1.5 block" for="new-node-display">Display name</label>
+        <input id="new-node-display" autocomplete="off" class="input input-bordered w-full" value={displayName()} placeholder="HQ Closet Node" onInput={(e) => setDisplayName(e.currentTarget.value)} disabled={busy()} />
+      </div>
+      <div>
+        <label class="eyebrow mb-1.5 block" for="new-node-location">Location</label>
+        <select id="new-node-location" class="select select-bordered w-full" value={location()} onChange={(e) => setLocation(e.currentTarget.value)} disabled={busy()}>
+          <option value="">(unplaced)</option>
+          <For each={locations.data ?? []}>{(l) => <option value={l.name}>{l.display_name || l.name}</option>}</For>
+        </select>
       </div>
       <div>
         <label class="eyebrow mb-1.5 block" for="new-node-desc">Description</label>
