@@ -1390,6 +1390,63 @@ Example:
 omniglass node list
 ```
 
+### `omniglass node listTags`
+
+List tags on a node
+
+```
+omniglass node listTags <name>
+```
+
+Lists the tags bound directly on a node (not the resolved cascade). Gated by node:read.
+
+Example:
+
+```sh
+omniglass node listTags <name>
+```
+
+### `omniglass node removeTag`
+
+Remove a tag value from a node
+
+```
+omniglass node removeTag <name> [flags]
+```
+
+Removes a key's value from a node. Gated by node:update.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--key` | string | (none) | The tag key to remove |
+
+Example:
+
+```sh
+omniglass node removeTag <name> --key key
+```
+
+### `omniglass node setTag`
+
+Set a tag value on a node
+
+```
+omniglass node setTag <name> [flags]
+```
+
+Binds a value for a key on a node. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by node:update.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--key` | string | (none) | The tag key (must exist and apply to this kind) |
+| `--value` | string | (none) | The bound value |
+
+Example:
+
+```sh
+omniglass node setTag <name> --key key --value value
+```
+
 ### `omniglass node update`
 
 Update a node

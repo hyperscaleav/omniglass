@@ -14,13 +14,14 @@ import (
 )
 
 type nodeBody struct {
-	Name            string     `json:"name"`
-	DisplayName     string     `json:"display_name,omitempty"`
-	Description     string     `json:"description,omitempty"`
-	Location        *string    `json:"location,omitempty" doc:"The location the node sits in (descriptive placement, not scope)"`
-	Enrolled        bool       `json:"enrolled"`
-	LastHeartbeatAt *time.Time `json:"last_heartbeat_at,omitempty"`
-	EnrolledAt      *time.Time `json:"enrolled_at,omitempty"`
+	Name            string            `json:"name"`
+	DisplayName     string            `json:"display_name,omitempty"`
+	Description     string            `json:"description,omitempty"`
+	Location        *string           `json:"location,omitempty" doc:"The location the node sits in (descriptive placement, not scope)"`
+	Enrolled        bool              `json:"enrolled"`
+	LastHeartbeatAt *time.Time        `json:"last_heartbeat_at,omitempty"`
+	EnrolledAt      *time.Time        `json:"enrolled_at,omitempty"`
+	EffectiveTags   map[string]string `json:"effective_tags,omitempty" doc:"The resolved effective tags (key -> winning value) on this node: its direct bindings plus propagating global tags. For the Tags column and the blade pills."`
 }
 
 func toNodeBody(n *storage.Node) nodeBody {
@@ -102,10 +103,20 @@ func registerNodeRoutes(api huma.API, a *authenticator, gw storage.Gateway, nats
 		if err != nil {
 			return nil, mapNodeErr(err)
 		}
+		ids := make([]string, len(nodes))
+		for i := range nodes {
+			ids[i] = nodes[i].PrincipalID
+		}
+		effTags, err := gw.EffectiveTags(ctx, "node", ids)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("list nodes")
+		}
 		out := &listNodesOutput{}
 		out.Body.Nodes = make([]nodeBody, 0, len(nodes))
 		for i := range nodes {
-			out.Body.Nodes = append(out.Body.Nodes, toNodeBody(&nodes[i]))
+			b := toNodeBody(&nodes[i])
+			b.EffectiveTags = effTags[nodes[i].PrincipalID]
+			out.Body.Nodes = append(out.Body.Nodes, b)
 		}
 		return out, nil
 	})
@@ -121,7 +132,13 @@ func registerNodeRoutes(api huma.API, a *authenticator, gw storage.Gateway, nats
 		if err != nil {
 			return nil, mapNodeErr(err)
 		}
-		return &nodeOutput{Body: toNodeBody(n)}, nil
+		b := toNodeBody(n)
+		effTags, err := gw.EffectiveTags(ctx, "node", []string{n.PrincipalID})
+		if err != nil {
+			return nil, huma.Error500InternalServerError("get node")
+		}
+		b.EffectiveTags = effTags[n.PrincipalID]
+		return &nodeOutput{Body: b}, nil
 	})
 
 	huma.Register(api, a.gated(huma.Operation{
