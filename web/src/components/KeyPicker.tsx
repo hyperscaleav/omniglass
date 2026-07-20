@@ -90,7 +90,10 @@ export default function KeyPicker(props: {
         </div>
       </Combobox.Control>
       <Combobox.Portal>
-        <Combobox.Content class="z-50 max-h-64 overflow-y-auto rounded-box border border-base-300 bg-base-100 p-1 shadow-lg">
+        {/* z-100 (not z-50): Kobalte's Popper copies the content's computed
+            z-index onto the portaled positioner, and the picker often opens inside
+            a blade (z-60), so the dropdown must sit above it, matching InfoTip. */}
+        <Combobox.Content class="z-100 max-h-64 overflow-y-auto rounded-box border border-base-300 bg-base-100 p-1 shadow-lg">
           <Combobox.Listbox class="flex flex-col gap-0.5" />
         </Combobox.Content>
       </Combobox.Portal>
