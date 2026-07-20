@@ -1894,16 +1894,16 @@ Example:
 omniglass principal-group update <id>
 ```
 
-## `omniglass propertie`
+## `omniglass property`
 
-Commands for the propertie resource
+Commands for the property resource
 
-### `omniglass propertie create`
+### `omniglass property create`
 
 Create a property
 
 ```
-omniglass propertie create [flags]
+omniglass property create [flags]
 ```
 
 Registers a custom property (official=false). The name must be a valid property key. Gated by property:create.
@@ -1921,15 +1921,15 @@ Registers a custom property (official=false). The name must be a valid property 
 Example:
 
 ```sh
-omniglass propertie create --data-type data_type --name name
+omniglass property create --data-type data_type --name name
 ```
 
-### `omniglass propertie delete`
+### `omniglass property delete`
 
 Delete a property
 
 ```
-omniglass propertie delete <name>
+omniglass property delete <name>
 ```
 
 Removes a custom property by name. Official properties are read-only. Gated by property:delete.
@@ -1937,15 +1937,15 @@ Removes a custom property by name. Official properties are read-only. Gated by p
 Example:
 
 ```sh
-omniglass propertie delete <name>
+omniglass property delete <name>
 ```
 
-### `omniglass propertie get`
+### `omniglass property get`
 
 Get a property
 
 ```
-omniglass propertie get <name>
+omniglass property get <name>
 ```
 
 Returns one property by name. Gated by property:read.
@@ -1953,15 +1953,15 @@ Returns one property by name. Gated by property:read.
 Example:
 
 ```sh
-omniglass propertie get <name>
+omniglass property get <name>
 ```
 
-### `omniglass propertie list`
+### `omniglass property list`
 
 List properties
 
 ```
-omniglass propertie list
+omniglass property list
 ```
 
 Lists every registered property (official and custom). The catalog is estate-wide reference data. Gated by property:read.
@@ -1969,15 +1969,15 @@ Lists every registered property (official and custom). The catalog is estate-wid
 Example:
 
 ```sh
-omniglass propertie list
+omniglass property list
 ```
 
-### `omniglass propertie update`
+### `omniglass property update`
 
 Update a property
 
 ```
-omniglass propertie update <name> [flags]
+omniglass property update <name> [flags]
 ```
 
 Patches a custom property's label, description, unit, or validation (a nil field is unchanged). Data type and kind are fixed at creation. Official properties are read-only. Gated by property:update.
@@ -1992,7 +1992,7 @@ Patches a custom property's label, description, unit, or validation (a nil field
 Example:
 
 ```sh
-omniglass propertie update <name>
+omniglass property update <name>
 ```
 
 ## `omniglass reachability`

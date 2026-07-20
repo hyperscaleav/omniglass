@@ -2132,8 +2132,8 @@ func generatedCommands() []*cobra.Command {
 	}
 	{
 		parent := &cobra.Command{
-			Use:   "propertie",
-			Short: "Commands for the propertie resource",
+			Use:   "property",
+			Short: "Commands for the property resource",
 		}
 		parent.AddCommand(func() *cobra.Command {
 			var fDataType string
@@ -2147,7 +2147,7 @@ func generatedCommands() []*cobra.Command {
 				Use:     "create",
 				Short:   "Create a property",
 				Long:    "Registers a custom property (official=false). The name must be a valid property key. Gated by property:create.",
-				Example: "  omniglass propertie create --data-type data_type --name name",
+				Example: "  omniglass property create --data-type data_type --name name",
 				Args:    cobra.ExactArgs(0),
 				RunE: func(cmd *cobra.Command, args []string) error {
 					path := fmt.Sprintf("/api/v1/properties")
@@ -2192,7 +2192,7 @@ func generatedCommands() []*cobra.Command {
 				Use:     "delete <name>",
 				Short:   "Delete a property",
 				Long:    "Removes a custom property by name. Official properties are read-only. Gated by property:delete.",
-				Example: "  omniglass propertie delete <name>",
+				Example: "  omniglass property delete <name>",
 				Args:    cobra.ExactArgs(1),
 				RunE: func(cmd *cobra.Command, args []string) error {
 					path := fmt.Sprintf("/api/v1/properties/%s", url.PathEscape(args[0]))
@@ -2206,7 +2206,7 @@ func generatedCommands() []*cobra.Command {
 				Use:     "get <name>",
 				Short:   "Get a property",
 				Long:    "Returns one property by name. Gated by property:read.",
-				Example: "  omniglass propertie get <name>",
+				Example: "  omniglass property get <name>",
 				Args:    cobra.ExactArgs(1),
 				RunE: func(cmd *cobra.Command, args []string) error {
 					path := fmt.Sprintf("/api/v1/properties/%s", url.PathEscape(args[0]))
@@ -2220,7 +2220,7 @@ func generatedCommands() []*cobra.Command {
 				Use:     "list",
 				Short:   "List properties",
 				Long:    "Lists every registered property (official and custom). The catalog is estate-wide reference data. Gated by property:read.",
-				Example: "  omniglass propertie list",
+				Example: "  omniglass property list",
 				Args:    cobra.ExactArgs(0),
 				RunE: func(cmd *cobra.Command, args []string) error {
 					path := fmt.Sprintf("/api/v1/properties")
@@ -2238,7 +2238,7 @@ func generatedCommands() []*cobra.Command {
 				Use:     "update <name>",
 				Short:   "Update a property",
 				Long:    "Patches a custom property's label, description, unit, or validation (a nil field is unchanged). Data type and kind are fixed at creation. Official properties are read-only. Gated by property:update.",
-				Example: "  omniglass propertie update <name>",
+				Example: "  omniglass property update <name>",
 				Args:    cobra.ExactArgs(1),
 				RunE: func(cmd *cobra.Command, args []string) error {
 					path := fmt.Sprintf("/api/v1/properties/%s", url.PathEscape(args[0]))
