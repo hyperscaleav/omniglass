@@ -258,22 +258,22 @@ func (UnimplementedGateway) ListTasks(context.Context, scope.Set) ([]Task, error
 func (UnimplementedGateway) GetTask(context.Context, string, scope.Set) (*Task, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) UpsertKey(context.Context, Key) error {
+func (UnimplementedGateway) UpsertProperty(context.Context, Property) error {
 	return nil
 }
-func (UnimplementedGateway) ListKeys(context.Context) ([]Key, error) {
+func (UnimplementedGateway) ListProperties(context.Context) ([]Property, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) GetKey(context.Context, string) (*Key, error) {
+func (UnimplementedGateway) GetProperty(context.Context, string) (*Property, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) CreateKey(context.Context, string, KeySpec) (*Key, error) {
+func (UnimplementedGateway) CreateProperty(context.Context, string, PropertySpec) (*Property, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) UpdateKey(context.Context, string, string, KeyPatch) (*Key, error) {
+func (UnimplementedGateway) UpdateProperty(context.Context, string, string, PropertyPatch) (*Property, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) DeleteKey(context.Context, string, string) error {
+func (UnimplementedGateway) DeleteProperty(context.Context, string, string) error {
 	return nil
 }
 func (UnimplementedGateway) UpsertInterfaceType(context.Context, InterfaceType) error {

@@ -101,12 +101,12 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 		return
 	}
 
-	keys, err := s.store.ListKeys(ctx)
+	properties, err := s.store.ListProperties(ctx)
 	if err != nil {
 		s.nakOrTerm(msg) // transient registry read failure: redeliver (bounded)
 		return
 	}
-	reg := collection.NewRegistry(keys)
+	reg := collection.NewRegistry(properties)
 
 	// Route by the registry kind (the cp3-deferred "route by kind" note): a metric
 	// name lands in metric_datapoint, a state name in state_datapoint. Both survive

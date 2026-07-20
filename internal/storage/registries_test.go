@@ -29,25 +29,25 @@ func TestRegistrySeed(t *testing.T) {
 		t.Fatalf("seed (2nd, idempotent): %v", err)
 	}
 
-	keys, err := gw.ListKeys(ctx)
+	props, err := gw.ListProperties(ctx)
 	if err != nil {
-		t.Fatalf("list canonical_keys: %v", err)
+		t.Fatalf("list properties: %v", err)
 	}
 	want := map[string]string{"icmp.reachable": "metric", "icmp.rtt_avg": "metric", "tcp.open": "metric", "tcp.connect_time": "metric"}
 	got := map[string]string{}
 	official := map[string]bool{}
-	for _, k := range keys {
-		if k.Kind != nil {
-			got[k.Name] = *k.Kind
+	for _, prop := range props {
+		if prop.Kind != nil {
+			got[prop.Name] = *prop.Kind
 		}
-		official[k.Name] = k.Official
+		official[prop.Name] = prop.Official
 	}
 	for name, kind := range want {
 		if got[name] != kind {
-			t.Errorf("canonical_key %s: want kind %q, got %q", name, kind, got[name])
+			t.Errorf("property %s: want kind %q, got %q", name, kind, got[name])
 		}
 	}
-	// The declared attribute keys seed with no kind and official=true.
+	// The declared attribute properties seed with no kind and official=true.
 	if _, ok := got["serial_number"]; ok {
 		t.Errorf("serial_number: want no kind (declared-only), got %q", got["serial_number"])
 	}

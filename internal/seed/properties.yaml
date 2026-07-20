@@ -1,8 +1,9 @@
-# The official canonical-key canon, seeded idempotently at boot. A key is a typed,
-# owner-agnostic name (snake_case, dot-hierarchied) that a datapoint observes and a
-# field declares. Observed keys carry a kind (metric/state/log) and unit; declared
-# attribute keys carry neither. validation is a JSON Schema fragment.
-keys:
+# The official property canon, seeded idempotently at boot. A property is a typed,
+# owner-agnostic signal keyed by name (snake_case, dot-hierarchied) that a datapoint
+# observes and a field declares. Observed properties carry a kind (metric/state/log)
+# and unit; declared attribute properties carry neither. validation is a JSON Schema
+# fragment.
+properties:
   - name: icmp.reachable
     kind: metric
     data_type: int
@@ -39,7 +40,7 @@ keys:
       results (up = every applicable probe reached the target). A built-in state:
       availability is time_in_state over it. Unknown/stale are read-time
       derivations, not stored values.
-  # Declared attribute keys: no kind (not observed), the starter set a field draws from.
+  # Declared attribute properties: no kind (not observed), the starter set a field draws from.
   - name: serial_number
     data_type: string
     display_name: Serial number

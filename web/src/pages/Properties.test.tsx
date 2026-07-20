@@ -1,15 +1,15 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, screen } from "@solidjs/testing-library";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
-import Keys from "./Keys";
-import { KEYS_KEY, type KeyRow } from "../lib/keys";
+import Properties from "./Properties";
+import { PROPERTIES_KEY, type PropertyRow } from "../lib/properties";
 import { ME_KEY, type Me } from "../lib/auth";
 
-// The Keys page is a single FlatList over the /keys catalog. Official (seed-owned)
-// keys are read-only; a custom key is writable only when the caller holds
-// key:create / key:update. Data is seeded into the query cache so no server is
-// needed.
-const seed: KeyRow[] = [
+// The Properties page is a single FlatList over the /properties catalog. Official
+// (seed-owned) properties are read-only; a custom property is writable only when the
+// caller holds property:create / property:update. Data is seeded into the query cache
+// so no server is needed.
+const seed: PropertyRow[] = [
   { name: "serial_number", data_type: "string", display_name: "Serial number", official: true },
   { name: "icmp.reachable", data_type: "int", display_name: "ICMP Reachable", kind: "metric", official: true },
   { name: "rack_unit", data_type: "int", display_name: "Rack unit", official: false },
@@ -20,32 +20,32 @@ const viewer: Me = { principal: { id: "u-view", kind: "human" }, human: { userna
 
 function mount(me: Me = admin) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
-  qc.setQueryData([...KEYS_KEY], seed);
+  qc.setQueryData([...PROPERTIES_KEY], seed);
   qc.setQueryData([...ME_KEY], me);
   return render(() => (
     <QueryClientProvider client={qc}>
-      <Keys />
+      <Properties />
     </QueryClientProvider>
   ));
 }
 
-describe("Keys page", () => {
+describe("Properties page", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("lists the seeded keys", () => {
+  it("lists the seeded properties", () => {
     mount();
     expect(screen.getByText("serial_number")).toBeTruthy();
     expect(screen.getByText("icmp.reachable")).toBeTruthy();
     expect(screen.getByText("rack_unit")).toBeTruthy();
   });
 
-  it("shows New key for a caller holding key:create", () => {
+  it("shows New property for a caller holding property:create", () => {
     mount(admin);
-    expect(screen.getByText("New key")).toBeTruthy();
+    expect(screen.getByText("New property")).toBeTruthy();
   });
 
-  it("hides New key from a read-only viewer", () => {
+  it("hides New property from a read-only viewer", () => {
     mount(viewer);
-    expect(screen.queryByText("New key")).toBeNull();
+    expect(screen.queryByText("New property")).toBeNull();
   });
 });

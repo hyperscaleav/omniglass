@@ -21,7 +21,7 @@ import Roles from "./pages/Roles";
 import Groups from "./pages/Groups";
 import Secrets from "./pages/Secrets";
 import Variables from "./pages/Variables";
-import Keys from "./pages/Keys";
+import Properties from "./pages/Properties";
 import Tags from "./pages/Tags";
 import Types from "./pages/Types";
 import ComponentMakes from "./pages/ComponentMakes";
@@ -90,7 +90,7 @@ render(
           <Route path="/variables" component={Variables} />
           <Route path="/tags" component={Tags} />
           <Route path="/types" component={Types} />
-          <Route path="/keys" component={Keys} />
+          <Route path="/properties" component={Properties} />
           <Route path="/component-makes" component={ComponentMakes} />
           <Route path="/audit" component={Audit} />
           <Route path="/settings" component={Settings} />

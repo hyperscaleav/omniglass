@@ -28,8 +28,8 @@ var systemTypesYAML []byte
 //go:embed component_types.yaml
 var componentTypesYAML []byte
 
-//go:embed canonical_keys.yaml
-var canonicalKeysYAML []byte
+//go:embed properties.yaml
+var propertiesYAML []byte
 
 //go:embed interface_types.yaml
 var interfaceTypesYAML []byte
@@ -73,8 +73,8 @@ type componentTypesDoc struct {
 	} `yaml:"component_types"`
 }
 
-type canonicalKeysDoc struct {
-	Keys []struct {
+type propertiesDoc struct {
+	Properties []struct {
 		Name        string         `yaml:"name"`
 		Kind        string         `yaml:"kind"`
 		DataType    string         `yaml:"data_type"`
@@ -82,7 +82,7 @@ type canonicalKeysDoc struct {
 		Validation  map[string]any `yaml:"validation"`
 		DisplayName string         `yaml:"display_name"`
 		Description string         `yaml:"description"`
-	} `yaml:"keys"`
+	} `yaml:"properties"`
 }
 
 type interfaceTypesDoc struct {
@@ -135,7 +135,7 @@ func Run(ctx context.Context, gw storage.Gateway) error {
 	if err := seedInterfaceTypes(ctx, gw); err != nil {
 		return err
 	}
-	if err := seedCanonicalKeys(ctx, gw); err != nil {
+	if err := seedProperties(ctx, gw); err != nil {
 		return err
 	}
 	if err := seedComponentMakes(ctx, gw); err != nil {
@@ -159,33 +159,33 @@ func seedInterfaceTypes(ctx context.Context, gw storage.Gateway) error {
 	return nil
 }
 
-func seedCanonicalKeys(ctx context.Context, gw storage.Gateway) error {
-	var doc canonicalKeysDoc
-	if err := yaml.Unmarshal(canonicalKeysYAML, &doc); err != nil {
-		return fmt.Errorf("seed: parse canonical_keys: %w", err)
+func seedProperties(ctx context.Context, gw storage.Gateway) error {
+	var doc propertiesDoc
+	if err := yaml.Unmarshal(propertiesYAML, &doc); err != nil {
+		return fmt.Errorf("seed: parse properties: %w", err)
 	}
-	for _, k := range doc.Keys {
+	for _, p := range doc.Properties {
 		var unit *string
-		if k.Unit != "" {
-			u := k.Unit
+		if p.Unit != "" {
+			u := p.Unit
 			unit = &u
 		}
 		var kind *string
-		if k.Kind != "" {
-			kk := k.Kind
+		if p.Kind != "" {
+			kk := p.Kind
 			kind = &kk
 		}
 		var validation []byte
-		if len(k.Validation) > 0 {
-			b, err := json.Marshal(k.Validation)
+		if len(p.Validation) > 0 {
+			b, err := json.Marshal(p.Validation)
 			if err != nil {
-				return fmt.Errorf("seed: marshal validation for %q: %w", k.Name, err)
+				return fmt.Errorf("seed: marshal validation for %q: %w", p.Name, err)
 			}
 			validation = b
 		}
-		if err := gw.UpsertKey(ctx, storage.Key{
-			Name: k.Name, DisplayName: k.DisplayName, Kind: kind, DataType: k.DataType,
-			Unit: unit, Validation: validation, Description: k.Description, Official: true,
+		if err := gw.UpsertProperty(ctx, storage.Property{
+			Name: p.Name, DisplayName: p.DisplayName, Kind: kind, DataType: p.DataType,
+			Unit: unit, Validation: validation, Description: p.Description, Official: true,
 		}); err != nil {
 			return err
 		}

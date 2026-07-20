@@ -6,24 +6,24 @@ import Button from "../components/Button";
 import { DrawerFooter } from "../components/Drawer";
 import { Plus } from "../components/icons";
 import {
-  type KeyRow,
-  type KeyDataType,
-  type KeyKind,
-  KEY_DATA_TYPES,
-  KEYS_KEY,
-  listKeys,
-  createKey,
-  updateKey,
-  deleteKey,
-} from "../lib/keys";
+  type PropertyRow,
+  type PropertyDataType,
+  type PropertyKind,
+  PROPERTY_DATA_TYPES,
+  PROPERTIES_KEY,
+  listProperties,
+  createProperty,
+  updateProperty,
+  deleteProperty,
+} from "../lib/properties";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
-// Keys: the canonical keyspace catalog (Catalog > Keys). A key is a typed,
-// registered name that a datapoint observes and a field declares. Official
-// (seed-owned) keys are read-only; custom keys are operator-created. The catalog
-// is estate-wide reference data, not a scoped resource.
+// Properties: the estate-model signal catalog (Catalog > Properties). A property is
+// a typed, registered signal named by a key that a datapoint observes and a field
+// declares. Official (seed-owned) properties are read-only; custom properties are
+// operator-created. The catalog is estate-wide reference data, not a scoped resource.
 
 function typeBadge(dataType: string): JSX.Element {
   return <span class="badge badge-ghost badge-sm font-data">{dataType}</span>;
@@ -41,7 +41,7 @@ function originBadge(official: boolean): JSX.Element {
     : <span class="badge badge-outline badge-sm">custom</span>;
 }
 
-const columns: FlatColumn<KeyRow>[] = [
+const columns: FlatColumn<PropertyRow>[] = [
   { key: "name", label: "Key", sortVal: (r) => r.name, cell: (r) => <span class="font-data font-semibold">{r.name}</span> },
   { key: "data_type", label: "Type", width: "90px", sortVal: (r) => r.data_type, cell: (r) => typeBadge(r.data_type) },
   { key: "display_name", label: "Label", sortVal: (r) => r.display_name ?? "", cell: (r) => <span>{r.display_name}</span> },
@@ -49,32 +49,32 @@ const columns: FlatColumn<KeyRow>[] = [
   { key: "official", label: "Origin", width: "100px", sortVal: (r) => String(r.official), cell: (r) => originBadge(r.official) },
 ];
 
-export default function Keys(): JSX.Element {
+export default function Properties(): JSX.Element {
   const me = useMe();
-  const keys = useQuery(() => ({ queryKey: KEYS_KEY, queryFn: listKeys }));
-  const rows = () => (keys.data ?? []).slice().sort((a, b) => a.name.localeCompare(b.name));
-  const canCreate = () => can(me.data, "key", "create");
+  const properties = useQuery(() => ({ queryKey: PROPERTIES_KEY, queryFn: listProperties }));
+  const rows = () => (properties.data ?? []).slice().sort((a, b) => a.name.localeCompare(b.name));
+  const canCreate = () => can(me.data, "property", "create");
 
   return (
     <div class="flex min-h-full flex-col gap-4">
-      <FlatList<KeyRow>
+      <FlatList<PropertyRow>
         config={{
-          entity: { name: "key", plural: "keys" },
+          entity: { name: "property", plural: "properties" },
           rows,
-          loading: () => keys.isPending,
-          error: () => keys.error,
+          loading: () => properties.isPending,
+          error: () => properties.error,
           filterKeys: [
             { key: "name", type: "string", hint: "substring", get: (r) => `${r.name} ${r.display_name ?? ""}`, values: () => [] },
-            { key: "type", type: "string", hint: "exact", get: (r) => r.data_type, values: () => KEY_DATA_TYPES },
+            { key: "type", type: "string", hint: "exact", get: (r) => r.data_type, values: () => PROPERTY_DATA_TYPES },
             { key: "official", type: "string", hint: "exact", get: (r) => (r.official ? "official" : "custom"), values: () => ["official", "custom"] },
           ],
-          filterPlaceholder: "filter keys by name, label…",
+          filterPlaceholder: "filter properties by name, label…",
           columns,
-          empty: "No keys.",
+          empty: "No properties.",
           rowId: (r) => r.name,
-          blades: { registry: { key: keyBlade }, rootKind: "key" },
+          blades: { registry: { property: propertyBlade }, rootKind: "property" },
           create: canCreate()
-            ? { label: "New key", can: canCreate, body: (ctx) => <CreateKeyForm onCreated={ctx.close} /> }
+            ? { label: "New property", can: canCreate, body: (ctx) => <CreatePropertyForm onCreated={ctx.close} /> }
             : undefined,
         }}
       />
@@ -82,24 +82,24 @@ export default function Keys(): JSX.Element {
   );
 }
 
-// keyBlade renders one key on the shared blade stack. The title is the mono key
-// name; official keys are read-only (no pencil, no delete).
-export const keyBlade: BladeDef = {
+// propertyBlade renders one property on the shared blade stack. The title is the mono
+// property key; official properties are read-only (no pencil, no delete).
+export const propertyBlade: BladeDef = {
   Title: (p) => <span class="font-data">{p.id}</span>,
-  Body: (p) => <KeyBladeBody name={p.id} />,
+  Body: (p) => <PropertyBladeBody name={p.id} />,
 };
 
-function useKeyRow(name: string): () => KeyRow | undefined {
-  const keys = useQuery(() => ({ queryKey: KEYS_KEY, queryFn: listKeys }));
-  return () => (keys.data ?? []).find((r) => r.name === name);
+function usePropertyRow(name: string): () => PropertyRow | undefined {
+  const properties = useQuery(() => ({ queryKey: PROPERTIES_KEY, queryFn: listProperties }));
+  return () => (properties.data ?? []).find((r) => r.name === name);
 }
 
-function KeyBladeBody(p: { name: string }): JSX.Element {
+function PropertyBladeBody(p: { name: string }): JSX.Element {
   const qc = useQueryClient();
   const me = useMe();
   const blades = useBlades();
   const edit = useBladeEdit();
-  const row = useKeyRow(p.name);
+  const row = usePropertyRow(p.name);
   const [err, setErr] = createSignal<string | null>(null);
   const [displayName, setDisplayName] = createSignal("");
   const [description, setDescription] = createSignal("");
@@ -114,15 +114,15 @@ function KeyBladeBody(p: { name: string }): JSX.Element {
     setErr(null);
   }));
 
-  async function removeKey() {
+  async function removeProperty() {
     const r = row();
     if (!r) return;
-    if (!confirm(`Delete key "${r.name}"?`)) return;
+    if (!confirm(`Delete property "${r.name}"?`)) return;
     setErr(null);
     try {
-      await deleteKey(r.name);
+      await deleteProperty(r.name);
       blades.close();
-      await qc.invalidateQueries({ queryKey: KEYS_KEY });
+      await qc.invalidateQueries({ queryKey: PROPERTIES_KEY });
     } catch (e) {
       setErr(describeError(e));
     }
@@ -133,8 +133,8 @@ function KeyBladeBody(p: { name: string }): JSX.Element {
     if (!r) return;
     setErr(null);
     try {
-      await updateKey(r.name, { display_name: displayName(), description: description(), unit: unit() || undefined });
-      await qc.invalidateQueries({ queryKey: KEYS_KEY });
+      await updateProperty(r.name, { display_name: displayName(), description: description(), unit: unit() || undefined });
+      await qc.invalidateQueries({ queryKey: PROPERTIES_KEY });
     } catch (e) {
       setErr(describeError(e));
       throw e; // keep the blade in edit mode on failure
@@ -142,16 +142,16 @@ function KeyBladeBody(p: { name: string }): JSX.Element {
   }
 
   edit.bind({
-    editable: () => !!row() && !row()!.official && can(me.data, "key", "update"),
+    editable: () => !!row() && !row()!.official && can(me.data, "property", "update"),
     save,
     destructive: () =>
-      row() && !row()!.official && can(me.data, "key", "delete")
-        ? { label: "Delete", tone: "danger", onClick: removeKey }
+      row() && !row()!.official && can(me.data, "property", "delete")
+        ? { label: "Delete", tone: "danger", onClick: removeProperty }
         : undefined,
   });
 
   return (
-    <Show when={row()} fallback={<p class="text-sm text-base-content/50">Key not found.</p>}>
+    <Show when={row()} fallback={<p class="text-sm text-base-content/50">Property not found.</p>}>
       {(r) => (
         <div class="flex flex-col gap-4">
           <Show when={err()}>
@@ -197,16 +197,16 @@ function KeyBladeBody(p: { name: string }): JSX.Element {
   );
 }
 
-// CreateKeyForm: register a custom key. Name and data type are required; kind
-// (observed metric/state/log) is optional, omitted for a declared attribute key.
-export function CreateKeyForm(p: { onCreated: (name: string) => void }): JSX.Element {
+// CreatePropertyForm: register a custom property. Name and data type are required; kind
+// (observed metric/state/log) is optional, omitted for a declared attribute property.
+export function CreatePropertyForm(p: { onCreated: (name: string) => void }): JSX.Element {
   const qc = useQueryClient();
   const [name, setName] = createSignal("");
-  const [dataType, setDataType] = createSignal<KeyDataType>("string");
+  const [dataType, setDataType] = createSignal<PropertyDataType>("string");
   const [displayName, setDisplayName] = createSignal("");
   const [description, setDescription] = createSignal("");
   const [unit, setUnit] = createSignal("");
-  const [kind, setKind] = createSignal<"" | KeyKind>("");
+  const [kind, setKind] = createSignal<"" | PropertyKind>("");
   const [busy, setBusy] = createSignal(false);
   const [formErr, setFormErr] = createSignal<string | null>(null);
 
@@ -215,7 +215,7 @@ export function CreateKeyForm(p: { onCreated: (name: string) => void }): JSX.Ele
     setBusy(true);
     setFormErr(null);
     try {
-      await createKey({
+      await createProperty({
         name: name().trim(),
         data_type: dataType(),
         display_name: displayName().trim() || undefined,
@@ -223,7 +223,7 @@ export function CreateKeyForm(p: { onCreated: (name: string) => void }): JSX.Ele
         unit: unit().trim() || undefined,
         kind: kind() || undefined,
       });
-      await qc.invalidateQueries({ queryKey: KEYS_KEY });
+      await qc.invalidateQueries({ queryKey: PROPERTIES_KEY });
       p.onCreated(name().trim());
     } catch (er) {
       setFormErr(describeError(er));
@@ -241,8 +241,8 @@ export function CreateKeyForm(p: { onCreated: (name: string) => void }): JSX.Ele
         <input class="input input-bordered w-full font-data" value={name()} placeholder="serial_number" onInput={(e) => setName(e.currentTarget.value)} />
       </Field>
       <Field label="Data type">
-        <select class="select select-bordered w-full" value={dataType()} onChange={(e) => setDataType(e.currentTarget.value as KeyDataType)}>
-          <For each={KEY_DATA_TYPES}>{(t) => <option value={t}>{t}</option>}</For>
+        <select class="select select-bordered w-full" value={dataType()} onChange={(e) => setDataType(e.currentTarget.value as PropertyDataType)}>
+          <For each={PROPERTY_DATA_TYPES}>{(t) => <option value={t}>{t}</option>}</For>
         </select>
       </Field>
       <Field label="Display name">
@@ -255,7 +255,7 @@ export function CreateKeyForm(p: { onCreated: (name: string) => void }): JSX.Ele
         <input class="input input-bordered w-full font-data" value={unit()} placeholder="ms" onInput={(e) => setUnit(e.currentTarget.value)} />
       </Field>
       <Field label="Kind" hint="Observed kind: metric, state, or log. Leave declared for an operator-set attribute.">
-        <select class="select select-bordered w-full" value={kind()} onChange={(e) => setKind(e.currentTarget.value as "" | KeyKind)}>
+        <select class="select select-bordered w-full" value={kind()} onChange={(e) => setKind(e.currentTarget.value as "" | PropertyKind)}>
           <option value="">declared (no observed kind)</option>
           <option value="metric">metric</option>
           <option value="state">state</option>
@@ -263,7 +263,7 @@ export function CreateKeyForm(p: { onCreated: (name: string) => void }): JSX.Ele
         </select>
       </Field>
       <DrawerFooter>
-        <Button type="submit" intent="action" icon={Plus} disabled={busy() || !name().trim()}>Create key</Button>
+        <Button type="submit" intent="action" icon={Plus} disabled={busy() || !name().trim()}>Create property</Button>
       </DrawerFooter>
     </form>
   );
