@@ -12,12 +12,16 @@ export type FieldDataType = "string" | "int" | "float" | "bool" | "json";
 
 export const FIELD_DATA_TYPES: FieldDataType[] = ["string", "int", "float", "bool", "json"];
 
-// FieldDefinition is one field declared on a component_type: a name unique per
-// type, a data_type, and an optional type-level default (omitted when unset).
+// FieldDefinition is one field declared on a component_type: it draws its identity
+// from a canonical key (name = key, data_type and display_name come from the key),
+// plus the per-type schema bits (an optional default and the required flag).
 export type FieldDefinition = {
   id: string;
   component_type: string;
   name: string;
+  // The canonical key this field declares (== name). Omitted only for a legacy
+  // field that predates the registry.
+  key?: string;
   display_name?: string;
   data_type: string;
   default_value?: unknown;
@@ -55,11 +59,12 @@ export async function listFieldDefinitions(): Promise<FieldDefinition[]> {
   return (data?.field_definitions ?? []) as FieldDefinition[];
 }
 
+// CreateFieldDefinition declares a field on a component_type by picking a key from
+// the catalog. The field's name, data_type, and label come from the key, so only
+// the key reference and the per-type schema bits (default, required) are sent.
 export type CreateFieldDefinition = {
   component_type: string;
-  name: string;
-  display_name?: string;
-  data_type: FieldDataType;
+  key: string;
   default_value?: unknown;
   required?: boolean;
 };
@@ -68,6 +73,30 @@ export async function createFieldDefinition(body: CreateFieldDefinition): Promis
   const { data, error } = await api.POST("/field-definitions", { body });
   if (error) throw error;
   return data as FieldDefinition;
+}
+
+// UpdateFieldDefinition patches a field's per-type schema bits (the default value
+// and required flag); the key, data_type, and label are fixed at creation.
+export type UpdateFieldDefinition = {
+  default_value?: unknown;
+  required?: boolean;
+};
+
+export async function updateFieldDefinition(id: string, body: UpdateFieldDefinition): Promise<FieldDefinition> {
+  const { data, error } = await api.PATCH("/field-definitions/{id}", {
+    params: { path: { id } },
+    body,
+  });
+  if (error) throw error;
+  return data as FieldDefinition;
+}
+
+// deleteFieldDefinition removes a field declared on a component_type by its id.
+export async function deleteFieldDefinition(id: string): Promise<void> {
+  const { error } = await api.DELETE("/field-definitions/{id}", {
+    params: { path: { id } },
+  });
+  if (error) throw error;
 }
 
 // effectiveFields reads a component's effective fields: every field declared on its

@@ -3,8 +3,10 @@ import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import KVStacked from "../components/KVStacked";
 import Button from "../components/Button";
+import KeyPicker from "../components/KeyPicker";
 import { DrawerFooter } from "../components/Drawer";
-import { Plus } from "../components/icons";
+import { ValueInput } from "./Variables";
+import { Plus, Pencil, Trash, Check } from "../components/icons";
 import {
   type TypeKind,
   type TypeRow,
@@ -17,13 +19,15 @@ import {
   deleteType,
 } from "../lib/types";
 import {
-  type FieldDataType,
-  FIELD_DATA_TYPES,
+  type FieldDefinition,
   FIELD_DEFINITIONS_KEY,
   listFieldDefinitions,
   createFieldDefinition,
+  updateFieldDefinition,
+  deleteFieldDefinition,
 } from "../lib/fields";
-import { displayValue, parseInput } from "../lib/variables";
+import { type KeyRow } from "../lib/keys";
+import { displayValue, parseInput, type ValueType } from "../lib/variables";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
@@ -307,24 +311,28 @@ function TypeBladeBody(p: { id: string }): JSX.Element {
   );
 }
 
-// ComponentTypeFields is the field-definition editor on a component_type blade: it
-// lists the fields declared on this type (name, data_type, and default) and, when
-// the caller holds field:create, an inline add row (name + a data_type select +
-// optional default). It reads the whole field-definition catalog and filters to this
-// type's id. Rendered outside the type's edit mode: a field is operator data layered
-// onto the type, so it is editable even for a read-only (official) component_type.
+// ComponentTypeFields is the field-definition editor on a component_type blade. It
+// lists the fields declared on this type, each with its display name, key, data_type,
+// default, and required flag, and (holding field:create) offers a KeyPicker-driven
+// add row: pick a registered key from the catalog, then a type-aware default input
+// keyed by the key's data_type, and a required toggle. Each declared field carries a
+// per-row edit (default + required) and delete, so the type schema is fully
+// operable. It reads the whole field-definition catalog and filters to this type's
+// id. Rendered outside the type's edit mode: a field is operator data layered onto
+// the type, so it is editable even for a read-only (official) component_type.
 function ComponentTypeFields(props: { typeId: string; canCreate: boolean }): JSX.Element {
   const qc = useQueryClient();
   const defs = useQuery(() => ({ queryKey: FIELD_DEFINITIONS_KEY, queryFn: listFieldDefinitions }));
   const rows = createMemo(() =>
     (defs.data ?? [])
       .filter((d) => d.component_type === props.typeId)
-      .sort((a, b) => a.name.localeCompare(b.name)),
+      .sort((a, b) => (a.display_name || a.name).localeCompare(b.display_name || b.name)),
   );
+  // Keys already declared on this type, so the picker never offers a duplicate.
+  const usedKeys = createMemo(() => rows().map((d) => d.key ?? d.name));
+  const refresh = () => qc.invalidateQueries({ queryKey: FIELD_DEFINITIONS_KEY });
 
-  const [name, setName] = createSignal("");
-  const [displayName, setDisplayName] = createSignal("");
-  const [dataType, setDataType] = createSignal<FieldDataType>("string");
+  const [pickedKey, setPickedKey] = createSignal<KeyRow | null>(null);
   const [defaultText, setDefaultText] = createSignal("");
   const [required, setRequired] = createSignal(false);
   const [busy, setBusy] = createSignal(false);
@@ -332,15 +340,17 @@ function ComponentTypeFields(props: { typeId: string; canCreate: boolean }): JSX
 
   async function add(e: Event) {
     e.preventDefault();
+    const key = pickedKey();
+    if (!key) return;
     setBusy(true);
     setErr(null);
     // A blank default leaves the field with no type-level default; a non-blank one
-    // is coerced to the data_type (so an int default is a number, not a string).
+    // is coerced to the key's data_type (so an int default is a number, not a string).
     let default_value: unknown;
     const raw = defaultText().trim();
     if (raw !== "") {
       try {
-        default_value = parseInput(dataType(), defaultText());
+        default_value = parseInput(key.data_type as ValueType, defaultText());
       } catch (er) {
         setErr(describeError(er));
         setBusy(false);
@@ -350,17 +360,13 @@ function ComponentTypeFields(props: { typeId: string; canCreate: boolean }): JSX
     try {
       await createFieldDefinition({
         component_type: props.typeId,
-        name: name().trim(),
-        ...(displayName().trim() === "" ? {} : { display_name: displayName().trim() }),
-        data_type: dataType(),
+        key: key.name,
         ...(default_value === undefined ? {} : { default_value }),
         required: required(),
       });
-      await qc.invalidateQueries({ queryKey: FIELD_DEFINITIONS_KEY });
-      setName("");
-      setDisplayName("");
+      await refresh();
+      setPickedKey(null);
       setDefaultText("");
-      setDataType("string");
       setRequired(false);
     } catch (er) {
       setErr(describeError(er));
@@ -374,66 +380,168 @@ function ComponentTypeFields(props: { typeId: string; canCreate: boolean }): JSX
       <span class="eyebrow">Fields</span>
       <div class="flex flex-col gap-2 rounded-box border border-base-300 p-2.5">
         <For each={rows()} fallback={<span class="text-[11px] text-base-content/40">No fields declared.</span>}>
-          {(d) => (
-            <div class="flex items-center gap-2 text-sm">
-              <span class="min-w-0 truncate">
-                {d.display_name || d.name}
-                <Show when={d.required}><span class="ml-1 font-semibold text-error" aria-label="required">*</span></Show>
-                <span class="ml-2 font-data text-[10px] font-normal text-base-content/40">{d.data_type}</span>
-              </span>
-              <Show when={d.display_name}><span class="shrink-0 font-data text-[11px] text-base-content/40">{d.name}</span></Show>
-              <span class="flex-1" />
-              <Show
-                when={d.default_value !== undefined && d.default_value !== null}
-                fallback={<span class="shrink-0 text-[11px] text-base-content/40">no default</span>}
-              >
-                <span class="shrink-0 font-data text-sm text-base-content/60">{displayValue(d.default_value)}</span>
-              </Show>
-            </div>
-          )}
+          {(d) => <FieldDefRow def={d} canEdit={props.canCreate} onChanged={refresh} />}
         </For>
         <Show when={props.canCreate}>
           <form class="flex flex-col gap-2 border-t border-base-300 pt-2" onSubmit={add}>
             <Show when={err()}>
               <div role="alert" class="alert alert-error alert-soft text-xs"><span>{err()}</span></div>
             </Show>
-            <div class="flex flex-wrap items-end gap-2">
-              <input
-                class="input input-bordered input-sm w-40"
-                placeholder="Display name (optional)"
-                value={displayName()}
-                onInput={(e) => setDisplayName(e.currentTarget.value)}
+            {/* Not wrapped in a <label>: the KeyPicker's trigger is a button, and a
+                button inside a label steals the label and breaks hover. */}
+            <div class="flex flex-col gap-1">
+              <span class="text-[11px] font-medium text-base-content/70">Add a field</span>
+              <KeyPicker
+                value={pickedKey()?.name}
+                onSelect={(k) => { setPickedKey(k); setDefaultText(""); }}
+                exclude={usedKeys()}
+                aria-label="Field key"
+                placeholder="Pick a key…"
               />
-              <input
-                class="input input-bordered input-sm w-36 font-data"
-                placeholder="asset_tag"
-                value={name()}
-                onInput={(e) => setName(e.currentTarget.value)}
-              />
-              <select
-                class="select select-bordered select-sm w-28"
-                value={dataType()}
-                onChange={(e) => { setDataType(e.currentTarget.value as FieldDataType); setDefaultText(""); }}
-              >
-                <For each={FIELD_DATA_TYPES}>{(t) => <option value={t}>{t}</option>}</For>
-              </select>
-              <input
-                class="input input-bordered input-sm w-32 font-data"
-                placeholder="default (optional)"
-                type={dataType() === "int" || dataType() === "float" ? "number" : "text"}
-                value={defaultText()}
-                onInput={(e) => setDefaultText(e.currentTarget.value)}
-              />
-              <label class="flex items-center gap-1.5 text-xs text-base-content/70">
-                <input type="checkbox" class="checkbox checkbox-sm" checked={required()} onChange={(e) => setRequired(e.currentTarget.checked)} />
-                required
-              </label>
-              <Button type="submit" intent="action" icon={Plus} disabled={busy() || !name().trim()}>Add</Button>
             </div>
-            <span class="text-[11px] text-base-content/40">A default applies to every component of this type until the component sets its own value.</span>
+            {/* Once a key is picked, its type and label are surfaced, and the default
+                input is keyed by the key's data_type. */}
+            <Show when={pickedKey()}>
+              {(k) => (
+                <div class="flex flex-col gap-2">
+                  <div class="flex flex-wrap items-center gap-2 text-[11px] text-base-content/50">
+                    <span>key <span class="font-data text-base-content/70">{k().name}</span></span>
+                    <span>type <span class="badge badge-ghost badge-sm font-data">{k().data_type}</span></span>
+                    <Show when={k().display_name}><span>label <span class="text-base-content/70">{k().display_name}</span></span></Show>
+                  </div>
+                  <div class="flex flex-wrap items-center gap-2">
+                    <div class="w-40">
+                      <ValueInput
+                        valueType={k().data_type as ValueType}
+                        value={defaultText()}
+                        onInput={setDefaultText}
+                        placeholder="default (optional)"
+                      />
+                    </div>
+                    <label class="flex items-center gap-1.5 text-xs text-base-content/70">
+                      <input type="checkbox" class="checkbox checkbox-sm" checked={required()} onChange={(e) => setRequired(e.currentTarget.checked)} />
+                      required
+                    </label>
+                    <Button type="submit" intent="action" icon={Plus} disabled={busy()}>Add</Button>
+                  </div>
+                </div>
+              )}
+            </Show>
+            <span class="text-[11px] text-base-content/40">A field draws its name, type, and label from the key. A default applies to every component of this type until the component sets its own value.</span>
           </form>
         </Show>
       </div>
+    </div>
+  );
+}
+
+// FieldDefRow renders one declared field with an inline edit (its default and
+// required flag; the key, data_type, and label are fixed) and a delete. The read
+// row shows the display name, the mono key, the data_type badge, and the default so
+// the schema reads clearly.
+function FieldDefRow(props: { def: FieldDefinition; canEdit: boolean; onChanged: () => Promise<unknown> }): JSX.Element {
+  const [editing, setEditing] = createSignal(false);
+  const [defaultText, setDefaultText] = createSignal("");
+  const [required, setRequired] = createSignal(false);
+  const [busy, setBusy] = createSignal(false);
+  const [err, setErr] = createSignal<string | null>(null);
+  const dt = () => props.def.data_type as ValueType;
+  const key = () => props.def.key ?? props.def.name;
+  const hasDefault = () => props.def.default_value !== undefined && props.def.default_value !== null;
+
+  function startEdit() {
+    setDefaultText(hasDefault() ? displayValue(props.def.default_value) : "");
+    setRequired(props.def.required);
+    setErr(null);
+    setEditing(true);
+  }
+
+  async function save() {
+    setBusy(true);
+    setErr(null);
+    // A blank default clears the type-level default (omitted from the patch); a
+    // non-blank one is coerced to the field's data_type.
+    let default_value: unknown;
+    const raw = defaultText().trim();
+    if (raw !== "") {
+      try {
+        default_value = parseInput(dt(), defaultText());
+      } catch (er) {
+        setErr(describeError(er));
+        setBusy(false);
+        return;
+      }
+    }
+    try {
+      await updateFieldDefinition(props.def.id, {
+        required: required(),
+        ...(default_value === undefined ? {} : { default_value }),
+      });
+      await props.onChanged();
+      setEditing(false);
+    } catch (er) {
+      setErr(describeError(er));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove() {
+    if (!confirm(`Delete field "${props.def.display_name || props.def.name}" from this type?`)) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      await deleteFieldDefinition(props.def.id);
+      await props.onChanged();
+    } catch (er) {
+      setErr(describeError(er));
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div class="flex flex-col gap-1.5">
+      <div class="flex items-center gap-2 text-sm">
+        <span class="min-w-0 truncate">
+          {props.def.display_name || props.def.name}
+          <Show when={props.def.required}><span class="ml-1 font-semibold text-error" aria-label="required">*</span></Show>
+        </span>
+        <span class="shrink-0 font-data text-[11px] text-base-content/40">{key()}</span>
+        <span class="badge badge-ghost badge-sm shrink-0 font-data">{props.def.data_type}</span>
+        <span class="flex-1" />
+        <Show
+          when={hasDefault()}
+          fallback={<span class="shrink-0 text-[11px] text-base-content/40">no default</span>}
+        >
+          <span class="shrink-0 font-data text-sm text-base-content/60">{displayValue(props.def.default_value)}</span>
+        </Show>
+        <Show when={props.canEdit && !editing()}>
+          <button type="button" class="shrink-0 text-base-content/40 hover:text-base-content" aria-label={`Edit ${key()}`} onClick={startEdit}>
+            <Pencil size={13} />
+          </button>
+          <button type="button" class="shrink-0 text-base-content/40 hover:text-error" aria-label={`Delete ${key()}`} disabled={busy()} onClick={remove}>
+            <Trash size={13} />
+          </button>
+        </Show>
+      </div>
+      <Show when={editing()}>
+        <div class="flex flex-col gap-2 rounded-box border border-base-300 bg-base-200/40 p-2">
+          <Show when={err()}>
+            <div role="alert" class="alert alert-error alert-soft text-xs"><span>{err()}</span></div>
+          </Show>
+          <div class="flex flex-wrap items-center gap-2">
+            <div class="w-40">
+              <ValueInput valueType={dt()} value={defaultText()} onInput={setDefaultText} placeholder="default (optional)" />
+            </div>
+            <label class="flex items-center gap-1.5 text-xs text-base-content/70">
+              <input type="checkbox" class="checkbox checkbox-sm" checked={required()} onChange={(e) => setRequired(e.currentTarget.checked)} />
+              required
+            </label>
+            <Button type="button" intent="action" icon={Check} disabled={busy()} onClick={save}>Save</Button>
+            <Button type="button" intent="quiet" disabled={busy()} onClick={() => setEditing(false)}>Cancel</Button>
+          </div>
+        </div>
+      </Show>
     </div>
   );
 }

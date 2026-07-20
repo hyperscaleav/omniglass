@@ -3,6 +3,8 @@ import { render, fireEvent, screen, waitFor, within } from "@solidjs/testing-lib
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import Types from "./Types";
 import { TYPES_KEY, type TypeRow } from "../lib/types";
+import { FIELD_DEFINITIONS_KEY, type FieldDefinition } from "../lib/fields";
+import { KEYS_KEY, type KeyRow } from "../lib/keys";
 import { ME_KEY, type Me } from "../lib/auth";
 
 // The Types page is a segmented tab control (Location / System / Component /
@@ -22,18 +24,44 @@ const seed: TypeRow[] = [
 
 const asides = () => document.querySelectorAll("aside[data-blade]");
 
+// The field-definition editor on the component blade reads the field-definition
+// catalog and the key catalog. Seed a required string field and an int field with a
+// default on the "display" component type.
+const fieldDefs: FieldDefinition[] = [
+  { id: "fd-serial", component_type: "display", name: "serial_number", key: "serial_number", display_name: "Serial number", data_type: "string", required: true },
+  { id: "fd-diag", component_type: "display", name: "diagonal_inches", key: "diagonal_inches", display_name: "Diagonal inches", data_type: "int", default_value: 55, required: false },
+];
+const keyCatalog: KeyRow[] = [
+  { name: "serial_number", data_type: "string", display_name: "Serial number", official: true },
+  { name: "diagonal_inches", data_type: "int", display_name: "Diagonal inches", official: false },
+  { name: "asset_tag", data_type: "string", display_name: "Asset tag", official: false },
+];
+
 const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
 const viewer: Me = { principal: { id: "u-view", kind: "human" }, human: { username: "viewer" }, permissions: ["*:read"], grants: [] };
 
 function mount(me: Me = admin) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...TYPES_KEY], seed);
+  qc.setQueryData([...FIELD_DEFINITIONS_KEY], fieldDefs);
+  qc.setQueryData([...KEYS_KEY], keyCatalog);
   qc.setQueryData([...ME_KEY], me);
   return render(() => (
     <QueryClientProvider client={qc}>
       <Types />
     </QueryClientProvider>
   ));
+}
+
+// Open the "display" component type's blade (the field-definition editor lives there).
+async function openDisplayBlade(): Promise<HTMLElement> {
+  fireEvent.click(screen.getByRole("tab", { name: "Component" }));
+  fireEvent.click(await screen.findByText("display"));
+  return waitFor(() => {
+    const el = asides()[0];
+    if (!el) throw new Error("no blade yet");
+    return el as HTMLElement;
+  });
 }
 
 describe("Types page", () => {
@@ -180,5 +208,45 @@ describe("Types page", () => {
     });
     fireEvent.click(within(blade).getByLabelText("Edit"));
     expect(within(blade).queryByText("Allowed parents")).toBeNull();
+  });
+
+  // The component blade carries the field-definition editor: each declared field
+  // shows its key and data_type, and (holding field:create) a per-row edit and
+  // delete plus a key-picker add row. This covers the gap where fields had no
+  // edit or delete.
+  it("the component blade lists a declared field with its key and per-row edit/delete", async () => {
+    mount();
+    const blade = await openDisplayBlade();
+    // The field reads clearly: its label, its mono key, and its data_type badge.
+    expect(within(blade).getByText("Serial number")).toBeTruthy();
+    expect(within(blade).getByText("serial_number")).toBeTruthy();
+    // Per-row edit and delete controls exist (the gap this slice closes).
+    expect(within(blade).getByLabelText("Edit serial_number")).toBeTruthy();
+    expect(within(blade).getByLabelText("Delete serial_number")).toBeTruthy();
+  });
+
+  it("offers a key-picker add-a-field control on the component blade for field:create", async () => {
+    mount(admin);
+    const blade = await openDisplayBlade();
+    expect(within(blade).getByText("Add a field")).toBeTruthy();
+    // The KeyPicker renders a searchable combobox input.
+    expect(within(blade).getByRole("combobox")).toBeTruthy();
+  });
+
+  it("hides the add control and per-row edit from a caller without field:create", async () => {
+    mount(viewer);
+    const blade = await openDisplayBlade();
+    // The declared field still reads, but no add row and no per-row edit/delete.
+    expect(within(blade).getByText("serial_number")).toBeTruthy();
+    expect(within(blade).queryByText("Add a field")).toBeNull();
+    expect(within(blade).queryByLabelText("Edit serial_number")).toBeNull();
+  });
+
+  it("editing a field row reveals its default input and a Save", async () => {
+    mount();
+    const blade = await openDisplayBlade();
+    fireEvent.click(within(blade).getByLabelText("Edit diagonal_inches"));
+    // The inline editor shows a Save control (the default input is type-aware).
+    expect(await within(blade).findByText("Save")).toBeTruthy();
   });
 });
