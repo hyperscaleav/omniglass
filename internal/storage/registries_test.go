@@ -29,19 +29,30 @@ func TestRegistrySeed(t *testing.T) {
 		t.Fatalf("seed (2nd, idempotent): %v", err)
 	}
 
-	dts, err := gw.ListDatapointTypes(ctx)
+	keys, err := gw.ListKeys(ctx)
 	if err != nil {
-		t.Fatalf("list datapoint_types: %v", err)
+		t.Fatalf("list canonical_keys: %v", err)
 	}
 	want := map[string]string{"icmp.reachable": "metric", "icmp.rtt_avg": "metric", "tcp.open": "metric", "tcp.connect_time": "metric"}
 	got := map[string]string{}
-	for _, dt := range dts {
-		got[dt.Name] = dt.Kind
+	official := map[string]bool{}
+	for _, k := range keys {
+		if k.Kind != nil {
+			got[k.Name] = *k.Kind
+		}
+		official[k.Name] = k.Official
 	}
 	for name, kind := range want {
 		if got[name] != kind {
-			t.Errorf("datapoint_type %s: want kind %q, got %q", name, kind, got[name])
+			t.Errorf("canonical_key %s: want kind %q, got %q", name, kind, got[name])
 		}
+	}
+	// The declared attribute keys seed with no kind and official=true.
+	if _, ok := got["serial_number"]; ok {
+		t.Errorf("serial_number: want no kind (declared-only), got %q", got["serial_number"])
+	}
+	if !official["serial_number"] {
+		t.Errorf("serial_number: want official=true")
 	}
 
 	its, err := gw.ListInterfaceTypes(ctx)

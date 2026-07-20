@@ -17,9 +17,10 @@ import (
 // name is stamped with the task's interface owner (component / source / instance),
 // and reject-not-project drops an unregistered name (no row produced for it).
 func TestDeriveDatapoints(t *testing.T) {
-	reg := collection.NewRegistry([]storage.DatapointType{
-		{Name: "tcp.open", Kind: "metric"},
-		{Name: "tcp.connect_time", Kind: "metric"},
+	metric := "metric"
+	reg := collection.NewRegistry([]storage.Key{
+		{Name: "tcp.open", Kind: &metric},
+		{Name: "tcp.connect_time", Kind: &metric},
 	})
 	owner := storage.TaskOwner{Component: "disp-1", InterfaceName: "disp-1-tcp", InterfaceType: "tcp"}
 	ev := &ogv1.Event{
@@ -51,10 +52,11 @@ func TestDeriveDatapoints(t *testing.T) {
 // unregistered name is still dropped (reject-not-project), and a log kind (no sink
 // this checkpoint) lands in neither.
 func TestDeriveDatapointsRoutesByKind(t *testing.T) {
-	reg := collection.NewRegistry([]storage.DatapointType{
-		{Name: "tcp.open", Kind: "metric"},
-		{Name: "interface.reachable", Kind: "state"},
-		{Name: "some.log", Kind: "log"},
+	metric, state, logKind := "metric", "state", "log"
+	reg := collection.NewRegistry([]storage.Key{
+		{Name: "tcp.open", Kind: &metric},
+		{Name: "interface.reachable", Kind: &state},
+		{Name: "some.log", Kind: &logKind},
 	})
 	owner := storage.TaskOwner{Component: "disp-1", InterfaceName: "disp-1-tcp", InterfaceType: "tcp"}
 	ev := &ogv1.Event{Datapoints: []*ogv1.Datapoint{

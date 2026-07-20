@@ -8,9 +8,10 @@ import (
 )
 
 func TestRegistryAllows(t *testing.T) {
-	reg := collection.NewRegistry([]storage.DatapointType{
-		{Scope: "official", Name: "tcp.open", Kind: "metric"},
-		{Scope: "official", Name: "icmp.reachable", Kind: "metric"},
+	metric := "metric"
+	reg := collection.NewRegistry([]storage.Key{
+		{Name: "tcp.open", Kind: &metric},
+		{Name: "icmp.reachable", Kind: &metric},
 	})
 
 	if kind, ok := reg.Allows("tcp.open"); !ok || kind != "metric" {

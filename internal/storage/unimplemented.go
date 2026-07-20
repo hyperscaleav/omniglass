@@ -258,10 +258,10 @@ func (UnimplementedGateway) ListTasks(context.Context, scope.Set) ([]Task, error
 func (UnimplementedGateway) GetTask(context.Context, string, scope.Set) (*Task, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) UpsertDatapointType(context.Context, DatapointType) error {
+func (UnimplementedGateway) UpsertKey(context.Context, Key) error {
 	return nil
 }
-func (UnimplementedGateway) ListDatapointTypes(context.Context) ([]DatapointType, error) {
+func (UnimplementedGateway) ListKeys(context.Context) ([]Key, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) UpsertInterfaceType(context.Context, InterfaceType) error {

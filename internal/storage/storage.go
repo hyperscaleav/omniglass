@@ -274,8 +274,8 @@ type Gateway interface {
 
 	// The collection registries: estate-wide reference data (no scope.Set),
 	// seeded official and operator-extensible at org/template scope later.
-	UpsertDatapointType(ctx context.Context, dt DatapointType) error
-	ListDatapointTypes(ctx context.Context) ([]DatapointType, error)
+	UpsertKey(ctx context.Context, k Key) error
+	ListKeys(ctx context.Context) ([]Key, error)
 	UpsertInterfaceType(ctx context.Context, it InterfaceType) error
 	ListInterfaceTypes(ctx context.Context) ([]InterfaceType, error)
 
