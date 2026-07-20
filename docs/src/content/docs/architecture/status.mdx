@@ -1391,3 +1391,23 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   split, and the required marker plus the submit-only red box and Save gate), the `EffectiveFields`
   blade-batch test, and a storage/HTTP round-trip carrying `required`. The [config, secrets, and
   variables](/architecture/variables/) page keeps its `Partial` field badge.
+- **The unified key registry.** The `datapoint_type` catalog is generalized into the primitive-agnostic
+  **`canonical_key`** registry (the physical table; the concept, the `/keys` API, the Go `Key`, and the
+  console all read `key`): the typed keyspace a datapoint **observes** and a field **declares**. The
+  `(scope, name)` ladder collapses to a `name` primary key plus an **`official`** boolean (seed-owned keys
+  read-only); `value_type` becomes **`data_type`** over `{string, int, float, bool, json}` (`text`
+  backfills to `string`, `bool` added); **`kind`** is nullable (a declared-only attribute key has none);
+  and **`validation`** is a **JSON Schema** enforced by Huma's own validator with **no new dependency**.
+  Value and source tables keep keying by the **name string** (no FK), so the rename is behavior-preserving:
+  the ingest registry, the reachability BFF, and the metric/state sinks are unchanged. A new
+  **`internal/key`** primitive holds the one canonical name-format rule (lowercase, dot-hierarchied) and
+  the typed value validator; tag's key rule folds onto it. The Storage Gateway gains custom-key CRUD
+  (gated `key:create` / `:update` / `:delete`, official keys read-only, audited in the same transaction),
+  exposed at **`/keys`** with a generated CLI and client, and a new **Catalog > Keys** console page (list,
+  blade, create form). An official seed ships the reachability keys plus a starter attribute set
+  (`serial_number`, `mac_address`, `firmware_version`, `model_number`). Proven by `internal/key` unit
+  tests, the `canonical_key` CRUD integration test, the `/keys` HTTP e2e (the `key:create` 403 and official
+  read-only), and the console suite. The type-schema (`field_definition.key`, PR-B) and reconciliation are
+  deferred ([ADR-0043](/architecture/decisions/#adr-0043-the-unified-key-registry),
+  [#297](https://github.com/hyperscaleav/omniglass/issues/297)). The
+  [config, secrets, and variables](/architecture/variables/) page stays `Partial`.
