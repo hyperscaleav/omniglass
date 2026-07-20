@@ -564,6 +564,51 @@ components:
       required:
         - type
       type: object
+    CreateKeyInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateKeyInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        data_type:
+          description: The value type
+          enum:
+            - string
+            - int
+            - float
+            - bool
+            - json
+          type: string
+        description:
+          description: What the key means
+          type: string
+        display_name:
+          description: A human label
+          type: string
+        kind:
+          description: The observed kind; omit for a declared-only key
+          enum:
+            - metric
+            - state
+            - log
+          type: string
+        name:
+          description: The canonical key name (lowercase, dot-hierarchied)
+          minLength: 1
+          type: string
+        unit:
+          description: A display unit (observed keys)
+          type: string
+        validation:
+          description: A JSON Schema fragment constraining the value
+      required:
+        - name
+        - data_type
+      type: object
     CreateLocationInputBody:
       additionalProperties: false
       properties:
@@ -1438,6 +1483,37 @@ components:
         - name
         - type
       type: object
+    KeyBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/KeyBody.json
+          format: uri
+          readOnly: true
+          type: string
+        data_type:
+          type: string
+        description:
+          type: string
+        display_name:
+          type: string
+        kind:
+          type: string
+        name:
+          type: string
+        official:
+          type: boolean
+        unit:
+          type: string
+        validation:
+          description: A JSON Schema fragment constraining the value
+      required:
+        - name
+        - data_type
+        - official
+      type: object
     Keybindings:
       additionalProperties: false
       properties:
@@ -1614,6 +1690,25 @@ components:
             - "null"
       required:
         - interfaces
+      type: object
+    ListKeysOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListKeysOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        keys:
+          items:
+            $ref: "#/components/schemas/KeyBody"
+          type:
+            - array
+            - "null"
+      required:
+        - keys
       type: object
     ListLocationTypesOutputBody:
       additionalProperties: false
@@ -3021,6 +3116,28 @@ components:
           type: string
         params:
           description: Replace the endpoint/target settings (jsonb)
+      type: object
+    UpdateKeyInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/UpdateKeyInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        description:
+          description: What the key means
+          type: string
+        display_name:
+          description: A human label
+          type: string
+        unit:
+          description: A display unit
+          type: string
+        validation:
+          description: A JSON Schema fragment (replaces wholesale)
       type: object
     UpdateLocationInputBody:
       additionalProperties: false
@@ -4503,6 +4620,130 @@ paths:
           description: Error
       summary: Update an interface
       x-omniglass-permission: interface:update
+  /keys:
+    get:
+      description: Lists every registered key (official and custom). The keyspace is estate-wide reference data. Gated by key:read.
+      operationId: list-keys
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListKeysOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List canonical keys
+      x-omniglass-permission: key:read
+    post:
+      description: Registers a custom key (official=false). The name must be a valid canonical key. Gated by key:create.
+      operationId: create-key
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateKeyInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KeyBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Create a canonical key
+      x-omniglass-permission: key:create
+  /keys/{name}:
+    delete:
+      description: Removes a custom key by name. Official keys are read-only. Gated by key:delete.
+      operationId: delete-key
+      parameters:
+        - description: The key's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The key's name
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Delete a canonical key
+      x-omniglass-permission: key:delete
+    get:
+      description: Returns one key by name. Gated by key:read.
+      operationId: get-key
+      parameters:
+        - description: The key's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The key's name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KeyBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get a canonical key
+      x-omniglass-permission: key:read
+    patch:
+      description: Patches a custom key's label, description, unit, or validation (a nil field is unchanged). Data type and kind are fixed at creation. Official keys are read-only. Gated by key:update.
+      operationId: update-key
+      parameters:
+        - description: The key's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The key's name
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateKeyInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KeyBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Update a canonical key
+      x-omniglass-permission: key:update
   /locations:
     get:
       description: Lists the locations the caller may read, each filtered to its scope subtree. Gated by location:read.

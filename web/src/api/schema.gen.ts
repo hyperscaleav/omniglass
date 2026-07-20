@@ -748,6 +748,58 @@ export interface paths {
         patch: operations["update-interface"];
         trace?: never;
     };
+    "/keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List canonical keys
+         * @description Lists every registered key (official and custom). The keyspace is estate-wide reference data. Gated by key:read.
+         */
+        get: operations["list-keys"];
+        put?: never;
+        /**
+         * Create a canonical key
+         * @description Registers a custom key (official=false). The name must be a valid canonical key. Gated by key:create.
+         */
+        post: operations["create-key"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/keys/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a canonical key
+         * @description Returns one key by name. Gated by key:read.
+         */
+        get: operations["get-key"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a canonical key
+         * @description Removes a custom key by name. Official keys are read-only. Gated by key:delete.
+         */
+        delete: operations["delete-key"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a canonical key
+         * @description Patches a custom key's label, description, unit, or validation (a nil field is unchanged). Data type and kind are fixed at creation. Official keys are read-only. Gated by key:update.
+         */
+        patch: operations["update-key"];
+        trace?: never;
+    };
     "/locations": {
         parameters: {
             query?: never;
@@ -2518,6 +2570,34 @@ export interface components {
             /** @description An interface_type name (the protocol); the interface is named by it, unique within the component */
             type: string;
         };
+        CreateKeyInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateKeyInputBody.json
+             */
+            readonly $schema?: string;
+            /**
+             * @description The value type
+             * @enum {string}
+             */
+            data_type: "string" | "int" | "float" | "bool" | "json";
+            /** @description What the key means */
+            description?: string;
+            /** @description A human label */
+            display_name?: string;
+            /**
+             * @description The observed kind; omit for a declared-only key
+             * @enum {string}
+             */
+            kind?: "metric" | "state" | "log";
+            /** @description The canonical key name (lowercase, dot-hierarchied) */
+            name: string;
+            /** @description A display unit (observed keys) */
+            unit?: string;
+            /** @description A JSON Schema fragment constraining the value */
+            validation?: unknown;
+        };
         CreateLocationInputBody: {
             /**
              * Format: uri
@@ -3019,6 +3099,23 @@ export interface components {
             params?: unknown;
             type: string;
         };
+        KeyBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/KeyBody.json
+             */
+            readonly $schema?: string;
+            data_type: string;
+            description?: string;
+            display_name?: string;
+            kind?: string;
+            name: string;
+            official: boolean;
+            unit?: string;
+            /** @description A JSON Schema fragment constraining the value */
+            validation?: unknown;
+        };
         Keybindings: {
             /**
              * @description Close the top blade
@@ -3112,6 +3209,15 @@ export interface components {
              */
             readonly $schema?: string;
             interfaces: components["schemas"]["InterfaceBody"][] | null;
+        };
+        ListKeysOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListKeysOutputBody.json
+             */
+            readonly $schema?: string;
+            keys: components["schemas"]["KeyBody"][] | null;
         };
         ListLocationTypesOutputBody: {
             /**
@@ -3835,6 +3941,22 @@ export interface components {
             node?: string;
             /** @description Replace the endpoint/target settings (jsonb) */
             params?: unknown;
+        };
+        UpdateKeyInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/UpdateKeyInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description What the key means */
+            description?: string;
+            /** @description A human label */
+            display_name?: string;
+            /** @description A display unit */
+            unit?: string;
+            /** @description A JSON Schema fragment (replaces wholesale) */
+            validation?: unknown;
         };
         UpdateLocationInputBody: {
             /**
@@ -5605,6 +5727,166 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InterfaceBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListKeysOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-key": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateKeyInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KeyBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-key": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The key's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KeyBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-key": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The key's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "update-key": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The key's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateKeyInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KeyBody"];
                 };
             };
             /** @description Error */
