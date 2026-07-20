@@ -37,6 +37,11 @@ ALTER TABLE canonical_key ADD PRIMARY KEY (name);
 
 -- migrate:down
 
+-- Drop the new-model rows datapoint_type cannot represent: a declared-only key
+-- (no observed kind) and a bool-typed key have no place in the restored NOT NULL
+-- kind and {int,float,text,json} shape. They re-seed on the next up.
+DELETE FROM canonical_key WHERE kind IS NULL OR data_type = 'bool';
+
 ALTER TABLE canonical_key DROP CONSTRAINT IF EXISTS canonical_key_pkey;
 ALTER TABLE canonical_key ADD COLUMN IF NOT EXISTS template_id uuid;
 ALTER TABLE canonical_key ADD COLUMN IF NOT EXISTS scope text NOT NULL DEFAULT 'official';
