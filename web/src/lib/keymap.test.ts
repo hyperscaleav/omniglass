@@ -61,6 +61,14 @@ describe("matchCombo", () => {
     const esc = parseCombo("Escape", false);
     expect(matchCombo({ key: "escape", meta: false, ctrl: false, alt: false, shift: false }, esc)).toBe(true);
   });
+
+  it("does not fire a bare letter binding while shift is held (Shift+D is not d)", () => {
+    const d = parseCombo("d", false);
+    expect(matchCombo({ key: "d", meta: false, ctrl: false, alt: false, shift: true }, d)).toBe(false);
+    // A symbol binding still matches with shift (the symbol carries it).
+    const hash = parseCombo("#", false);
+    expect(matchCombo({ key: "#", meta: false, ctrl: false, alt: false, shift: true }, hash)).toBe(true);
+  });
 });
 
 describe("chordFromEvent", () => {

@@ -1,4 +1,4 @@
-import { For, Show } from "solid-js";
+import { For, Show, createMemo } from "solid-js";
 import { Dialog } from "@kobalte/core/dialog";
 import { useKeymap } from "./KeymapProvider";
 import { formatCombo } from "../lib/platform";
@@ -19,6 +19,8 @@ const scopeTitle = (name: string) => SCOPE_TITLES[name] ?? name.charAt(0).toUppe
 
 export default function KeyboardHelp(props: { open: boolean; onClose: () => void }) {
   const km = useKeymap();
+  // One computation per render: activeScopes filters, maps, and sorts.
+  const scopes = createMemo(() => km.activeScopes());
 
   return (
     <Dialog open={props.open} onOpenChange={(o) => !o && props.onClose()}>
@@ -32,10 +34,10 @@ export default function KeyboardHelp(props: { open: boolean; onClose: () => void
             </div>
             <div class="max-h-[60vh] overflow-y-auto p-2">
               <Show
-                when={km.activeScopes().some((s) => s.bindings.length > 0)}
+                when={scopes().some((s) => s.bindings.length > 0)}
                 fallback={<p class="px-3 py-6 text-center text-sm text-base-content/40">No shortcuts active here.</p>}
               >
-                <For each={km.activeScopes()}>
+                <For each={scopes()}>
                   {(scope) => (
                     <Show when={scope.bindings.length > 0}>
                       <section class="mb-1">

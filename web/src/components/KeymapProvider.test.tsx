@@ -39,6 +39,19 @@ describe("KeymapProvider", () => {
     expect(fired).toEqual(["blade"]);
   });
 
+  it("ignores a keydown another handler already consumed (defaultPrevented)", () => {
+    const fired: string[] = [];
+    render(() => (
+      <KeymapProvider keys={keys} platform="Win32">
+        <Consumer name="global" priority={10} bindings={[{ action: "palette", label: "Palette", combo: "mod+k", run: () => fired.push("palette") }]} />
+      </KeymapProvider>
+    ));
+    const ev = new KeyboardEvent("keydown", { key: "k", ctrlKey: true, cancelable: true, bubbles: true });
+    ev.preventDefault(); // an element-local / overlay handler consumed it first
+    window.dispatchEvent(ev);
+    expect(fired).toEqual([]);
+  });
+
   it("does not dispatch to an inactive scope", () => {
     const fired: string[] = [];
     render(() => (

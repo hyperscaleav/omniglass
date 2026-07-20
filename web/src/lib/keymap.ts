@@ -97,6 +97,10 @@ export function matchCombo(chord: KeyChord, combo: Combo): boolean {
   if (chord.ctrl !== combo.ctrl) return false;
   if (chord.alt !== combo.alt) return false;
   if (combo.shift && !chord.shift) return false;
+  // Shift is permissive for symbol keys (a "?" or "#" carries its own shift), but a
+  // bare *letter* binding must not fire with Shift held: Shift+D is not `d`. Only when
+  // the combo does not itself name shift and the key is a single letter.
+  if (!combo.shift && chord.shift && /^[a-z]$/.test(combo.key)) return false;
   return true;
 }
 

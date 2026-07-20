@@ -81,6 +81,10 @@ export const KeymapProvider: ParentComponent<{ keys: Accessor<Record<string, str
       .sort((a, b) => b.priority - a.priority);
 
   const onKey = (e: KeyboardEvent) => {
+    // Honor a key an element-local (or Kobalte overlay) handler already consumed: it
+    // listens on the element or document, ahead of this window listener in the bubble
+    // phase, so a dialog's own Escape must not also trip a scope binding behind it.
+    if (e.defaultPrevented) return;
     const hit = resolveBinding(liveScopes(), chordFromEvent(e), isEditableTarget(e.target));
     if (!hit) return;
     e.preventDefault();
