@@ -1391,3 +1391,25 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   split, and the required marker plus the submit-only red box and Save gate), the `EffectiveFields`
   blade-batch test, and a storage/HTTP round-trip carrying `required`. The [config, secrets, and
   variables](/architecture/variables/) page keeps its `Partial` field badge.
+- **UI: the keyboard-shortcut registry (slice 0).** The console gains its first shortcut **primitive**,
+  the consumer the seeded `keybindings` settings namespace was built for
+  ([#304](https://github.com/hyperscaleav/omniglass/issues/304) under the keyboard epic
+  [#303](https://github.com/hyperscaleav/omniglass/issues/303)). A pure, DOM-free core (`web/src/lib/keymap.ts`)
+  owns the grammar (`parseCombo` resolving `mod` to the host modifier), the match predicate (`matchCombo`),
+  the typing guard (`isEditableTarget` plus `allowsWhileTyping`, so a bare key does not fire mid-word while a
+  modified combo and Escape still do), and **scope-ordered resolution** (`resolveBinding` walks the active
+  scopes highest-priority-first, blade over list over global). One `KeymapProvider` is the single `window`
+  keydown listener and a scope-registration API; it reads the effective keymap from `/settings/me`
+  (`keybindings` layered over the code defaults), so an operator rebind takes effect with no code change. The
+  two previously hand-wired shortcuts are **folded into the registry**: the command palette (`mod+k`, from
+  settings) and Escape-closes-the-top-blade (a `blade` scope `BladeStack` registers while a blade is open),
+  deleting the bespoke `window` listeners. Discoverability lands with it: a **`?` help overlay** renders the
+  live registry grouped by active scope with platform-native labels (a new `platform.formatCombo`), and the
+  command palette grows a **shortcut-hint column** with a "Keyboard shortcuts" action. No new user-facing
+  bindings and no storage change this slice. Proven by the keymap-core unit suite (grammar and platform
+  split, match positives and negatives, the typing guard, scope precedence and fall-through, the settings
+  overlay), the provider component tests (window dispatch, priority, the inactive-scope and typing guards,
+  the active-scope read), and the help-overlay and palette tests. The [UI](/architecture/ui/) page keeps its
+  `Partial` badge. Deferred to the next slices: the list current-row cursor with `d` / `e`
+  ([#303](https://github.com/hyperscaleav/omniglass/issues/303) slice 1) and the undoable-delete UX with `#`
+  (slice 2, [ADR-0043](/architecture/decisions/#adr-0043-operator-deletes-become-undoable-not-modifier-chorded)).

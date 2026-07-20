@@ -174,6 +174,39 @@ inventory). Home monitors the *monitor*: the operator and admin situation room f
 dropped with no matching rule), and proactive suggestions. A dashboard cannot model that, so Home
 earns its own slot; "Overview" is the name of the default dashboard, not the landing.
 
+## Keyboard control
+
+The console is a dense-ops surface, so it is keyboard-driven through **one shortcut registry**, not a
+scatter of hand-wired handlers. The registry is a **primitive** (doctrine 5): a pure core owns the
+grammar and matching, and a single provider is the one `window` keydown listener for the whole app.
+
+- **The keymap is data.** Bindings come from the `keybindings` [settings](/architecture/settings/)
+  namespace, resolved down the principal cascade and delivered to the client on `/settings/me`, so an
+  operator can rebind a key with no code change (and, once the cascade's user rung lands, per user). The
+  code defaults (`d` open detail, `e` open edit, `Escape` close blade, `mod+k` command palette) are the
+  floor; an override layers on top. `mod` resolves to the host modifier: Command on macOS, Control
+  elsewhere.
+- **Scopes, ordered.** Shortcuts resolve through a **scope stack**, highest-priority first: `global`
+  (the command palette, the help overlay) at the base, a `list` scope a list view contributes, and a
+  `blade` scope each open blade contributes. A blade on top claims a key before the list beneath it, so
+  Escape closes the blade you are looking at, and the list's own keys are dormant while it is covered.
+- **The typing guard.** A single-key shortcut does not fire while focus is in a text field, so typing a
+  name never triggers an action; a modifier combo (and Escape) still does. This is the "am I typing?"
+  rule every keyboard UI needs and the reason bare single keys are safe to bind.
+- **Discoverability** (doctrine 4): a hidden keymap is a support cost, so the shortcuts teach
+  themselves. **`?` opens a help overlay** rendered from the **live registry**, grouped by the scopes
+  active right now and labelled per host (`⌘K` on mac, `Ctrl+K` elsewhere), and the command palette
+  carries a **shortcut-hint column**. Both read the same registry the dispatcher runs, so they cannot
+  drift from what the keys actually do.
+
+**Deletes are undoable, not chorded.** The destructive shortcut is a Gmail-style `#`, and a delete is
+**optimistic with a short Undo window** (the row goes at once, a toast offers Undo, the real delete
+fires on expiry) rather than a modal confirm. This retires the copy-pasted `window.confirm()` calls and
+gives every delete an escape hatch, while the genuinely irreversible admin actions keep an explicit
+typed confirm. The rejected alternatives (a `ctrl+d` that collides with the browser bookmark shortcut, a
+hidden shift-click that skips the confirm) and the client-deferred-versus-server-soft-delete call are
+recorded in [ADR-0043](/architecture/decisions/#adr-0043-operator-deletes-become-undoable-not-modifier-chorded).
+
 The theme is **dark-first** (the NOC aesthetic) on the brand palette (teal `#21CAB9`, navy
 `#080c16`), semantic tokens only, no hardcoded colors in components.
 

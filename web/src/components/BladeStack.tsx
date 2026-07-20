@@ -1,8 +1,9 @@
-import { type JSX, For, Show, createEffect, onCleanup } from "solid-js";
+import { type JSX, For, Show, createEffect, onCleanup, onMount } from "solid-js";
 import { Dynamic } from "solid-js/web";
 import { Ban, ChevronLeft, MoreHorizontal, Pencil, RotateCcw, Save, Trash, X } from "./icons";
 import Button from "./Button";
 import { type BladeController, type BladeDef, BladeEditContext, createEditSlot } from "../lib/blades";
+import { useKeymapOptional } from "./KeymapProvider";
 
 // BladeStack: the Azure-style right-hand blade stack, lifted out of TreeList so
 // the inventory tree AND the flat identity pages share one implementation. A row
@@ -36,15 +37,22 @@ export default function BladeStack(props: {
     }
   };
 
-  // Escape pops the top blade.
-  const onKey = (e: KeyboardEvent) => {
-    if (e.key === "Escape" && stack().length) {
-      e.stopPropagation();
-      props.controller.pop();
-    }
-  };
-  window.addEventListener("keydown", onKey);
-  onCleanup(() => window.removeEventListener("keydown", onKey));
+  // Escape pops the top blade, registered as the `blade` keyboard scope (active only
+  // while a blade is open, priority above the list so it claims Escape first). When
+  // there is no registry (BladeStack rendered standalone in a test), no binding
+  // registers and the blade is driven by the controller directly.
+  const km = useKeymapOptional();
+  if (km) {
+    onMount(() => {
+      const off = km.register({
+        name: "blade",
+        priority: 30,
+        active: () => stack().length > 0,
+        bindings: () => [{ action: "close_blade", label: "Close blade", combo: km.keys().close_blade, run: () => props.controller.pop() }],
+      });
+      onCleanup(off);
+    });
+  }
 
   // Focus management: when the stack opens, remember the focused element and move
   // focus into the top blade; when it closes, restore focus to that element.

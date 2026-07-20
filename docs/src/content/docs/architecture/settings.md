@@ -70,7 +70,8 @@ Each namespace carries a `domain` classifier:
 
 - **`profile`**: cascades global to group to user, **client-visible**, lockable, user-overridable in the
   fast-follow. `ui` and `keybindings` are the two seeded `profile` namespaces (`ui.theme` and `ui.default_landing`;
-  the default keymap as data).
+  the default keymap, now consumed by the console's [keyboard registry](/architecture/ui/#keyboard-control),
+  which reads the effective keymap from `/settings/me`).
 - **`platform`**: global-only, admin-only-read, does not cascade (for example `retention`, `integrations`). None
   is seeded in slice-0; the mechanism exists and is unit-tested, exercised when the first platform setting lands
   with its feature.
