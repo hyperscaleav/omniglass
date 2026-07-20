@@ -255,18 +255,22 @@ has no lifecycle.
 ## field: an operator-defined typed schema on a type
 
 :::note[Partial: slice 0, schema on a `component_type` plus set-or-default on a component]
-The first cut is **built**: an operator declares a typed **`field_definition`** on a `component_type` (a
-`name`, a `data_type` of `string` / `int` / `float` / `bool` / `json`, and an optional type-level default
-validated against the `data_type`), unique per `(component_type, name)`; every component of that type
-carries it. A component sets a **literal** `field_value` for a field defined on its type, and the
-component's **effective** value resolves to the set literal or the type default (an `is_set` flag marks the
-override). The vertical is whole: storage (transactional, audited), the API (the definition catalog is flat
-and `field:<action>`-gated, the value routes are ABAC-scoped to the owning component), the generated CLI and
-typed client, and the UI (define on the component-type blade under [Types](/guides/admin/types/), plus an
-**Effective fields** panel on the component detail that sets a literal and shows override-versus-default).
-A field also carries an optional **`display_name`**, a human label: the raw `name` stays the unique key and
-the interpolation handle, while the console shows the `display_name`, falling back to the key when unset.
-The rest of the design below is **deferred**, listed plainly so a built badge never hides drift.
+The first cut is **built**: an operator declares a typed **`field_definition`** on a `component_type` by
+**picking a key** from the [canonical key registry](#field-an-operator-defined-typed-schema-on-a-type) (a
+`key` FK to `canonical_key`); the field's **`name`**, **`data_type`** (`string` / `int` / `float` / `bool`
+/ `json`), and **`display_name`** all come **from the key**, and the field carries the per-type schema bits,
+an optional type-level **default** and a **required** flag. The default is validated against the key through
+`internal/key.ValidateValue` (the key's data type plus its JSON Schema). It is unique per
+`(component_type, name)`; every component of that type carries it. A component sets a **literal**
+`field_value` for a field defined on its type, and the component's **effective** value resolves to the set
+literal or the type default (an `is_set` flag marks the override). The vertical is whole: storage
+(transactional, audited), the API (the definition catalog is flat and `field:<action>`-gated, the value
+routes are ABAC-scoped to the owning component), the generated CLI and typed client, and the UI (declare on
+the component-type blade under [Types](/guides/admin/types/) with the reusable **KeyPicker** and per-row
+edit/delete, plus an **Effective fields** panel on the component detail that sets a literal and shows
+override-versus-default). The `key` column is **nullable** so a field predating the registry keeps rendering,
+but a new create **requires** a registered key. The rest of the design below is **deferred**, listed plainly
+so a built badge never hides drift.
 :::
 
 A **field** is an operator-defined **typed attribute declared on a type**, the schema layer over the value
@@ -405,7 +409,7 @@ exclusive-arc scope either way.
 | `secret_type` | id, **official**, schema (per-field `{name, type, secret, origin}`) | **Built.** The secret **shape** registry (`snmp-community`, `basic-auth` seeded); `official` marks shipped-canonical versus org-local, like the datapoint and role registries |
 | `secret` | (name, **owner arc**), secret_type, **`admin_sensitive`**, **value** (secret fields as `{ciphertext, nonce, wrapped_dek, key_id}` envelopes, non-secret fields plaintext) | **Built.** The encrypted cell and the `$sec:` cascade key; scope is the exclusive arc (global/location/system/component). Read masked through a **scope-filtered** directory; decrypted only through the audited `:reveal` / `:copy` path. Visibility is placement scope plus the per-secret `admin_sensitive` flag (admin-only when set); `secret` is off the `*:read` floor ([ADR-0025](/architecture/decisions/#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier)) |
 | `variable` | (name, **owner arc**), **value_type** (`string`/`int`/`float`/`bool`/`json`), **value** (jsonb) | **Built.** The plaintext variable cell and the `$var:` cascade key; scope is the exclusive arc. Typed inline (no `variable_type` registry: the value is validated against `value_type` in the app), no observed side. The **config** cell (declared/observed/reconcile) is a separate, deferred member |
-| `field_definition` | (**component_type**, name), **data_type** (`string`/`int`/`float`/`bool`/`json`), **default_value** (jsonb) | **Built (slice 0).** The typed **schema on a `component_type`**: flat and unscoped like the type registries, unique per `(component_type, name)`, with an optional type-level default validated against `data_type`. Multi-type owners (`location_type`/`system_type`/`vendor`/`product`/`driver`) are deferred |
+| `field_definition` | (**component_type**, name), **`key`** (FK to `canonical_key`), **data_type** (`string`/`int`/`float`/`bool`/`json`), **default_value** (jsonb), **required** | **Built.** The typed **schema on a `component_type`**: it **declares a key** ([ADR-0044](/architecture/decisions/#adr-0044-a-field-declares-a-key)), so `name`/`data_type`/`display_name` come from the key (denormalized onto the row); flat and unscoped like the type registries, unique per `(component_type, name)`, with an optional default validated against the key's data_type and JSON Schema. Multi-type owners (`location_type`/`system_type`/`vendor`/`product`/`driver`) are deferred |
 | `field_value` | (**field**, **component**), **value** (jsonb) | **Built (slice 0).** A component's **literal** for a field on its type; the effective read is **set-or-default** (`is_set` marks the override, `value_id` carries the row id so the UI can clear it), ABAC-scoped to the owning component. Setting, re-setting, and clearing back to the default are wired; macro-string values (`$var:`/`$sec:`/`$datapoint:`) and the cross-type cascade are deferred |
 | `tag` | name, applies_to, propagates | **Built.** The **tenant-wide governed key vocabulary**; minting a key needs `tag:create` ([identity and access](/architecture/identity-access/)). No `_type`, no namespace; values bind via `tag_binding`. See [tags](/architecture/tags/) |
 | `tag_binding` | (tag, **owner arc**), value | **Built.** The `key: value` binding: **union on key, override on value** down the [cascade](/architecture/cascade/), owned on the exclusive arc (`global / location / system / component`); setting a value is the owner's own `update` write. Binding via groups and a `template` default are deferred |

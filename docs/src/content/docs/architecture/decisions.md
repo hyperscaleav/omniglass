@@ -76,6 +76,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0041](#adr-0041-settings-are-a-reflected-typed-struct-with-generated-client-and-server-validation) | 2026-07-19 | Accepted | A setting is declared **once**, as a tagged field on a canonical `Settings` Go struct; reflection produces the `code` defaults layer and the namespace registry, Huma reflects the struct into the OpenAPI schema so the typed client `values` is a `Settings` struct, and both the server PATCH and the generated client validate against that **same reflected schema**. Closes the slice-0 write-validation thin cut; retires the hand-kept `defaults.yaml` and `Namespaces()` slice |
 | [ADR-0042](#adr-0042-field-cascade-and-the-type-default-floor) | 2026-07-19 | Accepted | A field's resolved value is deepest-set-wins down `product -> location -> system -> component`, falling to the field's **type default** when nothing is set at any scope; the type default is the **floor** of the cascade, not a competitor to it. This slice is component-only (resolved = the component's set value, else the type default); the multi-scope cascade is tracked by #291 |
 | [ADR-0043](#adr-0043-the-unified-key-registry) | 2026-07-19 | Accepted | The `datapoint_type` catalog is generalized into a primitive-agnostic **`canonical_key`** registry (the typed keyspace a datapoint observes and a field declares): the unused scope ladder becomes an `official` boolean, `value_type` becomes `data_type` (text to string, add bool), `kind` is nullable (a declared-only key has none), and `validation` is a **JSON Schema** validated by Huma's own validator (zero new dependencies). Value/source tables key by **name** (no FK), so the rename is behavior-preserving; the type-schema (`field_definition.key`) is the only binding and lands in PR-B |
+| [ADR-0044](#adr-0044-a-field-declares-a-key) | 2026-07-20 | Accepted | A `field_definition` **declares a canonical key**: it gains a `key` FK to `canonical_key`, and its `name`, `data_type`, and `display_name` come from the key (denormalized onto the row so the read paths need no join), leaving `default`/`required` as the per-type schema bits. The default is validated against the key via `internal/key.ValidateValue` (data_type plus the key's JSON Schema). The column is **nullable** so a legacy field keeps rendering, but a new create **requires** a registered key (app-enforced). The console field-on-type editor picks a key with the reusable **KeyPicker** and gains per-row edit and delete |
 
 ## Entries
 
@@ -1217,4 +1218,40 @@ below from the project's history. From here it grows one slice at a time.
   reference; and an operator shadow of an official key.
 - **Closes:** issue [#297](https://github.com/hyperscaleav/omniglass/issues/297) (the field catalog,
   expanded to the unified key registry), under epic
+  [#266](https://github.com/hyperscaleav/omniglass/issues/266).
+
+### ADR-0044: A field declares a key
+
+- **Date:** 2026-07-20 | **Status:** Accepted | **Pages:** [config, secrets, and variables](/architecture/variables/)
+- **Decision:** A `field_definition` no longer mints its own name and type: it **declares a canonical key**
+  from the registry ([ADR-0043](#adr-0043-the-unified-key-registry)). The table gains a `key text references
+  canonical_key (name)` column, and on create the field's `name`, `data_type`, and `display_name` come
+  **from the key**, so `serial_number` is one concept with one spelling, one type, and one label whether a
+  device reports it (a datapoint) or an operator declares it (a field). The per-type schema bits stay on the
+  field: the **default** and the **required** flag. A default is validated against the key through
+  `internal/key.ValidateValue` (the key's `data_type` plus its JSON Schema), so an out-of-enum or
+  out-of-range default is refused at the definition, not just the value.
+- **Denormalize `data_type` and `display_name`, do not drop them (decision-for-review):** the key is the
+  source of truth, but the field row keeps a **materialized copy** of `data_type` and `display_name`,
+  written from the key at create. This keeps the smallest slice: the effective-fields read, the field-value
+  validation, and the console all read `field_definition.data_type` / `display_name` today, and a join per
+  read (or dropping the columns) would churn every one of those paths for no behavior gain. The tradeoff is
+  that renaming a key's label does not retroactively re-sync a field that already copied it; a key rename +
+  re-sync is a later slice (re-keying a field is not offered).
+- **Nullable column, app-enforced requirement:** the `key` FK is **nullable** so an existing field whose
+  name predates the registry still renders (the migration backfills `key = name` wherever a matching key
+  already exists), while `CreateFieldDefinition` **requires** a registered key (an unregistered key is
+  `ErrUnknownKey` to 422). A `NOT NULL` constraint was rejected because it would fail the backfill on any
+  legacy row with no catalog key.
+- **KeyPicker, the reusable primitive:** the console field-on-type editor picks a key with a new **KeyPicker**
+  component (a searchable Kobalte Combobox over `GET /keys`, portaled to escape blade overflow, generic over
+  `value`/`onSelect`/`filter`/`exclude`/`disabled`) rather than a free-text name and a data-type select. It
+  is built standalone with its own tests so the driver epic can reuse it. The editor also gains **per-row
+  edit and delete** for a declared field, closing the gap where a field once had no way to be edited or
+  removed.
+- **Deferred:** re-keying a field (changing which key a field declares); re-syncing a field's denormalized
+  label/type after a key rename; validating a component's field **value** (not only the default) against the
+  key's JSON Schema; and the cross-type field cascade ([ADR-0042](#adr-0042-field-cascade-and-the-type-default-floor)).
+- **Stacks on:** the unified key registry ([ADR-0043](#adr-0043-the-unified-key-registry), issue
+  [#297](https://github.com/hyperscaleav/omniglass/issues/297)), under epic
   [#266](https://github.com/hyperscaleav/omniglass/issues/266).

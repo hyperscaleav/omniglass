@@ -1411,3 +1411,22 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   deferred ([ADR-0043](/architecture/decisions/#adr-0043-the-unified-key-registry),
   [#297](https://github.com/hyperscaleav/omniglass/issues/297)). The
   [config, secrets, and variables](/architecture/variables/) page stays `Partial`.
+- **A field declares a key (the type-schema binding).** The deferred half of the key registry lands: a
+  `field_definition` gains a **`key`** FK to `canonical_key`, and its `name`, `data_type`, and
+  `display_name` now come **from the key** (denormalized onto the row so the effective-fields read and the
+  value validation need no join). The create surface picks a key instead of typing a free name and type;
+  the default is validated against the key through **`internal/key.ValidateValue`** (its data type plus its
+  JSON Schema), so an out-of-enum or out-of-range default is refused at the definition. The `key` column is
+  **nullable** (a legacy field keeps rendering; the migration backfills `key = name` where a matching key
+  exists), while a new create **requires** a registered key (`ErrUnknownKey` to 422). The console
+  field-on-type editor picks a key with a new reusable **`KeyPicker`** (a searchable Kobalte Combobox over
+  `/keys`, portaled, generic for the driver epic) and gains **per-row edit and delete** for a declared
+  field, closing the gap where a field had no edit or delete. Proven by the storage integration tier (the
+  key FK, the derive-from-key identity, the JSON-Schema default validation), the `/field-definitions` HTTP
+  e2e (declare from a key, unknown-key 422), the `KeyPicker` unit tests (search, filter, exclude, portal,
+  onSelect), and the field-editor console tests. The type-schema editor for how a type selects **many** keys
+  at once, re-keying a field, and value-against-schema validation are deferred
+  ([ADR-0044](/architecture/decisions/#adr-0044-a-field-declares-a-key),
+  [#297](https://github.com/hyperscaleav/omniglass/issues/297)). The
+  [config, secrets, and variables](/architecture/variables/) page stays `Partial` (the field cascade is the
+  remaining floor to `Built`).

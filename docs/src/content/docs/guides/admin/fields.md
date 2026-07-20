@@ -4,7 +4,7 @@ description: "Operator-defined typed attributes declared on a component type: de
 screenshots:
   - id: fields-schema
     path: /web/types
-    alt: "A component-type blade in the Types catalog: the Fields editor, where an operator declares a typed field (a name, a data_type, and an optional default) that every component of that type carries."
+    alt: "A component-type blade in the Types catalog: the Fields editor, where an operator declares a field by picking a key from the catalog (the key supplies the name, data_type, and label), sets an optional default and required flag, and edits or deletes each declared field."
     steps:
       - action: click
         selector: '[role="tab"]:has-text("Component")'
@@ -44,17 +44,24 @@ the cross-type cascade, and typed file fields are later slices, described on the
 
 **Catalog > Types**, the **Component** tab, is the [type catalog](/guides/admin/types/). Open a
 component type to reach its blade; a **Fields** section lists the fields declared on that type (each with
-a **name** and a **type badge**, `string` / `int` / `float` / `bool` / `json`, plus its default when one is
-set).
+its **display name**, its **key** (mono), and a **type badge**, `string` / `int` / `float` / `bool` /
+`json`, plus its default when one is set).
 
 ::screenshot{#fields-schema}
 
-- **Add a field** (with `field:create`, an **operator** permission) uses the inline add row: name the
-  field (unique on that type), optionally give it a **display name** (a human label), pick its **data
-  type**, and optionally type a **default**. The raw name stays the unique key and the interpolation
-  handle; the display name is presentation only, and the console shows it wherever it is set, falling back
-  to the name when it is not. The default is coerced to the data type (an `int` default is a number, not a
-  string) and applies to every component of the type until that component sets its own value.
+- **A field declares a key.** A field no longer mints its own name and type: it picks a **key** from the
+  [key catalog](/guides/admin/keys/), and the field's **name**, **data type**, and **label** all come from
+  that key, so `serial_number` is one concept whether a device reports it (a datapoint) or you declare it
+  (a field). See [the key registry](/architecture/variables/#field-an-operator-defined-typed-schema-on-a-type).
+- **Add a field** (with `field:create`, an **operator** permission) uses the **key picker**: search the
+  catalog and pick a key (each option shows its type and label), then fill in an optional **default** in a
+  type-aware input keyed by the key's data type, and the **required** toggle. The default is validated
+  against the key (its data type and its JSON Schema, so an out-of-range or out-of-enum default is refused
+  here, not just on a component's value) and applies to every component of the type until that component
+  sets its own value. The picker offers only keys not already declared on this type.
+- **Edit and delete a declared field** in place: each row carries a pencil (edit its default and required
+  flag; the key, type, and label are fixed) and a trash (remove the field from the type). Both need
+  `field:create` / `field:delete`.
 - The Fields editor is **operator data layered onto the type**, so it is editable even on a **seed-owned
   (official) component type**, which is otherwise read-only. It renders only for the **Component** kind;
   the other type registries do not carry fields this slice.
