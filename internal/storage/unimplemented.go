@@ -264,6 +264,18 @@ func (UnimplementedGateway) UpsertKey(context.Context, Key) error {
 func (UnimplementedGateway) ListKeys(context.Context) ([]Key, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) GetKey(context.Context, string) (*Key, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) CreateKey(context.Context, string, KeySpec) (*Key, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) UpdateKey(context.Context, string, string, KeyPatch) (*Key, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteKey(context.Context, string, string) error {
+	return nil
+}
 func (UnimplementedGateway) UpsertInterfaceType(context.Context, InterfaceType) error {
 	return nil
 }

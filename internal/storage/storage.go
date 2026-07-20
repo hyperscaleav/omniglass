@@ -276,6 +276,10 @@ type Gateway interface {
 	// seeded official and operator-extensible at org/template scope later.
 	UpsertKey(ctx context.Context, k Key) error
 	ListKeys(ctx context.Context) ([]Key, error)
+	GetKey(ctx context.Context, name string) (*Key, error)
+	CreateKey(ctx context.Context, actorID string, spec KeySpec) (*Key, error)
+	UpdateKey(ctx context.Context, actorID, name string, patch KeyPatch) (*Key, error)
+	DeleteKey(ctx context.Context, actorID, name string) error
 	UpsertInterfaceType(ctx context.Context, it InterfaceType) error
 	ListInterfaceTypes(ctx context.Context) ([]InterfaceType, error)
 
