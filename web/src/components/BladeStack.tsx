@@ -3,7 +3,7 @@ import { Dynamic } from "solid-js/web";
 import { Ban, ChevronLeft, MoreHorizontal, Pencil, RotateCcw, Save, Trash, X } from "./icons";
 import Button from "./Button";
 import { type BladeController, type BladeDef, BladeEditContext, createEditSlot } from "../lib/blades";
-import { useKeymapOptional } from "./KeymapProvider";
+import { useKeymapOptional, catalogBinding } from "./KeymapProvider";
 
 // BladeStack: the Azure-style right-hand blade stack, lifted out of TreeList so
 // the inventory tree AND the flat identity pages share one implementation. A row
@@ -48,7 +48,7 @@ export default function BladeStack(props: {
         name: "blade",
         priority: 30,
         active: () => stack().length > 0,
-        bindings: () => [{ action: "close_blade", label: "Close blade", combo: km.keys().close_blade, run: () => props.controller.pop() }],
+        bindings: () => [catalogBinding("close_blade", km.keys(), () => props.controller.pop())],
       });
       onCleanup(off);
     });

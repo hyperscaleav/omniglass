@@ -7,6 +7,7 @@ import {
   allowsWhileTyping,
   resolveBinding,
   keybindingsFromMe,
+  keybindingLabel,
   DEFAULT_KEYBINDINGS,
   type Scope,
 } from "./keymap";
@@ -100,6 +101,21 @@ describe("allowsWhileTyping", () => {
     expect(allowsWhileTyping(parseCombo("?", false))).toBe(false);
     expect(allowsWhileTyping(parseCombo("mod+k", false))).toBe(true);
     expect(allowsWhileTyping(parseCombo("Escape", false))).toBe(true);
+  });
+});
+
+describe("catalog-derived defaults and labels", () => {
+  it("derives DEFAULT_KEYBINDINGS from the generated catalog, including help", () => {
+    expect(DEFAULT_KEYBINDINGS.open_detail).toBe("d");
+    expect(DEFAULT_KEYBINDINGS.command_palette).toBe("mod+k");
+    expect(DEFAULT_KEYBINDINGS.help).toBe("?");
+  });
+
+  it("keybindingLabel reads the human description from the catalog", () => {
+    expect(keybindingLabel("command_palette")).toBe("Open the command palette");
+    expect(keybindingLabel("help")).toBe("Show keyboard shortcuts");
+    // Unknown action falls back to its id.
+    expect(keybindingLabel("nope")).toBe("nope");
   });
 });
 

@@ -22,11 +22,16 @@ type UISettings struct {
 }
 
 // Keybindings is the keymap namespace: a closed set of developer-defined actions.
+// Each field is the single source for one shortcut: its default combo (default),
+// its human description (doc), and, once reflected, its client-visible value. The
+// console keymap registry consumes these, so a shortcut is declared here and nowhere
+// else (the client catalog is generated, not hand-kept).
 type Keybindings struct {
 	OpenDetail     string `json:"open_detail" default:"d" doc:"Open the detail blade"`
 	OpenEdit       string `json:"open_edit" default:"e" doc:"Open the edit pane"`
 	CloseBlade     string `json:"close_blade" default:"Escape" doc:"Close the top blade"`
 	CommandPalette string `json:"command_palette" default:"mod+k" doc:"Open the command palette"`
+	Help           string `json:"help" default:"?" doc:"Show keyboard shortcuts"`
 }
 
 // namespaceType indexes each namespace's json name to its sub-struct type, for the

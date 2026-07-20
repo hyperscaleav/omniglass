@@ -1,6 +1,6 @@
 import { type Accessor, type ParentComponent, createContext, createSignal, onCleanup, useContext } from "solid-js";
 import { hostPlatform, isMac } from "../lib/platform";
-import { type Binding, type Scope, chordFromEvent, isEditableTarget, parseCombo, resolveBinding } from "../lib/keymap";
+import { type Binding, type Scope, chordFromEvent, isEditableTarget, keybindingLabel, parseCombo, resolveBinding } from "../lib/keymap";
 
 // KeymapProvider is the shortcut registry: the one window keydown listener for the
 // whole console, plus a scope-registration API. It is the runtime edge over the pure
@@ -42,6 +42,14 @@ export function useKeymap(): KeymapController {
   const c = useContext(KeymapContext);
   if (!c) throw new Error("useKeymap called outside a KeymapProvider");
   return c;
+}
+
+// catalogBinding builds a binding for a catalogued action: the combo comes from the
+// effective keymap (`keys`), the label from the shared catalog, and only the handler
+// is supplied at the call site. This keeps a shortcut's metadata single-sourced (the
+// Keybindings struct); the consumer contributes just the behavior.
+export function catalogBinding(action: string, keys: Record<string, string>, run: () => void): BindingSpec {
+  return { action, label: keybindingLabel(action), combo: keys[action] ?? "", run };
 }
 
 // useKeymapOptional returns the controller or undefined when there is no provider,

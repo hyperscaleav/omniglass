@@ -5,7 +5,7 @@ import TopBar from "./components/TopBar";
 import ImpersonationBanner from "./components/ImpersonationBanner";
 import CommandPalette from "./components/CommandPalette";
 import KeyboardHelp from "./components/KeyboardHelp";
-import { KeymapProvider, useKeymap } from "./components/KeymapProvider";
+import { KeymapProvider, useKeymap, catalogBinding } from "./components/KeymapProvider";
 import { sectionLabel } from "./lib/nav";
 import { useTheme, applyTheme, themeFromMe } from "./lib/theme";
 import { useSettingsMe, type SettingsMe } from "./lib/settings";
@@ -47,15 +47,16 @@ const Shell: ParentComponent<{ me: () => SettingsMe | undefined }> = (props) => 
   });
   createEffect(() => localStorage.setItem("og-collapsed", collapsed() ? "1" : "0"));
 
-  // The global scope: the command palette (from settings, mod+k by default) and the
-  // help overlay (?). Both toggle their dialogs; the registry owns the keys.
+  // The global scope: the command palette and the help overlay, both from the shared
+  // catalog (combo from settings, label + default from the Keybindings struct). Both
+  // toggle their dialogs; the registry owns the keys.
   onMount(() => {
     const off = km.register({
       name: "global",
       priority: 10,
       bindings: () => [
-        { action: "command_palette", label: "Command palette", combo: km.keys().command_palette, run: () => setPaletteOpen((o) => !o) },
-        { action: "help", label: "Keyboard shortcuts", combo: "?", run: () => setHelpOpen((o) => !o) },
+        catalogBinding("command_palette", km.keys(), () => setPaletteOpen((o) => !o)),
+        catalogBinding("help", km.keys(), () => setHelpOpen((o) => !o)),
       ],
     });
     onCleanup(off);

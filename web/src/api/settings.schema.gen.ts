@@ -7,6 +7,9 @@ export const settingsSchema = {
     "command_palette": {
       "type": "string"
     },
+    "help": {
+      "type": "string"
+    },
     "open_detail": {
       "type": "string"
     },

@@ -1405,8 +1405,12 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   settings) and Escape-closes-the-top-blade (a `blade` scope `BladeStack` registers while a blade is open),
   deleting the bespoke `window` listeners. Discoverability lands with it: a **`?` help overlay** renders the
   live registry grouped by active scope with platform-native labels (a new `platform.formatCombo`), and the
-  command palette grows a **shortcut-hint column** with a "Keyboard shortcuts" action. No new user-facing
-  bindings and no storage change this slice. Proven by the keymap-core unit suite (grammar and platform
+  command palette grows a **shortcut-hint column** with a "Keyboard shortcuts" action. Every shortcut is
+  declared **once** on the `Keybindings` struct (default combo plus `doc`); `make gen` emits a client catalog
+  (`web/src/api/keybindings.catalog.gen.ts`) so the defaults and labels are not hand-kept, the `?` help key is
+  itself a tagged, rebindable binding, and the help overlay carries a **full-catalog view** listing every
+  declared shortcut, not just the active ones. No new console bindings beyond making `?` rebindable, and no
+  storage change this slice. Proven by the keymap-core unit suite (grammar and platform
   split, match positives and negatives, the typing guard, scope precedence and fall-through, the settings
   overlay), the provider component tests (window dispatch, priority, the inactive-scope and typing guards,
   the active-scope read), and the help-overlay and palette tests. The [UI](/architecture/ui/) page keeps its

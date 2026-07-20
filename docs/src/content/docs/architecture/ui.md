@@ -180,12 +180,15 @@ The console is a dense-ops surface, so it is keyboard-driven through **one short
 scatter of hand-wired handlers. The registry is a **primitive** (doctrine 5): a pure core owns the
 grammar and matching, and a single provider is the one `window` keydown listener for the whole app.
 
-- **The keymap is data.** Bindings come from the `keybindings` [settings](/architecture/settings/)
-  namespace, resolved down the principal cascade and delivered to the client on `/settings/me`, so an
-  operator can rebind a key with no code change (and, once the cascade's user rung lands, per user). The
-  code defaults (`d` open detail, `e` open edit, `Escape` close blade, `mod+k` command palette) are the
-  floor; an override layers on top. `mod` resolves to the host modifier: Command on macOS, Control
-  elsewhere.
+- **The keymap is data, declared once.** Every shortcut is a tagged field on one Go struct
+  (`Keybindings`), carrying its default combo and its description. That single declaration drives the
+  `keybindings` [settings](/architecture/settings/) namespace, the OpenAPI schema, and a generated client
+  catalog, so a shortcut's default and label are never hand-kept twice. Bindings resolve down the principal
+  cascade and reach the client on `/settings/me`, so an operator can rebind a key with no code change (and,
+  once the cascade's user rung lands, per user). The code defaults (`d` open detail, `e` open edit, `Escape`
+  close blade, `mod+k` command palette, `?` help) are the floor; an override layers on top. `mod` resolves to
+  the host modifier: Command on macOS, Control elsewhere. A consumer contributes only the handler and the
+  scope; the combo and label come from the catalog.
 - **Scopes, ordered.** Shortcuts resolve through a **scope stack**, highest-priority first: `global`
   (the command palette, the help overlay) at the base, a `list` scope a list view contributes, and a
   `blade` scope each open blade contributes. A blade on top claims a key before the list beneath it, so
@@ -195,8 +198,9 @@ grammar and matching, and a single provider is the one `window` keydown listener
   rule every keyboard UI needs and the reason bare single keys are safe to bind.
 - **Discoverability** (doctrine 4): a hidden keymap is a support cost, so the shortcuts teach
   themselves. **`?` opens a help overlay** rendered from the **live registry**, grouped by the scopes
-  active right now and labelled per host (`⌘K` on mac, `Ctrl+K` elsewhere), and the command palette
-  carries a **shortcut-hint column**. Both read the same registry the dispatcher runs, so they cannot
+  active right now and labelled per host (`⌘K` on mac, `Ctrl+K` elsewhere), with an **All** view that
+  lists the full catalog (every declared shortcut, active or not); and the command palette carries a
+  **shortcut-hint column**. Both read the same registry and catalog the dispatcher runs, so they cannot
   drift from what the keys actually do.
 
 **Deletes are undoable, not chorded.** The destructive shortcut is a Gmail-style `#`, and a delete is

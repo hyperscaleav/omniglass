@@ -5,6 +5,8 @@
 // KeyboardEvents and the settings keymap. This is the shortcut registry the settings
 // `keybindings` namespace was built to feed (epic #303).
 
+import { keybindingsCatalog } from "../api/keybindings.catalog.gen";
+
 // A Combo is a parsed binding spec. `mod` is already resolved to the host modifier
 // (meta on mac, ctrl elsewhere) at parse time, so matching stays platform-agnostic.
 export type Combo = { key: string; meta: boolean; ctrl: boolean; alt: boolean; shift: boolean };
@@ -21,15 +23,24 @@ export type Binding = { action: string; label: string; combo: Combo; run: () => 
 // first (blade over list over global), so an open blade's Escape wins over a list's.
 export type Scope = { name: string; priority: number; bindings: Binding[] };
 
-// The code-layer keymap defaults, mirroring the Keybindings struct
-// (internal/settings/schema.go). /settings/me overlays operator overrides on top,
-// but these keep the registry working before the settings read resolves.
-export const DEFAULT_KEYBINDINGS: Record<string, string> = {
-  open_detail: "d",
-  open_edit: "e",
-  close_blade: "Escape",
-  command_palette: "mod+k",
-};
+// Re-export the generated catalog (action -> default combo + doc) as the single
+// source of shortcut metadata, so consumers can read defaults/labels from one place.
+export { keybindingsCatalog };
+
+// The code-layer keymap defaults, derived from the generated catalog (which is
+// sliced from the Keybindings struct in internal/settings/schema.go, the single
+// source). /settings/me overlays operator overrides on top; these keep the registry
+// working before the settings read resolves. No hand-kept second copy.
+export const DEFAULT_KEYBINDINGS: Record<string, string> = Object.fromEntries(
+  Object.entries(keybindingsCatalog).map(([action, meta]) => [action, meta.default]),
+);
+
+// keybindingLabel is the human name for an action, from the catalog `doc` (the same
+// text the settings struct declares), so a binding's label is not re-authored at its
+// registration site. Falls back to the action id if the catalog does not carry it.
+export function keybindingLabel(action: string): string {
+  return (keybindingsCatalog as Record<string, { doc: string }>)[action]?.doc || action;
+}
 
 // keybindingsFromMe resolves the effective keymap: the code defaults with the
 // client-visible `keybindings` namespace from /settings/me layered over them. Only

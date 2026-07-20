@@ -1449,6 +1449,10 @@ components:
           default: mod+k
           description: Open the command palette
           type: string
+        help:
+          default: "?"
+          description: Show keyboard shortcuts
+          type: string
         open_detail:
           default: d
           description: Open the detail blade
@@ -1462,6 +1466,7 @@ components:
         - open_edit
         - close_blade
         - command_palette
+        - help
       type: object
     ListComponentMakesOutputBody:
       additionalProperties: false
