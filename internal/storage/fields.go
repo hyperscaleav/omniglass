@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
+	"github.com/hyperscaleav/omniglass/internal/key"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/variable"
 	"github.com/jackc/pgx/v5"
@@ -23,51 +25,51 @@ var (
 	ErrFieldDefinitionNotFound = errors.New("storage: field definition not found")
 	ErrFieldDefinitionConflict = errors.New("storage: field definition already exists for this type and name")
 	ErrInvalidValue            = errors.New("storage: value does not match the field's data_type")
+	ErrUnknownKey              = errors.New("storage: key is not registered")
 )
 
 // FieldDefinition is a typed field declared on a component_type; every component
 // of that type carries it. The literal a component sets lives in field_value;
-// this is the schema row.
+// this is the schema row. A field draws its identity from a canonical key: Name,
+// DataType, and DisplayName are the key's (denormalized here so the read paths need
+// no join); Key is the back-reference. Required and DefaultValue are the per-type
+// schema bits.
 type FieldDefinition struct {
 	ID            string
 	ComponentType string
 	Name          string
-	DisplayName   string          // optional human label; empty when unset (falls back to Name in the UI)
-	DataType      string          // string | int | float | bool | json
+	Key           string          // the canonical key this field declares (== Name; empty only for a legacy row)
+	DisplayName   string          // the key's label; empty when the key has none (falls back to Name in the UI)
+	DataType      string          // the key's data_type: string | int | float | bool | json
 	Required      bool            // whether the field must be set on every component of its type
 	DefaultValue  json.RawMessage // nil when the field has no default
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
 }
 
-// FieldDefinitionSpec is the create payload.
+// FieldDefinitionSpec is the create payload. A field is declared by picking a Key
+// from the catalog: its Name, DataType, and DisplayName come from the key, so the
+// spec carries only the per-type schema bits (Required, DefaultValue).
 type FieldDefinitionSpec struct {
 	ComponentType string
-	Name          string
-	DisplayName   string
-	DataType      string
+	Key           string
 	Required      bool
 	DefaultValue  json.RawMessage
 }
 
-// nilIfEmpty maps an empty string to a SQL NULL, so an unset display_name stores
-// NULL (not ""), keeping "unset" and "" indistinguishable at the UI fallback.
-func nilIfEmpty(s string) *string {
-	if s == "" {
-		return nil
-	}
-	return &s
-}
-
-const fieldDefinitionCols = `id, component_type, name, display_name, data_type, required, default_value, created_at, updated_at`
+const fieldDefinitionCols = `id, component_type, name, key, display_name, data_type, required, default_value, created_at, updated_at`
 
 func scanFieldDefinition(row pgx.Row) (*FieldDefinition, error) {
 	var (
 		fd          FieldDefinition
-		displayName *string // NULL when unset
+		keyRef      *string // NULL for a legacy field (name predates the registry)
+		displayName *string // NULL when the key has no label
 	)
-	if err := row.Scan(&fd.ID, &fd.ComponentType, &fd.Name, &displayName, &fd.DataType, &fd.Required, &fd.DefaultValue, &fd.CreatedAt, &fd.UpdatedAt); err != nil {
+	if err := row.Scan(&fd.ID, &fd.ComponentType, &fd.Name, &keyRef, &displayName, &fd.DataType, &fd.Required, &fd.DefaultValue, &fd.CreatedAt, &fd.UpdatedAt); err != nil {
 		return nil, err
+	}
+	if keyRef != nil {
+		fd.Key = *keyRef
 	}
 	if displayName != nil {
 		fd.DisplayName = *displayName
@@ -94,29 +96,37 @@ func (p *PG) ListFieldDefinitions(ctx context.Context) ([]FieldDefinition, error
 	return out, rows.Err()
 }
 
-// CreateFieldDefinition declares a new field on a component_type. A default,
-// when present, must satisfy the declared data_type: this reuses the variable
-// primitive's pure validator (same scalar set for slice 0), so "the value's
-// shape matches its type" is defined once. An unknown component_type is the
-// FK-backed ErrUnknownComponentType; a duplicate (component_type, name) is
+// CreateFieldDefinition declares a new field on a component_type by picking a key
+// from the catalog. The field's name, data_type, and display_name come from the
+// key (denormalized onto the row), and a default, when present, is validated
+// against the key via internal/key.ValidateValue (the key's data_type plus its
+// JSON Schema). An unregistered key is ErrUnknownKey; an unknown component_type is
+// the FK-backed ErrUnknownComponentType; a duplicate (component_type, key) is
 // ErrFieldDefinitionConflict.
 func (p *PG) CreateFieldDefinition(ctx context.Context, actorID string, spec FieldDefinitionSpec) (*FieldDefinition, error) {
-	if len(spec.DefaultValue) > 0 {
-		if err := variable.ValidateValue(variable.ValueType(spec.DataType), spec.DefaultValue); err != nil {
-			return nil, fmt.Errorf("%w: %v", ErrInvalidValue, err)
-		}
-	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("storage: begin create field definition: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	// The key is the source of truth for the field's type and label. Load it, and
+	// validate the default against it, before the insert.
+	dataType, displayName, validation, err := loadKeyForField(ctx, tx, spec.Key)
+	if err != nil {
+		return nil, err
+	}
+	if len(spec.DefaultValue) > 0 {
+		if err := key.ValidateValue(dataType, spec.DefaultValue, validation); err != nil {
+			return nil, fmt.Errorf("%w: %v", ErrInvalidValue, err)
+		}
+	}
+
 	fd, err := scanFieldDefinition(tx.QueryRow(ctx, `
-		insert into field_definition (component_type, name, display_name, data_type, required, default_value)
-		values ($1, $2, $3, $4, $5, $6)
+		insert into field_definition (component_type, name, key, display_name, data_type, required, default_value)
+		values ($1, $2, $2, $3, $4, $5, $6)
 		returning `+fieldDefinitionCols,
-		spec.ComponentType, spec.Name, nilIfEmpty(spec.DisplayName), spec.DataType, spec.Required, []byte(spec.DefaultValue)))
+		spec.ComponentType, spec.Key, displayName, dataType, spec.Required, []byte(spec.DefaultValue)))
 	if err != nil {
 		return nil, mapFieldDefinitionWriteErr(err)
 	}
@@ -129,27 +139,61 @@ func (p *PG) CreateFieldDefinition(ctx context.Context, actorID string, spec Fie
 	return fd, nil
 }
 
-// UpdateFieldDefinition patches a field definition's data_type and default
-// value, revalidating the default against the new data_type. component_type and
-// name are fixed at creation (renaming or reparenting a field is a later
-// slice). An unknown id is ErrFieldDefinitionNotFound.
-func (p *PG) UpdateFieldDefinition(ctx context.Context, actorID, id, dataType, displayName string, required bool, def json.RawMessage) (*FieldDefinition, error) {
-	if len(def) > 0 {
-		if err := variable.ValidateValue(variable.ValueType(dataType), def); err != nil {
-			return nil, fmt.Errorf("%w: %v", ErrInvalidValue, err)
-		}
+// loadKeyForField reads the identity a field draws from its key: the data_type,
+// the display label (empty when the key has none), and the validation schema. An
+// unregistered key is ErrUnknownKey.
+func loadKeyForField(ctx context.Context, q querier, name string) (dataType string, displayName *string, validation []byte, err error) {
+	err = q.QueryRow(ctx, `select data_type, display_name, validation from canonical_key where name = $1`, name).
+		Scan(&dataType, &displayName, &validation)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil, nil, ErrUnknownKey
 	}
+	if err != nil {
+		return "", nil, nil, fmt.Errorf("storage: load key %q: %w", name, err)
+	}
+	return dataType, displayName, validation, nil
+}
+
+// UpdateFieldDefinition patches a field definition's per-type schema bits (the
+// required flag and the default value), revalidating the default against the
+// field's key (its fixed data_type and JSON Schema). The key, data_type, and
+// display_name are fixed at creation (re-keying a field is a later slice). An
+// unknown id is ErrFieldDefinitionNotFound.
+func (p *PG) UpdateFieldDefinition(ctx context.Context, actorID, id string, required bool, def json.RawMessage) (*FieldDefinition, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("storage: begin update field definition: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	// The default is revalidated against the field's key (its data_type + schema).
+	// A legacy field (no key) validates against its stored data_type with no schema.
+	if len(def) > 0 {
+		var (
+			dataType   string
+			validation []byte
+		)
+		err := tx.QueryRow(ctx, `
+			select fd.data_type, ck.validation
+			from field_definition fd
+			left join canonical_key ck on ck.name = fd.key
+			where fd.id = $1`, id).Scan(&dataType, &validation)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrFieldDefinitionNotFound
+		}
+		if err != nil {
+			return nil, fmt.Errorf("storage: load field definition %q: %w", id, err)
+		}
+		if err := key.ValidateValue(dataType, def, validation); err != nil {
+			return nil, fmt.Errorf("%w: %v", ErrInvalidValue, err)
+		}
+	}
+
 	fd, err := scanFieldDefinition(tx.QueryRow(ctx, `
 		update field_definition
-		set data_type = $2, display_name = $3, required = $4, default_value = $5, updated_at = now()
+		set required = $2, default_value = $3, updated_at = now()
 		where id = $1
-		returning `+fieldDefinitionCols, id, dataType, nilIfEmpty(displayName), required, []byte(def)))
+		returning `+fieldDefinitionCols, id, required, []byte(def)))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrFieldDefinitionNotFound
 	}
@@ -202,6 +246,7 @@ func auditFieldDefinition(fd *FieldDefinition) map[string]any {
 		"id":             fd.ID,
 		"component_type": fd.ComponentType,
 		"name":           fd.Name,
+		"key":            fd.Key,
 		"display_name":   fd.DisplayName,
 		"data_type":      fd.DataType,
 		"required":       fd.Required,
@@ -209,8 +254,11 @@ func auditFieldDefinition(fd *FieldDefinition) map[string]any {
 }
 
 // mapFieldDefinitionWriteErr translates Postgres constraint violations into the
-// field-definition sentinels: a duplicate (component_type, name) and an unknown
-// component_type FK are request faults the API reports as 409 and 400.
+// field-definition sentinels: a duplicate (component_type, name) and the two FKs
+// (component_type and key) are request faults the API reports as 409 and 422. The
+// key FK is normally caught earlier (loadKeyForField -> ErrUnknownKey); the
+// constraint name disambiguates it from the component_type FK if a race slips
+// through.
 func mapFieldDefinitionWriteErr(err error) error {
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) {
@@ -218,6 +266,12 @@ func mapFieldDefinitionWriteErr(err error) error {
 		case "23505": // unique_violation
 			return ErrFieldDefinitionConflict
 		case "23503": // foreign_key_violation
+			// The key FK is field_definition_key_fkey; the component_type FK is
+			// field_definition_component_type_fkey. Match the key one by its column
+			// suffix (every FK name ends in "_fkey", so a bare "key" match is wrong).
+			if strings.HasSuffix(pgErr.ConstraintName, "_key_fkey") {
+				return ErrUnknownKey
+			}
 			return ErrUnknownComponentType
 		}
 	}

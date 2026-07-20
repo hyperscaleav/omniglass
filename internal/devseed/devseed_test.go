@@ -60,27 +60,45 @@ func TestFixturesShape(t *testing.T) {
 		}
 	}
 
-	// Field definitions declare a typed field on a component_type; each needs a name
-	// and a data_type in the supported scalar set. seenField lets a later field_value
-	// check its field is actually declared in the same document.
+	// Custom keys the example fields draw from; each needs a name and a data_type in
+	// the supported scalar set. seenKey lets a field definition check its key is
+	// declared in the same document (serial_number is the one official boot-seed key,
+	// added below).
 	validDataTypes := map[string]bool{"string": true, "int": true, "float": true, "bool": true, "json": true}
-	seenField := map[string]bool{}
+	seenKey := map[string]bool{}
 	var assetTagDisplay string
-	for _, fd := range doc.FieldDefinitions {
-		if fd.Name == "" || fd.ComponentType == "" {
-			t.Errorf("field definition %+v missing name or component_type", fd)
+	for _, k := range doc.Keys {
+		if k.Name == "" {
+			t.Errorf("key %+v missing name", k)
 		}
-		if !validDataTypes[fd.DataType] {
-			t.Errorf("field definition %q has unsupported data_type %q", fd.Name, fd.DataType)
+		if !validDataTypes[k.DataType] {
+			t.Errorf("key %q has unsupported data_type %q", k.Name, k.DataType)
 		}
-		if fd.Name == "asset_tag" {
-			assetTagDisplay = fd.DisplayName
+		if k.Name == "asset_tag" {
+			assetTagDisplay = k.DisplayName
 		}
-		seenField[fd.Name] = true
+		seenKey[k.Name] = true
 	}
-	// A field carries an optional human label; the seed sets one on asset_tag.
+	// serial_number is an official boot-seed key (not repeated in the dev keys), so a
+	// field may reference it.
+	seenKey["serial_number"] = true
+	// A key carries a human label; the seed sets one on asset_tag, and the field's
+	// label comes from the key.
 	if assetTagDisplay != "Asset tag" {
 		t.Errorf("asset_tag display_name = %q, want \"Asset tag\"", assetTagDisplay)
+	}
+
+	// Field definitions declare a typed field on a component_type by picking a key.
+	// seenField lets a later field_value check its field is actually declared.
+	seenField := map[string]bool{}
+	for _, fd := range doc.FieldDefinitions {
+		if fd.Key == "" || fd.ComponentType == "" {
+			t.Errorf("field definition %+v missing key or component_type", fd)
+		}
+		if !seenKey[fd.Key] {
+			t.Errorf("field definition references key %q not declared in the document", fd.Key)
+		}
+		seenField[fd.Key] = true
 	}
 
 	// Components place a device in the estate; a component that names a location must

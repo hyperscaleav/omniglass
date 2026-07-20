@@ -385,22 +385,10 @@ components:
           description: The component_type this field is defined on
           minLength: 1
           type: string
-        data_type:
-          description: The declared value type
-          enum:
-            - string
-            - int
-            - float
-            - bool
-            - json
-          type: string
         default_value:
-          description: Optional type-level default, validated against data_type
-        display_name:
-          description: Optional human label; falls back to name when unset
-          type: string
-        name:
-          description: The field name; unique per component_type
+          description: Optional type-level default, validated against the key's data_type and validation
+        key:
+          description: The canonical key this field declares; the field's name, data_type, and label come from it. Must be a registered key
           minLength: 1
           type: string
         required:
@@ -408,8 +396,7 @@ components:
           type: boolean
       required:
         - component_type
-        - name
-        - data_type
+        - key
       type: object
     CreateFileInputBody:
       additionalProperties: false
@@ -1197,9 +1184,12 @@ components:
         default_value:
           description: The type-level default, shape given by data_type; omitted when unset
         display_name:
-          description: Optional human label; the raw name is the key. Omitted when unset
+          description: The key's human label; the raw name is the key. Omitted when the key has none
           type: string
         id:
+          type: string
+        key:
+          description: The canonical key this field declares; the name, type, and label come from it. Omitted only for a legacy field predating the registry
           type: string
         name:
           type: string
@@ -3041,25 +3031,11 @@ components:
           format: uri
           readOnly: true
           type: string
-        data_type:
-          description: The declared value type
-          enum:
-            - string
-            - int
-            - float
-            - bool
-            - json
-          type: string
         default_value:
-          description: Optional type-level default, validated against data_type
-        display_name:
-          description: Optional human label; falls back to name when unset
-          type: string
+          description: Optional type-level default, validated against the key's data_type and validation
         required:
           description: Whether every component of this type must set the field; defaults to false
           type: boolean
-      required:
-        - data_type
       type: object
     UpdateFieldValueInputBody:
       additionalProperties: false

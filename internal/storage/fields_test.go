@@ -12,7 +12,8 @@ import (
 )
 
 // fieldGateway opens a plain Gateway and seeds the reference data (field
-// definitions reference the official component_type registry).
+// definitions reference the official component_type registry and the canonical
+// key registry).
 func fieldGateway(t *testing.T) storage.Gateway {
 	t.Helper()
 	dsn := storagetest.NewDSN(t)
@@ -28,67 +29,106 @@ func fieldGateway(t *testing.T) storage.Gateway {
 	return gw
 }
 
+// registerKey installs a custom canonical key so a field can draw its identity
+// from it. A field's name, data_type, and display_name come FROM its key, so a
+// test that declares a field must register the key first.
+func registerKey(t *testing.T, gw storage.Gateway, name, dataType, displayName string, validation []byte) {
+	t.Helper()
+	if _, err := gw.CreateKey(context.Background(), "", storage.KeySpec{
+		Name: name, DataType: dataType, DisplayName: displayName, Validation: validation,
+	}); err != nil {
+		t.Fatalf("register key %q: %v", name, err)
+	}
+}
+
 func TestFieldDefinitionCRUD(t *testing.T) {
 	gw := fieldGateway(t)
 	ctx := context.Background()
 
-	// "display" is an official seeded component_type. A display_name is optional
-	// and presentation-only; the raw name stays the unique key.
+	// A field draws its identity from a registered key: name, data_type, and
+	// display_name all come from the key, not from the create call.
+	registerKey(t, gw, "asset_tag", "string", "Asset tag", nil)
+
+	// "display" is an official seeded component_type.
 	fd, err := gw.CreateFieldDefinition(ctx, "", storage.FieldDefinitionSpec{
 		ComponentType: "display",
-		Name:          "asset_tag",
-		DisplayName:   "Asset tag",
-		DataType:      "string",
-		DefaultValue:  nil,
+		Key:           "asset_tag",
 	})
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	if fd.ID == "" || fd.Name != "asset_tag" || fd.DisplayName != "Asset tag" || fd.ComponentType != "display" {
+	// name and display_name are the key's; the field carries a back-reference to it.
+	if fd.ID == "" || fd.Name != "asset_tag" || fd.Key != "asset_tag" || fd.DisplayName != "Asset tag" || fd.DataType != "string" || fd.ComponentType != "display" {
 		t.Fatalf("unexpected definition: %+v", fd)
 	}
 
-	// unknown component_type is rejected (FK).
+	// An unregistered key is refused: a field key must be a real key.
 	if _, err := gw.CreateFieldDefinition(ctx, "", storage.FieldDefinitionSpec{
-		ComponentType: "nope", Name: "x", DataType: "string",
+		ComponentType: "display", Key: "never_registered",
+	}); !errors.Is(err, storage.ErrUnknownKey) {
+		t.Fatalf("want ErrUnknownKey, got %v", err)
+	}
+
+	// An unknown component_type is rejected (FK).
+	if _, err := gw.CreateFieldDefinition(ctx, "", storage.FieldDefinitionSpec{
+		ComponentType: "nope", Key: "asset_tag",
 	}); !errors.Is(err, storage.ErrUnknownComponentType) {
 		t.Fatalf("want ErrUnknownComponentType, got %v", err)
 	}
 
-	// duplicate (component_type, name) conflicts.
+	// A duplicate (component_type, key) conflicts.
 	if _, err := gw.CreateFieldDefinition(ctx, "", storage.FieldDefinitionSpec{
-		ComponentType: "display", Name: "asset_tag", DataType: "string",
+		ComponentType: "display", Key: "asset_tag",
 	}); !errors.Is(err, storage.ErrFieldDefinitionConflict) {
 		t.Fatalf("want ErrFieldDefinitionConflict, got %v", err)
 	}
 
-	// a default that does not satisfy the declared data_type is refused on create
+	// A default that does not satisfy the key's data_type is refused on create
 	// (an int field cannot default to a JSON string).
+	registerKey(t, gw, "diagonal_inches", "int", "Diagonal inches", nil)
 	if _, err := gw.CreateFieldDefinition(ctx, "", storage.FieldDefinitionSpec{
-		ComponentType: "display", Name: "bad_default", DataType: "int",
+		ComponentType: "display", Key: "diagonal_inches",
 		DefaultValue: json.RawMessage(`"not-an-int"`),
 	}); !errors.Is(err, storage.ErrInvalidValue) {
 		t.Fatalf("want ErrInvalidValue on create, got %v", err)
 	}
 
-	// update the data_type, default, and display_name.
+	// The key's JSON Schema validation gates the default too: a default outside the
+	// key's enum is refused (the internal/key value validator, not just the base type).
+	registerKey(t, gw, "mount_style", "string", "Mount style", json.RawMessage(`{"enum":["wall","stand"]}`))
+	if _, err := gw.CreateFieldDefinition(ctx, "", storage.FieldDefinitionSpec{
+		ComponentType: "display", Key: "mount_style",
+		DefaultValue: json.RawMessage(`"ceiling"`),
+	}); !errors.Is(err, storage.ErrInvalidValue) {
+		t.Fatalf("want ErrInvalidValue on out-of-enum default, got %v", err)
+	}
+	// A default inside the enum is accepted.
+	if _, err := gw.CreateFieldDefinition(ctx, "", storage.FieldDefinitionSpec{
+		ComponentType: "display", Key: "mount_style",
+		DefaultValue: json.RawMessage(`"wall"`),
+	}); err != nil {
+		t.Fatalf("in-enum default should be accepted, got %v", err)
+	}
+
+	// Update patches the default and required (data_type and display_name are fixed
+	// to the key, so they are not update inputs).
 	def := json.RawMessage(`"unknown"`)
-	up, err := gw.UpdateFieldDefinition(ctx, "", fd.ID, "string", "Asset Tag (label)", false, def)
+	up, err := gw.UpdateFieldDefinition(ctx, "", fd.ID, false, def)
 	if err != nil {
 		t.Fatalf("update: %v", err)
 	}
-	if string(up.DefaultValue) != `"unknown"` || up.DisplayName != "Asset Tag (label)" {
+	if string(up.DefaultValue) != `"unknown"` || up.DisplayName != "Asset tag" || up.DataType != "string" {
 		t.Fatalf("update did not apply: %+v", up)
 	}
 
-	// the same validation gates update: a mismatched default is refused.
-	if _, err := gw.UpdateFieldDefinition(ctx, "", fd.ID, "int", "", false, json.RawMessage(`"nope"`)); !errors.Is(err, storage.ErrInvalidValue) {
-		t.Fatalf("want ErrInvalidValue on update, got %v", err)
+	// The same validation gates update: a mismatched default is refused (asset_tag is
+	// a string key, but re-typing is not a thing; use the int field to prove it).
+	di, err := gw.CreateFieldDefinition(ctx, "", storage.FieldDefinitionSpec{ComponentType: "display", Key: "diagonal_inches"})
+	if err != nil {
+		t.Fatalf("create diagonal_inches: %v", err)
 	}
-
-	list, err := gw.ListFieldDefinitions(ctx)
-	if err != nil || len(list) != 1 {
-		t.Fatalf("list: %v len=%d", err, len(list))
+	if _, err := gw.UpdateFieldDefinition(ctx, "", di.ID, false, json.RawMessage(`"nope"`)); !errors.Is(err, storage.ErrInvalidValue) {
+		t.Fatalf("want ErrInvalidValue on update, got %v", err)
 	}
 
 	if err := gw.DeleteFieldDefinition(ctx, "", fd.ID); err != nil {
@@ -108,9 +148,12 @@ func TestFieldDefinitionRequired(t *testing.T) {
 	gw := fieldGateway(t)
 	ctx := context.Background()
 
+	registerKey(t, gw, "asset_tag", "string", "Asset tag", nil)
+	registerKey(t, gw, "notes", "string", "Notes", nil)
+
 	// A field declared required on the "display" type reads back required.
 	req, err := gw.CreateFieldDefinition(ctx, "", storage.FieldDefinitionSpec{
-		ComponentType: "display", Name: "asset_tag", DataType: "string", Required: true,
+		ComponentType: "display", Key: "asset_tag", Required: true,
 	})
 	if err != nil {
 		t.Fatalf("create required: %v", err)
@@ -121,7 +164,7 @@ func TestFieldDefinitionRequired(t *testing.T) {
 
 	// A field created without the flag defaults to false (the not-null column default).
 	opt, err := gw.CreateFieldDefinition(ctx, "", storage.FieldDefinitionSpec{
-		ComponentType: "display", Name: "notes", DataType: "string",
+		ComponentType: "display", Key: "notes",
 	})
 	if err != nil {
 		t.Fatalf("create optional: %v", err)
@@ -149,14 +192,14 @@ func TestFieldDefinitionRequired(t *testing.T) {
 	}
 
 	// Update can toggle required off, and back on for the optional field.
-	off, err := gw.UpdateFieldDefinition(ctx, "", req.ID, "string", "", false, nil)
+	off, err := gw.UpdateFieldDefinition(ctx, "", req.ID, false, nil)
 	if err != nil {
 		t.Fatalf("update off: %v", err)
 	}
 	if off.Required {
 		t.Fatalf("want Required false after update, got %+v", off)
 	}
-	on, err := gw.UpdateFieldDefinition(ctx, "", opt.ID, "string", "", true, nil)
+	on, err := gw.UpdateFieldDefinition(ctx, "", opt.ID, true, nil)
 	if err != nil {
 		t.Fatalf("update on: %v", err)
 	}
@@ -173,9 +216,11 @@ func TestFieldValueEffective(t *testing.T) {
 	gw := fieldGateway(t)
 	ctx := context.Background()
 
+	registerKey(t, gw, "diagonal_inches", "int", "Diagonal inches", nil)
+
 	// A field on the "display" type with a default.
 	fd, err := gw.CreateFieldDefinition(ctx, "", storage.FieldDefinitionSpec{
-		ComponentType: "display", Name: "diagonal_inches", DataType: "int",
+		ComponentType: "display", Key: "diagonal_inches",
 		DefaultValue: json.RawMessage(`50`),
 	})
 	if err != nil {
@@ -250,8 +295,9 @@ func TestSetFieldValueUpsert(t *testing.T) {
 	gw := fieldGateway(t)
 	ctx := context.Background()
 
+	registerKey(t, gw, "diagonal_inches", "int", "Diagonal inches", nil)
 	if _, err := gw.CreateFieldDefinition(ctx, "", storage.FieldDefinitionSpec{
-		ComponentType: "display", Name: "diagonal_inches", DataType: "int",
+		ComponentType: "display", Key: "diagonal_inches",
 		DefaultValue: json.RawMessage(`50`),
 	}); err != nil {
 		t.Fatalf("define: %v", err)
@@ -316,16 +362,17 @@ func fieldValueAuditVerbs(t *testing.T, gw storage.Gateway, id string) []string 
 }
 
 // TestFieldValueUpdateDelete covers the mutation half: an update revalidates
-// against the field's fixed data_type and moves the effective value, a delete
-// reverts the component to the definition's default, and a second delete on the
-// same id is the non-disclosing not-found.
+// against the field's fixed data_type, a delete reverts the component to the
+// definition's default, and a second delete on the same id is the non-disclosing
+// not-found.
 func TestFieldValueUpdateDelete(t *testing.T) {
 	gw := fieldGateway(t)
 	ctx := context.Background()
 
+	registerKey(t, gw, "diagonal_inches", "int", "Diagonal inches", nil)
 	// diagonal_inches:int default 50 on "display", set on a fresh display component.
 	if _, err := gw.CreateFieldDefinition(ctx, "", storage.FieldDefinitionSpec{
-		ComponentType: "display", Name: "diagonal_inches", DataType: "int",
+		ComponentType: "display", Key: "diagonal_inches",
 		DefaultValue: json.RawMessage(`50`),
 	}); err != nil {
 		t.Fatalf("define: %v", err)

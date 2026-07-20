@@ -14,10 +14,20 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
+// registerKey creates a custom canonical key over HTTP so a field can draw its
+// identity from it (a field's name, data_type, and label come from its key).
+func registerKey(t *testing.T, c *apiClient, tok, name, dataType, displayName string) {
+	t.Helper()
+	c.do(tok, http.MethodPost, "/keys",
+		map[string]any{"name": name, "data_type": dataType, "display_name": displayName},
+		http.StatusCreated)
+}
+
 // TestFieldDefinitionAPI drives the field-definition catalog over HTTP: an owner
-// declares a field on a component_type (201), a duplicate name on the same type
-// conflicts (409), an unknown component_type is a request fault (422), and the
-// admin directory lists the one surviving definition.
+// declares a field by picking a registered key (201), a duplicate key on the same
+// type conflicts (409), an unknown component_type and an unregistered key are
+// request faults (422), and the admin directory lists the one surviving definition
+// with the key's name, type, and label.
 func TestFieldDefinitionAPI(t *testing.T) {
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
@@ -42,27 +52,34 @@ func TestFieldDefinitionAPI(t *testing.T) {
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
-	// Define a field on the "display" type, with an optional human label.
+	// Register the key, then declare a field that draws from it.
+	registerKey(t, c, ownerTok, "asset_tag", "string", "Asset tag")
 	c.do(ownerTok, http.MethodPost, "/field-definitions",
-		map[string]any{"component_type": "display", "name": "asset_tag", "display_name": "Asset tag", "data_type": "string"},
+		map[string]any{"component_type": "display", "key": "asset_tag"},
 		http.StatusCreated)
 
-	// A duplicate name on the same type conflicts.
+	// A duplicate key on the same type conflicts.
 	c.do(ownerTok, http.MethodPost, "/field-definitions",
-		map[string]any{"component_type": "display", "name": "asset_tag", "data_type": "string"},
+		map[string]any{"component_type": "display", "key": "asset_tag"},
 		http.StatusConflict)
 
-	// An unknown component_type is a 422.
+	// An unknown component_type is a 422 (the key is valid).
 	c.do(ownerTok, http.MethodPost, "/field-definitions",
-		map[string]any{"component_type": "nope", "name": "x", "data_type": "string"},
+		map[string]any{"component_type": "nope", "key": "asset_tag"},
 		http.StatusUnprocessableEntity)
 
-	// The directory lists the one surviving definition.
+	// An unregistered key is a 422 (the component_type is valid).
+	c.do(ownerTok, http.MethodPost, "/field-definitions",
+		map[string]any{"component_type": "display", "key": "never_registered"},
+		http.StatusUnprocessableEntity)
+
+	// The directory lists the one surviving definition, with the key's identity.
 	var listed struct {
 		FieldDefinitions []struct {
 			ID            string `json:"id"`
 			ComponentType string `json:"component_type"`
 			Name          string `json:"name"`
+			Key           string `json:"key"`
 			DisplayName   string `json:"display_name"`
 			DataType      string `json:"data_type"`
 		} `json:"field_definitions"`
@@ -71,11 +88,11 @@ func TestFieldDefinitionAPI(t *testing.T) {
 	if n := len(listed.FieldDefinitions); n != 1 {
 		t.Fatalf("want 1 definition, got %d", n)
 	}
-	if fd := listed.FieldDefinitions[0]; fd.ComponentType != "display" || fd.Name != "asset_tag" || fd.DataType != "string" {
-		t.Fatalf("listed definition = %+v, want display/asset_tag/string", fd)
+	if fd := listed.FieldDefinitions[0]; fd.ComponentType != "display" || fd.Name != "asset_tag" || fd.Key != "asset_tag" || fd.DataType != "string" {
+		t.Fatalf("listed definition = %+v, want display/asset_tag/asset_tag/string", fd)
 	}
 	if listed.FieldDefinitions[0].DisplayName != "Asset tag" {
-		t.Fatalf("display_name = %q, want \"Asset tag\"", listed.FieldDefinitions[0].DisplayName)
+		t.Fatalf("display_name = %q, want \"Asset tag\" (from the key)", listed.FieldDefinitions[0].DisplayName)
 	}
 }
 
@@ -107,12 +124,14 @@ func TestFieldDefinitionRequiredAPI(t *testing.T) {
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
-	// A required field and an optional field on the "display" type.
+	// A required field and an optional field on the "display" type, each from a key.
+	registerKey(t, c, ownerTok, "asset_tag", "string", "Asset tag")
+	registerKey(t, c, ownerTok, "notes", "string", "Notes")
 	c.do(ownerTok, http.MethodPost, "/field-definitions",
-		map[string]any{"component_type": "display", "name": "asset_tag", "data_type": "string", "required": true},
+		map[string]any{"component_type": "display", "key": "asset_tag", "required": true},
 		http.StatusCreated)
 	c.do(ownerTok, http.MethodPost, "/field-definitions",
-		map[string]any{"component_type": "display", "name": "notes", "data_type": "string"},
+		map[string]any{"component_type": "display", "key": "notes"},
 		http.StatusCreated)
 
 	// The directory reports the required flag per definition.
@@ -195,8 +214,9 @@ func TestFieldValueAPI(t *testing.T) {
 		ID string `json:"id"`
 	}
 	json.Unmarshal(compRaw, &comp)
+	registerKey(t, c, ownerTok, "diagonal_inches", "int", "Diagonal inches")
 	c.do(ownerTok, http.MethodPost, "/field-definitions",
-		map[string]any{"component_type": "display", "name": "diagonal_inches", "data_type": "int", "default_value": 50},
+		map[string]any{"component_type": "display", "key": "diagonal_inches", "default_value": 50},
 		http.StatusCreated)
 
 	// Effective read before any override: the default, unset, with no value_id (the
@@ -321,8 +341,9 @@ func TestFieldValueScopeSplit(t *testing.T) {
 
 	// A field on the display type and two display components: one in the caller's
 	// subtree (in-scope), one outside it (out-scope), which owns the value under test.
+	registerKey(t, c, ownerTok, "diagonal_inches", "int", "Diagonal inches")
 	c.do(ownerTok, http.MethodPost, "/field-definitions",
-		map[string]any{"component_type": "display", "name": "diagonal_inches", "data_type": "int", "default_value": 50},
+		map[string]any{"component_type": "display", "key": "diagonal_inches", "default_value": 50},
 		http.StatusCreated)
 	var inComp, outComp struct {
 		ID string `json:"id"`

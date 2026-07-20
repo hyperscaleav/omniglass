@@ -613,16 +613,14 @@ func generatedCommands() []*cobra.Command {
 		}
 		parent.AddCommand(func() *cobra.Command {
 			var fComponentType string
-			var fDataType string
 			var fDefaultValue string
-			var fDisplayName string
-			var fName string
+			var fKey string
 			var fRequired string
 			cmd := &cobra.Command{
 				Use:     "create",
 				Short:   "Define a field",
 				Long:    "Declares a typed field on a component_type. The default, if given, is validated against data_type. Gated by field:create.",
-				Example: "  omniglass field-definition create --component-type component_type --data-type data_type --name name",
+				Example: "  omniglass field-definition create --component-type component_type --key key",
 				Args:    cobra.ExactArgs(0),
 				RunE: func(cmd *cobra.Command, args []string) error {
 					path := fmt.Sprintf("/api/v1/field-definitions")
@@ -630,17 +628,11 @@ func generatedCommands() []*cobra.Command {
 					if cmd.Flags().Changed("component-type") {
 						body["component_type"] = fComponentType
 					}
-					if cmd.Flags().Changed("data-type") {
-						body["data_type"] = fDataType
-					}
 					if cmd.Flags().Changed("default-value") {
 						body["default_value"] = jsonOrString(fDefaultValue)
 					}
-					if cmd.Flags().Changed("display-name") {
-						body["display_name"] = fDisplayName
-					}
-					if cmd.Flags().Changed("name") {
-						body["name"] = fName
+					if cmd.Flags().Changed("key") {
+						body["key"] = fKey
 					}
 					if cmd.Flags().Changed("required") {
 						body["required"] = jsonOrString(fRequired)
@@ -650,12 +642,9 @@ func generatedCommands() []*cobra.Command {
 			}
 			cmd.Flags().StringVar(&fComponentType, "component-type", "", "The component_type this field is defined on")
 			_ = cmd.MarkFlagRequired("component-type")
-			cmd.Flags().StringVar(&fDataType, "data-type", "", "The declared value type")
-			_ = cmd.MarkFlagRequired("data-type")
-			cmd.Flags().StringVar(&fDefaultValue, "default-value", "", "Optional type-level default, validated against data_type")
-			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "Optional human label; falls back to name when unset")
-			cmd.Flags().StringVar(&fName, "name", "", "The field name; unique per component_type")
-			_ = cmd.MarkFlagRequired("name")
+			cmd.Flags().StringVar(&fDefaultValue, "default-value", "", "Optional type-level default, validated against the key's data_type and validation")
+			cmd.Flags().StringVar(&fKey, "key", "", "The canonical key this field declares; the field's name, data_type, and label come from it. Must be a registered key")
+			_ = cmd.MarkFlagRequired("key")
 			cmd.Flags().StringVar(&fRequired, "required", "", "Whether every component of this type must set the field; defaults to false")
 			return cmd
 		}())
@@ -688,27 +677,19 @@ func generatedCommands() []*cobra.Command {
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
-			var fDataType string
 			var fDefaultValue string
-			var fDisplayName string
 			var fRequired string
 			cmd := &cobra.Command{
 				Use:     "update <id>",
 				Short:   "Update a field definition",
 				Long:    "Replaces a field's data_type and default value, revalidating the default. component_type and name are fixed at creation. Gated by field:update.",
-				Example: "  omniglass field-definition update <id> --data-type data_type",
+				Example: "  omniglass field-definition update <id>",
 				Args:    cobra.ExactArgs(1),
 				RunE: func(cmd *cobra.Command, args []string) error {
 					path := fmt.Sprintf("/api/v1/field-definitions/%s", url.PathEscape(args[0]))
 					body := map[string]any{}
-					if cmd.Flags().Changed("data-type") {
-						body["data_type"] = fDataType
-					}
 					if cmd.Flags().Changed("default-value") {
 						body["default_value"] = jsonOrString(fDefaultValue)
-					}
-					if cmd.Flags().Changed("display-name") {
-						body["display_name"] = fDisplayName
 					}
 					if cmd.Flags().Changed("required") {
 						body["required"] = jsonOrString(fRequired)
@@ -716,10 +697,7 @@ func generatedCommands() []*cobra.Command {
 					return runAPICommand(cmd, "PATCH", path, body)
 				},
 			}
-			cmd.Flags().StringVar(&fDataType, "data-type", "", "The declared value type")
-			_ = cmd.MarkFlagRequired("data-type")
-			cmd.Flags().StringVar(&fDefaultValue, "default-value", "", "Optional type-level default, validated against data_type")
-			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "Optional human label; falls back to name when unset")
+			cmd.Flags().StringVar(&fDefaultValue, "default-value", "", "Optional type-level default, validated against the key's data_type and validation")
 			cmd.Flags().StringVar(&fRequired, "required", "", "Whether every component of this type must set the field; defaults to false")
 			return cmd
 		}())

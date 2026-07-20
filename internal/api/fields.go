@@ -18,14 +18,15 @@ type fieldDefinitionBody struct {
 	ID            string `json:"id"`
 	ComponentType string `json:"component_type"`
 	Name          string `json:"name"`
-	DisplayName   string `json:"display_name,omitempty" doc:"Optional human label; the raw name is the key. Omitted when unset"`
+	Key           string `json:"key,omitempty" doc:"The canonical key this field declares; the name, type, and label come from it. Omitted only for a legacy field predating the registry"`
+	DisplayName   string `json:"display_name,omitempty" doc:"The key's human label; the raw name is the key. Omitted when the key has none"`
 	DataType      string `json:"data_type"`
 	Required      bool   `json:"required" doc:"Whether every component of this type must set the field"`
 	DefaultValue  any    `json:"default_value,omitempty" doc:"The type-level default, shape given by data_type; omitted when unset"`
 }
 
 func toFieldDefinitionBody(fd *storage.FieldDefinition) fieldDefinitionBody {
-	b := fieldDefinitionBody{ID: fd.ID, ComponentType: fd.ComponentType, Name: fd.Name, DisplayName: fd.DisplayName, DataType: fd.DataType, Required: fd.Required}
+	b := fieldDefinitionBody{ID: fd.ID, ComponentType: fd.ComponentType, Name: fd.Name, Key: fd.Key, DisplayName: fd.DisplayName, DataType: fd.DataType, Required: fd.Required}
 	if len(fd.DefaultValue) > 0 {
 		_ = json.Unmarshal(fd.DefaultValue, &b.DefaultValue)
 	}
@@ -102,21 +103,17 @@ func toFieldValueBody(fv *storage.FieldValue) fieldValueBody {
 type createFieldDefinitionInput struct {
 	Body struct {
 		ComponentType string `json:"component_type" minLength:"1" doc:"The component_type this field is defined on"`
-		Name          string `json:"name" minLength:"1" doc:"The field name; unique per component_type"`
-		DisplayName   string `json:"display_name,omitempty" doc:"Optional human label; falls back to name when unset"`
-		DataType      string `json:"data_type" enum:"string,int,float,bool,json" doc:"The declared value type"`
+		Key           string `json:"key" minLength:"1" doc:"The canonical key this field declares; the field's name, data_type, and label come from it. Must be a registered key"`
 		Required      bool   `json:"required,omitempty" doc:"Whether every component of this type must set the field; defaults to false"`
-		DefaultValue  any    `json:"default_value,omitempty" doc:"Optional type-level default, validated against data_type"`
+		DefaultValue  any    `json:"default_value,omitempty" doc:"Optional type-level default, validated against the key's data_type and validation"`
 	}
 }
 
 type updateFieldDefinitionInput struct {
 	ID   string `path:"id" doc:"The field definition's id"`
 	Body struct {
-		DataType     string `json:"data_type" enum:"string,int,float,bool,json" doc:"The declared value type"`
-		DisplayName  string `json:"display_name,omitempty" doc:"Optional human label; falls back to name when unset"`
-		Required     bool   `json:"required,omitempty" doc:"Whether every component of this type must set the field; defaults to false"`
-		DefaultValue any    `json:"default_value,omitempty" doc:"Optional type-level default, validated against data_type"`
+		Required     bool `json:"required,omitempty" doc:"Whether every component of this type must set the field; defaults to false"`
+		DefaultValue any  `json:"default_value,omitempty" doc:"Optional type-level default, validated against the key's data_type and validation"`
 	}
 }
 
@@ -185,9 +182,7 @@ func registerFieldRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		}
 		fd, err := gw.CreateFieldDefinition(ctx, actorID(ctx), storage.FieldDefinitionSpec{
 			ComponentType: in.Body.ComponentType,
-			Name:          in.Body.Name,
-			DisplayName:   in.Body.DisplayName,
-			DataType:      in.Body.DataType,
+			Key:           in.Body.Key,
 			Required:      in.Body.Required,
 			DefaultValue:  def,
 		})
@@ -208,7 +203,7 @@ func registerFieldRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		if err != nil {
 			return nil, err
 		}
-		fd, err := gw.UpdateFieldDefinition(ctx, actorID(ctx), in.ID, in.Body.DataType, in.Body.DisplayName, in.Body.Required, def)
+		fd, err := gw.UpdateFieldDefinition(ctx, actorID(ctx), in.ID, in.Body.Required, def)
 		if err != nil {
 			return nil, mapFieldErr(err)
 		}
@@ -335,6 +330,8 @@ func mapFieldErr(err error) error {
 		return huma.Error409Conflict("field already exists")
 	case errors.Is(err, storage.ErrUnknownComponentType):
 		return huma.Error422UnprocessableEntity("unknown component_type")
+	case errors.Is(err, storage.ErrUnknownKey):
+		return huma.Error422UnprocessableEntity("unknown key")
 	case errors.Is(err, storage.ErrFieldNotApplicable):
 		return huma.Error422UnprocessableEntity("field is not defined for this component's type")
 	case errors.Is(err, storage.ErrInvalidValue):

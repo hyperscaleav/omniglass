@@ -36,20 +36,31 @@ type Doc struct {
 	Tags             []Tag             `yaml:"tags"`
 	TagBindings      []TagBinding      `yaml:"tag_bindings"`
 	Files            []File            `yaml:"files"`
+	Keys             []Key             `yaml:"keys"`
 	FieldDefinitions []FieldDefinition `yaml:"field_definitions"`
 	Components       []Component       `yaml:"components"`
 	FieldValues      []FieldValue      `yaml:"field_values"`
 }
 
+// Key is one example custom canonical key the fields draw from. Official keys ship
+// in the boot seed (internal/seed); these are operator (custom) keys the dev fields
+// need, created idempotently before the field definitions that reference them.
+type Key struct {
+	Name        string `yaml:"name"`
+	DataType    string `yaml:"data_type"`
+	DisplayName string `yaml:"display_name"`
+	Description string `yaml:"description"`
+}
+
 // FieldDefinition is one example typed field declared on a component_type: the
-// schema half of the field primitive. Default is decoded from YAML and, when
-// present, re-encoded to jsonb (like a Variable); an omitted default leaves the
-// field with none, so the seed can teach a default-vs-plain contrast.
+// schema half of the field primitive. It declares a Key from the catalog (its name,
+// data_type, and label come from the key); Default and Required are the per-type
+// schema bits. Default is decoded from YAML and, when present, re-encoded to jsonb
+// (like a Variable); an omitted default leaves the field with none, so the seed can
+// teach a default-vs-plain contrast.
 type FieldDefinition struct {
 	ComponentType string `yaml:"component_type"`
-	Name          string `yaml:"name"`
-	DisplayName   string `yaml:"display_name"`
-	DataType      string `yaml:"data_type"`
+	Key           string `yaml:"key"`
 	Default       any    `yaml:"default"`
 	Required      bool   `yaml:"required"`
 }
@@ -285,20 +296,36 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 			return fmt.Errorf("devseed: create file %q: %w", f.Name, err)
 		}
 	}
+	// Custom keys the example fields draw from, registered before the field
+	// definitions that reference them (a field's key must be a registered key). These
+	// are operator (custom) keys, not boot-seed reference data. A key that already
+	// exists (ErrKeyExists) is left as is, so a re-run adds nothing.
+	for _, k := range doc.Keys {
+		_, err := gw.CreateKey(ctx, actorID, storage.KeySpec{
+			Name: k.Name, DataType: k.DataType, DisplayName: k.DisplayName, Description: k.Description,
+		})
+		if errors.Is(err, storage.ErrKeyExists) {
+			continue
+		}
+		if err != nil {
+			return fmt.Errorf("devseed: create key %q: %w", k.Name, err)
+		}
+	}
+
 	// Field definitions: a couple of typed fields on the display component_type, so
 	// the field primitive comes up with a schema to teach (a default vs a plain
-	// field). These are catalog rows, flat and unscoped like the type registries, so
-	// they need nothing seeded before them. A default is encoded to jsonb like a
-	// variable; an omitted default stays nil. A definition that already exists
-	// (ErrFieldDefinitionConflict) is left as is, so a re-run adds nothing.
+	// field). Each declares a key from the catalog; its data_type and label come from
+	// the key. A default is encoded to jsonb like a variable; an omitted default stays
+	// nil. A definition that already exists (ErrFieldDefinitionConflict) is left as is,
+	// so a re-run adds nothing.
 	for _, fd := range doc.FieldDefinitions {
 		spec := storage.FieldDefinitionSpec{
-			ComponentType: fd.ComponentType, Name: fd.Name, DisplayName: fd.DisplayName, DataType: fd.DataType, Required: fd.Required,
+			ComponentType: fd.ComponentType, Key: fd.Key, Required: fd.Required,
 		}
 		if fd.Default != nil {
 			raw, err := json.Marshal(fd.Default)
 			if err != nil {
-				return fmt.Errorf("devseed: encode field default %q: %w", fd.Name, err)
+				return fmt.Errorf("devseed: encode field default %q: %w", fd.Key, err)
 			}
 			spec.DefaultValue = raw
 		}
@@ -307,7 +334,7 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 			continue
 		}
 		if err != nil {
-			return fmt.Errorf("devseed: create field definition %q: %w", fd.Name, err)
+			return fmt.Errorf("devseed: create field definition %q: %w", fd.Key, err)
 		}
 	}
 

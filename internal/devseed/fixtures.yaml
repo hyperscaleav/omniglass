@@ -163,29 +163,44 @@ files:
 # `diagonal_inches` carries a default (55); `asset_tag` and `location_note` have none,
 # so the effective-values panel shows a default-vs-plain contrast. Flat and
 # unscoped, like the type registries (no owner, no ABAC scope).
+# Custom canonical keys the example fields draw from. A field's name, data_type,
+# and label all come from its key, so these register first (serial_number is an
+# official boot-seed key, so it is not repeated here). These are operator (custom)
+# keys: dev-only example data, created idempotently.
+keys:
+  - name: asset_tag
+    data_type: string
+    display_name: Asset tag
+    description: An inventory asset tag for the device.
+  - name: diagonal_inches
+    data_type: int
+    display_name: Diagonal inches
+    description: The panel's diagonal size in inches.
+  - name: location_note
+    data_type: string
+    display_name: Location note
+    description: A free-form note about the device's placement.
+  - name: wall_mounted
+    data_type: bool
+    display_name: Wall mounted
+    description: Whether the display is wall mounted.
+
+# Each field declares a key on a component_type; the per-type schema bits are the
+# default and required flag. Type and label come from the key above (or the
+# official serial_number key).
 field_definitions:
   - component_type: display
-    name: asset_tag
-    display_name: Asset tag
-    data_type: string
+    key: asset_tag
   - component_type: display
-    name: diagonal_inches
-    display_name: Diagonal inches
-    data_type: int
+    key: diagonal_inches
     default: 55
   - component_type: display
-    name: location_note
-    display_name: Location note
-    data_type: string
+    key: location_note
   - component_type: display
-    name: wall_mounted
-    display_name: Wall mounted
-    data_type: bool
+    key: wall_mounted
     default: true
   - component_type: display
-    name: serial_number
-    display_name: Serial number
-    data_type: string
+    key: serial_number
     required: true
 
 # Components: one example device placed in the estate, so the Components directory

@@ -2468,17 +2468,10 @@ export interface components {
             readonly $schema?: string;
             /** @description The component_type this field is defined on */
             component_type: string;
-            /**
-             * @description The declared value type
-             * @enum {string}
-             */
-            data_type: "string" | "int" | "float" | "bool" | "json";
-            /** @description Optional type-level default, validated against data_type */
+            /** @description Optional type-level default, validated against the key's data_type and validation */
             default_value?: unknown;
-            /** @description Optional human label; falls back to name when unset */
-            display_name?: string;
-            /** @description The field name; unique per component_type */
-            name: string;
+            /** @description The canonical key this field declares; the field's name, data_type, and label come from it. Must be a registered key */
+            key: string;
             /** @description Whether every component of this type must set the field; defaults to false */
             required?: boolean;
         };
@@ -2931,9 +2924,11 @@ export interface components {
             data_type: string;
             /** @description The type-level default, shape given by data_type; omitted when unset */
             default_value?: unknown;
-            /** @description Optional human label; the raw name is the key. Omitted when unset */
+            /** @description The key's human label; the raw name is the key. Omitted when the key has none */
             display_name?: string;
             id: string;
+            /** @description The canonical key this field declares; the name, type, and label come from it. Omitted only for a legacy field predating the registry */
+            key?: string;
             name: string;
             /** @description Whether every component of this type must set the field */
             required: boolean;
@@ -3894,15 +3889,8 @@ export interface components {
              * @example /api/v1/schemas/UpdateFieldDefinitionInputBody.json
              */
             readonly $schema?: string;
-            /**
-             * @description The declared value type
-             * @enum {string}
-             */
-            data_type: "string" | "int" | "float" | "bool" | "json";
-            /** @description Optional type-level default, validated against data_type */
+            /** @description Optional type-level default, validated against the key's data_type and validation */
             default_value?: unknown;
-            /** @description Optional human label; falls back to name when unset */
-            display_name?: string;
             /** @description Whether every component of this type must set the field; defaults to false */
             required?: boolean;
         };
