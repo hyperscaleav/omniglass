@@ -1572,6 +1572,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/products": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List products
+         * @description Lists the product registry, ordered alphabetically by display name. Each product carries its vendor, driver, kind, and capabilities. Gated by product:read.
+         */
+        get: operations["list-products"];
+        put?: never;
+        /**
+         * Create a product
+         * @description Creates a custom (non-official) product and sets its capabilities. Gated by product:create.
+         */
+        post: operations["create-product"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a product
+         * @description Fetches a product by id, with its capabilities. Gated by product:read.
+         */
+        get: operations["get-product"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a product
+         * @description Deletes a custom product, refused if official (422) or still referenced by a component (409). Gated by product:delete.
+         */
+        delete: operations["delete-product"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a product
+         * @description Patches a custom product's display_name, vendor, driver, kind, or parent, and replaces its capabilities when provided. Official products are read-only (422). Gated by product:update.
+         */
+        patch: operations["update-product"];
+        trace?: never;
+    };
     "/properties": {
         parameters: {
             query?: never;
@@ -2503,6 +2555,8 @@ export interface components {
             location_id?: string;
             name: string;
             parent_id?: string;
+            /** @description The product (catalog SKU) this component is an instance of, if any. */
+            product_id?: string;
             system_id?: string;
         };
         ComponentTypeBody: {
@@ -2543,6 +2597,8 @@ export interface components {
             name: string;
             /** @description Parent component name; omit for a root component */
             parent?: string;
+            /** @description Product id (catalog SKU) this component is an instance of */
+            product?: string;
             /** @description Primary system name this component belongs to */
             system?: string;
         };
@@ -2770,6 +2826,26 @@ export interface components {
             password?: string;
             /** @description Unique sign-in name (lowercase letters, digits, and . _ -) */
             username: string;
+        };
+        CreateProductInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateProductInputBody.json
+             */
+            readonly $schema?: string;
+            capabilities?: string[] | null;
+            display_name: string;
+            driver_id?: string;
+            /** @description Globally unique product id */
+            id: string;
+            /**
+             * @default device
+             * @enum {string}
+             */
+            kind: "device" | "app" | "service" | "vm";
+            parent_product_id?: string;
+            vendor_id?: string;
         };
         CreatePropertyInputBody: {
             /**
@@ -3406,6 +3482,15 @@ export interface components {
             readonly $schema?: string;
             principals: components["schemas"]["PrincipalBody"][] | null;
         };
+        ListProductsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListProductsOutputBody.json
+             */
+            readonly $schema?: string;
+            products: components["schemas"]["ProductBody"][] | null;
+        };
         ListPropertiesOutputBody: {
             /**
              * Format: uri
@@ -3597,6 +3682,23 @@ export interface components {
         PrincipalStruct: {
             id: string;
             kind: string;
+        };
+        ProductBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ProductBody.json
+             */
+            readonly $schema?: string;
+            capabilities: string[] | null;
+            display_name: string;
+            driver_id?: string;
+            id: string;
+            /** @enum {string} */
+            kind: "device" | "app" | "service" | "vm";
+            official: boolean;
+            parent_product_id?: string;
+            vendor_id?: string;
         };
         PropertyBody: {
             /**
@@ -4169,6 +4271,21 @@ export interface components {
             email?: string;
             /** @description Sign-in name (lowercase letters, digits, and . _ -); renaming is safe */
             username?: string;
+        };
+        UpdateProductInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/UpdateProductInputBody.json
+             */
+            readonly $schema?: string;
+            capabilities?: string[];
+            display_name?: string;
+            driver_id?: string;
+            /** @enum {string} */
+            kind?: "device" | "app" | "service" | "vm";
+            parent_product_id?: string;
+            vendor_id?: string;
         };
         UpdatePropertyInputBody: {
             /**
@@ -7806,6 +7923,165 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-products": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListProductsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-product": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateProductInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-product": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The product id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-product": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The product id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "update-product": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateProductInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductBody"];
+                };
             };
             /** @description Error */
             default: {

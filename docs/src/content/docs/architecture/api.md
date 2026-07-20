@@ -356,6 +356,31 @@ A **capability** (Microphone, Display, ...) names what a component can do.
 
 A `capability` body is `{id, display_name, official}`.
 
+A **product** ([core entities](/architecture/core-entities/#catalog-reference-data-product)) is the
+concrete **SKU** that ties the leaf catalogs together: a **vendor** (who makes it), a **driver** (what
+talks to it), a **kind** (`device` / `app` / `service` / `vm`, default `device`, a 422 for any other
+value), an optional **parent** product (a variant), and the **capabilities** it provides. It is the
+layer the catalogs above were built for, and the target of `component.product_id`. Its writes gate on
+`product:create` / `product:update` / `product:delete` at the admin tier; the list and read routes sit
+on the viewer floor (`product:read`, which `*:read` carries). An **official** (seed-owned) row is
+read-only (`PATCH` and `DELETE` both 422).
+
+- `GET /products` lists the registry, ordered alphabetically by display name (`{products: [product]}`,
+  `product:read`). Each row carries its vendor, driver, kind, and capabilities.
+- `POST /products` mints a custom product from
+  `{id, display_name, kind?, vendor_id?, driver_id?, parent_product_id?, capabilities?}` (201,
+  `product:create`, admin).
+- `GET /products/{id}` reads one, with its capabilities (`product:read`).
+- `PATCH /products/{id}` updates
+  `{display_name?, kind?, vendor_id?, driver_id?, parent_product_id?, capabilities?}` (`product:update`,
+  admin); `capabilities`, when given, **replaces** the whole set.
+- `DELETE /products/{id}` removes a custom product (204, `product:delete`, admin); an official row is
+  refused (422), and a product still referenced by a component is refused (409).
+
+A `product` body is
+`{id, display_name, kind, vendor_id, driver_id, parent_product_id, capabilities, official}`. An unknown
+vendor / driver / parent / capability reference is a 422.
+
 ## Files: content-addressed bytes behind a handle
 
 A **file** is a searchable handle over a content-addressed [blob](/architecture/files/): the metadata is

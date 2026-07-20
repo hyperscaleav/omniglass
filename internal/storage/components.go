@@ -19,6 +19,7 @@ var (
 	ErrComponentExists         = errors.New("storage: component name already exists")
 	ErrParentComponentNotFound = errors.New("storage: parent component not found")
 	ErrUnknownComponentType    = errors.New("storage: unknown component_type")
+	ErrProductNotFound         = errors.New("storage: product not found")
 )
 
 // ComponentType is a registry row classifying a component. The registry lists
@@ -40,12 +41,14 @@ type Component struct {
 	ParentID      *string
 	SystemID      *string
 	LocationID    *string
+	ProductID     *string
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
 }
 
 // ComponentSpec is the create input. ParentName nil makes a root component;
-// SystemName / LocationName optionally bind it to a system and place it.
+// SystemName / LocationName optionally bind it to a system and place it;
+// ProductName optionally names the product (catalog SKU) it is an instance of.
 type ComponentSpec struct {
 	Name          string
 	DisplayName   string
@@ -53,6 +56,7 @@ type ComponentSpec struct {
 	ParentName    *string
 	SystemName    *string
 	LocationName  *string
+	ProductName   *string
 }
 
 // ComponentPatch is the update input: nil fields unchanged. Reparent, rebind,
@@ -168,11 +172,11 @@ func (p *PG) DeleteComponentType(ctx context.Context, actorID, id string) error 
 
 // --- component CRUD (read/delete via the generic helpers) --------------------
 
-const componentCols = `id, name, coalesce(display_name, ''), component_type, parent_id, system_id, location_id, created_at, updated_at`
+const componentCols = `id, name, coalesce(display_name, ''), component_type, parent_id, system_id, location_id, product_id, created_at, updated_at`
 
 func scanComponent(row pgx.Row) (*Component, error) {
 	var c Component
-	if err := row.Scan(&c.ID, &c.Name, &c.DisplayName, &c.ComponentType, &c.ParentID, &c.SystemID, &c.LocationID, &c.CreatedAt, &c.UpdatedAt); err != nil {
+	if err := row.Scan(&c.ID, &c.Name, &c.DisplayName, &c.ComponentType, &c.ParentID, &c.SystemID, &c.LocationID, &c.ProductID, &c.CreatedAt, &c.UpdatedAt); err != nil {
 		return nil, err
 	}
 	return &c, nil
@@ -263,11 +267,26 @@ func (p *PG) CreateComponent(ctx context.Context, actorID string, spec Component
 		locationID = &loc.ID
 	}
 
+	// product is a catalog, not a scoped tree: resolve by id (product id is its
+	// pk/name) with a plain lookup, not scopedByName. An unknown id is
+	// ErrProductNotFound -> 422 (the FK below is the belt-and-suspenders).
+	var productID *string
+	if spec.ProductName != nil {
+		var pid string
+		err := tx.QueryRow(ctx, `select id from product where id = $1`, *spec.ProductName).Scan(&pid)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrProductNotFound
+		} else if err != nil {
+			return nil, fmt.Errorf("storage: resolve product %q: %w", *spec.ProductName, err)
+		}
+		productID = &pid
+	}
+
 	c, err := scanComponent(tx.QueryRow(ctx, `
-		insert into component (name, display_name, component_type, parent_id, system_id, location_id)
-		values ($1, $2, $3, $4, $5, $6)
+		insert into component (name, display_name, component_type, parent_id, system_id, location_id, product_id)
+		values ($1, $2, $3, $4, $5, $6, $7)
 		returning `+componentCols,
-		spec.Name, nullize(spec.DisplayName), spec.ComponentType, parentID, systemID, locationID))
+		spec.Name, nullize(spec.DisplayName), spec.ComponentType, parentID, systemID, locationID, productID))
 	if err != nil {
 		return nil, mapComponentWriteErr(err)
 	}
@@ -372,6 +391,8 @@ func mapComponentWriteErr(err error) error {
 				return ErrSystemNotFound
 			case "component_location_id_fkey":
 				return ErrLocationNotFound
+			case "component_product_id_fkey":
+				return ErrProductNotFound
 			}
 		}
 	}

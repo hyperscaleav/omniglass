@@ -313,6 +313,7 @@ Creates a component, optionally under a parent (a root needs an all-scoped grant
 | `--location` | string | (none) | Location name this component is placed at |
 | `--name` | string | (none) | Globally unique name (the address; lowercase letters, digits, hyphens) |
 | `--parent` | string | (none) | Parent component name; omit for a root component |
+| `--product` | string | (none) | Product id (catalog SKU) this component is an instance of |
 | `--system` | string | (none) | Primary system name this component belongs to |
 
 Example:
@@ -1387,6 +1388,22 @@ omniglass migrate
 
 ## `omniglass node`
 
+Run the edge node: claim, pull the worklist, and heartbeat over NATS
+
+```
+omniglass node [flags]
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--heartbeat` | duration | `30s` | heartbeat interval |
+| `--name` | string | (none) | this node's registered name (env OMNIGLASS_NODE_NAME) |
+| `--once` | bool | `false` | run a single claim + pull + heartbeat cycle and exit |
+| `--server` | string | (none) | Omniglass server base URL (env OMNIGLASS_SERVER) |
+| `--token` | string | (none) | enrollment token from POST /nodes/{name}:enroll (env OMNIGLASS_NODE_TOKEN) |
+
+## `omniglass node`
+
 Commands for the node resource
 
 ### `omniglass node claim`
@@ -1575,22 +1592,6 @@ Example:
 ```sh
 omniglass node update <name>
 ```
-
-## `omniglass node`
-
-Run the edge node: claim, pull the worklist, and heartbeat over NATS
-
-```
-omniglass node [flags]
-```
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--heartbeat` | duration | `30s` | heartbeat interval |
-| `--name` | string | (none) | this node's registered name (env OMNIGLASS_NODE_NAME) |
-| `--once` | bool | `false` | run a single claim + pull + heartbeat cycle and exit |
-| `--server` | string | (none) | Omniglass server base URL (env OMNIGLASS_SERVER) |
-| `--token` | string | (none) | enrollment token from POST /nodes/{name}:enroll (env OMNIGLASS_NODE_TOKEN) |
 
 ## `omniglass principal`
 
@@ -1981,6 +1982,109 @@ Example:
 
 ```sh
 omniglass principal-group update <id>
+```
+
+## `omniglass product`
+
+Commands for the product resource
+
+### `omniglass product create`
+
+Create a product
+
+```
+omniglass product create [flags]
+```
+
+Creates a custom (non-official) product and sets its capabilities. Gated by product:create.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--capabilities` | string | (none) |  |
+| `--display-name` | string | (none) |  |
+| `--driver-id` | string | (none) |  |
+| `--id` | string | (none) | Globally unique product id |
+| `--kind` | string | (none) |  |
+| `--parent-product-id` | string | (none) |  |
+| `--vendor-id` | string | (none) |  |
+
+Example:
+
+```sh
+omniglass product create --display-name display_name --id id
+```
+
+### `omniglass product delete`
+
+Delete a product
+
+```
+omniglass product delete <id>
+```
+
+Deletes a custom product, refused if official (422) or still referenced by a component (409). Gated by product:delete.
+
+Example:
+
+```sh
+omniglass product delete <id>
+```
+
+### `omniglass product get`
+
+Get a product
+
+```
+omniglass product get <id>
+```
+
+Fetches a product by id, with its capabilities. Gated by product:read.
+
+Example:
+
+```sh
+omniglass product get <id>
+```
+
+### `omniglass product list`
+
+List products
+
+```
+omniglass product list
+```
+
+Lists the product registry, ordered alphabetically by display name. Each product carries its vendor, driver, kind, and capabilities. Gated by product:read.
+
+Example:
+
+```sh
+omniglass product list
+```
+
+### `omniglass product update`
+
+Update a product
+
+```
+omniglass product update <id> [flags]
+```
+
+Patches a custom product's display_name, vendor, driver, kind, or parent, and replaces its capabilities when provided. Official products are read-only (422). Gated by product:update.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--capabilities` | string | (none) |  |
+| `--display-name` | string | (none) |  |
+| `--driver-id` | string | (none) |  |
+| `--kind` | string | (none) |  |
+| `--parent-product-id` | string | (none) |  |
+| `--vendor-id` | string | (none) |  |
+
+Example:
+
+```sh
+omniglass product update <id>
 ```
 
 ## `omniglass property`

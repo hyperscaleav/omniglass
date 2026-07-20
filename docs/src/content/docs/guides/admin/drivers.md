@@ -25,10 +25,12 @@ where it sits in the estate model.
   "Seed-owned, read-only." Omniglass ships a starter set of official drivers (Generic SNMP, Cisco
   xAPI, Crestron CIP, HTTP JSON), upserted idempotently at boot so the shared set cannot drift
   install to install; add a custom driver for anything else.
-- **Delete** carries no in-use guard in this slice: nothing yet references a `driver`, so removing a
-  custom row is unconditional (still refused for an official row, 422). A later slice that lands
-  `product` adds the referential guard (409 while a product still points at the driver), the same
-  delete-refused-while-referenced rule the [Types](/guides/admin/types/) registry already enforces.
+- **Delete** carries no in-use guard: a [product](/guides/admin/products/) references a `driver`
+  through its optional `driver_id`, but that link is `on delete set null`, so deleting a driver
+  detaches it from those products (their driver clears) rather than blocking. Removing a custom row
+  is unconditional (still refused for an official row, 422). The 409 delete-refused-while-referenced
+  rule the [Types](/guides/admin/types/) registry enforces lives instead on `component.product_id`
+  (a product with components cannot be deleted), not on the driver.
 
 Minting a driver is admin-gated; the picker that consumes it, choosing a product's driver, does not
 exist yet, since it waits on `product`. The same operations are `omniglass driver

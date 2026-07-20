@@ -254,6 +254,9 @@ components:
           type: string
         parent_id:
           type: string
+        product_id:
+          description: The product (catalog SKU) this component is an instance of, if any.
+          type: string
         system_id:
           type: string
       required:
@@ -330,6 +333,9 @@ components:
           type: string
         parent:
           description: Parent component name; omit for a root component
+          type: string
+        product:
+          description: Product id (catalog SKU) this component is an instance of
           type: string
         system:
           description: Primary system name this component belongs to
@@ -742,6 +748,47 @@ components:
           type: string
       required:
         - username
+      type: object
+    CreateProductInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateProductInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        capabilities:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        display_name:
+          minLength: 1
+          type: string
+        driver_id:
+          type: string
+        id:
+          description: Globally unique product id
+          minLength: 1
+          type: string
+        kind:
+          default: device
+          enum:
+            - device
+            - app
+            - service
+            - vm
+          type: string
+        parent_product_id:
+          type: string
+        vendor_id:
+          type: string
+      required:
+        - id
+        - display_name
       type: object
     CreatePropertyInputBody:
       additionalProperties: false
@@ -1880,6 +1927,25 @@ components:
       required:
         - principals
       type: object
+    ListProductsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListProductsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        products:
+          items:
+            $ref: "#/components/schemas/ProductBody"
+          type:
+            - array
+            - "null"
+      required:
+        - products
+      type: object
     ListPropertiesOutputBody:
       additionalProperties: false
       properties:
@@ -2285,6 +2351,48 @@ components:
       required:
         - id
         - kind
+      type: object
+    ProductBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ProductBody.json
+          format: uri
+          readOnly: true
+          type: string
+        capabilities:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        display_name:
+          type: string
+        driver_id:
+          type: string
+        id:
+          type: string
+        kind:
+          enum:
+            - device
+            - app
+            - service
+            - vm
+          type: string
+        official:
+          type: boolean
+        parent_product_id:
+          type: string
+        vendor_id:
+          type: string
+      required:
+        - id
+        - display_name
+        - kind
+        - capabilities
+        - official
       type: object
     PropertyBody:
       additionalProperties: false
@@ -3332,6 +3440,36 @@ components:
           maxLength: 200
           minLength: 1
           pattern: ^[a-z0-9][a-z0-9._-]*$
+          type: string
+      type: object
+    UpdateProductInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/UpdateProductInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        capabilities:
+          items:
+            type: string
+          type: array
+        display_name:
+          type: string
+        driver_id:
+          type: string
+        kind:
+          enum:
+            - device
+            - app
+            - service
+            - vm
+          type: string
+        parent_product_id:
+          type: string
+        vendor_id:
           type: string
       type: object
     UpdatePropertyInputBody:
@@ -6325,6 +6463,128 @@ paths:
           description: Error
       summary: Set a principal's profile picture
       x-omniglass-permission: principal:set-avatar
+  /products:
+    get:
+      description: Lists the product registry, ordered alphabetically by display name. Each product carries its vendor, driver, kind, and capabilities. Gated by product:read.
+      operationId: list-products
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListProductsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List products
+      x-omniglass-permission: product:read
+    post:
+      description: Creates a custom (non-official) product and sets its capabilities. Gated by product:create.
+      operationId: create-product
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProductInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Create a product
+      x-omniglass-permission: product:create
+  /products/{id}:
+    delete:
+      description: Deletes a custom product, refused if official (422) or still referenced by a component (409). Gated by product:delete.
+      operationId: delete-product
+      parameters:
+        - description: The product id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The product id
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Delete a product
+      x-omniglass-permission: product:delete
+    get:
+      description: Fetches a product by id, with its capabilities. Gated by product:read.
+      operationId: get-product
+      parameters:
+        - description: The product id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The product id
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get a product
+      x-omniglass-permission: product:read
+    patch:
+      description: Patches a custom product's display_name, vendor, driver, kind, or parent, and replaces its capabilities when provided. Official products are read-only (422). Gated by product:update.
+      operationId: update-product
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProductInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Update a product
+      x-omniglass-permission: product:update
   /properties:
     get:
       description: Lists every registered property (official and custom). The catalog is estate-wide reference data. Gated by property:read.

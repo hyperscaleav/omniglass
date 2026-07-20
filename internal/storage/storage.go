@@ -263,6 +263,12 @@ type Gateway interface {
 	CreateCapability(ctx context.Context, actorID string, c Capability) (*Capability, error)
 	UpdateCapability(ctx context.Context, actorID, id string, patch CapabilityPatch) (*Capability, error)
 	DeleteCapability(ctx context.Context, actorID, id string) error
+	UpsertProduct(ctx context.Context, m Product) error
+	ListProducts(ctx context.Context) ([]Product, error)
+	GetProduct(ctx context.Context, id string) (*Product, error)
+	CreateProduct(ctx context.Context, actorID string, m Product) (*Product, error)
+	UpdateProduct(ctx context.Context, actorID, id string, patch ProductPatch) (*Product, error)
+	DeleteProduct(ctx context.Context, actorID, id string) error
 
 	// The interface tier: operator CRUD over placement-bound connections. An
 	// interface is not a scope-tree entity of its own; it hangs off a component

@@ -1,0 +1,31 @@
+# The official products, seeded idempotently at boot. A product is a concrete
+# SKU that ties the classification catalogs together: a vendor (who makes it), a
+# driver (what talks to it), a kind (device/app/service/vm), and the capabilities
+# it provides. vendor_id, driver_id, and every capability id must resolve against
+# the vendor/driver/capability catalogs (seeded first). The registry lists
+# alphabetically by display_name. Starter set, operator-extensible later; tune
+# freely.
+products:
+  - id: cisco-room-bar
+    display_name: Cisco Room Bar
+    vendor_id: cisco
+    driver_id: cisco-xapi
+    kind: device
+    capabilities: [microphone, speaker, camera, codec]
+  - id: samsung-qm55
+    display_name: Samsung QM55
+    vendor_id: samsung
+    kind: device
+    capabilities: [flat-panel-display]
+  - id: shure-mxa920
+    display_name: Shure MXA920
+    vendor_id: shure
+    driver_id: snmp-generic
+    kind: device
+    capabilities: [microphone]
+  - id: crestron-tss-1070
+    display_name: Crestron TSS-1070
+    vendor_id: crestron
+    driver_id: crestron-cip
+    kind: device
+    capabilities: [touch-panel]

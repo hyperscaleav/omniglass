@@ -330,6 +330,7 @@ func generatedCommands() []*cobra.Command {
 			var fLocation string
 			var fName string
 			var fParent string
+			var fProduct string
 			var fSystem string
 			cmd := &cobra.Command{
 				Use:     "create",
@@ -355,6 +356,9 @@ func generatedCommands() []*cobra.Command {
 					if cmd.Flags().Changed("parent") {
 						body["parent"] = fParent
 					}
+					if cmd.Flags().Changed("product") {
+						body["product"] = fProduct
+					}
 					if cmd.Flags().Changed("system") {
 						body["system"] = fSystem
 					}
@@ -368,6 +372,7 @@ func generatedCommands() []*cobra.Command {
 			cmd.Flags().StringVar(&fName, "name", "", "Globally unique name (the address; lowercase letters, digits, hyphens)")
 			_ = cmd.MarkFlagRequired("name")
 			cmd.Flags().StringVar(&fParent, "parent", "", "Parent component name; omit for a root component")
+			cmd.Flags().StringVar(&fProduct, "product", "", "Product id (catalog SKU) this component is an instance of")
 			cmd.Flags().StringVar(&fSystem, "system", "", "Primary system name this component belongs to")
 			return cmd
 		}())
@@ -2202,6 +2207,152 @@ func generatedCommands() []*cobra.Command {
 			cmd.Flags().StringVar(&fDescription, "description", "", "Description; empty clears it")
 			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "Display name; empty clears it")
 			cmd.Flags().StringVar(&fName, "name", "", "Group name (lowercase letters, digits, and . _ -); renaming is safe")
+			return cmd
+		}())
+		roots = append(roots, parent)
+	}
+	{
+		parent := &cobra.Command{
+			Use:   "product",
+			Short: "Commands for the product resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			var fCapabilities string
+			var fDisplayName string
+			var fDriverId string
+			var fId string
+			var fKind string
+			var fParentProductId string
+			var fVendorId string
+			cmd := &cobra.Command{
+				Use:     "create",
+				Short:   "Create a product",
+				Long:    "Creates a custom (non-official) product and sets its capabilities. Gated by product:create.",
+				Example: "  omniglass product create --display-name display_name --id id",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/products")
+					body := map[string]any{}
+					if cmd.Flags().Changed("capabilities") {
+						body["capabilities"] = jsonOrString(fCapabilities)
+					}
+					if cmd.Flags().Changed("display-name") {
+						body["display_name"] = fDisplayName
+					}
+					if cmd.Flags().Changed("driver-id") {
+						body["driver_id"] = fDriverId
+					}
+					if cmd.Flags().Changed("id") {
+						body["id"] = fId
+					}
+					if cmd.Flags().Changed("kind") {
+						body["kind"] = fKind
+					}
+					if cmd.Flags().Changed("parent-product-id") {
+						body["parent_product_id"] = fParentProductId
+					}
+					if cmd.Flags().Changed("vendor-id") {
+						body["vendor_id"] = fVendorId
+					}
+					return runAPICommand(cmd, "POST", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fCapabilities, "capabilities", "", "")
+			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
+			_ = cmd.MarkFlagRequired("display-name")
+			cmd.Flags().StringVar(&fDriverId, "driver-id", "", "")
+			cmd.Flags().StringVar(&fId, "id", "", "Globally unique product id")
+			_ = cmd.MarkFlagRequired("id")
+			cmd.Flags().StringVar(&fKind, "kind", "", "")
+			cmd.Flags().StringVar(&fParentProductId, "parent-product-id", "", "")
+			cmd.Flags().StringVar(&fVendorId, "vendor-id", "", "")
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "delete <id>",
+				Short:   "Delete a product",
+				Long:    "Deletes a custom product, refused if official (422) or still referenced by a component (409). Gated by product:delete.",
+				Example: "  omniglass product delete <id>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/products/%s", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "DELETE", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "get <id>",
+				Short:   "Get a product",
+				Long:    "Fetches a product by id, with its capabilities. Gated by product:read.",
+				Example: "  omniglass product get <id>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/products/%s", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "list",
+				Short:   "List products",
+				Long:    "Lists the product registry, ordered alphabetically by display name. Each product carries its vendor, driver, kind, and capabilities. Gated by product:read.",
+				Example: "  omniglass product list",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/products")
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			var fCapabilities string
+			var fDisplayName string
+			var fDriverId string
+			var fKind string
+			var fParentProductId string
+			var fVendorId string
+			cmd := &cobra.Command{
+				Use:     "update <id>",
+				Short:   "Update a product",
+				Long:    "Patches a custom product's display_name, vendor, driver, kind, or parent, and replaces its capabilities when provided. Official products are read-only (422). Gated by product:update.",
+				Example: "  omniglass product update <id>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/products/%s", url.PathEscape(args[0]))
+					body := map[string]any{}
+					if cmd.Flags().Changed("capabilities") {
+						body["capabilities"] = jsonOrString(fCapabilities)
+					}
+					if cmd.Flags().Changed("display-name") {
+						body["display_name"] = fDisplayName
+					}
+					if cmd.Flags().Changed("driver-id") {
+						body["driver_id"] = fDriverId
+					}
+					if cmd.Flags().Changed("kind") {
+						body["kind"] = fKind
+					}
+					if cmd.Flags().Changed("parent-product-id") {
+						body["parent_product_id"] = fParentProductId
+					}
+					if cmd.Flags().Changed("vendor-id") {
+						body["vendor_id"] = fVendorId
+					}
+					return runAPICommand(cmd, "PATCH", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fCapabilities, "capabilities", "", "")
+			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
+			cmd.Flags().StringVar(&fDriverId, "driver-id", "", "")
+			cmd.Flags().StringVar(&fKind, "kind", "", "")
+			cmd.Flags().StringVar(&fParentProductId, "parent-product-id", "", "")
+			cmd.Flags().StringVar(&fVendorId, "vendor-id", "", "")
 			return cmd
 		}())
 		roots = append(roots, parent)

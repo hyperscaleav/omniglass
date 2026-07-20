@@ -36,10 +36,12 @@ the two leaf catalogs beside it.
   valid website renders as a live link on the blade; a value that fails the check (entered off
   console, through a raw API call that bypassed the client) still renders, as plain text, never as
   a dead or unsafe link.
-- **Delete** carries no in-use guard in this slice: nothing yet references a `vendor`, so removing
-  a custom row is unconditional (still refused for an official row, 422). A later slice that lands
-  `product` adds the referential guard (409 while a product still points at the vendor), the same
-  delete-refused-while-referenced rule the [Types](/guides/admin/types/) registry already enforces.
+- **Delete** carries no in-use guard: a [product](/guides/admin/products/) references a `vendor`
+  through its optional `vendor_id`, but that link is `on delete set null`, so deleting a vendor
+  detaches it from those products (their vendor clears) rather than blocking. Removing a custom row
+  is unconditional (still refused for an official row, 422). The 409 delete-refused-while-referenced
+  rule the [Types](/guides/admin/types/) registry enforces lives instead on `component.product_id`
+  (a product with components cannot be deleted), not on the vendor.
 
 Minting a vendor is admin-gated; the picker that consumes it, choosing a product's vendor, does not
 exist yet, since it waits on `product`. The same operations are `omniglass vendor

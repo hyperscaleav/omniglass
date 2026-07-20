@@ -160,6 +160,7 @@ export default defineConfig({
             { label: 'Vendors', slug: 'guides/admin/vendors' },
             { label: 'Drivers', slug: 'guides/admin/drivers' },
             { label: 'Capabilities', slug: 'guides/admin/capabilities' },
+            { label: 'Products', slug: 'guides/admin/products' },
           ],
         },
         {

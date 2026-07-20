@@ -12,6 +12,7 @@ export type Component = {
   location_id?: string;
   parent_id?: string;
   system_id?: string;
+  product_id?: string;
   actions?: string[];
   effective_tags?: Record<string, string>;
 };
@@ -37,6 +38,7 @@ export type CreateComponent = {
   parent?: string;
   system?: string;
   location?: string;
+  product?: string;
 };
 
 export async function createComponent(body: CreateComponent): Promise<Component> {
