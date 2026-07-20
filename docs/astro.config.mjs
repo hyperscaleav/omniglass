@@ -157,7 +157,9 @@ export default defineConfig({
             { label: 'Types', slug: 'guides/admin/types' },
             { label: 'Properties', slug: 'guides/admin/properties' },
             { label: 'Tags', slug: 'guides/admin/tags' },
-            { label: 'Makes', slug: 'guides/admin/makes' },
+            { label: 'Vendors', slug: 'guides/admin/vendors' },
+            { label: 'Drivers', slug: 'guides/admin/drivers' },
+            { label: 'Capabilities', slug: 'guides/admin/capabilities' },
           ],
         },
         {

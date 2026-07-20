@@ -76,6 +76,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0041](#adr-0041-settings-are-a-reflected-typed-struct-with-generated-client-and-server-validation) | 2026-07-19 | Accepted | A setting is declared **once**, as a tagged field on a canonical `Settings` Go struct; reflection produces the `code` defaults layer and the namespace registry, Huma reflects the struct into the OpenAPI schema so the typed client `values` is a `Settings` struct, and both the server PATCH and the generated client validate against that **same reflected schema**. Closes the slice-0 write-validation thin cut; retires the hand-kept `defaults.yaml` and `Namespaces()` slice |
 | [ADR-0042](#adr-0042-field-cascade-and-the-type-default-floor) | 2026-07-19 | Accepted | A field's resolved value is deepest-set-wins down `product -> location -> system -> component`, falling to the field's **type default** when nothing is set at any scope; the type default is the **floor** of the cascade, not a competitor to it. This slice is component-only (resolved = the component's set value, else the type default); the multi-scope cascade is tracked by #291 |
 | [ADR-0043](#adr-0043-the-property-catalog) | 2026-07-19 | Accepted | The `datapoint_type` catalog is generalized into a primitive-agnostic **`property`** catalog (the typed set of signals a datapoint observes and a field declares): the unused scope ladder becomes an `official` boolean, `value_type` becomes `data_type` (text to string, add bool), `kind` is nullable (a declared-only property has none), and `validation` is a **JSON Schema** validated by Huma's own validator (zero new dependencies). Value/source tables key by **name** (no FK), so the rename is behavior-preserving; the type-schema (`field_definition.key`) is the only binding and lands in PR-B |
+| [ADR-0044](#adr-0044-the-component-classification-catalogs) | 2026-07-20 | Accepted | The `component_make` catalog is generalized into **`vendor`** (a `kind` of manufacturer / integrator / developer), and two new leaf catalogs join it, **`driver`** (id, display_name, version) and **`capability`** (id, display_name), as the component-classification reference data: each a gated CRUD Catalog console page with read-only official seeded rows. `product` + `product_capability` + `component.product` are the next slice. This is PR2 of the estate-model shift toward property / event / command + vendor / product / driver / capability / standard / role / health |
 
 ## Entries
 
@@ -971,7 +972,7 @@ below from the project's history. From here it grows one slice at a time.
 
 ### ADR-0031: `component_make` registry slice 1, an `official` boolean, a deferred referential guard, and website scheme validation
 
-- **Date:** 2026-07-14 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/), [Makes guide](/guides/admin/makes/)
+- **Date:** 2026-07-14 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/), [Vendors guide](/guides/admin/vendors/)
 - **Decision:** Three calls on the first slice of the `component_make` manufacturer registry (id,
   display_name, icon, support_phone, website), lands ahead of the rest of the make/model catalog.
   **(1) `official boolean`, not an `origin` enum.** The design sketch (below) proposed
@@ -1219,3 +1220,35 @@ below from the project's history. From here it grows one slice at a time.
 - **Closes:** issue [#297](https://github.com/hyperscaleav/omniglass/issues/297) (the field catalog,
   expanded to the property catalog), under epic
   [#266](https://github.com/hyperscaleav/omniglass/issues/266).
+
+### ADR-0044: The component classification catalogs
+
+- **Date:** 2026-07-20 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/)
+- **Decision:** The [`component_make`](#adr-0031-component_make-registry-slice-1-an-official-boolean-a-deferred-referential-guard-and-website-scheme-validation)
+  catalog is generalized into a **`vendor`** catalog carrying a **`kind`** (`manufacturer` / `integrator` /
+  `developer`), so the one organization that makes, integrates, or writes for a component is a single
+  reference entity rather than a make-only registry. Two new **leaf** catalogs join it as the rest of the
+  component-classification reference data: a **`driver`** (`id`, `display_name`, `version`, the software that
+  speaks to a component) and a **`capability`** (`id`, `display_name`, a thing a component can do). Each of the
+  three is a **gated CRUD Catalog console page** (`/vendors`, `/drivers`, `/capabilities`), reusing the
+  `official`-boolean chassis the type and property registries already use: seed-owned official rows are
+  read-only (an official row refuses update and delete, 422), a custom row is full CRUD gated by the
+  resource's `<resource>:create` / `:update` / `:delete` permission and audited in the same transaction. The
+  official rows are seeded at boot. This is a pure classification slice: **`product`** (the specific model an
+  organization sells), the **`product_capability`** link, and the **`component.product`** pointer that binds a
+  component to its product are the **next slice**, not this one.
+- **Context:** The estate model is shifting from the make/model catalog sketch toward a fuller classification
+  vocabulary: **property / event / command** on the signal side (property landed in
+  [ADR-0043](#adr-0043-the-property-catalog)) and **vendor / product / driver / capability / standard / role /
+  health** on the component side. This is **PR2** of that shift. `component_make` was manufacturer-only, but the
+  same organization concept covers an integrator who installs the estate and a developer who writes a component's
+  software, so generalizing make into a `kind`-tagged vendor is the honest widening rather than three parallel
+  organization registries. Driver and capability are leaf catalogs (no tree, no cross-references yet), so they
+  ship as the plain seeded-plus-CRUD pattern the registries already prove; they gain their bindings (a driver to
+  an interface / product, a capability to a product) when the product slice gives them something to reference.
+- **Deferred:** `product`, `product_capability`, and `component.product` (the next slice); a referential delete
+  guard on vendor / driver / capability (nothing references them yet, exactly as `component_make` shipped with no
+  guard until `component_model` was to land); and an operator shadow of an official row.
+- **Refines:** [ADR-0031](#adr-0031-component_make-registry-slice-1-an-official-boolean-a-deferred-referential-guard-and-website-scheme-validation)
+  (the `component_make` registry is renamed and generalized to `vendor` with a `kind`; its `official`-boolean,
+  deferred-delete-guard, and website-scheme-validation calls carry over unchanged).

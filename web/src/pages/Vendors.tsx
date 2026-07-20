@@ -6,26 +6,30 @@ import Button from "../components/Button";
 import { DrawerFooter } from "../components/Drawer";
 import { Plus } from "../components/icons";
 import {
-  type ComponentMake,
-  COMPONENT_MAKES_KEY,
-  listMakes,
-  createMake,
-  updateMake,
-  deleteMake,
-} from "../lib/component_makes";
+  type Vendor,
+  type VendorKind,
+  VENDORS_KEY,
+  listVendors,
+  createVendor,
+  updateVendor,
+  deleteVendor,
+} from "../lib/vendors";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
-// ComponentMakes: the manufacturer registry (the make picker on the
-// component_model form), on the flat FlatList surface. A make is addressed by
-// its id (a kebab id, create-only); official (seed-owned) rows are read-only,
-// same as the Types catalog's official rows: no Edit pencil, no Delete.
+// Vendors: the vendor registry (the vendor picker on the product form), on the
+// flat FlatList surface. A vendor is addressed by its id (a kebab id,
+// create-only); official (seed-owned) rows are read-only, same as the Types
+// catalog's official rows: no Edit pencil, no Delete. Each vendor carries a
+// kind (manufacturer/integrator/developer).
+
+const VENDOR_KINDS: VendorKind[] = ["manufacturer", "integrator", "developer"];
 
 // safeUrl allows only http(s) hrefs through to a live anchor. Website is
 // operator-entered free text; without this check a stored javascript:/data:
 // URL would execute on click (stored XSS). A value that fails the check
-// still renders, as plain text (see MakeBladeBody), so nothing is silently
+// still renders, as plain text (see VendorBladeBody), so nothing is silently
 // dropped.
 const safeUrl = (u?: string): string | undefined => {
   if (!u) return undefined;
@@ -43,72 +47,79 @@ function officialBadge(official: boolean): JSX.Element {
     : <span class="badge badge-outline badge-sm">custom</span>;
 }
 
-const columns: FlatColumn<ComponentMake>[] = [
+function kindBadge(kind: string): JSX.Element {
+  return <span class="badge badge-ghost badge-sm">{kind}</span>;
+}
+
+const columns: FlatColumn<Vendor>[] = [
   { key: "id", label: "Id", sortVal: (m) => m.id, cell: (m) => <span class="font-data font-semibold">{m.id}</span> },
   { key: "display_name", label: "Display name", sortVal: (m) => m.display_name, cell: (m) => <span>{m.display_name}</span> },
+  { key: "kind", label: "Kind", width: "130px", sortVal: (m) => m.kind, cell: (m) => kindBadge(m.kind) },
   { key: "icon", label: "Icon", width: "110px", cell: (m) => <span class="font-data text-xs text-base-content/60">{m.icon ?? "—"}</span> },
   { key: "official", label: "Origin", width: "100px", sortVal: (m) => String(m.official), cell: (m) => officialBadge(m.official) },
 ];
 
-export default function ComponentMakes() {
+export default function Vendors() {
   const me = useMe();
-  const makes = useQuery(() => ({ queryKey: COMPONENT_MAKES_KEY, queryFn: listMakes }));
+  const makes = useQuery(() => ({ queryKey: VENDORS_KEY, queryFn: listVendors }));
 
   const rows = createMemo(() =>
     [...(makes.data ?? [])].sort((a, b) => a.display_name.localeCompare(b.display_name) || a.id.localeCompare(b.id)),
   );
 
   return (
-    <FlatList<ComponentMake>
+    <FlatList<Vendor>
       config={{
-        entity: { name: "make", plural: "makes" },
+        entity: { name: "vendor", plural: "vendors" },
         rows,
         loading: () => makes.isPending,
         error: () => makes.error,
         filterKeys: [
           { key: "name", type: "string", hint: "substring", get: (m) => `${m.id} ${m.display_name}`, values: () => [] },
+          { key: "kind", type: "string", hint: "exact", get: (m) => m.kind, values: () => VENDOR_KINDS },
           { key: "official", type: "string", hint: "exact", get: (m) => (m.official ? "official" : "custom"), values: () => ["official", "custom"] },
         ],
-        filterPlaceholder: "filter makes by id, name…",
+        filterPlaceholder: "filter vendors by id, name…",
         columns,
-        empty: "No component makes yet.",
+        empty: "No vendors yet.",
         // Address a row by id: the write paths key on id, and it is globally unique.
         rowId: (m) => m.id,
-        blades: { registry: { make: makeBlade }, rootKind: "make" },
-        create: can(me.data, "make", "create")
-          ? { label: "New make", can: () => can(me.data, "make", "create"), body: (ctx) => <CreateMakeForm onCreated={ctx.close} /> }
+        blades: { registry: { vendor: vendorBlade }, rootKind: "vendor" },
+        create: can(me.data, "vendor", "create")
+          ? { label: "New vendor", can: () => can(me.data, "vendor", "create"), body: (ctx) => <CreateVendorForm onCreated={ctx.close} /> }
           : undefined,
       }}
     />
   );
 }
 
-// makeBlade renders an id on the shared blade stack. An official row is
+// vendorBlade renders an id on the shared blade stack. An official row is
 // read-only (no pencil, no destructive action); a custom row carries Edit +
 // Delete.
-export const makeBlade: BladeDef = {
-  Title: (p) => <MakeBladeTitle id={p.id} />,
-  Body: (p) => <MakeBladeBody id={p.id} />,
+export const vendorBlade: BladeDef = {
+  Title: (p) => <VendorBladeTitle id={p.id} />,
+  Body: (p) => <VendorBladeBody id={p.id} />,
 };
 
-function useMakeRow(id: string): () => ComponentMake | undefined {
-  const makes = useQuery(() => ({ queryKey: COMPONENT_MAKES_KEY, queryFn: listMakes }));
+function useVendorRow(id: string): () => Vendor | undefined {
+  const makes = useQuery(() => ({ queryKey: VENDORS_KEY, queryFn: listVendors }));
   return () => (makes.data ?? []).find((m) => m.id === id);
 }
 
-function MakeBladeTitle(p: { id: string }): JSX.Element {
-  const row = useMakeRow(p.id);
+function VendorBladeTitle(p: { id: string }): JSX.Element {
+  const row = useVendorRow(p.id);
   return <span class="font-data">{row()?.id ?? p.id}</span>;
 }
 
-function MakeBladeBody(p: { id: string }): JSX.Element {
+function VendorBladeBody(p: { id: string }): JSX.Element {
   const qc = useQueryClient();
   const me = useMe();
   const blades = useBlades();
   const edit = useBladeEdit();
-  const row = useMakeRow(p.id);
+  const row = useVendorRow(p.id);
   const [err, setErr] = createSignal<string | null>(null);
   const [displayName, setDisplayName] = createSignal("");
+  const [kind, setKind] = createSignal<VendorKind>("manufacturer");
   const [icon, setIcon] = createSignal("");
   const [supportPhone, setSupportPhone] = createSignal("");
   const [website, setWebsite] = createSignal("");
@@ -117,21 +128,22 @@ function MakeBladeBody(p: { id: string }): JSX.Element {
     if (!editing) return;
     const r = row();
     setDisplayName(r?.display_name ?? "");
+    setKind(r?.kind ?? "manufacturer");
     setIcon(r?.icon ?? "");
     setSupportPhone(r?.support_phone ?? "");
     setWebsite(r?.website ?? "");
     setErr(null);
   }));
 
-  async function removeMake() {
+  async function removeVendor() {
     const r = row();
     if (!r) return;
-    if (!confirm(`Delete make "${r.id}"?`)) return;
+    if (!confirm(`Delete vendor "${r.id}"?`)) return;
     setErr(null);
     try {
-      await deleteMake(r.id);
+      await deleteVendor(r.id);
       blades.close();
-      await qc.invalidateQueries({ queryKey: COMPONENT_MAKES_KEY });
+      await qc.invalidateQueries({ queryKey: VENDORS_KEY });
     } catch (e) {
       setErr(describeError(e));
     }
@@ -142,13 +154,14 @@ function MakeBladeBody(p: { id: string }): JSX.Element {
     if (!r) return;
     setErr(null);
     try {
-      await updateMake(r.id, {
+      await updateVendor(r.id, {
         display_name: displayName(),
+        kind: kind(),
         icon: icon(),
         support_phone: supportPhone(),
         website: website(),
       });
-      await qc.invalidateQueries({ queryKey: COMPONENT_MAKES_KEY });
+      await qc.invalidateQueries({ queryKey: VENDORS_KEY });
     } catch (e) {
       setErr(describeError(e));
       throw e; // keep the blade in edit mode on failure
@@ -156,16 +169,16 @@ function MakeBladeBody(p: { id: string }): JSX.Element {
   }
 
   edit.bind({
-    editable: () => !!row() && !row()!.official && can(me.data, "make", "update"),
+    editable: () => !!row() && !row()!.official && can(me.data, "vendor", "update"),
     save,
     destructive: () =>
-      row() && !row()!.official && can(me.data, "make", "delete")
-        ? { label: "Delete", tone: "danger", onClick: removeMake }
+      row() && !row()!.official && can(me.data, "vendor", "delete")
+        ? { label: "Delete", tone: "danger", onClick: removeVendor }
         : undefined,
   });
 
   return (
-    <Show when={row()} fallback={<p class="text-sm text-base-content/50">Make not found.</p>}>
+    <Show when={row()} fallback={<p class="text-sm text-base-content/50">Vendor not found.</p>}>
       {(r) => (
         <div class="flex flex-col gap-4">
           <Show when={err()}>
@@ -182,6 +195,17 @@ function MakeBladeBody(p: { id: string }): JSX.Element {
               fallback={<div class="input input-bordered flex items-center text-sm">{r().display_name}</div>}
             >
               <input class="input input-bordered w-full" value={displayName()} onInput={(e) => setDisplayName(e.currentTarget.value)} />
+            </Show>
+          </div>
+          <div class="flex flex-col gap-1.5">
+            <span class="eyebrow">Kind</span>
+            <Show
+              when={edit.editing()}
+              fallback={<div class="input input-bordered flex items-center text-sm">{kindBadge(r().kind)}</div>}
+            >
+              <select class="select select-bordered w-full" value={kind()} onChange={(e) => setKind(e.currentTarget.value as VendorKind)}>
+                {VENDOR_KINDS.map((k) => <option value={k}>{k}</option>)}
+              </select>
             </Show>
           </div>
           <div class="flex flex-col gap-1.5">
@@ -233,12 +257,13 @@ function MakeBladeBody(p: { id: string }): JSX.Element {
   );
 }
 
-// CreateMakeForm: name the id (a kebab id, immutable after creation) and set the
-// display name; icon, support phone, and website are optional.
-export function CreateMakeForm(p: { onCreated: (id: string) => void }): JSX.Element {
+// CreateVendorForm: name the id (a kebab id, immutable after creation), set the
+// display name and kind; icon, support phone, and website are optional.
+export function CreateVendorForm(p: { onCreated: (id: string) => void }): JSX.Element {
   const qc = useQueryClient();
   const [id, setId] = createSignal("");
   const [displayName, setDisplayName] = createSignal("");
+  const [kind, setKind] = createSignal<VendorKind>("manufacturer");
   const [icon, setIcon] = createSignal("");
   const [supportPhone, setSupportPhone] = createSignal("");
   const [website, setWebsite] = createSignal("");
@@ -250,14 +275,15 @@ export function CreateMakeForm(p: { onCreated: (id: string) => void }): JSX.Elem
     setBusy(true);
     setFormErr(null);
     try {
-      await createMake({
+      await createVendor({
         id: id().trim(),
         display_name: displayName().trim(),
+        kind: kind(),
         icon: icon().trim() || undefined,
         support_phone: supportPhone().trim() || undefined,
         website: website().trim() || undefined,
       });
-      await qc.invalidateQueries({ queryKey: COMPONENT_MAKES_KEY });
+      await qc.invalidateQueries({ queryKey: VENDORS_KEY });
       p.onCreated(id().trim());
     } catch (er) {
       setFormErr(describeError(er));
@@ -277,6 +303,11 @@ export function CreateMakeForm(p: { onCreated: (id: string) => void }): JSX.Elem
       <Field label="Display name">
         <input class="input input-bordered w-full" value={displayName()} placeholder="Crestron" onInput={(e) => setDisplayName(e.currentTarget.value)} />
       </Field>
+      <Field label="Kind" hint="What role the vendor plays.">
+        <select class="select select-bordered w-full" value={kind()} onChange={(e) => setKind(e.currentTarget.value as VendorKind)}>
+          {VENDOR_KINDS.map((k) => <option value={k}>{k}</option>)}
+        </select>
+      </Field>
       <Field label="Icon" hint="A glyph key, e.g. crestron-logo. Optional.">
         <input class="input input-bordered w-full font-data" value={icon()} placeholder="crestron-logo" onInput={(e) => setIcon(e.currentTarget.value)} />
       </Field>
@@ -287,7 +318,7 @@ export function CreateMakeForm(p: { onCreated: (id: string) => void }): JSX.Elem
         <input class="input input-bordered w-full" value={website()} placeholder="https://example.com" onInput={(e) => setWebsite(e.currentTarget.value)} />
       </Field>
       <DrawerFooter>
-        <Button type="submit" intent="action" icon={Plus} disabled={busy() || !id().trim() || !displayName().trim()}>Create make</Button>
+        <Button type="submit" intent="action" icon={Plus} disabled={busy() || !id().trim() || !displayName().trim()}>Create vendor</Button>
       </DrawerFooter>
     </form>
   );

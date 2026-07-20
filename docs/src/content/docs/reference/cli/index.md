@@ -179,6 +179,99 @@ omniglass bootstrap <username> [flags]
 | `--password` | string | (none) | owner password, so the owner can sign in to the console (optional) |
 | `--ttl` | duration | `2160h0m0s` | how long the bootstrap token is valid before it expires (max 365 days) |
 
+## `omniglass capability`
+
+Commands for the capability resource
+
+### `omniglass capability create`
+
+Create a capability
+
+```
+omniglass capability create [flags]
+```
+
+Creates a custom (non-official) capability. Gated by capability:create.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--display-name` | string | (none) |  |
+| `--id` | string | (none) | Globally unique capability id |
+
+Example:
+
+```sh
+omniglass capability create --display-name display_name --id id
+```
+
+### `omniglass capability delete`
+
+Delete a capability
+
+```
+omniglass capability delete <id>
+```
+
+Deletes a custom capability, refused if official (422). Gated by capability:delete.
+
+Example:
+
+```sh
+omniglass capability delete <id>
+```
+
+### `omniglass capability get`
+
+Get a capability
+
+```
+omniglass capability get <id>
+```
+
+Fetches a capability by id. Gated by capability:read.
+
+Example:
+
+```sh
+omniglass capability get <id>
+```
+
+### `omniglass capability list`
+
+List capabilities
+
+```
+omniglass capability list
+```
+
+Lists the capability registry, ordered alphabetically by display name. Populates the capability picker on the product form. Gated by capability:read.
+
+Example:
+
+```sh
+omniglass capability list
+```
+
+### `omniglass capability update`
+
+Update a capability
+
+```
+omniglass capability update <id> [flags]
+```
+
+Patches a custom capability's display_name. Official capabilities are read-only (422). Gated by capability:update.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--display-name` | string | (none) |  |
+
+Example:
+
+```sh
+omniglass capability update <id>
+```
+
 ## `omniglass component`
 
 Commands for the component resource
@@ -355,103 +448,99 @@ Example:
 omniglass component update <name>
 ```
 
-## `omniglass component-make`
+## `omniglass driver`
 
-Commands for the component-make resource
+Commands for the driver resource
 
-### `omniglass component-make create`
+### `omniglass driver create`
 
-Create a component make
+Create a driver
 
 ```
-omniglass component-make create [flags]
+omniglass driver create [flags]
 ```
 
-Creates a custom (non-official) component_make. Gated by make:create.
+Creates a custom (non-official) driver. Gated by driver:create.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--display-name` | string | (none) |  |
-| `--icon` | string | (none) |  |
-| `--id` | string | (none) | Globally unique make id |
-| `--support-phone` | string | (none) |  |
-| `--website` | string | (none) |  |
+| `--id` | string | (none) | Globally unique driver id |
+| `--version` | string | (none) |  |
 
 Example:
 
 ```sh
-omniglass component-make create --display-name display_name --id id
+omniglass driver create --display-name display_name --id id
 ```
 
-### `omniglass component-make delete`
+### `omniglass driver delete`
 
-Delete a component make
+Delete a driver
 
 ```
-omniglass component-make delete <id>
+omniglass driver delete <id>
 ```
 
-Deletes a custom component_make, refused if official (422). Gated by make:delete.
+Deletes a custom driver, refused if official (422). Gated by driver:delete.
 
 Example:
 
 ```sh
-omniglass component-make delete <id>
+omniglass driver delete <id>
 ```
 
-### `omniglass component-make get`
+### `omniglass driver get`
 
-Get a component make
+Get a driver
 
 ```
-omniglass component-make get <id>
+omniglass driver get <id>
 ```
 
-Fetches a component_make by id. Gated by make:read.
+Fetches a driver by id. Gated by driver:read.
 
 Example:
 
 ```sh
-omniglass component-make get <id>
+omniglass driver get <id>
 ```
 
-### `omniglass component-make list`
+### `omniglass driver list`
 
-List component makes
+List drivers
 
 ```
-omniglass component-make list
+omniglass driver list
 ```
 
-Lists the component_make registry, ordered alphabetically by display name. Populates the make picker on the component_model form. Gated by make:read.
+Lists the driver registry, ordered alphabetically by display name. Populates the driver picker on the product form. Gated by driver:read.
 
 Example:
 
 ```sh
-omniglass component-make list
+omniglass driver list
 ```
 
-### `omniglass component-make update`
+### `omniglass driver update`
 
-Update a component make
+Update a driver
 
 ```
-omniglass component-make update <id> [flags]
+omniglass driver update <id> [flags]
 ```
 
-Patches a custom component_make's display_name, icon, support_phone, or website. Official makes are read-only (422). Gated by make:update.
+Patches a custom driver's display_name or version. Official drivers are read-only (422). Gated by driver:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--display-name` | string | (none) |  |
-| `--icon` | string | (none) |  |
-| `--support-phone` | string | (none) |  |
-| `--website` | string | (none) |  |
+| `--version` | string | (none) |  |
 
 Example:
 
 ```sh
-omniglass component-make update <id>
+omniglass driver update <id>
 ```
 
 ## `omniglass effective-tag`
@@ -3004,5 +3093,106 @@ Example:
 
 ```sh
 omniglass variable update <id> --value value
+```
+
+## `omniglass vendor`
+
+Commands for the vendor resource
+
+### `omniglass vendor create`
+
+Create a vendor
+
+```
+omniglass vendor create [flags]
+```
+
+Creates a custom (non-official) vendor. Gated by vendor:create.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--display-name` | string | (none) |  |
+| `--icon` | string | (none) |  |
+| `--id` | string | (none) | Globally unique vendor id |
+| `--kind` | string | (none) |  |
+| `--support-phone` | string | (none) |  |
+| `--website` | string | (none) |  |
+
+Example:
+
+```sh
+omniglass vendor create --display-name display_name --id id
+```
+
+### `omniglass vendor delete`
+
+Delete a vendor
+
+```
+omniglass vendor delete <id>
+```
+
+Deletes a custom vendor, refused if official (422). Gated by vendor:delete.
+
+Example:
+
+```sh
+omniglass vendor delete <id>
+```
+
+### `omniglass vendor get`
+
+Get a vendor
+
+```
+omniglass vendor get <id>
+```
+
+Fetches a vendor by id. Gated by vendor:read.
+
+Example:
+
+```sh
+omniglass vendor get <id>
+```
+
+### `omniglass vendor list`
+
+List vendors
+
+```
+omniglass vendor list
+```
+
+Lists the vendor registry, ordered alphabetically by display name. Populates the vendor picker on the product form. Gated by vendor:read.
+
+Example:
+
+```sh
+omniglass vendor list
+```
+
+### `omniglass vendor update`
+
+Update a vendor
+
+```
+omniglass vendor update <id> [flags]
+```
+
+Patches a custom vendor's display_name, kind, icon, support_phone, or website. Official vendors are read-only (422). Gated by vendor:update.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--display-name` | string | (none) |  |
+| `--icon` | string | (none) |  |
+| `--kind` | string | (none) |  |
+| `--support-phone` | string | (none) |  |
+| `--website` | string | (none) |  |
+
+Example:
+
+```sh
+omniglass vendor update <id>
 ```
 

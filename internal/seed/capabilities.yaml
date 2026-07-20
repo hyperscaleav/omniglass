@@ -1,0 +1,19 @@
+# The official capabilities, seeded idempotently at boot. A capability names
+# what a component can do (e.g. "microphone", "display"); a later product slice
+# will point at one. The registry lists alphabetically by display_name. Starter
+# set, operator-extensible later; tune freely.
+capabilities:
+  - id: microphone
+    display_name: Microphone
+  - id: speaker
+    display_name: Speaker
+  - id: display
+    display_name: Display
+  - id: flat-panel-display
+    display_name: Flat Panel Display
+  - id: camera
+    display_name: Camera
+  - id: codec
+    display_name: Codec
+  - id: touch-panel
+    display_name: Touch Panel

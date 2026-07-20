@@ -2,18 +2,18 @@ import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, fireEvent, screen, waitFor, within } from "@solidjs/testing-library";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
-import ComponentMakes from "./ComponentMakes";
-import { COMPONENT_MAKES_KEY, type ComponentMake } from "../lib/component_makes";
+import Vendors from "./Vendors";
+import { VENDORS_KEY, type Vendor } from "../lib/vendors";
 import { ME_KEY, type Me } from "../lib/auth";
 
-// ComponentMakes is the manufacturer catalog on the flat FlatList surface (the
-// make picker on the component_model form). An official (seed-owned) row is
+// Vendors is the manufacturer catalog on the flat FlatList surface (the
+// vendor picker on the component_model form). An official (seed-owned) row is
 // read-only, same invariant as the Types catalog's official rows: no edit
 // pencil, no Delete. Data is seeded into the query cache so no server is needed.
-const seed: ComponentMake[] = [
-  { id: "crestron", display_name: "Crestron", official: true, icon: "crestron-logo" },
-  { id: "acme-av", display_name: "Acme AV", official: false, website: "https://acme.example" },
-  { id: "evil-corp", display_name: "Evil Corp", official: false, website: "javascript:alert(document.cookie)" },
+const seed: Vendor[] = [
+  { id: "crestron", display_name: "Crestron", kind: "manufacturer", official: true, icon: "crestron-logo" },
+  { id: "acme-av", display_name: "Acme AV", kind: "integrator", official: false, website: "https://acme.example" },
+  { id: "evil-corp", display_name: "Evil Corp", kind: "manufacturer", official: false, website: "javascript:alert(document.cookie)" },
 ];
 
 const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
@@ -23,19 +23,19 @@ const asides = () => document.querySelectorAll("aside[data-blade]");
 
 function mount(me: Me = admin) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
-  qc.setQueryData([...COMPONENT_MAKES_KEY], seed);
+  qc.setQueryData([...VENDORS_KEY], seed);
   qc.setQueryData([...ME_KEY], me);
   return render(() => (
     <QueryClientProvider client={qc}>
-      <ComponentMakes />
+      <Vendors />
     </QueryClientProvider>
   ));
 }
 
-describe("ComponentMakes page", () => {
+describe("Vendors page", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("lists a seeded make, an official row has no edit/delete, and create opens for an admin", async () => {
+  it("lists a seeded vendor, an official row has no edit/delete, and create opens for an admin", async () => {
     mount();
     expect(await screen.findByText("Crestron")).toBeInTheDocument();
 
@@ -50,7 +50,7 @@ describe("ComponentMakes page", () => {
     expect(within(blade).queryByLabelText("Edit")).not.toBeInTheDocument();
 
     // create is available to an admin
-    fireEvent.click(screen.getByRole("button", { name: /new make/i }));
+    fireEvent.click(screen.getByRole("button", { name: /new vendor/i }));
     expect(screen.getByLabelText(/display name/i)).toBeInTheDocument();
   });
 
@@ -67,9 +67,9 @@ describe("ComponentMakes page", () => {
     expect(within(blade).getByRole("button", { name: /delete/i })).toBeInTheDocument();
   });
 
-  it("hides New make for a caller without make:create", () => {
+  it("hides New vendor for a caller without vendor:create", () => {
     mount(viewer);
-    expect(screen.queryByText(/New make/i)).toBeNull();
+    expect(screen.queryByText(/New vendor/i)).toBeNull();
   });
 
   it("renders a normal https website as a live link", async () => {

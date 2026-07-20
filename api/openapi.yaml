@@ -94,6 +94,27 @@ components:
       required:
         - image_base64
       type: object
+    CapabilityBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CapabilityBody.json
+          format: uri
+          readOnly: true
+          type: string
+        display_name:
+          type: string
+        id:
+          type: string
+        official:
+          type: boolean
+      required:
+        - id
+        - display_name
+        - official
+      type: object
     ChangePasswordInputBody:
       additionalProperties: false
       properties:
@@ -240,33 +261,6 @@ components:
         - name
         - component_type
       type: object
-    ComponentMakeBody:
-      additionalProperties: false
-      properties:
-        $schema:
-          description: A URL to the JSON Schema for this object.
-          examples:
-            - /api/v1/schemas/ComponentMakeBody.json
-          format: uri
-          readOnly: true
-          type: string
-        display_name:
-          type: string
-        icon:
-          type: string
-        id:
-          type: string
-        official:
-          type: boolean
-        support_phone:
-          type: string
-        website:
-          type: string
-      required:
-        - id
-        - display_name
-        - official
-      type: object
     ComponentTypeBody:
       additionalProperties: false
       properties:
@@ -287,6 +281,27 @@ components:
         - id
         - display_name
         - official
+      type: object
+    CreateCapabilityInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateCapabilityInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        display_name:
+          minLength: 1
+          type: string
+        id:
+          description: Globally unique capability id
+          minLength: 1
+          type: string
+      required:
+        - id
+        - display_name
       type: object
     CreateComponentInputBody:
       additionalProperties: false
@@ -323,33 +338,6 @@ components:
         - name
         - component_type
       type: object
-    CreateComponentMakeInputBody:
-      additionalProperties: false
-      properties:
-        $schema:
-          description: A URL to the JSON Schema for this object.
-          examples:
-            - /api/v1/schemas/CreateComponentMakeInputBody.json
-          format: uri
-          readOnly: true
-          type: string
-        display_name:
-          minLength: 1
-          type: string
-        icon:
-          type: string
-        id:
-          description: Globally unique make id
-          minLength: 1
-          type: string
-        support_phone:
-          type: string
-        website:
-          type: string
-      required:
-        - id
-        - display_name
-      type: object
     CreateComponentTypeInputBody:
       additionalProperties: false
       properties:
@@ -366,6 +354,29 @@ components:
         id:
           description: Globally unique type id
           minLength: 1
+          type: string
+      required:
+        - id
+        - display_name
+      type: object
+    CreateDriverInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateDriverInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        display_name:
+          minLength: 1
+          type: string
+        id:
+          description: Globally unique driver id
+          minLength: 1
+          type: string
+        version:
           type: string
       required:
         - id
@@ -949,6 +960,40 @@ components:
         - owner_kind
         - value
       type: object
+    CreateVendorInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateVendorInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        display_name:
+          minLength: 1
+          type: string
+        icon:
+          type: string
+        id:
+          description: Globally unique vendor id
+          minLength: 1
+          type: string
+        kind:
+          default: manufacturer
+          enum:
+            - manufacturer
+            - integrator
+            - developer
+          type: string
+        support_phone:
+          type: string
+        website:
+          type: string
+      required:
+        - id
+        - display_name
+      type: object
     DownloadFileOutputBody:
       additionalProperties: false
       properties:
@@ -970,6 +1015,29 @@ components:
         - name
         - content_type
         - content
+      type: object
+    DriverBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/DriverBody.json
+          format: uri
+          readOnly: true
+          type: string
+        display_name:
+          type: string
+        id:
+          type: string
+        official:
+          type: boolean
+        version:
+          type: string
+      required:
+        - id
+        - display_name
+        - official
       type: object
     EffectiveFieldBody:
       additionalProperties: false
@@ -1508,24 +1576,24 @@ components:
         - close_blade
         - command_palette
       type: object
-    ListComponentMakesOutputBody:
+    ListCapabilitiesOutputBody:
       additionalProperties: false
       properties:
         $schema:
           description: A URL to the JSON Schema for this object.
           examples:
-            - /api/v1/schemas/ListComponentMakesOutputBody.json
+            - /api/v1/schemas/ListCapabilitiesOutputBody.json
           format: uri
           readOnly: true
           type: string
-        makes:
+        capabilities:
           items:
-            $ref: "#/components/schemas/ComponentMakeBody"
+            $ref: "#/components/schemas/CapabilityBody"
           type:
             - array
             - "null"
       required:
-        - makes
+        - capabilities
       type: object
     ListComponentTypesOutputBody:
       additionalProperties: false
@@ -1564,6 +1632,25 @@ components:
             - "null"
       required:
         - components
+      type: object
+    ListDriversOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListDriversOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        drivers:
+          items:
+            $ref: "#/components/schemas/DriverBody"
+          type:
+            - array
+            - "null"
+      required:
+        - drivers
       type: object
     ListFieldDefinitionsOutputBody:
       additionalProperties: false
@@ -1944,6 +2031,25 @@ components:
             - "null"
       required:
         - variables
+      type: object
+    ListVendorsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListVendorsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        vendors:
+          items:
+            $ref: "#/components/schemas/VendorBody"
+          type:
+            - array
+            - "null"
+      required:
+        - vendors
       type: object
     LocationBody:
       additionalProperties: false
@@ -2978,6 +3084,19 @@ components:
         - theme
         - default_landing
       type: object
+    UpdateCapabilityInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/UpdateCapabilityInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        display_name:
+          type: string
+      type: object
     UpdateComponentInputBody:
       additionalProperties: false
       properties:
@@ -2999,25 +3118,6 @@ components:
           pattern: ^[a-z0-9][a-z0-9-]*$
           type: string
       type: object
-    UpdateComponentMakeInputBody:
-      additionalProperties: false
-      properties:
-        $schema:
-          description: A URL to the JSON Schema for this object.
-          examples:
-            - /api/v1/schemas/UpdateComponentMakeInputBody.json
-          format: uri
-          readOnly: true
-          type: string
-        display_name:
-          type: string
-        icon:
-          type: string
-        support_phone:
-          type: string
-        website:
-          type: string
-      type: object
     UpdateComponentTypeInputBody:
       additionalProperties: false
       properties:
@@ -3029,6 +3129,21 @@ components:
           readOnly: true
           type: string
         display_name:
+          type: string
+      type: object
+    UpdateDriverInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/UpdateDriverInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        display_name:
+          type: string
+        version:
           type: string
       type: object
     UpdateFieldDefinitionInputBody:
@@ -3336,6 +3451,31 @@ components:
       required:
         - value
       type: object
+    UpdateVendorInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/UpdateVendorInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        display_name:
+          type: string
+        icon:
+          type: string
+        kind:
+          enum:
+            - manufacturer
+            - integrator
+            - developer
+          type: string
+        support_phone:
+          type: string
+        website:
+          type: string
+      type: object
     VariableBody:
       additionalProperties: false
       properties:
@@ -3366,6 +3506,40 @@ components:
         - value_type
         - owner_kind
         - value
+      type: object
+    VendorBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/VendorBody.json
+          format: uri
+          readOnly: true
+          type: string
+        display_name:
+          type: string
+        icon:
+          type: string
+        id:
+          type: string
+        kind:
+          enum:
+            - manufacturer
+            - integrator
+            - developer
+          type: string
+        official:
+          type: boolean
+        support_phone:
+          type: string
+        website:
+          type: string
+      required:
+        - id
+        - display_name
+        - kind
+        - official
       type: object
 info:
   title: Omniglass
@@ -3737,16 +3911,16 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Whether the system has an owner yet
-  /component-makes:
+  /capabilities:
     get:
-      description: Lists the component_make registry, ordered alphabetically by display name. Populates the make picker on the component_model form. Gated by make:read.
-      operationId: list-component-makes
+      description: Lists the capability registry, ordered alphabetically by display name. Populates the capability picker on the product form. Gated by capability:read.
+      operationId: list-capabilities
       responses:
         "200":
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ListComponentMakesOutputBody"
+                $ref: "#/components/schemas/ListCapabilitiesOutputBody"
           description: OK
         default:
           content:
@@ -3754,23 +3928,23 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
-      summary: List component makes
-      x-omniglass-permission: make:read
+      summary: List capabilities
+      x-omniglass-permission: capability:read
     post:
-      description: Creates a custom (non-official) component_make. Gated by make:create.
-      operationId: create-component-make
+      description: Creates a custom (non-official) capability. Gated by capability:create.
+      operationId: create-capability
       requestBody:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateComponentMakeInputBody"
+              $ref: "#/components/schemas/CreateCapabilityInputBody"
         required: true
       responses:
         "201":
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ComponentMakeBody"
+                $ref: "#/components/schemas/CapabilityBody"
           description: Created
         default:
           content:
@@ -3778,19 +3952,19 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
-      summary: Create a component make
-      x-omniglass-permission: make:create
-  /component-makes/{id}:
+      summary: Create a capability
+      x-omniglass-permission: capability:create
+  /capabilities/{id}:
     delete:
-      description: Deletes a custom component_make, refused if official (422). Gated by make:delete.
-      operationId: delete-component-make
+      description: Deletes a custom capability, refused if official (422). Gated by capability:delete.
+      operationId: delete-capability
       parameters:
-        - description: The component_make id
+        - description: The capability id
           in: path
           name: id
           required: true
           schema:
-            description: The component_make id
+            description: The capability id
             type: string
       responses:
         "204":
@@ -3801,25 +3975,25 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
-      summary: Delete a component make
-      x-omniglass-permission: make:delete
+      summary: Delete a capability
+      x-omniglass-permission: capability:delete
     get:
-      description: Fetches a component_make by id. Gated by make:read.
-      operationId: get-component-make
+      description: Fetches a capability by id. Gated by capability:read.
+      operationId: get-capability
       parameters:
-        - description: The component_make id
+        - description: The capability id
           in: path
           name: id
           required: true
           schema:
-            description: The component_make id
+            description: The capability id
             type: string
       responses:
         "200":
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ComponentMakeBody"
+                $ref: "#/components/schemas/CapabilityBody"
           description: OK
         default:
           content:
@@ -3827,11 +4001,11 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
-      summary: Get a component make
-      x-omniglass-permission: make:read
+      summary: Get a capability
+      x-omniglass-permission: capability:read
     patch:
-      description: Patches a custom component_make's display_name, icon, support_phone, or website. Official makes are read-only (422). Gated by make:update.
-      operationId: update-component-make
+      description: Patches a custom capability's display_name. Official capabilities are read-only (422). Gated by capability:update.
+      operationId: update-capability
       parameters:
         - in: path
           name: id
@@ -3842,14 +4016,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/UpdateComponentMakeInputBody"
+              $ref: "#/components/schemas/UpdateCapabilityInputBody"
         required: true
       responses:
         "200":
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ComponentMakeBody"
+                $ref: "#/components/schemas/CapabilityBody"
           description: OK
         default:
           content:
@@ -3857,8 +4031,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
-      summary: Update a component make
-      x-omniglass-permission: make:update
+      summary: Update a capability
+      x-omniglass-permission: capability:update
   /components:
     get:
       description: Lists the components the caller may read, each filtered to its scope subtree. Gated by component:read.
@@ -4208,6 +4382,128 @@ paths:
           description: Error
       summary: Check a component technical name
       x-omniglass-permission: component:update
+  /drivers:
+    get:
+      description: Lists the driver registry, ordered alphabetically by display name. Populates the driver picker on the product form. Gated by driver:read.
+      operationId: list-drivers
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListDriversOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List drivers
+      x-omniglass-permission: driver:read
+    post:
+      description: Creates a custom (non-official) driver. Gated by driver:create.
+      operationId: create-driver
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDriverInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DriverBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Create a driver
+      x-omniglass-permission: driver:create
+  /drivers/{id}:
+    delete:
+      description: Deletes a custom driver, refused if official (422). Gated by driver:delete.
+      operationId: delete-driver
+      parameters:
+        - description: The driver id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The driver id
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Delete a driver
+      x-omniglass-permission: driver:delete
+    get:
+      description: Fetches a driver by id. Gated by driver:read.
+      operationId: get-driver
+      parameters:
+        - description: The driver id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The driver id
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DriverBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get a driver
+      x-omniglass-permission: driver:read
+    patch:
+      description: Patches a custom driver's display_name or version. Official drivers are read-only (422). Gated by driver:update.
+      operationId: update-driver
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateDriverInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DriverBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Update a driver
+      x-omniglass-permission: driver:update
   /field-definitions:
     get:
       description: Lists every field defined on any component_type (the catalog directory). Gated by field:read.
@@ -7301,6 +7597,128 @@ paths:
           description: Error
       summary: Update a variable's value
       x-omniglass-permission: variable:update
+  /vendors:
+    get:
+      description: Lists the vendor registry, ordered alphabetically by display name. Populates the vendor picker on the product form. Gated by vendor:read.
+      operationId: list-vendors
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListVendorsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List vendors
+      x-omniglass-permission: vendor:read
+    post:
+      description: Creates a custom (non-official) vendor. Gated by vendor:create.
+      operationId: create-vendor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateVendorInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VendorBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Create a vendor
+      x-omniglass-permission: vendor:create
+  /vendors/{id}:
+    delete:
+      description: Deletes a custom vendor, refused if official (422). Gated by vendor:delete.
+      operationId: delete-vendor
+      parameters:
+        - description: The vendor id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The vendor id
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Delete a vendor
+      x-omniglass-permission: vendor:delete
+    get:
+      description: Fetches a vendor by id. Gated by vendor:read.
+      operationId: get-vendor
+      parameters:
+        - description: The vendor id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The vendor id
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VendorBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get a vendor
+      x-omniglass-permission: vendor:read
+    patch:
+      description: Patches a custom vendor's display_name, kind, icon, support_phone, or website. Official vendors are read-only (422). Gated by vendor:update.
+      operationId: update-vendor
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateVendorInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VendorBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Update a vendor
+      x-omniglass-permission: vendor:update
 servers:
   - url: /api/v1
 

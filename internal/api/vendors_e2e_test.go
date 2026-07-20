@@ -13,13 +13,13 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
-// TestComponentMakesAPI drives the component_make registry over HTTP: a
-// viewer reads the seeded official rows under the make:read floor but cannot
+// TestVendorsAPI drives the vendor registry over HTTP: a
+// viewer reads the seeded official rows under the vendor:read floor but cannot
 // create, an admin (owner) creates a custom row, an official row is
 // read-only (422 on patch), and the admin deletes the custom row. Mirrors
-// TestComponentTypesAPI; component_make is a flat registry like
-// component_type, so the make:* permission is wired exactly like type:*.
-func TestComponentMakesAPI(t *testing.T) {
+// TestComponentTypesAPI; vendor is a flat registry like
+// component_type, so the vendor:* permission is wired exactly like type:*.
+func TestVendorsAPI(t *testing.T) {
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
@@ -37,24 +37,24 @@ func TestComponentMakesAPI(t *testing.T) {
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
 	// A plain viewer (read everywhere, write nothing) reads the seeded
-	// official makes via the make:read floor (*:read).
+	// official makes via the vendor:read floor (*:read).
 	viewerTok := principalWithGrants(t, ctx, dsn, "make-viewer", []grant{{role: "viewer", scopeKind: "all"}})
-	out := c.do(viewerTok, http.MethodGet, "/component-makes", nil, http.StatusOK)
+	out := c.do(viewerTok, http.MethodGet, "/vendors", nil, http.StatusOK)
 	var listed struct {
-		Makes []struct {
+		Vendors []struct {
 			ID       string `json:"id"`
 			Official bool   `json:"official"`
-		} `json:"makes"`
+		} `json:"vendors"`
 	}
 	if err := json.Unmarshal(out, &listed); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if len(listed.Makes) == 0 {
-		t.Fatalf("component-makes empty, want seeded rows")
+	if len(listed.Vendors) == 0 {
+		t.Fatalf("vendors empty, want seeded rows")
 	}
 
 	// The viewer cannot create (403, capability fast-reject).
-	c.do(viewerTok, http.MethodPost, "/component-makes",
+	c.do(viewerTok, http.MethodPost, "/vendors",
 		map[string]any{"id": "nope", "display_name": "Nope"}, http.StatusForbidden)
 
 	// Admin (owner) creates a custom make.
@@ -62,7 +62,7 @@ func TestComponentMakesAPI(t *testing.T) {
 		ID       string `json:"id"`
 		Official bool   `json:"official"`
 	}
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/component-makes",
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/vendors",
 		map[string]any{"id": "acme", "display_name": "Acme"}, http.StatusCreated), &created); err != nil {
 		t.Fatalf("decode create: %v", err)
 	}
@@ -71,37 +71,37 @@ func TestComponentMakesAPI(t *testing.T) {
 	}
 
 	// Duplicate id is a 409, exercising the shared mapTypeErr ErrTypeExists branch.
-	c.do(ownerTok, http.MethodPost, "/component-makes",
+	c.do(ownerTok, http.MethodPost, "/vendors",
 		map[string]any{"id": "acme", "display_name": "Dup"}, http.StatusConflict)
 
 	// The custom row is fully mutable.
-	c.do(ownerTok, http.MethodPatch, "/component-makes/acme",
+	c.do(ownerTok, http.MethodPatch, "/vendors/acme",
 		map[string]any{"display_name": "Acme Corp"}, http.StatusOK)
-	c.do(ownerTok, http.MethodGet, "/component-makes/acme", nil, http.StatusOK)
+	c.do(ownerTok, http.MethodGet, "/vendors/acme", nil, http.StatusOK)
 
 	// A non-http(s) website scheme is refused server-side (defense-in-depth
 	// against a stored javascript:/data: href reaching a non-browser caller
 	// that bypasses the client's own scheme check), on both create and update.
 	// A normal https:// website succeeds.
-	c.do(ownerTok, http.MethodPost, "/component-makes",
+	c.do(ownerTok, http.MethodPost, "/vendors",
 		map[string]any{"id": "evil", "display_name": "Evil", "website": "javascript:alert(1)"}, http.StatusUnprocessableEntity)
-	c.do(ownerTok, http.MethodPost, "/component-makes",
+	c.do(ownerTok, http.MethodPost, "/vendors",
 		map[string]any{"id": "acme2", "display_name": "Acme 2", "website": "https://acme.example"}, http.StatusCreated)
-	c.do(ownerTok, http.MethodPatch, "/component-makes/acme",
+	c.do(ownerTok, http.MethodPatch, "/vendors/acme",
 		map[string]any{"website": "javascript:alert(1)"}, http.StatusUnprocessableEntity)
-	c.do(ownerTok, http.MethodPatch, "/component-makes/acme",
+	c.do(ownerTok, http.MethodPatch, "/vendors/acme",
 		map[string]any{"website": "https://acme.example"}, http.StatusOK)
-	c.do(ownerTok, http.MethodDelete, "/component-makes/acme2", nil, http.StatusNoContent)
+	c.do(ownerTok, http.MethodDelete, "/vendors/acme2", nil, http.StatusNoContent)
 
 	// The seeded official row (crestron) is read-only: 422 on patch and delete.
-	c.do(ownerTok, http.MethodPatch, "/component-makes/crestron",
+	c.do(ownerTok, http.MethodPatch, "/vendors/crestron",
 		map[string]any{"display_name": "X"}, http.StatusUnprocessableEntity)
-	c.do(ownerTok, http.MethodDelete, "/component-makes/crestron", nil, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodDelete, "/vendors/crestron", nil, http.StatusUnprocessableEntity)
 
 	// Admin deletes the custom row.
-	c.do(ownerTok, http.MethodDelete, "/component-makes/acme", nil, http.StatusNoContent)
-	c.do(ownerTok, http.MethodGet, "/component-makes/acme", nil, http.StatusNotFound)
+	c.do(ownerTok, http.MethodDelete, "/vendors/acme", nil, http.StatusNoContent)
+	c.do(ownerTok, http.MethodGet, "/vendors/acme", nil, http.StatusNotFound)
 
 	// Unknown id is a 404.
-	c.do(ownerTok, http.MethodDelete, "/component-makes/nope", nil, http.StatusNotFound)
+	c.do(ownerTok, http.MethodDelete, "/vendors/nope", nil, http.StatusNotFound)
 }

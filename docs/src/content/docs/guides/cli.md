@@ -251,25 +251,42 @@ defaults true (the value cascades to descendants); `--propagates=false` binds a 
 that resolves only on its own entity. Resolving onto a component **unions** keys and **overrides** values
 most-specific-wins down the cascade.
 
-## Component makes
+## Component classification catalogs
 
-The [component make](/architecture/core-entities/#catalog-reference-data-component_make) commands cover
-the manufacturer registry: a flat, official-vs-custom catalog on the same pattern as the `type`
-registries. `make:read` sits on the viewer floor; the three writes (`make:create`, `make:update`,
-`make:delete`) are admin-gated.
+The [component-classification catalog](/architecture/core-entities/#catalog-reference-data-vendor-driver-capability)
+commands cover the `vendor`, `driver`, and `capability` registries: flat, official-vs-custom catalogs on
+the same pattern as the `type` registries. Each resource's `:read` sits on the viewer floor; the three
+writes (`:create`, `:update`, `:delete`) are admin-gated.
+
+A **vendor** names an organization, carrying a `--kind` of `manufacturer`, `integrator`, or `developer`
+(default `manufacturer`):
 
 ```sh
-omniglass component-make list                                       # the manufacturer registry
-omniglass component-make create --id barco --display-name Barco \
+omniglass vendor list                                               # the vendor registry
+omniglass vendor create --id barco --display-name Barco --kind manufacturer \
   --icon monitor --support-phone "+1-555-0100" --website https://www.barco.com
-omniglass component-make get barco
-omniglass component-make update barco --support-phone "+1-555-0199"
-omniglass component-make delete barco                                # refused (422) if official
+omniglass vendor get barco
+omniglass vendor update barco --support-phone "+1-555-0199"
+omniglass vendor delete barco                                       # refused (422) if official
 ```
 
-A seed-owned (**official**) make, for example `crestron` or `biamp`, is read-only: `update` and `delete`
-both 422. `website` is validated to an `http`/`https` scheme on write; any other scheme (for example
-`javascript:`) is a 422.
+A **driver** names the implementation that gets, emits, or sets a product's signals, with an optional
+`--version`. A **capability** names what a component can do:
+
+```sh
+omniglass driver list                                               # the driver registry
+omniglass driver create --id barco-snmp --display-name "Barco SNMP" --version 1.0.0
+omniglass driver update barco-snmp --version 1.1.0
+omniglass driver delete barco-snmp                                  # refused (422) if official
+
+omniglass capability list                                           # the capability registry
+omniglass capability create --id projector --display-name Projector
+omniglass capability delete projector                               # refused (422) if official
+```
+
+A seed-owned (**official**) row, for example the `crestron` vendor or the `microphone` capability, is
+read-only: `update` and `delete` both 422. A vendor's `website` is validated to an `http`/`https` scheme
+on write; any other scheme (for example `javascript:`) is a 422.
 
 ## Generated versus hand-written
 

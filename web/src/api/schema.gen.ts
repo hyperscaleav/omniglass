@@ -288,7 +288,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/component-makes": {
+    "/capabilities": {
         parameters: {
             query?: never;
             header?: never;
@@ -296,23 +296,23 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List component makes
-         * @description Lists the component_make registry, ordered alphabetically by display name. Populates the make picker on the component_model form. Gated by make:read.
+         * List capabilities
+         * @description Lists the capability registry, ordered alphabetically by display name. Populates the capability picker on the product form. Gated by capability:read.
          */
-        get: operations["list-component-makes"];
+        get: operations["list-capabilities"];
         put?: never;
         /**
-         * Create a component make
-         * @description Creates a custom (non-official) component_make. Gated by make:create.
+         * Create a capability
+         * @description Creates a custom (non-official) capability. Gated by capability:create.
          */
-        post: operations["create-component-make"];
+        post: operations["create-capability"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/component-makes/{id}": {
+    "/capabilities/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -320,24 +320,24 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get a component make
-         * @description Fetches a component_make by id. Gated by make:read.
+         * Get a capability
+         * @description Fetches a capability by id. Gated by capability:read.
          */
-        get: operations["get-component-make"];
+        get: operations["get-capability"];
         put?: never;
         post?: never;
         /**
-         * Delete a component make
-         * @description Deletes a custom component_make, refused if official (422). Gated by make:delete.
+         * Delete a capability
+         * @description Deletes a custom capability, refused if official (422). Gated by capability:delete.
          */
-        delete: operations["delete-component-make"];
+        delete: operations["delete-capability"];
         options?: never;
         head?: never;
         /**
-         * Update a component make
-         * @description Patches a custom component_make's display_name, icon, support_phone, or website. Official makes are read-only (422). Gated by make:update.
+         * Update a capability
+         * @description Patches a custom capability's display_name. Official capabilities are read-only (422). Gated by capability:update.
          */
-        patch: operations["update-component-make"];
+        patch: operations["update-capability"];
         trace?: never;
     };
     "/components": {
@@ -534,6 +534,58 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/drivers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List drivers
+         * @description Lists the driver registry, ordered alphabetically by display name. Populates the driver picker on the product form. Gated by driver:read.
+         */
+        get: operations["list-drivers"];
+        put?: never;
+        /**
+         * Create a driver
+         * @description Creates a custom (non-official) driver. Gated by driver:create.
+         */
+        post: operations["create-driver"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/drivers/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a driver
+         * @description Fetches a driver by id. Gated by driver:read.
+         */
+        get: operations["get-driver"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a driver
+         * @description Deletes a custom driver, refused if official (422). Gated by driver:delete.
+         */
+        delete: operations["delete-driver"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a driver
+         * @description Patches a custom driver's display_name or version. Official drivers are read-only (422). Gated by driver:update.
+         */
+        patch: operations["update-driver"];
         trace?: never;
     };
     "/field-definitions": {
@@ -2256,6 +2308,58 @@ export interface paths {
         patch: operations["update-variable"];
         trace?: never;
     };
+    "/vendors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List vendors
+         * @description Lists the vendor registry, ordered alphabetically by display name. Populates the vendor picker on the product form. Gated by vendor:read.
+         */
+        get: operations["list-vendors"];
+        put?: never;
+        /**
+         * Create a vendor
+         * @description Creates a custom (non-official) vendor. Gated by vendor:create.
+         */
+        post: operations["create-vendor"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/vendors/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a vendor
+         * @description Fetches a vendor by id. Gated by vendor:read.
+         */
+        get: operations["get-vendor"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a vendor
+         * @description Deletes a custom vendor, refused if official (422). Gated by vendor:delete.
+         */
+        delete: operations["delete-vendor"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a vendor
+         * @description Patches a custom vendor's display_name, kind, icon, support_phone, or website. Official vendors are read-only (422). Gated by vendor:update.
+         */
+        patch: operations["update-vendor"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2308,6 +2412,17 @@ export interface components {
             readonly $schema?: string;
             /** @description The profile picture as a base64-encoded 256x256 JPEG */
             image_base64: string;
+        };
+        CapabilityBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CapabilityBody.json
+             */
+            readonly $schema?: string;
+            display_name: string;
+            id: string;
+            official: boolean;
         };
         ChangePasswordInputBody: {
             /**
@@ -2390,20 +2505,6 @@ export interface components {
             parent_id?: string;
             system_id?: string;
         };
-        ComponentMakeBody: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/ComponentMakeBody.json
-             */
-            readonly $schema?: string;
-            display_name: string;
-            icon?: string;
-            id: string;
-            official: boolean;
-            support_phone?: string;
-            website?: string;
-        };
         ComponentTypeBody: {
             /**
              * Format: uri
@@ -2414,6 +2515,17 @@ export interface components {
             display_name: string;
             id: string;
             official: boolean;
+        };
+        CreateCapabilityInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateCapabilityInputBody.json
+             */
+            readonly $schema?: string;
+            display_name: string;
+            /** @description Globally unique capability id */
+            id: string;
         };
         CreateComponentInputBody: {
             /**
@@ -2434,20 +2546,6 @@ export interface components {
             /** @description Primary system name this component belongs to */
             system?: string;
         };
-        CreateComponentMakeInputBody: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/CreateComponentMakeInputBody.json
-             */
-            readonly $schema?: string;
-            display_name: string;
-            icon?: string;
-            /** @description Globally unique make id */
-            id: string;
-            support_phone?: string;
-            website?: string;
-        };
         CreateComponentTypeInputBody: {
             /**
              * Format: uri
@@ -2458,6 +2556,18 @@ export interface components {
             display_name: string;
             /** @description Globally unique type id */
             id: string;
+        };
+        CreateDriverInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateDriverInputBody.json
+             */
+            readonly $schema?: string;
+            display_name: string;
+            /** @description Globally unique driver id */
+            id: string;
+            version?: string;
         };
         CreateFieldDefinitionInputBody: {
             /**
@@ -2782,6 +2892,25 @@ export interface components {
              */
             value_type: "string" | "int" | "float" | "bool" | "json";
         };
+        CreateVendorInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateVendorInputBody.json
+             */
+            readonly $schema?: string;
+            display_name: string;
+            icon?: string;
+            /** @description Globally unique vendor id */
+            id: string;
+            /**
+             * @default manufacturer
+             * @enum {string}
+             */
+            kind: "manufacturer" | "integrator" | "developer";
+            support_phone?: string;
+            website?: string;
+        };
         DownloadFileOutputBody: {
             /**
              * Format: uri
@@ -2793,6 +2922,18 @@ export interface components {
             content: string;
             content_type: string;
             name: string;
+        };
+        DriverBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/DriverBody.json
+             */
+            readonly $schema?: string;
+            display_name: string;
+            id: string;
+            official: boolean;
+            version?: string;
         };
         EffectiveFieldBody: {
             data_type: string;
@@ -3121,14 +3262,14 @@ export interface components {
              */
             open_edit: string;
         };
-        ListComponentMakesOutputBody: {
+        ListCapabilitiesOutputBody: {
             /**
              * Format: uri
              * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/ListComponentMakesOutputBody.json
+             * @example /api/v1/schemas/ListCapabilitiesOutputBody.json
              */
             readonly $schema?: string;
-            makes: components["schemas"]["ComponentMakeBody"][] | null;
+            capabilities: components["schemas"]["CapabilityBody"][] | null;
         };
         ListComponentTypesOutputBody: {
             /**
@@ -3147,6 +3288,15 @@ export interface components {
              */
             readonly $schema?: string;
             components: components["schemas"]["ComponentBody"][] | null;
+        };
+        ListDriversOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListDriversOutputBody.json
+             */
+            readonly $schema?: string;
+            drivers: components["schemas"]["DriverBody"][] | null;
         };
         ListFieldDefinitionsOutputBody: {
             /**
@@ -3327,6 +3477,15 @@ export interface components {
              */
             readonly $schema?: string;
             variables: components["schemas"]["VariableBody"][] | null;
+        };
+        ListVendorsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListVendorsOutputBody.json
+             */
+            readonly $schema?: string;
+            vendors: components["schemas"]["VendorBody"][] | null;
         };
         LocationBody: {
             /**
@@ -3854,6 +4013,15 @@ export interface components {
              */
             theme: "omniglass-dark" | "omniglass-light";
         };
+        UpdateCapabilityInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/UpdateCapabilityInputBody.json
+             */
+            readonly $schema?: string;
+            display_name?: string;
+        };
         UpdateComponentInputBody: {
             /**
              * Format: uri
@@ -3866,18 +4034,6 @@ export interface components {
             /** @description A new globally unique technical name (rename) */
             name?: string;
         };
-        UpdateComponentMakeInputBody: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/UpdateComponentMakeInputBody.json
-             */
-            readonly $schema?: string;
-            display_name?: string;
-            icon?: string;
-            support_phone?: string;
-            website?: string;
-        };
         UpdateComponentTypeInputBody: {
             /**
              * Format: uri
@@ -3886,6 +4042,16 @@ export interface components {
              */
             readonly $schema?: string;
             display_name?: string;
+        };
+        UpdateDriverInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/UpdateDriverInputBody.json
+             */
+            readonly $schema?: string;
+            display_name?: string;
+            version?: string;
         };
         UpdateFieldDefinitionInputBody: {
             /**
@@ -4077,6 +4243,20 @@ export interface components {
             /** @description The new value, validated against the fixed value_type */
             value: unknown;
         };
+        UpdateVendorInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/UpdateVendorInputBody.json
+             */
+            readonly $schema?: string;
+            display_name?: string;
+            icon?: string;
+            /** @enum {string} */
+            kind?: "manufacturer" | "integrator" | "developer";
+            support_phone?: string;
+            website?: string;
+        };
         VariableBody: {
             /**
              * Format: uri
@@ -4092,6 +4272,22 @@ export interface components {
             /** @description The value, shape given by value_type */
             value: unknown;
             value_type: string;
+        };
+        VendorBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/VendorBody.json
+             */
+            readonly $schema?: string;
+            display_name: string;
+            icon?: string;
+            id: string;
+            /** @enum {string} */
+            kind: "manufacturer" | "integrator" | "developer";
+            official: boolean;
+            support_phone?: string;
+            website?: string;
         };
     };
     responses: never;
@@ -4617,7 +4813,7 @@ export interface operations {
             };
         };
     };
-    "list-component-makes": {
+    "list-capabilities": {
         parameters: {
             query?: never;
             header?: never;
@@ -4632,7 +4828,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ListComponentMakesOutputBody"];
+                    "application/json": components["schemas"]["ListCapabilitiesOutputBody"];
                 };
             };
             /** @description Error */
@@ -4646,7 +4842,7 @@ export interface operations {
             };
         };
     };
-    "create-component-make": {
+    "create-capability": {
         parameters: {
             query?: never;
             header?: never;
@@ -4655,7 +4851,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CreateComponentMakeInputBody"];
+                "application/json": components["schemas"]["CreateCapabilityInputBody"];
             };
         };
         responses: {
@@ -4665,7 +4861,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ComponentMakeBody"];
+                    "application/json": components["schemas"]["CapabilityBody"];
                 };
             };
             /** @description Error */
@@ -4679,12 +4875,12 @@ export interface operations {
             };
         };
     };
-    "get-component-make": {
+    "get-capability": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description The component_make id */
+                /** @description The capability id */
                 id: string;
             };
             cookie?: never;
@@ -4697,7 +4893,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ComponentMakeBody"];
+                    "application/json": components["schemas"]["CapabilityBody"];
                 };
             };
             /** @description Error */
@@ -4711,12 +4907,12 @@ export interface operations {
             };
         };
     };
-    "delete-component-make": {
+    "delete-capability": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description The component_make id */
+                /** @description The capability id */
                 id: string;
             };
             cookie?: never;
@@ -4741,7 +4937,7 @@ export interface operations {
             };
         };
     };
-    "update-component-make": {
+    "update-capability": {
         parameters: {
             query?: never;
             header?: never;
@@ -4752,7 +4948,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["UpdateComponentMakeInputBody"];
+                "application/json": components["schemas"]["UpdateCapabilityInputBody"];
             };
         };
         responses: {
@@ -4762,7 +4958,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ComponentMakeBody"];
+                    "application/json": components["schemas"]["CapabilityBody"];
                 };
             };
             /** @description Error */
@@ -5189,6 +5385,165 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CheckNameOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-drivers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListDriversOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-driver": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateDriverInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DriverBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-driver": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The driver id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DriverBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-driver": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The driver id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "update-driver": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateDriverInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DriverBody"];
                 };
             };
             /** @description Error */
@@ -9103,6 +9458,165 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VariableBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-vendors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListVendorsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-vendor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateVendorInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VendorBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-vendor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The vendor id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VendorBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-vendor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The vendor id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "update-vendor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateVendorInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VendorBody"];
                 };
             };
             /** @description Error */

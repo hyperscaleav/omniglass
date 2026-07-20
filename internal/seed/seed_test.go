@@ -100,26 +100,26 @@ func TestSeedRolesIdempotent(t *testing.T) {
 		t.Errorf("official component_types = %d, want 11", compTypeCount)
 	}
 
-	// The official component makes seed too, idempotently (the second Run
+	// The official vendors seed too, idempotently (the second Run
 	// above must not have duplicated them), and every seeded row is official
 	// (read-only in the API layer).
 	var makeCount int
-	if err := conn.QueryRow(ctx, `select count(*) from component_make where official`).Scan(&makeCount); err != nil {
-		t.Fatalf("count component_makes: %v", err)
+	if err := conn.QueryRow(ctx, `select count(*) from vendor where official`).Scan(&makeCount); err != nil {
+		t.Fatalf("count vendors: %v", err)
 	}
 	if makeCount != 8 {
-		t.Errorf("official component_makes = %d, want 8", makeCount)
+		t.Errorf("official vendors = %d, want 8", makeCount)
 	}
 	var totalMakeCount int
-	if err := conn.QueryRow(ctx, `select count(*) from component_make`).Scan(&totalMakeCount); err != nil {
-		t.Fatalf("count all component_makes: %v", err)
+	if err := conn.QueryRow(ctx, `select count(*) from vendor`).Scan(&totalMakeCount); err != nil {
+		t.Fatalf("count all vendors: %v", err)
 	}
 	if totalMakeCount != makeCount {
-		t.Errorf("total component_makes = %d, official = %d, want equal (a non-official row leaked in)", totalMakeCount, makeCount)
+		t.Errorf("total vendors = %d, official = %d, want equal (a non-official row leaked in)", totalMakeCount, makeCount)
 	}
 	// Re-running Run keeps the metadata fields, not just the initial insert.
 	var crestronWebsite string
-	if err := conn.QueryRow(ctx, `select website from component_make where id = 'crestron'`).Scan(&crestronWebsite); err != nil {
+	if err := conn.QueryRow(ctx, `select website from vendor where id = 'crestron'`).Scan(&crestronWebsite); err != nil {
 		t.Fatalf("read crestron website: %v", err)
 	}
 	if crestronWebsite != "https://www.crestron.com" {

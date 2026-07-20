@@ -245,12 +245,24 @@ type Gateway interface {
 	// Crestron, ...), same shape and official-read-only guard as the type
 	// registries above but with no tree and no in-use delete guard in this
 	// slice (component_model will reference it later).
-	UpsertComponentMake(ctx context.Context, m ComponentMake) error
-	ListComponentMakes(ctx context.Context) ([]ComponentMake, error)
-	GetComponentMake(ctx context.Context, id string) (*ComponentMake, error)
-	CreateComponentMake(ctx context.Context, actorID string, m ComponentMake) (*ComponentMake, error)
-	UpdateComponentMake(ctx context.Context, actorID, id string, patch ComponentMakePatch) (*ComponentMake, error)
-	DeleteComponentMake(ctx context.Context, actorID, id string) error
+	UpsertVendor(ctx context.Context, v Vendor) error
+	ListVendors(ctx context.Context) ([]Vendor, error)
+	GetVendor(ctx context.Context, id string) (*Vendor, error)
+	CreateVendor(ctx context.Context, actorID string, v Vendor) (*Vendor, error)
+	UpdateVendor(ctx context.Context, actorID, id string, patch VendorPatch) (*Vendor, error)
+	DeleteVendor(ctx context.Context, actorID, id string) error
+	UpsertDriver(ctx context.Context, d Driver) error
+	ListDrivers(ctx context.Context) ([]Driver, error)
+	GetDriver(ctx context.Context, id string) (*Driver, error)
+	CreateDriver(ctx context.Context, actorID string, d Driver) (*Driver, error)
+	UpdateDriver(ctx context.Context, actorID, id string, patch DriverPatch) (*Driver, error)
+	DeleteDriver(ctx context.Context, actorID, id string) error
+	UpsertCapability(ctx context.Context, c Capability) error
+	ListCapabilities(ctx context.Context) ([]Capability, error)
+	GetCapability(ctx context.Context, id string) (*Capability, error)
+	CreateCapability(ctx context.Context, actorID string, c Capability) (*Capability, error)
+	UpdateCapability(ctx context.Context, actorID, id string, patch CapabilityPatch) (*Capability, error)
+	DeleteCapability(ctx context.Context, actorID, id string) error
 
 	// The interface tier: operator CRUD over placement-bound connections. An
 	// interface is not a scope-tree entity of its own; it hangs off a component
