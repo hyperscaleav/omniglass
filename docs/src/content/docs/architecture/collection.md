@@ -20,9 +20,10 @@ probe type); a target that does not answer is DATA (`icmp.reachable=0` with a re
 for a node that cannot do ICMP at all, told apart by a once-cached loopback capability self-check. On top of the
 raw probe metrics the node now computes the per-interface **reachability verdict** `interface.reachable` (up/down,
 the AND of that interface's probe results) and emits it as a built-in **state** datapoint; the ingest consumer
-**routes by the registry kind** (metric to `metric_datapoint`, state to `state_datapoint`) under the same
-confinement, and the state series is **transition-only** (one row per flip, guarded both at the node and at
-ingest). Of the two collection primitives this pipeline reads, the **interface** is the authored one and the
+**routes by the registry kind** (metric to `metric_datapoint`, state to `state_datapoint`, and a **log** to the
+new **`event`** log sink, no longer dropped, see [ADR-0046](/architecture/decisions/#adr-0046-the-event-log-kind-sink))
+under the same confinement, and the state series is **transition-only** (one row per flip, guarded both at the
+node and at ingest). Of the two collection primitives this pipeline reads, the **interface** is the authored one and the
 **task** is **derived**. An interface has an operator **CRUD API** (gateway + Huma routes at `/interfaces`,
 generated into the OpenAPI document, the cobra CLI, and the typed client); it is **named by its protocol** (the
 name derives from its `interface_type`, unique within its component, never a hand-typed label), so create takes a

@@ -564,6 +564,26 @@ Example:
 omniglass effective-tag list <name>
 ```
 
+## `omniglass event`
+
+Commands for the event resource
+
+### `omniglass event list`
+
+List a component's recent events
+
+```
+omniglass event list <name>
+```
+
+Returns the component's recent log occurrences (the log-kind sink), newest first, bounded to the last 24 hours. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+
+Example:
+
+```sh
+omniglass event list <name>
+```
+
 ## `omniglass field`
 
 Commands for the field resource
@@ -1388,22 +1408,6 @@ omniglass migrate
 
 ## `omniglass node`
 
-Run the edge node: claim, pull the worklist, and heartbeat over NATS
-
-```
-omniglass node [flags]
-```
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--heartbeat` | duration | `30s` | heartbeat interval |
-| `--name` | string | (none) | this node's registered name (env OMNIGLASS_NODE_NAME) |
-| `--once` | bool | `false` | run a single claim + pull + heartbeat cycle and exit |
-| `--server` | string | (none) | Omniglass server base URL (env OMNIGLASS_SERVER) |
-| `--token` | string | (none) | enrollment token from POST /nodes/{name}:enroll (env OMNIGLASS_NODE_TOKEN) |
-
-## `omniglass node`
-
 Commands for the node resource
 
 ### `omniglass node claim`
@@ -1592,6 +1596,22 @@ Example:
 ```sh
 omniglass node update <name>
 ```
+
+## `omniglass node`
+
+Run the edge node: claim, pull the worklist, and heartbeat over NATS
+
+```
+omniglass node [flags]
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--heartbeat` | duration | `30s` | heartbeat interval |
+| `--name` | string | (none) | this node's registered name (env OMNIGLASS_NODE_NAME) |
+| `--once` | bool | `false` | run a single claim + pull + heartbeat cycle and exit |
+| `--server` | string | (none) | Omniglass server base URL (env OMNIGLASS_SERVER) |
+| `--token` | string | (none) | enrollment token from POST /nodes/{name}:enroll (env OMNIGLASS_NODE_TOKEN) |
 
 ## `omniglass principal`
 

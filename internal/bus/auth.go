@@ -28,6 +28,9 @@ type Store interface {
 	// value equals the latest stored value for the series.
 	InsertStateDatapoints(ctx context.Context, evs []storage.StateDatapointEvent) error
 	LatestState(ctx context.Context, componentName, key, instance string) (*storage.StateDatapoint, error)
+	// The log sink: a log-kind datapoint routes here (by registry kind) as an
+	// occurrence, instead of being dropped.
+	InsertEvents(ctx context.Context, evs []storage.EventOccurrence) error
 }
 
 // nodeAuth implements server.Authentication (the in-process

@@ -412,6 +412,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/components/{name}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a component's recent events
+         * @description Returns the component's recent log occurrences (the log-kind sink), newest first, bounded to the last 24 hours. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+         */
+        get: operations["list-component-events"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/components/{name}/fields": {
         parameters: {
             query?: never;
@@ -3137,6 +3157,35 @@ export interface components {
              */
             type: string;
         };
+        EventBody: {
+            /** @description Structured attributes, when the occurrence carried a JSON payload */
+            attributes?: unknown;
+            /** @description The series discriminator (e.g. the interface), when set */
+            instance?: string;
+            /** @description The property name of the log (e.g. syslog.line) */
+            key: string;
+            /** @description The occurrence message */
+            message: string;
+            /** @description The lineage of the occurrence (observed for direct collection) */
+            provenance: string;
+            /** @description The interface type that produced the occurrence */
+            source?: string;
+            /**
+             * Format: date-time
+             * @description When the occurrence was observed
+             */
+            ts: string;
+        };
+        EventsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/EventsOutputBody.json
+             */
+            readonly $schema?: string;
+            component: string;
+            events: components["schemas"]["EventBody"][] | null;
+        };
         FieldDefinitionBody: {
             /**
              * Format: uri
@@ -5267,6 +5316,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EffectiveTagsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-component-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The component's unique name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventsOutputBody"];
                 };
             };
             /** @description Error */

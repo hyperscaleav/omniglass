@@ -352,6 +352,11 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 	if err := seedReachability(ctx, gw, actorID); err != nil {
 		return err
 	}
+	// A handful of example log occurrences on the lobby display, so the console's
+	// event-log panel comes up populated instead of empty.
+	if err := seedEvents(ctx, gw); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -510,6 +515,66 @@ func seedReachDatapoints(ctx context.Context, gw storage.Gateway, iface string, 
 		{OwnerKind: "component", OwnerID: reachComponent, Key: "tcp.connect_time", Instance: iface, Value: connMs, Source: "tcp", TS: recovered},
 	}); err != nil {
 		return fmt.Errorf("devseed: insert %s metric datapoints: %w", iface, err)
+	}
+	return nil
+}
+
+// The example log occurrences the dev seed installs on the lobby display, the
+// log-kind sink of the collection pipeline: a display emits device log lines (link,
+// CEC, EDID, input) so the console's event-log panel comes up populated instead of
+// empty. eventComponent names an existing fixture component (the display seeded above),
+// so the event's component_id foreign key resolves. All rows use the registered
+// log-kind key syslog.line (reject-not-project), with provenance stamped observed by
+// the insert.
+const eventComponent = "lobby-display"
+
+// exampleEvents are the display's recent log lines, each offset back from now so the
+// panel reads as a recent window (spread over the last few hours, newest last). One
+// line carries a structured attributes payload (the switched input); the rest are
+// plain messages. minsAgo is minutes before the seed's now.
+var exampleEvents = []struct {
+	message string
+	attrs   []byte
+	minsAgo int
+}{
+	{message: "power state changed to on", minsAgo: 214},
+	{message: "hdmi link state changed to up", minsAgo: 212},
+	{message: "edid read complete: 3840x2160@60", minsAgo: 211},
+	{message: "cec handshake ok", minsAgo: 127},
+	{message: "input switched to HDMI2", attrs: []byte(`{"input":"hdmi2"}`), minsAgo: 46},
+	{message: "backlight brightness set to 80%", minsAgo: 12},
+}
+
+// seedEvents installs the example log occurrences on the lobby display idempotently.
+// The event table has an auto id (bigint identity) and no natural unique key, so a
+// naive re-insert would pile up duplicates on every `make dev`; guard on the component
+// already carrying events (ListComponentEvents from the epoch, limit 1) and skip when
+// present, so a second run is a no-op. Owner = the component, instance empty (a
+// device-level log, not per-interface). Mirrors seedReachability's sentinel pattern.
+func seedEvents(ctx context.Context, gw storage.Gateway) error {
+	// Sentinel: any existing event on the component means this block already ran.
+	existing, err := gw.ListComponentEvents(ctx, eventComponent, time.Time{}, 1)
+	if err != nil {
+		return fmt.Errorf("devseed: check events: %w", err)
+	}
+	if len(existing) > 0 {
+		return nil
+	}
+	now := time.Now().UTC()
+	evs := make([]storage.EventOccurrence, 0, len(exampleEvents))
+	for _, e := range exampleEvents {
+		evs = append(evs, storage.EventOccurrence{
+			OwnerKind:  "component",
+			OwnerID:    eventComponent,
+			Key:        "syslog.line",
+			Message:    e.message,
+			Attributes: e.attrs,
+			Source:     "syslog",
+			TS:         now.Add(-time.Duration(e.minsAgo) * time.Minute),
+		})
+	}
+	if err := gw.InsertEvents(ctx, evs); err != nil {
+		return fmt.Errorf("devseed: insert events: %w", err)
 	}
 	return nil
 }

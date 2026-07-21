@@ -24,6 +24,7 @@ import TagPills from "../components/TagPills";
 import { tagFilterKeys } from "../lib/predicate";
 import TagAdder from "../components/TagAdder";
 import ReachabilityPanel from "../components/ReachabilityPanel";
+import EventsPanel from "../components/EventsPanel";
 import { interfaceBlade, interfaceCreateBlade } from "../components/interfaceBlades";
 import EffectiveFields, { fieldResolutionBlade, fieldBladeId } from "../components/EffectiveFields";
 
@@ -299,6 +300,7 @@ export default function Components() {
           onAdd={can(me.data, "interface", "create") ? () => ctx.openBlade({ kind: "interface-create", id: n().raw.name }) : undefined}
           onOpenInterface={can(me.data, "interface", "read") ? (id) => ctx.openBlade({ kind: "interface", id }) : undefined}
         />
+        <EventsPanel name={n().raw.name} />
         <Show when={can(me.data, "field", "read")}>
           <EffectiveFields
             component={n().raw.name}

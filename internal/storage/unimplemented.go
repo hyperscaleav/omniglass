@@ -300,6 +300,12 @@ func (UnimplementedGateway) LatestState(context.Context, string, string, string)
 func (UnimplementedGateway) StateTransitions(context.Context, string, string, string, time.Time) ([]StateDatapoint, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) InsertEvents(context.Context, []EventOccurrence) error {
+	return nil
+}
+func (UnimplementedGateway) ListComponentEvents(context.Context, string, time.Time, int) ([]Event, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) CreateNode(context.Context, string, NodeSpec, scope.Set) (*Node, error) {
 	return nil, nil
 }
