@@ -276,6 +276,26 @@ omniglass capability update <id>
 
 Commands for the component resource
 
+### `omniglass component alarms`
+
+List a component's alarms
+
+```
+omniglass component alarms <name> [flags]
+```
+
+What is currently wrong with this component, newest first, each with the capabilities it degrades. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--include-cleared` | bool | `false` | Include cleared alarms, so the list is the history rather than what is wrong now |
+
+Example:
+
+```sh
+omniglass component alarms <name>
+```
+
 ### `omniglass component capabilities`
 
 List a component's effective capabilities
@@ -310,6 +330,22 @@ Example:
 
 ```sh
 omniglass component checkName --name name
+```
+
+### `omniglass component clear-alarm`
+
+Clear an alarm
+
+```
+omniglass component clear-alarm <name> <id>
+```
+
+Marks the alarm cleared and recomputes health in the same transaction, so the recovery is recorded as a transition at the moment it happened. The row is kept: what was wrong and when outlives the fix. Clearing an alarm that is already cleared or does not exist is a 404. Gated by component:update; an out-of-scope component is a non-disclosing 404.
+
+Example:
+
+```sh
+omniglass component clear-alarm <name> <id>
 ```
 
 ### `omniglass component clear-capability`
@@ -447,6 +483,28 @@ Example:
 
 ```sh
 omniglass component properties <name>
+```
+
+### `omniglass component raise-alarm`
+
+Raise an alarm on a component
+
+```
+omniglass component raise-alarm <name> [flags]
+```
+
+Records a condition on this component and the capabilities it degrades, then recomputes health in the same transaction: any role requiring a degraded capability can no longer be filled by this component, and its system and location verdicts move with it. An unknown capability is a 422. Gated by component:update; an out-of-scope component is a non-disclosing 404.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--capabilities` | string | (none) | The capabilities this condition degrades; a role requiring one of them can no longer be filled by this component |
+| `--message` | string | (none) | What is wrong, for the operator reading it later |
+| `--severity` | string | (none) | How bad it is; critical puts the component itself in outage |
+
+Example:
+
+```sh
+omniglass component raise-alarm <name> --severity severity
 ```
 
 ### `omniglass component removeTag`
@@ -1080,6 +1138,22 @@ Example:
 
 ```sh
 omniglass location get <name>
+```
+
+### `omniglass location health`
+
+Read a location's health
+
+```
+omniglass location health <name>
+```
+
+The location's current verdict, worst-wins over every system placed anywhere beneath it, with those systems and their verdicts as the drill-down (the system health read names the role, the capability, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.
+
+Example:
+
+```sh
+omniglass location health <name>
 ```
 
 ### `omniglass location list`
@@ -2789,6 +2863,7 @@ Declares a role every conforming system needs filled, or revises it in place (th
 |---|---|---|---|
 | `--capabilities` | string | (none) | The capabilities a component must ALL provide; replaces the required set wholesale |
 | `--display-name` | string | (none) | The role's human label; defaults to the role name |
+| `--impact` | string | (none) | What an impaired role means for its system; omit for degraded. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display |
 | `--quorum` | string | (none) | How many components must fill the role; omit for one |
 
 Example:
@@ -2966,6 +3041,22 @@ Example:
 omniglass system get <name>
 ```
 
+### `omniglass system health`
+
+Read a system's health
+
+```
+omniglass system health <name>
+```
+
+The system's current verdict and why: every role it needs filled, whether it is impaired, what an impaired role means for the system (impact), and for an impaired role the required capabilities an alarm has taken away plus the alarms that took them. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+
+Example:
+
+```sh
+omniglass system health <name>
+```
+
 ### `omniglass system list`
 
 List systems in scope
@@ -3084,6 +3175,7 @@ Declares a role directly on this system (how a one-off system gets roles at all,
 |---|---|---|---|
 | `--capabilities` | string | (none) | The capabilities a component must ALL provide; replaces the required set wholesale |
 | `--display-name` | string | (none) | The role's human label; defaults to the role name |
+| `--impact` | string | (none) | What an impaired role means for its system; omit for degraded. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display |
 | `--quorum` | string | (none) | How many components must fill the role; omit for one |
 
 Example:

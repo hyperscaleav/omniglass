@@ -304,6 +304,29 @@ func generatedCommands() []*cobra.Command {
 			Short: "Commands for the component resource",
 		}
 		parent.AddCommand(func() *cobra.Command {
+			var qIncludeCleared bool
+			cmd := &cobra.Command{
+				Use:     "alarms <name>",
+				Short:   "List a component's alarms",
+				Long:    "What is currently wrong with this component, newest first, each with the capabilities it degrades. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
+				Example: "  omniglass component alarms <name>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/components/%s/alarms", url.PathEscape(args[0]))
+					q := url.Values{}
+					if cmd.Flags().Changed("include-cleared") {
+						q.Set("include_cleared", fmt.Sprintf("%v", qIncludeCleared))
+					}
+					if enc := q.Encode(); enc != "" {
+						path += "?" + enc
+					}
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			cmd.Flags().BoolVar(&qIncludeCleared, "include-cleared", false, "Include cleared alarms, so the list is the history rather than what is wrong now")
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
 			cmd := &cobra.Command{
 				Use:     "capabilities <name>",
 				Short:   "List a component's effective capabilities",
@@ -336,6 +359,20 @@ func generatedCommands() []*cobra.Command {
 			}
 			cmd.Flags().StringVar(&fName, "name", "", "The proposed technical name to check")
 			_ = cmd.MarkFlagRequired("name")
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "clear-alarm <name> <id>",
+				Short:   "Clear an alarm",
+				Long:    "Marks the alarm cleared and recomputes health in the same transaction, so the recovery is recorded as a transition at the moment it happened. The row is kept: what was wrong and when outlives the fix. Clearing an alarm that is already cleared or does not exist is a 404. Gated by component:update; an out-of-scope component is a non-disclosing 404.",
+				Example: "  omniglass component clear-alarm <name> <id>",
+				Args:    cobra.ExactArgs(2),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/components/%s/alarms/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+					return runAPICommand(cmd, "DELETE", path, nil)
+				},
+			}
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
@@ -480,6 +517,37 @@ func generatedCommands() []*cobra.Command {
 					return runAPICommand(cmd, "GET", path, nil)
 				},
 			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			var fCapabilities string
+			var fMessage string
+			var fSeverity string
+			cmd := &cobra.Command{
+				Use:     "raise-alarm <name>",
+				Short:   "Raise an alarm on a component",
+				Long:    "Records a condition on this component and the capabilities it degrades, then recomputes health in the same transaction: any role requiring a degraded capability can no longer be filled by this component, and its system and location verdicts move with it. An unknown capability is a 422. Gated by component:update; an out-of-scope component is a non-disclosing 404.",
+				Example: "  omniglass component raise-alarm <name> --severity severity",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/components/%s/alarms", url.PathEscape(args[0]))
+					body := map[string]any{}
+					if cmd.Flags().Changed("capabilities") {
+						body["capabilities"] = jsonOrString(fCapabilities)
+					}
+					if cmd.Flags().Changed("message") {
+						body["message"] = fMessage
+					}
+					if cmd.Flags().Changed("severity") {
+						body["severity"] = fSeverity
+					}
+					return runAPICommand(cmd, "POST", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fCapabilities, "capabilities", "", "The capabilities this condition degrades; a role requiring one of them can no longer be filled by this component")
+			cmd.Flags().StringVar(&fMessage, "message", "", "What is wrong, for the operator reading it later")
+			cmd.Flags().StringVar(&fSeverity, "severity", "", "How bad it is; critical puts the component itself in outage")
+			_ = cmd.MarkFlagRequired("severity")
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
@@ -1181,6 +1249,20 @@ func generatedCommands() []*cobra.Command {
 				Args:    cobra.ExactArgs(1),
 				RunE: func(cmd *cobra.Command, args []string) error {
 					path := fmt.Sprintf("/api/v1/locations/%s", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "health <name>",
+				Short:   "Read a location's health",
+				Long:    "The location's current verdict, worst-wins over every system placed anywhere beneath it, with those systems and their verdicts as the drill-down (the system health read names the role, the capability, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.",
+				Example: "  omniglass location health <name>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/locations/%s/health", url.PathEscape(args[0]))
 					return runAPICommand(cmd, "GET", path, nil)
 				},
 			}
@@ -3011,6 +3093,7 @@ func generatedCommands() []*cobra.Command {
 		parent.AddCommand(func() *cobra.Command {
 			var fCapabilities string
 			var fDisplayName string
+			var fImpact string
 			var fQuorum string
 			cmd := &cobra.Command{
 				Use:     "set-role <id> <role>",
@@ -3027,6 +3110,9 @@ func generatedCommands() []*cobra.Command {
 					if cmd.Flags().Changed("display-name") {
 						body["display_name"] = fDisplayName
 					}
+					if cmd.Flags().Changed("impact") {
+						body["impact"] = fImpact
+					}
 					if cmd.Flags().Changed("quorum") {
 						body["quorum"] = jsonOrString(fQuorum)
 					}
@@ -3035,6 +3121,7 @@ func generatedCommands() []*cobra.Command {
 			}
 			cmd.Flags().StringVar(&fCapabilities, "capabilities", "", "The capabilities a component must ALL provide; replaces the required set wholesale")
 			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "The role's human label; defaults to the role name")
+			cmd.Flags().StringVar(&fImpact, "impact", "", "What an impaired role means for its system; omit for degraded. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display")
 			cmd.Flags().StringVar(&fQuorum, "quorum", "", "How many components must fill the role; omit for one")
 			return cmd
 		}())
@@ -3225,6 +3312,20 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := &cobra.Command{
+				Use:     "health <name>",
+				Short:   "Read a system's health",
+				Long:    "The system's current verdict and why: every role it needs filled, whether it is impaired, what an impaired role means for the system (impact), and for an impaired role the required capabilities an alarm has taken away plus the alarms that took them. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
+				Example: "  omniglass system health <name>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/systems/%s/health", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
 				Use:     "list",
 				Short:   "List systems in scope",
 				Long:    "Lists the systems the caller may read, each filtered to its scope subtree. Gated by system:read.",
@@ -3324,6 +3425,7 @@ func generatedCommands() []*cobra.Command {
 		parent.AddCommand(func() *cobra.Command {
 			var fCapabilities string
 			var fDisplayName string
+			var fImpact string
 			var fQuorum string
 			cmd := &cobra.Command{
 				Use:     "set-role <name> <role>",
@@ -3340,6 +3442,9 @@ func generatedCommands() []*cobra.Command {
 					if cmd.Flags().Changed("display-name") {
 						body["display_name"] = fDisplayName
 					}
+					if cmd.Flags().Changed("impact") {
+						body["impact"] = fImpact
+					}
 					if cmd.Flags().Changed("quorum") {
 						body["quorum"] = jsonOrString(fQuorum)
 					}
@@ -3348,6 +3453,7 @@ func generatedCommands() []*cobra.Command {
 			}
 			cmd.Flags().StringVar(&fCapabilities, "capabilities", "", "The capabilities a component must ALL provide; replaces the required set wholesale")
 			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "The role's human label; defaults to the role name")
+			cmd.Flags().StringVar(&fImpact, "impact", "", "What an impaired role means for its system; omit for degraded. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display")
 			cmd.Flags().StringVar(&fQuorum, "quorum", "", "How many components must fill the role; omit for one")
 			return cmd
 		}())

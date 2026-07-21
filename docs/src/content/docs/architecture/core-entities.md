@@ -22,11 +22,13 @@ carries an **optional classifier** that declares what its instances expose: a co
 [ADR-0048](/architecture/decisions/#adr-0048-the-standard-blueprint-and-the-template-fork-seed-model)). The
 **exclusive-arc** owner columns are now real, carrying the datapoint sinks, the **`event`** log sink
 (see [The event sink](#the-event-sink-the-first-arc-owned-occurrence) below), and **`property_value`**
-(see [Declared properties](#declared-properties-the-classifier-contracts-and-the-value-store) below);
-`alarm` is the remaining arc-owned sink still `Design`. A system also declares the **roles** it needs
-filled, staffed by components whose **resolved capabilities** cover what the role requires (see
-[System roles](#system-roles-the-slots-a-system-needs-filled) below). Still `Design`: template pinning,
-`system_member` composition, a role's **impact** on health, operational mode, and decommission / purge.
+(see [Declared properties](#declared-properties-the-classifier-contracts-and-the-value-store) below); a
+component, system, and location each own a recorded **[health](/architecture/health/)** series on that
+same arc. A system also declares the **roles** it needs filled, staffed by components whose **resolved
+capabilities** cover what the role requires, each role carrying the **impact** an impaired one has on the
+system (see [System roles](#system-roles-the-slots-a-system-needs-filled) below). Still `Design`: template
+pinning, `system_member` composition, operational mode, decommission / purge, and the **`alarm` arc** (an
+alarm is component-local today, so a system- or location-owned alarm is not yet a thing).
 See [implementation status](/architecture/status/).
 :::
 
@@ -206,7 +208,7 @@ Four tables carry it:
 
 | Table | Key columns | Notes |
 |---|---|---|
-| `system_role` | `owner_kind` + `standard_id` / `system_id` (the arc), `name`, `display_name`, **`quorum`** | the slot itself; the arc is the one `property_value` uses, with a one-set CHECK and a `unique nulls not distinct` key over the arc plus name |
+| `system_role` | `owner_kind` + `standard_id` / `system_id` (the arc), `name`, `display_name`, **`quorum`**, **`impact`** | the slot itself; the arc is the one `property_value` uses, with a one-set CHECK and a `unique nulls not distinct` key over the arc plus name |
 | `role_capability` | (`role_id`, `capability_id`) | what the role requires, **conjunctive**: a component must provide **every** listed capability |
 | `component_capability` | (`component_id`, `capability_id`, **`present`**) | the component's **own** capability facts, layered over its product's |
 | `role_assignment` | (`system_id`, `role_id`, `component_id`) | who fills the role here; the component FK is **`on delete restrict`** |
@@ -250,10 +252,19 @@ component's capabilities or pick a different component. It is also why capabilit
 every productless component out of every role
 ([ADR-0049](/architecture/decisions/#adr-0049-the-system-role-capability-gated-staffing-and-the-resolved-capability-set)).
 
-**Quorum ships without health, on purpose.** Staffing is observable with no engine running: a role wanting two
-components with one assigned is under-staffed **today**, on data the operator entered. What an unfilled or
-failing role does to its system's health (its **impact**: outage, degraded, or none) and the SLI rollup that
-reads it are a separate concern and land with the engine behind them ([health](/architecture/health/)).
+**A role also declares its `impact`**: `outage`, `degraded`, or `none`, what an **impaired** role (fewer
+satisfying components than its quorum) means for its system. It lives on the role rather than on the
+component or the alarm because the same broken box matters differently depending on the slot it was filling:
+a dead confidence monitor is not a dead main display. Impact is the one input the
+**[health](/architecture/health/)** rollup takes from the declaration side, and **quorum is the redundancy
+knob** underneath it: a role wanting one component with two assigned tolerates a failure, a role wanting two
+with two assigned does not.
+
+Staffing stays readable **without** any of that: a role wanting two components with one assigned is
+under-staffed **today**, on data the operator entered, with nothing collecting. Health adds the second
+question (of the components that **are** assigned, how many can currently do the job) and routes the answer
+up the tree
+([ADR-0050](/architecture/decisions/#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain)).
 
 ### The seed model: forked templates versus canonical catalogs
 
@@ -337,8 +348,11 @@ carries:
 This makes **system-, location-, node-, and global-level datapoints first-class** (e.g. `health` is a
 `state_datapoint` owned by a system, estate-wide availability is owned by `global`, and a node's
 self-health is owned by the node), the fix for a monitoring tool that can only put state on a single
-host. The same arc owns the `event` and `alarm` rows a datapoint produces, so a system-owned datapoint
-yields a system-owned alarm. The full pattern and the storage DDL are on [storage](/architecture/storage/).
+host. It is also what carries a recorded [health](/architecture/health/) verdict: a component, a system,
+and a location each own their own transition series under the same `health` key, and the **owner** is what
+gives a reading its level. The same arc owns the `event` rows a datapoint produces, and is the design for
+`alarm` (component-local today), so a system-owned datapoint will yield a system-owned alarm. The full
+pattern and the storage DDL are on [storage](/architecture/storage/).
 
 ### The event sink: the first arc-owned occurrence
 
@@ -386,8 +400,11 @@ the role, validated on assignment. Detailed on [templates](/architecture/templat
 `system_member` and the frozen template BOM are still `Design`. The **built** slot is
 [`system_role`](#system-roles-the-slots-a-system-needs-filled), declared on a standard or a system rather
 than frozen into a `system_template_version`, requiring a **capability** set rather than canonical
-datapoints and commands, and assigned through `role_assignment`. The two models are reconciled when
-template pinning is built
+datapoints and commands, and assigned through `role_assignment`. Its **`impact`** also replaces the
+`health_role` tag above: `required` / `redundant` / `informational` are expressed by quorum plus impact,
+with no fourth vocabulary
+([ADR-0050](/architecture/decisions/#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain)).
+The two models are reconciled when template pinning is built
 ([ADR-0049](/architecture/decisions/#adr-0049-the-system-role-capability-gated-staffing-and-the-resolved-capability-set)).
 :::
 
@@ -412,8 +429,8 @@ suppresses consequences but keeps watching (so an operator can verify the work);
   ([config](/architecture/variables/)). The device-swap case (a brief declared-identity authority,
   [datapoints](/architecture/datapoints/)) is just maintenance suppressing drift.
 - **health rolls up no impact**: a member in maintenance or disabled does not sink its parent's
-  [health](/architecture/health/); it surfaces as "down (maintenance)", the truth plus the mode, not a
-  fifth health value.
+  [health](/architecture/health/); it surfaces as "outage (maintenance)", the truth plus the mode, not a
+  fourth verdict value.
 - **SLA does not count it**: the window is excluded from availability and the SLO.
 
 Maintenance is **time-bound**: a window (start / end, [time](/architecture/time/)) that **auto-exits**, or

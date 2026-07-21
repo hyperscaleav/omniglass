@@ -11,8 +11,8 @@ import { ME_KEY, type Me } from "../lib/auth";
 // many components the slot wants. Data is seeded into the query cache so no server
 // is needed; the PUT / DELETE fetches are faked where a test drives them.
 const declared: DeclaredRole[] = [
-  { name: "table-mic", display_name: "Table microphone", quorum: 2, capabilities: ["microphone"] },
-  { name: "main-display", display_name: "Main display", quorum: 1, capabilities: ["display", "hdmi-in"] },
+  { name: "table-mic", display_name: "Table microphone", quorum: 2, capabilities: ["microphone"], impact: "degraded" },
+  { name: "main-display", display_name: "Main display", quorum: 1, capabilities: ["display", "hdmi-in"], impact: "outage" },
 ];
 
 const catalog: Capability[] = [

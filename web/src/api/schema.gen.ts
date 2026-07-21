@@ -392,6 +392,50 @@ export interface paths {
         patch: operations["update-component"];
         trace?: never;
     };
+    "/components/{name}/alarms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a component's alarms
+         * @description What is currently wrong with this component, newest first, each with the capabilities it degrades. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+         */
+        get: operations["list-component-alarms"];
+        put?: never;
+        /**
+         * Raise an alarm on a component
+         * @description Records a condition on this component and the capabilities it degrades, then recomputes health in the same transaction: any role requiring a degraded capability can no longer be filled by this component, and its system and location verdicts move with it. An unknown capability is a 422. Gated by component:update; an out-of-scope component is a non-disclosing 404.
+         */
+        post: operations["raise-component-alarm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/components/{name}/alarms/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Clear an alarm
+         * @description Marks the alarm cleared and recomputes health in the same transaction, so the recovery is recorded as a transition at the moment it happened. The row is kept: what was wrong and when outlives the fix. Clearing an alarm that is already cleared or does not exist is a 404. Gated by component:update; an out-of-scope component is a non-disclosing 404.
+         */
+        delete: operations["clear-component-alarm"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/components/{name}/capabilities": {
         parameters: {
             query?: never;
@@ -906,6 +950,26 @@ export interface paths {
          * @description Patches a location's display_name, location_type, or parent (a move). Gated by location:update; the read and update scopes drive the 404 versus 403 split.
          */
         patch: operations["update-location"];
+        trace?: never;
+    };
+    "/locations/{name}/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read a location's health
+         * @description The location's current verdict, worst-wins over every system placed anywhere beneath it, with those systems and their verdicts as the drill-down (the system health read names the role, the capability, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.
+         */
+        get: operations["get-location-health"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/locations/{name}/properties": {
@@ -2204,6 +2268,26 @@ export interface paths {
         patch: operations["update-system"];
         trace?: never;
     };
+    "/systems/{name}/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read a system's health
+         * @description The system's current verdict and why: every role it needs filled, whether it is impaired, what an impaired role means for the system (impact), and for an impaired role the required capabilities an alarm has taken away plus the alarms that took them. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+         */
+        get: operations["get-system-health"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/systems/{name}/properties": {
         parameters: {
             query?: never;
@@ -2725,6 +2809,29 @@ export interface components {
             readonly $schema?: string;
             /** @description The principal to add to the group */
             principal_id: string;
+        };
+        AlarmBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/AlarmBody.json
+             */
+            readonly $schema?: string;
+            active: boolean;
+            /** @description The capabilities this alarm degrades; empty means it reaches no role */
+            capabilities: string[] | null;
+            /**
+             * Format: date-time
+             * @description Null while the alarm is active
+             */
+            cleared_at?: string;
+            component: string;
+            id: string;
+            message: string;
+            /** Format: date-time */
+            raised_at: string;
+            /** @description info, warning, or critical */
+            severity: string;
         };
         AuditEventBody: {
             actor?: string;
@@ -3335,6 +3442,8 @@ export interface components {
             display_name: string;
             /** @description True when the role is inherited from the system's standard; false when declared on the system */
             from_standard: boolean;
+            /** @description What an impaired role means for its system: outage, degraded, or none */
+            impact: string;
             name: string;
             /** Format: int64 */
             quorum: number;
@@ -3442,6 +3551,24 @@ export interface components {
              */
             type: string;
         };
+        EstateHealthOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/EstateHealthOutputBody.json
+             */
+            readonly $schema?: string;
+            owner: string;
+            owner_kind: string;
+            /** @description The contributing roles; empty for a location */
+            roles: components["schemas"]["HealthRoleBody"][] | null;
+            /** @description The systems beneath a location with their verdicts; empty for a system */
+            systems: components["schemas"]["HealthSystemBody"][] | null;
+            /** @description The recorded edges over the window, oldest first: one entry per change, never a sample */
+            transitions: components["schemas"]["HealthTransitionBody"][] | null;
+            /** @description healthy, degraded, or outage: the rollup of the roles or systems served beside it */
+            verdict: string;
+        };
         EventBody: {
             /** @description Structured attributes, when the occurrence carried a JSON payload */
             attributes?: unknown;
@@ -3542,6 +3669,15 @@ export interface components {
             member_count: number;
             name: string;
         };
+        HealthAlarmBody: {
+            capabilities: string[] | null;
+            component: string;
+            id: string;
+            message: string;
+            /** Format: date-time */
+            raised_at: string;
+            severity: string;
+        };
         HealthOutputBody: {
             /**
              * Format: uri
@@ -3553,6 +3689,37 @@ export interface components {
             db: string;
             /** @description Overall health: ok when all legs pass, degraded otherwise */
             status: string;
+        };
+        HealthRoleBody: {
+            /** @description The active alarms that degraded them */
+            alarms: components["schemas"]["HealthAlarmBody"][] | null;
+            assigned_to: string[] | null;
+            /** @description The required capabilities an active alarm has taken away; empty when the role is merely short-staffed */
+            degraded: string[] | null;
+            display_name: string;
+            /** @description What an impaired role means for its system: outage, degraded, or none */
+            impact: string;
+            /** @description True when satisfying is below quorum */
+            impaired: boolean;
+            name: string;
+            /** Format: int64 */
+            quorum: number;
+            /** @description The capabilities a component must ALL provide to fill this role */
+            required: string[] | null;
+            /**
+             * Format: int64
+             * @description How many assigned components can currently fill the role
+             */
+            satisfying: number;
+        };
+        HealthSystemBody: {
+            name: string;
+            verdict: string;
+        };
+        HealthTransitionBody: {
+            /** Format: date-time */
+            ts: string;
+            verdict: string;
         };
         HumanBody: {
             /**
@@ -3640,6 +3807,16 @@ export interface components {
              * @default e
              */
             open_edit: string;
+        };
+        ListAlarmsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListAlarmsOutputBody.json
+             */
+            readonly $schema?: string;
+            alarms: components["schemas"]["AlarmBody"][] | null;
+            component: string;
         };
         ListCapabilitiesOutputBody: {
             /**
@@ -4100,6 +4277,23 @@ export interface components {
             /** @description A JSON Schema fragment constraining the value */
             validation?: unknown;
         };
+        RaiseAlarmInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/RaiseAlarmInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The capabilities this condition degrades; a role requiring one of them can no longer be filled by this component */
+            capabilities?: string[] | null;
+            /** @description What is wrong, for the operator reading it later */
+            message?: string;
+            /**
+             * @description How bad it is; critical puts the component itself in outage
+             * @enum {string}
+             */
+            severity: "info" | "warning" | "critical";
+        };
         ReachHistoryBody: {
             /** Format: date-time */
             ts: string;
@@ -4272,6 +4466,11 @@ export interface components {
             capabilities?: string[] | null;
             /** @description The role's human label; defaults to the role name */
             display_name?: string;
+            /**
+             * @description What an impaired role means for its system; omit for degraded. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display
+             * @enum {string}
+             */
+            impact?: "outage" | "degraded" | "none";
             /**
              * Format: int64
              * @description How many components must fill the role; omit for one
@@ -4561,6 +4760,8 @@ export interface components {
             capabilities: string[] | null;
             /** @description The role's human label */
             display_name: string;
+            /** @description What an impaired role means for its system: outage, degraded, or none */
+            impact: string;
             /** @description The role's name within its owner (the address) */
             name: string;
             /**
@@ -5721,6 +5922,109 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ComponentBody"];
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-component-alarms": {
+        parameters: {
+            query?: {
+                /** @description Include cleared alarms, so the list is the history rather than what is wrong now */
+                include_cleared?: boolean;
+            };
+            header?: never;
+            path: {
+                /** @description The component's unique name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListAlarmsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "raise-component-alarm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The component's unique name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RaiseAlarmInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlarmBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "clear-component-alarm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The component's unique name */
+                name: string;
+                /** @description The alarm id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {
@@ -6917,6 +7221,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LocationBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-location-health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The location's unique name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EstateHealthOutputBody"];
                 };
             };
             /** @description Error */
@@ -9900,6 +10236,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SystemBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-system-health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The system's unique name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EstateHealthOutputBody"];
                 };
             };
             /** @description Error */

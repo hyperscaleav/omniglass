@@ -27,6 +27,17 @@ type scopedConfig[T any] struct {
 	occupied  error                     // 409 sentinel (delete refused: has children)
 }
 
+// sameOptional reports whether two optional columns hold the same value, absence
+// included. It is how an update path tells a field that MOVED from one that was
+// merely written again with the value it already had, which is what keeps a patch
+// from firing a recompute (and a transition) over nothing.
+func sameOptional(a, b *string) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	return *a == *b
+}
+
 // scopedList returns the entities in the caller's read scope, ordered by name,
 // via the scoped-tree subtree filter.
 func scopedList[T any](ctx context.Context, p *PG, cfg scopedConfig[T], read scope.Set) ([]T, error) {

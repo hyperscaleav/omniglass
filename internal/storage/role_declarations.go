@@ -26,7 +26,7 @@ var ErrUnknownRoleOwner = errors.New("storage: unknown role owner_kind")
 // OwnerID is not in the column list (it lives in whichever arc column the owner
 // kind selects), so the caller stamps it from the address it queried by, the way
 // property_value's scan does.
-const systemRoleCols = `id, owner_kind, name, display_name, quorum, created_at, updated_at`
+const systemRoleCols = `id, owner_kind, name, display_name, quorum, impact, created_at, updated_at`
 
 // roleOwnerColumn maps a role owner kind to its exclusive-arc column. Every
 // identifier it returns is a compile-time constant, never caller input, so
@@ -44,7 +44,8 @@ func roleOwnerColumn(ownerKind string) (string, error) {
 
 func scanSystemRole(row pgx.Row) (*SystemRole, error) {
 	var r SystemRole
-	if err := row.Scan(&r.ID, &r.OwnerKind, &r.Name, &r.DisplayName, &r.Quorum, &r.CreatedAt, &r.UpdatedAt); err != nil {
+	if err := row.Scan(&r.ID, &r.OwnerKind, &r.Name, &r.DisplayName, &r.Quorum, &r.Impact,
+		&r.CreatedAt, &r.UpdatedAt); err != nil {
 		return nil, err
 	}
 	return &r, nil
@@ -62,7 +63,7 @@ func (p *PG) ListSystemRoles(ctx context.Context, ownerKind, ownerID string) ([]
 	// The columns are spelled out rather than reusing systemRoleCols: the join
 	// needs them qualified by the role alias.
 	q := fmt.Sprintf(`
-		select r.id, r.owner_kind, r.name, r.display_name, r.quorum, r.created_at, r.updated_at,
+		select r.id, r.owner_kind, r.name, r.display_name, r.quorum, r.impact, r.created_at, r.updated_at,
 		       coalesce(array_agg(rc.capability_id order by rc.capability_id)
 		                filter (where rc.capability_id is not null), '{}') as caps
 		from system_role r
@@ -80,7 +81,7 @@ func (p *PG) ListSystemRoles(ctx context.Context, ownerKind, ownerID string) ([]
 	out := []SystemRole{}
 	for rows.Next() {
 		var r SystemRole
-		if err := rows.Scan(&r.ID, &r.OwnerKind, &r.Name, &r.DisplayName, &r.Quorum,
+		if err := rows.Scan(&r.ID, &r.OwnerKind, &r.Name, &r.DisplayName, &r.Quorum, &r.Impact,
 			&r.CreatedAt, &r.UpdatedAt, &r.Capabilities); err != nil {
 			return nil, fmt.Errorf("storage: scan role: %w", err)
 		}
@@ -109,6 +110,13 @@ func (p *PG) SetSystemRole(ctx context.Context, actorID, ownerKind, ownerID stri
 	if quorum < 1 {
 		quorum = 1
 	}
+	impact := spec.Impact
+	if impact == "" {
+		impact = "degraded"
+	}
+	if !roleImpacts[impact] {
+		return nil, ErrRoleImpact
+	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("storage: begin set role: %w", err)
@@ -130,14 +138,15 @@ func (p *PG) SetSystemRole(ctx context.Context, actorID, ownerKind, ownerID stri
 	}
 
 	r, err := scanSystemRole(tx.QueryRow(ctx, fmt.Sprintf(`
-		insert into system_role (owner_kind, %s, name, display_name, quorum)
-		values ($1, $2, $3, $4, $5)
+		insert into system_role (owner_kind, %s, name, display_name, quorum, impact)
+		values ($1, $2, $3, $4, $5, $6)
 		on conflict (owner_kind, standard_id, system_id, name) do update
 			set display_name = excluded.display_name,
 			    quorum       = excluded.quorum,
+			    impact       = excluded.impact,
 			    updated_at   = now()
 		returning `+systemRoleCols, col),
-		ownerKind, ownerID, spec.Name, spec.DisplayName, quorum))
+		ownerKind, ownerID, spec.Name, spec.DisplayName, quorum, impact))
 	if err != nil {
 		return nil, mapRoleWriteErr(err)
 	}
@@ -163,6 +172,17 @@ func (p *PG) SetSystemRole(ctx context.Context, actorID, ownerKind, ownerID stri
 		verb = "update"
 	}
 	if err := writeAuditRes(ctx, tx, actorID, verb, "system_role", r.ID, before, r); err != nil {
+		return nil, err
+	}
+	// A declaration change moves health without touching a component: a new
+	// required capability, a raised quorum, or a changed impact can impair a role
+	// that was fine a moment ago. A standard's declaration moves every conforming
+	// system at once.
+	affected, err := p.systemsForRoleOwner(ctx, tx, ownerKind, ownerID)
+	if err != nil {
+		return nil, err
+	}
+	if err := p.recomputeSystems(ctx, tx, affected...); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -202,6 +222,15 @@ func (p *PG) DeleteSystemRole(ctx context.Context, actorID, ownerKind, ownerID, 
 	if err := writeAuditRes(ctx, tx, actorID, "delete", "system_role", before.ID, before, nil); err != nil {
 		return err
 	}
+	// Withdrawing a role can only improve a system: the impaired slot it was
+	// contributing is gone. Recompute so the recovery is recorded as an edge.
+	affected, err := p.systemsForRoleOwner(ctx, tx, ownerKind, ownerID)
+	if err != nil {
+		return err
+	}
+	if err := p.recomputeSystems(ctx, tx, affected...); err != nil {
+		return err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("storage: commit delete role: %w", err)
 	}
@@ -236,6 +265,11 @@ func (p *PG) SetComponentCapability(ctx context.Context, actorID, componentName,
 		map[string]any{"component": componentName, "capability": capabilityID, "present": present}); err != nil {
 		return err
 	}
+	// What the component provides is half of whether it satisfies a role, so a
+	// capability fact moves the health of every system it staffs.
+	if err := p.RecomputeHealth(ctx, tx, componentName); err != nil {
+		return err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("storage: commit set component capability: %w", err)
 	}
@@ -265,6 +299,10 @@ func (p *PG) ClearComponentCapability(ctx context.Context, actorID, componentNam
 	if err := writeAuditRes(ctx, tx, actorID, "delete", "component_capability", id, nil, nil); err != nil {
 		return err
 	}
+	// Falling back to the product's set can drop a capability a role required.
+	if err := p.RecomputeHealth(ctx, tx, componentName); err != nil {
+		return err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("storage: commit clear component capability: %w", err)
 	}
@@ -280,13 +318,20 @@ func (p *PG) SeedSystemRole(ctx context.Context, ownerKind, ownerID string, spec
 	if err != nil {
 		return err
 	}
+	impact := spec.Impact
+	if impact == "" {
+		impact = "degraded"
+	}
+	if !roleImpacts[impact] {
+		return ErrRoleImpact
+	}
 	var id string
 	err = p.pool.QueryRow(ctx, fmt.Sprintf(`
-		insert into system_role (owner_kind, %s, name, display_name, quorum)
-		values ($1, $2, $3, $4, $5)
+		insert into system_role (owner_kind, %s, name, display_name, quorum, impact)
+		values ($1, $2, $3, $4, $5, $6)
 		on conflict (owner_kind, standard_id, system_id, name) do nothing
 		returning id`, col),
-		ownerKind, ownerID, spec.Name, spec.DisplayName, max(spec.Quorum, 1)).Scan(&id)
+		ownerKind, ownerID, spec.Name, spec.DisplayName, max(spec.Quorum, 1), impact).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil // already there, and the operator owns it now
 	}

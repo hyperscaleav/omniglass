@@ -94,6 +94,10 @@ Each row is one role with **where it came from**, **who fills it**, and **how ma
   assigned against a quorum of two reads as staffed; one reads as short by one. That is true the
   moment you enter it, with nothing collecting: staffing is a fact about your model, not a
   measurement.
+- **Impact.** Each role also says what the room loses when the slot is not being filled properly:
+  **outage**, **degraded**, or **none**. That is what turns a broken component into a room-level verdict
+  further down this page, and it is declared on the
+  [standard](/guides/admin/standards/#roles-what-a-conforming-system-needs-filled) or on the system.
 - **Assign** picks a component to fill the role; **unassign** takes it out and the role goes back to
   understaffed. Assigning the same component twice changes nothing.
 - **A component staffing a role cannot be deleted.** Unassign it first. The refusal is deliberate: a
@@ -114,3 +118,91 @@ A **component** carries a **Capabilities** panel: what it actually provides, res
 every role assignment is checked against, and it is how a component with **no product** provides
 anything at all. The walkthrough is in the
 [Capabilities guide](/guides/admin/capabilities/#what-a-component-actually-provides).
+
+## Alarms on a component
+
+An **alarm** says what is wrong with **one component**, and which of its capabilities the problem takes
+away. The component's **Alarms** panel lists the active ones newest first, with a **Recently cleared**
+group beneath them: what is wrong now on top, what was wrong underneath.
+
+Raising one takes three things:
+
+- a **severity**: `info`, `warning`, or `critical`. This is how loudly to treat it, and it sets the
+  **component's own** state (any active alarm makes the component degraded, a critical one an outage);
+- a **message**, for whoever reads it later. Write it for the person who finds this at 8am, not for you;
+- the **capabilities it degrades**. This is the one that matters beyond the device. A component keeps its
+  capabilities on paper, but a degraded one **does not count** toward any role that requires it. An alarm
+  that degrades nothing is a note on the device and reaches no room, which is often exactly right.
+
+**Clearing keeps the row.** The alarm moves to the history with the time it was cleared, so what was wrong
+and when survives the fix. Clearing one twice is a plain miss rather than a silent success.
+
+Both writes take effect immediately and completely: the room's verdict, the location above it, and the
+recorded history all move in the same transaction as the alarm. There is no wait and no refresh cycle.
+
+From the CLI: `omniglass component alarms <name> [--include-cleared]`,
+`omniglass component raise-alarm <name> --severity <level> --message <text> --capabilities <ids>`, and
+`omniglass component clear-alarm <name> <id>`.
+
+## Health on a system or location
+
+A **system** and a **location** each carry a **health verdict**, shown as a badge on the detail and in
+the systems list:
+
+| verdict | means |
+|---|---|
+| **healthy** | nothing the room depends on is impaired |
+| **degraded** | it is working, worse |
+| **outage** | it is not working |
+
+A location's verdict is the **worst** of every system placed anywhere beneath it, so a campus reads red
+when one room in one building is out. A system's verdict is the worst contribution among the **roles** it
+needs filled.
+
+**The Health panel is the answer to "why".** A bare "degraded" gives you nothing to do, so the panel
+names the whole chain instead, role by role:
+
+```text
+alarm on mic-pod-2 (critical, "no audio on channel 1")
+  -> degrades: microphone
+    -> role room-mic requires microphone, and wants 2
+      -> only 1 assigned component can currently fill it
+        -> role impaired, impact degraded
+          -> hq-r1 is degraded
+```
+
+Read it bottom-up when you want the verdict and top-down when you want the fix. A role can also be
+impaired with **no alarm named**, which means it is **short-staffed** rather than broken: nobody is
+assigned, or what is assigned never provided what the role requires. Those are two different jobs, and
+the panel keeps them apart.
+
+**The History strip is the answer to "since when".** It is the same shape as the reachability
+availability strip: one segment per stretch the entity held a verdict, drawn from the **recorded edges**
+over the last 30 days. It is not a sample and not a redraw of what somebody happened to look at; each edge
+was written at the moment the estate changed, by the write that changed it. That is what makes "it broke
+Friday at 18:40 and came back Monday at 09:15" answerable on Tuesday.
+
+From the CLI: `omniglass system health <name>` and `omniglass location health <name>`.
+
+## The whole loop, end to end
+
+Once, in order, on a real room:
+
+1. **Declare the roles with their impact.** On the room's
+   [standard](/guides/admin/standards/#roles-what-a-conforming-system-needs-filled), give **Main Display**
+   impact **outage** and **Room Microphone** impact **degraded** with quorum 2. Every conforming room
+   inherits both immediately.
+2. **Staff the system.** Assign components to each role from the system's **Roles** panel. A component
+   that cannot fill the role is refused by name (`missing microphone, speaker`), so a wrong assignment
+   never becomes a wrong verdict.
+3. **Raise an alarm.** On one of the mic pods, raise a `critical` alarm degrading `microphone`.
+4. **Watch the room move.** The system goes **degraded** (the `room-mic` role now has one satisfying
+   component against a quorum of 2, and its impact is `degraded`), and the location above it follows. Had
+   the alarm been on the main display instead, the room would be an **outage**, because that role says so.
+5. **Read the Health panel** to find the cause: the impaired role, the capability it lost, and the alarm
+   that took it, with its message and the time it was raised. Walk to the pod.
+6. **Clear the alarm** once it is fixed. The room returns to **healthy** in the same transaction, and the
+   alarm row stays in the component's history.
+7. **Read the history afterwards.** The transition strip now shows the exact stretch the room was
+   degraded, with the edge at the moment the alarm went up rather than the moment you opened this page.
+   That is the whole point: come back in three weeks and the answer is still exact.

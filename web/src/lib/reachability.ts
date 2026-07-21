@@ -1,4 +1,5 @@
 import { api } from "../api/client";
+import { share, spans } from "./timeline";
 
 // The reachability data layer: a thin typed wrapper over the generated client
 // plus the pure read-time derivations the panel renders. The API returns the raw
@@ -6,6 +7,10 @@ import { api } from "../api/client";
 // 4-state verdict word, the availability strip, the uptime hint, and the "why"
 // reason line are all derived here from those real fields (never invented). Shapes
 // follow the OpenAPI (see api/reachability.go).
+//
+// The strip itself is not reachability's own: transitions-to-spans lives in
+// lib/timeline, shared with the health history, so both surfaces read a recorded
+// edge the same way.
 
 // stalenessWindowMs mirrors v2's ~150s: a verdict older than this is stale, its
 // value no longer trusted as live.
@@ -50,32 +55,17 @@ export function verdictWord(v: ReachVerdict | null, now: number = Date.now()): V
 export type Segment = { value: string; weight: number };
 
 // segments builds the availability strip from the transition history over a
-// window ending at now. Each transition opens a segment that runs to the next
-// transition (or to now for the last), weighted by its duration. With no history
-// the current verdict (when present) fills the whole strip.
+// window ending at now, through the shared timeline primitive. The strip only
+// needs the state and its share of the window, so the span's wall-clock bounds are
+// dropped here (the health history keeps them, to say how long a state lasted).
 export function segments(history: ReachHistory[], verdict: ReachVerdict | null, now: number = Date.now()): Segment[] {
-  if (history.length === 0) {
-    return verdict ? [{ value: verdict.value, weight: 1 }] : [];
-  }
-  const start = new Date(history[0].ts).getTime();
-  const total = Math.max(now - start, 1);
-  const out: Segment[] = [];
-  for (let i = 0; i < history.length; i++) {
-    const from = new Date(history[i].ts).getTime();
-    const to = i + 1 < history.length ? new Date(history[i + 1].ts).getTime() : now;
-    const weight = Math.max(to - from, 0) / total;
-    if (weight > 0) out.push({ value: history[i].value, weight });
-  }
-  return out;
+  return spans(history, verdict?.value ?? null, now).map((s) => ({ value: s.value, weight: s.weight }));
 }
 
 // uptime is the fraction of the window spent up, as a whole-number percent, for
-// the "N% up" hint. Derived from the same segments the strip renders.
+// the "N% up" hint. Derived from the same spans the strip renders.
 export function uptime(history: ReachHistory[], verdict: ReachVerdict | null, now: number = Date.now()): number | null {
-  const segs = segments(history, verdict, now);
-  if (segs.length === 0) return null;
-  const up = segs.filter((s) => s.value === "up").reduce((a, s) => a + s.weight, 0);
-  return Math.round(up * 100);
+  return share(spans(history, verdict?.value ?? null, now), (v) => v === "up");
 }
 
 // reason is the "why" line for a down interface: it reads the layer pattern to

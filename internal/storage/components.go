@@ -48,11 +48,14 @@ type ComponentSpec struct {
 	ProductName  *string
 }
 
-// ComponentPatch is the update input: nil fields unchanged. Reparent, rebind,
-// and relocate are deferred.
+// ComponentPatch is the update input: nil fields unchanged. ProductName follows
+// the house three-state convention, nil unchanged and an explicit empty string
+// CLEARS it (leaving a component that carries only its own capability facts).
+// Reparent and relocate are deferred.
 type ComponentPatch struct {
 	Name        *string
 	DisplayName *string
+	ProductName *string
 }
 
 // --- component CRUD (read/delete via the generic helpers) --------------------
@@ -185,7 +188,8 @@ func (p *PG) CreateComponent(ctx context.Context, actorID string, spec Component
 }
 
 // UpdateComponent patches a component by name with the three-way scope split and
-// in-transaction audit. Reparent, rebind, and relocate are deferred.
+// in-transaction audit, recomputing health when the product moved. Reparent and
+// relocate are deferred.
 func (p *PG) UpdateComponent(ctx context.Context, actorID, name string, patch ComponentPatch, read, action scope.Set) (*Component, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -206,15 +210,33 @@ func (p *PG) UpdateComponent(ctx context.Context, actorID, name string, patch Co
 		update component set
 			name         = coalesce($2, name),
 			display_name = coalesce($3, display_name),
+			-- product_id takes the house three states: a nil field is unchanged, an
+			-- explicit empty string clears it, anything else is the new product (whose
+			-- id is its name, so it goes in as given; an unknown one comes back from
+			-- the FK as the named ErrProductNotFound).
+			product_id   = case
+				when $4::text is null then product_id
+				when $4 = '' then null
+				else $4
+			end,
 			updated_at   = now()
 		where id = $1
 		returning `+componentCols,
-		before.ID, patch.Name, patch.DisplayName))
+		before.ID, patch.Name, patch.DisplayName, patch.ProductName))
 	if err != nil {
 		return nil, mapComponentWriteErr(err)
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "update", "component", after.ID, before, after); err != nil {
 		return nil, err
+	}
+	// The product supplies the component's default capabilities, so swapping it can
+	// make an assignee stop satisfying the role it fills (or start). Detected against
+	// the before-image, and recomputed under the name the row carries after the
+	// patch, which is what every capability and assignment lookup keys on.
+	if !sameOptional(before.ProductID, after.ProductID) {
+		if err := p.RecomputeHealth(ctx, tx, after.Name); err != nil {
+			return nil, err
+		}
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("storage: commit update component: %w", err)

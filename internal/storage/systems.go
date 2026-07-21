@@ -63,12 +63,16 @@ type SystemSpec struct {
 	LocationName *string
 }
 
-// SystemPatch is the update input: nil fields unchanged. Reparenting and
-// changing located-at are deferred to a later slice.
+// SystemPatch is the update input: nil fields unchanged. StandardID and
+// LocationName follow the house three-state convention, nil unchanged and an
+// explicit empty string CLEARS (converting a classified system to a one-off,
+// or lifting a placed system out of its location). Reparenting is deferred to a
+// later slice.
 type SystemPatch struct {
-	Name        *string
-	DisplayName *string
-	StandardID  *string
+	Name         *string
+	DisplayName  *string
+	StandardID   *string
+	LocationName *string
 }
 
 // --- standard registry -------------------------------------------------------
@@ -342,6 +346,13 @@ func (p *PG) CreateSystem(ctx context.Context, actorID string, spec SystemSpec, 
 	if err := writeAuditRes(ctx, tx, actorID, "create", "system", s.ID, nil, s); err != nil {
 		return nil, err
 	}
+	// A system inherits its standard's roles the instant it exists, and nobody is
+	// assigned yet, so it is usually born impaired. Recording the opening verdict is
+	// what gives its history a defined beginning: without it the first edge would be
+	// whatever a later write happened to notice.
+	if err := p.recomputeSystems(ctx, tx, s.Name); err != nil {
+		return nil, err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("storage: commit create system: %w", err)
 	}
@@ -349,7 +360,8 @@ func (p *PG) CreateSystem(ctx context.Context, actorID string, spec SystemSpec, 
 }
 
 // UpdateSystem patches a system by name with the three-way scope split and
-// in-transaction audit. Reparent and located-at changes are deferred.
+// in-transaction audit, recomputing health when the standard or the location
+// moved. Reparenting is deferred.
 func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch SystemPatch, read, action scope.Set) (*System, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -366,6 +378,17 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 			return nil, err
 		}
 	}
+	// The location arrives as a name and the column holds an id, so the three-state
+	// value is resolved before the statement: nil stays nil (unchanged), "" stays ""
+	// (clear), and a named location becomes its id.
+	locationPatch := patch.LocationName
+	if patch.LocationName != nil && *patch.LocationName != "" {
+		loc, err := p.locationByName(ctx, tx, *patch.LocationName)
+		if err != nil {
+			return nil, err // ErrLocationNotFound -> mapped to 422 by the API
+		}
+		locationPatch = &loc.ID
+	}
 	after, err := scanSystem(tx.QueryRow(ctx, `
 		update system set
 			name         = coalesce($2, name),
@@ -379,15 +402,45 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 				when $4 = '' then null
 				else $4
 			end,
+			-- location_id takes the same three states, already resolved to an id. The
+			-- column is a uuid, so the branch that sets it casts: a CASE cannot mix
+			-- uuid and text.
+			location_id  = case
+				when $5::text is null then location_id
+				when $5 = '' then null
+				else $5::uuid
+			end,
 			updated_at   = now()
 		where id = $1
 		returning `+systemCols,
-		before.ID, patch.Name, patch.DisplayName, patch.StandardID))
+		before.ID, patch.Name, patch.DisplayName, patch.StandardID, locationPatch))
 	if err != nil {
 		return nil, mapSystemWriteErr(err)
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "update", "system", after.ID, before, after); err != nil {
 		return nil, err
+	}
+	// Two of these fields move health, and both are detected against the
+	// before-image the update already loaded rather than against the patch (a patch
+	// that sets a field to what it already held changes nothing).
+	//
+	// The standard swaps the whole inherited role set, so the verdict can flip in
+	// either direction. The location moves the system's contribution from one rollup
+	// to another, so BOTH are recomputed: the one it left may have just improved.
+	movedStandard := !sameOptional(before.StandardID, after.StandardID)
+	movedLocation := !sameOptional(before.LocationID, after.LocationID)
+	if movedStandard || movedLocation {
+		var left []string
+		if movedLocation && before.LocationID != nil {
+			name, err := locationNameByID(ctx, tx, *before.LocationID)
+			if err != nil {
+				return nil, err
+			}
+			left = append(left, name)
+		}
+		if err := p.recomputeMovedSystem(ctx, tx, after.Name, left...); err != nil {
+			return nil, err
+		}
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("storage: commit update system: %w", err)

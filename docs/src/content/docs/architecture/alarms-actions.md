@@ -3,8 +3,8 @@ title: Alarms and actions
 description: How Omniglass detects a condition with a stateful alarm and responds with an action, which is a flow when it has more than one step.
 sidebar:
   badge:
-    text: Design
-    variant: caution
+    text: Partial
+    variant: note
 ---
 
 Alarms and actions are how Omniglass turns a detected condition into a held incident and then into a response, so an operator gets paged, a ticket opens, or a device gets fixed without anyone watching a dashboard. An **alarm** detects a condition and holds it; an **action** does
@@ -13,6 +13,19 @@ something about it. A simple action is a single step (a `notify`); a multi-step 
 entities that hold their state directly** (not event-sourced). The credentials an action uses to reach a sink live in
 credentials; the Expr and Go-template machinery in
 [expressions](/architecture/expressions/).
+
+:::note[Partial]
+Built today: the **alarm as a held row**, raised on a **component** by a caller, carrying a `severity`
+(`info` / `warning` / `critical`), a message, a `raised_at`, and a nullable `cleared_at` (clearing keeps
+the row), plus the **capabilities it degrades**, which is how it reaches a system's
+[health](/architecture/health/). Still `Design`: everything that **produces and routes** one, so the
+`event_rule` lifecycle (fire / clear criteria, `for` sustain, the `(event_rule, owner)` key, ack and
+snooze), the **exclusive-arc owner** (an alarm is component-local today, so there is no system- or
+location-owned alarm), the severity-level registry, the CDC publish, and the whole `action_rule` and
+action / flow tier
+([ADR-0050](/architecture/decisions/#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain)).
+See [implementation status](/architecture/status/).
+:::
 
 ## The alarm (a stateful entity)
 
@@ -63,7 +76,7 @@ event_rule:
   for: 0                                             # fire-side sustain (optional)
   for_clear: 0                                       # clear-side sustain (optional)
   severity: average
-  health: degraded                                   # optional: degrade the owner's health while open
+  degrades: [microphone]                             # optional: the capabilities this alarm takes away
 ```
 
 `scope` selects the entities (fan-out, one alarm per match); `datapoint` is the
@@ -80,11 +93,15 @@ does not churn the alarm open and clear. Both default to `0` (immediate), and a 
 can set them independently (a long `for_clear` over a short `for` holds an incident
 through a noisy recovery without delaying the page).
 
-An event_rule also carries an optional **`health` impact** (`down` / `degraded`,
-default none): while the alarm it opens is open, it moves its owner's
-[health](/architecture/health/) by that much. Most rules carry none (an advisory
-alarm); the few that do are the owner's failure conditions. This is what makes health
-**alarm-sourced** rather than a parallel computation. Because a rule is scoped to
+An event_rule also declares the **capabilities its alarm degrades** (default none):
+while that alarm is open, the component can no longer be counted on for those, so any
+[system role](/architecture/core-entities/#system-roles-the-slots-a-system-needs-filled)
+requiring one of them loses it. Most rules degrade nothing (an advisory alarm); the few
+that do are the owner's failure conditions. This is what makes health **alarm-sourced**
+rather than a parallel computation. **The rule does not declare a health verdict**: how
+much a lost capability matters is the **impact** on the role that wanted it, since the
+same failure means different things in different slots
+([health](/architecture/health/)). Because a rule is scoped to
 whichever arc owns its datapoint, the same machinery yields **component-level** and
 **system-level** alarms: a system-scoped rule reads member data and fires a
 system-owned alarm for a condition only the system cares about (a display on input 2
@@ -168,7 +185,7 @@ storm without collapsing the grain.
 
 **Dependency suppression** mutes a child alarm whose owner's **parent entity on the
 [exclusive-arc](/architecture/datapoints/) structural tree** is itself down. When the
-parent is in a `down` health state, the child alarms beneath it are held suppressed
+parent is in an `outage` health state, the child alarms beneath it are held suppressed
 (open, but not dispatched), so one upstream failure does not emit N child pages. It is
 expressed over the exclusive-arc tree: the same arc that owns a datapoint and its
 alarm gives the parent walk for free, no separate dependency graph.
