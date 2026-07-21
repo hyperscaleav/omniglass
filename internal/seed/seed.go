@@ -28,8 +28,8 @@ var systemTypesYAML []byte
 //go:embed component_types.yaml
 var componentTypesYAML []byte
 
-//go:embed datapoint_types.yaml
-var datapointTypesYAML []byte
+//go:embed properties.yaml
+var propertiesYAML []byte
 
 //go:embed interface_types.yaml
 var interfaceTypesYAML []byte
@@ -73,16 +73,16 @@ type componentTypesDoc struct {
 	} `yaml:"component_types"`
 }
 
-type datapointTypesDoc struct {
-	DatapointTypes []struct {
+type propertiesDoc struct {
+	Properties []struct {
 		Name        string         `yaml:"name"`
 		Kind        string         `yaml:"kind"`
-		ValueType   string         `yaml:"value_type"`
+		DataType    string         `yaml:"data_type"`
 		Unit        string         `yaml:"unit"`
 		Validation  map[string]any `yaml:"validation"`
 		DisplayName string         `yaml:"display_name"`
 		Description string         `yaml:"description"`
-	} `yaml:"datapoint_types"`
+	} `yaml:"properties"`
 }
 
 type interfaceTypesDoc struct {
@@ -135,7 +135,7 @@ func Run(ctx context.Context, gw storage.Gateway) error {
 	if err := seedInterfaceTypes(ctx, gw); err != nil {
 		return err
 	}
-	if err := seedDatapointTypes(ctx, gw); err != nil {
+	if err := seedProperties(ctx, gw); err != nil {
 		return err
 	}
 	if err := seedComponentMakes(ctx, gw); err != nil {
@@ -159,29 +159,33 @@ func seedInterfaceTypes(ctx context.Context, gw storage.Gateway) error {
 	return nil
 }
 
-func seedDatapointTypes(ctx context.Context, gw storage.Gateway) error {
-	var doc datapointTypesDoc
-	if err := yaml.Unmarshal(datapointTypesYAML, &doc); err != nil {
-		return fmt.Errorf("seed: parse datapoint_types: %w", err)
+func seedProperties(ctx context.Context, gw storage.Gateway) error {
+	var doc propertiesDoc
+	if err := yaml.Unmarshal(propertiesYAML, &doc); err != nil {
+		return fmt.Errorf("seed: parse properties: %w", err)
 	}
-	for _, dt := range doc.DatapointTypes {
+	for _, p := range doc.Properties {
 		var unit *string
-		if dt.Unit != "" {
-			u := dt.Unit
+		if p.Unit != "" {
+			u := p.Unit
 			unit = &u
 		}
+		var kind *string
+		if p.Kind != "" {
+			kk := p.Kind
+			kind = &kk
+		}
 		var validation []byte
-		if len(dt.Validation) > 0 {
-			b, err := json.Marshal(dt.Validation)
+		if len(p.Validation) > 0 {
+			b, err := json.Marshal(p.Validation)
 			if err != nil {
-				return fmt.Errorf("seed: marshal validation for %q: %w", dt.Name, err)
+				return fmt.Errorf("seed: marshal validation for %q: %w", p.Name, err)
 			}
 			validation = b
 		}
-		if err := gw.UpsertDatapointType(ctx, storage.DatapointType{
-			Scope: "official", Name: dt.Name, DisplayName: dt.DisplayName,
-			Kind: dt.Kind, ValueType: dt.ValueType, Unit: unit,
-			Validation: validation, Description: dt.Description,
+		if err := gw.UpsertProperty(ctx, storage.Property{
+			Name: p.Name, DisplayName: p.DisplayName, Kind: kind, DataType: p.DataType,
+			Unit: unit, Validation: validation, Description: p.Description, Official: true,
 		}); err != nil {
 			return err
 		}

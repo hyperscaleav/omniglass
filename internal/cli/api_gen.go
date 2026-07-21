@@ -2132,6 +2132,142 @@ func generatedCommands() []*cobra.Command {
 	}
 	{
 		parent := &cobra.Command{
+			Use:   "property",
+			Short: "Commands for the property resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			var fDataType string
+			var fDescription string
+			var fDisplayName string
+			var fKind string
+			var fName string
+			var fUnit string
+			var fValidation string
+			cmd := &cobra.Command{
+				Use:     "create",
+				Short:   "Create a property",
+				Long:    "Registers a custom property (official=false). The name must be a valid property key. Gated by property:create.",
+				Example: "  omniglass property create --data-type data_type --name name",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/properties")
+					body := map[string]any{}
+					if cmd.Flags().Changed("data-type") {
+						body["data_type"] = fDataType
+					}
+					if cmd.Flags().Changed("description") {
+						body["description"] = fDescription
+					}
+					if cmd.Flags().Changed("display-name") {
+						body["display_name"] = fDisplayName
+					}
+					if cmd.Flags().Changed("kind") {
+						body["kind"] = fKind
+					}
+					if cmd.Flags().Changed("name") {
+						body["name"] = fName
+					}
+					if cmd.Flags().Changed("unit") {
+						body["unit"] = fUnit
+					}
+					if cmd.Flags().Changed("validation") {
+						body["validation"] = jsonOrString(fValidation)
+					}
+					return runAPICommand(cmd, "POST", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fDataType, "data-type", "", "The value type")
+			_ = cmd.MarkFlagRequired("data-type")
+			cmd.Flags().StringVar(&fDescription, "description", "", "What the property means")
+			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "A human label")
+			cmd.Flags().StringVar(&fKind, "kind", "", "The observed kind; omit for a declared-only property")
+			cmd.Flags().StringVar(&fName, "name", "", "The property name (lowercase, dot-hierarchied)")
+			_ = cmd.MarkFlagRequired("name")
+			cmd.Flags().StringVar(&fUnit, "unit", "", "A display unit (observed properties)")
+			cmd.Flags().StringVar(&fValidation, "validation", "", "A JSON Schema fragment constraining the value")
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "delete <name>",
+				Short:   "Delete a property",
+				Long:    "Removes a custom property by name. Official properties are read-only. Gated by property:delete.",
+				Example: "  omniglass property delete <name>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/properties/%s", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "DELETE", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "get <name>",
+				Short:   "Get a property",
+				Long:    "Returns one property by name. Gated by property:read.",
+				Example: "  omniglass property get <name>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/properties/%s", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "list",
+				Short:   "List properties",
+				Long:    "Lists every registered property (official and custom). The catalog is estate-wide reference data. Gated by property:read.",
+				Example: "  omniglass property list",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/properties")
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			var fDescription string
+			var fDisplayName string
+			var fUnit string
+			var fValidation string
+			cmd := &cobra.Command{
+				Use:     "update <name>",
+				Short:   "Update a property",
+				Long:    "Patches a custom property's label, description, unit, or validation (a nil field is unchanged). Data type and kind are fixed at creation. Official properties are read-only. Gated by property:update.",
+				Example: "  omniglass property update <name>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/properties/%s", url.PathEscape(args[0]))
+					body := map[string]any{}
+					if cmd.Flags().Changed("description") {
+						body["description"] = fDescription
+					}
+					if cmd.Flags().Changed("display-name") {
+						body["display_name"] = fDisplayName
+					}
+					if cmd.Flags().Changed("unit") {
+						body["unit"] = fUnit
+					}
+					if cmd.Flags().Changed("validation") {
+						body["validation"] = jsonOrString(fValidation)
+					}
+					return runAPICommand(cmd, "PATCH", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fDescription, "description", "", "What the property means")
+			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "A human label")
+			cmd.Flags().StringVar(&fUnit, "unit", "", "A display unit")
+			cmd.Flags().StringVar(&fValidation, "validation", "", "A JSON Schema fragment (replaces wholesale)")
+			return cmd
+		}())
+		roots = append(roots, parent)
+	}
+	{
+		parent := &cobra.Command{
 			Use:   "reachability",
 			Short: "Commands for the reachability resource",
 		}

@@ -732,6 +732,51 @@ components:
       required:
         - username
       type: object
+    CreatePropertyInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreatePropertyInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        data_type:
+          description: The value type
+          enum:
+            - string
+            - int
+            - float
+            - bool
+            - json
+          type: string
+        description:
+          description: What the property means
+          type: string
+        display_name:
+          description: A human label
+          type: string
+        kind:
+          description: The observed kind; omit for a declared-only property
+          enum:
+            - metric
+            - state
+            - log
+          type: string
+        name:
+          description: The property name (lowercase, dot-hierarchied)
+          minLength: 1
+          type: string
+        unit:
+          description: A display unit (observed properties)
+          type: string
+        validation:
+          description: A JSON Schema fragment constraining the value
+      required:
+        - name
+        - data_type
+      type: object
     CreateSecretInputBody:
       additionalProperties: false
       properties:
@@ -1748,6 +1793,25 @@ components:
       required:
         - principals
       type: object
+    ListPropertiesOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListPropertiesOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        properties:
+          items:
+            $ref: "#/components/schemas/PropertyBody"
+          type:
+            - array
+            - "null"
+      required:
+        - properties
+      type: object
     ListSecretTypesOutputBody:
       additionalProperties: false
       properties:
@@ -2115,6 +2179,37 @@ components:
       required:
         - id
         - kind
+      type: object
+    PropertyBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/PropertyBody.json
+          format: uri
+          readOnly: true
+          type: string
+        data_type:
+          type: string
+        description:
+          type: string
+        display_name:
+          type: string
+        kind:
+          type: string
+        name:
+          type: string
+        official:
+          type: boolean
+        unit:
+          type: string
+        validation:
+          description: A JSON Schema fragment constraining the value
+      required:
+        - name
+        - data_type
+        - official
       type: object
     ReachHistoryBody:
       additionalProperties: false
@@ -3123,6 +3218,28 @@ components:
           minLength: 1
           pattern: ^[a-z0-9][a-z0-9._-]*$
           type: string
+      type: object
+    UpdatePropertyInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/UpdatePropertyInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        description:
+          description: What the property means
+          type: string
+        display_name:
+          description: A human label
+          type: string
+        unit:
+          description: A display unit
+          type: string
+        validation:
+          description: A JSON Schema fragment (replaces wholesale)
       type: object
     UpdateSecretInputBody:
       additionalProperties: false
@@ -5912,6 +6029,130 @@ paths:
           description: Error
       summary: Set a principal's profile picture
       x-omniglass-permission: principal:set-avatar
+  /properties:
+    get:
+      description: Lists every registered property (official and custom). The catalog is estate-wide reference data. Gated by property:read.
+      operationId: list-property
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListPropertiesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List properties
+      x-omniglass-permission: property:read
+    post:
+      description: Registers a custom property (official=false). The name must be a valid property key. Gated by property:create.
+      operationId: create-property
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePropertyInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PropertyBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Create a property
+      x-omniglass-permission: property:create
+  /properties/{name}:
+    delete:
+      description: Removes a custom property by name. Official properties are read-only. Gated by property:delete.
+      operationId: delete-property
+      parameters:
+        - description: The property's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The property's name
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Delete a property
+      x-omniglass-permission: property:delete
+    get:
+      description: Returns one property by name. Gated by property:read.
+      operationId: get-property
+      parameters:
+        - description: The property's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The property's name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PropertyBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get a property
+      x-omniglass-permission: property:read
+    patch:
+      description: Patches a custom property's label, description, unit, or validation (a nil field is unchanged). Data type and kind are fixed at creation. Official properties are read-only. Gated by property:update.
+      operationId: update-property
+      parameters:
+        - description: The property's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The property's name
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePropertyInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PropertyBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Update a property
+      x-omniglass-permission: property:update
   /roles:
     get:
       description: Lists the roles with their metadata and effective (flattened) permissions. Gated by the role:read:admin capability.

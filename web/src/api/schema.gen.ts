@@ -1520,6 +1520,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/properties": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List properties
+         * @description Lists every registered property (official and custom). The catalog is estate-wide reference data. Gated by property:read.
+         */
+        get: operations["list-property"];
+        put?: never;
+        /**
+         * Create a property
+         * @description Registers a custom property (official=false). The name must be a valid property key. Gated by property:create.
+         */
+        post: operations["create-property"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/properties/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a property
+         * @description Returns one property by name. Gated by property:read.
+         */
+        get: operations["get-property"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a property
+         * @description Removes a custom property by name. Official properties are read-only. Gated by property:delete.
+         */
+        delete: operations["delete-property"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a property
+         * @description Patches a custom property's label, description, unit, or validation (a nil field is unchanged). Data type and kind are fixed at creation. Official properties are read-only. Gated by property:update.
+         */
+        patch: operations["update-property"];
+        trace?: never;
+    };
     "/roles": {
         parameters: {
             query?: never;
@@ -2609,6 +2661,34 @@ export interface components {
             /** @description Unique sign-in name (lowercase letters, digits, and . _ -) */
             username: string;
         };
+        CreatePropertyInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreatePropertyInputBody.json
+             */
+            readonly $schema?: string;
+            /**
+             * @description The value type
+             * @enum {string}
+             */
+            data_type: "string" | "int" | "float" | "bool" | "json";
+            /** @description What the property means */
+            description?: string;
+            /** @description A human label */
+            display_name?: string;
+            /**
+             * @description The observed kind; omit for a declared-only property
+             * @enum {string}
+             */
+            kind?: "metric" | "state" | "log";
+            /** @description The property name (lowercase, dot-hierarchied) */
+            name: string;
+            /** @description A display unit (observed properties) */
+            unit?: string;
+            /** @description A JSON Schema fragment constraining the value */
+            validation?: unknown;
+        };
         CreateSecretInputBody: {
             /**
              * Format: uri
@@ -3176,6 +3256,15 @@ export interface components {
             readonly $schema?: string;
             principals: components["schemas"]["PrincipalBody"][] | null;
         };
+        ListPropertiesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListPropertiesOutputBody.json
+             */
+            readonly $schema?: string;
+            properties: components["schemas"]["PropertyBody"][] | null;
+        };
         ListSecretTypesOutputBody: {
             /**
              * Format: uri
@@ -3349,6 +3438,23 @@ export interface components {
         PrincipalStruct: {
             id: string;
             kind: string;
+        };
+        PropertyBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/PropertyBody.json
+             */
+            readonly $schema?: string;
+            data_type: string;
+            description?: string;
+            display_name?: string;
+            kind?: string;
+            name: string;
+            official: boolean;
+            unit?: string;
+            /** @description A JSON Schema fragment constraining the value */
+            validation?: unknown;
         };
         ReachHistoryBody: {
             /** Format: date-time */
@@ -3897,6 +4003,22 @@ export interface components {
             email?: string;
             /** @description Sign-in name (lowercase letters, digits, and . _ -); renaming is safe */
             username?: string;
+        };
+        UpdatePropertyInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/UpdatePropertyInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description What the property means */
+            description?: string;
+            /** @description A human label */
+            display_name?: string;
+            /** @description A display unit */
+            unit?: string;
+            /** @description A JSON Schema fragment (replaces wholesale) */
+            validation?: unknown;
         };
         UpdateSecretInputBody: {
             /**
@@ -7329,6 +7451,166 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-property": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListPropertiesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-property": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePropertyInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PropertyBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-property": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The property's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PropertyBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-property": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The property's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "update-property": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The property's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePropertyInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PropertyBody"];
+                };
             };
             /** @description Error */
             default: {

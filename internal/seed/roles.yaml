@@ -28,6 +28,7 @@ roles:
       - "secret:read,reveal,create,update"
       - "variable:create,update"
       - "field:create,update"
+      - "property:create,update"
       - "alarm:ack,snooze,resolve"
       # files are shared knowledge (not in the sensitive-resource set), so the
       # viewer floor reads ordinary ones; operators upload and delete them. A
@@ -89,7 +90,7 @@ roles:
       - "node:*"
       - "role:read:admin"
       - "audit:read:admin"
-      - "datapoint_type:create"
+      - "property:*"
       - "type:create,update,delete"
       - "make:create,update,delete"
       - "tag:*"

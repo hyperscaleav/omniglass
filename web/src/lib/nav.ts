@@ -68,6 +68,7 @@ export const navItems: NavItem[] = [
     children: [
       { label: "Templates", path: "/templates", hint: "Author device shapes: component and system templates, versioned." },
       { label: "Types", path: "/types", live: true, resource: "type", hint: "Location, system, component, and secret type registries, classified by kind." },
+      { label: "Properties", path: "/properties", live: true, resource: "property", hint: "The signal catalog: the canonical properties a datapoint observes and a field declares." },
       { label: "Tags", path: "/tags", live: true, resource: "tag", hint: "The governed tag key vocabulary applied across the inventory." },
       { label: "Makes", path: "/component-makes", live: true, resource: "make", hint: "Manufacturer catalog: the vendors behind component models, with support and website." },
       { label: "Rules", path: "/rules", hint: "Transform, calc, and event rules, with CEL and blast-radius preview." },

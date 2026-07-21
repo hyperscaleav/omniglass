@@ -21,7 +21,7 @@ type Store interface {
 	// snapshot the datapoint registry (reject-not-project), and write the typed
 	// metric rows through cp1's insert path.
 	ResolveTaskOwner(ctx context.Context, taskID, nodeName string) (storage.TaskOwner, bool, error)
-	ListDatapointTypes(ctx context.Context) ([]storage.DatapointType, error)
+	ListProperties(ctx context.Context) ([]storage.Property, error)
 	InsertMetricDatapoints(ctx context.Context, evs []storage.MetricDatapointEvent) error
 	// The state sink and its transition-only guard: a state datapoint routes here
 	// (by registry kind), and LatestState lets the consumer skip a write whose

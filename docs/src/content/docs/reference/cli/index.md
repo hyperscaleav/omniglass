@@ -1894,6 +1894,107 @@ Example:
 omniglass principal-group update <id>
 ```
 
+## `omniglass property`
+
+Commands for the property resource
+
+### `omniglass property create`
+
+Create a property
+
+```
+omniglass property create [flags]
+```
+
+Registers a custom property (official=false). The name must be a valid property key. Gated by property:create.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--data-type` | string | (none) | The value type |
+| `--description` | string | (none) | What the property means |
+| `--display-name` | string | (none) | A human label |
+| `--kind` | string | (none) | The observed kind; omit for a declared-only property |
+| `--name` | string | (none) | The property name (lowercase, dot-hierarchied) |
+| `--unit` | string | (none) | A display unit (observed properties) |
+| `--validation` | string | (none) | A JSON Schema fragment constraining the value |
+
+Example:
+
+```sh
+omniglass property create --data-type data_type --name name
+```
+
+### `omniglass property delete`
+
+Delete a property
+
+```
+omniglass property delete <name>
+```
+
+Removes a custom property by name. Official properties are read-only. Gated by property:delete.
+
+Example:
+
+```sh
+omniglass property delete <name>
+```
+
+### `omniglass property get`
+
+Get a property
+
+```
+omniglass property get <name>
+```
+
+Returns one property by name. Gated by property:read.
+
+Example:
+
+```sh
+omniglass property get <name>
+```
+
+### `omniglass property list`
+
+List properties
+
+```
+omniglass property list
+```
+
+Lists every registered property (official and custom). The catalog is estate-wide reference data. Gated by property:read.
+
+Example:
+
+```sh
+omniglass property list
+```
+
+### `omniglass property update`
+
+Update a property
+
+```
+omniglass property update <name> [flags]
+```
+
+Patches a custom property's label, description, unit, or validation (a nil field is unchanged). Data type and kind are fixed at creation. Official properties are read-only. Gated by property:update.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--description` | string | (none) | What the property means |
+| `--display-name` | string | (none) | A human label |
+| `--unit` | string | (none) | A display unit |
+| `--validation` | string | (none) | A JSON Schema fragment (replaces wholesale) |
+
+Example:
+
+```sh
+omniglass property update <name>
+```
+
 ## `omniglass reachability`
 
 Commands for the reachability resource

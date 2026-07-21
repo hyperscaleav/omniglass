@@ -75,6 +75,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0040](#adr-0040-the-task-is-derived-read-only-plumbing-projected-from-its-interface) | 2026-07-14 | Accepted | The `task` is **derived** read-only plumbing: creating an `interface` derives its one poll task, so task create/update/delete routes and the `task:create` / `:update` grants are dropped; `task.node_name` is removed and **projected** from `interface.node_name` (the worklist and telemetry owner-confinement join the interface), and a node purge cascades its interfaces and their tasks. Reverses the checkpoint-5d task-CRUD build; refines ADR-0039 |
 | [ADR-0041](#adr-0041-settings-are-a-reflected-typed-struct-with-generated-client-and-server-validation) | 2026-07-19 | Accepted | A setting is declared **once**, as a tagged field on a canonical `Settings` Go struct; reflection produces the `code` defaults layer and the namespace registry, Huma reflects the struct into the OpenAPI schema so the typed client `values` is a `Settings` struct, and both the server PATCH and the generated client validate against that **same reflected schema**. Closes the slice-0 write-validation thin cut; retires the hand-kept `defaults.yaml` and `Namespaces()` slice |
 | [ADR-0042](#adr-0042-field-cascade-and-the-type-default-floor) | 2026-07-19 | Accepted | A field's resolved value is deepest-set-wins down `product -> location -> system -> component`, falling to the field's **type default** when nothing is set at any scope; the type default is the **floor** of the cascade, not a competitor to it. This slice is component-only (resolved = the component's set value, else the type default); the multi-scope cascade is tracked by #291 |
+| [ADR-0043](#adr-0043-the-property-catalog) | 2026-07-19 | Accepted | The `datapoint_type` catalog is generalized into a primitive-agnostic **`property`** catalog (the typed set of signals a datapoint observes and a field declares): the unused scope ladder becomes an `official` boolean, `value_type` becomes `data_type` (text to string, add bool), `kind` is nullable (a declared-only property has none), and `validation` is a **JSON Schema** validated by Huma's own validator (zero new dependencies). Value/source tables key by **name** (no FK), so the rename is behavior-preserving; the type-schema (`field_definition.key`) is the only binding and lands in PR-B |
 
 ## Entries
 
@@ -1180,3 +1181,41 @@ below from the project's history. From here it grows one slice at a time.
 - **Closes the gap:** the multi-scope cascade is tracked by
   [#291](https://github.com/hyperscaleav/omniglass/issues/291); this ADR settles only the resolution rule
   and the type-default floor.
+
+### ADR-0043: The property catalog
+
+- **Date:** 2026-07-19 | **Status:** Accepted | **Pages:** [config, secrets, and variables](/architecture/variables/)
+- **Decision:** The `datapoint_type` catalog is generalized into a primitive-agnostic **`property`**
+  catalog: one typed catalog whose entry (a **property**) is a canonical, typed name that a datapoint
+  **observes** and a field **declares**, identified by a **`key`** (its canonical name). The physical
+  table is `property`; the concept, the API resource (`/properties`), the Go `Property` type, and the
+  console all read `property`, while a property's identifier (its `key`, and the `field_definition.key`
+  reference) stays `key`. Four shape changes fold `datapoint_type` in: the unused `(scope, name)` ladder
+  (`org`/`template` never had an operator write path, `template_id` was a dangling column) collapses to a
+  `name` primary key plus an **`official`** boolean (seed-owned rows are read-only); `value_type` becomes
+  **`data_type`** over the unified set `{string, int, float, bool, json}` (`text` backfills to `string`,
+  `bool` is added); **`kind`** (metric/state/log) becomes nullable, since a declared-only attribute
+  property has no observed kind; and **`validation`** is a **JSON Schema** fragment (`pattern`/`enum`/`minimum`/
+  `maximum` and, for a json-typed property, a nested object schema), enforced by Huma's own validator with the stored
+  schema loaded through `yaml.v3`, so there is **no new dependency**. Value and source tables continue to
+  key by the **name string** (no foreign key, reject-not-project at ingest exactly as before), so the
+  rename is behavior-preserving: the collection registry, the reachability BFF, and the metric/state sinks
+  keep working unchanged.
+- **Context:** Datapoints already had a typed canonical-key catalog (`datapoint_type`: name, value_type,
+  display_name, unit, validation, kind), while fields, variables, secrets, and tags had no catalog at all,
+  an operator typed a key and it was registered nowhere. Rather than build a parallel table, this slice
+  makes the one catalog primitive-agnostic so `serial_number` is the same concept whether a device reports
+  it (observed, a datapoint) or an operator types it (declared, a field). The `official` boolean chassis is
+  chosen over finishing `datapoint_type`'s never-built scope-shadow precedence: it is the proven,
+  finished model the `*_type` registries already use.
+- **Values reference the key, not a `<primitive>_key` layer:** the only binding is the type-schema
+  (`field_definition` gaining a `key` reference so a field draws from the catalog), which is **PR-B**, not
+  this slice. Provenance rides the value (an observed metric versus a declared field value share the key),
+  so reconciliation of declared-versus-observed sources needs no middle table; it is deferred.
+- **Deferred:** the `field_definition.key` reference (PR-B); the type-schema editor (how a `component_type`
+  selects properties); reconciliation (the declared-versus-observed drift signal); a console editor for the
+  validation JSON Schema (set via the API for now); variables/secrets/commands/tags adopting a `key`
+  reference; and an operator shadow of an official property.
+- **Closes:** issue [#297](https://github.com/hyperscaleav/omniglass/issues/297) (the field catalog,
+  expanded to the property catalog), under epic
+  [#266](https://github.com/hyperscaleav/omniglass/issues/266).

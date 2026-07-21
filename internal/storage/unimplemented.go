@@ -258,11 +258,23 @@ func (UnimplementedGateway) ListTasks(context.Context, scope.Set) ([]Task, error
 func (UnimplementedGateway) GetTask(context.Context, string, scope.Set) (*Task, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) UpsertDatapointType(context.Context, DatapointType) error {
+func (UnimplementedGateway) UpsertProperty(context.Context, Property) error {
 	return nil
 }
-func (UnimplementedGateway) ListDatapointTypes(context.Context) ([]DatapointType, error) {
+func (UnimplementedGateway) ListProperties(context.Context) ([]Property, error) {
 	return nil, nil
+}
+func (UnimplementedGateway) GetProperty(context.Context, string) (*Property, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) CreateProperty(context.Context, string, PropertySpec) (*Property, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) UpdateProperty(context.Context, string, string, PropertyPatch) (*Property, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteProperty(context.Context, string, string) error {
+	return nil
 }
 func (UnimplementedGateway) UpsertInterfaceType(context.Context, InterfaceType) error {
 	return nil

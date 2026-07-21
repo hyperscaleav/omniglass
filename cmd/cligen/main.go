@@ -475,8 +475,12 @@ func pathParamSeg(seg string) (name, suffix string, ok bool) {
 }
 
 // singular is a naive depluralizer good enough for the AIP collection nouns in
-// use (locations, roles). A real irregular set can join nameOverride if needed.
+// use (locations, roles, properties). A real irregular set can join nameOverride
+// if needed.
 func singular(s string) string {
+	if strings.HasSuffix(s, "ies") && len(s) > 3 {
+		return s[:len(s)-3] + "y" // properties -> property
+	}
 	if strings.HasSuffix(s, "s") && len(s) > 1 {
 		return s[:len(s)-1]
 	}
