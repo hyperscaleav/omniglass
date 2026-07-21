@@ -959,6 +959,22 @@ Example:
 omniglass location checkName --name name
 ```
 
+### `omniglass location clear-property`
+
+Clear a property on a location
+
+```
+omniglass location clear-property <name> <property>
+```
+
+Removes the location's declared value, so the property falls back to the location type contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the location never set is a 404. Gated by location:update; an out-of-scope location is a non-disclosing 404.
+
+Example:
+
+```sh
+omniglass location clear-property <name> <property>
+```
+
 ### `omniglass location create`
 
 Create a location
@@ -1046,6 +1062,22 @@ Example:
 omniglass location listTags <name>
 ```
 
+### `omniglass location properties`
+
+List a location's effective properties
+
+```
+omniglass location properties <name>
+```
+
+Every property the location's type declares, resolved to the location's own value or the contract default (is_set marks the override), plus any property set directly on the location (from_contract false). Gated by location:read; an out-of-scope location is a non-disclosing 404.
+
+Example:
+
+```sh
+omniglass location properties <name>
+```
+
 ### `omniglass location removeTag`
 
 Remove a tag value from a location
@@ -1064,6 +1096,26 @@ Example:
 
 ```sh
 omniglass location removeTag <name> --key key
+```
+
+### `omniglass location set-property`
+
+Set a property on a location
+
+```
+omniglass location set-property <name> <property> [flags]
+```
+
+Declares a value for the property on this location, overriding the location type contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by location:update; an out-of-scope location is a non-disclosing 404.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--value` | string | (none) | The value to declare, shape given by the property's data_type |
+
+Example:
+
+```sh
+omniglass location set-property <name> <property> --value value
 ```
 
 ### `omniglass location setTag`
@@ -1108,6 +1160,63 @@ Example:
 
 ```sh
 omniglass location update <name>
+```
+
+## `omniglass location-type`
+
+Commands for the location-type resource
+
+### `omniglass location-type delete-property`
+
+Withdraw a property from a location type
+
+```
+omniglass location-type delete-property <id> <property>
+```
+
+Removes one line from a custom location type's contract; locations of the type keep any value they set for it, now off-contract. A property the type does not declare is a 404, and an official type is read-only (422). Gated by type:delete.
+
+Example:
+
+```sh
+omniglass location-type delete-property <id> <property>
+```
+
+### `omniglass location-type properties`
+
+List a location type's declared properties
+
+```
+omniglass location-type properties <id>
+```
+
+Lists the location type's declared-property contract (what every location of the type exposes), ordered by property name, each with its optional default and required flag. Gated by type:read.
+
+Example:
+
+```sh
+omniglass location-type properties <id>
+```
+
+### `omniglass location-type set-property`
+
+Declare a property on a location type
+
+```
+omniglass location-type set-property <id> <property> [flags]
+```
+
+Declares a catalog property on a custom location type, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official location types are read-only (422); an unknown type is a 404 and a property the catalog does not know is a 422. Gated by type:update.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--default-value` | string | (none) | The contract default, validated against the property's data_type; omit for no default |
+| `--required` | string | (none) | Whether every location of this type must set the property; defaults to false |
+
+Example:
+
+```sh
+omniglass location-type set-property <id> <property>
 ```
 
 ## `omniglass login`
@@ -1290,22 +1399,6 @@ Apply embedded database migrations (dbmate)
 ```
 omniglass migrate
 ```
-
-## `omniglass node`
-
-Run the edge node: claim, pull the worklist, and heartbeat over NATS
-
-```
-omniglass node [flags]
-```
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--heartbeat` | duration | `30s` | heartbeat interval |
-| `--name` | string | (none) | this node's registered name (env OMNIGLASS_NODE_NAME) |
-| `--once` | bool | `false` | run a single claim + pull + heartbeat cycle and exit |
-| `--server` | string | (none) | Omniglass server base URL (env OMNIGLASS_SERVER) |
-| `--token` | string | (none) | enrollment token from POST /nodes/{name}:enroll (env OMNIGLASS_NODE_TOKEN) |
 
 ## `omniglass node`
 
@@ -1497,6 +1590,22 @@ Example:
 ```sh
 omniglass node update <name>
 ```
+
+## `omniglass node`
+
+Run the edge node: claim, pull the worklist, and heartbeat over NATS
+
+```
+omniglass node [flags]
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--heartbeat` | duration | `30s` | heartbeat interval |
+| `--name` | string | (none) | this node's registered name (env OMNIGLASS_NODE_NAME) |
+| `--once` | bool | `false` | run a single claim + pull + heartbeat cycle and exit |
+| `--server` | string | (none) | Omniglass server base URL (env OMNIGLASS_SERVER) |
+| `--token` | string | (none) | enrollment token from POST /nodes/{name}:enroll (env OMNIGLASS_NODE_TOKEN) |
 
 ## `omniglass principal`
 
@@ -2497,6 +2606,22 @@ Example:
 omniglass standard delete <id>
 ```
 
+### `omniglass standard delete-property`
+
+Withdraw a property from a standard
+
+```
+omniglass standard delete-property <id> <property>
+```
+
+Removes one line from a custom standard's contract; conforming systems keep any value they set for it, now off-contract. A property the standard does not declare is a 404, and an official standard is read-only (422). Gated by standard:delete.
+
+Example:
+
+```sh
+omniglass standard delete-property <id> <property>
+```
+
 ### `omniglass standard get`
 
 Get a standard
@@ -2527,6 +2652,43 @@ Example:
 
 ```sh
 omniglass standard list
+```
+
+### `omniglass standard properties`
+
+List a standard's declared properties
+
+```
+omniglass standard properties <id>
+```
+
+Lists the standard's declared-property contract (what every system conforming to it exposes), ordered by property name, each with its optional default and required flag. Gated by standard:read.
+
+Example:
+
+```sh
+omniglass standard properties <id>
+```
+
+### `omniglass standard set-property`
+
+Declare a property on a standard
+
+```
+omniglass standard set-property <id> <property> [flags]
+```
+
+Declares a catalog property on a custom standard, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official standards are read-only (422); an unknown standard is a 404 and a property the catalog does not know is a 422. Gated by standard:update.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--default-value` | string | (none) | The contract default, validated against the property's data_type; omit for no default |
+| `--required` | string | (none) | Whether every system conforming to this standard must set the property; defaults to false |
+
+Example:
+
+```sh
+omniglass standard set-property <id> <property>
 ```
 
 ### `omniglass standard update`
@@ -2592,6 +2754,22 @@ Example:
 
 ```sh
 omniglass system checkName --name name
+```
+
+### `omniglass system clear-property`
+
+Clear a property on a system
+
+```
+omniglass system clear-property <name> <property>
+```
+
+Removes the system's declared value, so the property falls back to the standard contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the system never set is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.
+
+Example:
+
+```sh
+omniglass system clear-property <name> <property>
 ```
 
 ### `omniglass system create`
@@ -2682,6 +2860,22 @@ Example:
 omniglass system listTags <name>
 ```
 
+### `omniglass system properties`
+
+List a system's effective properties
+
+```
+omniglass system properties <name>
+```
+
+Every property the system's standard declares, resolved to the system's own value or the contract default (is_set marks the override), plus any property set directly on the system (from_contract false). Gated by system:read; an out-of-scope system is a non-disclosing 404.
+
+Example:
+
+```sh
+omniglass system properties <name>
+```
+
 ### `omniglass system removeTag`
 
 Remove a tag value from a system
@@ -2700,6 +2894,26 @@ Example:
 
 ```sh
 omniglass system removeTag <name> --key key
+```
+
+### `omniglass system set-property`
+
+Set a property on a system
+
+```
+omniglass system set-property <name> <property> [flags]
+```
+
+Declares a value for the property on this system, overriding the standard contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by system:update; an out-of-scope system is a non-disclosing 404.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--value` | string | (none) | The value to declare, shape given by the property's data_type |
+
+Example:
+
+```sh
+omniglass system set-property <name> <property> --value value
 ```
 
 ### `omniglass system setTag`

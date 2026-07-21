@@ -768,6 +768,50 @@ export interface paths {
         patch: operations["update-interface"];
         trace?: never;
     };
+    "/location-types/{id}/properties": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a location type's declared properties
+         * @description Lists the location type's declared-property contract (what every location of the type exposes), ordered by property name, each with its optional default and required flag. Gated by type:read.
+         */
+        get: operations["list-location-type-properties"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/location-types/{id}/properties/{property}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Declare a property on a location type
+         * @description Declares a catalog property on a custom location type, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official location types are read-only (422); an unknown type is a 404 and a property the catalog does not know is a 422. Gated by type:update.
+         */
+        put: operations["set-location-type-property"];
+        post?: never;
+        /**
+         * Withdraw a property from a location type
+         * @description Removes one line from a custom location type's contract; locations of the type keep any value they set for it, now off-contract. A property the type does not declare is a 404, and an official type is read-only (422). Gated by type:delete.
+         */
+        delete: operations["delete-location-type-property"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/locations": {
         parameters: {
             query?: never;
@@ -818,6 +862,50 @@ export interface paths {
          * @description Patches a location's display_name, location_type, or parent (a move). Gated by location:update; the read and update scopes drive the 404 versus 403 split.
          */
         patch: operations["update-location"];
+        trace?: never;
+    };
+    "/locations/{name}/properties": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a location's effective properties
+         * @description Every property the location's type declares, resolved to the location's own value or the contract default (is_set marks the override), plus any property set directly on the location (from_contract false). Gated by location:read; an out-of-scope location is a non-disclosing 404.
+         */
+        get: operations["list-location-properties"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/locations/{name}/properties/{property}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set a property on a location
+         * @description Declares a value for the property on this location, overriding the location type contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by location:update; an out-of-scope location is a non-disclosing 404.
+         */
+        put: operations["set-location-property"];
+        post?: never;
+        /**
+         * Clear a property on a location
+         * @description Removes the location's declared value, so the property falls back to the location type contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the location never set is a 404. Gated by location:update; an out-of-scope location is a non-disclosing 404.
+         */
+        delete: operations["clear-location-property"];
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/locations/{name}:listTags": {
@@ -1932,6 +2020,50 @@ export interface paths {
         patch: operations["update-standard"];
         trace?: never;
     };
+    "/standards/{id}/properties": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a standard's declared properties
+         * @description Lists the standard's declared-property contract (what every system conforming to it exposes), ordered by property name, each with its optional default and required flag. Gated by standard:read.
+         */
+        get: operations["list-standard-properties"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/standards/{id}/properties/{property}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Declare a property on a standard
+         * @description Declares a catalog property on a custom standard, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official standards are read-only (422); an unknown standard is a 404 and a property the catalog does not know is a 422. Gated by standard:update.
+         */
+        put: operations["set-standard-property"];
+        post?: never;
+        /**
+         * Withdraw a property from a standard
+         * @description Removes one line from a custom standard's contract; conforming systems keep any value they set for it, now off-contract. A property the standard does not declare is a 404, and an official standard is read-only (422). Gated by standard:delete.
+         */
+        delete: operations["delete-standard-property"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/systems": {
         parameters: {
             query?: never;
@@ -1982,6 +2114,50 @@ export interface paths {
          * @description Patches a system's display_name or standard. Gated by system:update; read and update scopes drive the 404 versus 403 split.
          */
         patch: operations["update-system"];
+        trace?: never;
+    };
+    "/systems/{name}/properties": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a system's effective properties
+         * @description Every property the system's standard declares, resolved to the system's own value or the contract default (is_set marks the override), plus any property set directly on the system (from_contract false). Gated by system:read; an out-of-scope system is a non-disclosing 404.
+         */
+        get: operations["list-system-properties"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/systems/{name}/properties/{property}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set a property on a system
+         * @description Declares a value for the property on this system, overriding the standard contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by system:update; an out-of-scope system is a non-disclosing 404.
+         */
+        put: operations["set-system-property"];
+        post?: never;
+        /**
+         * Clear a property on a system
+         * @description Removes the system's declared value, so the property falls back to the standard contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the system never set is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.
+         */
+        delete: operations["clear-system-property"];
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/systems/{name}:listTags": {
@@ -3339,6 +3515,15 @@ export interface components {
             readonly $schema?: string;
             interfaces: components["schemas"]["InterfaceBody"][] | null;
         };
+        ListLocationTypePropertiesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListLocationTypePropertiesOutputBody.json
+             */
+            readonly $schema?: string;
+            properties: components["schemas"]["LocationTypePropertyBody"][] | null;
+        };
         ListLocationTypesOutputBody: {
             /**
              * Format: uri
@@ -3447,6 +3632,15 @@ export interface components {
             readonly $schema?: string;
             secrets: components["schemas"]["SecretBody"][] | null;
         };
+        ListStandardPropertiesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListStandardPropertiesOutputBody.json
+             */
+            readonly $schema?: string;
+            properties: components["schemas"]["StandardPropertyBody"][] | null;
+        };
         ListStandardsOutputBody: {
             /**
              * Format: uri
@@ -3520,6 +3714,30 @@ export interface components {
             name: string;
             parent_id?: string;
         };
+        LocationPropertiesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/LocationPropertiesOutputBody.json
+             */
+            readonly $schema?: string;
+            location: string;
+            properties: components["schemas"]["EffectivePropertyBody"][] | null;
+        };
+        LocationPropertyValueBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/LocationPropertyValueBody.json
+             */
+            readonly $schema?: string;
+            location: string;
+            property_name: string;
+            /** @description The stored value, shape given by the property's data_type */
+            value: unknown;
+            /** @description The stored value's id */
+            value_id: string;
+        };
         LocationTypeBody: {
             /**
              * Format: uri
@@ -3532,6 +3750,20 @@ export interface components {
             icon: string;
             id: string;
             official: boolean;
+        };
+        LocationTypePropertyBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/LocationTypePropertyBody.json
+             */
+            readonly $schema?: string;
+            /** @description The contract default, shape given by the property's data_type; omitted when the contract sets none */
+            default_value?: unknown;
+            /** @description The catalog property this location type declares */
+            property_name: string;
+            /** @description Whether every location of this type must set the property */
+            required: boolean;
         };
         LoginInputBody: {
             /**
@@ -3923,6 +4155,28 @@ export interface components {
             /** @description The value to declare, shape given by the property's data_type */
             value: unknown;
         };
+        SetLocationPropertyInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/SetLocationPropertyInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The value to declare, shape given by the property's data_type */
+            value: unknown;
+        };
+        SetLocationTypePropertyInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/SetLocationTypePropertyInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The contract default, validated against the property's data_type; omit for no default */
+            default_value?: unknown;
+            /** @description Whether every location of this type must set the property; defaults to false */
+            required?: boolean;
+        };
         SetProductPropertyInputBody: {
             /**
              * Format: uri
@@ -3934,6 +4188,28 @@ export interface components {
             default_value?: unknown;
             /** @description Whether every instance of this product must set the property; defaults to false */
             required?: boolean;
+        };
+        SetStandardPropertyInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/SetStandardPropertyInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The contract default, validated against the property's data_type; omit for no default */
+            default_value?: unknown;
+            /** @description Whether every system conforming to this standard must set the property; defaults to false */
+            required?: boolean;
+        };
+        SetSystemPropertyInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/SetSystemPropertyInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The value to declare, shape given by the property's data_type */
+            value: unknown;
         };
         Settings: {
             keybindings: components["schemas"]["Keybindings"];
@@ -3977,6 +4253,20 @@ export interface components {
             official: boolean;
             parent_standard_id?: string;
         };
+        StandardPropertyBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/StandardPropertyBody.json
+             */
+            readonly $schema?: string;
+            /** @description The contract default, shape given by the property's data_type; omitted when the contract sets none */
+            default_value?: unknown;
+            /** @description The catalog property this standard declares */
+            property_name: string;
+            /** @description Whether every system conforming to this standard must set the property */
+            required: boolean;
+        };
         SvcBody: {
             label: string;
         };
@@ -4000,6 +4290,30 @@ export interface components {
             parent_id?: string;
             /** @description The standard this system conforms to; omitted for a one-off system */
             standard_id?: string;
+        };
+        SystemPropertiesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/SystemPropertiesOutputBody.json
+             */
+            readonly $schema?: string;
+            properties: components["schemas"]["EffectivePropertyBody"][] | null;
+            system: string;
+        };
+        SystemPropertyValueBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/SystemPropertyValueBody.json
+             */
+            readonly $schema?: string;
+            property_name: string;
+            system: string;
+            /** @description The stored value, shape given by the property's data_type */
+            value: unknown;
+            /** @description The stored value's id */
+            value_id: string;
         };
         TagBindingBody: {
             /**
@@ -6001,6 +6315,108 @@ export interface operations {
             };
         };
     };
+    "list-location-type-properties": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The location_type id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListLocationTypePropertiesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "set-location-type-property": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The location type id */
+                id: string;
+                /** @description The property name */
+                property: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetLocationTypePropertyInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationTypePropertyBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-location-type-property": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The location type id */
+                id: string;
+                /** @description The property name */
+                property: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "list-locations": {
         parameters: {
             query?: never;
@@ -6148,6 +6564,108 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["LocationBody"];
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-location-properties": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The location's unique name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationPropertiesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "set-location-property": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The location's unique name */
+                name: string;
+                /** @description The property name */
+                property: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetLocationPropertyInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationPropertyValueBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "clear-location-property": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The location's unique name */
+                name: string;
+                /** @description The property name */
+                property: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {
@@ -8678,6 +9196,108 @@ export interface operations {
             };
         };
     };
+    "list-standard-properties": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The standard id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListStandardPropertiesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "set-standard-property": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The standard id */
+                id: string;
+                /** @description The property name */
+                property: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetStandardPropertyInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StandardPropertyBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-standard-property": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The standard id */
+                id: string;
+                /** @description The property name */
+                property: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "list-systems": {
         parameters: {
             query?: never;
@@ -8825,6 +9445,108 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["SystemBody"];
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-system-properties": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The system's unique name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemPropertiesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "set-system-property": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The system's unique name */
+                name: string;
+                /** @description The property name */
+                property: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetSystemPropertyInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemPropertyValueBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "clear-system-property": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The system's unique name */
+                name: string;
+                /** @description The property name */
+                property: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {

@@ -220,6 +220,24 @@ var nameOverride = map[string]([]string){
 	"list-component-properties": {"component", "properties"},
 	"set-component-property":    {"component", "set-property"},
 	"clear-component-property":  {"component", "clear-property"},
+	// The standard contract, the location type contract, and the system/location
+	// effective reads collapse the same way. Each goes under the resource that
+	// owns it. The location type contract takes its own `location-type` parent
+	// rather than the `type` umbrella: grouping is two levels (the parent is the
+	// first word, the command the last), so a `type properties` would not say
+	// which registry it means.
+	"list-standard-properties":      {"standard", "properties"},
+	"set-standard-property":         {"standard", "set-property"},
+	"delete-standard-property":      {"standard", "delete-property"},
+	"list-location-type-properties": {"location-type", "properties"},
+	"set-location-type-property":    {"location-type", "set-property"},
+	"delete-location-type-property": {"location-type", "delete-property"},
+	"list-system-properties":        {"system", "properties"},
+	"set-system-property":           {"system", "set-property"},
+	"clear-system-property":         {"system", "clear-property"},
+	"list-location-properties":      {"location", "properties"},
+	"set-location-property":         {"location", "set-property"},
+	"clear-location-property":       {"location", "clear-property"},
 }
 
 func buildCommands(doc spec, base string) []command {
