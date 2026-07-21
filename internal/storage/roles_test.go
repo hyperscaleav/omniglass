@@ -237,6 +237,14 @@ func TestEffectiveRolesAndAssignment(t *testing.T) {
 		t.Fatalf("delete an unassigned component: %v", err)
 	}
 
+	// A component that does not exist is a not-found, NOT a capability shortfall.
+	// An absent component resolves to an empty capability set, so without an
+	// existence check the operator gets "missing microphone, speaker" for what is
+	// really a typo.
+	if err := gw.AssignRole(ctx, "", "hq-huddle", "table-mic", "no-such-component", all); !errors.Is(err, storage.ErrComponentNotFound) {
+		t.Fatalf("assign an unknown component: err = %v, want ErrComponentNotFound", err)
+	}
+
 	// An unknown role on a real system is a clear not-found, not a silent no-op.
 	if err := gw.AssignRole(ctx, "", "hq-huddle", "no-such-role", "bar-1", all); !errors.Is(err, storage.ErrRoleNotFound) {
 		t.Fatalf("assign to unknown role: err = %v, want ErrRoleNotFound", err)

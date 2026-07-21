@@ -71,9 +71,13 @@ describe("PropertiesPanel on a system", () => {
     expect(getByText("set on this system, not declared by its standard")).toBeTruthy();
   });
 
-  it("explains where properties come from when the system conforms to no standard", () => {
-    const { getByText } = mount("system", "boardroom", undefined, []);
-    expect(getByText(/declared by the standard it conforms to/i)).toBeTruthy();
+  // A system whose standard simply declares no properties resolves empty too, so
+  // the empty state must not claim the system conforms to no standard: that would
+  // state something false on a system that plainly shows its standard above.
+  it("explains where properties come from when nothing resolves, without claiming why", () => {
+    const { getByText, queryByText } = mount("system", "boardroom", undefined, []);
+    expect(getByText(/come from the standard it conforms to/i)).toBeTruthy();
+    expect(queryByText(/conforms to no standard/i)).toBeNull();
   });
 
   it("writes an override and a clear to the system's own property routes on Save", async () => {

@@ -88,10 +88,13 @@ describe("PropertiesPanel", () => {
     expect(getByText(/not declared by its product/i)).toBeTruthy();
   });
 
-  it("explains where properties come from when there is no contract and nothing set", () => {
-    const { getByText } = mount([]);
-    expect(getByText(/declared by the product it is an instance of/i)).toBeTruthy();
-    expect(getByText(/no product contract/i)).toBeTruthy();
+  // The empty state teaches where properties come from without asserting WHY none
+  // resolved: the panel only sees an empty list, so it cannot tell a productless
+  // component from a product that declares nothing, and must not claim either.
+  it("explains where properties come from when nothing resolves", () => {
+    const { getByText, queryByText } = mount([]);
+    expect(getByText(/come from the product it is an instance of/i)).toBeTruthy();
+    expect(queryByText(/no product contract/i)).toBeNull();
   });
 
   it("blocks the Save when a required property is left empty, before writing anything", async () => {

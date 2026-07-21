@@ -193,6 +193,13 @@ func (p *PG) AssignRole(ctx context.Context, actorID, systemName, roleName, comp
 	if err != nil {
 		return err
 	}
+	// Confirm the component exists before judging what it provides. An absent
+	// component resolves to an empty capability set, which would otherwise be
+	// reported as "missing everything": a capability shortfall for a component that
+	// is not there is a confusing answer to a simple typo.
+	if _, err := scopedByName(ctx, tx, componentConfig, componentName); err != nil {
+		return err // ErrComponentNotFound when absent
+	}
 	provided, err := p.EffectiveCapabilities(ctx, tx, componentName)
 	if err != nil {
 		return err
