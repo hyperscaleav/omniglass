@@ -342,7 +342,7 @@ type Gateway interface {
 	ListNodes(ctx context.Context, read scope.Set) ([]Node, error)
 
 	// The secret tier: a shape registry, scoped CRUD, an audited reveal, and the
-	// cascade resolver. A secret is owned on the exclusive arc (global or one of
+	// cascade resolver. A secret is owned on the exclusive arc (platform or one of
 	// the three trees) and encrypted at rest; ResolveSecrets is the per-component
 	// effective-value view down the structural cascade.
 	UpsertSecretType(ctx context.Context, st SecretType) error

@@ -63,7 +63,7 @@ type TagBinding struct {
 
 // ResolvedTag is one entry in a component's effective-tags cascade: the
 // winning-or-shadowed binding, the owner it comes from, and where that owner
-// sits in the chain. Band orders the tiers (0 global, 1 location, 2 system, 3
+// sits in the chain. Band orders the tiers (0 platform, 1 location, 2 system, 3
 // component) and Depth is the distance up that tier's tree; the highest band
 // then lowest depth wins per key. Winner marks the resolved value; the shadowed
 // entries come back too so the surface can teach the override.
@@ -85,7 +85,7 @@ const tagCols = `id, name, applies_to, propagates, allowed_values, created_at, u
 // index for that arc. The values are compile-time constants (never user input),
 // keyed by an owner kind the write path has already validated.
 var tagBindingConflictArc = map[string]string{
-	"global":    "(tag_id) where owner_kind = 'global'",
+	"platform":  "(tag_id) where owner_kind = 'platform'",
 	"component": "(tag_id, component_id) where owner_kind = 'component'",
 	"system":    "(tag_id, system_id) where owner_kind = 'system'",
 	"location":  "(tag_id, location_id) where owner_kind = 'location'",
@@ -250,7 +250,7 @@ func (p *PG) DeleteTag(ctx context.Context, actorID, name string, action scope.S
 
 // SetTagBinding upserts a value for a key at an owner on the exclusive arc.
 // Binding a value is the ordinary entity write, so the gate is the owner's own
-// update permission: the caller passes the entity's read/update scopes (a global
+// update permission: the caller passes the entity's read/update scopes (a platform
 // binding needs an all-scope action). The key must exist and apply to the
 // owner's kind, and the value is validated. A binding already present at that
 // owner has its value replaced.
@@ -269,7 +269,7 @@ func (p *PG) SetTagBinding(ctx context.Context, actorID, key, ownerKind string, 
 	if err != nil {
 		return nil, err
 	}
-	if ownerKind != "global" && !tag.AppliesToKind(t.AppliesTo, tag.EntityKind(ownerKind)) {
+	if ownerKind != "platform" && !tag.AppliesToKind(t.AppliesTo, tag.EntityKind(ownerKind)) {
 		return nil, ErrTagKindNotAllowed
 	}
 	if !tag.ValueAllowed(t.AllowedValues, value) {
@@ -361,7 +361,7 @@ func (p *PG) DeleteTagBinding(ctx context.Context, actorID, key, ownerKind strin
 
 // ListEntityTags returns the tags bound directly on one entity (not the resolved
 // cascade), ordered by key. The entity must be within the read scope; an unknown
-// or out-of-scope owner is the non-disclosing not-found for its kind. A global
+// or out-of-scope owner is the non-disclosing not-found for its kind. A platform
 // listing (ownerName nil) needs an all-scope read.
 func (p *PG) ListEntityTags(ctx context.Context, ownerKind string, ownerName *string, read scope.Set) ([]TagBinding, error) {
 	ownerID, ownerDisplay, err := resolveTagBindingOwner(ctx, p.pool, ownerKind, ownerName, read, read)
@@ -399,7 +399,7 @@ func (p *PG) ListEntityTags(ctx context.Context, ownerKind string, ownerName *st
 }
 
 // ResolveTags returns the effective tags for a component: every key that
-// resolves onto it down the structural cascade (global -> location tree ->
+// resolves onto it down the structural cascade (platform -> location tree ->
 // system tree -> component tree), keys unioning and values overriding
 // most-specific-wins, with the shadowed candidates included so the surface can
 // teach the override. A non-propagating key resolves only from a binding on the
@@ -484,7 +484,7 @@ loc_chain(id, depth) as (
     where l.parent_id is not null
 ) cycle id set loc_cyc using loc_path,
 owners(owner_kind, owner_id, band, depth) as (
-                select 'global',    null::uuid, 0, 0
+                select 'platform',  null::uuid, 0, 0
     union all   select 'location',  id,         1, depth from loc_chain
     union all   select 'system',    id,         2, depth from sys_chain
     union all   select 'component', id,         3, depth from comp_chain
@@ -515,10 +515,10 @@ order by r.key, r.band desc, r.depth asc`
 // the directory Tags column, so it is deliberately scopeless: the caller passes
 // ids already filtered to the read scope by the list query (the same contract as
 // the rowActions batch), and this resolver adds no per-id scope check. Each kind
-// resolves the bands that apply to it: a component the full arc (global, its
-// location tree, its system tree, its component tree); a system global, its own
+// resolves the bands that apply to it: a component the full arc (platform, its
+// location tree, its system tree, its component tree); a system platform, its own
 // location tree, and its system tree (a system placed in a location inherits that
-// location's tags); a location global and its own location tree. A non-propagating
+// location's tags); a location platform and its own location tree. A non-propagating
 // key resolves only from the owner itself. Ids that are not valid uuids are
 // dropped. Owners with no effective tags are simply absent from the map.
 func (p *PG) EffectiveTags(ctx context.Context, kind string, ownerIDs []string) (map[string]map[string]string, error) {
@@ -604,7 +604,7 @@ loc_chain(target_id, id, depth) as (
     where l.parent_id is not null
 ) cycle id set loc_cyc using loc_path,
 owners(target_id, owner_kind, owner_id, band, depth) as (
-                select target_id, 'global',    null::uuid, 0, 0 from targets
+                select target_id, 'platform',  null::uuid, 0, 0 from targets
     union all   select target_id, 'location',  id, 1, depth from loc_chain
     union all   select target_id, 'system',    id, 2, depth from sys_chain
     union all   select target_id, 'component', id, 3, depth from comp_chain
@@ -622,8 +622,8 @@ ranked as (
 select target_id::text, key, value from ranked where rnk = 1 order by target_id, key`
 
 // A node is estate-wide, not a scope tree, so its effective tags are just the
-// global layer plus its own direct bindings (a node-direct value wins over a
-// propagating global). No recursion: there is nothing above a node to inherit
+// platform layer plus its own direct bindings (a node-direct value wins over a
+// propagating platform). No recursion: there is nothing above a node to inherit
 // from. Targets and owner ids are node.principal_id.
 const effectiveNodeTagsSQL = `
 with
@@ -631,8 +631,8 @@ targets as (
     select principal_id as target_id from node where principal_id = any($1)
 ),
 owners(target_id, owner_kind, owner_id, band) as (
-                select target_id, 'global', null::uuid, 0 from targets
-    union all   select target_id, 'node',   target_id, 1 from targets
+                select target_id, 'platform', null::uuid, 0 from targets
+    union all   select target_id, 'node',     target_id, 1 from targets
 ),
 ranked as (
     select o.target_id, t.name as key, b.value,
@@ -666,7 +666,7 @@ loc_chain(target_id, id, depth) as (
     where l.parent_id is not null
 ) cycle id set loc_cyc using loc_path,
 owners(target_id, owner_kind, owner_id, band, depth) as (
-                select target_id, 'global',   null::uuid, 0, 0 from targets
+                select target_id, 'platform', null::uuid, 0, 0 from targets
     union all   select target_id, 'location', id, 1, depth from loc_chain
     union all   select target_id, 'system',   id, 2, depth from sys_chain
 ),
@@ -692,7 +692,7 @@ loc_chain(target_id, id, depth) as (
     where l.parent_id is not null
 ) cycle id set loc_cyc using loc_path,
 owners(target_id, owner_kind, owner_id, band, depth) as (
-                select distinct target_id, 'global',   null::uuid, 0, 0 from loc_chain
+                select distinct target_id, 'platform', null::uuid, 0, 0 from loc_chain
     union all   select target_id, 'location', id, 1, depth from loc_chain
 ),
 ranked as (
@@ -710,12 +710,12 @@ select target_id::text, key, value from ranked where rnk = 1 order by target_id,
 // --- helpers -----------------------------------------------------------------
 
 // resolveTagBindingOwner turns an owner kind + optional name into the owning id,
-// enforcing the read-then-action scope split on the owner entity: a global
+// enforcing the read-then-action scope split on the owner entity: a platform
 // owner needs an all-scope action (and read); a scoped one resolves its entity
 // in the matching tree and requires it within read (else not-found) then action
-// (else forbidden). Returns a nil id and empty display name for a global owner.
+// (else forbidden). Returns a nil id and empty display name for a platform owner.
 func resolveTagBindingOwner(ctx context.Context, q querier, kind string, name *string, read, action scope.Set) (*string, string, error) {
-	if kind == "global" {
+	if kind == "platform" {
 		if !action.All || !read.All {
 			return nil, "", ErrTagForbidden
 		}

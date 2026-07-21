@@ -35,9 +35,9 @@ func TestVariableCreateRoundTrip(t *testing.T) {
 	gw := variableGateway(t)
 	ctx := context.Background()
 
-	mustVar(t, gw, "poll_interval", "int", "global", nil, `30`)
-	mustVar(t, gw, "base_url", "string", "global", nil, `"https://api.example"`)
-	mustVar(t, gw, "opts", "json", "global", nil, `{"retries":3,"backoff":"1s"}`)
+	mustVar(t, gw, "poll_interval", "int", "platform", nil, `30`)
+	mustVar(t, gw, "base_url", "string", "platform", nil, `"https://api.example"`)
+	mustVar(t, gw, "opts", "json", "platform", nil, `{"retries":3,"backoff":"1s"}`)
 
 	list, err := gw.ListVariables(ctx, all)
 	if err != nil {
@@ -69,12 +69,12 @@ func TestVariableValueValidation(t *testing.T) {
 	ctx := context.Background()
 
 	if _, err := gw.CreateVariable(ctx, "", storage.VariableSpec{
-		Name: "bad_type", ValueType: "date", OwnerKind: "global", Value: json.RawMessage(`"x"`),
+		Name: "bad_type", ValueType: "date", OwnerKind: "platform", Value: json.RawMessage(`"x"`),
 	}, all); !errors.Is(err, storage.ErrUnknownValueType) {
 		t.Errorf("unknown value_type = %v, want ErrUnknownValueType", err)
 	}
 	if _, err := gw.CreateVariable(ctx, "", storage.VariableSpec{
-		Name: "bad_val", ValueType: "int", OwnerKind: "global", Value: json.RawMessage(`"not-an-int"`),
+		Name: "bad_val", ValueType: "int", OwnerKind: "platform", Value: json.RawMessage(`"not-an-int"`),
 	}, all); !errors.Is(err, storage.ErrVariableValueInvalid) {
 		t.Errorf("mismatched value = %v, want ErrVariableValueInvalid", err)
 	}
@@ -91,11 +91,11 @@ func TestVariableOwnerScope(t *testing.T) {
 		t.Fatalf("seed location: %v", err)
 	}
 
-	// A global variable needs an all create scope.
+	// A platform variable needs an all create scope.
 	if _, err := gw.CreateVariable(ctx, "", storage.VariableSpec{
-		Name: "g", ValueType: "int", OwnerKind: "global", Value: json.RawMessage(`1`),
+		Name: "g", ValueType: "int", OwnerKind: "platform", Value: json.RawMessage(`1`),
 	}, scope.Set{}); !errors.Is(err, storage.ErrVariableForbidden) {
-		t.Errorf("global create without all = %v, want ErrVariableForbidden", err)
+		t.Errorf("platform create without all = %v, want ErrVariableForbidden", err)
 	}
 	// An unknown owner name is a 422, not a 500.
 	if _, err := gw.CreateVariable(ctx, "", storage.VariableSpec{
@@ -130,7 +130,7 @@ func TestVariableUpdate(t *testing.T) {
 	gw := variableGateway(t)
 	ctx := context.Background()
 
-	v := mustVar(t, gw, "poll_interval", "int", "global", nil, `30`)
+	v := mustVar(t, gw, "poll_interval", "int", "platform", nil, `30`)
 	// A value that does not match the fixed type is refused.
 	if _, err := gw.UpdateVariable(ctx, "", v.ID, json.RawMessage(`"nope"`), all, all); !errors.Is(err, storage.ErrVariableValueInvalid) {
 		t.Errorf("update with bad value = %v, want ErrVariableValueInvalid", err)
@@ -164,7 +164,7 @@ func TestVariableCascadeResolve(t *testing.T) {
 		t.Fatalf("component: %v", err)
 	}
 
-	mustVar(t, gw, "poll", "int", "global", nil, `10`)
+	mustVar(t, gw, "poll", "int", "platform", nil, `10`)
 	mustVar(t, gw, "poll", "int", "location", strptr("campus"), `20`)
 	mustVar(t, gw, "poll", "int", "location", strptr("room"), `30`)
 	mustVar(t, gw, "poll", "int", "system", strptr("sys"), `40`)
@@ -201,6 +201,34 @@ func TestVariableCascadeResolve(t *testing.T) {
 	// A component outside the read scope does not disclose its cascade.
 	if _, err := gw.ResolveVariables(ctx, comp.ID, scope.Set{IDs: []string{"00000000-0000-0000-0000-000000000000"}}); !errors.Is(err, storage.ErrComponentNotFound) {
 		t.Errorf("out-of-scope resolve = %v, want ErrComponentNotFound", err)
+	}
+}
+
+// TestVariableAtPlatformTier asserts the cascade's least-specific tier is
+// addressable by its new name (platform, formerly global) and still requires an
+// all-scope create grant.
+func TestVariableAtPlatformTier(t *testing.T) {
+	gw := variableGateway(t)
+	ctx := context.Background()
+
+	v, err := gw.CreateVariable(ctx, "", storage.VariableSpec{
+		Name: "snmp_community", ValueType: "string", OwnerKind: "platform", Value: json.RawMessage(`"public"`),
+	}, all)
+	if err != nil {
+		t.Fatalf("create at platform tier: %v", err)
+	}
+	if v.OwnerKind != "platform" {
+		t.Fatalf("owner kind = %q, want platform", v.OwnerKind)
+	}
+	if v.OwnerID != nil {
+		t.Errorf("owner id = %v, want nil for the platform singleton", *v.OwnerID)
+	}
+
+	// The tier keeps its all-scope create gate under the new name.
+	if _, err := gw.CreateVariable(ctx, "", storage.VariableSpec{
+		Name: "denied", ValueType: "string", OwnerKind: "platform", Value: json.RawMessage(`"x"`),
+	}, scope.Set{}); !errors.Is(err, storage.ErrVariableForbidden) {
+		t.Fatalf("create without all = %v, want ErrVariableForbidden", err)
 	}
 }
 

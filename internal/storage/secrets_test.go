@@ -64,7 +64,7 @@ func TestSecretSealRoundTrip(t *testing.T) {
 	ctx := context.Background()
 
 	created, err := gw.CreateSecret(ctx, "", storage.SecretSpec{
-		Name: "snmp", SecretType: "snmp-community", OwnerKind: "global",
+		Name: "snmp", SecretType: "snmp-community", OwnerKind: "platform",
 		Fields: map[string]string{"community": "s3cr3t-ro"},
 	}, all, true)
 	if err != nil {
@@ -107,14 +107,14 @@ func TestSecretFieldValidation(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := gw.CreateSecret(ctx, "", storage.SecretSpec{
-		Name: "bad", SecretType: "snmp-community", OwnerKind: "global",
+		Name: "bad", SecretType: "snmp-community", OwnerKind: "platform",
 		Fields: map[string]string{"nope": "x"},
 	}, all, true)
 	if !errors.Is(err, storage.ErrSecretFieldInvalid) {
 		t.Errorf("unknown field = %v, want ErrSecretFieldInvalid", err)
 	}
 	_, err = gw.CreateSecret(ctx, "", storage.SecretSpec{
-		Name: "empty", SecretType: "snmp-community", OwnerKind: "global",
+		Name: "empty", SecretType: "snmp-community", OwnerKind: "platform",
 		Fields: map[string]string{},
 	}, all, true)
 	if !errors.Is(err, storage.ErrSecretFieldInvalid) {
@@ -122,7 +122,7 @@ func TestSecretFieldValidation(t *testing.T) {
 	}
 	// A multi-field type stores the non-secret field in the clear, masks the secret one.
 	s, err := gw.CreateSecret(ctx, "", storage.SecretSpec{
-		Name: "web", SecretType: "basic-auth", OwnerKind: "global",
+		Name: "web", SecretType: "basic-auth", OwnerKind: "platform",
 		Fields: map[string]string{"username": "admin", "password": "hunter2"},
 	}, all, true)
 	if err != nil {
@@ -151,12 +151,12 @@ func TestSecretOwnerScope(t *testing.T) {
 		t.Fatalf("seed location: %v", err)
 	}
 
-	// A global secret needs an all create scope.
+	// A platform secret needs an all create scope.
 	if _, err := gw.CreateSecret(ctx, "", storage.SecretSpec{
-		Name: "g", SecretType: "snmp-community", OwnerKind: "global",
+		Name: "g", SecretType: "snmp-community", OwnerKind: "platform",
 		Fields: map[string]string{"community": "x"},
 	}, scope.Set{}, true); !errors.Is(err, storage.ErrSecretForbidden) {
-		t.Errorf("global create without all = %v, want ErrSecretForbidden", err)
+		t.Errorf("platform create without all = %v, want ErrSecretForbidden", err)
 	}
 	// An unknown owner name is a 422, not a 500.
 	if _, err := gw.CreateSecret(ctx, "", storage.SecretSpec{
@@ -217,7 +217,7 @@ func TestSecretCascadeResolve(t *testing.T) {
 
 	// Same secret name "poll" placed at four tiers; distinct communities so we
 	// can tell the winner apart on reveal later.
-	mustSecret(t, gw, "poll", "global", nil, "global-val")
+	mustSecret(t, gw, "poll", "platform", nil, "platform-val")
 	mustSecret(t, gw, "poll", "location", strptr("campus"), "campus-val")
 	mustSecret(t, gw, "poll", "location", strptr("room"), "room-val")
 	// Bound on the system and deliberately NOT expected below: a secret is
@@ -231,7 +231,7 @@ func TestSecretCascadeResolve(t *testing.T) {
 		t.Fatalf("resolve: %v", err)
 	}
 	if len(resolved) != 4 {
-		t.Fatalf("resolved candidates = %d, want 4 (global, 2 loc, comp): the system-owned "+
+		t.Fatalf("resolved candidates = %d, want 4 (platform, 2 loc, comp): the system-owned "+
 			"secret must not reach a component", len(resolved))
 	}
 	for _, r := range resolved {
