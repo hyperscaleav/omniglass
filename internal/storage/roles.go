@@ -219,6 +219,13 @@ func (p *PG) AssignRole(ctx context.Context, actorID, systemName, roleName, comp
 		return &CapabilityShortfall{Component: componentName, Role: roleName, Missing: missing}
 	}
 
+	// Staffing a role IS membership, so the binding is created here rather than
+	// asked of the operator as a separate step. A component filling a job in a
+	// system that the system does not count as a member is the contradiction
+	// system_member exists to make impossible.
+	if err := addMemberTx(ctx, tx, systemName, componentName); err != nil {
+		return err
+	}
 	if _, err := tx.Exec(ctx, `
 		insert into role_assignment (system_id, role_id, component_id)
 		values ($1, $2, $3)
