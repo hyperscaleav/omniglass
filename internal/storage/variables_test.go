@@ -132,10 +132,10 @@ func TestVariableUpdate(t *testing.T) {
 
 	v := mustVar(t, gw, "poll_interval", "int", "platform", nil, `30`)
 	// A value that does not match the fixed type is refused.
-	if _, err := gw.UpdateVariable(ctx, "", v.ID, json.RawMessage(`"nope"`), all, all); !errors.Is(err, storage.ErrVariableValueInvalid) {
+	if _, err := gw.UpdateVariable(ctx, "", v.ID, json.RawMessage(`"nope"`), all, all, true); !errors.Is(err, storage.ErrVariableValueInvalid) {
 		t.Errorf("update with bad value = %v, want ErrVariableValueInvalid", err)
 	}
-	updated, err := gw.UpdateVariable(ctx, "", v.ID, json.RawMessage(`60`), all, all)
+	updated, err := gw.UpdateVariable(ctx, "", v.ID, json.RawMessage(`60`), all, all, true)
 	if err != nil {
 		t.Fatalf("update: %v", err)
 	}
@@ -247,7 +247,7 @@ func deleteVarByOwner(t *testing.T, gw storage.Gateway, list []storage.Variable,
 	t.Helper()
 	for _, v := range list {
 		if v.OwnerKind == ownerKind {
-			if err := gw.DeleteVariable(context.Background(), "", v.ID, all, all); err != nil {
+			if err := gw.DeleteVariable(context.Background(), "", v.ID, all, all, true); err != nil {
 				t.Fatalf("delete %s: %v", v.ID, err)
 			}
 		}

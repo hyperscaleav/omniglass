@@ -42,11 +42,18 @@ func TestSeedGrantsResolveToUniverse(t *testing.T) {
 	var gw storage.Gateway = storage.UnimplementedGateway{}
 	var universe []string
 	seenPerm := map[string]bool{}
-	for _, op := range operations(t, gw) {
-		if op.perm != "" && !seenPerm[op.perm] {
-			seenPerm[op.perm] = true
-			universe = append(universe, op.perm)
+	add := func(perm string) {
+		if perm != "" && !seenPerm[perm] {
+			seenPerm[perm] = true
+			universe = append(universe, perm)
 		}
+	}
+	for _, op := range operations(t, gw) {
+		add(op.perm)
+		// A platform-tier write enforces a SECOND permission (platform:<action>) on
+		// top of its resource gate, published as its own stamp, so it belongs in the
+		// universe too: it is enforced, and a role blade must be able to show it.
+		add(op.platformPerm)
 	}
 	if len(universe) == 0 {
 		t.Fatal("permission universe is empty; the x-omniglass-permission stamps are missing from the spec")

@@ -35,8 +35,10 @@ type settingsNamespaceInput struct {
 
 // registerSettingsRoutes wires the settings engine: an admin read with provenance,
 // a client-safe /settings/me any authenticated user may read, and admin writes
-// (merge-patch a namespace, restore a namespace, factory reset). Writes act on the
-// platform scope in slice-0, the same scope the resolver reads.
+// (merge-patch a namespace, restore a namespace, factory reset). Every write acts
+// on the platform scope, the same scope the resolver reads, so all three carry
+// platform:update on top of settings:update: a settings override is install-wide
+// by definition, never scoped to part of the estate.
 func registerSettingsRoutes(api huma.API, a *authenticator, gw storage.Gateway, svc *settings.Service) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "get-settings",
@@ -69,13 +71,16 @@ func registerSettingsRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 		return out, nil
 	})
 
-	huma.Register(api, a.gated(huma.Operation{
+	huma.Register(api, a.platformGated(a.gated(huma.Operation{
 		OperationID: "patch-settings-namespace",
 		Method:      http.MethodPatch,
 		Path:        "/settings/{namespace}",
 		Summary:     "Update a settings namespace",
-		Description: "Applies an RFC 7386 JSON Merge Patch to the namespace's platform override; null on a key restores it. Gated by settings:update.",
-	}, "settings", "update"), func(ctx context.Context, in *settingsPatchInput) (*settingsReadOutput, error) {
+		Description: "Applies an RFC 7386 JSON Merge Patch to the namespace's platform override; null on a key restores it. Gated by settings:update and platform:update.",
+	}, "settings", "update"), "update"), func(ctx context.Context, in *settingsPatchInput) (*settingsReadOutput, error) {
+		if err := a.requirePlatform(ctx, "update"); err != nil {
+			return nil, err
+		}
 		// Validate the patch against the namespace's reflected schema before storing:
 		// an unknown namespace is a 404, a bad key or value a 422.
 		if err := settings.Validate(in.Namespace, in.Body); err != nil {
@@ -96,28 +101,34 @@ func registerSettingsRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 		return resolveOutput(ctx, svc)
 	})
 
-	huma.Register(api, a.gated(huma.Operation{
+	huma.Register(api, a.platformGated(a.gated(huma.Operation{
 		OperationID:   "delete-settings-namespace",
 		Method:        http.MethodDelete,
 		Path:          "/settings/{namespace}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Restore a settings namespace to defaults",
-		Description:   "Drops the namespace's platform override, restoring the file layer and the declared defaults. Gated by settings:update.",
-	}, "settings", "update"), func(ctx context.Context, in *settingsNamespaceInput) (*struct{}, error) {
+		Description:   "Drops the namespace's platform override, restoring the file layer and the declared defaults. Gated by settings:update and platform:update.",
+	}, "settings", "update"), "update"), func(ctx context.Context, in *settingsNamespaceInput) (*struct{}, error) {
+		if err := a.requirePlatform(ctx, "update"); err != nil {
+			return nil, err
+		}
 		if err := gw.DeleteSettingOverride(ctx, actorID(ctx), "platform", in.Namespace); err != nil {
 			return nil, err
 		}
 		return nil, nil
 	})
 
-	huma.Register(api, a.gated(huma.Operation{
+	huma.Register(api, a.platformGated(a.gated(huma.Operation{
 		OperationID:   "restore-settings-defaults",
 		Method:        http.MethodPost,
 		Path:          "/settings:restoreDefaults",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Restore all settings to defaults",
-		Description:   "Removes every platform override (a factory reset). Gated by settings:update.",
-	}, "settings", "update"), func(ctx context.Context, _ *struct{}) (*struct{}, error) {
+		Description:   "Removes every platform override (a factory reset). Gated by settings:update and platform:update.",
+	}, "settings", "update"), "update"), func(ctx context.Context, _ *struct{}) (*struct{}, error) {
+		if err := a.requirePlatform(ctx, "update"); err != nil {
+			return nil, err
+		}
 		if err := gw.DeleteAllSettingOverrides(ctx, actorID(ctx), "platform"); err != nil {
 			return nil, err
 		}

@@ -150,15 +150,17 @@ func (p *PG) ListVariables(ctx context.Context, read scope.Set) ([]Variable, err
 // UpdateVariable replaces a variable's value, validated against its fixed
 // value_type, audited. Name, type, and owner are fixed at creation. Requires the
 // owner within the action scope; an unknown or out-of-scope id is
-// ErrVariableNotFound.
-func (p *PG) UpdateVariable(ctx context.Context, actorID, id string, value json.RawMessage, read, action scope.Set) (*Variable, error) {
+// ErrVariableNotFound. canPlatform is the caller's platform:update permission: a
+// variable at the platform tier is install-wide, so an all-scoped caller without
+// it is ErrVariableForbidden.
+func (p *PG) UpdateVariable(ctx context.Context, actorID, id string, value json.RawMessage, read, action scope.Set, canPlatform bool) (*Variable, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("storage: begin update variable: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	row, err := p.variableRowForAction(ctx, tx, id, read, action)
+	row, err := p.variableRowForAction(ctx, tx, id, read, action, canPlatform)
 	if err != nil {
 		return nil, err
 	}
@@ -187,15 +189,16 @@ func (p *PG) UpdateVariable(ctx context.Context, actorID, id string, value json.
 
 // DeleteVariable removes a variable by id, audited. The owner must be within the
 // action scope (all for a platform variable); an unknown id or one out of read scope
-// is the non-disclosing ErrVariableNotFound.
-func (p *PG) DeleteVariable(ctx context.Context, actorID, id string, read, action scope.Set) error {
+// is the non-disclosing ErrVariableNotFound. canPlatform is the caller's
+// platform:delete permission, required to remove a variable at the platform tier.
+func (p *PG) DeleteVariable(ctx context.Context, actorID, id string, read, action scope.Set, canPlatform bool) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("storage: begin delete variable: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	row, err := p.variableRowForAction(ctx, tx, id, read, action)
+	row, err := p.variableRowForAction(ctx, tx, id, read, action, canPlatform)
 	if err != nil {
 		return err
 	}
@@ -389,8 +392,11 @@ type variableRow struct {
 // variableRowForAction fetches a variable by id and enforces the read-then-action
 // scope split on its owner: read (owner in read scope, else the non-disclosing
 // not-found) then the action (owner in action scope, else forbidden). A platform
-// variable needs the all scope on each leg.
-func (p *PG) variableRowForAction(ctx context.Context, q querier, id string, read, action scope.Set) (variableRow, error) {
+// variable needs the all scope on each leg, plus the caller's platform permission
+// for the action (canPlatform): the tier is install-wide, so scope alone does not
+// carry it. Only the stored row knows its tier, which is why the permission is
+// resolved by the API and passed in here rather than checked on the request body.
+func (p *PG) variableRowForAction(ctx context.Context, q querier, id string, read, action scope.Set, canPlatform bool) (variableRow, error) {
 	var (
 		row            variableRow
 		comp, sys, loc *string
@@ -416,6 +422,9 @@ func (p *PG) variableRowForAction(ctx context.Context, q querier, id string, rea
 	if ok, err := p.variableOwnerInScope(ctx, q, row.ownerKind, row.ownerID, action); err != nil {
 		return variableRow{}, err
 	} else if !ok {
+		return variableRow{}, ErrVariableForbidden
+	}
+	if row.ownerKind == "platform" && !canPlatform {
 		return variableRow{}, ErrVariableForbidden
 	}
 	return row, nil

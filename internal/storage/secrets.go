@@ -300,15 +300,16 @@ func (p *PG) ListSecrets(ctx context.Context, read scope.Set, canAdmin bool) ([]
 
 // DeleteSecret removes a secret by id, audited. The owner must be within the
 // action scope (all for a platform secret); an unknown id or one out of read scope
-// is the non-disclosing ErrSecretNotFound.
-func (p *PG) DeleteSecret(ctx context.Context, actorID, id string, read, action scope.Set, canAdmin bool) error {
+// is the non-disclosing ErrSecretNotFound. canPlatform is the caller's
+// platform:delete permission, required to remove a secret at the platform tier.
+func (p *PG) DeleteSecret(ctx context.Context, actorID, id string, read, action scope.Set, canAdmin, canPlatform bool) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("storage: begin delete secret: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	before, err := p.secretForAction(ctx, tx, id, read, action, canAdmin)
+	before, err := p.secretForAction(ctx, tx, id, read, action, canAdmin, canPlatform)
 	if err != nil {
 		return err
 	}
@@ -332,8 +333,9 @@ func (p *PG) DeleteSecret(ctx context.Context, actorID, id string, read, action 
 // call, so leaving a secret field blank there omits it (keeps the current
 // value); a direct API client that means "keep" must omit the field, not send
 // it empty. Requires the owner within the action scope; an unknown or
-// out-of-scope id is ErrSecretNotFound.
-func (p *PG) UpdateSecret(ctx context.Context, actorID, id string, fields map[string]string, read, action scope.Set, canAdmin bool) (*Secret, error) {
+// out-of-scope id is ErrSecretNotFound. canPlatform is the caller's
+// platform:update permission, required to edit a secret at the platform tier.
+func (p *PG) UpdateSecret(ctx context.Context, actorID, id string, fields map[string]string, read, action scope.Set, canAdmin, canPlatform bool) (*Secret, error) {
 	if p.secret == nil {
 		return nil, ErrNoSecretProvider
 	}
@@ -343,7 +345,7 @@ func (p *PG) UpdateSecret(ctx context.Context, actorID, id string, fields map[st
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	row, shape, err := p.secretRowForAction(ctx, tx, id, read, action, canAdmin)
+	row, shape, err := p.secretRowForAction(ctx, tx, id, read, action, canAdmin, canPlatform)
 	if err != nil {
 		return nil, err
 	}
@@ -409,7 +411,10 @@ func (p *PG) decryptSecret(ctx context.Context, actorID, id, verb string, read, 
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	row, shape, err := p.secretRowForAction(ctx, tx, id, read, action, canAdmin)
+	// Revealing reads a secret, it never writes at the platform tier, so the tier
+	// permission does not apply here: the read/action scopes and the admin tier are
+	// the whole gate. Passing true keeps the shared fetch from re-gating a read.
+	row, shape, err := p.secretRowForAction(ctx, tx, id, read, action, canAdmin, true)
 	if err != nil {
 		return nil, err
 	}
@@ -678,8 +683,8 @@ type secretRow struct {
 
 // secretForAction fetches a secret by id and enforces the read-then-action scope
 // split on its owner, returning the masked Secret for the audit before-image.
-func (p *PG) secretForAction(ctx context.Context, q querier, id string, read, action scope.Set, canAdmin bool) (*Secret, error) {
-	row, shape, err := p.secretRowForAction(ctx, q, id, read, action, canAdmin)
+func (p *PG) secretForAction(ctx context.Context, q querier, id string, read, action scope.Set, canAdmin, canPlatform bool) (*Secret, error) {
+	row, shape, err := p.secretRowForAction(ctx, q, id, read, action, canAdmin, canPlatform)
 	if err != nil {
 		return nil, err
 	}
@@ -694,8 +699,11 @@ func (p *PG) secretForAction(ctx context.Context, q querier, id string, read, ac
 // secretRowForAction is the shared fetch-and-scope-check: the secret is read
 // (owner in read scope, else the non-disclosing not-found) then gated for the
 // action (owner in action scope, else forbidden). A platform secret needs the
-// all scope on each leg.
-func (p *PG) secretRowForAction(ctx context.Context, q querier, id string, read, action scope.Set, canAdmin bool) (secretRow, secret.Shape, error) {
+// all scope on each leg, plus the caller's platform permission for the action
+// (canPlatform): the tier is install-wide, so scope alone does not carry it. Only
+// the stored row knows its tier, which is why the permission is resolved by the
+// API and passed in here rather than checked on the request body.
+func (p *PG) secretRowForAction(ctx context.Context, q querier, id string, read, action scope.Set, canAdmin, canPlatform bool) (secretRow, secret.Shape, error) {
 	var (
 		row       secretRow
 		secType   string
@@ -730,6 +738,9 @@ func (p *PG) secretRowForAction(ctx context.Context, q querier, id string, read,
 	if ok, err := p.secretOwnerInScope(ctx, q, row.ownerKind, row.ownerID, action); err != nil {
 		return secretRow{}, secret.Shape{}, err
 	} else if !ok {
+		return secretRow{}, secret.Shape{}, ErrSecretForbidden
+	}
+	if row.ownerKind == "platform" && !canPlatform {
 		return secretRow{}, secret.Shape{}, ErrSecretForbidden
 	}
 	st, err := p.GetSecretType(ctx, secType)

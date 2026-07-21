@@ -356,8 +356,8 @@ type Gateway interface {
 	// where; canAdmin fences the sensitivity tier.
 	ListSecrets(ctx context.Context, read scope.Set, canAdmin bool) ([]Secret, error)
 	CreateSecret(ctx context.Context, actorID string, spec SecretSpec, create scope.Set, canAdmin bool) (*Secret, error)
-	UpdateSecret(ctx context.Context, actorID, id string, fields map[string]string, read, action scope.Set, canAdmin bool) (*Secret, error)
-	DeleteSecret(ctx context.Context, actorID, id string, read, action scope.Set, canAdmin bool) error
+	UpdateSecret(ctx context.Context, actorID, id string, fields map[string]string, read, action scope.Set, canAdmin, canPlatform bool) (*Secret, error)
+	DeleteSecret(ctx context.Context, actorID, id string, read, action scope.Set, canAdmin, canPlatform bool) error
 	RevealSecret(ctx context.Context, actorID, id string, read, action scope.Set, canAdmin bool) (map[string]string, error)
 	CopySecret(ctx context.Context, actorID, id string, read, action scope.Set, canAdmin bool) (map[string]string, error)
 	ResolveSecrets(ctx context.Context, componentID string, read scope.Set, canAdmin bool) ([]ResolvedSecret, error)
@@ -368,8 +368,8 @@ type Gateway interface {
 	// effective-value view down the structural cascade.
 	ListVariables(ctx context.Context, read scope.Set) ([]Variable, error)
 	CreateVariable(ctx context.Context, actorID string, spec VariableSpec, create scope.Set) (*Variable, error)
-	UpdateVariable(ctx context.Context, actorID, id string, value json.RawMessage, read, action scope.Set) (*Variable, error)
-	DeleteVariable(ctx context.Context, actorID, id string, read, action scope.Set) error
+	UpdateVariable(ctx context.Context, actorID, id string, value json.RawMessage, read, action scope.Set, canPlatform bool) (*Variable, error)
+	DeleteVariable(ctx context.Context, actorID, id string, read, action scope.Set, canPlatform bool) error
 	ResolveVariables(ctx context.Context, componentID string, read scope.Set) ([]ResolvedVariable, error)
 
 	// The declared-property tier, the fold of the fields feature onto the estate

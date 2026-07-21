@@ -275,6 +275,52 @@ func (a *authenticator) gated(op huma.Operation, tokens ...string) huma.Operatio
 	return op
 }
 
+// platformTier is the cascade's least-specific owner kind, the install-wide level
+// a write reaches only with platform:<action>.
+const platformTier = "platform"
+
+// platformGated declares the SECOND permission a route needs when its write lands
+// at the platform tier, the least-specific level of the cascade. The route keeps
+// its own resource gate (gated(...) is what enforces admission); this adds
+// platform:<action> to the permission registry and publishes it on the operation
+// as "x-omniglass-platform-permission", so the tier gate the handler enforces
+// through requirePlatform / canPlatform is in the universe the roles view reports
+// and in the spec, exactly like a primary gate. Wrap gated: platformGated(a.gated(op,
+// "variable", "create"), "create").
+func (a *authenticator) platformGated(op huma.Operation, action string) huma.Operation {
+	perm := "platform:" + action
+	if a.perms != nil {
+		a.perms[perm] = struct{}{}
+	}
+	if op.Extensions == nil {
+		op.Extensions = map[string]any{}
+	}
+	op.Extensions["x-omniglass-platform-permission"] = perm
+	return op
+}
+
+// canPlatform reports whether the caller holds platform:<action>, the install-wide
+// authority a write at the platform tier needs on top of the resource permission.
+// Full-estate SCOPE deliberately does not imply it: a senior operator may hold an
+// all-scoped grant over every entity without being able to change the one value
+// that applies to the whole install. Handlers that know the target tier from the
+// request use requirePlatform; the Gateway takes this as a flag where only the
+// stored row knows its tier (update and delete by id).
+func (a *authenticator) canPlatform(ctx context.Context, action string) bool {
+	perms, ok := permsFrom(ctx)
+	return ok && perms.Allows("platform", action)
+}
+
+// requirePlatform is the tier gate for a handler whose request already says the
+// write lands at the platform tier: nil when the caller holds platform:<action>,
+// a 403 otherwise.
+func (a *authenticator) requirePlatform(ctx context.Context, action string) error {
+	if !a.canPlatform(ctx, action) {
+		return huma.Error403Forbidden("writing at the platform tier requires platform:" + action)
+	}
+	return nil
+}
+
 // registeredPerms returns the permission universe (every capability declared via
 // gated()) as a sorted, deduped slice, for the roles view's held-vs-missing report.
 func (a *authenticator) registeredPerms() []string {

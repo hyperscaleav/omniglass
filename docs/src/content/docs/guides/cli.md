@@ -230,8 +230,8 @@ omniglass tag list                                  # the governed key vocabular
 omniglass tag create --name environment             # mint a key (tag:create, admin)
 omniglass tag create --name rack_position --applies-to '["location"]' --propagates=false
 omniglass tag update environment --applies-to '["component","system"]'
-omniglass tag setGlobal environment --value prod    # a tenant-wide default (tag:update)
-omniglass tag clearGlobal environment
+omniglass tag setPlatform environment --value prod  # an install-wide default (tag:update + platform:update)
+omniglass tag clearPlatform environment
 omniglass tag delete environment                    # cascades its bindings
 
 omniglass component setTag codec-1 --key environment --value dev    # component:update

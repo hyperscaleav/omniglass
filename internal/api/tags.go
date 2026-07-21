@@ -90,7 +90,7 @@ type tagNameInput struct {
 	Name string `path:"name" doc:"The tag key"`
 }
 
-type globalBindingInput struct {
+type platformBindingInput struct {
 	Name string `path:"name" doc:"The tag key"`
 	Body struct {
 		Value string `json:"value" minLength:"1" doc:"The bound value"`
@@ -120,9 +120,9 @@ type effectiveTagsOutput struct {
 
 // registerTagRoutes wires the tag surface: the governed key vocabulary (minting
 // gated by tag:create, an admin action), the per-entity value bindings (gated by
-// the owner's own update permission), the global binding (tag:update), and the
-// per-component effective-tags cascade. Reading the vocabulary and an entity's
-// tags rides the viewer floor.
+// the owner's own update permission), the platform binding (tag:update plus
+// platform:update), and the per-component effective-tags cascade. Reading the
+// vocabulary and an entity's tags rides the viewer floor.
 func registerTagRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-tags",
@@ -211,17 +211,22 @@ func registerTagRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		return nil, nil
 	})
 
-	// Global binding: a tenant-wide default value for a key, gated by tag:update
-	// (there is no owning entity to defer to). Modeled as custom methods on the
-	// key so the generated CLI reads `tag set-global <key>` / `tag clear-global`.
-	huma.Register(api, a.gated(huma.Operation{
-		OperationID: "set-global-tag",
+	// Platform binding: an install-wide default value for a key at the cascade's
+	// least-specific tier, gated by tag:update (there is no owning entity to defer
+	// to) plus platform:update, since the write always lands at the tier. Modeled as
+	// custom methods on the key so the generated CLI reads `tag setPlatform <key>` /
+	// `tag clearPlatform`.
+	huma.Register(api, a.platformGated(a.gated(huma.Operation{
+		OperationID: "set-platform-tag",
 		Method:      http.MethodPost,
-		Path:        "/tags/{name}:setGlobal",
-		Summary:     "Set a global tag value",
-		Description: "Binds a tenant-wide default value for a key at the global scope. Gated by tag:update (all-scope).",
-	}, "tag", "update"), func(ctx context.Context, in *globalBindingInput) (*tagBindingOutput, error) {
-		b, err := gw.SetTagBinding(ctx, actorID(ctx), in.Name, "platform", nil, in.Body.Value,
+		Path:        "/tags/{name}:setPlatform",
+		Summary:     "Set a platform tag value",
+		Description: "Binds an install-wide default value for a key at the platform tier. Gated by tag:update (all-scope) and platform:update.",
+	}, "tag", "update"), "update"), func(ctx context.Context, in *platformBindingInput) (*tagBindingOutput, error) {
+		if err := a.requirePlatform(ctx, "update"); err != nil {
+			return nil, err
+		}
+		b, err := gw.SetTagBinding(ctx, actorID(ctx), in.Name, platformTier, nil, in.Body.Value,
 			a.scopeFor(ctx, "tag", "update"), a.scopeFor(ctx, "tag", "update"))
 		if err != nil {
 			return nil, mapTagErr(err)
@@ -229,15 +234,18 @@ func registerTagRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		return &tagBindingOutput{Body: toTagBindingBody(b)}, nil
 	})
 
-	huma.Register(api, a.gated(huma.Operation{
-		OperationID:   "clear-global-tag",
+	huma.Register(api, a.platformGated(a.gated(huma.Operation{
+		OperationID:   "clear-platform-tag",
 		Method:        http.MethodPost,
-		Path:          "/tags/{name}:clearGlobal",
+		Path:          "/tags/{name}:clearPlatform",
 		DefaultStatus: http.StatusNoContent,
-		Summary:       "Clear a global tag value",
-		Description:   "Removes the global binding for a key. Gated by tag:update (all-scope).",
-	}, "tag", "update"), func(ctx context.Context, in *tagNameInput) (*struct{}, error) {
-		if err := gw.DeleteTagBinding(ctx, actorID(ctx), in.Name, "platform", nil,
+		Summary:       "Clear a platform tag value",
+		Description:   "Removes the platform-tier binding for a key. Gated by tag:update (all-scope) and platform:update.",
+	}, "tag", "update"), "update"), func(ctx context.Context, in *tagNameInput) (*struct{}, error) {
+		if err := a.requirePlatform(ctx, "update"); err != nil {
+			return nil, err
+		}
+		if err := gw.DeleteTagBinding(ctx, actorID(ctx), in.Name, platformTier, nil,
 			a.scopeFor(ctx, "tag", "update"), a.scopeFor(ctx, "tag", "update")); err != nil {
 			return nil, mapTagErr(err)
 		}

@@ -298,9 +298,9 @@ owning entity's own write. The key vocabulary and an entity's tags read on the v
 - `PATCH /tags/{name}` replaces a key's `{applies_to?, propagates?}` (`tag:update`, all-scope); the name
   is fixed.
 - `DELETE /tags/{name}` removes a key, cascading its bindings (204, `tag:delete`, all-scope).
-- `POST /tags/{name}:setGlobal` sets the **global** value for a key from `{value}` (`tag:update`);
-  `POST /tags/{name}:clearGlobal` removes it (204). A global binding has no owning entity, so it gates on
-  `tag:update`.
+- `POST /tags/{name}:setPlatform` sets the **platform-tier** value for a key from `{value}`;
+  `POST /tags/{name}:clearPlatform` removes it (204). A platform binding has no owning entity, so it gates on
+  `tag:update` plus `platform:update` (the install-wide tier permission below).
 - `GET /{components,systems,locations,nodes}/{name}:listTags` lists the bindings set **directly** on one entity
   (`{tags: [tagBinding]}`, the entity's `:read`).
 - `POST /{components,systems,locations,nodes}/{name}:setTag` binds a value from `{key, value}` on the entity;

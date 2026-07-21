@@ -48,7 +48,7 @@ func TestEffectiveTagsOnListBodies(t *testing.T) {
 	// Tags: environment cascades, compliance set only at the campus location.
 	c.do(ownerTok, http.MethodPost, "/tags", map[string]any{"name": "environment"}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPost, "/tags", map[string]any{"name": "compliance"}, http.StatusCreated)
-	c.do(ownerTok, http.MethodPost, "/tags/environment:setGlobal", map[string]any{"value": "prod"}, http.StatusOK)
+	c.do(ownerTok, http.MethodPost, "/tags/environment:setPlatform", map[string]any{"value": "prod"}, http.StatusOK)
 	c.do(ownerTok, http.MethodPost, "/locations/campus:setTag", map[string]any{"key": "compliance", "value": "pci"}, http.StatusOK)
 	c.do(ownerTok, http.MethodPost, "/systems/av:setTag", map[string]any{"key": "environment", "value": "dev"}, http.StatusOK)
 

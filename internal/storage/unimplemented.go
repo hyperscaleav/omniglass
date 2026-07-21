@@ -396,10 +396,10 @@ func (UnimplementedGateway) ListSecrets(context.Context, scope.Set, bool) ([]Sec
 func (UnimplementedGateway) CreateSecret(context.Context, string, SecretSpec, scope.Set, bool) (*Secret, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) UpdateSecret(context.Context, string, string, map[string]string, scope.Set, scope.Set, bool) (*Secret, error) {
+func (UnimplementedGateway) UpdateSecret(context.Context, string, string, map[string]string, scope.Set, scope.Set, bool, bool) (*Secret, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) DeleteSecret(context.Context, string, string, scope.Set, scope.Set, bool) error {
+func (UnimplementedGateway) DeleteSecret(context.Context, string, string, scope.Set, scope.Set, bool, bool) error {
 	return nil
 }
 func (UnimplementedGateway) RevealSecret(context.Context, string, string, scope.Set, scope.Set, bool) (map[string]string, error) {
@@ -417,10 +417,10 @@ func (UnimplementedGateway) ListVariables(context.Context, scope.Set) ([]Variabl
 func (UnimplementedGateway) CreateVariable(context.Context, string, VariableSpec, scope.Set) (*Variable, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) UpdateVariable(context.Context, string, string, json.RawMessage, scope.Set, scope.Set) (*Variable, error) {
+func (UnimplementedGateway) UpdateVariable(context.Context, string, string, json.RawMessage, scope.Set, scope.Set, bool) (*Variable, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) DeleteVariable(context.Context, string, string, scope.Set, scope.Set) error {
+func (UnimplementedGateway) DeleteVariable(context.Context, string, string, scope.Set, scope.Set, bool) error {
 	return nil
 }
 func (UnimplementedGateway) ResolveVariables(context.Context, string, scope.Set) ([]ResolvedVariable, error) {

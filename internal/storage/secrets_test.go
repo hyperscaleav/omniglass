@@ -307,7 +307,7 @@ func deleteByOwner(t *testing.T, gw storage.Gateway, list []storage.Secret, owne
 	t.Helper()
 	for _, s := range list {
 		if s.OwnerKind == ownerKind {
-			if err := gw.DeleteSecret(context.Background(), "", s.ID, all, all, true); err != nil {
+			if err := gw.DeleteSecret(context.Background(), "", s.ID, all, all, true, true); err != nil {
 				t.Fatalf("delete %s: %v", s.ID, err)
 			}
 		}

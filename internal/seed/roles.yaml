@@ -80,6 +80,13 @@ roles:
       # etc.) a two-token wildcard cannot; a sensitive file is thus admin/owner-only.
       - "file:>"
       - "variable:*"
+      # platform:<action> is install-wide authority: the right to change the value
+      # that applies to the WHOLE install (the least-specific cascade tier and the
+      # settings overrides), separate from how much of the estate a grant's scope
+      # covers. Admin and owner (via >) hold it; operator and deploy deliberately do
+      # not, so an all-scoped operator runs every site without being able to move
+      # the install-wide floor under them.
+      - "platform:*"
       - "settings:read,update"
       - "principal_grant:*"
       - "principal_group:*"
