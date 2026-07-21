@@ -397,6 +397,16 @@ type Gateway interface {
 	ClearPropertyValue(ctx context.Context, actorID, ownerKind, ownerID, propertyName, instance string, write scope.Set) error
 	EffectiveProperties(ctx context.Context, ownerKind, ownerID string, read scope.Set) ([]EffectiveProperty, error)
 
+	// Membership: the binding a role attaches to. Many-valued on purpose, since a
+	// shared device belongs to every system it serves, which a single pointer on
+	// the component cannot express. Staffing a role creates the membership, so the
+	// two can never disagree.
+	ListMembers(ctx context.Context, systemName string, read scope.Set) ([]Member, error)
+	ComponentMemberships(ctx context.Context, componentName string, read scope.Set) ([]Member, error)
+	AddMember(ctx context.Context, actorID, systemName, componentName string, write scope.Set) error
+	RemoveMember(ctx context.Context, actorID, systemName, componentName string, write scope.Set) error
+	SetPrimaryMember(ctx context.Context, actorID, systemName, componentName string, write scope.Set) error
+
 	// The role tier: a system's roles resolve from its standard (inherited) and its
 	// own ad-hoc declarations; assignment refuses a component whose resolved
 	// capabilities do not cover what the role requires.

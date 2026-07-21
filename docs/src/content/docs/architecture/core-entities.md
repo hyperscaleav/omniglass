@@ -64,7 +64,8 @@ Three nouns describe what you operate, plus the edge process that collects for t
   interfaces, and ships results ([nodes](/architecture/nodes/)). It is structural because it is a
   first-class **owner**: a node owns its own self-health telemetry and can carry a node-owned alarm.
 
-A component belongs to a system; a system sits in a location.
+A component belongs to one or more systems (see
+[membership](#membership-what-a-role-attaches-to)); a system sits in a location.
 
 ```d2
 direction: down
@@ -204,14 +205,42 @@ nothing crosses between them. The storage methods are deliberately `ListSystemRo
 `DeleteSystemRole` so they cannot be mistaken for RBAC's `ListRoles` / `UpsertRole`.
 :::
 
-Four tables carry it:
+Five tables carry it:
 
 | Table | Key columns | Notes |
 |---|---|---|
+| `system_member` | (`system_id`, `component_id`, **`is_primary`**) | **membership**: the binding a role attaches to, many-valued, cascading from both ends |
 | `system_role` | `owner_kind` + `standard_id` / `system_id` (the arc), `name`, `display_name`, **`quorum`**, **`impact`** | the slot itself; the arc is the one `property_value` uses, with a one-set CHECK and a `unique nulls not distinct` key over the arc plus name |
 | `role_capability` | (`role_id`, `capability_id`) | what the role requires, **conjunctive**: a component must provide **every** listed capability |
 | `component_capability` | (`component_id`, `capability_id`, **`present`**) | the component's **own** capability facts, layered over its product's |
 | `role_assignment` | (`system_id`, `role_id`, `component_id`) | who fills the role here; the component FK is **`on delete restrict`** |
+
+### Membership: what a role attaches to
+
+**A component that does a job in a system is a member of it, and the role is what that membership does.**
+Belonging and job are one attachment seen at two levels, not two facts that can drift apart.
+
+Membership is **many-valued on purpose**. A shared device belongs to every system it serves: a rack DSP
+feeding three rooms is a member of all three, and each of them depends on it. That a component is in this
+system *and two others* is exactly the kind of thing an operator needs to know before touching it.
+
+**Staffing a role creates the membership.** A component filling a job in a system that the system does not
+count as a member is a contradiction, so assignment binds it rather than asking an operator to say it twice.
+The reverse is deliberately **not** symmetric: giving up a role does not end membership, because the device
+is still in the room. A member carrying no role at all is ordinary and useful, and it is how the power
+conditioner, the rack shelf, and the spare on the shelf are accounted for.
+
+**`is_primary`** marks which membership answers a question asked *without a system in hand*. It is a
+**default for context-free callers, not a resolution rule**: anything that names a system resolves against
+that system. A component's first membership takes the default with nobody asking, so a component in exactly
+one system, which is nearly all of them, never meets the concept. A partial unique index makes a second
+primary impossible rather than merely unlikely.
+
+Membership **cascades from both ends**, since a binding is meaningless once either side is gone. It
+deliberately does not restrict the component the way `role_assignment` does: that restrict is load-bearing,
+because deleting a component that fills a job would silently break a system's health, but a membership
+carrying no role is an inventory fact, and refusing the delete for it would add a step to every component
+removal while protecting nothing the role table does not already protect.
 
 **A role is declared on a standard or on a system**, the same exclusive arc the property value store uses.
 Declared on a **standard**, every conforming system **inherits it live**, exactly as a contract default does:
@@ -381,23 +410,34 @@ occurrence behind it. See [datapoints](/architecture/datapoints/) for the value 
 
 ## Structural multi-membership (a component in N systems)
 
-A shared device legitimately belongs to more than one system, which would make the system layer a DAG.
-Keep it a **tree with a primary-system pointer** (which system chain feeds the cascade); a truly shared
-device **skips the system layer**. The genuine "config differs per system" case is answered by
-**per-system effective views** on demand, not by merging chains into the resolution
-([cascade](/architecture/cascade/)).
+A shared device legitimately belongs to more than one system, and
+[`system_member`](#membership-what-a-role-attaches-to) says so directly: it is many-valued, and a rack DSP
+serving three rooms holds three memberships.
 
-The binding itself is the **`system_member`** table: the **instance assignment** that ties a
-`component` to a `system` under a specific role, satisfying a `system_template_member` from the frozen
-`system_template_version` (key columns: `system_id`, `component_id`, `role`, plus the pin to the
-`system_template_member` it satisfies).
+What stays single-valued is **which system chain feeds the cascade**, because the resolver ranks candidates
+by band and then depth with no tiebreaker after that, so a many-valued seed would resolve
+nondeterministically. That is the job `is_primary` does, and only for callers with no system in hand. The
+genuine "config differs per system" case is answered by **per-system effective views** on demand, not by
+merging chains into the resolution ([cascade](/architecture/cascade/)).
+
+:::note[Superseded]
+This page previously said a truly shared device **skips the system layer**, which was the best available
+answer while the only binding was a single pointer on the component. It no longer holds: a shared device is
+a member of every system it serves.
+:::
+
+The binding itself is the **`system_member`** table, which is **built**: `(system_id, component_id,
+is_primary)`, described under [membership](#membership-what-a-role-attaches-to). The design below layered
+the role onto that same row and pinned it to a frozen template BOM; what shipped keeps the row to the
+binding alone and lets `role_assignment` carry the role, so a member can exist without one.
 
 A `system_template_member` declares, per role, a **requirement** (the canonical datapoints and commands a
 member must provide) plus its `health_role`; any component whose template meets the requirement can fill
 the role, validated on assignment. Detailed on [templates](/architecture/templates/).
 
 :::note[What is built is the role model above]
-`system_member` and the frozen template BOM are still `Design`. The **built** slot is
+`system_member` is **built** as the plain binding above; the **frozen template BOM** on it is still
+`Design`. The **built** slot is
 [`system_role`](#system-roles-the-slots-a-system-needs-filled), declared on a standard or a system rather
 than frozen into a `system_template_version`, requiring a **capability** set rather than canonical
 datapoints and commands, and assigned through `role_assignment`. Its **`impact`** also replaces the

@@ -1872,6 +1872,28 @@ components:
       required:
         - capabilities
       type: object
+    ListComponentMembershipsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListComponentMembershipsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        component:
+          type: string
+        memberships:
+          items:
+            $ref: "#/components/schemas/SystemMemberBody"
+          type:
+            - array
+            - "null"
+      required:
+        - component
+        - memberships
+      type: object
     ListComponentsOutputBody:
       additionalProperties: false
       properties:
@@ -2289,6 +2311,28 @@ components:
             - "null"
       required:
         - standards
+      type: object
+    ListSystemMembersOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListSystemMembersOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        members:
+          items:
+            $ref: "#/components/schemas/SystemMemberBody"
+          type:
+            - array
+            - "null"
+        system:
+          type: string
+      required:
+        - system
+        - members
       type: object
     ListSystemRolesOutputBody:
       additionalProperties: false
@@ -3615,6 +3659,23 @@ components:
       required:
         - id
         - name
+      type: object
+    SystemMemberBody:
+      additionalProperties: false
+      properties:
+        component:
+          description: Technical name of the component
+          type: string
+        primary:
+          description: Whether this membership is the component's default when no system is given
+          type: boolean
+        system:
+          description: Technical name of the system
+          type: string
+      required:
+        - system
+        - component
+        - primary
       type: object
     SystemPropertiesOutputBody:
       additionalProperties: false
@@ -5117,6 +5178,33 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List a component's recent events
+      x-omniglass-permission: component:read
+  /components/{name}/memberships:
+    get:
+      description: "The systems this component is bound into, ordered by name. A component may belong to several: a rack DSP serving three rooms is a member of all three, and each of them depends on it. Exactly one membership may be marked primary, the default for a question asked without a system in hand. Gated by component:read; an out-of-scope component is a non-disclosing 404."
+      operationId: list-component-memberships
+      parameters:
+        - description: Technical name of the component
+          in: path
+          name: name
+          required: true
+          schema:
+            description: Technical name of the component
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListComponentMembershipsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List the systems a component is in
       x-omniglass-permission: component:read
   /components/{name}/properties:
     get:
@@ -8449,6 +8537,122 @@ paths:
           description: Error
       summary: Read a system's health
       x-omniglass-permission: system:read
+  /systems/{name}/members:
+    get:
+      description: "The components bound into this system, ordered by name. Membership is what a role attaches to: every component staffing a role here is a member, and a member may also carry no role at all (a power conditioner is in the room without filling a declared slot). Gated by system:read; an out-of-scope system is a non-disclosing 404."
+      operationId: list-system-members
+      parameters:
+        - description: Technical name of the system
+          in: path
+          name: name
+          required: true
+          schema:
+            description: Technical name of the system
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListSystemMembersOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List the components in a system
+      x-omniglass-permission: system:read
+  /systems/{name}/members/{component}:
+    delete:
+      description: "Unbinds this component from the system. Refused with a 409 while it still fills a role here, since removing it would leave the system staffed by a non-member: unassign the role first. A component that was not a member is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404."
+      operationId: remove-system-member
+      parameters:
+        - description: Technical name of the system
+          in: path
+          name: name
+          required: true
+          schema:
+            description: Technical name of the system
+            type: string
+        - description: Technical name of the component
+          in: path
+          name: component
+          required: true
+          schema:
+            description: Technical name of the component
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Take a component out of a system
+      x-omniglass-permission: system:update
+    put:
+      description: Binds this component into the system. Idempotent. A component's first membership becomes its primary with nobody asking, so a component in exactly one system never has to think about the concept; a later membership does not take that default away. Gated by system:update; an out-of-scope system is a non-disclosing 404.
+      operationId: add-system-member
+      parameters:
+        - description: Technical name of the system
+          in: path
+          name: name
+          required: true
+          schema:
+            description: Technical name of the system
+            type: string
+        - description: Technical name of the component
+          in: path
+          name: component
+          required: true
+          schema:
+            description: Technical name of the component
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Put a component in a system
+      x-omniglass-permission: system:update
+  /systems/{name}/members/{component}:setPrimary:
+    post:
+      description: Moves the component's default to this membership. The default answers questions asked without a system in hand; it does not decide anything that names a system explicitly. A component that was not a member here is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.
+      operationId: set-primary-member
+      parameters:
+        - description: Technical name of the system
+          in: path
+          name: name
+          required: true
+          schema:
+            description: Technical name of the system
+            type: string
+        - description: Technical name of the component
+          in: path
+          name: component
+          required: true
+          schema:
+            description: Technical name of the component
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Make this the component's default system
+      x-omniglass-permission: system:update
   /systems/{name}/properties:
     get:
       description: Every property the system's standard declares, resolved to the system's own value or the contract default (is_set marks the override), plus any property set directly on the system (from_contract false). Gated by system:read; an out-of-scope system is a non-disclosing 404.

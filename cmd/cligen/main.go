@@ -201,14 +201,25 @@ var nameOverride = map[string]([]string){
 	// The self-service token creation would collapse to `token create`, colliding with
 	// the hand-written direct-DB `token <username>` command; group it under `auth`.
 	"create-auth-me-token": {"auth", "create-token"},
+	// System membership shares its leaf noun ("members") with principal-group
+	// membership, so the leaf-noun heuristic collapses both into one `member` group
+	// holding two `list` commands and two `delete` commands, where the second of
+	// each silently shadows the first. Group the system side under the resource
+	// that owns it, and read a component's systems from `component`, which is also
+	// where an operator would look for it.
+	"list-system-members":        {"system", "members"},
+	"add-system-member":          {"system", "add-member"},
+	"remove-system-member":       {"system", "remove-member"},
+	"set-primary-member":         {"system", "set-primary-member"},
+	"list-component-memberships": {"component", "systems"},
 	// The type registries live under one /types umbrella (/types/location, ...), so the
 	// leaf-noun heuristic would map each to `<kind> create` and collide with the base
 	// entity commands (location/system/component/secret). Group them under `type`.
-	"list-location-types":   {"type", "location", "list"},
-	"create-location-type":  {"type", "location", "create"},
-	"update-location-type":  {"type", "location", "update"},
-	"delete-location-type":  {"type", "location", "delete"},
-	"list-secret-types":     {"type", "secret", "list"},
+	"list-location-types":  {"type", "location", "list"},
+	"create-location-type": {"type", "location", "create"},
+	"update-location-type": {"type", "location", "update"},
+	"delete-location-type": {"type", "location", "delete"},
+	"list-secret-types":    {"type", "secret", "list"},
 	// The product contract and the component effective read are sub-collections
 	// whose leaf noun ("properties") is the property catalog's own, so the
 	// leaf-noun heuristic would collapse all three into one `property` group with
@@ -260,9 +271,9 @@ var nameOverride = map[string]([]string){
 	// same way its properties and capabilities do. Left to the leaf-noun heuristic
 	// they would become a top-level `alarm list|create|delete`, which drops the
 	// component the alarm is actually about from the command word.
-	"list-component-alarms":  {"component", "alarms"},
-	"raise-component-alarm":  {"component", "raise-alarm"},
-	"clear-component-alarm":  {"component", "clear-alarm"},
+	"list-component-alarms": {"component", "alarms"},
+	"raise-component-alarm": {"component", "raise-alarm"},
+	"clear-component-alarm": {"component", "clear-alarm"},
 	// The two health reads share the leaf noun "health", so the heuristic would
 	// collapse both into one `health` group with two colliding `list` commands.
 	// Each goes under the resource whose health it reports.
