@@ -97,3 +97,15 @@ func deleteTypeRow(ctx context.Context, p *PG, table, resource string, ref typeR
 	}
 	return nil
 }
+
+// isReferencedViolation reports whether a delete failed because another row still
+// references the target: foreign_key_violation (23503) or the explicit
+// restrict_violation (23001) an ON DELETE RESTRICT raises. Both mean the same
+// thing to an operator, that the row is still in use.
+func isReferencedViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		return pgErr.Code == "23503" || pgErr.Code == "23001"
+	}
+	return false
+}

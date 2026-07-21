@@ -337,7 +337,7 @@ func registerComponentCapabilityRoutes(api huma.API, a *authenticator, gw storag
 		Path:          "/components/{name}/capabilities/{capability}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Declare a capability on a component",
-		Description:   "Records this component's own fact about a capability: present true adds one its product does not claim, present false suppresses one it does. Idempotent. An unknown component or capability is a 422. Gated by component:update; an out-of-scope component is a non-disclosing 404.",
+		Description:   "Records this component's own fact about a capability: present true adds one its product does not claim, present false suppresses one it does. Idempotent. An unknown capability is a 422; an unknown or out-of-scope component is a non-disclosing 404 (the component is resolved in scope first). Gated by component:update.",
 	}, "component", "update"), func(ctx context.Context, in *setComponentCapabilityInput) (*struct{}, error) {
 		if err := requireComponentInScope(ctx, a, gw, in.Name, "update"); err != nil {
 			return nil, err

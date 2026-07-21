@@ -1,6 +1,6 @@
 ---
 title: Standards
-description: "The Standards catalog: the blueprint a system conforms to, its variants, and the properties it declares; shipped standards are yours to edit, not read-only seed content."
+description: "The Standards catalog: the blueprint a system conforms to, its variants, the properties it declares, and the roles a conforming system must staff; shipped standards are yours to edit, not read-only seed content."
 ---
 
 **Catalog > Standards** (`/standards`, with `standard:read`, covered by every viewer's `*:read` floor)
@@ -77,3 +77,77 @@ defaults to. It is the same editor as a product's contract, on the system side.
 From the CLI the contract is `omniglass standard properties <id>`,
 `omniglass standard set-property <id> <property>`, and
 `omniglass standard delete-property <id> <property>`.
+
+## Roles: what a conforming system needs filled
+
+A contract says what a system **carries**. A **role** says what it **needs filled**: a room microphone, a
+main display, a confidence monitor. Declare a role on a standard and **every conforming system inherits
+it**, the same live inheritance the contract has, so a standard is not only a shape but a **checklist**
+that says which rooms are short a component.
+
+A role in this sense is a **slot in a room**, and it has nothing to do with the
+[roles under Admin](/guides/admin/access/) that grant people access. Different word, different namespace,
+no overlap.
+
+The standard's blade carries a **Roles** panel beside its contract. Each role has:
+
+- a **name** (its address within the standard, e.g. `room-mic`) and a **display name**;
+- a **quorum**, how many components should fill it. Two ceiling mics is **one role with quorum 2**, not
+  two roles. The minimum is one, since a role no component need fill is not a role;
+- the **capabilities** it requires, picked from the [capability catalog](/guides/admin/capabilities/).
+  The list is **all of them, not any of them**: a component must provide **every** capability listed to
+  fill the role. Requiring `microphone` and `speaker` means a display cannot fill it no matter what else
+  it does.
+
+Declaring is **idempotent**, so saving a role that already exists revises it in place, and the capability
+list **replaces** the previous requirement wholesale (drop one by leaving it out). **Withdrawing** a role
+(with `standard:delete`) also removes every assignment conforming systems made to it, so withdraw only
+when the slot itself is gone, not when one room's component changed.
+
+Two shipped roles come with **Meeting Room**, and they are the worked example: **Room Microphone**
+(requires `microphone` and `speaker`, quorum **2**) and **Main Display** (requires
+`flat-panel-display`). Like the standards themselves they are **seeded only if absent**, so retuning
+quorum to what your rooms actually run survives the next restart.
+
+From the CLI: `omniglass standard roles <id>`,
+`omniglass standard set-role <id> <role> --display-name <label> --quorum <n> --capabilities <ids>`, and
+`omniglass standard delete-role <id> <role>`.
+
+## Staff a system against its standard
+
+Declaring the role is half of it; the other half happens on the system. Open a system from
+[Systems](/guides/operator/inventory/) and its detail carries a **Roles** panel showing **every role it
+needs filled**: the ones inherited from its standard and any declared on the system itself, each marked
+with where it came from.
+
+1. **Conform the system to the standard.** A system's **Standard** field is what makes it inherit;
+   a [one-off system](/guides/operator/entities/) that conforms to nothing sees only roles declared
+   directly on it.
+2. **Assign a component to the role.** Each role lists the components filling it and lets you add
+   another. The picker is scoped to what you can see, and assignment is idempotent.
+3. **Read the understaffed count.** A role wanting two components with one assigned reads as short by
+   one, immediately, without any monitoring running: staffing is a fact about what you have entered, not
+   a health verdict. What an unfilled role does to the room's health is a separate concern that arrives
+   with the health rollup.
+4. **Unassign when a component moves out.** The role goes back to understaffed until something else
+   fills it. A component that is currently staffing a role **cannot be deleted**; unassign it first, so
+   the system never silently loses a slot.
+
+**A component that cannot fill the role is refused, and told why.** Assigning a display to a role that
+requires `microphone` and `speaker` fails with a message naming exactly what is missing:
+
+```
+component "panel-1" cannot fill role "table-mic": missing microphone, speaker
+```
+
+That is the whole point of declaring capabilities. Your next move is in the message: either the component
+really does provide them and its [capability declarations](/guides/admin/capabilities/) need fixing, or it
+is the wrong component for the slot.
+
+Roles declared **directly on a system** work identically and are edited from the same panel; use them for
+what one room needs and the blueprint does not. A role inherited from the standard is withdrawn on the
+**standard**, not on the system that inherits it.
+
+From the CLI: `omniglass system roles <name>`, `omniglass system set-role <name> <role>`,
+`omniglass system delete-role <name> <role>`, `omniglass system assign-role <name> <role> <component>`,
+and `omniglass system unassign-role <name> <role> <component>`.

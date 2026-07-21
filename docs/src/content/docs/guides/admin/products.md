@@ -31,7 +31,11 @@ a separate genus. The system side has the same arrangement one level up: a syste
 - **Capabilities** is the set of things the product provides (a room bar provides **microphone**,
   **speaker**, **camera**, **codec**), each chosen from the [capability](/guides/admin/capabilities/)
   catalog. It is a many-to-many set: a product declares as many as it needs, and setting capabilities
-  on an update **replaces** the whole set. An unknown capability id is refused (422).
+  on an update **replaces** the whole set. An unknown capability id is refused (422). This set is the
+  **default** for the product's components, not the last word: a component
+  [adds or suppresses capabilities](/guides/admin/capabilities/#what-a-component-actually-provides) of
+  its own over it, and the resolved set is what a
+  [role assignment](/guides/admin/standards/#staff-a-system-against-its-standard) is checked against.
 - **Variants** use **parent product**: a specific SKU that inherits from a base product points at it
   with `parent_product_id` (a trim or regional variant of the same model). A product with no parent is
   a base product.

@@ -508,7 +508,7 @@ func generatedCommands() []*cobra.Command {
 			cmd := &cobra.Command{
 				Use:     "set-capability <name> <capability>",
 				Short:   "Declare a capability on a component",
-				Long:    "Records this component's own fact about a capability: present true adds one its product does not claim, present false suppresses one it does. Idempotent. An unknown component or capability is a 422. Gated by component:update; an out-of-scope component is a non-disclosing 404.",
+				Long:    "Records this component's own fact about a capability: present true adds one its product does not claim, present false suppresses one it does. Idempotent. An unknown capability is a 422; an unknown or out-of-scope component is a non-disclosing 404 (the component is resolved in scope first). Gated by component:update.",
 				Example: "  omniglass component set-capability <name> <capability> --present present",
 				Args:    cobra.ExactArgs(2),
 				RunE: func(cmd *cobra.Command, args []string) error {

@@ -157,6 +157,16 @@ are tagged, consequences are not, and health rolls up only, so there is no loop.
 
 ## Role-aware rollup: built-in, tuned by role
 
+:::note[Where the role lives today]
+The rollup is `Design`, but the **role** it tunes is now built: a
+[`system_role`](/architecture/core-entities/#system-roles-the-slots-a-system-needs-filled) declared on a
+standard or a system, staffed by components whose capabilities cover it, and carrying a **quorum**
+(**staffing** is already visible: a role wanting two with one assigned is understaffed today). What is
+**not** built is a role's **impact** on health, the successor to the `health_role` this section describes,
+which lands with the rollup engine that reads it
+([ADR-0049](/architecture/decisions/#adr-0049-the-system-role-capability-gated-staffing-and-the-resolved-capability-set)).
+:::
+
 The rollup is **engine behavior, not an editable rule**. Health is opinionated, so the reducer is
 built in and the same everywhere; what an operator tunes is **roles and thresholds**, never the
 reducer's guts. Each member carries a **`health_role`**, and the rollup respects it:

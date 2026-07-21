@@ -27,6 +27,7 @@ import ReachabilityPanel from "../components/ReachabilityPanel";
 import EventsPanel from "../components/EventsPanel";
 import { interfaceBlade, interfaceCreateBlade } from "../components/interfaceBlades";
 import PropertiesPanel, { propertyResolutionBlade, propertyBladeId } from "../components/PropertiesPanel";
+import CapabilitiesPanel from "../components/CapabilitiesPanel";
 
 // Components: the device inventory, the first page built on the generic TreeList.
 // Components form a tree (parent_id) and each is bound to a primary system and a
@@ -296,6 +297,15 @@ export default function Components() {
           component={n().raw.name}
           edit={edit}
           onOpen={(property) => ctx.openBlade({ kind: "property-resolution", id: propertyBladeId(n().raw.name, property) })}
+        />
+
+        {/* What the component provides, which is what a system role checks before
+            it may fill one. Writes are immediate (like tags), so the controls
+            appear only in edit mode, which keeps view read-only. */}
+        <CapabilitiesPanel
+          component={n().raw.name}
+          productId={n().raw.product_id}
+          canUpdate={editing() && canUpdate()}
         />
 
         <TagAdder kind="component" name={n().raw.name} canUpdate={editing() && canUpdate()} canCreateKey={can(me.data, "tag", "create")} />

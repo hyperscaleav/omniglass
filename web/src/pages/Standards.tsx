@@ -5,6 +5,7 @@ import KVStacked from "../components/KVStacked";
 import Button from "../components/Button";
 import { DrawerFooter } from "../components/Drawer";
 import ContractEditor from "../components/ContractEditor";
+import RoleEditor from "../components/RoleEditor";
 import { Plus } from "../components/icons";
 import {
   type Standard,
@@ -184,6 +185,7 @@ function StandardBladeBody(p: { id: string }): JSX.Element {
             <span class="text-[11px] text-base-content/40">A standard this one specializes. Leave empty for a standalone standard.</span>
           </div>
           <ContractEditor classifier="standard" id={r().id} official={r().official} />
+          <RoleEditor id={r().id} official={r().official} />
           <Show when={r().official}>
             <div role="alert" class="alert alert-soft text-sm"><span>Seed-owned, read-only.</span></div>
           </Show>

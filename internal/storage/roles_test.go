@@ -222,6 +222,21 @@ func TestEffectiveRolesAndAssignment(t *testing.T) {
 		t.Fatalf("unassign twice: err = %v, want ErrAssignmentMissing", err)
 	}
 
+	// A component staffing a role cannot be deleted out from under the system, and
+	// the refusal is the same "occupied" answer a parent with children gives (409),
+	// not an opaque server error. The restrict FK fires from outside the structural
+	// child check, so without mapping it this surfaces as a 500.
+	if err := gw.DeleteComponent(ctx, "", "bar-1", all, all); !errors.Is(err, storage.ErrComponentOccupied) {
+		t.Fatalf("delete a component staffing a role: err = %v, want ErrComponentOccupied", err)
+	}
+	// Unassigned, it deletes cleanly.
+	if err := gw.UnassignRole(ctx, "", "hq-huddle", "table-mic", "bar-1", all); err != nil {
+		t.Fatalf("unassign before delete: %v", err)
+	}
+	if err := gw.DeleteComponent(ctx, "", "bar-1", all, all); err != nil {
+		t.Fatalf("delete an unassigned component: %v", err)
+	}
+
 	// An unknown role on a real system is a clear not-found, not a silent no-op.
 	if err := gw.AssignRole(ctx, "", "hq-huddle", "no-such-role", "bar-1", all); !errors.Is(err, storage.ErrRoleNotFound) {
 		t.Fatalf("assign to unknown role: err = %v, want ErrRoleNotFound", err)
