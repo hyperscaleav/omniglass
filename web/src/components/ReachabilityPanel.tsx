@@ -2,6 +2,7 @@ import { For, Show, createMemo, createSignal } from "solid-js";
 import { useQuery } from "@tanstack/solid-query";
 import { ChevronRight, Plus, Sliders } from "./icons";
 import Button from "./Button";
+import StateStrip from "./StateStrip";
 import { rel } from "../lib/format";
 import { INTERFACES_KEY, listInterfaces } from "../lib/interfaces";
 import {
@@ -42,22 +43,18 @@ function segClass(value: string): string {
 }
 
 // AvailabilityStrip renders the up/down segments as flex weights, with an uptime
-// hint. A single-value strip (or none) still reads correctly.
+// hint. A single-value strip (or none) still reads correctly. The bar itself is the
+// shared StateStrip primitive, the same one the health history draws.
 function AvailabilityStrip(p: { iface: ReachInterface }) {
   const now = Date.now();
   const segs = createMemo(() => segments(p.iface.history, p.iface.verdict, now));
   const up = createMemo(() => uptime(p.iface.history, p.iface.verdict, now));
   return (
-    <div class="flex items-center gap-2">
-      <div class="flex h-2 flex-1 overflow-hidden rounded-full bg-base-300" title="Availability over the recent window">
-        <For each={segs()}>
-          {(s) => <div class={segClass(s.value)} style={{ flex: `${Math.max(s.weight, 0.001)} 1 0%` }} />}
-        </For>
-      </div>
+    <StateStrip segments={segs()} tone={segClass} title="Availability over the recent window">
       <Show when={up() !== null} fallback={<span class="text-[11px] text-base-content/40">no data</span>}>
         <span class="w-12 shrink-0 text-right text-[11px] tabular-nums text-base-content/60">{up()}% up</span>
       </Show>
-    </div>
+    </StateStrip>
   );
 }
 

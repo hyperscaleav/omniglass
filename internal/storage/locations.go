@@ -501,6 +501,18 @@ func (p *PG) locationByName(ctx context.Context, q querier, name string) (*Locat
 	return scopedByName(ctx, q, locationConfig, name)
 }
 
+// locationNameByID resolves a location id back to its name. Placements hold the
+// id while the estate-address records (health among them) hold the name, so a
+// before-image's location has to be translated before the location it points at
+// can be acted on.
+func locationNameByID(ctx context.Context, q querier, id string) (string, error) {
+	var name string
+	if err := q.QueryRow(ctx, `select name from location where id = $1`, id).Scan(&name); err != nil {
+		return "", fmt.Errorf("storage: location name for %q: %w", id, err)
+	}
+	return name, nil
+}
+
 // LocationNameTaken reports whether a location with this name exists. Scope-blind
 // by design: the name unique constraint is global, so availability must be a
 // global fact to match it (a scope-aware answer would false-positive on a name

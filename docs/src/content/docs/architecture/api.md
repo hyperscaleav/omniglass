@@ -22,8 +22,9 @@ Built today: the Huma-over-chi API with the OpenAPI 3.1 document generated from 
 (`make gen`), the AIP-style resource and `:verb` routing, and the problem+json error envelope, proven
 on `/auth`, `/roles`, `/locations`, `/systems`, `/components`, `/nodes`, `/interfaces`, `/tasks`, and the
 per-component reachability read, plus the type registries, the `/products` and `/standards` catalogs, the
-classifier-contract and instance-value property routes, and the role declaration, resolution, and staffing
-routes. The node `:enroll` and `:claim` custom methods
+classifier-contract and instance-value property routes, the role declaration, resolution, and staffing
+routes, and the component alarm plus system and location [health](#health-the-verdict-and-why) reads. The
+node `:enroll` and `:claim` custom methods
 are the first `:verb` routes in the wild. Still `Design`:
 the expression `filter` language, idempotency keys, long-running operations over the `action` row, the
 MCP surface, the SSE relay, and the NATS node contract. See [implementation status](/architecture/status/).
@@ -478,18 +479,21 @@ with who fills each role today), and **staffing** (assign and unassign). It is *
 [IAM role](/architecture/identity-access/): `/roles` is the RBAC catalog, these routes are the estate model.
 
 A role is addressed **by name within its owner**, so like a property contract line every declaration is a
-`PUT` that declares or revises in place. The body is `{display_name?, quorum?, capabilities?}`, and
-`capabilities` **replaces** the required set wholesale (omitting one drops it). Gating follows the owner:
+`PUT` that declares or revises in place. The body is `{display_name?, quorum?, capabilities?, impact?}`,
+`capabilities` **replaces** the required set wholesale (omitting one drops it), and `impact` is
+`outage` / `degraded` / `none` (omitted means `degraded`), what an impaired role does to its system's
+[health](#health-the-verdict-and-why). An unknown impact is a 422. Gating follows the owner:
 
 - `GET /standards/{id}/roles` plus `PUT` / `DELETE /standards/{id}/roles/{role}`, gated `standard:read` /
   `:update` / `:delete`. The list returns `{roles: [systemRole]}`, each
-  `{name, display_name, quorum, capabilities}`. Withdrawing a role takes every assignment conforming
+  `{name, display_name, quorum, capabilities, impact}`. Withdrawing a role takes every assignment conforming
   systems made to it (a cascade), and a role the standard does not declare is a 404.
 - `PUT` / `DELETE /systems/{name}/roles/{role}`, gated `system:update`, for a role declared **directly on
   one system**. A role the system does not declare **itself** is a 404 here: an inherited role is withdrawn
   on the standard, not on the system that inherits it.
 - `GET /systems/{name}/roles` is the **resolved read** (`{system, roles: [effectiveRole]}`), gated
-  `system:read`. Each row is the declaration plus `from_standard` (inherited, or declared on the system),
+  `system:read`. Each row is the declaration (including its `impact`) plus `from_standard` (inherited, or
+  declared on the system),
   `assigned_to` (the component names filling it here), `assigned`, and **`understaffed`** (how many more the
   role wants before quorum, zero when staffed). The counts are **served, not computed by the client**, so
   every surface reads staffing identically. A one-off system returns only its own roles.
@@ -521,6 +525,52 @@ bare 422 would be useless here, because the operator's next move (declare the mi
 component, or pick a different component) is exactly what the message has to tell them. Around it: an unknown
 role is a **404**, an unknown standard or an unknown capability on a declaration is a **422**, and an unknown
 (or out-of-scope) system or component is the same non-disclosing **404** as anywhere else.
+
+## Health: the verdict, and why
+
+**[Health](/architecture/health/)** is two shapes on this surface: the **alarm**, which is what is wrong
+with one component, and the **report**, which is what that means for a system or a location. The split is
+the model's: an alarm is component-local, and it reaches a room only through the **capabilities** it
+degrades.
+
+An alarm hangs off its component and rides that component's gating:
+
+- `GET /components/{name}/alarms` lists them newest first (`{component, alarms: [alarm]}`,
+  `component:read`), the **active** set by default and the whole history with `include_cleared`. An
+  `alarm` body is `{id, component, severity, message, capabilities, raised_at, cleared_at?, active}`.
+- `POST /components/{name}/alarms` raises one from `{severity, message?, capabilities?}` (201,
+  `component:update`). `severity` is `info` / `warning` / `critical`; `capabilities` is what the condition
+  **takes away**, and an alarm naming none is a note on the component that reaches no system. An unknown
+  capability or a bad severity is a **422**.
+- `DELETE /components/{name}/alarms/{id}` clears it (204, `component:update`). The row is **kept**, so the
+  record of what was wrong and when outlives the fix; clearing one that is already cleared, or that
+  belongs to another component, is a **404**, because clearing twice is an explicit miss rather than a
+  silent success.
+
+Both writes **recompute health in the same transaction**, so an alarm and the verdict it caused are never
+separately visible, and the recorded edge carries the time the estate changed rather than the time
+somebody asked.
+
+The reports are one shape over two owners:
+
+- `GET /systems/{name}/health` (`system:read`) returns `{owner_kind, owner, verdict, roles, systems,
+  transitions}`. `verdict` is `healthy` / `degraded` / `outage`. `roles` is every role the system needs
+  filled, each `{name, display_name, impact, required, quorum, satisfying, impaired, assigned_to,
+  degraded, alarms}`: `satisfying` counts the assigned components that can currently fill it, `degraded`
+  names the **required** capabilities an active alarm has taken away, and `alarms` is the alarms that took
+  them. An impaired role with an **empty** `degraded` is **short-staffed**, not broken, which is a
+  different job for the operator.
+- `GET /locations/{name}/health` (`location:read`) returns the same envelope with `systems` filled
+  instead: every system placed **anywhere** beneath the location, with its verdict, as the drill-down. The
+  system read explains the rest, so the location report stays a map.
+- `transitions` is the **recorded edges** over the last 30 days, oldest first, each `{ts, verdict}`. One
+  entry per change, never a sample.
+
+Both resolve their owner **within the caller's scope first**, so an out-of-scope system or location is a
+**non-disclosing 404**, and **neither read writes anything**. The verdict served is computed from the very
+rows served beside it, so a report can never disagree with its own evidence, while the transitions stay the
+recorded history
+([ADR-0050](/architecture/decisions/#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain)).
 
 ## Files: content-addressed bytes behind a handle
 

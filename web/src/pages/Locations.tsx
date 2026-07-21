@@ -26,6 +26,7 @@ import { ChevronRight, Pencil, Plus, Save, Search, X, resolveIcon } from "../com
 import Button from "../components/Button";
 import InfoTip from "../components/InfoTip";
 import PropertiesPanel, { propertyResolutionBlade, ownerPropertyBladeId } from "../components/PropertiesPanel";
+import { LocationHealthPanel } from "../components/HealthPanel";
 import { ROOT_PLACEMENT } from "../lib/types";
 
 // Locations: the place tree on the generic TreeList (campuses, buildings, floors,
@@ -422,6 +423,14 @@ export default function Locations() {
             </div>
           </div>
         </Show>
+
+        {/* The rollup: a location has no roles of its own, so its verdict is the
+            worst among the systems placed anywhere beneath it, each linked to the
+            detail that can say why. */}
+        <LocationHealthPanel
+          location={n().raw.name}
+          onOpenSystem={(name) => navigate(`/systems/${encodeURIComponent(name)}`)}
+        />
 
         {/* The location type's contract, resolved against this location's own
             values. The panel batches its writes into the accordion's Save, so a

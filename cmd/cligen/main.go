@@ -256,6 +256,18 @@ var nameOverride = map[string]([]string){
 	"list-component-capabilities": {"component", "capabilities"},
 	"set-component-capability":    {"component", "set-capability"},
 	"clear-component-capability":  {"component", "clear-capability"},
+	// Alarms are a component sub-collection, so they group under the component the
+	// same way its properties and capabilities do. Left to the leaf-noun heuristic
+	// they would become a top-level `alarm list|create|delete`, which drops the
+	// component the alarm is actually about from the command word.
+	"list-component-alarms":  {"component", "alarms"},
+	"raise-component-alarm":  {"component", "raise-alarm"},
+	"clear-component-alarm":  {"component", "clear-alarm"},
+	// The two health reads share the leaf noun "health", so the heuristic would
+	// collapse both into one `health` group with two colliding `list` commands.
+	// Each goes under the resource whose health it reports.
+	"get-system-health":   {"system", "health"},
+	"get-location-health": {"location", "health"},
 }
 
 func buildCommands(doc spec, base string) []command {

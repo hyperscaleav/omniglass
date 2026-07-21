@@ -560,3 +560,16 @@ func (UnimplementedGateway) SetComponentCapability(context.Context, string, stri
 func (UnimplementedGateway) ClearComponentCapability(context.Context, string, string, string) error {
 	return nil
 }
+func (UnimplementedGateway) RaiseAlarm(context.Context, string, string, AlarmSpec) (*Alarm, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) ClearAlarm(context.Context, string, string, string) error { return nil }
+func (UnimplementedGateway) ListAlarms(context.Context, string, bool) ([]Alarm, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) SystemHealth(context.Context, string, time.Time, scope.Set) (*HealthReport, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) LocationHealth(context.Context, string, time.Time, scope.Set) (*HealthReport, error) {
+	return nil, nil
+}

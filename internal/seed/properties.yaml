@@ -40,6 +40,16 @@ properties:
       results (up = every applicable probe reached the target). A built-in state:
       availability is time_in_state over it. Unknown/stale are read-time
       derivations, not stored values.
+  - name: health
+    kind: state
+    data_type: string
+    validation: { enum: [healthy, degraded, outage] }
+    display_name: Health
+    description: >-
+      The rolled-up health verdict for a component, system, or location, worst-wins
+      over its inputs (a component's active alarms, a system's roles, the systems
+      under a location). Recorded transition-only, so the series is the edges: when
+      it broke and when it came back, not a sample per check.
   - name: syslog.line
     kind: log
     data_type: string

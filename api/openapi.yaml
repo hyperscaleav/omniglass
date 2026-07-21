@@ -17,6 +17,50 @@ components:
       required:
         - principal_id
       type: object
+    AlarmBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/AlarmBody.json
+          format: uri
+          readOnly: true
+          type: string
+        active:
+          type: boolean
+        capabilities:
+          description: The capabilities this alarm degrades; empty means it reaches no role
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        cleared_at:
+          description: Null while the alarm is active
+          format: date-time
+          type: string
+        component:
+          type: string
+        id:
+          type: string
+        message:
+          type: string
+        raised_at:
+          format: date-time
+          type: string
+        severity:
+          description: info, warning, or critical
+          type: string
+      required:
+        - id
+        - component
+        - severity
+        - message
+        - capabilities
+        - raised_at
+        - active
+      type: object
     AuditEventBody:
       additionalProperties: false
       properties:
@@ -1130,6 +1174,9 @@ components:
         from_standard:
           description: True when the role is inherited from the system's standard; false when declared on the system
           type: boolean
+        impact:
+          description: "What an impaired role means for its system: outage, degraded, or none"
+          type: string
         name:
           type: string
         quorum:
@@ -1144,6 +1191,7 @@ components:
         - display_name
         - quorum
         - capabilities
+        - impact
         - from_standard
         - assigned_to
         - assigned
@@ -1303,6 +1351,52 @@ components:
             - https://example.com/errors/example
           format: uri
           type: string
+      type: object
+    EstateHealthOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/EstateHealthOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        owner:
+          type: string
+        owner_kind:
+          type: string
+        roles:
+          description: The contributing roles; empty for a location
+          items:
+            $ref: "#/components/schemas/HealthRoleBody"
+          type:
+            - array
+            - "null"
+        systems:
+          description: The systems beneath a location with their verdicts; empty for a system
+          items:
+            $ref: "#/components/schemas/HealthSystemBody"
+          type:
+            - array
+            - "null"
+        transitions:
+          description: "The recorded edges over the window, oldest first: one entry per change, never a sample"
+          items:
+            $ref: "#/components/schemas/HealthTransitionBody"
+          type:
+            - array
+            - "null"
+        verdict:
+          description: "healthy, degraded, or outage: the rollup of the roles or systems served beside it"
+          type: string
+      required:
+        - owner_kind
+        - owner
+        - verdict
+        - roles
+        - systems
+        - transitions
       type: object
     EventBody:
       additionalProperties: false
@@ -1476,6 +1570,34 @@ components:
         - member_count
         - grant_count
       type: object
+    HealthAlarmBody:
+      additionalProperties: false
+      properties:
+        capabilities:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        component:
+          type: string
+        id:
+          type: string
+        message:
+          type: string
+        raised_at:
+          format: date-time
+          type: string
+        severity:
+          type: string
+      required:
+        - id
+        - component
+        - severity
+        - message
+        - capabilities
+        - raised_at
+      type: object
     HealthOutputBody:
       additionalProperties: false
       properties:
@@ -1495,6 +1617,88 @@ components:
       required:
         - status
         - db
+      type: object
+    HealthRoleBody:
+      additionalProperties: false
+      properties:
+        alarms:
+          description: The active alarms that degraded them
+          items:
+            $ref: "#/components/schemas/HealthAlarmBody"
+          type:
+            - array
+            - "null"
+        assigned_to:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        degraded:
+          description: The required capabilities an active alarm has taken away; empty when the role is merely short-staffed
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        display_name:
+          type: string
+        impact:
+          description: "What an impaired role means for its system: outage, degraded, or none"
+          type: string
+        impaired:
+          description: True when satisfying is below quorum
+          type: boolean
+        name:
+          type: string
+        quorum:
+          format: int64
+          type: integer
+        required:
+          description: The capabilities a component must ALL provide to fill this role
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        satisfying:
+          description: How many assigned components can currently fill the role
+          format: int64
+          type: integer
+      required:
+        - name
+        - display_name
+        - impact
+        - required
+        - quorum
+        - satisfying
+        - impaired
+        - assigned_to
+        - degraded
+        - alarms
+      type: object
+    HealthSystemBody:
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+        verdict:
+          type: string
+      required:
+        - name
+        - verdict
+      type: object
+    HealthTransitionBody:
+      additionalProperties: false
+      properties:
+        ts:
+          format: date-time
+          type: string
+        verdict:
+          type: string
+      required:
+        - ts
+        - verdict
       type: object
     HumanBody:
       additionalProperties: false
@@ -1626,6 +1830,28 @@ components:
         - open_edit
         - close_blade
         - command_palette
+      type: object
+    ListAlarmsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListAlarmsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        alarms:
+          items:
+            $ref: "#/components/schemas/AlarmBody"
+          type:
+            - array
+            - "null"
+        component:
+          type: string
+      required:
+        - component
+        - alarms
       type: object
     ListCapabilitiesOutputBody:
       additionalProperties: false
@@ -2580,6 +2806,36 @@ components:
         - data_type
         - official
       type: object
+    RaiseAlarmInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/RaiseAlarmInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        capabilities:
+          description: The capabilities this condition degrades; a role requiring one of them can no longer be filled by this component
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        message:
+          description: What is wrong, for the operator reading it later
+          type: string
+        severity:
+          description: How bad it is; critical puts the component itself in outage
+          enum:
+            - info
+            - warning
+            - critical
+          type: string
+      required:
+        - severity
+      type: object
     ReachHistoryBody:
       additionalProperties: false
       properties:
@@ -2895,6 +3151,13 @@ components:
             - "null"
         display_name:
           description: The role's human label; defaults to the role name
+          type: string
+        impact:
+          description: "What an impaired role means for its system; omit for degraded. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display"
+          enum:
+            - outage
+            - degraded
+            - none
           type: string
         quorum:
           description: How many components must fill the role; omit for one
@@ -3420,6 +3683,9 @@ components:
         display_name:
           description: The role's human label
           type: string
+        impact:
+          description: "What an impaired role means for its system: outage, degraded, or none"
+          type: string
         name:
           description: The role's name within its owner (the address)
           type: string
@@ -3432,6 +3698,7 @@ components:
         - display_name
         - quorum
         - capabilities
+        - impact
       type: object
     TagBindingBody:
       additionalProperties: false
@@ -4532,7 +4799,7 @@ paths:
       x-omniglass-permission: component:create
   /components/{name}:
     delete:
-      description: Deletes a component, refused while it still has child components. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.
+      description: Deletes a component, refused (409) while it still has child components or is still referenced elsewhere, such as by a system role it staffs. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.
       operationId: delete-component
       parameters:
         - description: The component's unique name
@@ -4608,6 +4875,102 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Update a component
+      x-omniglass-permission: component:update
+  /components/{name}/alarms:
+    get:
+      description: What is currently wrong with this component, newest first, each with the capabilities it degrades. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+      operationId: list-component-alarms
+      parameters:
+        - description: The component's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The component's unique name
+            type: string
+        - description: Include cleared alarms, so the list is the history rather than what is wrong now
+          explode: false
+          in: query
+          name: include_cleared
+          schema:
+            description: Include cleared alarms, so the list is the history rather than what is wrong now
+            type: boolean
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListAlarmsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List a component's alarms
+      x-omniglass-permission: component:read
+    post:
+      description: "Records a condition on this component and the capabilities it degrades, then recomputes health in the same transaction: any role requiring a degraded capability can no longer be filled by this component, and its system and location verdicts move with it. An unknown capability is a 422. Gated by component:update; an out-of-scope component is a non-disclosing 404."
+      operationId: raise-component-alarm
+      parameters:
+        - description: The component's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The component's unique name
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RaiseAlarmInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlarmBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Raise an alarm on a component
+      x-omniglass-permission: component:update
+  /components/{name}/alarms/{id}:
+    delete:
+      description: "Marks the alarm cleared and recomputes health in the same transaction, so the recovery is recorded as a transition at the moment it happened. The row is kept: what was wrong and when outlives the fix. Clearing an alarm that is already cleared or does not exist is a 404. Gated by component:update; an out-of-scope component is a non-disclosing 404."
+      operationId: clear-component-alarm
+      parameters:
+        - description: The component's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The component's unique name
+            type: string
+        - description: The alarm id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The alarm id
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Clear an alarm
       x-omniglass-permission: component:update
   /components/{name}/capabilities:
     get:
@@ -5514,7 +5877,7 @@ paths:
       x-omniglass-permission: location:create
   /locations/{name}:
     delete:
-      description: Deletes a location, refused while it still has child locations. Gated by location:delete; read and delete scopes drive the 404 versus 403 split.
+      description: Deletes a location, refused (409) while it still has child locations or is still referenced elsewhere. Gated by location:delete; read and delete scopes drive the 404 versus 403 split.
       operationId: delete-location
       parameters:
         - description: The location's unique name
@@ -5591,6 +5954,33 @@ paths:
           description: Error
       summary: Update a location
       x-omniglass-permission: location:update
+  /locations/{name}/health:
+    get:
+      description: The location's current verdict, worst-wins over every system placed anywhere beneath it, with those systems and their verdicts as the drill-down (the system health read names the role, the capability, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.
+      operationId: get-location-health
+      parameters:
+        - description: The location's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The location's unique name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EstateHealthOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Read a location's health
+      x-omniglass-permission: location:read
   /locations/{name}/properties:
     get:
       description: Every property the location's type declares, resolved to the location's own value or the contract default (is_set marks the override), plus any property set directly on the location (from_contract false). Gated by location:read; an out-of-scope location is a non-disclosing 404.
@@ -7955,7 +8345,7 @@ paths:
       x-omniglass-permission: system:create
   /systems/{name}:
     delete:
-      description: Deletes a system, refused while it still has child systems. Gated by system:delete; read and delete scopes drive the 404 versus 403 split.
+      description: Deletes a system, refused (409) while it still has child systems or is still referenced elsewhere. Gated by system:delete; read and delete scopes drive the 404 versus 403 split.
       operationId: delete-system
       parameters:
         - description: The system's unique name
@@ -8032,6 +8422,33 @@ paths:
           description: Error
       summary: Update a system
       x-omniglass-permission: system:update
+  /systems/{name}/health:
+    get:
+      description: "The system's current verdict and why: every role it needs filled, whether it is impaired, what an impaired role means for the system (impact), and for an impaired role the required capabilities an alarm has taken away plus the alarms that took them. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404."
+      operationId: get-system-health
+      parameters:
+        - description: The system's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The system's unique name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EstateHealthOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Read a system's health
+      x-omniglass-permission: system:read
   /systems/{name}/properties:
     get:
       description: Every property the system's standard declares, resolved to the system's own value or the contract default (is_set marks the override), plus any property set directly on the system (from_contract false). Gated by system:read; an out-of-scope system is a non-disclosing 404.

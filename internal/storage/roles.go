@@ -21,8 +21,13 @@ type SystemRole struct {
 	DisplayName  string
 	Quorum       int
 	Capabilities []string // the capability ids the role requires, all of them
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	// Impact is what an impaired role means for its system: outage, degraded, or
+	// none. It lives on the role because the same broken component matters
+	// differently depending on the slot it was filling, and it is the only input
+	// the rollup takes from the declaration side beyond the requirement itself.
+	Impact    string
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 // SystemRoleSpec is the declaration input. Capabilities replace the required set
@@ -32,6 +37,7 @@ type SystemRoleSpec struct {
 	DisplayName  string
 	Quorum       int
 	Capabilities []string
+	Impact       string // outage | degraded | none; empty means degraded
 }
 
 // EffectiveRole is one role resolved for a system: the declaration plus who fills
@@ -63,7 +69,12 @@ var (
 	ErrRoleExists        = errors.New("storage: a role with this name is already declared here")
 	ErrRoleRefNotFound   = errors.New("storage: role references a missing owner or capability")
 	ErrAssignmentMissing = errors.New("storage: role assignment not found")
+	ErrRoleImpact        = errors.New("storage: unknown role impact")
 )
+
+// roleImpacts is the impact domain, mirroring the table's CHECK. Validating here
+// turns a typo into a named refusal rather than a constraint violation.
+var roleImpacts = map[string]bool{"outage": true, "degraded": true, "none": true}
 
 // CapabilityShortfall is the assignment refusal: the component does not provide
 // every capability the role requires. It names the gap so the caller can say so.
@@ -141,14 +152,14 @@ func (p *PG) EffectiveRoles(ctx context.Context, systemName string, read scope.S
 			select r.*, false as from_standard
 			from sys join system_role r on r.owner_kind = 'system' and r.system_id = sys.name
 		)
-		select roles.id, roles.name, roles.display_name, roles.quorum, roles.from_standard,
+		select roles.id, roles.name, roles.display_name, roles.quorum, roles.impact, roles.from_standard,
 		       roles.created_at, roles.updated_at,
 		       coalesce(array_agg(distinct rc.capability_id) filter (where rc.capability_id is not null), '{}') as caps,
 		       coalesce(array_agg(distinct ra.component_id) filter (where ra.component_id is not null), '{}') as assigned
 		from roles
 		left join role_capability rc on rc.role_id = roles.id
 		left join role_assignment ra on ra.role_id = roles.id and ra.system_id = $1
-		group by roles.id, roles.name, roles.display_name, roles.quorum, roles.from_standard,
+		group by roles.id, roles.name, roles.display_name, roles.quorum, roles.impact, roles.from_standard,
 		         roles.created_at, roles.updated_at
 		order by roles.name`, systemName)
 	if err != nil {
@@ -159,7 +170,7 @@ func (p *PG) EffectiveRoles(ctx context.Context, systemName string, read scope.S
 	var out []EffectiveRole
 	for rows.Next() {
 		var e EffectiveRole
-		if err := rows.Scan(&e.ID, &e.Name, &e.DisplayName, &e.Quorum, &e.FromStandard,
+		if err := rows.Scan(&e.ID, &e.Name, &e.DisplayName, &e.Quorum, &e.Impact, &e.FromStandard,
 			&e.CreatedAt, &e.UpdatedAt, &e.Capabilities, &e.AssignedTo); err != nil {
 			return nil, fmt.Errorf("storage: scan effective role: %w", err)
 		}
@@ -219,6 +230,12 @@ func (p *PG) AssignRole(ctx context.Context, actorID, systemName, roleName, comp
 		map[string]string{"system": systemName, "role": roleName, "component": componentName}); err != nil {
 		return err
 	}
+	// Staffing changes health: the role may have just reached quorum. The system is
+	// named explicitly rather than left to the component's assignments, so assign
+	// and unassign take the same path.
+	if err := p.recomputeChain(ctx, tx, []string{componentName}, []string{systemName}, nil); err != nil {
+		return err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("storage: commit assign role: %w", err)
 	}
@@ -256,6 +273,11 @@ func (p *PG) UnassignRole(ctx context.Context, actorID, systemName, roleName, co
 		return fmt.Errorf("storage: unassign role: %w", err)
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "delete", "role_assignment", id, nil, nil); err != nil {
+		return err
+	}
+	// The assignment row is already gone, so walking the component's assignments
+	// would no longer reach this system. Naming it is what makes the drop visible.
+	if err := p.recomputeChain(ctx, tx, []string{componentName}, []string{systemName}, nil); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {

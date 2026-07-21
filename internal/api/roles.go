@@ -33,6 +33,7 @@ type systemRoleBody struct {
 	DisplayName  string   `json:"display_name" doc:"The role's human label"`
 	Quorum       int      `json:"quorum" doc:"How many components must fill the role"`
 	Capabilities []string `json:"capabilities" doc:"The capabilities a component must ALL provide to fill it"`
+	Impact       string   `json:"impact" doc:"What an impaired role means for its system: outage, degraded, or none"`
 }
 
 func toSystemRoleBody(r *storage.SystemRole) systemRoleBody {
@@ -45,6 +46,7 @@ func toSystemRoleBody(r *storage.SystemRole) systemRoleBody {
 		DisplayName:  r.DisplayName,
 		Quorum:       r.Quorum,
 		Capabilities: caps,
+		Impact:       r.Impact,
 	}
 }
 
@@ -56,6 +58,7 @@ type effectiveRoleBody struct {
 	DisplayName  string   `json:"display_name"`
 	Quorum       int      `json:"quorum"`
 	Capabilities []string `json:"capabilities" doc:"The capabilities a component must ALL provide to fill it"`
+	Impact       string   `json:"impact" doc:"What an impaired role means for its system: outage, degraded, or none"`
 	FromStandard bool     `json:"from_standard" doc:"True when the role is inherited from the system's standard; false when declared on the system"`
 	AssignedTo   []string `json:"assigned_to" doc:"The component names filling this role in this system"`
 	Assigned     int      `json:"assigned" doc:"How many components fill the role"`
@@ -75,6 +78,7 @@ func toEffectiveRoleBody(e *storage.EffectiveRole) effectiveRoleBody {
 		DisplayName:  e.DisplayName,
 		Quorum:       e.Quorum,
 		Capabilities: caps,
+		Impact:       e.Impact,
 		FromStandard: e.FromStandard,
 		AssignedTo:   to,
 		Assigned:     e.Assigned(),
@@ -106,6 +110,7 @@ type roleSpecBody struct {
 	DisplayName  string   `json:"display_name,omitempty" doc:"The role's human label; defaults to the role name"`
 	Quorum       int      `json:"quorum,omitempty" minimum:"0" doc:"How many components must fill the role; omit for one"`
 	Capabilities []string `json:"capabilities,omitempty" doc:"The capabilities a component must ALL provide; replaces the required set wholesale"`
+	Impact       string   `json:"impact,omitempty" enum:"outage,degraded,none" doc:"What an impaired role means for its system; omit for degraded. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display"`
 }
 
 type standardRolePathInput struct {
@@ -378,6 +383,7 @@ func roleSpec(name string, body roleSpecBody) storage.SystemRoleSpec {
 		DisplayName:  display,
 		Quorum:       body.Quorum,
 		Capabilities: body.Capabilities,
+		Impact:       body.Impact,
 	}
 }
 
@@ -427,6 +433,8 @@ func mapRoleErr(err error) error {
 		return huma.Error409Conflict("a role with this name is already declared here")
 	case errors.Is(err, storage.ErrRoleRefNotFound):
 		return huma.Error422UnprocessableEntity("unknown owner or capability")
+	case errors.Is(err, storage.ErrRoleImpact):
+		return huma.Error422UnprocessableEntity("impact must be outage, degraded, or none")
 	case errors.Is(err, storage.ErrSystemNotFound):
 		return huma.Error404NotFound("system not found")
 	case errors.Is(err, storage.ErrComponentNotFound):

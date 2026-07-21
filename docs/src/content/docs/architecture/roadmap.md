@@ -23,8 +23,10 @@ Three surfaces carry the time axis, and this page ties them together:
 The foundation and the first vertical tiers are built: the single binary with `server` / `migrate` run
 modes, the auth and Storage Gateway foundation (capability + per-action ABAC scope), the
 [generation pipeline](/contributing/api-first/) (OpenAPI to typed CLI and SPA client), and the structural
-[estate](/architecture/core-entities/) (`location`, `system`, `component` as scoped trees) with the
-operator console's inventory surfaces. The per-slice detail is on [implementation status](/architecture/status/).
+[estate](/architecture/core-entities/) (`location`, `system`, `component` as scoped trees, their
+classifier catalogs and property contracts, the roles a system needs filled, and the
+[health](/architecture/health/) verdict rolled up over them) with the operator console's inventory
+surfaces. The per-slice detail is on [implementation status](/architecture/status/).
 
 ## Near-term epics
 
@@ -54,7 +56,9 @@ pointing at the page that already describes the target:
    filters share.
 3. **Detection and verdict.** [Events](/architecture/events/), [alarms and actions](/architecture/alarms-actions/),
    [calculations](/architecture/calculations/), and the [health](/architecture/health/) rollup that answers
-   "is this system working?".
+   "is this system working?". The **verdict half has landed**: an alarm degrades a capability, an impaired
+   role sinks its system by its impact, and the transitions record when it changed. What remains here is
+   what **produces** an alarm (the `event_rule` tier) and what **acts** on one.
 4. **The machinery underneath.** [Messaging](/architecture/messaging/) (the NATS subject contract and the
    data lane), the [workers](/architecture/workers/) draining the worklists, [time](/architecture/time/) as
    a primitive, and the CDC bridge on [storage](/architecture/storage/).

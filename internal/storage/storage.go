@@ -414,6 +414,19 @@ type Gateway interface {
 	SetComponentCapability(ctx context.Context, actorID, componentName, capabilityID string, present bool) error
 	ClearComponentCapability(ctx context.Context, actorID, componentName, capabilityID string) error
 
+	// The health tier. An alarm degrades named capabilities on a component; the
+	// rollup turns that into a system and location verdict and RECORDS every
+	// change as a transition, so the history is edges and only edges. The
+	// recompute itself is not on this interface: it runs inside the transaction of
+	// the write that triggered it, never as a call of its own.
+	RaiseAlarm(ctx context.Context, actorID, componentName string, spec AlarmSpec) (*Alarm, error)
+	ClearAlarm(ctx context.Context, actorID, componentName, alarmID string) error
+	ListAlarms(ctx context.Context, componentName string, includeCleared bool) ([]Alarm, error)
+	// The health reads: the current verdict, why it is what it is, and the
+	// recorded transitions at or after since (a zero since is the whole history).
+	SystemHealth(ctx context.Context, systemName string, since time.Time, read scope.Set) (*HealthReport, error)
+	LocationHealth(ctx context.Context, locationName string, since time.Time, read scope.Set) (*HealthReport, error)
+
 	// The tag tier: the governed key vocabulary and the per-entity value
 	// bindings. Minting a key (tag:create) is a tenant-wide governance action;
 	// binding a value is the owner's own write, so the binding methods take the

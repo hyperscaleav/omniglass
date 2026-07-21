@@ -28,6 +28,7 @@ import EventsPanel from "../components/EventsPanel";
 import { interfaceBlade, interfaceCreateBlade } from "../components/interfaceBlades";
 import PropertiesPanel, { propertyResolutionBlade, propertyBladeId } from "../components/PropertiesPanel";
 import CapabilitiesPanel from "../components/CapabilitiesPanel";
+import AlarmsPanel from "../components/AlarmsPanel";
 
 // Components: the device inventory, the first page built on the generic TreeList.
 // Components form a tree (parent_id) and each is bound to a primary system and a
@@ -292,6 +293,12 @@ export default function Components() {
           onAdd={can(me.data, "interface", "create") ? () => ctx.openBlade({ kind: "interface-create", id: n().raw.name }) : undefined}
           onOpenInterface={can(me.data, "interface", "read") ? (id) => ctx.openBlade({ kind: "interface", id }) : undefined}
         />
+        {/* What is wrong with this component, and which capabilities that takes
+            away. This is where estate health starts: a role requiring a degraded
+            capability can no longer be filled here. Raising and clearing write
+            immediately (like tags), so the controls appear only in edit mode,
+            which keeps view read-only. */}
+        <AlarmsPanel component={n().raw.name} canUpdate={editing() && canUpdate()} />
         <EventsPanel name={n().raw.name} />
         <PropertiesPanel
           component={n().raw.name}

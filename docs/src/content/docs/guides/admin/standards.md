@@ -97,12 +97,35 @@ The standard's blade carries a **Roles** panel beside its contract. Each role ha
 - the **capabilities** it requires, picked from the [capability catalog](/guides/admin/capabilities/).
   The list is **all of them, not any of them**: a component must provide **every** capability listed to
   fill the role. Requiring `microphone` and `speaker` means a display cannot fill it no matter what else
-  it does.
+  it does;
+- an **impact**, what the room loses when this slot is not being filled properly.
+
+**Impact is the health knob, and it belongs to the slot.** The same broken box matters differently
+depending on the job it was doing, so the judgement lives on the role rather than on the device:
+
+| impact | means | reach for it when |
+|---|---|---|
+| **outage** | the room is not working | the room cannot run without this slot |
+| **degraded** (the default) | the room works, worse | losing it costs quality, not the meeting |
+| **none** | nothing | you want the slot tracked, not depended on |
+
+A dead **confidence monitor** is not a dead **main display**, and this is where you say so. Set the main
+display to **outage** and the confidence monitor to **none**, and a failed confidence monitor stops paging
+anybody about a room that is running fine. What that impact does downstream is the
+[health rollup](/architecture/health/): a role short of its quorum contributes its impact, and the system
+takes the worst one.
+
+**Quorum is your redundancy setting**, and it pairs with impact. A role wanting **one** mic with **two**
+assigned survives losing either of them, because one working mic still meets the quorum. A role wanting
+**two** with two assigned is impaired the moment either one fails. Redundancy is not a separate switch, it
+is the gap between what you staffed and what you need.
 
 Declaring is **idempotent**, so saving a role that already exists revises it in place, and the capability
 list **replaces** the previous requirement wholesale (drop one by leaving it out). **Withdrawing** a role
 (with `standard:delete`) also removes every assignment conforming systems made to it, so withdraw only
-when the slot itself is gone, not when one room's component changed.
+when the slot itself is gone, not when one room's component changed. Changing a quorum or an impact
+**re-evaluates every conforming system immediately**, so a retune shows up in the estate's health without
+waiting for anything to poll.
 
 Two shipped roles come with **Meeting Room**, and they are the worked example: **Room Microphone**
 (requires `microphone` and `speaker`, quorum **2**) and **Main Display** (requires
@@ -110,8 +133,8 @@ Two shipped roles come with **Meeting Room**, and they are the worked example: *
 quorum to what your rooms actually run survives the next restart.
 
 From the CLI: `omniglass standard roles <id>`,
-`omniglass standard set-role <id> <role> --display-name <label> --quorum <n> --capabilities <ids>`, and
-`omniglass standard delete-role <id> <role>`.
+`omniglass standard set-role <id> <role> --display-name <label> --quorum <n> --capabilities <ids>
+--impact <outage|degraded|none>`, and `omniglass standard delete-role <id> <role>`.
 
 ## Staff a system against its standard
 
@@ -126,9 +149,10 @@ with where it came from.
 2. **Assign a component to the role.** Each role lists the components filling it and lets you add
    another. The picker is scoped to what you can see, and assignment is idempotent.
 3. **Read the understaffed count.** A role wanting two components with one assigned reads as short by
-   one, immediately, without any monitoring running: staffing is a fact about what you have entered, not
-   a health verdict. What an unfilled role does to the room's health is a separate concern that arrives
-   with the health rollup.
+   one, immediately, without any monitoring running: staffing is a fact about what you have entered. The
+   room's **[health](/guides/operator/entities/#health-on-a-system-or-location)** asks the second question,
+   of the components that **are** assigned, how many can currently do the job, and routes the answer up
+   through the role's impact.
 4. **Unassign when a component moves out.** The role goes back to understaffed until something else
    fills it. A component that is currently staffing a role **cannot be deleted**; unassign it first, so
    the system never silently loses a slot.
@@ -151,3 +175,7 @@ what one room needs and the blueprint does not. A role inherited from the standa
 From the CLI: `omniglass system roles <name>`, `omniglass system set-role <name> <role>`,
 `omniglass system delete-role <name> <role>`, `omniglass system assign-role <name> <role> <component>`,
 and `omniglass system unassign-role <name> <role> <component>`.
+
+Once the roles are declared and staffed, the whole loop (raise an alarm, watch the room go degraded, find
+the cause, clear it, read the history) is on
+[Work with an entity](/guides/operator/entities/#health-on-a-system-or-location).

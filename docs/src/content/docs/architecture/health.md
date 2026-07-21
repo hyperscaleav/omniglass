@@ -1,255 +1,347 @@
 ---
 title: Health, KPIs, and service levels
-description: "Health as a first-class state rolled up to a global estate top, the KPIs every estate should track (availability, utilization), and SLI / SLO / SLA."
+description: "Health as a verdict rolled up from alarms through capabilities and roles, recorded as a transition so the edges are accurate, plus the KPIs every estate should track and SLI / SLO / SLA."
 sidebar:
   badge:
-    text: Design
-    variant: caution
+    text: Partial
+    variant: note
 ---
 
-Health gives an operator the one answer that matters most, "is this system working right now?", as a first-class state on every entity that rolls up the service tree, not something you have to assemble out of raw rules. Omniglass is **opinionated about health**: it is a
-**first-class capability**, not a byproduct of a customizable rules engine. The *model* is
-deliberate (an ordered state, a health impact on alarms, a role-aware rollup up the system tree);
-the *carrier* is the ordinary datapoint pipeline, so health is stored, queried, trended, and alarmed
-on like any other signal, with no parallel subsystem.
+Health gives an operator the one answer that matters most, "is this system working right now?", and the
+one that matters next, "since when?". Omniglass is **opinionated about health**: it is a **first-class
+capability**, not a byproduct of a customizable rules engine. The *model* is deliberate (an alarm degrades
+a capability, a capability failure impairs a role, an impaired role sinks its system by a declared
+impact); the *carrier* is the ordinary datapoint pipeline, so health is stored, queried, and trended like
+any other signal, with no parallel subsystem.
 
-## Health is a first-class model, carried as a datapoint
+:::note[Partial]
+Built today: the **`alarm`** table (component-local, with the capabilities it degrades), **`impact`** on a
+`system_role`, the **rollup** from component through system to location, and the **recorded transition
+history** that answers "since when". Two reads serve it (`GET /systems/{name}/health` and
+`GET /locations/{name}/health`) alongside the alarm write surface on a component. Still `Design`: alarms
+raised by an [`event_rule`](/architecture/alarms-actions/) rather than by a caller, system- and
+location-owned alarms, the `unknown` verdict and its coverage reasons, the **`global`** estate top, and
+the whole **SLI / SLO / SLA** and **KPI** tier below
+([ADR-0050](/architecture/decisions/#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain)).
+See [implementation status](/architecture/status/).
+:::
 
-`health` is a built-in **state of every structural entity**, not a datapoint type an operator
-happens to author. But its **representation** is an ordinary derived `state_datapoint`
-(provenance=calculated), so it inherits the whole pipeline for free: stored, queried, projected to
-current-value, trended, and able to raise alarms. The model is opinionated; the carrier is reused.
-There is **no separate health store, no `health_event`, no parallel service subsystem**, because
-pulling health off the datapoint stream is exactly the Zabbix services bolt-on this design rejects.
+## The chain: capability is the routing key
 
-What is **first-class about the model** (not ordinary):
-
-- **Intrinsic.** Every component, system, and location *has* health, automatically, moved by its
-  open health-impacting alarms when it is covered and `unknown` until then (below). No entity is
-  health-less, and none waits on someone authoring a rule.
-- **A built-in ordered domain** (below), not a user-defined value type.
-- **Alarm-sourced.** Health is computed from open **alarms**, not measured or extracted (below).
-- **A built-in role-aware rollup** up the structural tree (below): engine behavior, not an editable
-  reducer.
-
-What is **reused from the carrier**: storage, history, `current_value` projection, the SLI
-(`time_in_state` over health history), alarming (an `event_rule` on `health`), and backtest. An
-operator who understands datapoints and alarms already understands health.
-
-## Health is built from alarms
-
-Health is a **state**, and a state must be built from something stateful. An **event is a stateless
-edge**: it just happens, so health cannot hang off events. It hangs off the **alarm**, the stateful
-PROBLEM that holds open as long as its condition does (the Zabbix-trigger model). The chain:
-
-> datapoints -> an **`event_rule`** decides "something we care about" -> an **alarm** opens -> the
-> alarm *optionally* carries a **health impact**.
-
-An `event_rule` (the alarm's definition) declares an optional **`health` impact**: `down`,
-`degraded`, or none (the default). Most alarms carry none, because a lamp-hours warning is worth an
-alert but does not down the device; the few that do are the device's actual failure conditions.
-
-- A **component's health** is the **worst** over its **open health-impacting alarms**. Reachability
-  is just one such alarm (an "unreachable" trigger, impact `down`): everything is an alarm, with no
-  parallel datapoint-calc.
-- Health is **ack-independent**, because ack is not close. An alarm stays open (acknowledged) while
-  its condition holds; only the **clear event** (the data recovered) closes it. Acking annotates; it
-  never makes a down room look healthy.
-
-So "twelve alarms open, system fine" falls out for free: if none of the twelve is health-impacting,
-health never moved.
-
-### No firing alarm splits by coverage
-
-When **no** health-impacting alarm is open, the honest answer depends on whether anything would have
-caught a failure. **Coverage** is the question "does any health-impacting `event_rule` resolve
-against this entity's datapoint_types?":
-
-- **covered, none firing, data fresh -> `ok`.** Something measures what "down" means here, it is
-  watching, and it is silent: genuinely healthy.
-- **not covered -> `unknown`.** No health-impacting rule resolves, so nothing here knows what failure
-  looks like. Reporting `ok` would be a false green; the entity is `unknown`, not healthy.
-
-`unknown` carries a **reason** discriminator as metadata, so an operator can tell a measurement gap
-from a coverage gap. The ordered value domain (below) is **unchanged**: `unknown` stays off the
-order, and the reason is descriptive metadata, not a new state. The reasons:
-
-- **`stale`** -- the entity had data and it went stale (the no-data machinery in
-  [time](/architecture/time/)).
-- **`uncovered`** -- no health-impacting rule resolves against its datapoint_types (this concern).
-- **`no-data`** -- a rule covers it, but it has never reported, so the rule has nothing to evaluate.
-
-To keep `uncovered` the rare, honest resting state rather than the default, every **collected
-component** is **seeded with a baseline reachability health-impacting alarm** (an "unreachable"
-trigger, impact `down`, via the collection / template default). A freshly-collected device is
-therefore covered the moment it is collected, and resolves `unknown -> ok` or `unknown -> down` on
-its first poll. Bare `unknown(uncovered)` then means exactly one thing: "you have collected this, but
-you have not told me what failure looks like beyond reachability," a deliberate gap to fill, not a
-silent hole.
-
-## The health-state vocabulary
-
-Health is a **state** with a small **fixed ordered** value domain, declared as its datapoint_type:
+Health is not "the worst thing happening near this room". It is a chain with one hop per question, and
+every hop is a thing an operator already models:
 
 ```text
-ok  <  degraded  <  down            unknown = no signal (not on the order)
+alarm on a component
+  -> degrades named capabilities
+    -> a component no longer satisfies a role that required one
+      -> the role falls below its quorum and is impaired
+        -> the role contributes its declared impact
+          -> the system takes the worst contribution
+            -> the location takes the worst of its systems
 ```
 
-It is **distinct from severity**. Severity is alert importance (a named level by id,
-[alarms and actions](/architecture/alarms-actions/)); health is entity operational state. They map
-(a `down` health typically raises a `high` or `disaster` alarm) but they are different axes, so health
-is not a severity level. The order exists so the `worst` reducer can pick the worst member;
-`unknown` is off the order (carrying a reason of `stale`, `uncovered`, or `no-data`, above) and is
-surfaced, not silently folded as `down`.
+- An **[alarm](#the-alarm-what-is-wrong-with-one-component)** is **component-local**: something is wrong
+  with this box.
+- It names the **[capabilities](/architecture/core-entities/#system-roles-the-slots-a-system-needs-filled)**
+  it degrades. That naming is the only route out of the component. An alarm that degrades nothing is a note
+  on the device and reaches no system, which is the honest reading, not a special case.
+- A component **satisfies** a [system role](/architecture/core-entities/#system-roles-the-slots-a-system-needs-filled)
+  only when it **provides every** capability the role requires **and none of those is currently degraded**.
+  A capability it has on paper but cannot deliver right now does not count.
+- A role with fewer satisfying components than its **quorum** is **impaired**.
+- An impaired role contributes its **impact**, and the system takes the **worst** contribution among its
+  roles. A location takes the worst among every system placed anywhere in its subtree.
 
-## Rollup up the structural tree
+This is why a **capability is flat** and why a **role requires a set** of them. Capability is the only
+vocabulary shared by the thing that breaks (a component) and the thing that cares (a slot in a room), so
+it is the only honest place to route a failure through. Everything else about a component (its vendor, its
+model, its properties) describes it; only its capabilities say what a room loses when it stops working.
 
-Health composes recursively, always **up the structural tree** (which has no cycles):
+## Impact lives on the role
+
+**`impact`** is a column on `system_role`: `outage`, `degraded`, or `none`, defaulting to `degraded`. It
+answers "what does this slot being empty mean for this room?".
+
+It lives on the **role**, not on the alarm and not on the component, because the same broken box matters
+differently depending on the slot it was filling. **A dead confidence monitor is not a dead main display**,
+and the difference is not a property of the display, it is a property of the job it was doing. Declaring
+impact on the role puts the judgement exactly where the operator already made it.
+
+| impact | an impaired role means | use it for |
+|---|---|---|
+| `outage` | the system is not working | the slot the room cannot run without |
+| `degraded` | the system is working, worse | the slot that costs quality, not the meeting |
+| `none` | nothing | a slot you track but do not depend on |
+
+**Quorum is the redundancy knob.** A role with quorum 1 and two components assigned tolerates one failure
+with no verdict change, because one satisfying component still meets the quorum. A role with quorum 2 and
+two assigned is impaired the moment either one degrades. Redundancy is therefore not a separate concept
+with its own vocabulary, it is the gap between how many you staffed and how many you need.
+
+## The verdict vocabulary
+
+A verdict is one of three values, ordered so "worst" has a meaning:
 
 ```text
-component health   (worst over the component's own open health-impacting alarms)
-   -> system health      (role-aware rollup of members + the system's own health-impacting alarms)
-      -> location health  (role-aware rollup of its systems)
-         -> global health  (rollup of every location: the estate top)
+healthy  <  degraded  <  outage
 ```
 
-The headline is the **system's `health`**, the rollup of its members, the service view operators
-care about; the **`global`** rollup is the estate-wide view leadership cares about.
+**`outage`, not `down`.** A device is down; a room has an outage. The word is chosen for what a broken
+system means to the people standing in it, which is the same reasoning that once picked `ok` over `up`
+([ADR-0003](/architecture/decisions/#adr-0003-health-reads-ok-not-up)), applied one level further out.
 
-**One owner-agnostic `health` key.** Following the measurement-not-owner naming model
-([datapoints](/architecture/datapoints/)), there is a single registered `health` datapoint_type; a
-component owns its own `health`, a system the rollup of its members, a location the rollup of its
-systems, and the singleton **`global`** owner the estate-wide rollup (the top of the tree, above
-every location). The owner gives the reading its level, so the same key flows up the tree. The calc
-engine routes a changed `health` by the owner's level against each rule's source (a component's
-`health` only feeds the system rollup, a system's only the location, a location's only the global),
-so the shared key never cross-triggers.
+Health is **distinct from severity**. Severity is an alarm's alert importance
+([alarms and actions](/architecture/alarms-actions/)); health is an entity's operational state. They
+correlate but they are different axes: a `critical` alarm on a component filling no role moves nothing
+above that component, and an `info` alarm that degrades the one capability a required role needed takes
+the room out.
 
-## System health: rollup plus the system's own alarms
+## The rollup is a pure function
 
-A system's health is the **worst of two inputs**:
+The judgement lives in a **pure package** (`internal/health`) that takes resolved inputs and returns a
+verdict, with **no database access at all**. Storage resolves the inputs and records the answer; the
+package decides. The subtle cases (a quorum boundary, a role nobody staffed, an alarm degrading a
+capability no role wanted) are exactly the ones that go quietly wrong in SQL and are trivial to pin down
+in a unit test, which is the whole argument for the split.
 
-1. the **role-aware rollup** of its members' health (below), and
-2. the system's **own open health-impacting alarms**, raised by **system-scoped `event_rule`s** over
-   member data.
+Two of its defaults are deliberate safety calls, and they point in **opposite** directions:
 
-The second input is what lets a system see what no single component can. The canonical case: a
-display sitting on **input 2** is a perfectly normal state *for the display* (no alarm), but in a
-specific room it means the wrong source is on screen. A system-scoped event_rule ("this display must
-be on input 1") opens a **system-level alarm** with a health impact, dropping system health while the
-display's own health stays `ok`. The system template owns the conditions only the system cares about;
-the component stays generic.
+- An **unrecognized impact reads `degraded`**, never `healthy`. A bad value must not make an impaired role
+  silently harmless.
+- An **unrecognized recorded value reads `healthy`**. One stray row must not paint an estate broken.
 
-The same discipline governs **SaaS and vendor status** (a UCC platform like Zoom, mapped to
-system-owned datapoints, [shared-API collection](/architecture/collection/)): a vendor's reported
-"offline" or "in a meeting" is an *observed signal from one source*, not a verdict on the room. Author
-the system condition over it, **corroborated** where you can (against the codec, occupancy), rather
-than trusting it. The vendor's opinion is an input to health, not health itself, the same way no
-single component's state is.
+The rule behind both: **fail loud about a judgement, fail quiet about a record**. A judgement that cannot
+be trusted should raise its hand; a record that cannot be parsed should get out of the way.
 
-This is the symmetry: **component-level events and alarms** and **system-level events and alarms**,
-the same machinery on each arc, distinguished by which entity owns the arc (the exclusive-arc owner,
-[alarms and actions](/architecture/alarms-actions/)).
+Two more defaults follow the same instinct. A **system with no roles is `healthy`**, because nothing has
+been claimed about it and painting every unmodelled system red would train operators to ignore the color.
+A **quorum below one is treated as one**, because a role no component need fill is not a role.
 
-The acyclic discipline: an alarm that *feeds* health is impact-tagged; the "system is down" alarm
-that fires *off* health (an `event_rule` watching the `health` datapoint) carries no impact. Inputs
-are tagged, consequences are not, and health rolls up only, so there is no loop.
+## Health is recorded as a transition
 
-## Role-aware rollup: built-in, tuned by role
+This is the load-bearing part of the design.
 
-:::note[Where the role lives today]
-The rollup is `Design`, but the **role** it tunes is now built: a
-[`system_role`](/architecture/core-entities/#system-roles-the-slots-a-system-needs-filled) declared on a
-standard or a system, staffed by components whose capabilities cover it, and carrying a **quorum**
-(**staffing** is already visible: a role wanting two with one assigned is understaffed today). What is
-**not** built is a role's **impact** on health, the successor to the `health_role` this section describes,
-which lands with the rollup engine that reads it
-([ADR-0049](/architecture/decisions/#adr-0049-the-system-role-capability-gated-staffing-and-the-resolved-capability-set)).
-:::
+> The most important thing about health is that we have a real, accurate history of the edges. We need to
+> know exactly when a system went from healthy to unhealthy, and be able to look back at it weeks later.
 
-The rollup is **engine behavior, not an editable rule**. Health is opinionated, so the reducer is
-built in and the same everywhere; what an operator tunes is **roles and thresholds**, never the
-reducer's guts. Each member carries a **`health_role`**, and the rollup respects it:
+Everything else follows from taking that literally. If the history has to be **accurate**, the only correct
+place to compute a verdict is the **write** that changed it. If the history has to be **edges**, the right
+carrier already exists.
 
-- **required** member `down` -> system `down`;
-- **required** member `unknown` -> system `unknown` (the system cannot be called healthy when a
-  member it depends on is unmeasured);
-- a **`stale`** required member folds to `unknown` here under the lost-visibility policy (lost
-  visibility, so the system goes `unknown`), or keeps its last value's health under the
-  last-value-valid policy (per the datapoint_type's staleness tolerance, [time](/architecture/time/));
-- **redundant** member `down` -> system `degraded` (only `down` if *all* redundant peers are down);
-- **informational** member -> does not affect system health, including an `informational` member that
-  is `unknown` (an unmeasured member that never mattered does not sink the parent).
+Health lands in **`state_datapoint`**, which is **already transition-only**: the ingest path writes a row
+only when the value differs from the last one stored for that owner, and `StateTransitions` reads the
+ordered flips that draw the reachability availability strip. Health reuses that primitive exactly as it
+is, on the **[owner arc](/architecture/core-entities/#ownership-the-exclusive-arc)** (a component, a
+system, or a location owns its own health series), with `provenance='calculated'` and
+`source_rule='health-rollup'` naming the producer in the row's lineage. There is **no `health_history`
+table**, because it would have been a second and worse copy of one that already exists.
+
+The first value for an owner is **always** recorded, even `healthy`. An owner whose history starts at its
+first health-relevant write has a defined beginning; recording only once something goes wrong leaves a
+reader unable to tell "healthy since we started watching" from "never evaluated".
+
+### Two alternatives, and why both fail
+
+**Compute the verdict on read.** Cheap, always current, no writes. It keeps **no history at all**, so
+"when did this break?" is unanswerable by construction. That is not a smaller version of the requirement,
+it is the opposite of it.
+
+**Compute on read and write the result through.** This looks like it solves the first one, and it is the
+more dangerous idea because it produces a history that **looks** real. The history is **sampled by whoever
+opens a page**: the recorded edge is stamped at the moment somebody **looked**, not the moment the estate
+**changed**. A room that broke on Friday night and was opened on Monday morning reads as breaking Monday
+morning, and a weekend nobody watched has no weekend at all. A history whose timestamps mean "when a human
+navigated here" is worse than no history, because it will be trusted.
+
+### Recompute at the write, in the same transaction
+
+A verdict is recomputed by **every mutation that can change it**, inside the caller's transaction, so the
+cause and the verdict commit together or not at all:
+
+| the write | why it can move health |
+|---|---|
+| raise or clear an **alarm** | a capability is taken away or given back |
+| **assign** or **unassign** a component | a role reaches or falls below its quorum |
+| **declare** or **withdraw** a role | a system gains or loses a slot it can be short of |
+| change a role's **quorum** or **impact** | the same staffing crosses a different line |
+| add, suppress, or clear a **component capability** | what the component provides is half of satisfying a role |
+| change a component's **product** | the product supplies its default capabilities |
+| **create** a system | its opening verdict gives its history a beginning |
+| change the **standard** a system conforms to | the whole inherited role set is swapped |
+| change a system's **location** | the contribution moves between rollups, so **both** are recomputed |
+| **delete** a system | the location it sat in loses a contributor and may have just improved |
+| change a **product's capabilities** | every component built to it provides a different set, in systems nobody touched |
+
+A declaration change on a **standard** moves **every conforming system** at once, since they inherit it
+live. The relocation case names the location the system **left** explicitly, because that location's row no
+longer points at the system and its rollup may have just **improved**: a recovery is an edge as real as a
+failure. **Deleting** a system is the same shape: the system's own rows go with it, but the location's
+history is the location's, and it has to say when it got better.
+
+The **product** case is the one that reaches furthest. A product is a contract, so withdrawing a capability
+from it can drop a role below quorum in systems no operator went near, and each of those is a real
+transition. A catalog edit is a health event across the estate.
+
+Deleting a **location** is not on the list, and does not need to be: a location that still holds systems,
+components, or child locations cannot be deleted at all (every one of those references is `on delete
+restrict`), so a deletable location is empty, its verdict is already healthy, and removing it cannot move
+its parent.
+
+A **missing trigger is a hole in the history**, which is the honest cost of this design and the reason the
+trigger list is enumerated rather than inferred.
+
+### A read never writes
+
+Self-healing on read would stamp the edge at read time, which is precisely the inaccuracy this whole model
+is built to avoid. So the reads write nothing.
+
+They do, however, **compute the verdict they serve from the same rows they display**. This was a
+correctness fix: the report originally served the **last recorded** verdict while resolving the
+contributing roles **live**, which let a system with nothing recorded yet report `healthy` while listing an
+impaired `outage` role right beside it. The report contradicted its own evidence, which is worse than no
+report. Deriving the served verdict from the resolved rows costs nothing (they are already loaded) and
+makes that class of contradiction impossible. **Recorded transitions remain the source for history**, which
+is a different question. A missing trigger can therefore cost an **edge**, but it can never make a report
+**lie about the present**.
+
+## Reading health
+
+Two reads, both scope-injected, both a non-disclosing 404 for an owner outside the caller's scope
+([API](/architecture/api/#health-the-verdict-and-why)).
+
+**A system's report** is the verdict, every role it needs filled, and for an impaired role the causing
+chain: which required capabilities an active alarm has taken away and which alarms took them. That chain is
+the point. A bare "degraded" gives an operator nothing to do; "the `room-mic` role wants 2 and has 1,
+because `mic-pod-2` lost `microphone` to a critical alarm raised at 14:02" tells them where to walk.
+
+A role can also be impaired with **no alarm to name**: nobody was assigned, or the assignments never
+provided what it requires. The report says so by naming no degraded capability, which distinguishes
+**short-staffed** from **broken**, two very different jobs.
+
+**A location's report** is the verdict plus every system beneath it with its own verdict, as the
+drill-down. The system read explains the rest, so the location report stays a map rather than duplicating
+the explanation at every level.
+
+Both reports carry the **recorded transitions** over the last 30 days, oldest first: one entry per change,
+never a sample. That is the availability strip's data, and the answer to "since when".
+
+## The alarm: what is wrong with one component
+
+An alarm is a row on a component with a **`severity`** (`info`, `warning`, or `critical`), a **message**,
+a **`raised_at`**, and a **nullable `cleared_at`**. Clearing sets `cleared_at` and **keeps the row**: what
+was wrong, and when, outlives the fix. Clearing an alarm that is already cleared is an explicit miss, not a
+silent success.
+
+Severity drives the **component's own** verdict (any active alarm makes the component `degraded`, a
+`critical` one makes it an `outage`) and **nothing above it**. What reaches a system is the **capability
+set**, not the severity. This separation is deliberate: severity is how loudly to page somebody, impact is
+what the room lost, and conflating them is how a monitoring system ends up with a critical alert about a
+spare device nobody uses.
+
+A component's verdict is recorded on its own arc like any other, so a component that fills no role still
+carries an accurate history of what was wrong with it.
+
+## Still design: where alarms come from
+
+Today an alarm is written by an **operator or an API caller**. The full model has them produced by the
+detection tier: an [`event_rule`](/architecture/alarms-actions/) watches datapoints, fires an event, and an
+alarm **opens** and stays open while its condition holds, closing on the paired clear event. Health is
+**ack-independent**, because ack is not close: an acknowledged alarm stays open while its condition holds,
+so acking annotates and never makes a broken room look healthy.
+
+That tier is what turns health from a modelled verdict into a **measured** one. The chain above does not
+change when it lands: a rule-opened alarm names the capabilities it degrades exactly as a hand-raised one
+does.
 
 :::caution[Open question]
-The exact `redundant`-group semantics when a system has several independent redundant sets (per-set
-quorum versus one pool), and whether `degraded` is one rung or graduated.
+Whether a rule declares the degraded capability set directly, or derives it from the datapoint it watched.
 :::
 
-A redundant deployment needs exactly this: a failed backup mic must not down the room. **Member
-`health_role`** (required / redundant / informational) is declared on the **system_template_member**
-(the frozen BOM, where the system template declares each role with its requirement and health_role), not on the
-component itself, since the same device can be required in one system and redundant in another. The
-instance assignment is the `system_member` row; the `health_role` rides the frozen template version,
-so it never expires under an instance. It is shared with KPI calcs.
+### Alarms owned by a system or a location
 
-For the rare case the role logic still gets wrong, an **Expr override at the system-template level**
-over the member health states is the escape hatch, reached for rarely.
+The alarm arc is **component-only** today. The design gives an alarm the same
+[exclusive-arc owner](/architecture/core-entities/#ownership-the-exclusive-arc) every datapoint and event
+has, so a **system-scoped** rule can raise a **system-owned** alarm over member data. The canonical case: a
+display sitting on **input 2** is a perfectly normal state *for the display*, but in a specific room it
+means the wrong source is on screen. The system template owns the conditions only the system cares about,
+and the component stays generic.
+
+The same discipline governs **SaaS and vendor status** (a UCC platform mapped to system-owned datapoints,
+[shared-API collection](/architecture/collection/)): a vendor's reported "offline" is an *observed signal
+from one source*, not a verdict on the room. Author the system condition over it, **corroborated** where
+you can, rather than trusting it. The vendor's opinion is an input to health, not health itself.
+
+The acyclic discipline holds either way: an alarm that **feeds** health degrades a capability, and the
+"system is down" alarm that fires **off** health (a rule watching the `health` state) degrades nothing.
+Inputs route, consequences do not, and health rolls up only, so there is no loop.
+
+### `unknown`, and honest coverage
+
+The built domain has three values and no `unknown`. The design adds a fourth reading, **off the order**,
+for "nothing here knows what failure looks like":
+
+- **covered, nothing firing, data fresh -> `healthy`.** Something measures what broken means here, it is
+  watching, and it is silent.
+- **not covered -> `unknown`.** No health-impacting rule resolves. Reporting `healthy` would be a false
+  green.
+
+`unknown` carries a **reason** discriminator as metadata, so an operator can tell a measurement gap from a
+coverage gap: **`stale`** (had data, it went stale, the no-data machinery in [time](/architecture/time/)),
+**`uncovered`** (no health-impacting rule resolves), **`no-data`** (a rule covers it, but it has never
+reported). To keep `uncovered` rare rather than default, every **collected component** is seeded with a
+baseline reachability alarm, so a freshly-collected device is covered on its first poll.
 
 :::caution[Open question]
-Whether a system-template binding may narrow the built-in rollup (a scoped-precedence refinement),
-or only the roles and the Expr override are the knobs.
+How `unknown` composes upward. A required role whose only component is unmeasured is not `healthy`, but
+calling the system an outage overstates it.
 :::
 
-The rollup **runs over the calc engine** (no parallel evaluator) and is **seeded for every system,
-location, and the global top**, so health rolls up out of the box without per-system authoring:
-`system-health` reduces a system's members' `health`, `location-health` a location's systems',
-`global-health` every location's into the estate top (each treated as required above the system
-level: any down child sinks the parent). It is the model's behavior, not a rule operators rewrite.
+### The `global` estate top
 
-:::caution[Open question]
-A single `required` `unknown` member already makes the system `unknown` (above). The remaining
-question is the all-`unknown` system with no forcing required member (every member `unknown`, or only
-`informational` ones reporting): gray, or the parent's prior state. The `unknown` versus `stale`
-distinction itself is settled in [time](/architecture/time/).
-:::
+The rollup ends at a location today. The design adds the singleton **`global`** owner above every location,
+the estate-wide verdict leadership reads and the owner that estate-wide KPIs hang off. The same `health`
+key flows the whole way up: the **owner** gives a reading its level, so one key serves component, system,
+location, and global without cross-triggering.
 
 ## SLI: indicator over a window
 
-A **Service Level Indicator** is a `time_in_state` calc over a window (`time_in_state(s)` = the fraction of the window the entity held state `s`, derived from the health-history transitions), emitted as its own datapoint
-(the temporal reducer, [expressions](/architecture/expressions/)):
+A **Service Level Indicator** is a `time_in_state` calc over a window (`time_in_state(s)` = the fraction of
+the window the entity held state `s`, derived from the health transitions this page records), emitted as
+its own datapoint (the temporal reducer, [expressions](/architecture/expressions/)):
 
 ```yaml
-# availability = fraction of the last 30 days the system was ok
+# availability = fraction of the last 30 days the system was healthy
 source: { datapoint: health, over: 30d }
 reduce: time_in_state
-when: "value.ok / value.total"        # an Expr leaf shapes it into a ratio
+when: "value.healthy / value.total"   # an Expr leaf shapes it into a ratio
 # -> emits system.availability
 ```
 
-An SLI is therefore just another derived datapoint, queryable and trendable like any other.
+An SLI is therefore just another derived datapoint, queryable and trendable like any other. It is also the
+clearest payoff of transition-only recording: `time_in_state` over a stream of edges is exact and cheap,
+where the same calc over samples is an approximation whose accuracy depends on who was looking.
 
 ## SLO and SLA: the target, and meeting it
 
-Three terms, not two. The **SLI** is the *measured indicator* (the `system.availability` calc above).
-The **SLO** (Service Level Objective) is the **target**: the number you intend to hold
-(availability >= 99.9%), a [config](/architecture/variables/) value on the entity or template, not
-machinery. The **SLA** (Service Level Agreement) is **meeting the SLO**: an `event_rule` fires when
-the SLI breaches the target, and compliance over the contractual window (the fraction of the period
-the SLO held) is itself an SLI.
+Three terms, not two. The **SLI** is the *measured indicator* (the `system.availability` calc above). The
+**SLO** (Service Level Objective) is the **target**: the number you intend to hold (availability >= 99.9%),
+a [config](/architecture/variables/) value on the entity or standard, not machinery. The **SLA** (Service
+Level Agreement) is **meeting the SLO**: an `event_rule` fires when the SLI breaches the target, and
+compliance over the contractual window is itself an SLI.
 
 ```yaml
 event_rule:
-  scope: 'system.template == "standard-boardroom"'
+  scope: 'system.standard == "meeting-room"'
   datapoint: system.availability
   when: "value < $var:availability.slo"   # the SLO target, a config value
   severity: high
 ```
 
-So the target is config (the SLO), the breach is an event/alarm (the SLA edge), and compliance is a
-calc (an SLI over the SLA). No new machinery. Windowing is the SLI's concern: a **rolling** window
-(last 30d) for trends, or a **calendar** window (the billing month) for a contractual SLA; the
-calendar reset is the one piece that leans on the time primitive.
+So the target is config (the SLO), the breach is an event and alarm (the SLA edge), and compliance is a
+calc (an SLI over the SLA). No new machinery. Windowing is the SLI's concern: a **rolling** window (last
+30d) for trends, or a **calendar** window (the billing month) for a contractual SLA; the calendar reset is
+the one piece that leans on the time primitive.
 
 :::caution[Open question]
 The SLA calendar-window boundaries and timezone, co-designed with the time primitive.
@@ -257,46 +349,47 @@ The SLA calendar-window boundaries and timezone, co-designed with the time primi
 
 ## KPIs: what every estate should track
 
-A **KPI** is a derived datapoint (a calc or SLI), registered as a canonical `datapoint_type` and
-owned at the level it describes (system, location, or **global**). It is no new primitive: a KPI is a
-shipped calc the same way health is. Omniglass ships an opinionated **default set** so the data is
-there out of the box, with the escape hatch to author your own.
+A **KPI** is a derived datapoint (a calc or SLI), registered as a canonical property and owned at the level
+it describes (system, location, or **global**). It is no new primitive: a KPI is a shipped calc the same
+way health is. Omniglass ships an opinionated **default set** so the data is there out of the box, with the
+escape hatch to author your own.
 
-**Availability** is health over time: the SLI `time_in_state(ok)` above. Health is the substance,
+**Availability** is health over time: the SLI `time_in_state(healthy)` above. Health is the substance,
 availability is its ratio, so it ships free at every level up to global.
 
 **Utilization** is the AV-native family, over occupancy and booking data:
 
-- **occupancy** -- current people / capacity (an instant ratio);
-- **time-utilization** -- used vs idle minutes;
-- **booking-utilization** -- booked vs unbooked minutes;
-- **ghost** -- occupied vs booked: booked, but nobody showed (the wasted-room signal).
+- **occupancy**: current people / capacity (an instant ratio);
+- **time-utilization**: used vs idle minutes;
+- **booking-utilization**: booked vs unbooked minutes;
+- **ghost**: occupied vs booked, so booked but nobody showed (the wasted-room signal).
 
-Both inputs are **ordinary components**, no special integration: an occupancy sensor (a component
-template emitting `occupancy.*`) and the booking system (a component template whose interface is the
-calendar / room-booking API, emitting `booking.*`). The KPIs are then `calc_rule`s over those
-datapoints, owned at room / system / location / global like any rollup. A booking API is just an
-interface; a ghost meeting is just `occupied < booked`.
-
-The point is a small, opinionated set of the measurements every estate should watch, computed and
-rolled up for free.
+Both inputs are **ordinary components**, no special integration: an occupancy sensor emitting `occupancy.*`
+and the booking system, a component whose interface is the calendar API, emitting `booking.*`. The KPIs are
+then calcs over those datapoints, owned at room / system / location / global like any rollup. A booking API
+is just an interface; a ghost meeting is just `occupied < booked`.
 
 :::caution[Open question]
-The full default KPI set and each one's exact calc. Availability and the utilization family are
-named, but the precise reducers and windows are unsettled.
+The full default KPI set and each one's exact calc. Availability and the utilization family are named, but
+the precise reducers and windows are unsettled.
 :::
 
 :::caution[Open question]
-The `occupancy.*` and `booking.*` canonical signals, and the occupancy-sensor and booking-system
-component templates that feed the utilization KPIs.
+The `occupancy.*` and `booking.*` canonical signals, and the occupancy-sensor and booking-system component
+templates that feed the utilization KPIs.
 :::
 
 ## Why this is the Zabbix service tree, done right
 
-Zabbix bolts services, SLA, and the service tree on as a separate subsystem. Omniglass does the
-opposite: health is **first-class but not separate**. The model is opinionated (an intrinsic state,
-health-impacting alarms, a role-aware rollup) and it rides the one datapoint pipeline, so the
-**system tree is the service tree**: health is a datapoint, the rollup is built-in, the SLI is a
-calc, the SLA is an alarm. One model, composed, instead of a parallel feature. An operator who
-understands datapoints and alarms already understands health and SLAs.
+Zabbix bolts services, SLA, and the service tree on as a separate subsystem. Omniglass does the opposite:
+health is **first-class but not separate**. The model is opinionated (an alarm degrades a capability, a
+role declares its impact, the rollup is engine behavior rather than an editable reducer) and it rides the
+one datapoint pipeline, so the **system tree is the service tree**: the verdict is a state datapoint, the
+history is its transitions, the SLI is a calc over them, and the SLA is an alarm. One model, composed,
+instead of a parallel feature. An operator who understands alarms and datapoints already understands health.
 
+Related: [core entities](/architecture/core-entities/#system-roles-the-slots-a-system-needs-filled) (the
+role, the capability, and the quorum), [alarms and actions](/architecture/alarms-actions/) (the detection
+tier that will raise alarms), [datapoints](/architecture/datapoints/) (the state datapoint and the owner
+arc), and the [Standards](/guides/admin/standards/) and
+[Work with an entity](/guides/operator/entities/) guides for the operator loop.

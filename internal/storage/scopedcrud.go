@@ -25,6 +25,24 @@ type scopedConfig[T any] struct {
 	notFound  error                     // 404 sentinel (absent or out of read scope)
 	forbidden error                     // 403 sentinel (readable, out of action scope)
 	occupied  error                     // 409 sentinel (delete refused: has children)
+	// afterDelete runs inside the delete's transaction, after the row is gone and
+	// before the commit, receiving the entity as it was. It exists for the ripples
+	// a delete causes elsewhere: removing a degraded system improves the health of
+	// the location it sat in, and that improvement is an edge worth recording. In
+	// the transaction so the ripple cannot commit apart from the delete that caused
+	// it. Optional; nil for entities whose removal ripples nowhere.
+	afterDelete func(ctx context.Context, p *PG, q txQuerier, before *T) error
+}
+
+// sameOptional reports whether two optional columns hold the same value, absence
+// included. It is how an update path tells a field that MOVED from one that was
+// merely written again with the value it already had, which is what keeps a patch
+// from firing a recompute (and a transition) over nothing.
+func sameOptional(a, b *string) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	return *a == *b
 }
 
 // scopedList returns the entities in the caller's read scope, ordered by name,
@@ -139,18 +157,24 @@ func scopedDelete[T any](ctx context.Context, p *PG, cfg scopedConfig[T], actorI
 		return cfg.occupied
 	}
 	if _, err := tx.Exec(ctx, `delete from `+string(cfg.table)+` where id = $1`, cfg.idOf(before)); err != nil {
-		// A row that something else still references is the same "refused while
-		// occupied" answer as a row with children, so it must reach the caller as
-		// the occupied sentinel (409) rather than as an opaque server error. The
-		// child count above only sees structural children; a restrict FK from
-		// anywhere else (a component staffing a system role, say) lands here.
+		// A row that something else still references is refused, like a row with
+		// children, and must reach the caller as a conflict rather than an opaque
+		// server error. It is a distinct sentinel from occupied: the child count
+		// above proved there are no children, so a restrict FK from anywhere else
+		// (a component staffing a system role, say) landed here, and this path
+		// cannot tell which one. Reporting "has children" would be false.
 		if isReferencedViolation(err) {
-			return cfg.occupied
+			return ErrReferenced
 		}
 		return fmt.Errorf("storage: delete %s: %w", cfg.table, err)
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "delete", cfg.resource, cfg.idOf(before), before, nil); err != nil {
 		return err
+	}
+	if cfg.afterDelete != nil {
+		if err := cfg.afterDelete(ctx, p, tx, before); err != nil {
+			return err
+		}
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("storage: commit delete %s: %w", cfg.table, err)

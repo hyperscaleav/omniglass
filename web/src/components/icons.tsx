@@ -162,6 +162,21 @@ export const LogOut: Component<P> = (p) => (
 export const Info: Component<P> = (p) => (
   <Svg size={p.size}><circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" /></Svg>
 );
+// Health glyphs: one shape per verdict, so healthy / degraded / outage reads
+// without relying on the badge hue alone.
+export const CircleCheck: Component<P> = (p) => (
+  <Svg size={p.size}><circle cx="12" cy="12" r="9" /><path d="m8.5 12.2 2.4 2.4 4.6-4.8" /></Svg>
+);
+export const TriangleAlert: Component<P> = (p) => (
+  <Svg size={p.size}><path d="M10.3 3.9 1.9 18a2 2 0 0 0 1.7 3h16.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" /><path d="M12 9v4" /><path d="M12 17h.01" /></Svg>
+);
+export const OctagonX: Component<P> = (p) => (
+  <Svg size={p.size}><path d="M8.6 2.6h6.8l4.8 4.8v6.8l-4.8 4.8H8.6l-4.8-4.8V7.4z" /><path d="m9.5 9.5 5 5M14.5 9.5l-5 5" /></Svg>
+);
+export const Siren: Component<P> = (p) => (
+  <Svg size={p.size}><path d="M7 18v-6a5 5 0 0 1 10 0v6" /><path d="M3 21h18" /><path d="M12 2v1M4.5 5.5l.7.7M19.5 5.5l-.7.7" /></Svg>
+);
+
 // Place-type glyphs: the leading icon a location wears in the tree, resolved from
 // its location_type's icon key (see resolveIcon below).
 export const Landmark: Component<P> = (p) => (

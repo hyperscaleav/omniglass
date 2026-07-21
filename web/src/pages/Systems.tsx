@@ -26,6 +26,9 @@ import { ArrowRight, ChevronRight, Pencil, Plus, Save, Search, X } from "../comp
 import Button from "../components/Button";
 import PropertiesPanel, { propertyResolutionBlade, ownerPropertyBladeId } from "../components/PropertiesPanel";
 import RolesPanel from "../components/RolesPanel";
+import HealthBadge from "../components/HealthBadge";
+import SystemHealthPanel from "../components/HealthPanel";
+import { systemHealthKey, verdictOf, verdictRank, type EstateHealth } from "../lib/health";
 
 // Systems: the system inventory on the generic TreeList, the same shell as
 // Locations and Components. Systems form a tree (parent_id) and are placed at a
@@ -42,13 +45,14 @@ export const systemsDescriptor: PageDescriptor = {
   entity: { name: "system", plural: "Systems" },
   storageKey: "og-sys",
   columns: {
+    health: { label: "Health", width: 130 },
     standard: { label: "Standard", width: 170 },
     location: { label: "Location", width: 190 },
     components: { label: "Components", width: 130 },
     tags: { label: "Tags", width: 340 },
   },
-  columnKeys: ["standard", "location", "components", "tags"],
-  defaultCols: ["standard", "location", "components", "tags"],
+  columnKeys: ["health", "standard", "location", "components", "tags"],
+  defaultCols: ["health", "standard", "location", "components", "tags"],
 };
 
 export default function Systems() {
@@ -321,6 +325,15 @@ export default function Systems() {
           </Show>
         </div>
 
+        {/* The verdict and its reconciliation: which roles are impaired, which
+            required capabilities an alarm took away, and which alarms took them.
+            It sits directly above the roles surface it reasons about, so "why is
+            this degraded" and "what are these roles" read as one thought. */}
+        <SystemHealthPanel
+          system={n().raw.name}
+          onOpenComponent={(name) => navigate(`/components/${encodeURIComponent(name)}`)}
+        />
+
         {/* The slots this system needs filled, resolved the same way its
             properties are: what the standard declares plus what the system
             declares of its own. Assignment writes immediately (like tags), so its
@@ -461,6 +474,11 @@ export default function Systems() {
     filterPlaceholder: "Filter by name, standard, location…",
     nameWeight: () => 500,
     cellFor: (key, n) => {
+      // There is no bulk health read, so the badge owns its own query per row and
+      // shares the cache key with the detail panel: opening a row costs nothing
+      // extra. Quiet until a verdict lands, so a page of rows never flashes a
+      // column of "unknown".
+      if (key === "health") return <HealthBadge system={n.raw.name} quiet />;
       if (key === "standard") return n.standard ? <span class="badge badge-ghost badge-sm">{n.standard}</span> : <span class="text-base-content/40">—</span>;
       if (key === "location") return <span class="text-base-content/70">{n.locationName || "—"}</span>;
       if (key === "components") return <span class="tnum text-base-content/60">{(compsBySystem().get(n.raw.id) ?? []).length}</span>;
@@ -474,6 +492,14 @@ export default function Systems() {
       ...tagFacets(),
     ],
     sortVal: (n, key) => {
+      // Worst first on the first click, which is the only ordering anyone wants
+      // from a health column. The verdict is read from the cache the row badges
+      // filled, so the sort orders exactly what is on screen; a row whose health
+      // has not arrived sorts last rather than pretending to be healthy.
+      if (key === "health") {
+        const v = verdictOf(qc.getQueryData<EstateHealth>([...systemHealthKey(n.raw.name)])?.verdict);
+        return v ? -verdictRank(v) : 9;
+      }
       if (key === "standard") return n.standard.toLowerCase();
       if (key === "location") return n.locationName.toLowerCase();
       if (key === "components") return -(compsBySystem().get(n.raw.id) ?? []).length;

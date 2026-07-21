@@ -108,17 +108,20 @@ a fix you can push back.
 An **[event_rule](/architecture/alarms-actions/)** watches a datapoint and fires when its condition
 is met, recording an **event**: our assertion, in our own words, that something happened. Pair a fire
 with a clear and the two events open and resolve an **alarm**, the stateful incident, one row per
-occurrence, the thing an operator works and a ticket binds to. An alarm can carry a **health impact**,
-which is what turns a detection into a verdict on the system.
+occurrence, the thing an operator works and a ticket binds to. An alarm names the **capabilities it
+degrades**, which is what turns a detection into a verdict on the system.
 
 ## Model health
 
-A single alarm is rarely the point. The headline is **[health](/architecture/health/)**: a
-first-class state carried as a calculated datapoint and owned by the **system**. A component goes
-unhealthy when a health-impacting **alarm** opens on it, and the system **rolls its members up,
-role-aware**. A *required* component down takes the system down; a *redundant* one only degrades it;
-an *informational* one does not touch it. That is the answer to "is the system working?", and a
-target on it over time is a real uptime **SLA**.
+A single alarm is rarely the point. The headline is **[health](/architecture/health/)**: a verdict on
+the **system**, carried as a calculated datapoint. The chain is one hop per question: an alarm degrades
+a **capability**, so the component that had it no longer **satisfies** the **role** it was filling; a
+role below its **quorum** is impaired and contributes its declared **impact** (outage, degraded, or
+none); the system takes the worst contribution, and a location the worst of its systems. That is the
+answer to "is the system working?", and a target on it over time is a real uptime **SLA**.
+
+The other half is "since when". Health is recorded as a **transition**, written by the change that
+caused it rather than by whoever opens a page, so the edges are exact weeks later.
 
 The rollup ships **opinionated by default**, a first-class model rather than a byproduct of the rules
 engine, with an escape hatch for the systems the defaults get wrong. The health model always runs;
@@ -164,7 +167,7 @@ views: "views → console" { class: node }
 gear -> datapoint: collect (node + edge parse)
 datapoint -> event: event_rule
 event -> alarm: fire / clear
-alarm -> health: health impact
+alarm -> health: degrades a capability
 alarm -> action: action_rule
 action -> gear: command { style.stroke-dash: 4 }
 config -- datapoint: drift { style.stroke-dash: 4 }
