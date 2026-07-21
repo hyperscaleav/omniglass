@@ -413,7 +413,7 @@ Delete a component
 omniglass component delete <name>
 ```
 
-Deletes a component, refused while it still has child components. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.
+Deletes a component, refused (409) while it still has child components or is still referenced elsewhere, such as by a system role it staffs. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.
 
 Example:
 
@@ -1116,7 +1116,7 @@ Delete a location
 omniglass location delete <name>
 ```
 
-Deletes a location, refused while it still has child locations. Gated by location:delete; read and delete scopes drive the 404 versus 403 split.
+Deletes a location, refused (409) while it still has child locations or is still referenced elsewhere. Gated by location:delete; read and delete scopes drive the 404 versus 403 split.
 
 Example:
 
@@ -3001,7 +3001,7 @@ Delete a system
 omniglass system delete <name>
 ```
 
-Deletes a system, refused while it still has child systems. Gated by system:delete; read and delete scopes drive the 404 versus 403 split.
+Deletes a system, refused (409) while it still has child systems or is still referenced elsewhere. Gated by system:delete; read and delete scopes drive the 404 versus 403 split.
 
 Example:
 

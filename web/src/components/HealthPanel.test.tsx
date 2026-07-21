@@ -208,7 +208,9 @@ describe("SystemHealthPanel history", () => {
   it("renders each recorded edge newest first, with how long it held", () => {
     const { getByText, getAllByText } = mountSystem(degraded);
     expect(getByText("History")).toBeTruthy();
-    expect(getByText("2 changes recorded in this window.")).toBeTruthy();
+    // Three entries, two of them changes: the oldest is the first record, not a
+    // change from anything, and the count says so rather than reading off by one.
+    expect(getByText("2 changes since the first record.")).toBeTruthy();
     // The current state is open-ended; the ones before it are closed durations.
     expect(getAllByText(/and counting/).length).toBe(1);
     expect(getByText("held 2h")).toBeTruthy(); // degraded ran 5h ago -> 3h ago

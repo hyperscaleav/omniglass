@@ -98,6 +98,13 @@ func deleteTypeRow(ctx context.Context, p *PG, table, resource string, ref typeR
 	return nil
 }
 
+// ErrReferenced is a delete refused because some other row still points at the
+// target. It is deliberately separate from the per-entity "occupied" sentinels,
+// which mean the narrower and knowable "this row has structural children": the
+// delete path sees only that a foreign key stopped it, not which one, so naming
+// a cause here would state something it has not established.
+var ErrReferenced = errors.New("storage: row is still referenced by another record")
+
 // isReferencedViolation reports whether a delete failed because another row still
 // references the target: foreign_key_violation (23503) or the explicit
 // restrict_violation (23001) an ON DELETE RESTRICT raises. Both mean the same

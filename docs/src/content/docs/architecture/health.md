@@ -170,11 +170,23 @@ cause and the verdict commit together or not at all:
 | **create** a system | its opening verdict gives its history a beginning |
 | change the **standard** a system conforms to | the whole inherited role set is swapped |
 | change a system's **location** | the contribution moves between rollups, so **both** are recomputed |
+| **delete** a system | the location it sat in loses a contributor and may have just improved |
+| change a **product's capabilities** | every component built to it provides a different set, in systems nobody touched |
 
 A declaration change on a **standard** moves **every conforming system** at once, since they inherit it
 live. The relocation case names the location the system **left** explicitly, because that location's row no
 longer points at the system and its rollup may have just **improved**: a recovery is an edge as real as a
-failure.
+failure. **Deleting** a system is the same shape: the system's own rows go with it, but the location's
+history is the location's, and it has to say when it got better.
+
+The **product** case is the one that reaches furthest. A product is a contract, so withdrawing a capability
+from it can drop a role below quorum in systems no operator went near, and each of those is a real
+transition. A catalog edit is a health event across the estate.
+
+Deleting a **location** is not on the list, and does not need to be: a location that still holds systems,
+components, or child locations cannot be deleted at all (every one of those references is `on delete
+restrict`), so a deletable location is empty, its verdict is already healthy, and removing it cannot move
+its parent.
 
 A **missing trigger is a hole in the history**, which is the honest cost of this design and the reason the
 trigger list is enumerated rather than inferred.

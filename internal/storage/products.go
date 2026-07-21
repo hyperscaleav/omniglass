@@ -328,6 +328,14 @@ func (p *PG) UpdateProduct(ctx context.Context, actorID, id string, patch Produc
 		if err := replaceProductCapabilities(ctx, tx, id, *patch.Capabilities); err != nil {
 			return nil, err
 		}
+		// A product is a contract, so its capability set is the default every
+		// component built to it provides. Withdrawing one can drop a role below its
+		// quorum in systems nobody touched, which is a real transition in each of
+		// them: an edit here is a health event over there. In the same transaction,
+		// so a component can never provide less than the record says it does.
+		if err := p.recomputeProductComponents(ctx, tx, id); err != nil {
+			return nil, err
+		}
 	}
 	caps, err := loadProductCapabilities(ctx, tx, id)
 	if err != nil {

@@ -252,7 +252,7 @@ func registerSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Path:          "/systems/{name}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete a system",
-		Description:   "Deletes a system, refused while it still has child systems. Gated by system:delete; read and delete scopes drive the 404 versus 403 split.",
+		Description:   "Deletes a system, refused (409) while it still has child systems or is still referenced elsewhere. Gated by system:delete; read and delete scopes drive the 404 versus 403 split.",
 	}, "system", "delete"), func(ctx context.Context, in *systemPathInput) (*struct{}, error) {
 		if err := gw.DeleteSystem(ctx, actorID(ctx), in.Name,
 			a.scopeFor(ctx, "system", "read"), a.scopeFor(ctx, "system", "delete")); err != nil {
@@ -270,6 +270,8 @@ func mapSystemErr(err error) error {
 		return huma.Error404NotFound("system not found")
 	case errors.Is(err, storage.ErrSystemForbidden):
 		return huma.Error403Forbidden("forbidden")
+	case errors.Is(err, storage.ErrReferenced):
+		return huma.Error409Conflict("system is still referenced by another record")
 	case errors.Is(err, storage.ErrSystemOccupied):
 		return huma.Error409Conflict("system has child systems")
 	case errors.Is(err, storage.ErrSystemExists):

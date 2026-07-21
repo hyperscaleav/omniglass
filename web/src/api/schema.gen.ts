@@ -380,7 +380,7 @@ export interface paths {
         post?: never;
         /**
          * Delete a component
-         * @description Deletes a component, refused while it still has child components. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.
+         * @description Deletes a component, refused (409) while it still has child components or is still referenced elsewhere, such as by a system role it staffs. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.
          */
         delete: operations["delete-component"];
         options?: never;
@@ -940,7 +940,7 @@ export interface paths {
         post?: never;
         /**
          * Delete a location
-         * @description Deletes a location, refused while it still has child locations. Gated by location:delete; read and delete scopes drive the 404 versus 403 split.
+         * @description Deletes a location, refused (409) while it still has child locations or is still referenced elsewhere. Gated by location:delete; read and delete scopes drive the 404 versus 403 split.
          */
         delete: operations["delete-location"];
         options?: never;
@@ -2256,7 +2256,7 @@ export interface paths {
         post?: never;
         /**
          * Delete a system
-         * @description Deletes a system, refused while it still has child systems. Gated by system:delete; read and delete scopes drive the 404 versus 403 split.
+         * @description Deletes a system, refused (409) while it still has child systems or is still referenced elsewhere. Gated by system:delete; read and delete scopes drive the 404 versus 403 split.
          */
         delete: operations["delete-system"];
         options?: never;

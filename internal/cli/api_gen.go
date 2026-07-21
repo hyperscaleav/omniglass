@@ -453,7 +453,7 @@ func generatedCommands() []*cobra.Command {
 			cmd := &cobra.Command{
 				Use:     "delete <name>",
 				Short:   "Delete a component",
-				Long:    "Deletes a component, refused while it still has child components. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.",
+				Long:    "Deletes a component, refused (409) while it still has child components or is still referenced elsewhere, such as by a system role it staffs. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.",
 				Example: "  omniglass component delete <name>",
 				Args:    cobra.ExactArgs(1),
 				RunE: func(cmd *cobra.Command, args []string) error {
@@ -1230,7 +1230,7 @@ func generatedCommands() []*cobra.Command {
 			cmd := &cobra.Command{
 				Use:     "delete <name>",
 				Short:   "Delete a location",
-				Long:    "Deletes a location, refused while it still has child locations. Gated by location:delete; read and delete scopes drive the 404 versus 403 split.",
+				Long:    "Deletes a location, refused (409) while it still has child locations or is still referenced elsewhere. Gated by location:delete; read and delete scopes drive the 404 versus 403 split.",
 				Example: "  omniglass location delete <name>",
 				Args:    cobra.ExactArgs(1),
 				RunE: func(cmd *cobra.Command, args []string) error {
@@ -3272,7 +3272,7 @@ func generatedCommands() []*cobra.Command {
 			cmd := &cobra.Command{
 				Use:     "delete <name>",
 				Short:   "Delete a system",
-				Long:    "Deletes a system, refused while it still has child systems. Gated by system:delete; read and delete scopes drive the 404 versus 403 split.",
+				Long:    "Deletes a system, refused (409) while it still has child systems or is still referenced elsewhere. Gated by system:delete; read and delete scopes drive the 404 versus 403 split.",
 				Example: "  omniglass system delete <name>",
 				Args:    cobra.ExactArgs(1),
 				RunE: func(cmd *cobra.Command, args []string) error {

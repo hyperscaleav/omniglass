@@ -257,10 +257,26 @@ func scanSystem(row pgx.Row) (*System, error) {
 }
 
 // systemConfig drives the generic scoped-CRUD helpers for the system tree.
+//
+// afterDelete records the room's recovery. A location's verdict is the rollup of
+// the systems in it, so deleting the system that was dragging it down improves it,
+// and that improvement is an edge an operator has to be able to read back. The
+// system's own rows go with it (cascade), but the location's history is the
+// location's, and it has to say when it got better.
 var systemConfig = scopedConfig[System]{
 	table: systemTable, cols: systemCols, resource: "system",
 	scan: scanSystem, idOf: func(s *System) string { return s.ID },
 	notFound: ErrSystemNotFound, forbidden: ErrSystemForbidden, occupied: ErrSystemOccupied,
+	afterDelete: func(ctx context.Context, p *PG, q txQuerier, before *System) error {
+		if before.LocationID == nil {
+			return nil // placed nowhere: its removal rolls up to nothing
+		}
+		name, err := locationNameByID(ctx, q, *before.LocationID)
+		if err != nil {
+			return err
+		}
+		return p.recomputeChain(ctx, q, nil, nil, []string{name})
+	},
 }
 
 // ListSystems returns the systems in the caller's read scope (shared read path).

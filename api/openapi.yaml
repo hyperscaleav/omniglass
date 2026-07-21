@@ -4799,7 +4799,7 @@ paths:
       x-omniglass-permission: component:create
   /components/{name}:
     delete:
-      description: Deletes a component, refused while it still has child components. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.
+      description: Deletes a component, refused (409) while it still has child components or is still referenced elsewhere, such as by a system role it staffs. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.
       operationId: delete-component
       parameters:
         - description: The component's unique name
@@ -5877,7 +5877,7 @@ paths:
       x-omniglass-permission: location:create
   /locations/{name}:
     delete:
-      description: Deletes a location, refused while it still has child locations. Gated by location:delete; read and delete scopes drive the 404 versus 403 split.
+      description: Deletes a location, refused (409) while it still has child locations or is still referenced elsewhere. Gated by location:delete; read and delete scopes drive the 404 versus 403 split.
       operationId: delete-location
       parameters:
         - description: The location's unique name
@@ -8345,7 +8345,7 @@ paths:
       x-omniglass-permission: system:create
   /systems/{name}:
     delete:
-      description: Deletes a system, refused while it still has child systems. Gated by system:delete; read and delete scopes drive the 404 versus 403 split.
+      description: Deletes a system, refused (409) while it still has child systems or is still referenced elsewhere. Gated by system:delete; read and delete scopes drive the 404 versus 403 split.
       operationId: delete-system
       parameters:
         - description: The system's unique name

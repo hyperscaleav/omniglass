@@ -2,7 +2,6 @@ package storage
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sort"
 	"time"
@@ -41,6 +40,18 @@ import (
 // COMPUTE the verdict they serve from the same rows they show (see SystemHealth
 // and LocationHealth) without recording anything, so an incomplete trigger set can
 // cost an edge in the history but can never make a report contradict itself.
+//
+// One owner at a time. Both rules above are compare-then-act: read what the roles
+// say, compare it with the last recorded value, write only on a difference. Two
+// transactions doing that at once for the same owner each read a state the other
+// was about to change, so both could conclude they were recording an edge (two
+// consecutive identical rows, which is not an edge) or neither could (a real
+// transition, silently missing). Two alarms in one room is an ordinary minute in
+// an estate, so this is not a corner. Every recompute therefore takes a
+// transaction-scoped advisory lock on the owner BEFORE it resolves that owner's
+// inputs, and holds it to commit: the whole resolve-compare-write sequence is
+// serialized per owner, and the loser recomputes over the winner's committed
+// state instead of over a snapshot that predates it. See lockHealthOwner.
 
 // healthKey is the state datapoint key carrying a rolled-up verdict. There is one
 // series per owner and no instance dimension: an entity has exactly one health.
@@ -135,13 +146,19 @@ func (p *PG) RecomputeHealth(ctx context.Context, q txQuerier, componentName str
 // component, withdrawing a role, moving a system out of a location), where walking
 // the current rows would no longer find the entity that just changed.
 //
-// Systems and locations are visited in name order. The recompute holds no row
-// locks of its own, but a deterministic order keeps two concurrent alarms on
-// components in the same system from interleaving their inserts unpredictably.
+// Every owner is locked before its inputs are resolved, and the lock is held to
+// commit, so a concurrent recompute of the same owner resolves over this one's
+// committed result rather than over the state it is replacing. Owners are visited
+// in a fixed order (components, then systems, then locations, each by name), which
+// is what keeps two recomputes over overlapping chains from deadlocking on each
+// other's locks.
 func (p *PG) recomputeChain(ctx context.Context, q txQuerier, components, systems, locations []string) error {
 	affected := newNameSet(systems)
 
-	for _, c := range components {
+	for _, c := range newNameSet(components).sorted() {
+		if err := lockHealthOwner(ctx, q, "component", c); err != nil {
+			return err
+		}
 		severities, err := p.activeAlarmSeverities(ctx, q, c)
 		if err != nil {
 			return err
@@ -158,6 +175,9 @@ func (p *PG) recomputeChain(ctx context.Context, q txQuerier, components, system
 
 	systemNames := affected.sorted()
 	for _, s := range systemNames {
+		if err := lockHealthOwner(ctx, q, "system", s); err != nil {
+			return err
+		}
 		roles, err := p.resolveHealthRoles(ctx, q, s)
 		if err != nil {
 			return err
@@ -174,6 +194,9 @@ func (p *PG) recomputeChain(ctx context.Context, q txQuerier, components, system
 		return err
 	}
 	for _, l := range affectedLocations {
+		if err := lockHealthOwner(ctx, q, "location", l); err != nil {
+			return err
+		}
 		v, err := p.locationVerdict(ctx, q, l)
 		if err != nil {
 			return err
@@ -181,6 +204,31 @@ func (p *PG) recomputeChain(ctx context.Context, q txQuerier, components, system
 		if err := recordHealth(ctx, q, "location", l, v); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// lockHealthOwner takes the owner's health lock for the rest of the caller's
+// transaction. It is what makes "resolve the inputs, compare with the last
+// recorded value, write on a difference" atomic per owner: a second transaction
+// recomputing the same owner waits here, and its statements then read the
+// winner's committed rows rather than a snapshot that predates them.
+//
+// The lock is an advisory one keyed on a hash of the owner, not a row lock,
+// because the thing being serialized is a computation over many tables rather
+// than one row. Owners are locked in a single global order (components, then
+// systems, then locations, each by name), which is what keeps two recomputes over
+// overlapping chains from deadlocking. A hash collision costs two unrelated
+// owners a wait and nothing else.
+//
+// It is transaction-scoped, so it releases on commit or rollback with no
+// unlocking to forget. The recompute always runs inside the caller's transaction
+// (that is the point of taking txQuerier), so there is always a transaction to
+// scope it to.
+func lockHealthOwner(ctx context.Context, q txQuerier, ownerKind, ownerID string) error {
+	if _, err := q.Exec(ctx, `select pg_advisory_xact_lock(hashtextextended($1, 0))`,
+		healthKey+"/"+ownerKind+"/"+ownerID); err != nil {
+		return fmt.Errorf("storage: lock health %s/%s: %w", ownerKind, ownerID, err)
 	}
 	return nil
 }
@@ -199,9 +247,55 @@ func (p *PG) recomputeMovedSystem(ctx context.Context, q txQuerier, system strin
 	return p.recomputeChain(ctx, q, nil, []string{system}, leftLocations)
 }
 
+// recomputeProductComponents is the trigger shape for a catalog edit: the product
+// changed, so every component built to it may now provide a different capability
+// set, and every system staffed by one of those components may have moved. The
+// components are named and recomputeChain walks the rest of the way up.
+//
+// A product with no components in use recomputes nothing, which is the common
+// case for a catalog edit and costs one query.
+func (p *PG) recomputeProductComponents(ctx context.Context, q txQuerier, productID string) error {
+	rows, err := q.Query(ctx, `select name from component where product_id = $1 order by name`, productID)
+	if err != nil {
+		return fmt.Errorf("storage: components of product %q: %w", productID, err)
+	}
+	defer rows.Close()
+	var names []string
+	for rows.Next() {
+		var n string
+		if err := rows.Scan(&n); err != nil {
+			return fmt.Errorf("storage: scan component of product %q: %w", productID, err)
+		}
+		names = append(names, n)
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("storage: iterate components of product %q: %w", productID, err)
+	}
+	if len(names) == 0 {
+		return nil
+	}
+	return p.recomputeChain(ctx, q, names, nil, nil)
+}
+
 // recordHealth is the transition-only write, and the reason this slice adds no
-// history table of its own. It compares the computed verdict with the last one
-// recorded for this owner and writes NOTHING when they match.
+// history table of its own. It writes NOTHING when the computed verdict already
+// matches the last one recorded for this owner.
+//
+// The comparison is INSIDE the insert rather than a read the caller acts on. One
+// statement cannot record a value it did not just compare against, so no future
+// trigger, and no reordering of this one, can reintroduce a gap between deciding
+// and writing. That is only half the guarantee: the lock below is what stops a
+// concurrent transaction from deciding the same thing at the same time. Taking it
+// here as well as in the recompute is deliberate. A trigger that reaches straight
+// for recordHealth still cannot record a duplicate, and re-taking a lock the
+// caller already holds costs nothing.
+//
+// ts is the moment of the write (clock_timestamp), not the transaction's start
+// (now()). Two rows written in one transaction would otherwise share a timestamp,
+// and a slow transaction would stamp its edge before edges that were recorded
+// while it ran, which is exactly backwards for a record whose whole job is saying
+// WHEN something changed. With that, ts and the identity id agree on the order,
+// and the reads below take the id: it is the true write sequence.
 //
 // The first value for an owner is always recorded, even Healthy. An owner whose
 // history starts at its first health-relevant write has a defined beginning; the
@@ -212,40 +306,24 @@ func recordHealth(ctx context.Context, q txQuerier, ownerKind, ownerID string, v
 	if err != nil {
 		return fmt.Errorf("storage: record health %s/%s: %w", ownerKind, ownerID, err)
 	}
-	last, err := latestHealthValue(ctx, q, col, ownerID)
-	if err != nil {
+	if err := lockHealthOwner(ctx, q, ownerKind, ownerID); err != nil {
 		return err
-	}
-	if last == v.String() {
-		return nil
 	}
 	// provenance 'calculated' pins the lineage: source_rule names the producer,
 	// event_id and audit_id stay null. The CHECK enforces exactly that shape.
-	sql := fmt.Sprintf(`insert into state_datapoint (owner_kind, %s, key, instance, value, provenance, source_rule)
-		values ($1, $2, $3, '', $4, 'calculated', $5)`, col)
+	// The WHERE is the transition rule: no previous row (is distinct from null) or
+	// a different one writes; the same value writes nothing.
+	sql := fmt.Sprintf(`insert into state_datapoint (ts, owner_kind, %s, key, instance, value, provenance, source_rule)
+		select clock_timestamp(), $1::text, $2::text, $3::text, '', $4::text, 'calculated', $5::text
+		where $4::text is distinct from (
+			select value from state_datapoint
+			where %s = $2::text and key = $3::text and instance = ''
+			order by id desc
+			limit 1)`, col, col)
 	if _, err := q.Exec(ctx, sql, ownerKind, ownerID, healthKey, v.String(), healthRule); err != nil {
 		return fmt.Errorf("storage: record health %s/%s: %w", ownerKind, ownerID, err)
 	}
 	return nil
-}
-
-// latestHealthValue reads the last recorded verdict for one owner, or "" when the
-// owner has none. The tie-break on id matters: rows written in one transaction
-// share now(), so ts alone does not order them.
-func latestHealthValue(ctx context.Context, q txQuerier, col, ownerID string) (string, error) {
-	var value string
-	sql := fmt.Sprintf(`select value from state_datapoint
-		where %s = $1 and key = $2 and instance = ''
-		order by ts desc, id desc
-		limit 1`, col)
-	err := q.QueryRow(ctx, sql, ownerID, healthKey).Scan(&value)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return "", nil
-	}
-	if err != nil {
-		return "", fmt.Errorf("storage: latest health %s=%s: %w", col, ownerID, err)
-	}
-	return value, nil
 }
 
 // activeAlarmSeverities lists the severities of a component's active alarms, the
@@ -361,7 +439,7 @@ func (p *PG) locationVerdict(ctx context.Context, q txQuerier, locationName stri
 		from state_datapoint sd
 		where sd.key = $2
 		  and sd.system_id in (select name from system where location_id in (select id from subtree))
-		order by sd.system_id, sd.ts desc, sd.id desc`, locationName, healthKey)
+		order by sd.system_id, sd.id desc`, locationName, healthKey)
 	if err != nil {
 		return health.Healthy, fmt.Errorf("storage: location verdict %q: %w", locationName, err)
 	}
@@ -613,7 +691,7 @@ func (p *PG) subtreeSystemHealth(ctx context.Context, q txQuerier, locationName 
 		select s.name, coalesce((
 			select sd.value from state_datapoint sd
 			where sd.system_id = s.name and sd.key = $2 and sd.instance = ''
-			order by sd.ts desc, sd.id desc
+			order by sd.id desc
 			limit 1
 		), 'healthy')
 		from system s

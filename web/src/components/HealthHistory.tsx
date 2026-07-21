@@ -103,8 +103,12 @@ export default function HealthHistory(props: {
             }}
           </For>
         </div>
+        {/* The list holds one more entry than there are changes: the oldest is the
+            first record for this entity, which is a starting point rather than a
+            change from something. Saying so beats a count that looks off by one
+            against the rows right above it. */}
         <span class="text-[11px] text-base-content/40">
-          {changes()} change{changes() === 1 ? "" : "s"} recorded in this window.
+          {changes()} change{changes() === 1 ? "" : "s"} since the first record.
         </span>
       </Show>
     </div>

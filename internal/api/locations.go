@@ -307,7 +307,7 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Path:          "/locations/{name}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete a location",
-		Description:   "Deletes a location, refused while it still has child locations. Gated by location:delete; read and delete scopes drive the 404 versus 403 split.",
+		Description:   "Deletes a location, refused (409) while it still has child locations or is still referenced elsewhere. Gated by location:delete; read and delete scopes drive the 404 versus 403 split.",
 	}, "location", "delete"), func(ctx context.Context, in *locationPathInput) (*struct{}, error) {
 		if err := gw.DeleteLocation(ctx, actorID(ctx), in.Name,
 			a.scopeFor(ctx, "location", "read"), a.scopeFor(ctx, "location", "delete")); err != nil {
@@ -340,6 +340,8 @@ func mapLocationErr(err error) error {
 		return huma.Error404NotFound("location not found")
 	case errors.Is(err, storage.ErrLocationForbidden):
 		return huma.Error403Forbidden("forbidden")
+	case errors.Is(err, storage.ErrReferenced):
+		return huma.Error409Conflict("location is still referenced by another record")
 	case errors.Is(err, storage.ErrLocationOccupied):
 		return huma.Error409Conflict("location has child locations")
 	case errors.Is(err, storage.ErrLocationExists):
