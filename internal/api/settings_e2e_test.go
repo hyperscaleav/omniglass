@@ -95,9 +95,11 @@ func TestSettingsPatchThenReadReflectsOverride(t *testing.T) {
 
 // TestSettingsReadResolvesRowsStoredAtPlatformScope drives the read half of the
 // round trip against the scope the rows actually carry. The platform-tier migration
-// rewrote every setting_override row to scope 'platform', and the column has no check
-// constraint, so an engine still asking the Gateway for 'global' finds nothing and
-// silently serves defaults: every operator override orphaned, with no error anywhere.
+// rewrote every setting_override row to scope 'platform', and the column carried no
+// check constraint at the time, so an engine still asking the Gateway for 'global'
+// found nothing and silently served defaults: every operator override orphaned, with
+// no error anywhere. The scope CHECK now stops the write half of that drift; this
+// test covers the read half, which no constraint can catch.
 // Writing the row through the Gateway (not the API) pins the durable value
 // independently of whatever scope the write path happens to use.
 func TestSettingsReadResolvesRowsStoredAtPlatformScope(t *testing.T) {

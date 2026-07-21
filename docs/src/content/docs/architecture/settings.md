@@ -92,7 +92,10 @@ cascade.
 The declared defaults and the file layer live in memory, so Postgres holds **only the override levels**: a single
 `setting_override(scope, principal_id, namespace, doc, locks, ...)` table with a
 `unique nulls not distinct (scope, principal_id, namespace)` identity (a surrogate `id` is the primary key because
-`principal_id` is nullable, and Postgres forbids NULL in a PK column). Restore semantics fall out of the layer
+`principal_id` is nullable, and Postgres forbids NULL in a PK column). `scope` is under a CHECK naming the levels
+that are actually persisted, today `platform` alone: the declared defaults and the file layer are recomputed in
+memory and can never be rows, so a level the resolver would never read cannot be written, and a future rename of
+the tier fails loudly at the database instead of orphaning every override in silence. Restore semantics fall out of the layer
 model: **restore a namespace** is a `DELETE` of its row, **restore everything** truncates the scope, and the file
 layer plus the declared defaults re-supply the values. The table is **never boot-seeded**: it is operator data,
 and the seeding doctrine's "operator rows untouched" rule applies. Persisting only the override (not the file)

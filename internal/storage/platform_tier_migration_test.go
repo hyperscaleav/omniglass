@@ -58,9 +58,12 @@ func TestPlatformTierRename(t *testing.T) {
 		}
 	}
 
-	// setting_override carries the tier as scope, with no check constraint, so
-	// only the value is asserted.
+	// setting_override carries the tier as scope, under its own check constraint.
 	mustExec(t, conn, `insert into setting_override (scope, namespace) values ('platform', 'ui')`)
+	if _, err := conn.Exec(ctx,
+		`insert into setting_override (scope, namespace) values ('global', 'keybindings')`); err == nil {
+		t.Error("expected the check constraint to reject setting_override.scope 'global'")
+	}
 }
 
 // TestPlatformTierIndexNames pins the index names the rename produced. A
@@ -97,20 +100,18 @@ func TestPlatformTierIndexNames(t *testing.T) {
 // band 0, so nothing may resolve differently.
 //
 // The harness has no way to migrate up to an arbitrary version, so the database
-// is stood at the pre-rename schema by migrating fully and rolling the single
-// newest migration back. That runs the real down block, seeds real 'global'
-// rows, and then runs the real up block over them, which is the upgrade an
-// existing operator database actually takes.
+// is stood at the pre-rename schema by migrating fully and rolling back to just
+// before the rename. That runs the real down blocks, seeds real 'global' rows,
+// and then runs the real up blocks over them, which is the upgrade an existing
+// operator database actually takes.
 func TestPlatformTierRenamePreservesResolution(t *testing.T) {
 	dsn := storagetest.NewDSN(t)
 	conn := connectDSN(t, dsn)
 
-	if got := latestMigration(t, conn); got != platformTierVersion {
-		t.Fatalf("latest applied migration = %s, want %s", got, platformTierVersion)
+	if got := latestMigration(t, conn); got < platformTierVersion {
+		t.Fatalf("latest applied migration = %s, want the rename %s applied", got, platformTierVersion)
 	}
-	if err := migrate.RollbackOne(dsn); err != nil {
-		t.Fatalf("roll back to the pre-rename schema: %v", err)
-	}
+	rollbackBelow(t, conn, dsn, platformTierVersion)
 
 	mustExec(t, conn, `insert into location_type (id, display_name) values ('site', 'Site') on conflict do nothing`)
 	mustExec(t, conn, `insert into location (name, location_type) values ('ceres', 'site')`)
@@ -205,6 +206,19 @@ func count(t *testing.T, conn *pgx.Conn, sql string) int {
 		t.Fatalf("query %s: %v", sql, err)
 	}
 	return out
+}
+
+// rollbackBelow rolls migrations back one at a time until the newest applied one
+// is older than version, leaving the database at the schema immediately before it.
+// Looping (rather than rolling back a fixed count) keeps the test honest as
+// migrations land on top of the one under test.
+func rollbackBelow(t *testing.T, conn *pgx.Conn, dsn, version string) {
+	t.Helper()
+	for latestMigration(t, conn) >= version {
+		if err := migrate.RollbackOne(dsn); err != nil {
+			t.Fatalf("roll back below %s: %v", version, err)
+		}
+	}
 }
 
 func latestMigration(t *testing.T, conn *pgx.Conn) string {
