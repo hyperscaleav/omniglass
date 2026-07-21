@@ -36,7 +36,7 @@ type scopedEntity struct {
 
 var scopedEntities = []scopedEntity{
 	{resource: "location", base: "/locations", typeField: "location_type", typeValue: "campus"},
-	{resource: "system", base: "/systems", typeField: "system_type", typeValue: "meeting-room"},
+	{resource: "system", base: "/systems", typeField: "standard_id", typeValue: "meeting-room"},
 	{resource: "component", base: "/components"},
 }
 

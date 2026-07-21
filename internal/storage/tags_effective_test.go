@@ -25,7 +25,7 @@ func tagEstate(t *testing.T, gw storage.Gateway) (campus, room, sysID, compID st
 	if err != nil {
 		t.Fatalf("get room: %v", err)
 	}
-	sys, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "av", SystemType: "meeting-room", LocationName: strptr("room")}, all)
+	sys, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "av", LocationName: strptr("room")}, all)
 	if err != nil {
 		t.Fatalf("system: %v", err)
 	}

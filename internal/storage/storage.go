@@ -185,6 +185,7 @@ type Gateway interface {
 	// UpsertLocationType installs or updates an official location type by id, the
 	// boot-seed phase's write. Idempotent.
 	UpsertLocationType(ctx context.Context, lt LocationType) error
+	SeedLocationType(ctx context.Context, lt LocationType) error
 	// ListLocationTypes returns every location type, alphabetically by display_name.
 	ListLocationTypes(ctx context.Context) ([]LocationType, error)
 	// The location_type registry CRUD (capability-only, unscoped). Create writes a
@@ -211,12 +212,15 @@ type Gateway interface {
 	LocationNameTaken(ctx context.Context, name string) (bool, error)
 	DeleteLocation(ctx context.Context, actorID, name string, read, action scope.Set) error
 
-	// The system tier: a type registry and scoped CRUD, mirroring locations.
-	UpsertSystemType(ctx context.Context, st SystemType) error
-	ListSystemTypes(ctx context.Context) ([]SystemType, error)
-	CreateSystemType(ctx context.Context, actorID string, st SystemType) (*SystemType, error)
-	UpdateSystemType(ctx context.Context, actorID, id string, patch SystemTypePatch) (*SystemType, error)
-	DeleteSystemType(ctx context.Context, actorID, id string) error
+	// The system tier: the standard catalog (the blueprint a system conforms to,
+	// the system-side counterpart of product) and scoped CRUD, mirroring locations.
+	UpsertStandard(ctx context.Context, st Standard) error
+	SeedStandard(ctx context.Context, st Standard) error
+	ListStandards(ctx context.Context) ([]Standard, error)
+	GetStandard(ctx context.Context, id string) (*Standard, error)
+	CreateStandard(ctx context.Context, actorID string, st Standard) (*Standard, error)
+	UpdateStandard(ctx context.Context, actorID, id string, patch StandardPatch) (*Standard, error)
+	DeleteStandard(ctx context.Context, actorID, id string) error
 	ListSystems(ctx context.Context, read scope.Set) ([]System, error)
 	GetSystem(ctx context.Context, name string, read scope.Set) (*System, error)
 	CreateSystem(ctx context.Context, actorID string, spec SystemSpec, create scope.Set) (*System, error)
@@ -374,12 +378,24 @@ type Gateway interface {
 	// EffectiveProperties resolves a component against its product's contract
 	// (default < override) and adds the ad-hoc values the contract does not declare.
 	ListProductProperties(ctx context.Context, productID string) ([]ProductProperty, error)
+
+	// The standard and location-type contracts: the system-side and place-side
+	// counterparts of product_property, resolved by the same owner-generic
+	// EffectiveProperties.
+	ListStandardProperties(ctx context.Context, standardID string) ([]StandardProperty, error)
+	UpsertStandardProperty(ctx context.Context, standardID string, spec StandardPropertySpec) error
+	SetStandardProperty(ctx context.Context, actorID, standardID string, spec StandardPropertySpec) (*StandardProperty, error)
+	DeleteStandardProperty(ctx context.Context, actorID, standardID, propertyName string) error
+	ListLocationTypeProperties(ctx context.Context, locationTypeID string) ([]LocationTypeProperty, error)
+	UpsertLocationTypeProperty(ctx context.Context, locationTypeID string, spec LocationTypePropertySpec) error
+	SetLocationTypeProperty(ctx context.Context, actorID, locationTypeID string, spec LocationTypePropertySpec) (*LocationTypeProperty, error)
+	DeleteLocationTypeProperty(ctx context.Context, actorID, locationTypeID, propertyName string) error
 	UpsertProductProperty(ctx context.Context, productID string, spec ProductPropertySpec) error
 	SetProductProperty(ctx context.Context, actorID, productID string, spec ProductPropertySpec) (*ProductProperty, error)
 	DeleteProductProperty(ctx context.Context, actorID, productID, propertyName string) error
 	SetPropertyValue(ctx context.Context, actorID, ownerKind, ownerID, propertyName, instance string, value json.RawMessage, write scope.Set) (*PropertyValue, error)
 	ClearPropertyValue(ctx context.Context, actorID, ownerKind, ownerID, propertyName, instance string, write scope.Set) error
-	EffectiveProperties(ctx context.Context, componentName string, read scope.Set) ([]EffectiveProperty, error)
+	EffectiveProperties(ctx context.Context, ownerKind, ownerID string, read scope.Set) ([]EffectiveProperty, error)
 
 	// The tag tier: the governed key vocabulary and the per-entity value
 	// bindings. Minting a key (tag:create) is a tenant-wide governance action;

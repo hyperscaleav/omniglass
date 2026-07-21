@@ -1,6 +1,7 @@
-# The official location types, seeded idempotently at boot (ON CONFLICT DO
-# UPDATE). The registry lists alphabetically by display_name; that ordering
-# does NOT constrain nesting. allowed_parent_types is what does: a set of
+# Example location types, seeded only when absent (ON CONFLICT DO NOTHING) and
+# owned by the operator once they land: the estate shapes its own place
+# vocabulary, so an edit is never reverted on the next boot. The registry lists
+# alphabetically by display_name; that ordering does NOT constrain nesting. allowed_parent_types is what does: a set of
 # location_type ids and/or the reserved "root" sentinel (may sit at the top,
 # no parent) this type may be placed under. Empty means unconstrained; these
 # four ship the estate's implied hierarchy so a floor can never sit above a

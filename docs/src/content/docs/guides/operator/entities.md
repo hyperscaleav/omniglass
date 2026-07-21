@@ -42,8 +42,13 @@ user's is **Disable / Enable**), each behind a confirm. Secondary actions like *
 
 ## Create, edit, delete
 
-- **New** opens a **draft** at the entity's own `/create` address (a form for name, type,
-  placement, and where applicable a parent). The name is the entity's address: lowercase
+- **New** opens a **draft** at the entity's own `/create` address (a form for name, classifier,
+  placement, and where applicable a parent). The classifier is the entity's shape: a component
+  picks its [product](/guides/admin/products/), a system the
+  [standard](/guides/admin/standards/) it conforms to, a location its
+  [type](/guides/admin/types/). On a component and a system the classifier is **optional**, so a
+  one-off unit or a system that matches no blueprint is legitimate; a location's type is
+  required, since for a location the type is the only shape-definer. The name is the entity's address: lowercase
   letters, digits, and hyphens (it can be changed later, see Edit). **Create** commits it and
   drops you straight into the new entity's detail in **edit mode**, so you can tag it and finish
   configuring in place instead of hunting for it back in the list. Bindings like tags need the
@@ -63,3 +68,11 @@ user's is **Disable / Enable**), each behind a confirm. Secondary actions like *
   not offered; a move a stale picker still lets through is refused the same way as create, inline,
   naming both types.
 - **Delete** removes it, with a confirm. These actions appear only if your grants allow them.
+
+## Properties on the detail
+
+A component, a system, and a location each carry a **Properties** panel on their detail: one row per
+property their classifier declares, resolved to the value set here or the classifier's default.
+Overrides are staged with the rest of the edit and committed by the same **Save changes**. It is one
+surface over one resolver, so the panel reads the same on all three; the full walkthrough is in the
+[Properties guide](/guides/admin/properties/#set-a-property-on-an-instance).

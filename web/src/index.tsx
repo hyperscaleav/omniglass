@@ -24,6 +24,7 @@ import Variables from "./pages/Variables";
 import Properties from "./pages/Properties";
 import Tags from "./pages/Tags";
 import Types from "./pages/Types";
+import Standards from "./pages/Standards";
 import Vendors from "./pages/Vendors";
 import Drivers from "./pages/Drivers";
 import Capabilities from "./pages/Capabilities";
@@ -93,6 +94,7 @@ render(
           <Route path="/variables" component={Variables} />
           <Route path="/tags" component={Tags} />
           <Route path="/types" component={Types} />
+          <Route path="/standards" component={Standards} />
           <Route path="/properties" component={Properties} />
           <Route path="/vendors" component={Vendors} />
           <Route path="/drivers" component={Drivers} />

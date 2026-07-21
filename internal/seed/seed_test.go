@@ -52,15 +52,22 @@ func TestSeedRolesIdempotent(t *testing.T) {
 		t.Errorf("owner permissions = %v, want [>] (the superuser tail wildcard)", ownerPerms)
 	}
 
-	// The four official location types seed alongside the roles, in
-	// alphabetical order by display_name, and idempotently (the second Run
-	// above must not have duplicated them).
-	var typeCount int
-	if err := conn.QueryRow(ctx, `select count(*) from location_type where official`).Scan(&typeCount); err != nil {
+	// The four shipped location types seed alongside the roles, in alphabetical
+	// order by display_name, and idempotently (the second Run above must not have
+	// duplicated them). They are operator-owned example content (the estate shapes
+	// its own place vocabulary), so they seed if absent and are not official.
+	var typeCount, officialTypes int
+	if err := conn.QueryRow(ctx, `select count(*) from location_type`).Scan(&typeCount); err != nil {
 		t.Fatalf("count location_types: %v", err)
 	}
 	if typeCount != 4 {
-		t.Errorf("official location_types = %d, want 4", typeCount)
+		t.Errorf("location_types = %d, want 4", typeCount)
+	}
+	if err := conn.QueryRow(ctx, `select count(*) from location_type where official`).Scan(&officialTypes); err != nil {
+		t.Fatalf("count official location_types: %v", err)
+	}
+	if officialTypes != 0 {
+		t.Errorf("official location_types = %d, want 0 (a shipped location type is operator-owned)", officialTypes)
 	}
 	var topType string
 	if err := conn.QueryRow(ctx, `select id from location_type order by display_name, id limit 1`).Scan(&topType); err != nil {
@@ -83,13 +90,38 @@ func TestSeedRolesIdempotent(t *testing.T) {
 		}
 	}
 
-	// The official system types seed too, idempotently.
-	var sysTypeCount int
-	if err := conn.QueryRow(ctx, `select count(*) from system_type where official`).Scan(&sysTypeCount); err != nil {
-		t.Fatalf("count system_types: %v", err)
+	// The shipped standards seed idempotently, and they are operator-owned
+	// (official=false): a standard is example content forked from an in-code
+	// template, so the estate owns it once it lands.
+	var standardCount, officialStandards int
+	if err := conn.QueryRow(ctx, `select count(*) from standard`).Scan(&standardCount); err != nil {
+		t.Fatalf("count standards: %v", err)
 	}
-	if sysTypeCount != 6 {
-		t.Errorf("official system_types = %d, want 6", sysTypeCount)
+	if standardCount != 6 {
+		t.Errorf("standards = %d, want 6 (seed not idempotent or incomplete)", standardCount)
+	}
+	if err := conn.QueryRow(ctx, `select count(*) from standard where official`).Scan(&officialStandards); err != nil {
+		t.Fatalf("count official standards: %v", err)
+	}
+	if officialStandards != 0 {
+		t.Errorf("official standards = %d, want 0 (a shipped standard is operator-owned, not authoritative)", officialStandards)
+	}
+
+	// The property that makes them operator-owned: re-seeding must not reassert
+	// over an operator's edit. An authoritative upsert would silently revert this
+	// on the next boot.
+	if _, err := conn.Exec(ctx, `update standard set display_name = 'Our Huddle Room' where id = 'huddle-room'`); err != nil {
+		t.Fatalf("edit seeded standard: %v", err)
+	}
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed re-run: %v", err)
+	}
+	var huddleName string
+	if err := conn.QueryRow(ctx, `select display_name from standard where id = 'huddle-room'`).Scan(&huddleName); err != nil {
+		t.Fatalf("read huddle-room: %v", err)
+	}
+	if huddleName != "Our Huddle Room" {
+		t.Errorf("huddle-room display_name = %q after re-seed, want the operator's edit to survive", huddleName)
 	}
 
 	// The official vendors seed too, idempotently (the second Run

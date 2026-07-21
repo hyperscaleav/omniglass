@@ -9,9 +9,9 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
-// The type registries (location_type, system_type, component_type) are flat,
-// unscoped reference tables sharing one shape: a stable id, an official flag
-// (seed-owned rows), and a display_name (plus an icon on location). They
+// The type registries and catalogs (location_type, standard, vendor, driver,
+// capability, product) are flat, unscoped reference tables sharing one shape: a
+// stable id, an official flag (seed-owned rows), and a display_name. They
 // are not scoped-tree entities, so they use these registry helpers rather than
 // scopedcrud. Operator rows are official=false; seeded rows are official=true and
 // read-only. A row cannot be deleted while inventory still references it (the

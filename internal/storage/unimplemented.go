@@ -145,6 +145,9 @@ func (UnimplementedGateway) WriteAuthEvent(context.Context, string, string) erro
 func (UnimplementedGateway) UpsertLocationType(context.Context, LocationType) error {
 	return nil
 }
+func (UnimplementedGateway) SeedLocationType(context.Context, LocationType) error {
+	return nil
+}
 func (UnimplementedGateway) ListLocationTypes(context.Context) ([]LocationType, error) {
 	return nil, nil
 }
@@ -176,17 +179,21 @@ func (UnimplementedGateway) LocationNameTaken(context.Context, string) (bool, er
 func (UnimplementedGateway) DeleteLocation(context.Context, string, string, scope.Set, scope.Set) error {
 	return nil
 }
-func (UnimplementedGateway) UpsertSystemType(context.Context, SystemType) error { return nil }
-func (UnimplementedGateway) ListSystemTypes(context.Context) ([]SystemType, error) {
+func (UnimplementedGateway) UpsertStandard(context.Context, Standard) error { return nil }
+func (UnimplementedGateway) SeedStandard(context.Context, Standard) error   { return nil }
+func (UnimplementedGateway) ListStandards(context.Context) ([]Standard, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) CreateSystemType(context.Context, string, SystemType) (*SystemType, error) {
+func (UnimplementedGateway) GetStandard(context.Context, string) (*Standard, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) UpdateSystemType(context.Context, string, string, SystemTypePatch) (*SystemType, error) {
+func (UnimplementedGateway) CreateStandard(context.Context, string, Standard) (*Standard, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) DeleteSystemType(context.Context, string, string) error { return nil }
+func (UnimplementedGateway) UpdateStandard(context.Context, string, string, StandardPatch) (*Standard, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteStandard(context.Context, string, string) error { return nil }
 func (UnimplementedGateway) ListSystems(context.Context, scope.Set) ([]System, error) {
 	return nil, nil
 }
@@ -437,7 +444,7 @@ func (UnimplementedGateway) SetPropertyValue(context.Context, string, string, st
 func (UnimplementedGateway) ClearPropertyValue(context.Context, string, string, string, string, string, scope.Set) error {
 	return nil
 }
-func (UnimplementedGateway) EffectiveProperties(context.Context, string, scope.Set) ([]EffectiveProperty, error) {
+func (UnimplementedGateway) EffectiveProperties(context.Context, string, string, scope.Set) ([]EffectiveProperty, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) ListTags(context.Context) ([]Tag, error) {
@@ -497,3 +504,28 @@ func (UnimplementedGateway) DeleteAllSettingOverrides(context.Context, string, s
 	return nil
 }
 func (UnimplementedGateway) Close() {}
+
+func (UnimplementedGateway) ListStandardProperties(context.Context, string) ([]StandardProperty, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) UpsertStandardProperty(context.Context, string, StandardPropertySpec) error {
+	return nil
+}
+func (UnimplementedGateway) SetStandardProperty(context.Context, string, string, StandardPropertySpec) (*StandardProperty, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteStandardProperty(context.Context, string, string, string) error {
+	return nil
+}
+func (UnimplementedGateway) ListLocationTypeProperties(context.Context, string) ([]LocationTypeProperty, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) UpsertLocationTypeProperty(context.Context, string, LocationTypePropertySpec) error {
+	return nil
+}
+func (UnimplementedGateway) SetLocationTypeProperty(context.Context, string, string, LocationTypePropertySpec) (*LocationTypeProperty, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteLocationTypeProperty(context.Context, string, string, string) error {
+	return nil
+}

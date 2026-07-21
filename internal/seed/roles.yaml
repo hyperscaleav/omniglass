@@ -94,6 +94,10 @@ roles:
       - "driver:create,update,delete"
       - "capability:create,update,delete"
       - "product:create,update,delete"
+      # standard is the system-side counterpart of product (a Catalog entity with
+      # its own property contract), so it carries its own permission rather than
+      # the type-registry one.
+      - "standard:create,update,delete"
       - "tag:*"
       - "unit:create"
       - "event_type:create"

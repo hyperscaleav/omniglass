@@ -33,7 +33,7 @@ func TestComponentScopeCRUD(t *testing.T) {
 	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "rm-1", LocationType: "campus"}, all); err != nil {
 		t.Fatalf("seed location: %v", err)
 	}
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "sys-1", SystemType: "meeting-room"}, all); err != nil {
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "sys-1"}, all); err != nil {
 		t.Fatalf("seed system: %v", err)
 	}
 

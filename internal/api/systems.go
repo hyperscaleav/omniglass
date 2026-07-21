@@ -14,7 +14,7 @@ type systemBody struct {
 	ID            string            `json:"id"`
 	Name          string            `json:"name"`
 	DisplayName   string            `json:"display_name,omitempty"`
-	SystemType    string            `json:"system_type"`
+	StandardID    string            `json:"standard_id,omitempty" doc:"The standard this system conforms to; omitted for a one-off system"`
 	ParentID      *string           `json:"parent_id,omitempty"`
 	LocationID    *string           `json:"location_id,omitempty"`
 	Actions       []string          `json:"actions,omitempty" doc:"The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces."`
@@ -24,7 +24,7 @@ type systemBody struct {
 func toSystemBody(s *storage.System) systemBody {
 	return systemBody{
 		ID: s.ID, Name: s.Name, DisplayName: s.DisplayName,
-		SystemType: s.SystemType, ParentID: s.ParentID, LocationID: s.LocationID,
+		StandardID: derefStr(s.StandardID), ParentID: s.ParentID, LocationID: s.LocationID,
 	}
 }
 
@@ -38,40 +38,51 @@ type systemOutput struct {
 	Body systemBody
 }
 
-// systemTypeBody is the wire shape of a system_type registry row. The registry
-// lists alphabetically by display_name.
-type systemTypeBody struct {
-	ID          string `json:"id"`
-	DisplayName string `json:"display_name"`
-	Official    bool   `json:"official"`
+// standardBody is the wire shape of a standard: the blueprint a system conforms
+// to, the system-side counterpart of a product. The catalog lists alphabetically
+// by display_name.
+type standardBody struct {
+	ID               string `json:"id"`
+	DisplayName      string `json:"display_name"`
+	ParentStandardID string `json:"parent_standard_id,omitempty"`
+	Official         bool   `json:"official"`
 }
 
-type listSystemTypesOutput struct {
-	Body struct {
-		SystemTypes []systemTypeBody `json:"system_types"`
+func toStandardBody(st *storage.Standard) standardBody {
+	return standardBody{
+		ID: st.ID, DisplayName: st.DisplayName,
+		ParentStandardID: derefStr(st.ParentStandardID), Official: st.Official,
 	}
 }
 
-type systemTypePathInput struct {
-	ID string `path:"id" doc:"The system_type id"`
-}
-
-type createSystemTypeInput struct {
+type listStandardsOutput struct {
 	Body struct {
-		ID          string `json:"id" minLength:"1" doc:"Globally unique type id"`
-		DisplayName string `json:"display_name" minLength:"1"`
+		Standards []standardBody `json:"standards"`
 	}
 }
 
-type updateSystemTypeInput struct {
+type standardPathInput struct {
+	ID string `path:"id" doc:"The standard id"`
+}
+
+type createStandardInput struct {
+	Body struct {
+		ID               string `json:"id" minLength:"1" doc:"Globally unique standard id"`
+		DisplayName      string `json:"display_name" minLength:"1"`
+		ParentStandardID string `json:"parent_standard_id,omitempty" doc:"A standard this one is a variant of"`
+	}
+}
+
+type updateStandardInput struct {
 	ID   string `path:"id"`
 	Body struct {
-		DisplayName *string `json:"display_name,omitempty"`
+		DisplayName      *string `json:"display_name,omitempty"`
+		ParentStandardID *string `json:"parent_standard_id,omitempty"`
 	}
 }
 
-type systemTypeOutput struct {
-	Body systemTypeBody
+type standardOutput struct {
+	Body standardBody
 }
 
 type systemPathInput struct {
@@ -82,7 +93,7 @@ type createSystemInput struct {
 	Body struct {
 		Name        string  `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"Globally unique name (the address; lowercase letters, digits, hyphens)"`
 		DisplayName string  `json:"display_name,omitempty"`
-		SystemType  string  `json:"system_type" minLength:"1" doc:"A system_type id"`
+		StandardID  string  `json:"standard_id,omitempty" doc:"A standard id; omit for a one-off system that conforms to none"`
 		Parent      *string `json:"parent,omitempty" doc:"Parent system name; omit for a root system"`
 		Location    *string `json:"location,omitempty" doc:"Location name this system is placed at"`
 	}
@@ -93,7 +104,7 @@ type updateSystemInput struct {
 	Body struct {
 		Name        *string `json:"name,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"A new globally unique technical name (rename)"`
 		DisplayName *string `json:"display_name,omitempty"`
-		SystemType  *string `json:"system_type,omitempty"`
+		StandardID  *string `json:"standard_id,omitempty"`
 	}
 }
 
@@ -155,74 +166,6 @@ func registerSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	})
 
 	huma.Register(api, a.gated(huma.Operation{
-		OperationID: "list-system-types",
-		Method:      http.MethodGet,
-		Path:        "/types/system",
-		Summary:     "List system types",
-		Description: "Lists the system_type registry, ordered alphabetically by display name. Populates the type picker on the system form. Gated by type:read.",
-	}, "type", "read"), func(ctx context.Context, _ *struct{}) (*listSystemTypesOutput, error) {
-		types, err := gw.ListSystemTypes(ctx)
-		if err != nil {
-			return nil, huma.Error500InternalServerError("list system types")
-		}
-		out := &listSystemTypesOutput{}
-		out.Body.SystemTypes = make([]systemTypeBody, 0, len(types))
-		for i := range types {
-			out.Body.SystemTypes = append(out.Body.SystemTypes, systemTypeBody{
-				ID: types[i].ID, DisplayName: types[i].DisplayName, Official: types[i].Official,
-			})
-		}
-		return out, nil
-	})
-
-	huma.Register(api, a.gated(huma.Operation{
-		OperationID:   "create-system-type",
-		Method:        http.MethodPost,
-		Path:          "/types/system",
-		DefaultStatus: http.StatusCreated,
-		Summary:       "Create a system type",
-		Description:   "Creates a custom (non-official) system_type. Gated by type:create.",
-	}, "type", "create"), func(ctx context.Context, in *createSystemTypeInput) (*systemTypeOutput, error) {
-		st, err := gw.CreateSystemType(ctx, actorID(ctx), storage.SystemType{
-			ID: in.Body.ID, DisplayName: in.Body.DisplayName,
-		})
-		if err != nil {
-			return nil, mapTypeErr(err, "system_type")
-		}
-		return &systemTypeOutput{Body: systemTypeBody{ID: st.ID, DisplayName: st.DisplayName, Official: st.Official}}, nil
-	})
-
-	huma.Register(api, a.gated(huma.Operation{
-		OperationID: "update-system-type",
-		Method:      http.MethodPatch,
-		Path:        "/types/system/{id}",
-		Summary:     "Update a system type",
-		Description: "Patches a custom system_type's display_name. Official types are read-only (422). Gated by type:update.",
-	}, "type", "update"), func(ctx context.Context, in *updateSystemTypeInput) (*systemTypeOutput, error) {
-		st, err := gw.UpdateSystemType(ctx, actorID(ctx), in.ID, storage.SystemTypePatch{
-			DisplayName: in.Body.DisplayName,
-		})
-		if err != nil {
-			return nil, mapTypeErr(err, "system_type")
-		}
-		return &systemTypeOutput{Body: systemTypeBody{ID: st.ID, DisplayName: st.DisplayName, Official: st.Official}}, nil
-	})
-
-	huma.Register(api, a.gated(huma.Operation{
-		OperationID:   "delete-system-type",
-		Method:        http.MethodDelete,
-		Path:          "/types/system/{id}",
-		DefaultStatus: http.StatusNoContent,
-		Summary:       "Delete a system type",
-		Description:   "Deletes a custom system_type, refused if official (422) or referenced by a system (409). Gated by type:delete.",
-	}, "type", "delete"), func(ctx context.Context, in *systemTypePathInput) (*struct{}, error) {
-		if err := gw.DeleteSystemType(ctx, actorID(ctx), in.ID); err != nil {
-			return nil, mapTypeErr(err, "system_type")
-		}
-		return nil, nil
-	})
-
-	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "get-system",
 		Method:      http.MethodGet,
 		Path:        "/systems/{name}",
@@ -247,7 +190,7 @@ func registerSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		s, err := gw.CreateSystem(ctx, actorID(ctx), storage.SystemSpec{
 			Name:         in.Body.Name,
 			DisplayName:  in.Body.DisplayName,
-			SystemType:   in.Body.SystemType,
+			StandardID:   ptrOrNil(in.Body.StandardID),
 			ParentName:   in.Body.Parent,
 			LocationName: in.Body.Location,
 		}, a.scopeFor(ctx, "system", "create"))
@@ -262,12 +205,15 @@ func registerSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodPatch,
 		Path:        "/systems/{name}",
 		Summary:     "Update a system",
-		Description: "Patches a system's display_name or system_type. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
+		Description: "Patches a system's display_name or standard. An omitted standard_id leaves it unchanged; an explicit empty string clears it, converting the system to a one-off. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
 	}, "system", "update"), func(ctx context.Context, in *updateSystemInput) (*systemOutput, error) {
 		s, err := gw.UpdateSystem(ctx, actorID(ctx), in.Name, storage.SystemPatch{
 			Name:        in.Body.Name,
 			DisplayName: in.Body.DisplayName,
-			SystemType:  in.Body.SystemType,
+			// Deliberately NOT emptyPtrToNil: that collapses an explicit "" into
+			// "omitted", which would make converting a classified system back to a
+			// one-off impossible. The storage layer reads "" as clear.
+			StandardID: in.Body.StandardID,
 		}, a.scopeFor(ctx, "system", "read"), a.scopeFor(ctx, "system", "update"))
 		if err != nil {
 			return nil, mapSystemErr(err)
@@ -332,11 +278,112 @@ func mapSystemErr(err error) error {
 		return huma.Error422UnprocessableEntity("invalid name")
 	case errors.Is(err, storage.ErrParentSystemNotFound):
 		return huma.Error422UnprocessableEntity("parent system not found")
-	case errors.Is(err, storage.ErrUnknownSystemType):
-		return huma.Error422UnprocessableEntity("unknown system_type")
+	case errors.Is(err, storage.ErrUnknownStandard):
+		return huma.Error422UnprocessableEntity("unknown standard")
 	case errors.Is(err, storage.ErrLocationNotFound):
 		return huma.Error422UnprocessableEntity("location not found")
 	default:
 		return huma.Error500InternalServerError("system operation failed")
 	}
+}
+
+// mapStandardErr translates the standard storage sentinels into HTTP status. An
+// unknown parent is a 422; everything else falls through to the shared
+// type-registry mapping (not-found 404, duplicate 409, official read-only 422,
+// in-use 409).
+func mapStandardErr(err error) error {
+	if errors.Is(err, storage.ErrParentStandardNotFound) {
+		return huma.Error422UnprocessableEntity("standard references an unknown parent standard")
+	}
+	return mapTypeErr(err, "standard")
+}
+
+// registerStandardRoutes wires the standard catalog CRUD surface, on the same
+// pattern as products. A standard is not a bare type registry: it carries a
+// declared property contract (and later a role set), so it is a Catalog entity
+// gated by its own standard:read|create|update|delete rather than the inherited
+// type:*. standard:read sits in the viewer read-floor (*:read), the mutations at
+// the admin tier, exactly like product:*.
+func registerStandardRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
+	huma.Register(api, a.gated(huma.Operation{
+		OperationID: "list-standards",
+		Method:      http.MethodGet,
+		Path:        "/standards",
+		Summary:     "List standards",
+		Description: "Lists the standard catalog, ordered alphabetically by display name. A standard is the blueprint a system conforms to. Gated by standard:read.",
+	}, "standard", "read"), func(ctx context.Context, _ *struct{}) (*listStandardsOutput, error) {
+		items, err := gw.ListStandards(ctx)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("list standards")
+		}
+		out := &listStandardsOutput{}
+		out.Body.Standards = make([]standardBody, 0, len(items))
+		for i := range items {
+			out.Body.Standards = append(out.Body.Standards, toStandardBody(&items[i]))
+		}
+		return out, nil
+	})
+
+	huma.Register(api, a.gated(huma.Operation{
+		OperationID:   "create-standard",
+		Method:        http.MethodPost,
+		Path:          "/standards",
+		DefaultStatus: http.StatusCreated,
+		Summary:       "Create a standard",
+		Description:   "Creates a custom (non-official) standard, optionally as a variant of another. Gated by standard:create.",
+	}, "standard", "create"), func(ctx context.Context, in *createStandardInput) (*standardOutput, error) {
+		st, err := gw.CreateStandard(ctx, actorID(ctx), storage.Standard{
+			ID: in.Body.ID, DisplayName: in.Body.DisplayName,
+			ParentStandardID: ptrOrNil(in.Body.ParentStandardID),
+		})
+		if err != nil {
+			return nil, mapStandardErr(err)
+		}
+		return &standardOutput{Body: toStandardBody(st)}, nil
+	})
+
+	huma.Register(api, a.gated(huma.Operation{
+		OperationID: "get-standard",
+		Method:      http.MethodGet,
+		Path:        "/standards/{id}",
+		Summary:     "Get a standard",
+		Description: "Fetches a standard by id. Gated by standard:read.",
+	}, "standard", "read"), func(ctx context.Context, in *standardPathInput) (*standardOutput, error) {
+		st, err := gw.GetStandard(ctx, in.ID)
+		if err != nil {
+			return nil, mapStandardErr(err)
+		}
+		return &standardOutput{Body: toStandardBody(st)}, nil
+	})
+
+	huma.Register(api, a.gated(huma.Operation{
+		OperationID: "update-standard",
+		Method:      http.MethodPatch,
+		Path:        "/standards/{id}",
+		Summary:     "Update a standard",
+		Description: "Patches a custom standard's display_name or parent. Official standards are read-only (422). Gated by standard:update.",
+	}, "standard", "update"), func(ctx context.Context, in *updateStandardInput) (*standardOutput, error) {
+		st, err := gw.UpdateStandard(ctx, actorID(ctx), in.ID, storage.StandardPatch{
+			DisplayName:      in.Body.DisplayName,
+			ParentStandardID: emptyPtrToNil(in.Body.ParentStandardID),
+		})
+		if err != nil {
+			return nil, mapStandardErr(err)
+		}
+		return &standardOutput{Body: toStandardBody(st)}, nil
+	})
+
+	huma.Register(api, a.gated(huma.Operation{
+		OperationID:   "delete-standard",
+		Method:        http.MethodDelete,
+		Path:          "/standards/{id}",
+		DefaultStatus: http.StatusNoContent,
+		Summary:       "Delete a standard",
+		Description:   "Deletes a custom standard, refused if official (422) or still referenced by a system (409). Gated by standard:delete.",
+	}, "standard", "delete"), func(ctx context.Context, in *standardPathInput) (*struct{}, error) {
+		if err := gw.DeleteStandard(ctx, actorID(ctx), in.ID); err != nil {
+			return nil, mapStandardErr(err)
+		}
+		return nil, nil
+	})
 }

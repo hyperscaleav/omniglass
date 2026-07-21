@@ -67,7 +67,7 @@ func TestEffectiveProperties(t *testing.T) {
 	}
 
 	// Unset: the contract default resolves, nothing is marked set.
-	got, err := gw.EffectiveProperties(ctx, "panel-1", all)
+	got, err := gw.EffectiveProperties(ctx, "component", "panel-1", all)
 	if err != nil {
 		t.Fatalf("effective properties: %v", err)
 	}
@@ -155,7 +155,7 @@ func TestEffectiveProperties(t *testing.T) {
 
 func mustResolve(t *testing.T, gw *storage.PG, name string, s scope.Set) []storage.EffectiveProperty {
 	t.Helper()
-	got, err := gw.EffectiveProperties(context.Background(), name, s)
+	got, err := gw.EffectiveProperties(context.Background(), "component", name, s)
 	if err != nil {
 		t.Fatalf("effective properties %s: %v", name, err)
 	}

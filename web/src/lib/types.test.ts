@@ -12,17 +12,12 @@ describe("types data layer", () => {
     vi.restoreAllMocks();
   });
 
-  it("lists all three registries and tags each row's kind", async () => {
+  it("lists both registries and tags each row's kind", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = (input as Request).url;
       if (url.includes("/types/location")) {
         return jsonResponse({
           location_types: [{ id: "campus", display_name: "Campus", icon: "building", official: true }],
-        });
-      }
-      if (url.includes("/types/system")) {
-        return jsonResponse({
-          system_types: [{ id: "kiosk", display_name: "Kiosk", official: true }],
         });
       }
       if (url.includes("/types/secret")) {
@@ -41,16 +36,11 @@ describe("types data layer", () => {
     });
 
     const rows = await listTypes();
-    expect(fetchMock).toHaveBeenCalledTimes(3);
-    expect(rows).toHaveLength(3);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(rows).toHaveLength(2);
 
     const location = rows.find((r) => r.kind === "location");
     expect(location).toMatchObject({ kind: "location", id: "campus", icon: "building", allowed_parent_types: [] });
-
-    const system = rows.find((r) => r.kind === "system");
-    expect(system).toMatchObject({ kind: "system", id: "kiosk" });
-    expect(system?.icon).toBeUndefined();
-    expect(system?.fields).toBeUndefined();
 
     const secret = rows.find((r) => r.kind === "secret");
     expect(secret).toMatchObject({ kind: "secret", id: "credentials" });
@@ -85,16 +75,16 @@ describe("types data layer", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("updates a system type by id", async () => {
+  it("updates a location type by id", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ id: "kiosk", display_name: "Kiosk v2", official: true }),
+      jsonResponse({ id: "wing", display_name: "Wing v2", official: false }),
     );
-    await updateType("system", "kiosk", { display_name: "Kiosk v2" });
+    await updateType("location", "wing", { display_name: "Wing v2" });
     const req = fetchMock.mock.calls[0][0] as Request;
     expect(req.method).toBe("PATCH");
-    expect(req.url).toContain("/api/v1/types/system/kiosk");
+    expect(req.url).toContain("/api/v1/types/location/wing");
     const sent = await req.json();
-    expect(sent).toMatchObject({ display_name: "Kiosk v2" });
+    expect(sent).toMatchObject({ display_name: "Wing v2" });
   });
 
   it("sends an explicit empty allowed_parent_types to clear a location type's constraint", async () => {
@@ -124,12 +114,12 @@ describe("types data layer", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("deletes a system type by id", async () => {
+  it("deletes a location type by id", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
-    await deleteType("system", "kiosk");
+    await deleteType("location", "wing");
     const req = fetchMock.mock.calls[0][0] as Request;
     expect(req.method).toBe("DELETE");
-    expect(req.url).toContain("/api/v1/types/system/kiosk");
+    expect(req.url).toContain("/api/v1/types/location/wing");
   });
 
   it("rejects deleting a secret type without calling fetch", async () => {

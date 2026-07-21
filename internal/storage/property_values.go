@@ -158,48 +158,57 @@ func (p *PG) ClearPropertyValue(ctx context.Context, actorID, ownerKind, ownerID
 	return nil
 }
 
-// EffectiveProperties resolves a component's declared properties: every property
-// its product's contract declares (value = coalesce(the component's set value, the
-// contract default)), plus any ad-hoc property the component sets directly that the
-// contract does not declare. A productless component has only the ad-hoc set. The
-// component must be within the read scope; an out-of-scope component is the
-// non-disclosing ErrComponentNotFound.
+// ownerContract is the only thing that varies between the owner kinds when
+// resolving declared properties: where the instance names its classifier, which
+// contract table that classifier declares properties in, and which arc column
+// carries the instance's own values. The resolution SQL is written once and
+// parameterized by this, so component, system, and location resolve through one
+// code path (primitive-first) and cannot drift apart.
+//
+// Every identifier here is a compile-time constant from this table, never caller
+// input, so interpolating them into the statement is safe.
+type ownerContract struct {
+	instanceTable  string // the instance's own table
+	classifierCol  string // the instance column naming its classifier ("" = no classifier)
+	contractTable  string // where the classifier declares its properties ("" = no contract)
+	contractKeyCol string // the contract column matching the classifier
+	arcCol         string // the property_value arc column for this owner kind
+	notFound       error
+}
+
+var ownerContracts = map[string]ownerContract{
+	"component": {"component", "product_id", "product_property", "product_id", "component_id", ErrComponentNotFound},
+	"system":    {"system", "standard_id", "standard_property", "standard_id", "system_id", ErrSystemNotFound},
+	"location":  {"location", "location_type", "location_type_property", "location_type_id", "location_id", ErrLocationNotFound},
+	// A node has the arc but no classifier, so it resolves ad-hoc values only.
+	"node": {"node", "", "", "", "node_id", ErrNodeNotFound},
+}
+
+// EffectiveProperties resolves an instance's declared properties: every property
+// its classifier's contract declares (value = coalesce(the instance's set value,
+// the contract default)), plus any ad-hoc property the instance sets directly that
+// the contract does not declare. An instance with no classifier (a productless
+// component, a one-off system) has only the ad-hoc set. The instance must be within
+// the read scope; an out-of-scope instance is its non-disclosing not-found.
 //
 // The two arms are one UNION so the merge stays in SQL: the contract arm is a left
-// join from product_property, the ad-hoc arm is the component's values with no
+// join from the contract table, the ad-hoc arm is the instance's values with no
 // matching contract row.
-func (p *PG) EffectiveProperties(ctx context.Context, componentName string, read scope.Set) ([]EffectiveProperty, error) {
-	_, inScope, err := p.componentIDResolved(ctx, p.pool, componentName, read)
+func (p *PG) EffectiveProperties(ctx context.Context, ownerKind, ownerID string, read scope.Set) ([]EffectiveProperty, error) {
+	oc, ok := ownerContracts[ownerKind]
+	if !ok {
+		return nil, ErrUnknownOwnerKind
+	}
+	inScope, err := p.ownerInScope(ctx, p.pool, ownerKind, ownerID, read)
 	if err != nil {
 		return nil, err
 	}
 	if !inScope {
-		return nil, ErrComponentNotFound
+		return nil, oc.notFound
 	}
-	rows, err := p.pool.Query(ctx, `
-		with comp as (
-			select name, product_id from component where name = $1
-		)
-		-- The contract arm: what the component's product declares, resolved against
-		-- the component's own value.
-		select pp.property_name, pr.display_name, pr.data_type, pp.required,
-		       pp.default_value,
-		       pv.value as set_value,
-		       coalesce(pv.value, pp.default_value) as effective_value,
-		       (pv.id is not null) as is_set,
-		       true as from_contract,
-		       pv.id as value_id
-		from comp
-		join product_property pp on pp.product_id = comp.product_id
-		join property pr on pr.name = pp.property_name
-		left join property_value pv
-		       on pv.component_id = comp.name
-		      and pv.property_name = pp.property_name
-		      and pv.instance = ''
-		      and pv.provenance = 'declared'
-		union all
-		-- The ad-hoc arm: values set directly on the component for properties the
-		-- contract does not declare (every value on a productless component).
+
+	// The ad-hoc arm alone when the owner kind has no classifier to inherit from.
+	adHoc := fmt.Sprintf(`
 		select pv.property_name, pr.display_name, pr.data_type, false as required,
 		       null::jsonb as default_value,
 		       pv.value as set_value,
@@ -207,17 +216,52 @@ func (p *PG) EffectiveProperties(ctx context.Context, componentName string, read
 		       true as is_set,
 		       false as from_contract,
 		       pv.id as value_id
-		from comp
-		join property_value pv on pv.component_id = comp.name
+		from inst
+		join property_value pv on pv.%[1]s = inst.name
 		     and pv.instance = '' and pv.provenance = 'declared'
-		join property pr on pr.name = pv.property_name
-		where not exists (
-			select 1 from product_property pp
-			where pp.product_id = comp.product_id and pp.property_name = pv.property_name
+		join property pr on pr.name = pv.property_name`, oc.arcCol)
+
+	var q string
+	if oc.contractTable == "" {
+		q = fmt.Sprintf(`with inst as (select name from %s where name = $1) %s order by 1`,
+			oc.instanceTable, adHoc)
+	} else {
+		q = fmt.Sprintf(`
+		with inst as (
+			select name, %[2]s as classifier from %[1]s where name = $1
 		)
-		order by 1`, componentName)
+		-- The contract arm: what the instance's classifier declares, resolved
+		-- against the instance's own value.
+		select c.property_name, pr.display_name, pr.data_type, c.required,
+		       c.default_value,
+		       pv.value as set_value,
+		       coalesce(pv.value, c.default_value) as effective_value,
+		       (pv.id is not null) as is_set,
+		       true as from_contract,
+		       pv.id as value_id
+		from inst
+		join %[3]s c on c.%[4]s = inst.classifier
+		join property pr on pr.name = c.property_name
+		left join property_value pv
+		       on pv.%[5]s = inst.name
+		      and pv.property_name = c.property_name
+		      and pv.instance = ''
+		      and pv.provenance = 'declared'
+		union all
+		-- The ad-hoc arm: values set directly on the instance for properties the
+		-- contract does not declare (every value on a classifier-less instance).
+		%[6]s
+		where not exists (
+			select 1 from %[3]s c
+			where c.%[4]s = inst.classifier and c.property_name = pv.property_name
+		)
+		order by 1`,
+			oc.instanceTable, oc.classifierCol, oc.contractTable, oc.contractKeyCol, oc.arcCol, adHoc)
+	}
+
+	rows, err := p.pool.Query(ctx, q, ownerID)
 	if err != nil {
-		return nil, fmt.Errorf("storage: effective properties: %w", err)
+		return nil, fmt.Errorf("storage: effective properties %s/%s: %w", ownerKind, ownerID, err)
 	}
 	defer rows.Close()
 
@@ -247,20 +291,59 @@ func (p *PG) EffectiveProperties(ctx context.Context, componentName string, read
 	return out, rows.Err()
 }
 
-// guardOwnerScope confirms the owner exists and is reachable within the caller's
-// scope. Only the component arc is scope-injected today (the surface that writes
-// values is the component detail); the other arcs resolve existence so a bad owner
-// fails as a clear not-found rather than an opaque FK violation.
-func (p *PG) guardOwnerScope(ctx context.Context, q querier, ownerKind, ownerID string, write scope.Set) error {
-	if ownerKind != "component" {
-		return nil // existence is enforced by the arc FK; scope for the other arcs lands with their surfaces
+// ownerInScope reports whether the named owner exists and falls within the given
+// scope, for any owner kind on the arc. An absent owner is that kind's not-found
+// sentinel (nothing to disclose); an existing but out-of-scope owner returns
+// inScope=false so each caller picks its own sentinel. A node is estate-wide (not
+// scope-tree scoped, like a principal), so it is in scope once it exists.
+func (p *PG) ownerInScope(ctx context.Context, q querier, ownerKind, ownerID string, s scope.Set) (bool, error) {
+	switch ownerKind {
+	case "component":
+		c, err := scopedByName(ctx, q, componentConfig, ownerID)
+		if err != nil {
+			return false, err
+		}
+		return inScopeTree(ctx, q, componentTable, c.ID, s)
+	case "system":
+		sys, err := scopedByName(ctx, q, systemConfig, ownerID)
+		if err != nil {
+			return false, err
+		}
+		return inScopeTree(ctx, q, systemTable, sys.ID, s)
+	case "location":
+		l, err := scopedByName(ctx, q, locationConfig, ownerID)
+		if err != nil {
+			return false, err
+		}
+		return inScopeTree(ctx, q, locationTable, l.ID, s)
+	case "node":
+		// A node is not a scope tree, so existence is the whole check.
+		var exists bool
+		if err := q.QueryRow(ctx, `select exists (select 1 from node where name = $1)`, ownerID).Scan(&exists); err != nil {
+			return false, fmt.Errorf("storage: resolve node %q: %w", ownerID, err)
+		}
+		if !exists {
+			return false, ErrNodeNotFound
+		}
+		return true, nil
 	}
-	_, inScope, err := p.componentIDResolved(ctx, q, ownerID, write)
+	return false, ErrUnknownOwnerKind
+}
+
+// guardOwnerScope confirms the owner exists and is reachable within the caller's
+// scope before a value is written to it, so a caller cannot set a value on an
+// instance it cannot reach. Every arc is scope-checked, not just the component one.
+func (p *PG) guardOwnerScope(ctx context.Context, q querier, ownerKind, ownerID string, write scope.Set) error {
+	oc, ok := ownerContracts[ownerKind]
+	if !ok {
+		return ErrUnknownOwnerKind
+	}
+	inScope, err := p.ownerInScope(ctx, q, ownerKind, ownerID, write)
 	if err != nil {
 		return err
 	}
 	if !inScope {
-		return ErrComponentNotFound
+		return oc.notFound
 	}
 	return nil
 }

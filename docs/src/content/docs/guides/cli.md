@@ -312,6 +312,50 @@ A seed-owned (**official**) product, for example `cisco-room-bar`, is read-only:
 both 422. A product still referenced by a **component** (`component.product_id`) cannot be deleted (409);
 an unknown vendor, driver, parent, or capability id is a 422.
 
+## Standards
+
+The [standard](/architecture/core-entities/#catalog-reference-data-standard) commands cover the
+system-side counterpart of a product: the **blueprint a system conforms to**. `standard:read` sits on the
+viewer floor; `standard:create`, `standard:update`, and `standard:delete` are admin-gated.
+
+```sh
+omniglass standard list                                             # the standard catalog
+omniglass standard create --id lecture-hall --display-name "Lecture Hall" \
+  --parent-standard-id classroom                                    # a variant of an existing standard
+omniglass standard get lecture-hall
+omniglass standard delete lecture-hall                              # 409 if a system still conforms to it
+```
+
+Unlike a seeded product, the **shipped standards are `official: false`**: they are forked from an in-code
+template once, with no inheritance, so they are yours to rename, re-parent, or delete, and the boot seed
+installs one **only if absent** rather than reasserting over your edit. The same holds for the shipped
+location types. See [the seed model](/architecture/core-entities/#the-seed-model-forked-templates-versus-canonical-catalogs).
+
+## Property contracts and values
+
+A classifier **declares** which properties its instances carry; an instance **sets** a value. Both sides
+are the same three verbs, and the contract commands hang off the classifier that owns them:
+
+```sh
+omniglass product properties cisco-room-bar                         # a product's contract
+omniglass standard properties huddle-room                           # a standard's contract
+omniglass location-type properties room                             # a location type's contract
+omniglass standard set-property huddle-room room_capacity --default-value 6 --required true
+omniglass standard delete-property huddle-room room_capacity        # systems keep any value they set
+
+omniglass component properties dsp-boardroom-3                      # the effective read
+omniglass system properties boardroom                               # same shape, system side
+omniglass location properties east-campus                           # same shape, location side
+omniglass system set-property boardroom room_capacity --value 12    # idempotent
+omniglass system clear-property boardroom room_capacity             # falls back to the contract default
+```
+
+The read resolves the classifier's contract against the instance's own values, so a **one-off system**
+(one conforming to no standard) and a **productless component** still resolve, to their off-contract
+values alone. The value commands are **scope-injected**: an instance outside your read scope is a
+non-disclosing 404 on the read and on the write. Note the two different names on the location-type side:
+the registry CRUD is `omniglass type location ...`, its contract is `omniglass location-type ...`.
+
 ## Generated versus hand-written
 
 - **Generated** (`internal/cli/api_gen.go`, do not edit): one command per API operation.

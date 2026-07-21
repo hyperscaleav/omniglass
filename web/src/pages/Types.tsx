@@ -4,6 +4,7 @@ import FlatList, { type FlatColumn } from "../components/FlatList";
 import KVStacked from "../components/KVStacked";
 import Button from "../components/Button";
 import { DrawerFooter } from "../components/Drawer";
+import ContractEditor from "../components/ContractEditor";
 import { Plus } from "../components/icons";
 import {
   type TypeKind,
@@ -20,17 +21,19 @@ import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
-// Types: the classifier registries (location, system, secret), one per tab. Each
-// tab is that registry's own directory over the FlatList surface; a row is
-// addressed by kind + id (the write paths key on id within a kind, not
-// globally). secret_type and any official (seed-owned) row are read-only this
-// slice; the writable rows are custom location and system entries. A component's
-// shape is not a classifier registry: it comes from the product the component is
-// an instance of, whose contract lives on the Products page.
+// Types: the classifier registries (location, secret), one per tab. Each tab is
+// that registry's own directory over the FlatList surface; a row is addressed by
+// kind + id (the write paths key on id within a kind, not globally). secret_type
+// and any official (seed-owned) row are read-only this slice; the writable rows
+// are custom location entries, whose detail also carries the location type's
+// declared-property contract.
+//
+// The other two shape-definers are catalog entities of their own, each with its
+// own page and contract editor: a system's shape is the STANDARD it conforms to
+// (Standards), and a component's is the product it is an instance of (Products).
 
 const KIND_LABEL: Record<TypeKind, string> = {
   location: "Location",
-  system: "System",
   secret: "Secret",
 };
 
@@ -125,7 +128,7 @@ export default function Types() {
 
 // typeBlade renders a kind:id row on the shared blade stack. Secret rows and
 // official rows are read-only (no pencil, no destructive action); a custom
-// location or system row carries Edit + Delete.
+// location row carries Edit + Delete.
 export const typeBlade: BladeDef = {
   Title: (p) => <TypeBladeTitle id={p.id} />,
   Body: (p) => <TypeBladeBody id={p.id} />,
@@ -267,6 +270,12 @@ function TypeBladeBody(p: { id: string }): JSX.Element {
               </Show>
               <span class="text-[11px] text-base-content/40">Empty allows any parent (or root). A non-empty set is enforced on create and move.</span>
             </div>
+          </Show>
+          {/* The location type's declared-property contract: what every location
+              of this type exposes. Writes are immediate (a PUT per line), so the
+              panel sits outside the blade's edit slot, which the core facts own. */}
+          <Show when={r().kind === "location"}>
+            <ContractEditor classifier="location-type" id={r().id} official={r().official} />
           </Show>
           <Show when={r().kind === "secret"}>
             <div class="flex flex-col gap-1.5">

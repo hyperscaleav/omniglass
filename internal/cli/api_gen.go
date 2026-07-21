@@ -1059,6 +1059,20 @@ func generatedCommands() []*cobra.Command {
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "clear-property <name> <property>",
+				Short:   "Clear a property on a location",
+				Long:    "Removes the location's declared value, so the property falls back to the location type contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the location never set is a 404. Gated by location:update; an out-of-scope location is a non-disclosing 404.",
+				Example: "  omniglass location clear-property <name> <property>",
+				Args:    cobra.ExactArgs(2),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/locations/%s/properties/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+					return runAPICommand(cmd, "DELETE", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
 			var fDisplayName string
 			var fLocationType string
 			var fName string
@@ -1152,6 +1166,20 @@ func generatedCommands() []*cobra.Command {
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "properties <name>",
+				Short:   "List a location's effective properties",
+				Long:    "Every property the location's type declares, resolved to the location's own value or the contract default (is_set marks the override), plus any property set directly on the location (from_contract false). Gated by location:read; an out-of-scope location is a non-disclosing 404.",
+				Example: "  omniglass location properties <name>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/locations/%s/properties", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
 			var fKey string
 			cmd := &cobra.Command{
 				Use:     "removeTag <name>",
@@ -1170,6 +1198,27 @@ func generatedCommands() []*cobra.Command {
 			}
 			cmd.Flags().StringVar(&fKey, "key", "", "The tag key to remove")
 			_ = cmd.MarkFlagRequired("key")
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			var fValue string
+			cmd := &cobra.Command{
+				Use:     "set-property <name> <property>",
+				Short:   "Set a property on a location",
+				Long:    "Declares a value for the property on this location, overriding the location type contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by location:update; an out-of-scope location is a non-disclosing 404.",
+				Example: "  omniglass location set-property <name> <property> --value value",
+				Args:    cobra.ExactArgs(2),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/locations/%s/properties/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+					body := map[string]any{}
+					if cmd.Flags().Changed("value") {
+						body["value"] = jsonOrString(fValue)
+					}
+					return runAPICommand(cmd, "PUT", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fValue, "value", "", "The value to declare, shape given by the property's data_type")
+			_ = cmd.MarkFlagRequired("value")
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
@@ -1232,6 +1281,66 @@ func generatedCommands() []*cobra.Command {
 			cmd.Flags().StringVar(&fLocationType, "location-type", "", "")
 			cmd.Flags().StringVar(&fName, "name", "", "A new globally unique technical name (rename)")
 			cmd.Flags().StringVar(&fParent, "parent", "", "Re-parents the location (a tree move) to this location name, cycle-guarded and placement-validated. Moving to root is not supported via update this slice.")
+			return cmd
+		}())
+		roots = append(roots, parent)
+	}
+	{
+		parent := &cobra.Command{
+			Use:   "location-type",
+			Short: "Commands for the location-type resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "delete-property <id> <property>",
+				Short:   "Withdraw a property from a location type",
+				Long:    "Removes one line from a custom location type's contract; locations of the type keep any value they set for it, now off-contract. A property the type does not declare is a 404, and an official type is read-only (422). Gated by type:delete.",
+				Example: "  omniglass location-type delete-property <id> <property>",
+				Args:    cobra.ExactArgs(2),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/location-types/%s/properties/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+					return runAPICommand(cmd, "DELETE", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "properties <id>",
+				Short:   "List a location type's declared properties",
+				Long:    "Lists the location type's declared-property contract (what every location of the type exposes), ordered by property name, each with its optional default and required flag. Gated by type:read.",
+				Example: "  omniglass location-type properties <id>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/location-types/%s/properties", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			var fDefaultValue string
+			var fRequired string
+			cmd := &cobra.Command{
+				Use:     "set-property <id> <property>",
+				Short:   "Declare a property on a location type",
+				Long:    "Declares a catalog property on a custom location type, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official location types are read-only (422); an unknown type is a 404 and a property the catalog does not know is a 422. Gated by type:update.",
+				Example: "  omniglass location-type set-property <id> <property>",
+				Args:    cobra.ExactArgs(2),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/location-types/%s/properties/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+					body := map[string]any{}
+					if cmd.Flags().Changed("default-value") {
+						body["default_value"] = jsonOrString(fDefaultValue)
+					}
+					if cmd.Flags().Changed("required") {
+						body["required"] = jsonOrString(fRequired)
+					}
+					return runAPICommand(cmd, "PUT", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fDefaultValue, "default-value", "", "The contract default, validated against the property's data_type; omit for no default")
+			cmd.Flags().StringVar(&fRequired, "required", "", "Whether every location of this type must set the property; defaults to false")
 			return cmd
 		}())
 		roots = append(roots, parent)
@@ -2692,6 +2801,165 @@ func generatedCommands() []*cobra.Command {
 	}
 	{
 		parent := &cobra.Command{
+			Use:   "standard",
+			Short: "Commands for the standard resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			var fDisplayName string
+			var fId string
+			var fParentStandardId string
+			cmd := &cobra.Command{
+				Use:     "create",
+				Short:   "Create a standard",
+				Long:    "Creates a custom (non-official) standard, optionally as a variant of another. Gated by standard:create.",
+				Example: "  omniglass standard create --display-name display_name --id id",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/standards")
+					body := map[string]any{}
+					if cmd.Flags().Changed("display-name") {
+						body["display_name"] = fDisplayName
+					}
+					if cmd.Flags().Changed("id") {
+						body["id"] = fId
+					}
+					if cmd.Flags().Changed("parent-standard-id") {
+						body["parent_standard_id"] = fParentStandardId
+					}
+					return runAPICommand(cmd, "POST", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
+			_ = cmd.MarkFlagRequired("display-name")
+			cmd.Flags().StringVar(&fId, "id", "", "Globally unique standard id")
+			_ = cmd.MarkFlagRequired("id")
+			cmd.Flags().StringVar(&fParentStandardId, "parent-standard-id", "", "A standard this one is a variant of")
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "delete <id>",
+				Short:   "Delete a standard",
+				Long:    "Deletes a custom standard, refused if official (422) or still referenced by a system (409). Gated by standard:delete.",
+				Example: "  omniglass standard delete <id>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/standards/%s", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "DELETE", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "delete-property <id> <property>",
+				Short:   "Withdraw a property from a standard",
+				Long:    "Removes one line from a custom standard's contract; conforming systems keep any value they set for it, now off-contract. A property the standard does not declare is a 404, and an official standard is read-only (422). Gated by standard:delete.",
+				Example: "  omniglass standard delete-property <id> <property>",
+				Args:    cobra.ExactArgs(2),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/standards/%s/properties/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+					return runAPICommand(cmd, "DELETE", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "get <id>",
+				Short:   "Get a standard",
+				Long:    "Fetches a standard by id. Gated by standard:read.",
+				Example: "  omniglass standard get <id>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/standards/%s", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "list",
+				Short:   "List standards",
+				Long:    "Lists the standard catalog, ordered alphabetically by display name. A standard is the blueprint a system conforms to. Gated by standard:read.",
+				Example: "  omniglass standard list",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/standards")
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "properties <id>",
+				Short:   "List a standard's declared properties",
+				Long:    "Lists the standard's declared-property contract (what every system conforming to it exposes), ordered by property name, each with its optional default and required flag. Gated by standard:read.",
+				Example: "  omniglass standard properties <id>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/standards/%s/properties", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			var fDefaultValue string
+			var fRequired string
+			cmd := &cobra.Command{
+				Use:     "set-property <id> <property>",
+				Short:   "Declare a property on a standard",
+				Long:    "Declares a catalog property on a custom standard, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official standards are read-only (422); an unknown standard is a 404 and a property the catalog does not know is a 422. Gated by standard:update.",
+				Example: "  omniglass standard set-property <id> <property>",
+				Args:    cobra.ExactArgs(2),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/standards/%s/properties/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+					body := map[string]any{}
+					if cmd.Flags().Changed("default-value") {
+						body["default_value"] = jsonOrString(fDefaultValue)
+					}
+					if cmd.Flags().Changed("required") {
+						body["required"] = jsonOrString(fRequired)
+					}
+					return runAPICommand(cmd, "PUT", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fDefaultValue, "default-value", "", "The contract default, validated against the property's data_type; omit for no default")
+			cmd.Flags().StringVar(&fRequired, "required", "", "Whether every system conforming to this standard must set the property; defaults to false")
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			var fDisplayName string
+			var fParentStandardId string
+			cmd := &cobra.Command{
+				Use:     "update <id>",
+				Short:   "Update a standard",
+				Long:    "Patches a custom standard's display_name or parent. Official standards are read-only (422). Gated by standard:update.",
+				Example: "  omniglass standard update <id>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/standards/%s", url.PathEscape(args[0]))
+					body := map[string]any{}
+					if cmd.Flags().Changed("display-name") {
+						body["display_name"] = fDisplayName
+					}
+					if cmd.Flags().Changed("parent-standard-id") {
+						body["parent_standard_id"] = fParentStandardId
+					}
+					return runAPICommand(cmd, "PATCH", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
+			cmd.Flags().StringVar(&fParentStandardId, "parent-standard-id", "", "")
+			return cmd
+		}())
+		roots = append(roots, parent)
+	}
+	{
+		parent := &cobra.Command{
 			Use:   "statu",
 			Short: "Commands for the statu resource",
 		}
@@ -2738,16 +3006,30 @@ func generatedCommands() []*cobra.Command {
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "clear-property <name> <property>",
+				Short:   "Clear a property on a system",
+				Long:    "Removes the system's declared value, so the property falls back to the standard contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the system never set is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.",
+				Example: "  omniglass system clear-property <name> <property>",
+				Args:    cobra.ExactArgs(2),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/systems/%s/properties/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+					return runAPICommand(cmd, "DELETE", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
 			var fDisplayName string
 			var fLocation string
 			var fName string
 			var fParent string
-			var fSystemType string
+			var fStandardId string
 			cmd := &cobra.Command{
 				Use:     "create",
 				Short:   "Create a system",
 				Long:    "Creates a system, optionally under a parent (a root needs an all-scoped grant) and at a location. Gated by system:create.",
-				Example: "  omniglass system create --name name --system-type system_type",
+				Example: "  omniglass system create --name name",
 				Args:    cobra.ExactArgs(0),
 				RunE: func(cmd *cobra.Command, args []string) error {
 					path := fmt.Sprintf("/api/v1/systems")
@@ -2764,8 +3046,8 @@ func generatedCommands() []*cobra.Command {
 					if cmd.Flags().Changed("parent") {
 						body["parent"] = fParent
 					}
-					if cmd.Flags().Changed("system-type") {
-						body["system_type"] = fSystemType
+					if cmd.Flags().Changed("standard-id") {
+						body["standard_id"] = fStandardId
 					}
 					return runAPICommand(cmd, "POST", path, body)
 				},
@@ -2775,8 +3057,7 @@ func generatedCommands() []*cobra.Command {
 			cmd.Flags().StringVar(&fName, "name", "", "Globally unique name (the address; lowercase letters, digits, hyphens)")
 			_ = cmd.MarkFlagRequired("name")
 			cmd.Flags().StringVar(&fParent, "parent", "", "Parent system name; omit for a root system")
-			cmd.Flags().StringVar(&fSystemType, "system-type", "", "A system_type id")
-			_ = cmd.MarkFlagRequired("system-type")
+			cmd.Flags().StringVar(&fStandardId, "standard-id", "", "A standard id; omit for a one-off system that conforms to none")
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
@@ -2836,6 +3117,20 @@ func generatedCommands() []*cobra.Command {
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "properties <name>",
+				Short:   "List a system's effective properties",
+				Long:    "Every property the system's standard declares, resolved to the system's own value or the contract default (is_set marks the override), plus any property set directly on the system (from_contract false). Gated by system:read; an out-of-scope system is a non-disclosing 404.",
+				Example: "  omniglass system properties <name>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/systems/%s/properties", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
 			var fKey string
 			cmd := &cobra.Command{
 				Use:     "removeTag <name>",
@@ -2854,6 +3149,27 @@ func generatedCommands() []*cobra.Command {
 			}
 			cmd.Flags().StringVar(&fKey, "key", "", "The tag key to remove")
 			_ = cmd.MarkFlagRequired("key")
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			var fValue string
+			cmd := &cobra.Command{
+				Use:     "set-property <name> <property>",
+				Short:   "Set a property on a system",
+				Long:    "Declares a value for the property on this system, overriding the standard contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by system:update; an out-of-scope system is a non-disclosing 404.",
+				Example: "  omniglass system set-property <name> <property> --value value",
+				Args:    cobra.ExactArgs(2),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/systems/%s/properties/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+					body := map[string]any{}
+					if cmd.Flags().Changed("value") {
+						body["value"] = jsonOrString(fValue)
+					}
+					return runAPICommand(cmd, "PUT", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fValue, "value", "", "The value to declare, shape given by the property's data_type")
+			_ = cmd.MarkFlagRequired("value")
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
@@ -2886,11 +3202,11 @@ func generatedCommands() []*cobra.Command {
 		parent.AddCommand(func() *cobra.Command {
 			var fDisplayName string
 			var fName string
-			var fSystemType string
+			var fStandardId string
 			cmd := &cobra.Command{
 				Use:     "update <name>",
 				Short:   "Update a system",
-				Long:    "Patches a system's display_name or system_type. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
+				Long:    "Patches a system's display_name or standard. An omitted standard_id leaves it unchanged; an explicit empty string clears it, converting the system to a one-off. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
 				Example: "  omniglass system update <name>",
 				Args:    cobra.ExactArgs(1),
 				RunE: func(cmd *cobra.Command, args []string) error {
@@ -2902,15 +3218,15 @@ func generatedCommands() []*cobra.Command {
 					if cmd.Flags().Changed("name") {
 						body["name"] = fName
 					}
-					if cmd.Flags().Changed("system-type") {
-						body["system_type"] = fSystemType
+					if cmd.Flags().Changed("standard-id") {
+						body["standard_id"] = fStandardId
 					}
 					return runAPICommand(cmd, "PATCH", path, body)
 				},
 			}
 			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
 			cmd.Flags().StringVar(&fName, "name", "", "A new globally unique technical name (rename)")
-			cmd.Flags().StringVar(&fSystemType, "system-type", "", "")
+			cmd.Flags().StringVar(&fStandardId, "standard-id", "", "")
 			return cmd
 		}())
 		roots = append(roots, parent)
@@ -3212,81 +3528,6 @@ func generatedCommands() []*cobra.Command {
 					return runAPICommand(cmd, "GET", path, nil)
 				},
 			}
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			var fDisplayName string
-			var fId string
-			cmd := &cobra.Command{
-				Use:     "create",
-				Short:   "Create a system type",
-				Long:    "Creates a custom (non-official) system_type. Gated by type:create.",
-				Example: "  omniglass type system create --display-name display_name --id id",
-				Args:    cobra.ExactArgs(0),
-				RunE: func(cmd *cobra.Command, args []string) error {
-					path := fmt.Sprintf("/api/v1/types/system")
-					body := map[string]any{}
-					if cmd.Flags().Changed("display-name") {
-						body["display_name"] = fDisplayName
-					}
-					if cmd.Flags().Changed("id") {
-						body["id"] = fId
-					}
-					return runAPICommand(cmd, "POST", path, body)
-				},
-			}
-			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
-			_ = cmd.MarkFlagRequired("display-name")
-			cmd.Flags().StringVar(&fId, "id", "", "Globally unique type id")
-			_ = cmd.MarkFlagRequired("id")
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := &cobra.Command{
-				Use:     "delete <id>",
-				Short:   "Delete a system type",
-				Long:    "Deletes a custom system_type, refused if official (422) or referenced by a system (409). Gated by type:delete.",
-				Example: "  omniglass type system delete <id>",
-				Args:    cobra.ExactArgs(1),
-				RunE: func(cmd *cobra.Command, args []string) error {
-					path := fmt.Sprintf("/api/v1/types/system/%s", url.PathEscape(args[0]))
-					return runAPICommand(cmd, "DELETE", path, nil)
-				},
-			}
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := &cobra.Command{
-				Use:     "list",
-				Short:   "List system types",
-				Long:    "Lists the system_type registry, ordered alphabetically by display name. Populates the type picker on the system form. Gated by type:read.",
-				Example: "  omniglass type system list",
-				Args:    cobra.ExactArgs(0),
-				RunE: func(cmd *cobra.Command, args []string) error {
-					path := fmt.Sprintf("/api/v1/types/system")
-					return runAPICommand(cmd, "GET", path, nil)
-				},
-			}
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			var fDisplayName string
-			cmd := &cobra.Command{
-				Use:     "update <id>",
-				Short:   "Update a system type",
-				Long:    "Patches a custom system_type's display_name. Official types are read-only (422). Gated by type:update.",
-				Example: "  omniglass type system update <id>",
-				Args:    cobra.ExactArgs(1),
-				RunE: func(cmd *cobra.Command, args []string) error {
-					path := fmt.Sprintf("/api/v1/types/system/%s", url.PathEscape(args[0]))
-					body := map[string]any{}
-					if cmd.Flags().Changed("display-name") {
-						body["display_name"] = fDisplayName
-					}
-					return runAPICommand(cmd, "PATCH", path, body)
-				},
-			}
-			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
 			return cmd
 		}())
 		roots = append(roots, parent)

@@ -22,8 +22,8 @@ var rolesYAML []byte
 //go:embed location_types.yaml
 var locationTypesYAML []byte
 
-//go:embed system_types.yaml
-var systemTypesYAML []byte
+//go:embed standards.yaml
+var standardsYAML []byte
 
 //go:embed properties.yaml
 var propertiesYAML []byte
@@ -65,11 +65,12 @@ type locationTypesDoc struct {
 	} `yaml:"location_types"`
 }
 
-type systemTypesDoc struct {
-	SystemTypes []struct {
-		ID          string `yaml:"id"`
-		DisplayName string `yaml:"display_name"`
-	} `yaml:"system_types"`
+type standardsDoc struct {
+	Standards []struct {
+		ID               string `yaml:"id"`
+		DisplayName      string `yaml:"display_name"`
+		ParentStandardID string `yaml:"parent_standard_id"`
+	} `yaml:"standards"`
 }
 
 type propertiesDoc struct {
@@ -160,7 +161,7 @@ func Run(ctx context.Context, gw storage.Gateway) error {
 	if err := seedLocationTypes(ctx, gw); err != nil {
 		return err
 	}
-	if err := seedSystemTypes(ctx, gw); err != nil {
+	if err := seedStandards(ctx, gw); err != nil {
 		return err
 	}
 	if err := seedInterfaceTypes(ctx, gw); err != nil {
@@ -346,16 +347,23 @@ func seedProducts(ctx context.Context, gw storage.Gateway) error {
 	return nil
 }
 
-func seedSystemTypes(ctx context.Context, gw storage.Gateway) error {
-	var doc systemTypesDoc
-	if err := yaml.Unmarshal(systemTypesYAML, &doc); err != nil {
-		return fmt.Errorf("seed: parse system_types: %w", err)
+func seedStandards(ctx context.Context, gw storage.Gateway) error {
+	var doc standardsDoc
+	if err := yaml.Unmarshal(standardsYAML, &doc); err != nil {
+		return fmt.Errorf("seed: parse standards: %w", err)
 	}
-	for _, st := range doc.SystemTypes {
-		if err := gw.UpsertSystemType(ctx, storage.SystemType{
-			ID:          st.ID,
-			Official:    true,
-			DisplayName: st.DisplayName,
+	for _, st := range doc.Standards {
+		var parent *string
+		if st.ParentStandardID != "" {
+			parent = &st.ParentStandardID
+		}
+		// Shipped standards are example content the operator owns once it lands,
+		// not authoritative reference data: seeded if absent, never reasserted.
+		if err := gw.SeedStandard(ctx, storage.Standard{
+			ID:               st.ID,
+			Official:         false,
+			DisplayName:      st.DisplayName,
+			ParentStandardID: parent,
 		}); err != nil {
 			return err
 		}
@@ -413,9 +421,9 @@ func seedLocationTypes(ctx context.Context, gw storage.Gateway) error {
 		return fmt.Errorf("seed: parse location_types: %w", err)
 	}
 	for _, lt := range doc.LocationTypes {
-		if err := gw.UpsertLocationType(ctx, storage.LocationType{
+		if err := gw.SeedLocationType(ctx, storage.LocationType{
 			ID:                 lt.ID,
-			Official:           true,
+			Official:           false,
 			DisplayName:        lt.DisplayName,
 			Icon:               lt.Icon,
 			AllowedParentTypes: lt.AllowedParentTypes,

@@ -96,7 +96,7 @@ func registerComponentPropertyRoutes(api huma.API, a *authenticator, gw storage.
 		Summary:     "List a component's effective properties",
 		Description: "Every property the component's product declares, resolved to the component's own value or the contract default (is_set marks the override), plus any property set directly on the component (from_contract false). Gated by component:read; an out-of-scope component is a non-disclosing 404.",
 	}, "component", "read"), func(ctx context.Context, in *componentPathInput) (*componentPropertiesOutput, error) {
-		eff, err := gw.EffectiveProperties(ctx, in.Name, a.scopeFor(ctx, "component", "read"))
+		eff, err := gw.EffectiveProperties(ctx, "component", in.Name, a.scopeFor(ctx, "component", "read"))
 		if err != nil {
 			return nil, mapComponentPropertyErr(err)
 		}

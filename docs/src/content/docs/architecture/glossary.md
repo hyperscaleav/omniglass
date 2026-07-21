@@ -78,9 +78,11 @@ This is the **authoritative glossary**: every official term in the architecture,
 | **component** | A deployed instance (device/app/service); owns datapoints; a variable-depth tree; pins a component_template_version; points at the `product` it is, the source of its shape. |
 | **product** | The concrete SKU (Cisco Room Bar): binds a vendor, a driver, a kind, the capabilities it provides, and the property contract its instances carry. Carries the `official` boolean. |
 | **product_property** | One line of a product's declared-property contract: a catalog property, an optional default, and whether an instance must set it. |
+| **standard** | The blueprint a system conforms to (Huddle Room, Classroom): the system-side counterpart of `product`, carrying variants (`parent_standard_id`) and the property contract its systems inherit. Optional on a system. |
+| **standard_property / location_type_property** | The same contract line as `product_property`, declared by a standard for its systems and by a location type for its locations. |
 | **property_value** | A stored value for a property on one arc owner, tagged with its provenance (observed / calculated / intended / declared). |
 | **component_template / _version** | The device shape (collection, commands, datapoint_types, defaults, alarms); the **immutable version** instances pin. |
-| **system** | A composition of components/subsystems (the service tree); pins a system_template_version; located at a location; classified by system_type. |
+| **system** | A composition of components/subsystems (the service tree); pins a system_template_version; located at a location; **conforms to** an optional `standard`. |
 | **system_template / _version** | The system shape; the immutable version is the snapshot instances pin. Carries a frozen BOM: per role, its requirement (required canonical datapoints + commands) + health_role. |
 | **template signature / attestation** | An optional author signature on a `template_version`, verified on import; authenticity (who authored it), distinct from the content-hash integrity (that it is unaltered). The hosted / marketplace path verifies signatures regardless of the self-host runtime stance. See [templates](/architecture/templates/). |
 | **capability manifest** | A declaration on a template of which write-commands and credential shapes it exercises; shown and approved at `:apply`, and the gate behind which `latest` / channel auto-update for device-mutating templates requires an explicit operator re-pin. See [templates](/architecture/templates/). |

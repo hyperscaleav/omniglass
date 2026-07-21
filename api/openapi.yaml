@@ -810,6 +810,30 @@ components:
         - owner_kind
         - fields
       type: object
+    CreateStandardInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateStandardInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        display_name:
+          minLength: 1
+          type: string
+        id:
+          description: Globally unique standard id
+          minLength: 1
+          type: string
+        parent_standard_id:
+          description: A standard this one is a variant of
+          type: string
+      required:
+        - id
+        - display_name
+      type: object
     CreateSystemInputBody:
       additionalProperties: false
       properties:
@@ -834,34 +858,11 @@ components:
         parent:
           description: Parent system name; omit for a root system
           type: string
-        system_type:
-          description: A system_type id
-          minLength: 1
+        standard_id:
+          description: A standard id; omit for a one-off system that conforms to none
           type: string
       required:
         - name
-        - system_type
-      type: object
-    CreateSystemTypeInputBody:
-      additionalProperties: false
-      properties:
-        $schema:
-          description: A URL to the JSON Schema for this object.
-          examples:
-            - /api/v1/schemas/CreateSystemTypeInputBody.json
-          format: uri
-          readOnly: true
-          type: string
-        display_name:
-          minLength: 1
-          type: string
-        id:
-          description: Globally unique type id
-          minLength: 1
-          type: string
-      required:
-        - id
-        - display_name
       type: object
     CreateTagInputBody:
       additionalProperties: false
@@ -1691,6 +1692,25 @@ components:
       required:
         - interfaces
       type: object
+    ListLocationTypePropertiesOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListLocationTypePropertiesOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        properties:
+          items:
+            $ref: "#/components/schemas/LocationTypePropertyBody"
+          type:
+            - array
+            - "null"
+      required:
+        - properties
+      type: object
     ListLocationTypesOutputBody:
       additionalProperties: false
       properties:
@@ -1919,24 +1939,43 @@ components:
       required:
         - secrets
       type: object
-    ListSystemTypesOutputBody:
+    ListStandardPropertiesOutputBody:
       additionalProperties: false
       properties:
         $schema:
           description: A URL to the JSON Schema for this object.
           examples:
-            - /api/v1/schemas/ListSystemTypesOutputBody.json
+            - /api/v1/schemas/ListStandardPropertiesOutputBody.json
           format: uri
           readOnly: true
           type: string
-        system_types:
+        properties:
           items:
-            $ref: "#/components/schemas/SystemTypeBody"
+            $ref: "#/components/schemas/StandardPropertyBody"
           type:
             - array
             - "null"
       required:
-        - system_types
+        - properties
+      type: object
+    ListStandardsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListStandardsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        standards:
+          items:
+            $ref: "#/components/schemas/StandardBody"
+          type:
+            - array
+            - "null"
+      required:
+        - standards
       type: object
     ListSystemsOutputBody:
       additionalProperties: false
@@ -2070,6 +2109,53 @@ components:
         - name
         - location_type
       type: object
+    LocationPropertiesOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/LocationPropertiesOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        location:
+          type: string
+        properties:
+          items:
+            $ref: "#/components/schemas/EffectivePropertyBody"
+          type:
+            - array
+            - "null"
+      required:
+        - location
+        - properties
+      type: object
+    LocationPropertyValueBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/LocationPropertyValueBody.json
+          format: uri
+          readOnly: true
+          type: string
+        location:
+          type: string
+        property_name:
+          type: string
+        value:
+          description: The stored value, shape given by the property's data_type
+        value_id:
+          description: The stored value's id
+          type: string
+      required:
+        - location
+        - property_name
+        - value
+        - value_id
+      type: object
     LocationTypeBody:
       additionalProperties: false
       properties:
@@ -2100,6 +2186,28 @@ components:
         - icon
         - allowed_parent_types
         - official
+      type: object
+    LocationTypePropertyBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/LocationTypePropertyBody.json
+          format: uri
+          readOnly: true
+          type: string
+        default_value:
+          description: The contract default, shape given by the property's data_type; omitted when the contract sets none
+        property_name:
+          description: The catalog property this location type declares
+          type: string
+        required:
+          description: Whether every location of this type must set the property
+          type: boolean
+      required:
+        - property_name
+        - required
       type: object
     LoginInputBody:
       additionalProperties: false
@@ -2871,6 +2979,37 @@ components:
       required:
         - value
       type: object
+    SetLocationPropertyInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/SetLocationPropertyInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        value:
+          description: The value to declare, shape given by the property's data_type
+      required:
+        - value
+      type: object
+    SetLocationTypePropertyInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/SetLocationTypePropertyInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        default_value:
+          description: The contract default, validated against the property's data_type; omit for no default
+        required:
+          description: Whether every location of this type must set the property; defaults to false
+          type: boolean
+      type: object
     SetProductPropertyInputBody:
       additionalProperties: false
       properties:
@@ -2886,6 +3025,37 @@ components:
         required:
           description: Whether every instance of this product must set the property; defaults to false
           type: boolean
+      type: object
+    SetStandardPropertyInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/SetStandardPropertyInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        default_value:
+          description: The contract default, validated against the property's data_type; omit for no default
+        required:
+          description: Whether every system conforming to this standard must set the property; defaults to false
+          type: boolean
+      type: object
+    SetSystemPropertyInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/SetSystemPropertyInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        value:
+          description: The value to declare, shape given by the property's data_type
+      required:
+        - value
       type: object
     Settings:
       additionalProperties: false
@@ -2940,6 +3110,51 @@ components:
         - sources
         - locks
       type: object
+    StandardBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/StandardBody.json
+          format: uri
+          readOnly: true
+          type: string
+        display_name:
+          type: string
+        id:
+          type: string
+        official:
+          type: boolean
+        parent_standard_id:
+          type: string
+      required:
+        - id
+        - display_name
+        - official
+      type: object
+    StandardPropertyBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/StandardPropertyBody.json
+          format: uri
+          readOnly: true
+          type: string
+        default_value:
+          description: The contract default, shape given by the property's data_type; omitted when the contract sets none
+        property_name:
+          description: The catalog property this standard declares
+          type: string
+        required:
+          description: Whether every system conforming to this standard must set the property
+          type: boolean
+      required:
+        - property_name
+        - required
+      type: object
     SvcBody:
       additionalProperties: false
       properties:
@@ -2980,33 +3195,59 @@ components:
           type: string
         parent_id:
           type: string
-        system_type:
+        standard_id:
+          description: The standard this system conforms to; omitted for a one-off system
           type: string
       required:
         - id
         - name
-        - system_type
       type: object
-    SystemTypeBody:
+    SystemPropertiesOutputBody:
       additionalProperties: false
       properties:
         $schema:
           description: A URL to the JSON Schema for this object.
           examples:
-            - /api/v1/schemas/SystemTypeBody.json
+            - /api/v1/schemas/SystemPropertiesOutputBody.json
           format: uri
           readOnly: true
           type: string
-        display_name:
+        properties:
+          items:
+            $ref: "#/components/schemas/EffectivePropertyBody"
+          type:
+            - array
+            - "null"
+        system:
           type: string
-        id:
-          type: string
-        official:
-          type: boolean
       required:
-        - id
-        - display_name
-        - official
+        - system
+        - properties
+      type: object
+    SystemPropertyValueBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/SystemPropertyValueBody.json
+          format: uri
+          readOnly: true
+          type: string
+        property_name:
+          type: string
+        system:
+          type: string
+        value:
+          description: The stored value, shape given by the property's data_type
+        value_id:
+          description: The stored value's id
+          type: string
+      required:
+        - system
+        - property_name
+        - value
+        - value_id
       type: object
     TagBindingBody:
       additionalProperties: false
@@ -3401,6 +3642,21 @@ components:
       required:
         - fields
       type: object
+    UpdateStandardInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/UpdateStandardInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        display_name:
+          type: string
+        parent_standard_id:
+          type: string
+      type: object
     UpdateSystemInputBody:
       additionalProperties: false
       properties:
@@ -3419,20 +3675,7 @@ components:
           minLength: 1
           pattern: ^[a-z0-9][a-z0-9-]*$
           type: string
-        system_type:
-          type: string
-      type: object
-    UpdateSystemTypeInputBody:
-      additionalProperties: false
-      properties:
-        $schema:
-          description: A URL to the JSON Schema for this object.
-          examples:
-            - /api/v1/schemas/UpdateSystemTypeInputBody.json
-          format: uri
-          readOnly: true
-          type: string
-        display_name:
+        standard_id:
           type: string
       type: object
     UpdateTagInputBody:
@@ -4854,6 +5097,102 @@ paths:
           description: Error
       summary: Update an interface
       x-omniglass-permission: interface:update
+  /location-types/{id}/properties:
+    get:
+      description: Lists the location type's declared-property contract (what every location of the type exposes), ordered by property name, each with its optional default and required flag. Gated by type:read.
+      operationId: list-location-type-properties
+      parameters:
+        - description: The location_type id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The location_type id
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListLocationTypePropertiesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List a location type's declared properties
+      x-omniglass-permission: type:read
+  /location-types/{id}/properties/{property}:
+    delete:
+      description: Removes one line from a custom location type's contract; locations of the type keep any value they set for it, now off-contract. A property the type does not declare is a 404, and an official type is read-only (422). Gated by type:delete.
+      operationId: delete-location-type-property
+      parameters:
+        - description: The location type id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The location type id
+            type: string
+        - description: The property name
+          in: path
+          name: property
+          required: true
+          schema:
+            description: The property name
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Withdraw a property from a location type
+      x-omniglass-permission: type:delete
+    put:
+      description: Declares a catalog property on a custom location type, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official location types are read-only (422); an unknown type is a 404 and a property the catalog does not know is a 422. Gated by type:update.
+      operationId: set-location-type-property
+      parameters:
+        - description: The location type id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The location type id
+            type: string
+        - description: The property name
+          in: path
+          name: property
+          required: true
+          schema:
+            description: The property name
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetLocationTypePropertyInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocationTypePropertyBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Declare a property on a location type
+      x-omniglass-permission: type:update
   /locations:
     get:
       description: Lists the locations the caller may read, each filtered to its scope subtree. Gated by location:read.
@@ -4975,6 +5314,102 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Update a location
+      x-omniglass-permission: location:update
+  /locations/{name}/properties:
+    get:
+      description: Every property the location's type declares, resolved to the location's own value or the contract default (is_set marks the override), plus any property set directly on the location (from_contract false). Gated by location:read; an out-of-scope location is a non-disclosing 404.
+      operationId: list-location-properties
+      parameters:
+        - description: The location's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The location's unique name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocationPropertiesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List a location's effective properties
+      x-omniglass-permission: location:read
+  /locations/{name}/properties/{property}:
+    delete:
+      description: Removes the location's declared value, so the property falls back to the location type contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the location never set is a 404. Gated by location:update; an out-of-scope location is a non-disclosing 404.
+      operationId: clear-location-property
+      parameters:
+        - description: The location's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The location's unique name
+            type: string
+        - description: The property name
+          in: path
+          name: property
+          required: true
+          schema:
+            description: The property name
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Clear a property on a location
+      x-omniglass-permission: location:update
+    put:
+      description: "Declares a value for the property on this location, overriding the location type contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by location:update; an out-of-scope location is a non-disclosing 404."
+      operationId: set-location-property
+      parameters:
+        - description: The location's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The location's unique name
+            type: string
+        - description: The property name
+          in: path
+          name: property
+          required: true
+          schema:
+            description: The property name
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetLocationPropertyInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocationPropertyValueBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Set a property on a location
       x-omniglass-permission: location:update
   /locations/{name}:listTags:
     get:
@@ -6885,6 +7320,224 @@ paths:
           description: Error
       summary: Restore all settings to defaults
       x-omniglass-permission: settings:update
+  /standards:
+    get:
+      description: Lists the standard catalog, ordered alphabetically by display name. A standard is the blueprint a system conforms to. Gated by standard:read.
+      operationId: list-standards
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListStandardsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List standards
+      x-omniglass-permission: standard:read
+    post:
+      description: Creates a custom (non-official) standard, optionally as a variant of another. Gated by standard:create.
+      operationId: create-standard
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateStandardInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Create a standard
+      x-omniglass-permission: standard:create
+  /standards/{id}:
+    delete:
+      description: Deletes a custom standard, refused if official (422) or still referenced by a system (409). Gated by standard:delete.
+      operationId: delete-standard
+      parameters:
+        - description: The standard id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The standard id
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Delete a standard
+      x-omniglass-permission: standard:delete
+    get:
+      description: Fetches a standard by id. Gated by standard:read.
+      operationId: get-standard
+      parameters:
+        - description: The standard id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The standard id
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get a standard
+      x-omniglass-permission: standard:read
+    patch:
+      description: Patches a custom standard's display_name or parent. Official standards are read-only (422). Gated by standard:update.
+      operationId: update-standard
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateStandardInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Update a standard
+      x-omniglass-permission: standard:update
+  /standards/{id}/properties:
+    get:
+      description: Lists the standard's declared-property contract (what every system conforming to it exposes), ordered by property name, each with its optional default and required flag. Gated by standard:read.
+      operationId: list-standard-properties
+      parameters:
+        - description: The standard id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The standard id
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListStandardPropertiesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List a standard's declared properties
+      x-omniglass-permission: standard:read
+  /standards/{id}/properties/{property}:
+    delete:
+      description: Removes one line from a custom standard's contract; conforming systems keep any value they set for it, now off-contract. A property the standard does not declare is a 404, and an official standard is read-only (422). Gated by standard:delete.
+      operationId: delete-standard-property
+      parameters:
+        - description: The standard id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The standard id
+            type: string
+        - description: The property name
+          in: path
+          name: property
+          required: true
+          schema:
+            description: The property name
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Withdraw a property from a standard
+      x-omniglass-permission: standard:delete
+    put:
+      description: Declares a catalog property on a custom standard, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official standards are read-only (422); an unknown standard is a 404 and a property the catalog does not know is a 422. Gated by standard:update.
+      operationId: set-standard-property
+      parameters:
+        - description: The standard id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The standard id
+            type: string
+        - description: The property name
+          in: path
+          name: property
+          required: true
+          schema:
+            description: The property name
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetStandardPropertyInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardPropertyBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Declare a property on a standard
+      x-omniglass-permission: standard:update
   /systems:
     get:
       description: Lists the systems the caller may read, each filtered to its scope subtree. Gated by system:read.
@@ -6978,7 +7631,7 @@ paths:
       summary: Get a system
       x-omniglass-permission: system:read
     patch:
-      description: Patches a system's display_name or system_type. Gated by system:update; read and update scopes drive the 404 versus 403 split.
+      description: Patches a system's display_name or standard. An omitted standard_id leaves it unchanged; an explicit empty string clears it, converting the system to a one-off. Gated by system:update; read and update scopes drive the 404 versus 403 split.
       operationId: update-system
       parameters:
         - in: path
@@ -7006,6 +7659,102 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Update a system
+      x-omniglass-permission: system:update
+  /systems/{name}/properties:
+    get:
+      description: Every property the system's standard declares, resolved to the system's own value or the contract default (is_set marks the override), plus any property set directly on the system (from_contract false). Gated by system:read; an out-of-scope system is a non-disclosing 404.
+      operationId: list-system-properties
+      parameters:
+        - description: The system's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The system's unique name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemPropertiesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List a system's effective properties
+      x-omniglass-permission: system:read
+  /systems/{name}/properties/{property}:
+    delete:
+      description: Removes the system's declared value, so the property falls back to the standard contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the system never set is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.
+      operationId: clear-system-property
+      parameters:
+        - description: The system's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The system's unique name
+            type: string
+        - description: The property name
+          in: path
+          name: property
+          required: true
+          schema:
+            description: The property name
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Clear a property on a system
+      x-omniglass-permission: system:update
+    put:
+      description: "Declares a value for the property on this system, overriding the standard contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by system:update; an out-of-scope system is a non-disclosing 404."
+      operationId: set-system-property
+      parameters:
+        - description: The system's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The system's unique name
+            type: string
+        - description: The property name
+          in: path
+          name: property
+          required: true
+          schema:
+            description: The property name
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetSystemPropertyInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemPropertyValueBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Set a property on a system
       x-omniglass-permission: system:update
   /systems/{name}:listTags:
     get:
@@ -7463,102 +8212,6 @@ paths:
           description: Error
       summary: List secret types
       x-omniglass-permission: secret:read
-  /types/system:
-    get:
-      description: Lists the system_type registry, ordered alphabetically by display name. Populates the type picker on the system form. Gated by type:read.
-      operationId: list-system-types
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ListSystemTypesOutputBody"
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: List system types
-      x-omniglass-permission: type:read
-    post:
-      description: Creates a custom (non-official) system_type. Gated by type:create.
-      operationId: create-system-type
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateSystemTypeInputBody"
-        required: true
-      responses:
-        "201":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/SystemTypeBody"
-          description: Created
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Create a system type
-      x-omniglass-permission: type:create
-  /types/system/{id}:
-    delete:
-      description: Deletes a custom system_type, refused if official (422) or referenced by a system (409). Gated by type:delete.
-      operationId: delete-system-type
-      parameters:
-        - description: The system_type id
-          in: path
-          name: id
-          required: true
-          schema:
-            description: The system_type id
-            type: string
-      responses:
-        "204":
-          description: No Content
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Delete a system type
-      x-omniglass-permission: type:delete
-    patch:
-      description: Patches a custom system_type's display_name. Official types are read-only (422). Gated by type:update.
-      operationId: update-system-type
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UpdateSystemTypeInputBody"
-        required: true
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/SystemTypeBody"
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Update a system type
-      x-omniglass-permission: type:update
   /variables:
     get:
       description: Lists every variable. Requires an all-scope read. Gated by variable:read.
