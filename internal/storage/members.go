@@ -77,10 +77,18 @@ func (p *PG) AddMember(ctx context.Context, actorID, systemName, componentName s
 // component into the system it is being staffed into within the same transaction
 // rather than making the operator say it twice.
 func addMemberTx(ctx context.Context, q txQuerier, systemName, componentName string) error {
-	// The primary is decided by the row's own absence of competition: it is the
-	// default only when this component has no membership yet. Doing it in the
-	// insert keeps "first one wins" true even when two rooms claim a component at
-	// the same moment, since the partial unique index refuses the second.
+	// Whether this membership becomes the default is decided by reading the
+	// component's other memberships, which is compare-then-act and therefore wrong
+	// under READ COMMITTED without serializing it: two rooms claiming a component
+	// at the same instant would each see none and each claim the default, and the
+	// partial unique index would then fail the loser's write outright rather than
+	// letting it become an ordinary member. Two rooms wired at once is an ordinary
+	// afternoon, so this is not a corner.
+	if err := lockMemberComponent(ctx, q, componentName); err != nil {
+		return err
+	}
+	// The primary is the row's own absence of competition: it is the default only
+	// when this component has no membership yet.
 	if _, err := q.Exec(ctx, `
 		insert into system_member (system_id, component_id, is_primary)
 		select $1, $2, not exists (select 1 from system_member where component_id = $2)
@@ -102,6 +110,9 @@ func (p *PG) RemoveMember(ctx context.Context, actorID, systemName, componentNam
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	if err := p.resolveMembershipEnds(ctx, tx, systemName, componentName, write); err != nil {
+		return err
+	}
+	if err := lockMemberComponent(ctx, tx, componentName); err != nil {
 		return err
 	}
 	var staffing int
@@ -138,6 +149,13 @@ func (p *PG) RemoveMember(ctx context.Context, actorID, systemName, componentNam
 	return nil
 }
 
+// lockMemberComponent serializes every write that can move a component's default.
+// The component is the unit because the default is a property of the component,
+// not of one binding, and it is the same key from either side of the relation.
+func lockMemberComponent(ctx context.Context, q txQuerier, componentName string) error {
+	return lockAdvisory(ctx, q, "system_member/"+componentName)
+}
+
 // promoteSolePrimary makes a component's only remaining membership its default,
 // when losing one left it without a default and with nothing to choose between.
 func promoteSolePrimary(ctx context.Context, q txQuerier, componentName string) error {
@@ -163,6 +181,9 @@ func (p *PG) SetPrimaryMember(ctx context.Context, actorID, systemName, componen
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	if err := p.resolveMembershipEnds(ctx, tx, systemName, componentName, write); err != nil {
+		return err
+	}
+	if err := lockMemberComponent(ctx, tx, componentName); err != nil {
 		return err
 	}
 	// Clear first: the index permits at most one primary per component, so the old

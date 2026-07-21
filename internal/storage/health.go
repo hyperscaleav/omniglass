@@ -226,9 +226,24 @@ func (p *PG) recomputeChain(ctx context.Context, q txQuerier, components, system
 // (that is the point of taking txQuerier), so there is always a transaction to
 // scope it to.
 func lockHealthOwner(ctx context.Context, q txQuerier, ownerKind, ownerID string) error {
-	if _, err := q.Exec(ctx, `select pg_advisory_xact_lock(hashtextextended($1, 0))`,
-		healthKey+"/"+ownerKind+"/"+ownerID); err != nil {
+	if err := lockAdvisory(ctx, q, healthKey+"/"+ownerKind+"/"+ownerID); err != nil {
 		return fmt.Errorf("storage: lock health %s/%s: %w", ownerKind, ownerID, err)
+	}
+	return nil
+}
+
+// lockAdvisory serializes a named critical section for the rest of the caller's
+// transaction. It is the answer to compare-then-act: any sequence that reads
+// state, decides from it, and writes, is wrong under READ COMMITTED unless the
+// whole sequence is serialized, because a second transaction takes its snapshot
+// before the first commits and both decide from a state neither will end in.
+//
+// Transaction-scoped, so it releases on commit or rollback with no unlocking to
+// forget. The key is hashed to the bigint the advisory-lock functions take; a
+// collision costs two unrelated keys a wait and nothing else.
+func lockAdvisory(ctx context.Context, q txQuerier, key string) error {
+	if _, err := q.Exec(ctx, `select pg_advisory_xact_lock(hashtextextended($1, 0))`, key); err != nil {
+		return fmt.Errorf("storage: advisory lock %q: %w", key, err)
 	}
 	return nil
 }
