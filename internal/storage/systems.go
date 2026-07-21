@@ -48,6 +48,11 @@ type System struct {
 	StandardID  *string
 	ParentID    *string
 	LocationID  *string
+	// MemberCount is how many components are bound into this system. It comes from
+	// system_member, not from any pointer on the component: membership is the
+	// relation that says what is in a system, and reading it from anywhere else is
+	// how a fully staffed system came to report zero components.
+	MemberCount int
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 }
@@ -246,11 +251,13 @@ func (p *PG) DeleteStandard(ctx context.Context, actorID, id string) error {
 
 // --- system CRUD -------------------------------------------------------------
 
-const systemCols = `id, name, coalesce(display_name, ''), standard_id, parent_id, location_id, created_at, updated_at`
+const systemCols = `id, name, coalesce(display_name, ''), standard_id, parent_id, location_id,
+	(select count(*) from system_member m where m.system_id = system.name), created_at, updated_at`
 
 func scanSystem(row pgx.Row) (*System, error) {
 	var s System
-	if err := row.Scan(&s.ID, &s.Name, &s.DisplayName, &s.StandardID, &s.ParentID, &s.LocationID, &s.CreatedAt, &s.UpdatedAt); err != nil {
+	if err := row.Scan(&s.ID, &s.Name, &s.DisplayName, &s.StandardID, &s.ParentID, &s.LocationID,
+		&s.MemberCount, &s.CreatedAt, &s.UpdatedAt); err != nil {
 		return nil, err
 	}
 	return &s, nil

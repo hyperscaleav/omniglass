@@ -50,7 +50,7 @@ const roles: EffectiveRole[] = [
   },
 ];
 
-const system: System = { id: "s-1", name: "boardroom", display_name: "Boardroom" };
+const system: System = { id: "s-1", name: "boardroom", display_name: "Boardroom", member_count: 3 };
 const components: Comp[] = [
   { id: "c-1", name: "mic-1", display_name: "Ceiling Mic 1", system_id: "s-1" },
   { id: "c-2", name: "panel-1", display_name: "Touch Panel 1", system_id: "s-1" },

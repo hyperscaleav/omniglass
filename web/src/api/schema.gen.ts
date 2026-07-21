@@ -4824,6 +4824,11 @@ export interface components {
             };
             id: string;
             location_id?: string;
+            /**
+             * Format: int64
+             * @description How many components are bound into this system
+             */
+            member_count: number;
             name: string;
             parent_id?: string;
             /** @description The standard this system conforms to; omitted for a one-off system */
@@ -4836,6 +4841,11 @@ export interface components {
             primary: boolean;
             /** @description Technical name of the system */
             system: string;
+            /**
+             * Format: int64
+             * @description How many systems this component belongs to in total; more than one means it is shared
+             */
+            system_count: number;
         };
         SystemPropertiesOutputBody: {
             /**

@@ -17,6 +17,7 @@ type systemBody struct {
 	StandardID    string            `json:"standard_id,omitempty" doc:"The standard this system conforms to; omitted for a one-off system"`
 	ParentID      *string           `json:"parent_id,omitempty"`
 	LocationID    *string           `json:"location_id,omitempty"`
+	MemberCount   int               `json:"member_count" doc:"How many components are bound into this system"`
 	Actions       []string          `json:"actions,omitempty" doc:"The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces."`
 	EffectiveTags map[string]string `json:"effective_tags,omitempty" doc:"The resolved effective tags (key -> winning value) that cascade onto this system (global, its location, its system tree); for the Tags column."`
 }
@@ -25,6 +26,7 @@ func toSystemBody(s *storage.System) systemBody {
 	return systemBody{
 		ID: s.ID, Name: s.Name, DisplayName: s.DisplayName,
 		StandardID: derefStr(s.StandardID), ParentID: s.ParentID, LocationID: s.LocationID,
+		MemberCount: s.MemberCount,
 	}
 }
 

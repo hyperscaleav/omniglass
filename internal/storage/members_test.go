@@ -85,6 +85,44 @@ func TestMembershipIsManyValued(t *testing.T) {
 	}
 }
 
+// "Is this component shared" and "is this its default" are different questions,
+// and a row carries both because one cannot be derived from the other. The case
+// that proves it: a component whose default IS this system while it also serves
+// another. Reading sharing off the primary flag would call that one exclusive,
+// which is how the console first got it wrong.
+func TestMemberCarriesHowManySystemsItServes(t *testing.T) {
+	ctx := context.Background()
+	f := newMemberFixture(t, ctx)
+
+	for _, s := range []string{"room-a", "room-b"} {
+		if err := f.gw.AddMember(ctx, "", s, "dsp", f.all); err != nil {
+			t.Fatalf("add: %v", err)
+		}
+	}
+	if err := f.gw.AddMember(ctx, "", "room-a", "mic-a", f.all); err != nil {
+		t.Fatalf("add: %v", err)
+	}
+
+	members, err := f.gw.ListMembers(ctx, "room-a", f.all)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	got := map[string]storage.Member{}
+	for _, m := range members {
+		got[m.ComponentID] = m
+	}
+	// dsp took its default here (first membership) AND serves room-b.
+	if d := got["dsp"]; !d.IsPrimary || d.SystemCount != 2 {
+		t.Errorf("dsp in room-a = primary %v, system count %d; want primary with a count of 2: "+
+			"holding the default here says nothing about whether it serves elsewhere",
+			d.IsPrimary, d.SystemCount)
+	}
+	if m := got["mic-a"]; !m.IsPrimary || m.SystemCount != 1 {
+		t.Errorf("mic-a = primary %v, system count %d, want primary with a count of 1",
+			m.IsPrimary, m.SystemCount)
+	}
+}
+
 // Adding the same membership twice is the same membership, not a second one.
 func TestAddMemberIsIdempotent(t *testing.T) {
 	ctx := context.Background()

@@ -13,13 +13,14 @@ import (
 // membership that answers a question asked without a system in hand; it is a
 // default for context-free callers, not a resolution rule.
 type systemMemberBody struct {
-	System    string `json:"system" doc:"Technical name of the system"`
-	Component string `json:"component" doc:"Technical name of the component"`
-	Primary   bool   `json:"primary" doc:"Whether this membership is the component's default when no system is given"`
+	System      string `json:"system" doc:"Technical name of the system"`
+	Component   string `json:"component" doc:"Technical name of the component"`
+	Primary     bool   `json:"primary" doc:"Whether this membership is the component's default when no system is given"`
+	SystemCount int    `json:"system_count" doc:"How many systems this component belongs to in total; more than one means it is shared"`
 }
 
 func toSystemMemberBody(m storage.Member) systemMemberBody {
-	return systemMemberBody{System: m.SystemID, Component: m.ComponentID, Primary: m.IsPrimary}
+	return systemMemberBody{System: m.SystemID, Component: m.ComponentID, Primary: m.IsPrimary, SystemCount: m.SystemCount}
 }
 
 func toSystemMemberBodies(ms []storage.Member) []systemMemberBody {

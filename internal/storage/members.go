@@ -20,18 +20,27 @@ var (
 // Member is a component's binding to a system. IsPrimary marks the one that
 // answers a question asked without a system in hand; it is a default for
 // context-free callers, not a resolution rule.
+//
+// SystemCount is how many systems this component belongs to in total, carried on
+// every row because "is this shared" is a fact about the component that a single
+// binding cannot answer. Without it a reader has only IsPrimary, and those are
+// different questions: a component whose default is here can still serve three
+// other systems, and a surface that inferred sharing from the default would call
+// that one exclusive.
 type Member struct {
 	ID          string
 	SystemID    string
 	ComponentID string
 	IsPrimary   bool
+	SystemCount int
 }
 
-const memberCols = `id, system_id, component_id, is_primary`
+const memberCols = `id, system_id, component_id, is_primary,
+	(select count(*) from system_member peer where peer.component_id = system_member.component_id)`
 
 func scanMember(row pgx.Row) (*Member, error) {
 	var m Member
-	if err := row.Scan(&m.ID, &m.SystemID, &m.ComponentID, &m.IsPrimary); err != nil {
+	if err := row.Scan(&m.ID, &m.SystemID, &m.ComponentID, &m.IsPrimary, &m.SystemCount); err != nil {
 		return nil, err
 	}
 	return &m, nil

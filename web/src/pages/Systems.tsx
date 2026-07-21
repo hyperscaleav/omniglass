@@ -18,7 +18,6 @@ import {
 } from "../lib/systems";
 import { LOCATIONS_KEY, listLocations } from "../lib/locations";
 import { STANDARDS_KEY, listStandards } from "../lib/standards";
-import { type Component as Comp, COMPONENTS_KEY, listComponents } from "../lib/components";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { openInEdit, consumePendingEdit } from "../lib/pendingedit";
@@ -26,6 +25,7 @@ import { ArrowRight, ChevronRight, Pencil, Plus, Save, Search, X } from "../comp
 import Button from "../components/Button";
 import PropertiesPanel, { propertyResolutionBlade, ownerPropertyBladeId } from "../components/PropertiesPanel";
 import RolesPanel from "../components/RolesPanel";
+import MembersPanel from "../components/MembersPanel";
 import HealthBadge from "../components/HealthBadge";
 import SystemHealthPanel from "../components/HealthPanel";
 import { systemHealthKey, verdictOf, verdictRank, type EstateHealth } from "../lib/health";
@@ -63,7 +63,6 @@ export default function Systems() {
 
   const systems = useQuery(() => ({ queryKey: SYSTEMS_KEY, queryFn: listSystems }));
   const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations }));
-  const components = useQuery(() => ({ queryKey: COMPONENTS_KEY, queryFn: listComponents }));
   const standards = useQuery(() => ({ queryKey: STANDARDS_KEY, queryFn: listStandards }));
 
   const label = (x: { name: string; display_name?: string }) => x.display_name || x.name;
@@ -77,15 +76,6 @@ export default function Systems() {
     id ? (standards.data ?? []).find((s) => s.id === id)?.display_name ?? id : "";
   const locationItems = createMemo(() => (locations.data ?? []).map((l) => ({ id: l.id, value: l.name, label: l.display_name || l.name, parentId: l.parent_id })));
   const systemItems = createMemo(() => (systems.data ?? []).map((s) => ({ id: s.id, value: s.name, label: s.display_name || s.name, parentId: s.parent_id })));
-  const compsBySystem = createMemo(() => {
-    const m = new Map<string, Comp[]>();
-    for (const c of components.data ?? []) {
-      if (!c.system_id) continue;
-      if (!m.has(c.system_id)) m.set(c.system_id, []);
-      m.get(c.system_id)!.push(c);
-    }
-    return m;
-  });
 
   // One filter facet per tag key present across the systems, derived from their
   // effective tags, so the bar can filter by any tag like any other field.
@@ -148,7 +138,6 @@ export default function Systems() {
     const n = () => ctx.byId(props.node.id) ?? props.node;
     const parent = () => ctx.parentOf(n());
     const path = () => ctx.pathOf(n());
-    const comps = () => compsBySystem().get(n().raw.id) ?? [];
     const canUpdate = () => can(me.data, "system", "update");
 
     const [display, setDisplay] = createSignal(n().raw.display_name ?? "");
@@ -305,25 +294,6 @@ export default function Systems() {
           </div>
         </Show>
 
-        <div class="flex flex-col gap-1.5">
-          <div class="flex items-center justify-between">
-            <span class="eyebrow">Components</span>
-            <button class="link text-xs" onClick={() => navigate(`/components?system=${encodeURIComponent(n().raw.name)}`)}>All in this system →</button>
-          </div>
-          <Show when={comps().length} fallback={<span class="text-sm text-base-content/40">No components in this system.</span>}>
-            <div class="overflow-hidden rounded-box border border-base-300">
-              <For each={comps()}>
-                {(c, i) => (
-                  <button class="flex w-full items-center gap-2.5 px-3 py-2 text-left hover:bg-base-content/5" classList={{ "border-t border-base-300": i() > 0 }} onClick={() => navigate(`/components/${encodeURIComponent(c.name)}`)}>
-                    <span class="flex-1 truncate text-sm">{c.display_name || c.name}</span>
-                    <Show when={c.product_id}><span class="badge badge-ghost badge-sm text-[10px] font-data">{c.product_id}</span></Show>
-                    <ChevronRight size={14} />
-                  </button>
-                )}
-              </For>
-            </div>
-          </Show>
-        </div>
 
         {/* The verdict and its reconciliation: which roles are impaired, which
             required capabilities an alarm took away, and which alarms took them.
@@ -331,6 +301,16 @@ export default function Systems() {
             this degraded" and "what are these roles" read as one thought. */}
         <SystemHealthPanel
           system={n().raw.name}
+          onOpenComponent={(name) => navigate(`/components/${encodeURIComponent(name)}`)}
+        />
+
+        {/* What is in this system, directly above what each one does. Membership
+            is the attachment and a role is what it does, so the two read in that
+            order: the room's contents, then the jobs. A member holding no role
+            appears only here, which is the case a staffing-only view would lose. */}
+        <MembersPanel
+          system={n().raw.name}
+          canUpdate={editing() && canUpdate()}
           onOpenComponent={(name) => navigate(`/components/${encodeURIComponent(name)}`)}
         />
 
@@ -481,7 +461,7 @@ export default function Systems() {
       if (key === "health") return <HealthBadge system={n.raw.name} quiet />;
       if (key === "standard") return n.standard ? <span class="badge badge-ghost badge-sm">{n.standard}</span> : <span class="text-base-content/40">—</span>;
       if (key === "location") return <span class="text-base-content/70">{n.locationName || "—"}</span>;
-      if (key === "components") return <span class="tnum text-base-content/60">{(compsBySystem().get(n.raw.id) ?? []).length}</span>;
+      if (key === "components") return <span class="tnum text-base-content/60">{n.raw.member_count}</span>;
       if (key === "tags") return <TagPills tags={n.tags} />;
       return null;
     },
@@ -502,7 +482,7 @@ export default function Systems() {
       }
       if (key === "standard") return n.standard.toLowerCase();
       if (key === "location") return n.locationName.toLowerCase();
-      if (key === "components") return -(compsBySystem().get(n.raw.id) ?? []).length;
+      if (key === "components") return -n.raw.member_count;
       if (key === "tags") return Object.keys(n.tags).sort().join(",");
       return n.display.toLowerCase();
     },

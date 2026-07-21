@@ -15,6 +15,10 @@ export type System = {
   standard_id?: string;
   location_id?: string;
   parent_id?: string;
+  // How many components are bound into this system, from membership rather than
+  // any pointer on the component: membership is what says a component is in a
+  // system, and reading it elsewhere is how a fully staffed system reported zero.
+  member_count: number;
   actions?: string[];
   effective_tags?: Record<string, string>;
 };

@@ -18,7 +18,7 @@ import { TAGS_KEY, entityTagsKey } from "../lib/tags";
 // detail's Properties panel resolves. Data is seeded into the query cache so no
 // server is needed; `>` grants every permission.
 const me: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
-const sys: System = { id: "s-1", name: "boardroom", display_name: "Boardroom", standard_id: "meeting-room", effective_tags: {} };
+const sys: System = { id: "s-1", name: "boardroom", display_name: "Boardroom", standard_id: "meeting-room", member_count: 2, effective_tags: {} };
 const standards: Standard[] = [
   { id: "meeting-room", display_name: "Meeting room", official: true },
   { id: "huddle-space", display_name: "Huddle space", official: false },
