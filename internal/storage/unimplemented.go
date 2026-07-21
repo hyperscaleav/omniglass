@@ -331,20 +331,44 @@ func (UnimplementedGateway) GetNode(context.Context, string, scope.Set) (*Node, 
 func (UnimplementedGateway) ListNodes(context.Context, scope.Set) ([]Node, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) UpsertComponentMake(context.Context, ComponentMake) error { return nil }
-func (UnimplementedGateway) ListComponentMakes(context.Context) ([]ComponentMake, error) {
+func (UnimplementedGateway) UpsertVendor(context.Context, Vendor) error       { return nil }
+func (UnimplementedGateway) ListVendors(context.Context) ([]Vendor, error)    { return nil, nil }
+func (UnimplementedGateway) GetVendor(context.Context, string) (*Vendor, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) GetComponentMake(context.Context, string) (*ComponentMake, error) {
+func (UnimplementedGateway) CreateVendor(context.Context, string, Vendor) (*Vendor, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) CreateComponentMake(context.Context, string, ComponentMake) (*ComponentMake, error) {
+func (UnimplementedGateway) UpdateVendor(context.Context, string, string, VendorPatch) (*Vendor, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) UpdateComponentMake(context.Context, string, string, ComponentMakePatch) (*ComponentMake, error) {
+func (UnimplementedGateway) DeleteVendor(context.Context, string, string) error { return nil }
+func (UnimplementedGateway) UpsertDriver(context.Context, Driver) error         { return nil }
+func (UnimplementedGateway) ListDrivers(context.Context) ([]Driver, error)      { return nil, nil }
+func (UnimplementedGateway) GetDriver(context.Context, string) (*Driver, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) DeleteComponentMake(context.Context, string, string) error { return nil }
+func (UnimplementedGateway) CreateDriver(context.Context, string, Driver) (*Driver, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) UpdateDriver(context.Context, string, string, DriverPatch) (*Driver, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteDriver(context.Context, string, string) error { return nil }
+func (UnimplementedGateway) UpsertCapability(context.Context, Capability) error { return nil }
+func (UnimplementedGateway) ListCapabilities(context.Context) ([]Capability, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) GetCapability(context.Context, string) (*Capability, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) CreateCapability(context.Context, string, Capability) (*Capability, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) UpdateCapability(context.Context, string, string, CapabilityPatch) (*Capability, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteCapability(context.Context, string, string) error { return nil }
 func (UnimplementedGateway) UpsertSecretType(context.Context, SecretType) error         { return nil }
 func (UnimplementedGateway) ListSecretTypes(context.Context) ([]SecretType, error) {
 	return nil, nil

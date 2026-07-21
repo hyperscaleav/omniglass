@@ -34,8 +34,14 @@ var propertiesYAML []byte
 //go:embed interface_types.yaml
 var interfaceTypesYAML []byte
 
-//go:embed component_makes.yaml
-var componentMakesYAML []byte
+//go:embed vendors.yaml
+var vendorsYAML []byte
+
+//go:embed drivers.yaml
+var driversYAML []byte
+
+//go:embed capabilities.yaml
+var capabilitiesYAML []byte
 
 //go:embed secret_types.yaml
 var secretTypesYAML []byte
@@ -93,13 +99,29 @@ type interfaceTypesDoc struct {
 	} `yaml:"interface_types"`
 }
 
-type componentMakesDoc struct {
-	ComponentMakes []struct {
+type vendorsDoc struct {
+	Vendors []struct {
 		ID          string `yaml:"id"`
 		DisplayName string `yaml:"display_name"`
+		Kind        string `yaml:"kind"`
 		Icon        string `yaml:"icon"`
 		Website     string `yaml:"website"`
-	} `yaml:"component_makes"`
+	} `yaml:"vendors"`
+}
+
+type driversDoc struct {
+	Drivers []struct {
+		ID          string `yaml:"id"`
+		DisplayName string `yaml:"display_name"`
+		Version     string `yaml:"version"`
+	} `yaml:"drivers"`
+}
+
+type capabilitiesDoc struct {
+	Capabilities []struct {
+		ID          string `yaml:"id"`
+		DisplayName string `yaml:"display_name"`
+	} `yaml:"capabilities"`
 }
 
 type secretTypesDoc struct {
@@ -138,7 +160,13 @@ func Run(ctx context.Context, gw storage.Gateway) error {
 	if err := seedProperties(ctx, gw); err != nil {
 		return err
 	}
-	if err := seedComponentMakes(ctx, gw); err != nil {
+	if err := seedVendors(ctx, gw); err != nil {
+		return err
+	}
+	if err := seedDrivers(ctx, gw); err != nil {
+		return err
+	}
+	if err := seedCapabilities(ctx, gw); err != nil {
 		return err
 	}
 	return seedSecretTypes(ctx, gw)
@@ -233,18 +261,49 @@ func seedComponentTypes(ctx context.Context, gw storage.Gateway) error {
 	return nil
 }
 
-func seedComponentMakes(ctx context.Context, gw storage.Gateway) error {
-	var doc componentMakesDoc
-	if err := yaml.Unmarshal(componentMakesYAML, &doc); err != nil {
-		return fmt.Errorf("seed: parse component_makes: %w", err)
+func seedVendors(ctx context.Context, gw storage.Gateway) error {
+	var doc vendorsDoc
+	if err := yaml.Unmarshal(vendorsYAML, &doc); err != nil {
+		return fmt.Errorf("seed: parse vendors: %w", err)
 	}
-	for _, cm := range doc.ComponentMakes {
-		if err := gw.UpsertComponentMake(ctx, storage.ComponentMake{
-			ID:          cm.ID,
+	for _, v := range doc.Vendors {
+		if err := gw.UpsertVendor(ctx, storage.Vendor{
+			ID:          v.ID,
 			Official:    true,
-			DisplayName: cm.DisplayName,
-			Icon:        cm.Icon,
-			Website:     cm.Website,
+			DisplayName: v.DisplayName,
+			Kind:        v.Kind,
+			Icon:        v.Icon,
+			Website:     v.Website,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func seedDrivers(ctx context.Context, gw storage.Gateway) error {
+	var doc driversDoc
+	if err := yaml.Unmarshal(driversYAML, &doc); err != nil {
+		return fmt.Errorf("seed: parse drivers: %w", err)
+	}
+	for _, d := range doc.Drivers {
+		if err := gw.UpsertDriver(ctx, storage.Driver{
+			ID: d.ID, Official: true, DisplayName: d.DisplayName, Version: d.Version,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func seedCapabilities(ctx context.Context, gw storage.Gateway) error {
+	var doc capabilitiesDoc
+	if err := yaml.Unmarshal(capabilitiesYAML, &doc); err != nil {
+		return fmt.Errorf("seed: parse capabilities: %w", err)
+	}
+	for _, c := range doc.Capabilities {
+		if err := gw.UpsertCapability(ctx, storage.Capability{
+			ID: c.ID, Official: true, DisplayName: c.DisplayName,
 		}); err != nil {
 			return err
 		}

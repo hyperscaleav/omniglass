@@ -204,6 +204,102 @@ func generatedCommands() []*cobra.Command {
 	}
 	{
 		parent := &cobra.Command{
+			Use:   "capability",
+			Short: "Commands for the capability resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			var fDisplayName string
+			var fId string
+			cmd := &cobra.Command{
+				Use:     "create",
+				Short:   "Create a capability",
+				Long:    "Creates a custom (non-official) capability. Gated by capability:create.",
+				Example: "  omniglass capability create --display-name display_name --id id",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/capabilities")
+					body := map[string]any{}
+					if cmd.Flags().Changed("display-name") {
+						body["display_name"] = fDisplayName
+					}
+					if cmd.Flags().Changed("id") {
+						body["id"] = fId
+					}
+					return runAPICommand(cmd, "POST", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
+			_ = cmd.MarkFlagRequired("display-name")
+			cmd.Flags().StringVar(&fId, "id", "", "Globally unique capability id")
+			_ = cmd.MarkFlagRequired("id")
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "delete <id>",
+				Short:   "Delete a capability",
+				Long:    "Deletes a custom capability, refused if official (422). Gated by capability:delete.",
+				Example: "  omniglass capability delete <id>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/capabilities/%s", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "DELETE", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "get <id>",
+				Short:   "Get a capability",
+				Long:    "Fetches a capability by id. Gated by capability:read.",
+				Example: "  omniglass capability get <id>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/capabilities/%s", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "list",
+				Short:   "List capabilities",
+				Long:    "Lists the capability registry, ordered alphabetically by display name. Populates the capability picker on the product form. Gated by capability:read.",
+				Example: "  omniglass capability list",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/capabilities")
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			var fDisplayName string
+			cmd := &cobra.Command{
+				Use:     "update <id>",
+				Short:   "Update a capability",
+				Long:    "Patches a custom capability's display_name. Official capabilities are read-only (422). Gated by capability:update.",
+				Example: "  omniglass capability update <id>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/capabilities/%s", url.PathEscape(args[0]))
+					body := map[string]any{}
+					if cmd.Flags().Changed("display-name") {
+						body["display_name"] = fDisplayName
+					}
+					return runAPICommand(cmd, "PATCH", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
+			return cmd
+		}())
+		roots = append(roots, parent)
+	}
+	{
+		parent := &cobra.Command{
 			Use:   "component",
 			Short: "Commands for the component resource",
 		}
@@ -413,60 +509,50 @@ func generatedCommands() []*cobra.Command {
 	}
 	{
 		parent := &cobra.Command{
-			Use:   "component-make",
-			Short: "Commands for the component-make resource",
+			Use:   "driver",
+			Short: "Commands for the driver resource",
 		}
 		parent.AddCommand(func() *cobra.Command {
 			var fDisplayName string
-			var fIcon string
 			var fId string
-			var fSupportPhone string
-			var fWebsite string
+			var fVersion string
 			cmd := &cobra.Command{
 				Use:     "create",
-				Short:   "Create a component make",
-				Long:    "Creates a custom (non-official) component_make. Gated by make:create.",
-				Example: "  omniglass component-make create --display-name display_name --id id",
+				Short:   "Create a driver",
+				Long:    "Creates a custom (non-official) driver. Gated by driver:create.",
+				Example: "  omniglass driver create --display-name display_name --id id",
 				Args:    cobra.ExactArgs(0),
 				RunE: func(cmd *cobra.Command, args []string) error {
-					path := fmt.Sprintf("/api/v1/component-makes")
+					path := fmt.Sprintf("/api/v1/drivers")
 					body := map[string]any{}
 					if cmd.Flags().Changed("display-name") {
 						body["display_name"] = fDisplayName
 					}
-					if cmd.Flags().Changed("icon") {
-						body["icon"] = fIcon
-					}
 					if cmd.Flags().Changed("id") {
 						body["id"] = fId
 					}
-					if cmd.Flags().Changed("support-phone") {
-						body["support_phone"] = fSupportPhone
-					}
-					if cmd.Flags().Changed("website") {
-						body["website"] = fWebsite
+					if cmd.Flags().Changed("version") {
+						body["version"] = fVersion
 					}
 					return runAPICommand(cmd, "POST", path, body)
 				},
 			}
 			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
 			_ = cmd.MarkFlagRequired("display-name")
-			cmd.Flags().StringVar(&fIcon, "icon", "", "")
-			cmd.Flags().StringVar(&fId, "id", "", "Globally unique make id")
+			cmd.Flags().StringVar(&fId, "id", "", "Globally unique driver id")
 			_ = cmd.MarkFlagRequired("id")
-			cmd.Flags().StringVar(&fSupportPhone, "support-phone", "", "")
-			cmd.Flags().StringVar(&fWebsite, "website", "", "")
+			cmd.Flags().StringVar(&fVersion, "version", "", "")
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := &cobra.Command{
 				Use:     "delete <id>",
-				Short:   "Delete a component make",
-				Long:    "Deletes a custom component_make, refused if official (422). Gated by make:delete.",
-				Example: "  omniglass component-make delete <id>",
+				Short:   "Delete a driver",
+				Long:    "Deletes a custom driver, refused if official (422). Gated by driver:delete.",
+				Example: "  omniglass driver delete <id>",
 				Args:    cobra.ExactArgs(1),
 				RunE: func(cmd *cobra.Command, args []string) error {
-					path := fmt.Sprintf("/api/v1/component-makes/%s", url.PathEscape(args[0]))
+					path := fmt.Sprintf("/api/v1/drivers/%s", url.PathEscape(args[0]))
 					return runAPICommand(cmd, "DELETE", path, nil)
 				},
 			}
@@ -475,12 +561,12 @@ func generatedCommands() []*cobra.Command {
 		parent.AddCommand(func() *cobra.Command {
 			cmd := &cobra.Command{
 				Use:     "get <id>",
-				Short:   "Get a component make",
-				Long:    "Fetches a component_make by id. Gated by make:read.",
-				Example: "  omniglass component-make get <id>",
+				Short:   "Get a driver",
+				Long:    "Fetches a driver by id. Gated by driver:read.",
+				Example: "  omniglass driver get <id>",
 				Args:    cobra.ExactArgs(1),
 				RunE: func(cmd *cobra.Command, args []string) error {
-					path := fmt.Sprintf("/api/v1/component-makes/%s", url.PathEscape(args[0]))
+					path := fmt.Sprintf("/api/v1/drivers/%s", url.PathEscape(args[0]))
 					return runAPICommand(cmd, "GET", path, nil)
 				},
 			}
@@ -489,12 +575,12 @@ func generatedCommands() []*cobra.Command {
 		parent.AddCommand(func() *cobra.Command {
 			cmd := &cobra.Command{
 				Use:     "list",
-				Short:   "List component makes",
-				Long:    "Lists the component_make registry, ordered alphabetically by display name. Populates the make picker on the component_model form. Gated by make:read.",
-				Example: "  omniglass component-make list",
+				Short:   "List drivers",
+				Long:    "Lists the driver registry, ordered alphabetically by display name. Populates the driver picker on the product form. Gated by driver:read.",
+				Example: "  omniglass driver list",
 				Args:    cobra.ExactArgs(0),
 				RunE: func(cmd *cobra.Command, args []string) error {
-					path := fmt.Sprintf("/api/v1/component-makes")
+					path := fmt.Sprintf("/api/v1/drivers")
 					return runAPICommand(cmd, "GET", path, nil)
 				},
 			}
@@ -502,37 +588,27 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			var fDisplayName string
-			var fIcon string
-			var fSupportPhone string
-			var fWebsite string
+			var fVersion string
 			cmd := &cobra.Command{
 				Use:     "update <id>",
-				Short:   "Update a component make",
-				Long:    "Patches a custom component_make's display_name, icon, support_phone, or website. Official makes are read-only (422). Gated by make:update.",
-				Example: "  omniglass component-make update <id>",
+				Short:   "Update a driver",
+				Long:    "Patches a custom driver's display_name or version. Official drivers are read-only (422). Gated by driver:update.",
+				Example: "  omniglass driver update <id>",
 				Args:    cobra.ExactArgs(1),
 				RunE: func(cmd *cobra.Command, args []string) error {
-					path := fmt.Sprintf("/api/v1/component-makes/%s", url.PathEscape(args[0]))
+					path := fmt.Sprintf("/api/v1/drivers/%s", url.PathEscape(args[0]))
 					body := map[string]any{}
 					if cmd.Flags().Changed("display-name") {
 						body["display_name"] = fDisplayName
 					}
-					if cmd.Flags().Changed("icon") {
-						body["icon"] = fIcon
-					}
-					if cmd.Flags().Changed("support-phone") {
-						body["support_phone"] = fSupportPhone
-					}
-					if cmd.Flags().Changed("website") {
-						body["website"] = fWebsite
+					if cmd.Flags().Changed("version") {
+						body["version"] = fVersion
 					}
 					return runAPICommand(cmd, "PATCH", path, body)
 				},
 			}
 			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
-			cmd.Flags().StringVar(&fIcon, "icon", "", "")
-			cmd.Flags().StringVar(&fSupportPhone, "support-phone", "", "")
-			cmd.Flags().StringVar(&fWebsite, "website", "", "")
+			cmd.Flags().StringVar(&fVersion, "version", "", "")
 			return cmd
 		}())
 		roots = append(roots, parent)
@@ -3332,6 +3408,142 @@ func generatedCommands() []*cobra.Command {
 			}
 			cmd.Flags().StringVar(&fValue, "value", "", "The new value, validated against the fixed value_type")
 			_ = cmd.MarkFlagRequired("value")
+			return cmd
+		}())
+		roots = append(roots, parent)
+	}
+	{
+		parent := &cobra.Command{
+			Use:   "vendor",
+			Short: "Commands for the vendor resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			var fDisplayName string
+			var fIcon string
+			var fId string
+			var fKind string
+			var fSupportPhone string
+			var fWebsite string
+			cmd := &cobra.Command{
+				Use:     "create",
+				Short:   "Create a vendor",
+				Long:    "Creates a custom (non-official) vendor. Gated by vendor:create.",
+				Example: "  omniglass vendor create --display-name display_name --id id",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/vendors")
+					body := map[string]any{}
+					if cmd.Flags().Changed("display-name") {
+						body["display_name"] = fDisplayName
+					}
+					if cmd.Flags().Changed("icon") {
+						body["icon"] = fIcon
+					}
+					if cmd.Flags().Changed("id") {
+						body["id"] = fId
+					}
+					if cmd.Flags().Changed("kind") {
+						body["kind"] = fKind
+					}
+					if cmd.Flags().Changed("support-phone") {
+						body["support_phone"] = fSupportPhone
+					}
+					if cmd.Flags().Changed("website") {
+						body["website"] = fWebsite
+					}
+					return runAPICommand(cmd, "POST", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
+			_ = cmd.MarkFlagRequired("display-name")
+			cmd.Flags().StringVar(&fIcon, "icon", "", "")
+			cmd.Flags().StringVar(&fId, "id", "", "Globally unique vendor id")
+			_ = cmd.MarkFlagRequired("id")
+			cmd.Flags().StringVar(&fKind, "kind", "", "")
+			cmd.Flags().StringVar(&fSupportPhone, "support-phone", "", "")
+			cmd.Flags().StringVar(&fWebsite, "website", "", "")
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "delete <id>",
+				Short:   "Delete a vendor",
+				Long:    "Deletes a custom vendor, refused if official (422). Gated by vendor:delete.",
+				Example: "  omniglass vendor delete <id>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/vendors/%s", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "DELETE", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "get <id>",
+				Short:   "Get a vendor",
+				Long:    "Fetches a vendor by id. Gated by vendor:read.",
+				Example: "  omniglass vendor get <id>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/vendors/%s", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "list",
+				Short:   "List vendors",
+				Long:    "Lists the vendor registry, ordered alphabetically by display name. Populates the vendor picker on the product form. Gated by vendor:read.",
+				Example: "  omniglass vendor list",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/vendors")
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			var fDisplayName string
+			var fIcon string
+			var fKind string
+			var fSupportPhone string
+			var fWebsite string
+			cmd := &cobra.Command{
+				Use:     "update <id>",
+				Short:   "Update a vendor",
+				Long:    "Patches a custom vendor's display_name, kind, icon, support_phone, or website. Official vendors are read-only (422). Gated by vendor:update.",
+				Example: "  omniglass vendor update <id>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/vendors/%s", url.PathEscape(args[0]))
+					body := map[string]any{}
+					if cmd.Flags().Changed("display-name") {
+						body["display_name"] = fDisplayName
+					}
+					if cmd.Flags().Changed("icon") {
+						body["icon"] = fIcon
+					}
+					if cmd.Flags().Changed("kind") {
+						body["kind"] = fKind
+					}
+					if cmd.Flags().Changed("support-phone") {
+						body["support_phone"] = fSupportPhone
+					}
+					if cmd.Flags().Changed("website") {
+						body["website"] = fWebsite
+					}
+					return runAPICommand(cmd, "PATCH", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
+			cmd.Flags().StringVar(&fIcon, "icon", "", "")
+			cmd.Flags().StringVar(&fKind, "kind", "", "")
+			cmd.Flags().StringVar(&fSupportPhone, "support-phone", "", "")
+			cmd.Flags().StringVar(&fWebsite, "website", "", "")
 			return cmd
 		}())
 		roots = append(roots, parent)

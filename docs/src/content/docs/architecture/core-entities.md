@@ -73,14 +73,22 @@ deployment, no FK.
 | `location` | a place tree | name (unique), type, **parent_id** (self-ref tree), display_name; no template (the `location_type` is the only shape-definer) |
 | `node` | the edge process | name (the identity); carries labels, last_heartbeat_at, and its bound credential ([identity and access](/architecture/identity-access/)) |
 
-### Catalog reference data: `component_make`
+### Catalog reference data: vendor, driver, capability
 
-A `component_make` (Crestron, Biamp, QSC, ...) is Catalog reference data, not a structural
-entity: a flat, seed-and-custom registry naming who makes a component, on the same official/custom
-pattern as the `*_type` registries ([Types guide](/guides/admin/types/)). It is the first landed
-piece of a larger make/model catalog; nothing on `component` points at one yet, and the
-`component_type` genus tree and a `component_model` layer between make and instance are later
-work, not built. See the [Makes guide](/guides/admin/makes/) for the operator surface.
+The **component-classification catalogs** are flat, seed-and-custom registries, not structural
+entities: each names a reusable fact a future `product` layer will pin, on the same official/custom
+pattern as the `*_type` registries ([Types guide](/guides/admin/types/)). Three ship today, none yet
+referenced by `component` (a `product` layer between a catalog and an instance is later work, not
+built):
+
+- A **`vendor`** (Crestron, Biamp, QSC, ...) names an organization in the estate model, carrying a
+  **`kind`** of `manufacturer`, `integrator`, or `developer` (default `manufacturer`). It is the
+  generalization of the former manufacturer-only `component_make`.
+- A **`driver`** (Generic SNMP, Cisco xAPI, ...) names the implementation that gets, emits, or sets
+  a product's signals, carrying an optional **`version`**.
+- A **`capability`** (Microphone, Display, ...) names what a component can do.
+
+See the [Vendors guide](/guides/admin/vendors/) for the operator surface.
 
 ## The variable-depth trees
 

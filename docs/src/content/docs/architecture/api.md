@@ -308,24 +308,53 @@ owning entity's own write. The key vocabulary and an entity's tags read on the v
 
 A `tagBinding` body is `{key, value, owner_kind, owner_id?, owner_name?}`.
 
-A **component make** ([core entities](/architecture/core-entities/#catalog-reference-data-component_make))
-is Catalog reference data, the manufacturer registry a future `component_model` will reference, on the
-same flat, official-vs-custom pattern as the `*_type` registries. The list and read routes sit on the
-viewer floor (`make:read`, which `*:read` carries); the three writes gate on `make:create` /
-`make:update` / `make:delete`, all at the admin tier, exactly like `type:*`.
+The **component-classification catalogs** ([core entities](/architecture/core-entities/#catalog-reference-data-vendor-driver-capability))
+are Catalog reference data, flat official-vs-custom registries a future `product` layer will reference,
+on the same pattern as the `*_type` registries. Each is its own resource with the same CRUD shape: the
+list and read routes sit on the viewer floor (`vendor:read` / `driver:read` / `capability:read`, which
+`*:read` carries); the three writes gate on `<resource>:create` / `<resource>:update` /
+`<resource>:delete`, all at the admin tier, exactly like `type:*`. An **official** (seed-owned) row is
+read-only (`PATCH` and `DELETE` both 422).
 
-- `GET /component-makes` lists the registry, ordered alphabetically by display name (`{makes: [make]}`,
-  `make:read`).
-- `POST /component-makes` mints a custom make from `{id, display_name, icon?, support_phone?, website?}`
-  (201, `make:create`, admin).
-- `GET /component-makes/{id}` reads one (`make:read`).
-- `PATCH /component-makes/{id}` updates `{display_name?, icon?, support_phone?, website?}` (`make:update`,
-  admin); an **official** (seed-owned) row is read-only (422).
-- `DELETE /component-makes/{id}` removes a custom make (204, `make:delete`, admin); an official row is
-  refused (422).
+A **vendor** (Crestron, Biamp, ...) names an organization, generalizing the former manufacturer-only
+`component_make` with a **`kind`** of `manufacturer` / `integrator` / `developer` (default
+`manufacturer`, a 422 for any other value).
 
-A `make` body is `{id, display_name, icon, support_phone, website, official}`. `website` is validated to
-an `http`/`https` scheme on write (a 422 for any other scheme, for example `javascript:`).
+- `GET /vendors` lists the registry, ordered alphabetically by display name (`{vendors: [vendor]}`,
+  `vendor:read`).
+- `POST /vendors` mints a custom vendor from `{id, display_name, kind?, icon?, support_phone?, website?}`
+  (201, `vendor:create`, admin).
+- `GET /vendors/{id}` reads one (`vendor:read`).
+- `PATCH /vendors/{id}` updates `{display_name?, kind?, icon?, support_phone?, website?}` (`vendor:update`,
+  admin).
+- `DELETE /vendors/{id}` removes a custom vendor (204, `vendor:delete`, admin).
+
+A `vendor` body is `{id, display_name, kind, icon, support_phone, website, official}`. `website` is
+validated to an `http`/`https` scheme on write (a 422 for any other scheme, for example `javascript:`).
+
+A **driver** (Generic SNMP, Cisco xAPI, ...) names the implementation that gets, emits, or sets a
+product's signals, with an optional **`version`**.
+
+- `GET /drivers` lists the registry, ordered alphabetically by display name (`{drivers: [driver]}`,
+  `driver:read`).
+- `POST /drivers` mints a custom driver from `{id, display_name, version?}` (201, `driver:create`, admin).
+- `GET /drivers/{id}` reads one (`driver:read`).
+- `PATCH /drivers/{id}` updates `{display_name?, version?}` (`driver:update`, admin).
+- `DELETE /drivers/{id}` removes a custom driver (204, `driver:delete`, admin).
+
+A `driver` body is `{id, display_name, version, official}`.
+
+A **capability** (Microphone, Display, ...) names what a component can do.
+
+- `GET /capabilities` lists the registry, ordered alphabetically by display name
+  (`{capabilities: [capability]}`, `capability:read`).
+- `POST /capabilities` mints a custom capability from `{id, display_name}` (201, `capability:create`,
+  admin).
+- `GET /capabilities/{id}` reads one (`capability:read`).
+- `PATCH /capabilities/{id}` updates `{display_name?}` (`capability:update`, admin).
+- `DELETE /capabilities/{id}` removes a custom capability (204, `capability:delete`, admin).
+
+A `capability` body is `{id, display_name, official}`.
 
 ## Files: content-addressed bytes behind a handle
 
