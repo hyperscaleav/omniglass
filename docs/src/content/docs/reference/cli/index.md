@@ -2654,7 +2654,7 @@ Restore a settings namespace to defaults
 omniglass setting delete <namespace>
 ```
 
-Drops the namespace's global override, restoring file and code defaults. Gated by settings:update.
+Drops the namespace's platform override, restoring the file layer and the declared defaults. Gated by settings:update.
 
 Example:
 
@@ -2686,7 +2686,7 @@ Restore all settings to defaults
 omniglass setting restoreDefaults
 ```
 
-Removes every global override (a factory reset). Gated by settings:update.
+Removes every platform override (a factory reset). Gated by settings:update.
 
 Example:
 
@@ -2702,7 +2702,7 @@ Update a settings namespace
 omniglass setting update <namespace>
 ```
 
-Applies an RFC 7386 JSON Merge Patch to the namespace's global override; null on a key restores it. Gated by settings:update.
+Applies an RFC 7386 JSON Merge Patch to the namespace's platform override; null on a key restores it. Gated by settings:update.
 
 Example:
 

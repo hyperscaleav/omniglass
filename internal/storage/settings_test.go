@@ -11,13 +11,13 @@ func TestSettingOverrideRoundTrip(t *testing.T) {
 	ctx := context.Background()
 	gw := storagetest.NewDB(t) // ephemeral Postgres on a random port, migrations applied
 
-	// upsert a global override for ui
-	if _, err := gw.UpsertSettingOverride(ctx, "", "global", "ui",
+	// upsert a platform override for ui
+	if _, err := gw.UpsertSettingOverride(ctx, "", "platform", "ui",
 		map[string]any{"theme": "omniglass-light"}, []string{"theme"}); err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
 
-	got, err := gw.GetSettingOverrides(ctx, "global")
+	got, err := gw.GetSettingOverrides(ctx, "platform")
 	if err != nil {
 		t.Fatalf("get: %v", err)
 	}
@@ -29,14 +29,14 @@ func TestSettingOverrideRoundTrip(t *testing.T) {
 	}
 
 	// upsert again (update path), then delete to restore defaults
-	if _, err := gw.UpsertSettingOverride(ctx, "", "global", "ui",
+	if _, err := gw.UpsertSettingOverride(ctx, "", "platform", "ui",
 		map[string]any{"theme": "omniglass-dark"}, nil); err != nil {
 		t.Fatalf("re-upsert: %v", err)
 	}
-	if err := gw.DeleteSettingOverride(ctx, "", "global", "ui"); err != nil {
+	if err := gw.DeleteSettingOverride(ctx, "", "platform", "ui"); err != nil {
 		t.Fatalf("delete: %v", err)
 	}
-	after, err := gw.GetSettingOverrides(ctx, "global")
+	after, err := gw.GetSettingOverrides(ctx, "platform")
 	if err != nil {
 		t.Fatalf("get after delete: %v", err)
 	}
@@ -49,19 +49,19 @@ func TestSettingOverrideDeleteAll(t *testing.T) {
 	ctx := context.Background()
 	gw := storagetest.NewDB(t)
 
-	if _, err := gw.UpsertSettingOverride(ctx, "", "global", "ui",
+	if _, err := gw.UpsertSettingOverride(ctx, "", "platform", "ui",
 		map[string]any{"theme": "omniglass-light"}, nil); err != nil {
 		t.Fatalf("upsert ui: %v", err)
 	}
-	if _, err := gw.UpsertSettingOverride(ctx, "", "global", "keybindings",
+	if _, err := gw.UpsertSettingOverride(ctx, "", "platform", "keybindings",
 		map[string]any{"open_edit": "x"}, nil); err != nil {
 		t.Fatalf("upsert keybindings: %v", err)
 	}
 
-	if err := gw.DeleteAllSettingOverrides(ctx, "", "global"); err != nil {
+	if err := gw.DeleteAllSettingOverrides(ctx, "", "platform"); err != nil {
 		t.Fatalf("delete all: %v", err)
 	}
-	after, err := gw.GetSettingOverrides(ctx, "global")
+	after, err := gw.GetSettingOverrides(ctx, "platform")
 	if err != nil {
 		t.Fatalf("get after reset: %v", err)
 	}

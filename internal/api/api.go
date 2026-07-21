@@ -302,7 +302,7 @@ func specAPI(gw storage.Gateway) huma.API {
 }
 
 // defaultSettingsService builds a settings service with no operator file, reading
-// the global override live from the Gateway (the same seam the boot path uses,
+// the platform override live from the Gateway (the same seam the boot path uses,
 // minus the operator file). It is the fallback when no service is wired via
 // WithSettingsService, so NewHandler(gw) resolves real overrides; the boot path
 // supplies a file-aware service instead. The override reader is never invoked

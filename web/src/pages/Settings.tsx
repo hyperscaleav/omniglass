@@ -12,10 +12,10 @@ import {
 import { constraintFor, validateField } from "../lib/settingsValidation";
 
 // Settings is the Admin platform-settings surface (issue #271). It resolves the
-// effective settings document from the cascade (code defaults, the operator file,
-// the console override) and lets an admin edit each key, see where its value came
+// effective settings document from the cascade (the declared defaults, the operator
+// file, the console override) and lets an admin edit each key, see where its value came
 // from (provenance), restore a key or a namespace to defaults, and read the layer
-// stack. Slice-0 acts on the global scope; the per-group and per-user levels are a
+// stack. Slice-0 acts on the platform scope; the per-group and per-user levels are a
 // fast-follow. The write path is an RFC 7386 merge patch: a null on a key restores
 // it. Locks are shown when present (a broader level pinning a value); the write
 // path to set a lock lands with the group/user levels, so the chip is read-only in
@@ -26,11 +26,11 @@ import { constraintFor, validateField } from "../lib/settingsValidation";
 // weighted, and an Edit toggle swaps in the inline inputs.
 
 // originLabel maps a provenance level to the neutral origin-badge text KVRow shows
-// (weight, not colour, carries the signal). The code default returns "" so KVRow
+// (weight, not colour, carries the signal). The declared default returns "" so KVRow
 // suppresses the badge entirely.
 function originLabel(level: string): string {
   switch (level) {
-    case "global":
+    case "platform":
       return "Set in console";
     case "file":
       return "From settings file";
@@ -42,17 +42,18 @@ function originLabel(level: string): string {
 // levelLabel names a cascade level for the drill-in layer stack.
 function levelLabel(level: string): string {
   switch (level) {
-    case "global":
-      return "Console override (global)";
+    case "platform":
+      return "Console override (platform)";
     case "file":
       return "Operator settings file";
     default:
-      return "Code default";
+      return "Declared default";
   }
 }
 
-// The cascade order, broad to specific, for the layer-stack display.
-const CASCADE = ["code", "file", "global"] as const;
+// The cascade order, broad to specific, for the layer-stack display. "default" is
+// off the axis: it is what the setting is when nobody set it, never a stored row.
+const CASCADE = ["default", "file", "platform"] as const;
 
 export default function Settings() {
   const me = useMe();
@@ -87,7 +88,7 @@ export default function Settings() {
     <section class="og-stack flex flex-col gap-4">
       <div class="flex items-start justify-between gap-4">
         <p class="max-w-160 text-sm text-base-content/60">
-          Platform preferences resolved down the settings cascade: code defaults, the operator
+          Platform preferences resolved down the settings cascade: declared defaults, the operator
           settings file, and the console override. Each value shows where it came from; editing it
           sets a console override, and restoring drops that override so the value falls back to the
           layer below.
@@ -146,7 +147,7 @@ export default function Settings() {
                           namespace={namespace}
                           settingKey={key}
                           value={data().values[namespace][key]}
-                          source={data().sources[`${namespace}.${key}`] ?? "code"}
+                          source={data().sources[`${namespace}.${key}`] ?? "default"}
                           lockLevel={data().locks[`${namespace}.${key}`]}
                           editing={editing() && canEdit()}
                           onPatch={patchNamespace}
@@ -201,7 +202,7 @@ function SettingRow(props: {
   });
 
   const dirty = () => draft() !== current();
-  const isOverridden = () => props.source === "global";
+  const isOverridden = () => props.source === "platform";
   const locked = () => Boolean(props.lockLevel);
   // A locked key is never editable, so it stays in read mode even on the edit pass.
   const rowEditing = () => props.editing && !locked();

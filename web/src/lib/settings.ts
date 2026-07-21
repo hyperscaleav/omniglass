@@ -5,7 +5,7 @@ import { api } from "../api/client";
 // settings engine (issue #271). The read side carries provenance (which cascade
 // level a key resolved from) and lock state; the write side is an RFC 7386 merge
 // patch per namespace, a namespace restore, and a factory reset. Slice-0 acts on
-// the global scope only. The client-safe /settings/me feeds the SPA theme.
+// the platform scope only. The client-safe /settings/me feeds the SPA theme.
 
 // A settings document is namespace to key to value; values stay generic (the
 // engine merges presence, not typed fields).
@@ -52,7 +52,7 @@ export function useSettingsMe() {
   }));
 }
 
-// usePatchNamespace merge-patches a namespace's global override, then invalidates
+// usePatchNamespace merge-patches a namespace's platform override, then invalidates
 // the read (and /settings/me, since a client-visible change re-themes the SPA). A
 // null value on a key restores that one key to the lower layer.
 export function usePatchNamespace() {
@@ -72,8 +72,8 @@ export function usePatchNamespace() {
   };
 }
 
-// useRestoreNamespace drops a namespace's global override, restoring the file and
-// code defaults, then invalidates the read and /settings/me.
+// useRestoreNamespace drops a namespace's platform override, restoring the file layer
+// and the declared defaults, then invalidates the read and /settings/me.
 export function useRestoreNamespace() {
   const qc = useQueryClient();
   return async (namespace: string): Promise<{ ok: true } | { ok: false; message: string }> => {
@@ -87,7 +87,7 @@ export function useRestoreNamespace() {
   };
 }
 
-// useRestoreAllDefaults removes every global override (a factory reset), then
+// useRestoreAllDefaults removes every platform override (a factory reset), then
 // invalidates the read and /settings/me.
 export function useRestoreAllDefaults() {
   const qc = useQueryClient();

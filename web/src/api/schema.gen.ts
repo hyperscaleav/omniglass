@@ -2064,14 +2064,14 @@ export interface paths {
         post?: never;
         /**
          * Restore a settings namespace to defaults
-         * @description Drops the namespace's global override, restoring file and code defaults. Gated by settings:update.
+         * @description Drops the namespace's platform override, restoring the file layer and the declared defaults. Gated by settings:update.
          */
         delete: operations["delete-settings-namespace"];
         options?: never;
         head?: never;
         /**
          * Update a settings namespace
-         * @description Applies an RFC 7386 JSON Merge Patch to the namespace's global override; null on a key restores it. Gated by settings:update.
+         * @description Applies an RFC 7386 JSON Merge Patch to the namespace's platform override; null on a key restores it. Gated by settings:update.
          */
         patch: operations["patch-settings-namespace"];
         trace?: never;
@@ -2087,7 +2087,7 @@ export interface paths {
         put?: never;
         /**
          * Restore all settings to defaults
-         * @description Removes every global override (a factory reset). Gated by settings:update.
+         * @description Removes every platform override (a factory reset). Gated by settings:update.
          */
         post: operations["restore-settings-defaults"];
         delete?: never;
@@ -4798,7 +4798,7 @@ export interface components {
             locks: {
                 [key: string]: string;
             };
-            /** @description key 'namespace.key' to the winning level (code|file|global) */
+            /** @description key 'namespace.key' to the winning level (default|file|platform) */
             sources: {
                 [key: string]: string;
             };

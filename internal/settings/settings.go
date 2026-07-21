@@ -1,9 +1,9 @@
 // Package settings is the pure resolution engine of the settings store. It deep
-// merges ordered layers (embedded code defaults, an operator file, the DB
-// override) into an effective document, tracks per-key provenance, and enforces
-// locks. It performs no I/O beyond reading the operator file: the DB layer is
-// supplied by the caller (the Storage Gateway). This is the primitive; the API and
-// the SPA consume it.
+// merges ordered layers (the type's declared defaults, an operator file, the
+// platform DB override) into an effective document, tracks per-key provenance,
+// and enforces locks. It performs no I/O beyond reading the operator file: the DB
+// layer is supplied by the caller (the Storage Gateway). This is the primitive; the
+// API and the SPA consume it.
 package settings
 
 import (
@@ -23,7 +23,7 @@ import (
 type Doc = map[string]map[string]any
 
 // Namespace declares a settings namespace and its policy. Domain is "profile" (it
-// cascades to groups and users and is client-visible) or "platform" (global-only,
+// cascades to groups and users and is client-visible) or "platform" (platform-only,
 // admin-only-read). ClientVisible is true when any authenticated user may read the
 // effective values (fed to the SPA via /settings/me).
 type Namespace struct {
@@ -78,7 +78,7 @@ func ClientVisibleNamespaces() map[string]bool {
 	return out
 }
 
-// Defaults reflects the code-default layer from the Settings struct: each leaf's
+// Defaults reflects the off-axis default layer from the Settings struct: each leaf's
 // default tag, coerced to the field's Go kind. This is the single declaration point
 // for a setting's default. A field with no default tag contributes nothing.
 func Defaults() Doc {

@@ -8,7 +8,7 @@ import { ME_KEY, type Me } from "../lib/auth";
 
 // The Settings page renders the settings-engine read through the shared KVRow
 // primitive: one card per namespace, one KVRow per key. Read mode is a value scan
-// with the origin weighted (no badge for the code default, a neutral "Set in
+// with the origin weighted (no badge for the declared default, a neutral "Set in
 // console" / "From settings file" badge otherwise) and a drill-in to the layer
 // stack; an Edit toggle swaps in the controls with inline save and restore. Data
 // is seeded into the query cache so no server is needed; `>` grants settings:update
@@ -30,7 +30,7 @@ function mount(read: SettingsRead, principal: Me = me) {
 
 const defaultRead: SettingsRead = {
   values: { ui: { theme: "omniglass-dark", default_landing: "/" } },
-  sources: { "ui.theme": "code", "ui.default_landing": "code" },
+  sources: { "ui.theme": "default", "ui.default_landing": "default" },
   locks: {},
 };
 
@@ -39,12 +39,12 @@ const enterEdit = () => fireEvent.click(screen.getByRole("button", { name: /edit
 describe("Settings page", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("read mode shows the namespace, key labels, and values with no badge for a code default", async () => {
+  it("read mode shows the namespace, key labels, and values with no badge for a declared default", async () => {
     mount(defaultRead);
     expect(await screen.findByText("ui")).toBeTruthy(); // namespace section title
     expect(screen.getByText("theme")).toBeTruthy(); // key label
     expect(screen.getByText("omniglass-dark")).toBeTruthy(); // value, inline in read mode
-    // KVRow suppresses the origin badge for the code default (weight, not a badge).
+    // KVRow suppresses the origin badge for the declared default (weight, not a badge).
     expect(screen.queryByText("Default")).toBeNull();
     expect(screen.queryByText("Set in console")).toBeNull();
     // Read mode is a pure scan: no inputs and no Save until you enter Edit.
@@ -53,7 +53,7 @@ describe("Settings page", () => {
   });
 
   it("shows a neutral origin badge for an overridden value in read mode", async () => {
-    mount({ values: { ui: { theme: "omniglass-light" } }, sources: { "ui.theme": "global" }, locks: {} });
+    mount({ values: { ui: { theme: "omniglass-light" } }, sources: { "ui.theme": "platform" }, locks: {} });
     expect(await screen.findByText("Set in console")).toBeTruthy();
   });
 
@@ -102,7 +102,7 @@ describe("Settings page", () => {
   });
 
   it("marks a locked key and keeps it read-only even in edit mode", async () => {
-    mount({ values: { ui: { theme: "omniglass-dark" } }, sources: { "ui.theme": "global" }, locks: { "ui.theme": "global" } });
+    mount({ values: { ui: { theme: "omniglass-dark" } }, sources: { "ui.theme": "platform" }, locks: { "ui.theme": "platform" } });
     expect(await screen.findByText("Locked")).toBeTruthy();
     enterEdit();
     // The locked row stays in read mode, so no editable control appears for it.
@@ -110,15 +110,15 @@ describe("Settings page", () => {
   });
 
   it("drills in to the layer stack from a read row", async () => {
-    mount({ values: { ui: { theme: "omniglass-light" } }, sources: { "ui.theme": "global" }, locks: {} });
+    mount({ values: { ui: { theme: "omniglass-light" } }, sources: { "ui.theme": "platform" }, locks: {} });
     fireEvent.click(await screen.findByLabelText("Show resolution"));
     expect(await screen.findByText("Layer stack")).toBeTruthy();
-    expect(screen.getByText("Console override (global)")).toBeTruthy();
+    expect(screen.getByText("Console override (platform)")).toBeTruthy();
   });
 
   it("hides every write affordance for a principal without settings:update", async () => {
     const viewer: Me = { principal: { id: "u-v", kind: "human" }, human: { username: "vi" }, permissions: ["ui:read"], grants: [] };
-    mount({ values: { ui: { theme: "omniglass-light" } }, sources: { "ui.theme": "global" }, locks: {} }, viewer);
+    mount({ values: { ui: { theme: "omniglass-light" } }, sources: { "ui.theme": "platform" }, locks: {} }, viewer);
     expect(await screen.findByText("theme")).toBeTruthy();
     expect(screen.queryByText("Restore all defaults")).toBeNull();
     expect(screen.queryByRole("button", { name: /edit/i })).toBeNull();

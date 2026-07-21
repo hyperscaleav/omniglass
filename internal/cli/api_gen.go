@@ -2899,7 +2899,7 @@ func generatedCommands() []*cobra.Command {
 			cmd := &cobra.Command{
 				Use:     "delete <namespace>",
 				Short:   "Restore a settings namespace to defaults",
-				Long:    "Drops the namespace's global override, restoring file and code defaults. Gated by settings:update.",
+				Long:    "Drops the namespace's platform override, restoring the file layer and the declared defaults. Gated by settings:update.",
 				Example: "  omniglass setting delete <namespace>",
 				Args:    cobra.ExactArgs(1),
 				RunE: func(cmd *cobra.Command, args []string) error {
@@ -2927,7 +2927,7 @@ func generatedCommands() []*cobra.Command {
 			cmd := &cobra.Command{
 				Use:     "restoreDefaults",
 				Short:   "Restore all settings to defaults",
-				Long:    "Removes every global override (a factory reset). Gated by settings:update.",
+				Long:    "Removes every platform override (a factory reset). Gated by settings:update.",
 				Example: "  omniglass setting restoreDefaults",
 				Args:    cobra.ExactArgs(0),
 				RunE: func(cmd *cobra.Command, args []string) error {
@@ -2941,7 +2941,7 @@ func generatedCommands() []*cobra.Command {
 			cmd := &cobra.Command{
 				Use:     "update <namespace>",
 				Short:   "Update a settings namespace",
-				Long:    "Applies an RFC 7386 JSON Merge Patch to the namespace's global override; null on a key restores it. Gated by settings:update.",
+				Long:    "Applies an RFC 7386 JSON Merge Patch to the namespace's platform override; null on a key restores it. Gated by settings:update.",
 				Example: "  omniglass setting update <namespace>",
 				Args:    cobra.ExactArgs(1),
 				RunE: func(cmd *cobra.Command, args []string) error {

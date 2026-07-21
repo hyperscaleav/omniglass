@@ -3591,7 +3591,7 @@ components:
         sources:
           additionalProperties:
             type: string
-          description: key 'namespace.key' to the winning level (code|file|global)
+          description: key 'namespace.key' to the winning level (default|file|platform)
           type: object
         values:
           $ref: "#/components/schemas/Settings"
@@ -8066,7 +8066,7 @@ paths:
       summary: Get the caller's effective settings
   /settings/{namespace}:
     delete:
-      description: Drops the namespace's global override, restoring file and code defaults. Gated by settings:update.
+      description: Drops the namespace's platform override, restoring the file layer and the declared defaults. Gated by settings:update.
       operationId: delete-settings-namespace
       parameters:
         - description: the settings namespace
@@ -8088,7 +8088,7 @@ paths:
       summary: Restore a settings namespace to defaults
       x-omniglass-permission: settings:update
     patch:
-      description: Applies an RFC 7386 JSON Merge Patch to the namespace's global override; null on a key restores it. Gated by settings:update.
+      description: Applies an RFC 7386 JSON Merge Patch to the namespace's platform override; null on a key restores it. Gated by settings:update.
       operationId: patch-settings-namespace
       parameters:
         - description: the settings namespace, e.g. ui
@@ -8123,7 +8123,7 @@ paths:
       x-omniglass-permission: settings:update
   /settings:restoreDefaults:
     post:
-      description: Removes every global override (a factory reset). Gated by settings:update.
+      description: Removes every platform override (a factory reset). Gated by settings:update.
       operationId: restore-settings-defaults
       responses:
         "204":
