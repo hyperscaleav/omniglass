@@ -134,6 +134,29 @@ describe("PropertiesPanel", () => {
     expect(deletes.length).toBe(1);
     expect(deletes[0].url).toContain("/components/disp-1/properties/display.resolution");
   });
+
+  // A required property whose contract carries a default is already satisfied by
+  // that default, so it must stay inheritable. Forcing the override on would pin a
+  // redundant copy of the default onto the component on the next Save, and the
+  // component would silently stop following the product when the default changed.
+  it("leaves a required property that has a contract default inheriting, and writes nothing for it", async () => {
+    const requiredWithDefault: EffectiveProperty[] = [
+      { property_name: "net.domain", display_name: "Domain", data_type: "string", required: true, is_set: false, from_contract: true, default_value: "hq.example", value: "hq.example" },
+    ];
+    const calls = captureWrites();
+    const edit = createEditSlot();
+    const { getByText } = mount(requiredWithDefault, edit);
+    edit.begin();
+
+    // The override switch is off (the default applies) and is operable, unlike a
+    // required property with nothing to inherit.
+    const domain = editCell(getByText("Domain"));
+    expect((within(domain).getByRole("checkbox") as HTMLInputElement).checked).toBe(false);
+
+    await edit.save(); // the default satisfies required, so the Save commits
+
+    expect(calls.filter((c) => c.method === "PUT" || c.method === "DELETE")).toEqual([]);
+  });
 });
 
 // The drill-in re-resolves the property from the blade id (component + property

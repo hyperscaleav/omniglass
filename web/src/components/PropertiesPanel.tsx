@@ -65,10 +65,13 @@ export default function PropertiesPanel(props: {
 
   const resolvedStr = (p: EffectiveProperty) => (p.value !== null && p.value !== undefined ? displayValue(p.value) : "");
   const hasDefault = (p: EffectiveProperty) => p.default_value !== null && p.default_value !== undefined;
-  // A required property is always overridden; otherwise the toggled state, else the
-  // persisted is_set.
+  // A required property with no contract default is always overridden: there is
+  // nothing to inherit, so the component must carry the value itself. A required
+  // property that HAS a default toggles like any other, because the default already
+  // satisfies the requirement; forcing it on would pin a redundant override and
+  // silently stop the component following the product's default.
   const overridingOf = (p: EffectiveProperty) =>
-    p.required ? true : (p.property_name in overriding ? overriding[p.property_name] : p.is_set);
+    p.required && !hasDefault(p) ? true : (p.property_name in overriding ? overriding[p.property_name] : p.is_set);
   // The override input seeds from the resolved value (the set value or the default).
   const draftOf = (p: EffectiveProperty) => (p.property_name in drafts ? drafts[p.property_name] : resolvedStr(p));
 
