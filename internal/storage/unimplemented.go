@@ -205,17 +205,6 @@ func (UnimplementedGateway) SystemNameTaken(context.Context, string) (bool, erro
 func (UnimplementedGateway) DeleteSystem(context.Context, string, string, scope.Set, scope.Set) error {
 	return nil
 }
-func (UnimplementedGateway) UpsertComponentType(context.Context, ComponentType) error { return nil }
-func (UnimplementedGateway) ListComponentTypes(context.Context) ([]ComponentType, error) {
-	return nil, nil
-}
-func (UnimplementedGateway) CreateComponentType(context.Context, string, ComponentType) (*ComponentType, error) {
-	return nil, nil
-}
-func (UnimplementedGateway) UpdateComponentType(context.Context, string, string, ComponentTypePatch) (*ComponentType, error) {
-	return nil, nil
-}
-func (UnimplementedGateway) DeleteComponentType(context.Context, string, string) error { return nil }
 func (UnimplementedGateway) ListComponents(context.Context, scope.Set) ([]Component, error) {
 	return nil, nil
 }
@@ -337,8 +326,8 @@ func (UnimplementedGateway) GetNode(context.Context, string, scope.Set) (*Node, 
 func (UnimplementedGateway) ListNodes(context.Context, scope.Set) ([]Node, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) UpsertVendor(context.Context, Vendor) error       { return nil }
-func (UnimplementedGateway) ListVendors(context.Context) ([]Vendor, error)    { return nil, nil }
+func (UnimplementedGateway) UpsertVendor(context.Context, Vendor) error    { return nil }
+func (UnimplementedGateway) ListVendors(context.Context) ([]Vendor, error) { return nil, nil }
 func (UnimplementedGateway) GetVendor(context.Context, string) (*Vendor, error) {
 	return nil, nil
 }
@@ -387,7 +376,7 @@ func (UnimplementedGateway) UpdateProduct(context.Context, string, string, Produ
 	return nil, nil
 }
 func (UnimplementedGateway) DeleteProduct(context.Context, string, string) error { return nil }
-func (UnimplementedGateway) UpsertSecretType(context.Context, SecretType) error         { return nil }
+func (UnimplementedGateway) UpsertSecretType(context.Context, SecretType) error  { return nil }
 func (UnimplementedGateway) ListSecretTypes(context.Context) ([]SecretType, error) {
 	return nil, nil
 }
@@ -430,28 +419,25 @@ func (UnimplementedGateway) DeleteVariable(context.Context, string, string, scop
 func (UnimplementedGateway) ResolveVariables(context.Context, string, scope.Set) ([]ResolvedVariable, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) ListFieldDefinitions(context.Context) ([]FieldDefinition, error) {
+func (UnimplementedGateway) ListProductProperties(context.Context, string) ([]ProductProperty, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) CreateFieldDefinition(context.Context, string, FieldDefinitionSpec) (*FieldDefinition, error) {
-	return nil, nil
-}
-func (UnimplementedGateway) UpdateFieldDefinition(context.Context, string, string, string, string, bool, json.RawMessage) (*FieldDefinition, error) {
-	return nil, nil
-}
-func (UnimplementedGateway) DeleteFieldDefinition(context.Context, string, string) error {
+func (UnimplementedGateway) UpsertProductProperty(context.Context, string, ProductPropertySpec) error {
 	return nil
 }
-func (UnimplementedGateway) SetFieldValue(context.Context, string, string, string, json.RawMessage, scope.Set) (*FieldValue, error) {
+func (UnimplementedGateway) SetProductProperty(context.Context, string, string, ProductPropertySpec) (*ProductProperty, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) UpdateFieldValue(context.Context, string, string, json.RawMessage, scope.Set, scope.Set) (*FieldValue, error) {
-	return nil, nil
-}
-func (UnimplementedGateway) DeleteFieldValue(context.Context, string, string, scope.Set, scope.Set) error {
+func (UnimplementedGateway) DeleteProductProperty(context.Context, string, string, string) error {
 	return nil
 }
-func (UnimplementedGateway) EffectiveFields(context.Context, string, scope.Set) ([]EffectiveField, error) {
+func (UnimplementedGateway) SetPropertyValue(context.Context, string, string, string, string, string, json.RawMessage, scope.Set) (*PropertyValue, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) ClearPropertyValue(context.Context, string, string, string, string, string, scope.Set) error {
+	return nil
+}
+func (UnimplementedGateway) EffectiveProperties(context.Context, string, scope.Set) ([]EffectiveProperty, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) ListTags(context.Context) ([]Tag, error) {

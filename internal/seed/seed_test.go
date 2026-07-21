@@ -92,14 +92,6 @@ func TestSeedRolesIdempotent(t *testing.T) {
 		t.Errorf("official system_types = %d, want 6", sysTypeCount)
 	}
 
-	var compTypeCount int
-	if err := conn.QueryRow(ctx, `select count(*) from component_type where official`).Scan(&compTypeCount); err != nil {
-		t.Fatalf("count component_types: %v", err)
-	}
-	if compTypeCount != 11 {
-		t.Errorf("official component_types = %d, want 11", compTypeCount)
-	}
-
 	// The official vendors seed too, idempotently (the second Run
 	// above must not have duplicated them), and every seeded row is official
 	// (read-only in the API layer).
@@ -117,6 +109,25 @@ func TestSeedRolesIdempotent(t *testing.T) {
 	if totalMakeCount != makeCount {
 		t.Errorf("total vendors = %d, official = %d, want equal (a non-official row leaked in)", totalMakeCount, makeCount)
 	}
+	// The seeded products ship a declared-property contract, and a second Run
+	// upserts it rather than duplicating (the contract is keyed by product +
+	// property).
+	var barContract int
+	if err := conn.QueryRow(ctx, `select count(*) from product_property where product_id = 'cisco-room-bar'`).Scan(&barContract); err != nil {
+		t.Fatalf("count cisco-room-bar contract: %v", err)
+	}
+	if barContract != 3 {
+		t.Errorf("cisco-room-bar contract = %d properties, want 3 (seed not idempotent or incomplete)", barContract)
+	}
+	var barModelDefault string
+	if err := conn.QueryRow(ctx, `select default_value #>> '{}' from product_property
+		where product_id = 'cisco-room-bar' and property_name = 'model_number'`).Scan(&barModelDefault); err != nil {
+		t.Fatalf("read cisco-room-bar model_number default: %v", err)
+	}
+	if barModelDefault != "Room Bar" {
+		t.Errorf("cisco-room-bar model_number default = %q, want %q", barModelDefault, "Room Bar")
+	}
+
 	// Re-running Run keeps the metadata fields, not just the initial insert.
 	var crestronWebsite string
 	if err := conn.QueryRow(ctx, `select website from vendor where id = 'crestron'`).Scan(&crestronWebsite); err != nil {

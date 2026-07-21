@@ -225,11 +225,6 @@ type Gateway interface {
 	DeleteSystem(ctx context.Context, actorID, name string, read, action scope.Set) error
 
 	// The component tier: a type registry and scoped CRUD, on the same helpers.
-	UpsertComponentType(ctx context.Context, ct ComponentType) error
-	ListComponentTypes(ctx context.Context) ([]ComponentType, error)
-	CreateComponentType(ctx context.Context, actorID string, ct ComponentType) (*ComponentType, error)
-	UpdateComponentType(ctx context.Context, actorID, id string, patch ComponentTypePatch) (*ComponentType, error)
-	DeleteComponentType(ctx context.Context, actorID, id string) error
 	ListComponents(ctx context.Context, read scope.Set) ([]Component, error)
 	GetComponent(ctx context.Context, name string, read scope.Set) (*Component, error)
 	// ListComponentInterfaces returns a component's interfaces (the reachability
@@ -373,22 +368,18 @@ type Gateway interface {
 	DeleteVariable(ctx context.Context, actorID, id string, read, action scope.Set) error
 	ResolveVariables(ctx context.Context, componentID string, read scope.Set) ([]ResolvedVariable, error)
 
-	// The field tier: a typed field declared on a component_type (the schema
-	// half of the field primitive), flat and unscoped like the type registries.
-	// The value a component carries for it lives in field_value (a later slice).
-	ListFieldDefinitions(ctx context.Context) ([]FieldDefinition, error)
-	CreateFieldDefinition(ctx context.Context, actorID string, spec FieldDefinitionSpec) (*FieldDefinition, error)
-	UpdateFieldDefinition(ctx context.Context, actorID, id, dataType, displayName string, required bool, def json.RawMessage) (*FieldDefinition, error)
-	DeleteFieldDefinition(ctx context.Context, actorID, id string) error
-
-	// field values: the literal a component sets for a field defined on its
-	// type (field_value, the variable table narrowed to a component owner: no
-	// owner arc, no cascade), plus the effective read that coalesces the set
-	// value with the definition's default for a component.
-	SetFieldValue(ctx context.Context, actorID, componentName, fieldName string, value json.RawMessage, create scope.Set) (*FieldValue, error)
-	UpdateFieldValue(ctx context.Context, actorID, id string, value json.RawMessage, read, action scope.Set) (*FieldValue, error)
-	DeleteFieldValue(ctx context.Context, actorID, id string, read, action scope.Set) error
-	EffectiveFields(ctx context.Context, componentName string, read scope.Set) ([]EffectiveField, error)
+	// The declared-property tier, the fold of the fields feature onto the estate
+	// model. product_property is the product's contract (which properties it declares
+	// and their defaults); property_value is the value store on the shared owner arc.
+	// EffectiveProperties resolves a component against its product's contract
+	// (default < override) and adds the ad-hoc values the contract does not declare.
+	ListProductProperties(ctx context.Context, productID string) ([]ProductProperty, error)
+	UpsertProductProperty(ctx context.Context, productID string, spec ProductPropertySpec) error
+	SetProductProperty(ctx context.Context, actorID, productID string, spec ProductPropertySpec) (*ProductProperty, error)
+	DeleteProductProperty(ctx context.Context, actorID, productID, propertyName string) error
+	SetPropertyValue(ctx context.Context, actorID, ownerKind, ownerID, propertyName, instance string, value json.RawMessage, write scope.Set) (*PropertyValue, error)
+	ClearPropertyValue(ctx context.Context, actorID, ownerKind, ownerID, propertyName, instance string, write scope.Set) error
+	EffectiveProperties(ctx context.Context, componentName string, read scope.Set) ([]EffectiveProperty, error)
 
 	// The tag tier: the governed key vocabulary and the per-entity value
 	// bindings. Minting a key (tag:create) is a tenant-wide governance action;

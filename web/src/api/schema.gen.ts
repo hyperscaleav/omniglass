@@ -387,7 +387,7 @@ export interface paths {
         head?: never;
         /**
          * Update a component
-         * @description Patches a component's display_name or component_type. Gated by component:update; read and update scopes drive the 404 versus 403 split.
+         * @description Patches a component's technical name or display_name. Gated by component:update; read and update scopes drive the 404 versus 403 split.
          */
         patch: operations["update-component"];
         trace?: never;
@@ -432,7 +432,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/components/{name}/fields": {
+    "/components/{name}/properties": {
         parameters: {
             query?: never;
             header?: never;
@@ -440,17 +440,37 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List a component's effective fields
-         * @description Each field defined on the component's type, resolved to the set literal or the type default (is_set marks the override). Gated by field:read; the component must be in the caller's field read scope.
+         * List a component's effective properties
+         * @description Every property the component's product declares, resolved to the component's own value or the contract default (is_set marks the override), plus any property set directly on the component (from_contract false). Gated by component:read; an out-of-scope component is a non-disclosing 404.
          */
-        get: operations["list-effective-fields"];
+        get: operations["list-component-properties"];
         put?: never;
-        /**
-         * Set a field value on a component
-         * @description Sets a literal for a field defined on the component's type, validated against its data_type. Idempotent: the first set creates the value, a later set patches it in place. Gated by field:create; the component must be in the caller's field create scope.
-         */
-        post: operations["set-field-value"];
+        post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/components/{name}/properties/{property}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set a property on a component
+         * @description Declares a value for the property on this component, overriding the product contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by component:update; an out-of-scope component is a non-disclosing 404.
+         */
+        put: operations["set-component-property"];
+        post?: never;
+        /**
+         * Clear a property on a component
+         * @description Removes the component's declared value, so the property falls back to the product contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the component never set is a 404. Gated by component:update; an out-of-scope component is a non-disclosing 404.
+         */
+        delete: operations["clear-component-property"];
         options?: never;
         head?: never;
         patch?: never;
@@ -606,78 +626,6 @@ export interface paths {
          * @description Patches a custom driver's display_name or version. Official drivers are read-only (422). Gated by driver:update.
          */
         patch: operations["update-driver"];
-        trace?: never;
-    };
-    "/field-definitions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List field definitions
-         * @description Lists every field defined on any component_type (the catalog directory). Gated by field:read.
-         */
-        get: operations["list-field-definitions"];
-        put?: never;
-        /**
-         * Define a field
-         * @description Declares a typed field on a component_type. The default, if given, is validated against data_type. Gated by field:create.
-         */
-        post: operations["create-field-definition"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/field-definitions/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Delete a field definition
-         * @description Removes a field definition by id. Gated by field:delete.
-         */
-        delete: operations["delete-field-definition"];
-        options?: never;
-        head?: never;
-        /**
-         * Update a field definition
-         * @description Replaces a field's data_type and default value, revalidating the default. component_type and name are fixed at creation. Gated by field:update.
-         */
-        patch: operations["update-field-definition"];
-        trace?: never;
-    };
-    "/field-values/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Delete a field value
-         * @description Clears a component's override for a field, reverting it to the type default. Gated by field:delete; read and delete scopes on the owning component drive the 404 versus 403 split.
-         */
-        delete: operations["delete-field-value"];
-        options?: never;
-        head?: never;
-        /**
-         * Update a field value
-         * @description Replaces a field value's literal, revalidated against the field's fixed data_type. Gated by field:update; read and update scopes on the owning component drive the 404 versus 403 split.
-         */
-        patch: operations["update-field-value"];
         trace?: never;
     };
     "/files": {
@@ -1644,6 +1592,50 @@ export interface paths {
         patch: operations["update-product"];
         trace?: never;
     };
+    "/products/{id}/properties": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a product's declared properties
+         * @description Lists the product's declared-property contract (what every instance of the product exposes), ordered by property name, each with its optional default and required flag. Gated by product:read.
+         */
+        get: operations["list-product-properties"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/{id}/properties/{property}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Declare a property on a product
+         * @description Declares a catalog property on a custom product, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official products are read-only (422), and an unknown product or property is a 422. Gated by product:update.
+         */
+        put: operations["set-product-property"];
+        post?: never;
+        /**
+         * Withdraw a property from a product
+         * @description Removes one line from a custom product's contract; instances keep any value they set for it, now off-contract. A property the product does not declare is a 404, and an official product is read-only (422). Gated by product:delete.
+         */
+        delete: operations["delete-product-property"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/properties": {
         parameters: {
             query?: never;
@@ -2168,54 +2160,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/types/component": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List component types
-         * @description Lists the component_type registry, ordered alphabetically by display name. Populates the type picker on the component form. Gated by type:read.
-         */
-        get: operations["list-component-types"];
-        put?: never;
-        /**
-         * Create a component type
-         * @description Creates a custom (non-official) component_type. Gated by type:create.
-         */
-        post: operations["create-component-type"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/types/component/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Delete a component type
-         * @description Deletes a custom component_type, refused if official (422) or referenced by a component (409). Gated by type:delete.
-         */
-        delete: operations["delete-component-type"];
-        options?: never;
-        head?: never;
-        /**
-         * Update a component type
-         * @description Patches a custom component_type's display_name. Official types are read-only (422). Gated by type:update.
-         */
-        patch: operations["update-component-type"];
-        trace?: never;
-    };
     "/types/location": {
         parameters: {
             query?: never;
@@ -2565,7 +2509,6 @@ export interface components {
             readonly $schema?: string;
             /** @description The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces. */
             actions?: string[] | null;
-            component_type: string;
             display_name?: string;
             /** @description The resolved effective tags (key -> winning value) that cascade onto this component; for the Tags column. Provenance is in the effective-tags detail view. */
             effective_tags?: {
@@ -2579,16 +2522,15 @@ export interface components {
             product_id?: string;
             system_id?: string;
         };
-        ComponentTypeBody: {
+        ComponentPropertiesOutputBody: {
             /**
              * Format: uri
              * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/ComponentTypeBody.json
+             * @example /api/v1/schemas/ComponentPropertiesOutputBody.json
              */
             readonly $schema?: string;
-            display_name: string;
-            id: string;
-            official: boolean;
+            component: string;
+            properties: components["schemas"]["EffectivePropertyBody"][] | null;
         };
         CreateCapabilityInputBody: {
             /**
@@ -2608,8 +2550,6 @@ export interface components {
              * @example /api/v1/schemas/CreateComponentInputBody.json
              */
             readonly $schema?: string;
-            /** @description A component_type id */
-            component_type: string;
             display_name?: string;
             /** @description Location name this component is placed at */
             location?: string;
@@ -2622,17 +2562,6 @@ export interface components {
             /** @description Primary system name this component belongs to */
             system?: string;
         };
-        CreateComponentTypeInputBody: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/CreateComponentTypeInputBody.json
-             */
-            readonly $schema?: string;
-            display_name: string;
-            /** @description Globally unique type id */
-            id: string;
-        };
         CreateDriverInputBody: {
             /**
              * Format: uri
@@ -2644,29 +2573,6 @@ export interface components {
             /** @description Globally unique driver id */
             id: string;
             version?: string;
-        };
-        CreateFieldDefinitionInputBody: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/CreateFieldDefinitionInputBody.json
-             */
-            readonly $schema?: string;
-            /** @description The component_type this field is defined on */
-            component_type: string;
-            /**
-             * @description The declared value type
-             * @enum {string}
-             */
-            data_type: "string" | "int" | "float" | "bool" | "json";
-            /** @description Optional type-level default, validated against data_type */
-            default_value?: unknown;
-            /** @description Optional human label; falls back to name when unset */
-            display_name?: string;
-            /** @description The field name; unique per component_type */
-            name: string;
-            /** @description Whether every component of this type must set the field; defaults to false */
-            required?: boolean;
         };
         CreateFileInputBody: {
             /**
@@ -3031,33 +2937,41 @@ export interface components {
             official: boolean;
             version?: string;
         };
-        EffectiveFieldBody: {
+        EffectivePropertyBody: {
+            /** @description The declared value type, from the property catalog */
             data_type: string;
-            /** @description The type-level default, shape given by data_type; the drill-in's type-default step. Omitted when the definition has no default */
+            /** @description The contract default; omitted when the contract sets none */
             default_value?: unknown;
-            /** @description Optional human label; omitted when unset */
+            /** @description The property's human label; omitted when unset */
             display_name?: string;
-            field_id: string;
-            /** @description True when the component overrides the type default */
+            /** @description True when the component's product declares the property; false for one set directly on the component */
+            from_contract: boolean;
+            /** @description True when the component overrides the contract default */
             is_set: boolean;
-            name: string;
-            /** @description Whether every component of this type must set the field */
+            /** @description The catalog property name */
+            property_name: string;
+            /** @description Whether the product contract requires a value; always false off-contract */
             required: boolean;
-            /** @description The component's override; omitted when the field is unset */
+            /** @description The component's override; omitted when the property is unset */
             set_value?: unknown;
-            /** @description The effective value: the set literal, or the type default when unset */
-            value: unknown;
-            /** @description The field_value id when set; the id to DELETE to clear the override. Omitted when the field is unset */
+            /** @description The effective value: the override, or the contract default when unset */
+            value?: unknown;
+            /** @description The stored value's id when set; omitted when the property is unset */
             value_id?: string;
         };
-        EffectiveFieldsOutputBody: {
+        EffectivePropertyValueBody: {
             /**
              * Format: uri
              * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/EffectiveFieldsOutputBody.json
+             * @example /api/v1/schemas/EffectivePropertyValueBody.json
              */
             readonly $schema?: string;
-            fields: components["schemas"]["EffectiveFieldBody"][] | null;
+            component: string;
+            property_name: string;
+            /** @description The stored value, shape given by the property's data_type */
+            value: unknown;
+            /** @description The stored value's id */
+            value_id: string;
         };
         EffectiveTagsOutputBody: {
             /**
@@ -3185,37 +3099,6 @@ export interface components {
             readonly $schema?: string;
             component: string;
             events: components["schemas"]["EventBody"][] | null;
-        };
-        FieldDefinitionBody: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/FieldDefinitionBody.json
-             */
-            readonly $schema?: string;
-            component_type: string;
-            data_type: string;
-            /** @description The type-level default, shape given by data_type; omitted when unset */
-            default_value?: unknown;
-            /** @description Optional human label; the raw name is the key. Omitted when unset */
-            display_name?: string;
-            id: string;
-            name: string;
-            /** @description Whether every component of this type must set the field */
-            required: boolean;
-        };
-        FieldValueBody: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/FieldValueBody.json
-             */
-            readonly $schema?: string;
-            component_id: string;
-            field_id: string;
-            id: string;
-            /** @description The literal, shape given by the field's data_type */
-            value: unknown;
         };
         FileBody: {
             /**
@@ -3396,15 +3279,6 @@ export interface components {
             readonly $schema?: string;
             capabilities: components["schemas"]["CapabilityBody"][] | null;
         };
-        ListComponentTypesOutputBody: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/ListComponentTypesOutputBody.json
-             */
-            readonly $schema?: string;
-            component_types: components["schemas"]["ComponentTypeBody"][] | null;
-        };
         ListComponentsOutputBody: {
             /**
              * Format: uri
@@ -3422,15 +3296,6 @@ export interface components {
              */
             readonly $schema?: string;
             drivers: components["schemas"]["DriverBody"][] | null;
-        };
-        ListFieldDefinitionsOutputBody: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/ListFieldDefinitionsOutputBody.json
-             */
-            readonly $schema?: string;
-            field_definitions: components["schemas"]["FieldDefinitionBody"][] | null;
         };
         ListFilesOutputBody: {
             /**
@@ -3530,6 +3395,15 @@ export interface components {
              */
             readonly $schema?: string;
             principals: components["schemas"]["PrincipalBody"][] | null;
+        };
+        ListProductPropertiesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListProductPropertiesOutputBody.json
+             */
+            readonly $schema?: string;
+            properties: components["schemas"]["ProductPropertyBody"][] | null;
         };
         ListProductsOutputBody: {
             /**
@@ -3748,6 +3622,20 @@ export interface components {
             official: boolean;
             parent_product_id?: string;
             vendor_id?: string;
+        };
+        ProductPropertyBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ProductPropertyBody.json
+             */
+            readonly $schema?: string;
+            /** @description The contract default, shape given by the property's data_type; omitted when the contract sets none */
+            default_value?: unknown;
+            /** @description The catalog property this product declares */
+            property_name: string;
+            /** @description Whether every instance of this product must set the property */
+            required: boolean;
         };
         PropertyBody: {
             /**
@@ -4019,17 +3907,27 @@ export interface components {
             /** @description The image (JPEG, PNG, or WebP), base64-encoded; normalized server-side to a 256x256 JPEG */
             image_base64: string;
         };
-        SetFieldValueInputBody: {
+        SetComponentPropertyInputBody: {
             /**
              * Format: uri
              * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/SetFieldValueInputBody.json
+             * @example /api/v1/schemas/SetComponentPropertyInputBody.json
              */
             readonly $schema?: string;
-            /** @description The field name, defined on the component's type */
-            field: string;
-            /** @description The literal, validated against the field's data_type */
+            /** @description The value to declare, shape given by the property's data_type */
             value: unknown;
+        };
+        SetProductPropertyInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/SetProductPropertyInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The contract default, validated against the property's data_type; omit for no default */
+            default_value?: unknown;
+            /** @description Whether every instance of this product must set the property; defaults to false */
+            required?: boolean;
         };
         Settings: {
             keybindings: components["schemas"]["Keybindings"];
@@ -4180,19 +4078,9 @@ export interface components {
              * @example /api/v1/schemas/UpdateComponentInputBody.json
              */
             readonly $schema?: string;
-            component_type?: string;
             display_name?: string;
             /** @description A new globally unique technical name (rename) */
             name?: string;
-        };
-        UpdateComponentTypeInputBody: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/UpdateComponentTypeInputBody.json
-             */
-            readonly $schema?: string;
-            display_name?: string;
         };
         UpdateDriverInputBody: {
             /**
@@ -4203,35 +4091,6 @@ export interface components {
             readonly $schema?: string;
             display_name?: string;
             version?: string;
-        };
-        UpdateFieldDefinitionInputBody: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/UpdateFieldDefinitionInputBody.json
-             */
-            readonly $schema?: string;
-            /**
-             * @description The declared value type
-             * @enum {string}
-             */
-            data_type: "string" | "int" | "float" | "bool" | "json";
-            /** @description Optional type-level default, validated against data_type */
-            default_value?: unknown;
-            /** @description Optional human label; falls back to name when unset */
-            display_name?: string;
-            /** @description Whether every component of this type must set the field; defaults to false */
-            required?: boolean;
-        };
-        UpdateFieldValueInputBody: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/UpdateFieldValueInputBody.json
-             */
-            readonly $schema?: string;
-            /** @description The new literal, validated against the field's fixed data_type */
-            value: unknown;
         };
         UpdateGroupInputBody: {
             /**
@@ -5361,12 +5220,12 @@ export interface operations {
             };
         };
     };
-    "list-effective-fields": {
+    "list-component-properties": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description The component's name */
+                /** @description The component's unique name */
                 name: string;
             };
             cookie?: never;
@@ -5379,7 +5238,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EffectiveFieldsOutputBody"];
+                    "application/json": components["schemas"]["ComponentPropertiesOutputBody"];
                 };
             };
             /** @description Error */
@@ -5393,19 +5252,21 @@ export interface operations {
             };
         };
     };
-    "set-field-value": {
+    "set-component-property": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description The component's name */
+                /** @description The component's unique name */
                 name: string;
+                /** @description The property name */
+                property: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["SetFieldValueInputBody"];
+                "application/json": components["schemas"]["SetComponentPropertyInputBody"];
             };
         };
         responses: {
@@ -5415,8 +5276,40 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["FieldValueBody"];
+                    "application/json": components["schemas"]["EffectivePropertyValueBody"];
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "clear-component-property": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The component's unique name */
+                name: string;
+                /** @description The property name */
+                property: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {
@@ -5742,200 +5635,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DriverBody"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "list-field-definitions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ListFieldDefinitionsOutputBody"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "create-field-definition": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateFieldDefinitionInputBody"];
-            };
-        };
-        responses: {
-            /** @description Created */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["FieldDefinitionBody"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "delete-field-definition": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The field definition's id */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description No Content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "update-field-definition": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The field definition's id */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateFieldDefinitionInputBody"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["FieldDefinitionBody"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "delete-field-value": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The field value's id */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description No Content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "update-field-value": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The field value's id */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateFieldValueInputBody"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["FieldValueBody"];
                 };
             };
             /** @description Error */
@@ -8175,6 +7874,108 @@ export interface operations {
             };
         };
     };
+    "list-product-properties": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The product id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListProductPropertiesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "set-product-property": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The product id */
+                id: string;
+                /** @description The property name */
+                property: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetProductPropertyInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductPropertyBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-product-property": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The product id */
+                id: string;
+                /** @description The property name */
+                property: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "list-property": {
         parameters: {
             query?: never;
@@ -9277,133 +9078,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TaskBody"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "list-component-types": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ListComponentTypesOutputBody"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "create-component-type": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateComponentTypeInputBody"];
-            };
-        };
-        responses: {
-            /** @description Created */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ComponentTypeBody"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "delete-component-type": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The component_type id */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description No Content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "update-component-type": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateComponentTypeInputBody"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ComponentTypeBody"];
                 };
             };
             /** @description Error */

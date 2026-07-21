@@ -1,19 +1,21 @@
 ---
 title: Types
-description: "The Types catalog: a segmented tab per kind across the location, system, component, and secret type registries, each tab its own directory, with CRUD for the three writable kinds."
+description: "The Types catalog: a segmented tab per kind across the location, system, and secret type registries, each tab its own directory, with CRUD for the two writable kinds."
 ---
 
 **Catalog > Types** (with `type:read`, covered by every viewer's `*:read` floor) is a
-**segmented tab control** over the four classifier registries that shape the estate:
-**Location**, **System**, **Component**, and **Secret**, one tab per `location_type`,
-`system_type`, `component_type`, and `secret_type`. Each tab is that registry's own directory:
+**segmented tab control** over the classifier registries that shape the estate:
+**Location**, **System**, and **Secret**, one tab per `location_type`, `system_type`, and
+`secret_type`. A **component** has no type tab: its shape comes from the
+[product](/guides/admin/products/) it points at, and the properties that product declares.
+Each tab is that registry's own directory:
 a table of its rows, sorted alphabetically by display name, each showing **id**, **display name**, and **origin** (**official**, seed-owned, or **custom**); the Location tab's rows
 also carry an **icon** glyph key.
 
 - Switch tabs to move between registries; **name** matches an id or display name within the
   active tab, and **official** narrows it to official or custom rows.
 - **New type** (with `type:create`, an admin permission) opens a create **drawer** scoped to
-  the active tab when it is a writable kind (location, system, or component; the Secret tab has
+  the active tab when it is a writable kind (location or system; the Secret tab has
   no write routes this slice): name its **id** (a kebab identifier, unique within that kind,
   e.g. `wing`), give it a **display name**, and, on the
   Location tab, an **icon** glyph key (defaults to `map-pin`) and its **allowed parents**: a
@@ -32,7 +34,7 @@ also carry an **icon** glyph key.
   scalar type, whether the field is itself secret, and its origin), so you can see what a secret
   of that type expects (for example `snmp-community` or `basic-auth`), but there is no write
   route yet. Editing the fields schema is a follow-up.
-- **Delete** is refused (409) while a location, system, or component still uses that type:
+- **Delete** is refused (409) while a location or system still uses that type:
   reclassify or remove the referencing rows first. An official type cannot be deleted at all
   (422).
 - A non-empty **allowed parents** set is enforced when a location is created or moved: an
@@ -40,7 +42,7 @@ also carry an **icon** glyph key.
   both types. An empty set never blocks a placement. Existing locations are grandfathered: adding
   or tightening a set does not touch a placement already made, only a later move.
 
-Minting a type is admin-gated; *using* one, classifying a location, system, or component by
+Minting a type is admin-gated; *using* one, classifying a location or system by
 picking it on that entity's own create or edit form, is the ordinary entity write, gated by that
 entity's own `:update`. The same operations are `omniglass type <kind> list/create/update/delete`
 from the CLI (see the [CLI reference](/reference/cli/)).

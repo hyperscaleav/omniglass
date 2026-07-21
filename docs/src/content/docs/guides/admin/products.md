@@ -54,3 +54,33 @@ Minting a product is admin-gated, and the product form is where the vendor, driv
 catalogs are finally consumed, as the pickers that choose a product's vendor and driver and declare its
 capabilities. The same operations are `omniglass product list/get/create/update/delete` from the CLI
 (see the [CLI reference](/reference/cli/)).
+
+## Declared properties: the product's contract
+
+A product's blade also carries a **Declared properties** panel, the product's **contract**: which
+[properties](/guides/admin/properties/) every instance of the product exposes, and what each one
+defaults to. It is the second half of "the product is the source of a component's shape": capabilities
+say what the product can **do**, the contract says what it **carries**.
+
+- **Declare a property** (with `product:update`) picks a name from the property catalog, optionally
+  types a **default**, and optionally marks it **required**. The property must already exist in the
+  catalog, since the contract only names it: mint it under
+  [Catalog > Properties](/guides/admin/properties/) first. Declaring is **idempotent**, so declaring a
+  property already on the contract revises that line in place rather than adding a second.
+- **The default is typed by the catalog, not here.** The panel labels the input with the property's
+  data type, coerces what you type to it, and refuses a value that will not parse. Type and validation
+  live on the property, so a product cannot redefine what `serial_number` means, only what a fresh
+  instance of that product starts with.
+- **Required** means an instance must resolve the property to a value. A component of the product
+  cannot save with a required property empty (see
+  [set a property on a component](/guides/admin/properties/#set-a-property-on-a-component)).
+- **Withdraw** (with `product:delete`, behind a confirm) removes a line from the contract. Components
+  **keep** any value they set for it; the value simply reads as **off contract** from then on, since
+  nothing declares it any more.
+- An **official** (seed-owned) product's contract is read-only, like the rest of the row: the seeded
+  Cisco Room Bar and Samsung QM55 ship declaring `serial_number`, `firmware_version`, and
+  `model_number`, and those declarations come with the release.
+
+From the CLI the contract is `omniglass product properties <id>`,
+`omniglass product set-property <id> <property>`, and
+`omniglass product delete-property <id> <property>`.

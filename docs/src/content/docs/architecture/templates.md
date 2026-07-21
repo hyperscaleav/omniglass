@@ -38,7 +38,7 @@ result.
 
 | Family | What it is | Examples |
 |---|---|---|
-| `component_type` | classification | device, app, cloud-api |
+| `product` | classification: the concrete SKU a component **is**, and the source of its shape | Cisco Room Bar, Samsung QM55 |
 | `component_template` | the **device shape**: everything about a class of device | Polaris DSP 16, Cisco Room Kit Pro, Q-SYS Core |
 | `component` | a deployed instance | `dsp-boardroom-3` |
 

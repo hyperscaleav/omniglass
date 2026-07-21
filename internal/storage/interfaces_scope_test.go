@@ -32,8 +32,8 @@ func TestInterfaceScopeCRUD(t *testing.T) {
 	}
 
 	// Two root components, plus a scope confined to A's subtree.
-	compA := mustCreateComponent(t, gw, storage.ComponentSpec{Name: "comp-a", ComponentType: "display"}, all)
-	compB := mustCreateComponent(t, gw, storage.ComponentSpec{Name: "comp-b", ComponentType: "display"}, all)
+	compA := mustCreateComponent(t, gw, storage.ComponentSpec{Name: "comp-a"}, all)
+	compB := mustCreateComponent(t, gw, storage.ComponentSpec{Name: "comp-b"}, all)
 	readA := scope.Set{IDs: []string{compA.ID}}
 	_ = compB
 
@@ -150,8 +150,8 @@ func TestInterfaceProtocolNamed(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	mustCreateComponent(t, gw, storage.ComponentSpec{Name: "comp-x", ComponentType: "display"}, all)
-	mustCreateComponent(t, gw, storage.ComponentSpec{Name: "comp-y", ComponentType: "display"}, all)
+	mustCreateComponent(t, gw, storage.ComponentSpec{Name: "comp-x"}, all)
+	mustCreateComponent(t, gw, storage.ComponentSpec{Name: "comp-y"}, all)
 
 	// The same transport on two different components: both succeed, both named by
 	// the protocol, distinct rows (distinct surrogate ids).

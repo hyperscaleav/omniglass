@@ -26,19 +26,21 @@ import TagAdder from "../components/TagAdder";
 import ReachabilityPanel from "../components/ReachabilityPanel";
 import EventsPanel from "../components/EventsPanel";
 import { interfaceBlade, interfaceCreateBlade } from "../components/interfaceBlades";
-import EffectiveFields, { fieldResolutionBlade, fieldBladeId } from "../components/EffectiveFields";
+import PropertiesPanel, { propertyResolutionBlade, propertyBladeId } from "../components/PropertiesPanel";
 
 // Components: the device inventory, the first page built on the generic TreeList.
 // Components form a tree (parent_id) and each is bound to a primary system and a
-// location. The live API carries names/types/placement only (no health or metrics
-// yet, those land with component.state), so the columns and facets are the real
-// fields, not invented health. System and location ids are resolved to readable
-// names from their own lists. Create and edit both live on the detail accordion
-// (create-as-route): New routes to /components/create (a draft), Save hands off to
-// /components/<name> in edit mode; the pencil flips the same surface. View is
-// read-only, edit is the only writer, per the console invariant.
+// location. A component's shape comes from the PRODUCT it is an instance of (the
+// catalog SKU), whose contract declares the properties it exposes. The live API
+// carries names/placement/product only (no health or metrics yet, those land with
+// component.state), so the columns and facets are the real fields, not invented
+// health. System and location ids are resolved to readable names from their own
+// lists. Create and edit both live on the detail accordion (create-as-route): New
+// routes to /components/create (a draft), Save hands off to /components/<name> in
+// edit mode; the pencil flips the same surface. View is read-only, edit is the
+// only writer, per the console invariant.
 type CompNode = ListNode & {
-  type: string;
+  product: string;
   systemName: string;
   systemAddr: string;
   locationName: string;
@@ -52,13 +54,13 @@ export const componentsDescriptor: PageDescriptor = {
   entity: { name: "component", plural: "Components" },
   storageKey: "og-cmp",
   columns: {
-    type: { label: "Type", width: 170 },
+    product: { label: "Product", width: 170 },
     system: { label: "System", width: 190 },
     location: { label: "Location", width: 190 },
     tags: { label: "Tags", width: 340 },
   },
-  columnKeys: ["type", "system", "location", "tags"],
-  defaultCols: ["type", "system", "location", "tags"],
+  columnKeys: ["product", "system", "location", "tags"],
+  defaultCols: ["product", "system", "location", "tags"],
 };
 
 export default function Components() {
@@ -75,14 +77,13 @@ export default function Components() {
   const label = (x: { name: string; display_name?: string }) => x.display_name || x.name;
   const sysById = createMemo(() => new Map((systems.data ?? []).map((s) => [s.id, s] as const)));
   const locById = createMemo(() => new Map((locations.data ?? []).map((l) => [l.id, l] as const)));
-  const componentTypes = createMemo(() => [...new Set((components.data ?? []).map((c) => c.component_type))].sort());
 
   // One filter facet per tag key present across the components, derived from
   // their effective tags, so the bar can filter by any tag like any other field.
   const tagFacets = createMemo(() => {
     const keys = new Set<string>();
     for (const c of components.data ?? []) for (const k of Object.keys(c.effective_tags ?? {})) keys.add(k);
-    return tagFilterKeys<CompNode>([...keys].sort(), new Set(["name", "type", "system", "location"]));
+    return tagFilterKeys<CompNode>([...keys].sort(), new Set(["name", "product", "system", "location"]));
   });
 
   // Build the forest from the flat component list by parent_id. Roots are the
@@ -98,7 +99,7 @@ export default function Components() {
         display: c.display_name || c.name,
         children: [],
         actions: c.actions,
-        type: c.component_type,
+        product: c.product_id ?? "",
         systemName: c.system_id ? label(sm.get(c.system_id) ?? { name: c.system_id }) : "",
         systemAddr: c.system_id ? (sm.get(c.system_id)?.name ?? c.system_id) : "",
         locationName: c.location_id ? label(lm.get(c.location_id) ?? { name: c.location_id }) : "",
@@ -130,11 +131,12 @@ export default function Components() {
   }
 
   // ComponentDetail: the entity accordion, read-only in view, editable in edit. Own
-  // fields (display name, type) are editable; placement is fixed at creation. The
-  // Tags section is the shared TagAdder, whose write controls appear only in edit
-  // (canUpdate gates them), so view carries no mutation. The Fields section is the
-  // component's value surface. The full page renders its own Save/Cancel/Edit footer
-  // from ctx.edit; a blade gets those from BladeStack.
+  // fields (display name, technical name) are editable; placement and product are
+  // fixed at creation. The Tags section is the shared TagAdder, whose write controls
+  // appear only in edit (canUpdate gates them), so view carries no mutation. The
+  // Properties section is the component's value surface, resolved against its
+  // product's contract. The full page renders its own Save/Cancel/Edit footer from
+  // ctx.edit; a blade gets those from BladeStack.
   function ComponentDetail(props: { node: CompNode; ctx: ListCtx<CompNode> }): JSX.Element {
     const ctx = props.ctx;
     const edit = ctx.edit;
@@ -148,7 +150,6 @@ export default function Components() {
     const canUpdate = () => can(me.data, "component", "update");
 
     const [display, setDisplay] = createSignal(n().raw.display_name ?? "");
-    const [type, setType] = createSignal(n().raw.component_type ?? "");
     const [name, setName] = createSignal(n().raw.name);
     const [nameCheck, setNameCheck] = createSignal<NameCheck | null>(null);
     const [checking, setChecking] = createSignal(false);
@@ -162,7 +163,7 @@ export default function Components() {
     // Seed the inputs from the node each time edit begins (this also reverts a Cancel,
     // since Cancel exits edit and the next begin re-seeds).
     createEffect(on(editing, (isEditing) => {
-      if (isEditing) { setDisplay(n().raw.display_name ?? ""); setType(n().raw.component_type ?? ""); setName(n().raw.name); setNameCheck(null); }
+      if (isEditing) { setDisplay(n().raw.display_name ?? ""); setName(n().raw.name); setNameCheck(null); }
     }));
     // Consume a pending "open in edit" handoff (from create or the row pencil) once
     // the node has resolved.
@@ -177,7 +178,6 @@ export default function Components() {
           await updateComponent(n().raw.name, {
             name: renamed ? name().trim() : undefined,
             display_name: display() || undefined,
-            component_type: type() || undefined,
           });
           await qc.invalidateQueries({ queryKey: COMPONENTS_KEY });
           if (renamed) navigate(`/components/${encodeURIComponent(name().trim())}`);
@@ -216,7 +216,6 @@ export default function Components() {
             when={editing()}
             fallback={
               <div class="grid grid-cols-2 gap-5">
-                {ctx.fact("Type", <span class="badge badge-ghost badge-sm">{n().type}</span>)}
                 {ctx.fact("Technical name", <span class="font-data text-sm">{n().raw.name}</span>)}
                 {ctx.fact("ID", <span class="font-data text-xs text-base-content/50">{n().raw.id}</span>)}
               </div>
@@ -224,14 +223,6 @@ export default function Components() {
           >
             <div class="flex flex-col gap-3">
               {ctx.field("Display name", <input class="input input-bordered w-full" value={display()} placeholder="Ceiling Mic 2" onInput={(e) => setDisplay(e.currentTarget.value)} />)}
-              {ctx.field(
-                "Component type",
-                <>
-                  <input class="input input-bordered w-full" list="cmp-types-edit" value={type()} placeholder="microphone" onInput={(e) => setType(e.currentTarget.value)} />
-                  <datalist id="cmp-types-edit"><For each={componentTypes()}>{(t) => <option value={t} />}</For></datalist>
-                </>,
-                "A component_type id.",
-              )}
               {ctx.field(
                 "Technical name",
                 <>
@@ -287,7 +278,7 @@ export default function Components() {
                 {(c, i) => (
                   <button class="flex w-full items-center gap-2.5 px-3 py-2 text-left hover:bg-base-content/5" classList={{ "border-t border-base-300": i() > 0 }} onClick={() => ctx.go(c)}>
                     <span class="flex-1 truncate text-sm">{c.display}</span>
-                    <span class="badge badge-ghost badge-sm text-[10px]">{c.type}</span>
+                    <Show when={c.product}><span class="badge badge-ghost badge-sm text-[10px] font-data">{c.product}</span></Show>
                     <ChevronRight size={14} />
                   </button>
                 )}
@@ -301,13 +292,11 @@ export default function Components() {
           onOpenInterface={can(me.data, "interface", "read") ? (id) => ctx.openBlade({ kind: "interface", id }) : undefined}
         />
         <EventsPanel name={n().raw.name} />
-        <Show when={can(me.data, "field", "read")}>
-          <EffectiveFields
-            component={n().raw.name}
-            edit={edit}
-            onOpen={(fieldName) => ctx.openBlade({ kind: "field-resolution", id: fieldBladeId(n().raw.name, fieldName) })}
-          />
-        </Show>
+        <PropertiesPanel
+          component={n().raw.name}
+          edit={edit}
+          onOpen={(property) => ctx.openBlade({ kind: "property-resolution", id: propertyBladeId(n().raw.name, property) })}
+        />
 
         <TagAdder kind="component" name={n().raw.name} canUpdate={editing() && canUpdate()} canCreateKey={can(me.data, "tag", "create")} />
 
@@ -344,7 +333,6 @@ export default function Components() {
   function ComponentCreate(): JSX.Element {
     const [name, setName] = createSignal("");
     const [display, setDisplay] = createSignal("");
-    const [type, setType] = createSignal("");
     const [system, setSystem] = createSignal("");
     const [location, setLocation] = createSignal("");
     const [parent, setParent] = createSignal("");
@@ -359,7 +347,6 @@ export default function Components() {
       try {
         await createComponent({
           name: nm,
-          component_type: type().trim(),
           display_name: display().trim() || undefined,
           system: system() || undefined,
           location: location() || undefined,
@@ -389,14 +376,6 @@ export default function Components() {
           <div class="flex flex-col gap-3">
             {field("Name", <input class="input input-bordered w-full font-data" value={name()} placeholder="mic-2" onInput={(e) => setName(e.currentTarget.value)} />, "Globally unique address.")}
             {field("Display name", <input class="input input-bordered w-full" value={display()} placeholder="Ceiling Mic 2" onInput={(e) => setDisplay(e.currentTarget.value)} />)}
-            {field(
-              "Component type",
-              <>
-                <input class="input input-bordered w-full" list="cmp-types-new" value={type()} placeholder="microphone" onInput={(e) => setType(e.currentTarget.value)} />
-                <datalist id="cmp-types-new"><For each={componentTypes()}>{(t) => <option value={t} />}</For></datalist>
-              </>,
-              "A component_type id.",
-            )}
           </div>
         </div>
 
@@ -416,7 +395,7 @@ export default function Components() {
         <div class="flex items-center gap-2 border-t border-base-300 pt-4">
           <Button icon={X} onClick={() => navigate("/components")}>Cancel</Button>
           <span class="flex-1" />
-          <Button type="submit" intent="action" icon={Plus} disabled={busy() || !name().trim() || !type().trim()}>Create component</Button>
+          <Button type="submit" intent="action" icon={Plus} disabled={busy() || !name().trim()}>Create component</Button>
         </div>
 
         <div class="flex flex-col gap-1 opacity-50">
@@ -449,10 +428,10 @@ export default function Components() {
     loading: () => components.isLoading,
     error: () => components.error,
     initialChips,
-    filterPlaceholder: "Filter by name, type, system, location…",
+    filterPlaceholder: "Filter by name, product, system, location…",
     nameWeight: () => 500,
     cellFor: (key, n) => {
-      if (key === "type") return <span class="badge badge-ghost badge-sm">{n.type}</span>;
+      if (key === "product") return n.product ? <span class="badge badge-ghost badge-sm font-data">{n.product}</span> : <span class="text-base-content/40">—</span>;
       if (key === "system") return <span class="text-base-content/70">{n.systemName || "—"}</span>;
       if (key === "location") return <span class="text-base-content/70">{n.locationName || "—"}</span>;
       if (key === "tags") return <TagPills tags={n.tags} />;
@@ -460,13 +439,13 @@ export default function Components() {
     },
     filterKeys: () => [
       { key: "name", type: "string", hint: "substring", get: (n) => `${n.display} ${n.raw.name}`, values: () => [] },
-      { key: "type", type: "string", hint: "exact", get: (n) => n.type, values: (rows) => [...new Set(rows.map((r) => r.type))].sort() },
+      { key: "product", type: "string", hint: "exact", get: (n) => n.product, values: (rows) => [...new Set(rows.map((r) => r.product).filter(Boolean))].sort() },
       { key: "system", type: "string", hint: "exact", get: (n) => n.systemAddr, values: (rows) => [...new Set(rows.map((r) => r.systemAddr).filter(Boolean))].sort(), valueLabel: (v) => (systems.data ?? []).find((s) => s.name === v)?.display_name ?? v },
       { key: "location", type: "string", hint: "exact", get: (n) => n.locationName, values: (rows) => [...new Set(rows.map((r) => r.locationName).filter(Boolean))].sort() },
       ...tagFacets(),
     ],
     sortVal: (n, key) => {
-      if (key === "type") return n.type.toLowerCase();
+      if (key === "product") return n.product.toLowerCase();
       if (key === "system") return n.systemName.toLowerCase();
       if (key === "location") return n.locationName.toLowerCase();
       if (key === "tags") return Object.keys(n.tags).sort().join(",");
@@ -481,7 +460,7 @@ export default function Components() {
     renderCreate: () => <ComponentCreate />,
     renderDetail: (n, ctx) => <ComponentDetail node={n} ctx={ctx} />,
     extraBlades: {
-      "field-resolution": fieldResolutionBlade,
+      "property-resolution": propertyResolutionBlade,
       interface: interfaceBlade,
       "interface-create": interfaceCreateBlade,
     },

@@ -5,18 +5,16 @@ import Types from "./Types";
 import { TYPES_KEY, type TypeRow } from "../lib/types";
 import { ME_KEY, type Me } from "../lib/auth";
 
-// The Types page is a segmented tab control (Location / System / Component /
-// Secret) over the shared FlatList, one tab per type registry. Each tab rebuilds
-// its own FlatList (keyed on the active kind) over the same unified listTypes
-// query, so switching tabs swaps the visible rows without a refetch. Secret is
-// read-only (no create); a custom location/system/component row is writable
-// only when the caller holds type:create. Data is seeded into the query cache
-// so no server is needed.
+// The Types page is a segmented tab control (Location / System / Secret) over
+// the shared FlatList, one tab per type registry. Each tab rebuilds its own
+// FlatList (keyed on the active kind) over the same unified listTypes query, so
+// switching tabs swaps the visible rows without a refetch. Secret is read-only
+// (no create); a custom location or system row is writable only when the caller
+// holds type:create. Data is seeded into the query cache so no server is needed.
 const seed: TypeRow[] = [
   { kind: "location", id: "campus", display_name: "Campus", official: true, icon: "map-pin" },
   { kind: "location", id: "wing", display_name: "Wing", official: false, icon: "map-pin", allowed_parent_types: ["campus", "root"] },
   { kind: "system", id: "kiosk", display_name: "Kiosk", official: false },
-  { kind: "component", id: "display", display_name: "Display", official: true },
   { kind: "secret", id: "oauth2-client", display_name: "OAuth2 Client", official: false, fields: [] },
 ];
 
@@ -43,20 +41,19 @@ describe("Types page", () => {
     mount();
     expect(screen.getByRole("tab", { name: "Location" })).toBeTruthy();
     expect(screen.getByRole("tab", { name: "System" })).toBeTruthy();
-    expect(screen.getByRole("tab", { name: "Component" })).toBeTruthy();
     expect(screen.getByRole("tab", { name: "Secret" })).toBeTruthy();
   });
 
-  it("defaults to the Location tab: a location row shows, a component-only row does not", () => {
+  it("defaults to the Location tab: a location row shows, a system-only row does not", () => {
     mount();
     expect(screen.getByText("campus")).toBeTruthy();
-    expect(screen.queryByText("display")).toBeNull();
+    expect(screen.queryByText("kiosk")).toBeNull();
   });
 
-  it("switches rows on tab click: Component shows display and hides campus", async () => {
+  it("switches rows on tab click: System shows kiosk and hides campus", async () => {
     mount();
-    fireEvent.click(screen.getByRole("tab", { name: "Component" }));
-    expect(await screen.findByText("display")).toBeTruthy();
+    fireEvent.click(screen.getByRole("tab", { name: "System" }));
+    expect(await screen.findByText("kiosk")).toBeTruthy();
     expect(screen.queryByText("campus")).toBeNull();
   });
 
@@ -126,7 +123,7 @@ describe("Types page", () => {
       // The post-save invalidation refetches the unified listTypes query; any
       // shape satisfies the parser (each registry reads only its own key).
       return new Response(
-        JSON.stringify({ location_types: [], system_types: [], component_types: [], secret_types: [] }),
+        JSON.stringify({ location_types: [], system_types: [], secret_types: [] }),
         { status: 200, headers: { "Content-Type": "application/json" } },
       );
     });

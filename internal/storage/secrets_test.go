@@ -209,7 +209,7 @@ func TestSecretCascadeResolve(t *testing.T) {
 		t.Fatalf("system: %v", err)
 	}
 	comp, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
-		Name: "codec-1", ComponentType: "codec", SystemName: strptr("sys"), LocationName: strptr("room"),
+		Name: "codec-1", SystemName: strptr("sys"), LocationName: strptr("room"),
 	}, all)
 	if err != nil {
 		t.Fatalf("component: %v", err)

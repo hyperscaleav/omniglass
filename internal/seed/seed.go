@@ -25,9 +25,6 @@ var locationTypesYAML []byte
 //go:embed system_types.yaml
 var systemTypesYAML []byte
 
-//go:embed component_types.yaml
-var componentTypesYAML []byte
-
 //go:embed properties.yaml
 var propertiesYAML []byte
 
@@ -73,13 +70,6 @@ type systemTypesDoc struct {
 		ID          string `yaml:"id"`
 		DisplayName string `yaml:"display_name"`
 	} `yaml:"system_types"`
-}
-
-type componentTypesDoc struct {
-	ComponentTypes []struct {
-		ID          string `yaml:"id"`
-		DisplayName string `yaml:"display_name"`
-	} `yaml:"component_types"`
 }
 
 type propertiesDoc struct {
@@ -136,6 +126,13 @@ type productsDoc struct {
 		Kind            string   `yaml:"kind"`
 		ParentProductID string   `yaml:"parent_product_id"`
 		Capabilities    []string `yaml:"capabilities"`
+		// The declared-property contract this product ships. `default` is raw JSON
+		// (quoted in the YAML) so it round-trips into the jsonb column verbatim.
+		Properties []struct {
+			Name     string `yaml:"name"`
+			Default  string `yaml:"default"`
+			Required bool   `yaml:"required"`
+		} `yaml:"properties"`
 	} `yaml:"products"`
 }
 
@@ -164,9 +161,6 @@ func Run(ctx context.Context, gw storage.Gateway) error {
 		return err
 	}
 	if err := seedSystemTypes(ctx, gw); err != nil {
-		return err
-	}
-	if err := seedComponentTypes(ctx, gw); err != nil {
 		return err
 	}
 	if err := seedInterfaceTypes(ctx, gw); err != nil {
@@ -262,23 +256,6 @@ func seedSecretTypes(ctx context.Context, gw storage.Gateway) error {
 	return nil
 }
 
-func seedComponentTypes(ctx context.Context, gw storage.Gateway) error {
-	var doc componentTypesDoc
-	if err := yaml.Unmarshal(componentTypesYAML, &doc); err != nil {
-		return fmt.Errorf("seed: parse component_types: %w", err)
-	}
-	for _, ct := range doc.ComponentTypes {
-		if err := gw.UpsertComponentType(ctx, storage.ComponentType{
-			ID:          ct.ID,
-			Official:    true,
-			DisplayName: ct.DisplayName,
-		}); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func seedVendors(ctx context.Context, gw storage.Gateway) error {
 	var doc vendorsDoc
 	if err := yaml.Unmarshal(vendorsYAML, &doc); err != nil {
@@ -351,6 +328,19 @@ func seedProducts(ctx context.Context, gw storage.Gateway) error {
 			ParentProductID: nz(p.ParentProductID), Kind: kind, Capabilities: p.Capabilities,
 		}); err != nil {
 			return err
+		}
+		// The product's declared-property contract. Seeded through the unaudited
+		// upsert path (seed owns official rows), so a re-run is a no-op.
+		for _, prop := range p.Properties {
+			var def json.RawMessage
+			if prop.Default != "" {
+				def = json.RawMessage(prop.Default)
+			}
+			if err := gw.UpsertProductProperty(ctx, p.ID, storage.ProductPropertySpec{
+				PropertyName: prop.Name, DefaultValue: def, Required: prop.Required,
+			}); err != nil {
+				return fmt.Errorf("seed: product %s property %s: %w", p.ID, prop.Name, err)
+			}
 		}
 	}
 	return nil

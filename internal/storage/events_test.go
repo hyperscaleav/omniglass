@@ -30,7 +30,7 @@ func TestInsertEvents(t *testing.T) {
 	}
 
 	all := scope.Set{All: true}
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp-1", ComponentType: "display"}, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp-1"}, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
 

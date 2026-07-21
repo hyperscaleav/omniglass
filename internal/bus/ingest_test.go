@@ -79,7 +79,7 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	// Components + interfaces + tasks: disp-1 bound to node-a (the happy path);
 	// disp-2 bound to node-b (the confinement target node-a must not reach).
 	for _, name := range []string{"disp-1", "disp-2"} {
-		if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: name, ComponentType: "display"}, all); err != nil {
+		if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: name}, all); err != nil {
 			t.Fatalf("create component %s: %v", name, err)
 		}
 	}

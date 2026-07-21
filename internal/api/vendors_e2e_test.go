@@ -16,9 +16,8 @@ import (
 // TestVendorsAPI drives the vendor registry over HTTP: a
 // viewer reads the seeded official rows under the vendor:read floor but cannot
 // create, an admin (owner) creates a custom row, an official row is
-// read-only (422 on patch), and the admin deletes the custom row. Mirrors
-// TestComponentTypesAPI; vendor is a flat registry like
-// component_type, so the vendor:* permission is wired exactly like type:*.
+// read-only (422 on patch), and the admin deletes the custom row. Vendor is a flat
+// registry, so the vendor:* permission is wired exactly like type:*.
 func TestVendorsAPI(t *testing.T) {
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()

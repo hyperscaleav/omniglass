@@ -60,35 +60,20 @@ func TestFixturesShape(t *testing.T) {
 		}
 	}
 
-	// Field definitions declare a typed field on a component_type; each needs a name
-	// and a data_type in the supported scalar set. seenField lets a later field_value
-	// check its field is actually declared in the same document.
-	validDataTypes := map[string]bool{"string": true, "int": true, "float": true, "bool": true, "json": true}
-	seenField := map[string]bool{}
-	var assetTagDisplay string
-	for _, fd := range doc.FieldDefinitions {
-		if fd.Name == "" || fd.ComponentType == "" {
-			t.Errorf("field definition %+v missing name or component_type", fd)
+	// A contract line names a product and a property, both resolved by name at seed
+	// time against the boot-seed catalogs.
+	for _, pp := range doc.ProductProperties {
+		if pp.Product == "" || pp.Property == "" {
+			t.Errorf("product property %+v missing product or property", pp)
 		}
-		if !validDataTypes[fd.DataType] {
-			t.Errorf("field definition %q has unsupported data_type %q", fd.Name, fd.DataType)
-		}
-		if fd.Name == "asset_tag" {
-			assetTagDisplay = fd.DisplayName
-		}
-		seenField[fd.Name] = true
-	}
-	// A field carries an optional human label; the seed sets one on asset_tag.
-	if assetTagDisplay != "Asset tag" {
-		t.Errorf("asset_tag display_name = %q, want \"Asset tag\"", assetTagDisplay)
 	}
 
 	// Components place a device in the estate; a component that names a location must
 	// name one declared in this document (the seed resolves the placement by name).
 	seenComp := map[string]bool{}
 	for _, c := range doc.Components {
-		if c.Name == "" || c.ComponentType == "" {
-			t.Errorf("component %+v missing name or component_type", c)
+		if c.Name == "" {
+			t.Errorf("component %+v missing name", c)
 		}
 		if c.Location != "" && !seenLoc[c.Location] {
 			t.Errorf("component %q placed at location %q not in the fixtures", c.Name, c.Location)
@@ -96,14 +81,14 @@ func TestFixturesShape(t *testing.T) {
 		seenComp[c.Name] = true
 	}
 
-	// Field values set a literal on a component for a field: both must be declared in
-	// this document, else the seed's create fails at run time.
-	for _, fv := range doc.FieldValues {
-		if !seenComp[fv.Component] {
-			t.Errorf("field value references component %q not in the fixtures", fv.Component)
+	// Property values declare a literal on a component: the component must be declared
+	// in this document, else the seed's set fails at run time.
+	for _, pv := range doc.PropertyValues {
+		if !seenComp[pv.Component] {
+			t.Errorf("property value references component %q not in the fixtures", pv.Component)
 		}
-		if !seenField[fv.Field] {
-			t.Errorf("field value on %q references field %q not declared", fv.Component, fv.Field)
+		if pv.Property == "" {
+			t.Errorf("property value on %q names no property", pv.Component)
 		}
 	}
 }
@@ -168,27 +153,31 @@ func TestRunIdempotent(t *testing.T) {
 		t.Errorf("grants = %d, want 3", grants)
 	}
 
-	// The field primitive seeds three definitions, one component, and one value
-	// override. The counts prove the second Run added none of them: the definition,
-	// component, and value loops are each idempotent.
-	var fieldDefs, comps, fieldVals int
-	if err := conn.QueryRow(ctx, `select count(*) from field_definition`).Scan(&fieldDefs); err != nil {
-		t.Fatalf("count field definitions: %v", err)
+	// The property primitive seeds one extra contract line on the QM55, one component
+	// bound to that product, and two declared overrides. The counts prove the second
+	// Run added none of them: the contract, component, and value loops are each
+	// idempotent.
+	var contractLines, comps, propVals int
+	if err := conn.QueryRow(ctx, `
+		select count(*) from product_property where product_id = 'samsung-qm55'`).Scan(&contractLines); err != nil {
+		t.Fatalf("count contract lines: %v", err)
 	}
-	if fieldDefs != 5 {
-		t.Errorf("field definitions = %d, want 5 (seed not idempotent or incomplete)", fieldDefs)
+	if contractLines != 4 {
+		t.Errorf("qm55 contract lines = %d, want 4 (3 boot-seed + mac_address)", contractLines)
 	}
 	if err := conn.QueryRow(ctx, `select count(*) from component where name = 'lobby-display'`).Scan(&comps); err != nil {
-		t.Fatalf("count field-seed components: %v", err)
+		t.Fatalf("count property-seed components: %v", err)
 	}
 	if comps != 1 {
-		t.Errorf("field-seed components = %d, want 1 (lobby-display)", comps)
+		t.Errorf("property-seed components = %d, want 1 (lobby-display)", comps)
 	}
-	if err := conn.QueryRow(ctx, `select count(*) from field_value`).Scan(&fieldVals); err != nil {
-		t.Fatalf("count field values: %v", err)
+	if err := conn.QueryRow(ctx, `
+		select count(*) from property_value
+		where owner_kind = 'component' and component_id = 'lobby-display'`).Scan(&propVals); err != nil {
+		t.Fatalf("count property values: %v", err)
 	}
-	if fieldVals != 2 {
-		t.Errorf("field values = %d, want 2 (diagonal_inches override, serial_number required)", fieldVals)
+	if propVals != 2 {
+		t.Errorf("property values = %d, want 2 (serial_number, firmware_version)", propVals)
 	}
 
 	// The tree links resolve: the west building hangs under the hq campus.

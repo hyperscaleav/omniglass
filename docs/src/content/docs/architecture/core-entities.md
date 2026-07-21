@@ -13,9 +13,13 @@ nest, and how everything else names one of them as owner. The shapes these entit
 
 :::note[Partial]
 Built today: `component`, `system`, and `location` as name-addressable, variable-depth (`parent_id`)
-trees, each with its `*_type` registry and full scoped CRUD; a delete is refused while a structural
-child remains. The **exclusive-arc** owner columns are now real, carrying the datapoint sinks and the
-**`event`** log sink (see [The event sink](#the-event-sink-the-first-arc-owned-occurrence) below);
+trees with full scoped CRUD; a delete is refused while a structural child remains. `system` and
+`location` each keep a `*_type` registry, while a **component's shape comes from its `product`**
+(the `component_type` registry retired,
+[ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property_value)). The
+**exclusive-arc** owner columns are now real, carrying the datapoint sinks, the **`event`** log sink
+(see [The event sink](#the-event-sink-the-first-arc-owned-occurrence) below), and **`property_value`**
+(see [Declared properties](#declared-properties-the-product-contract-and-the-value-store) below);
 `alarm` is the remaining arc-owned sink still `Design`. Still `Design`: template pinning, `system_member`
 composition, operational mode, and decommission / purge. See [implementation status](/architecture/status/).
 :::
@@ -25,8 +29,10 @@ composition, operational mode, and decommission / purge. See [implementation sta
 Three nouns describe what you operate, plus the edge process that collects for them.
 
 - A **component** is a deployed device, app, or service: a display, a codec, a DSP, a control
-  processor, a cloud UCC service. It owns datapoints, pins a `component_template_version`, and is
-  classified by `component_type`.
+  processor, a cloud UCC service. It owns datapoints, pins a `component_template_version`, and points
+  at the **`product`** it is, which is where its shape comes from (its vendor, its driver, the
+  capabilities it provides, and the properties it declares). The pointer is optional: a productless
+  component is legal, it simply carries no contract.
 - A **system** is a set of components that work together to do one job. A meeting room is a system.
   So is a classroom, a video wall, a broadcast chain. The word is deliberately universal: a system
   is the unit you actually care about, whatever shape it takes. It pins a `system_template_version`,
@@ -69,7 +75,7 @@ deployment, no FK.
 
 | Entity | What it is | Key columns |
 |---|---|---|
-| `component` | a deployed instance (`dsp-boardroom-3`) | name (unique), type, **parent_id** (self-ref tree), display_name; pins a `component_template_version`; classified by `component_type` |
+| `component` | a deployed instance (`dsp-boardroom-3`) | name (unique), **parent_id** (self-ref tree), display_name; pins a `component_template_version`; carries **`product_id`** (optional, `on delete restrict`), the source of its shape |
 | `system` | a composition of components / subsystems (the service tree) | name (unique), type, **parent_id** (self-ref tree), display_name; pins a `system_template_version`; carries `location_id`; classified by `system_type` |
 | `location` | a place tree | name (unique), type, **parent_id** (self-ref tree), display_name; no template (the `location_type` is the only shape-definer) |
 | `node` | the edge process | name (the identity); carries labels, last_heartbeat_at, and its bound credential ([identity and access](/architecture/identity-access/)) |
@@ -107,6 +113,36 @@ capabilities), replacing the old `component_type`-as-shape notion. The restrict 
 guard the leaf catalogs deferred, so a product still referenced by a component cannot be deleted (409).
 See the [Products guide](/guides/admin/products/) for the operator surface.
 
+### Declared properties: the product contract and the value store
+
+A product does not only classify, it **declares what its instances expose**. That declaration is
+**`product_property`**, the product's **contract**: one row per property the product declares
+(`product_id`, `property_name` referencing the [`property` catalog](/architecture/variables/), an
+optional `default_value` in jsonb, and a `required` flag), unique per `(product, property)`. Type and
+validation are deliberately **not** repeated here: they live on the property, which stays the single
+source for what a name means.
+
+The value lives in **`property_value`**, which carries the **same owner exclusive-arc** as the datapoint
+sinks and `event` (`owner_kind` plus `component_id` / `system_id` / `location_id` / `node_id`, one-set
+CHECK), plus the property name, an `instance` discriminator, a **`provenance`**, and the jsonb `value`.
+Provenance is what makes the fold work: the same table holds a value an operator **declared**, a value a
+device **observed**, a value a rule **calculated**, and a value config **intended**, and only the
+provenance says which. Today the write path fills `owner_kind=component` with `provenance=declared`; the
+rest of the arc and the other three provenances are seats for the producers that come later.
+
+The read is **`EffectiveProperties`**, one query with two arms:
+
+- the **contract arm**: every property the component's product declares, resolved to
+  `coalesce(the component's declared value, the contract default)`, marked `from_contract`;
+- the **off-contract arm**: the values set directly on the component for properties its contract does
+  not declare.
+
+A **productless** component has only the off-contract arm, so it still resolves. This pair replaces the
+retired `field_definition` / `field_value` feature: a "field" was always a property with **declared**
+provenance, and the catalog it hung off is now the product's contract
+([ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property_value)). See
+the [Properties guide](/guides/admin/properties/) for the operator surface.
+
 ## The variable-depth trees
 
 `component`, `system`, and `location` are each a **variable-depth tree**: a `parent_id` self-reference
@@ -118,10 +154,10 @@ runs over an entity's containment path and the **deepest node wins**, weight-fre
 direction: right
 classes: { node: { style.border-radius: 8 }; key: { style: { border-radius: 8; bold: true } } }
 component: component { class: node }
-component_type: component_type { class: node }
+product: product { class: node }
 location: location { class: node }
 system: system { class: node }
-component -> component_type: classified by (N:1)
+component -> product: is a (N:1)
 component -> component: parent (tree)
 system -> location: located at (N:1)
 system -> system: parent (tree)
@@ -154,7 +190,8 @@ guidance if a use case needs more. The depth-resolution and rollup semantics the
 ## Ownership: the exclusive-arc
 
 Everything observed, asserted, or set in Omniglass attaches to exactly one structural entity, through
-the **exclusive-arc**. Every datapoint table, plus `event`, `alarm`, and `variable`, carries:
+the **exclusive-arc**. Every datapoint table, plus `event`, `property_value`, `alarm`, and `variable`,
+carries:
 
 - an **`owner_kind`** enum, plus
 - the **matching typed FK** (`component_id` / `system_id` / `location_id` / `node_id`, or none for the

@@ -292,7 +292,7 @@ export default function Systems() {
                 {(c, i) => (
                   <button class="flex w-full items-center gap-2.5 px-3 py-2 text-left hover:bg-base-content/5" classList={{ "border-t border-base-300": i() > 0 }} onClick={() => navigate(`/components/${encodeURIComponent(c.name)}`)}>
                     <span class="flex-1 truncate text-sm">{c.display_name || c.name}</span>
-                    <span class="badge badge-ghost badge-sm text-[10px]">{c.component_type}</span>
+                    <Show when={c.product_id}><span class="badge badge-ghost badge-sm text-[10px] font-data">{c.product_id}</span></Show>
                     <ChevronRight size={14} />
                   </button>
                 )}

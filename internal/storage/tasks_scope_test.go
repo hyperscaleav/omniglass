@@ -29,8 +29,8 @@ func TestTaskDerivedScope(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	compA := mustCreateComponent(t, gw, storage.ComponentSpec{Name: "comp-a", ComponentType: "display"}, all)
-	mustCreateComponent(t, gw, storage.ComponentSpec{Name: "comp-b", ComponentType: "display"}, all)
+	compA := mustCreateComponent(t, gw, storage.ComponentSpec{Name: "comp-a"}, all)
+	mustCreateComponent(t, gw, storage.ComponentSpec{Name: "comp-b"}, all)
 	readA := scope.Set{IDs: []string{compA.ID}}
 
 	// Each interface DERIVES exactly one poll task. The interface is protocol-named
