@@ -254,8 +254,10 @@ everything" grant sees only masks and **only admin (`secret:*`) and owner (`>`) 
   secret, origin}]}` (`secret:read`).
 - `GET /secrets` is the **all-scope admin directory** (`{secrets: [secret]}`); like the principal
   directory it needs an all-scope grant, and a non-all scope is a 403 (`secret:read`).
-- `POST /secrets` creates one from `{name, secret_type, owner_kind: global|location|system|component,
-  owner?, fields}` (201, `secret:create`); a `global` secret needs an all-scope grant.
+- `POST /secrets` creates one from `{name, secret_type, owner_kind: platform|location|system|component,
+  owner?, fields}` (201, `secret:create`); a `platform` secret needs an all-scope grant **and**
+  `platform:create` (the install-wide tier permission below). `PATCH` and `DELETE` on a secret that sits at
+  the tier likewise take `platform:update` / `platform:delete`.
 - `PATCH /secrets/{id}` re-seals the given `fields`, merged over the stored value so an omitted field
   keeps its value (`secret:update`).
 - `DELETE /secrets/{id}` removes it (204, `secret:delete`).
@@ -276,8 +278,9 @@ operators); `DELETE` gates on `variable:delete` (admin, owner). The value is pol
 - `GET /variables` is the **all-scope admin directory** (`{variables: [variable]}`); like the secret
   directory it needs an all-scope grant, and a non-all scope is a 403 (`variable:read`).
 - `POST /variables` creates one from `{name, value_type: string|int|float|bool|json, owner_kind:
-  global|location|system|component, owner?, value}` (201, `variable:create`); a `global` variable needs
-  an all-scope grant, and the `value` is validated against `value_type`.
+  platform|location|system|component, owner?, value}` (201, `variable:create`); a `platform` variable needs
+  an all-scope grant **and** `platform:create`, and the `value` is validated against `value_type`. `PATCH`
+  and `DELETE` on a variable at the tier likewise take `platform:update` / `platform:delete`.
 - `PATCH /variables/{id}` replaces the `value` (validated against the fixed `value_type`;
   `variable:update`).
 - `DELETE /variables/{id}` removes it (204, `variable:delete`).
@@ -316,8 +319,8 @@ owning entity's own write. The key vocabulary and an entity's tags read on the v
   component read-scope).
 - The directory list routes (`GET /components`, `/systems`, `/locations`) each carry an **`effective_tags`**
   map (`{key: winning_value}`, winners only) on every row, resolved for the whole page in one batched query.
-  It feeds the Tags column. A component resolves the full arc; a location resolves global plus its location
-  tree; a system resolves global, its system tree, and the location it is placed at. Provenance lives in the
+  It feeds the Tags column. A component resolves the full arc; a location resolves `platform` plus its location
+  tree; a system resolves `platform`, its system tree, and the location it is placed at. Provenance lives in the
   per-entity effective-tags detail, not the row.
 
 A `tagBinding` body is `{key, value, owner_kind, owner_id?, owner_name?}`.
@@ -417,6 +420,23 @@ gate on `standard:create` / `:update` / `:delete` at the admin tier.
 A `standard` body is `{id, display_name, parent_standard_id, official}`. An unknown parent is a 422. The
 **shipped** standards are `official: false`, so unlike a seeded product they are fully editable
 ([the seed model](/architecture/core-entities/#the-seed-model-forked-templates-versus-canonical-catalogs)).
+
+### The install-wide tier permission
+
+The cascade's least-specific tier is **`platform`** ([cascade](/architecture/cascade/)), and a write that lands
+there needs **two** permissions: the resource's own (`secret:create`, `variable:update`, `tag:update`,
+`settings:update`) **and** `platform:<action>`. Estate **scope** and install-wide **authority** are different
+questions, and an all-scope grant answers only the first: a senior operator can run every site without being
+able to move the value that applies to the whole install under them
+([identity and access](/architecture/identity-access/#install-wide-authority-is-not-estate-scope)). `platform:*`
+is seeded to `admin` (and to `owner` through `>`); `operator` and `deploy` deliberately do not hold it.
+
+The tier gate is **published in the spec** like every primary gate: a route that can write at the tier carries an
+`x-omniglass-platform-permission` extension beside its `x-omniglass-permission` stamp, and both land in the
+route-derived permission universe the Roles view reports. Where the request body names the tier
+(`owner_kind: platform`, and every settings write) the handler checks it up front; where only the stored row
+knows its tier (an update or delete by id) the resolved capability rides into the Gateway alongside the ABAC
+scope, so the 404-versus-403 split stays non-disclosing.
 
 ## Properties: a classifier declares, an instance sets
 

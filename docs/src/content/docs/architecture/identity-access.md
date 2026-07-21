@@ -210,7 +210,7 @@ viewer  <-  operator  <-  admin  <-  owner
 | `viewer` | Read every operator-facing resource within scope. The IAM directories (`principal`, `role`, `principal_group`) are **not** operator-facing: their reads are admin-tier (`<resource>:read:admin`), so `viewer`'s `*:read` does not reach the Users, Roles, or Groups pages ([ADR-0023](/architecture/decisions/#adr-0023-the-iam-directory-reads-principal-role-principal_group-are-admin-tier)). Secrets are likewise off the floor: `secret` is a **sensitive resource** a bare `*` does not reach, so `viewer` reads no secret directory ([ADR-0025](/architecture/decisions/#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier)). |
 | `operator` | viewer + create/update on components, interfaces, rules, config; **read, reveal, create, and update the operational secrets in scope** (`secret:read,reveal,create,update`); ack/snooze/resolve alarms. Secret **delete** stays admin-only, and an **admin-sensitive** secret (a platform credential, `admin_sensitive = true`) is invisible in the directory and a non-disclosing 404 on reveal regardless of scope, so an operator sees device secrets but never a platform key at the same scope ([ADR-0025](/architecture/decisions/#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier)). Creating an admin-sensitive secret needs the admin tier, so an operator can mint only operational ones. |
 | `deploy` | viewer + create/update on locations, systems, and components (the integrator / field-tech role, typically granted with the `subtree_excl_root` operator to build out a subtree without editing its root). No delete. Carries the same scoped `secret:read,reveal,create,update` as `operator`, for the device secrets a field tech sets up during a site build. |
-| `admin` | operator + delete on managed resources + manage IAM (principals, credentials, grants, custom roles) + curate registries (`<registry>:create`). Holds `secret:>` (the tail wildcard, not the two-token `secret:*`), so it reaches the **admin-sensitive** secret tier (`secret:reveal:admin`) that a two-token wildcard cannot, and sees and reveals platform credentials. IAM management is meaningful only from an `@ all` grant (a scoped `admin @ subtree` keeps the operator powers within its subtree but gets no IAM); registry curation is a plain capability, so a custom role can carry `<registry>:create` alone for a non-admin curator. Deliberately **not** the superuser: it cannot grant a role above its own tier ([ADR-0013](/architecture/decisions/#adr-0013-a-grant-cannot-confer-capabilities-the-granter-lacks)), so it cannot make itself owner, and it cannot delete `official` roles. |
+| `admin` | operator + delete on managed resources + manage IAM (principals, credentials, grants, custom roles) + curate registries (`<registry>:create`) + **`platform:*`**, the install-wide authority a write at the cascade's `platform` tier needs ([below](#install-wide-authority-is-not-estate-scope)); `operator` and `deploy` hold no `platform` capability, so an all-scoped operator runs every site without being able to change the install-wide value under them. Holds `secret:>` (the tail wildcard, not the two-token `secret:*`), so it reaches the **admin-sensitive** secret tier (`secret:reveal:admin`) that a two-token wildcard cannot, and sees and reveals platform credentials. IAM management is meaningful only from an `@ all` grant (a scoped `admin @ subtree` keeps the operator powers within its subtree but gets no IAM); registry curation is a plain capability, so a custom role can carry `<registry>:create` alone for a non-admin curator. Deliberately **not** the superuser: it cannot grant a role above its own tier ([ADR-0013](/architecture/decisions/#adr-0013-a-grant-cannot-confer-capabilities-the-granter-lacks)), so it cannot make itself owner, and it cannot delete `official` roles. |
 | `owner` | The break-glass superuser (`>`, the tail wildcard, covering every capability at every tier, including admin-sensitive ones and future resources). The unkillable role: at least one active `owner@all` grant must exist at all times (enforced by DB trigger), and an owner account cannot be impersonated. The bootstrap creates the first owner. |
 
 The console **Roles view** (`GET /roles`, gated `role:read:admin`) lists these read-only with each role's display name, description, inheritance, and **effective permissions**, so an operator sees exactly what a role grants before assigning it. The role blade shows permissions as a **net** view: the response carries the **permission universe** (every capability the route surface enforces, see [the permission universe](#the-permission-universe-published-per-route)) plus, per role, the **held** subset (resolved server-side by the same `rbac.Set.Allows` matcher as the effective set, so wildcards, the `:read` floor, and the `>` tail are honoured). The blade renders the universe one-per-line, lexicographically, with a `Held / Missing / All` toggle, so an operator reads not only what a role holds but what it is missing. Custom-role editing is a later slice.
@@ -289,6 +289,35 @@ So the same role applied at different scopes composes naturally; mixing roles (e
 :::caution[Open question]
 Whether a scope may mix include and exclude (e.g. "all except group X").
 :::
+
+### Install-wide authority is not estate scope
+
+The [cascade](/architecture/cascade/)'s least-specific tier is **`platform`**: the value an admin set for the
+**whole install**, above every location tree top. A write there needs **two** permissions, the resource's own
+and **`platform:<action>`**, checked together ([ADR-0057](/architecture/decisions/#adr-0057-the-cascades-least-specific-tier-is-platform-and-a-default-is-not-a-tier)):
+
+```
+secret:create   + platform:create    <- seal a secret at the platform tier
+variable:update + platform:update    <- change the install-wide value of a variable
+tag:update      + platform:update    <- POST /tags/{name}:setPlatform
+settings:update + platform:update    <- every settings write, which is install-wide by definition
+```
+
+The two answer different questions. A **scope** says *how much of the estate* a grant reaches; `platform:<action>`
+says whether the principal may change *the value under all of it*. Collapsing them would mean any all-scope grant
+silently carried install-wide authority, so a senior operator trusted with every site could also change the
+install-wide value every one of those sites inherits. `platform:*` is seeded to **`admin`** (and reaches `owner`
+through `>`); `operator` and `deploy` hold no `platform` write, and nothing implies one, because `platform` is an
+ordinary resource token in the [permission format](#permission-format) that only a literal, a `platform:*`, or a
+`>` names (`viewer`'s `*:read` reaches `platform:read` and stops there).
+
+The tier gate is **published per route** like every primary gate: a route that can write at the tier carries an
+`x-omniglass-platform-permission` extension beside its `x-omniglass-permission` stamp, and both land in the
+route-derived [permission universe](#the-permission-universe-published-per-route). Where the request already
+names the tier the handler refuses up front (403); where only the stored row knows its tier (an update or delete
+by id) the resolved capability is passed into the Storage Gateway beside the ABAC scope, so a caller who may read
+the row but not act at the tier gets 403 and one who cannot read it gets a non-disclosing 404, the same split
+every other write uses.
 
 ## Visibility cascades down the structural tree
 

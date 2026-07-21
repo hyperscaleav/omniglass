@@ -799,7 +799,7 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   directory list routes (`GET /components`, `/systems`, `/locations`) now carry an **`effective_tags`** map (key to
   winning value, winners only) on each row, resolved for the whole page in one batched query per kind
   (`Gateway.EffectiveTags`), feeding the coming Tags column with zero per-row fetch. Effective resolution extends past
-  the component: a **location** resolves `global` + its own location tree, and a **system** resolves `global` + its
+  the component: a **location** resolves the install-wide tier + its own location tree, and a **system** resolves it + its
   system tree + **the location it is placed at** ([ADR-0022](/architecture/decisions/#adr-0022-effective-tags-resolve-onto-systems-and-locations-a-placed-system-inherits-its-location)),
   so a system in a PCI building surfaces `compliance: pci`. Three per-kind recursive-CTE resolvers thread a target id
   through the ancestor chains and rank per (target, key); the resolver is scopeless by contract (the list already
@@ -831,7 +831,7 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   entity custom methods, like the principal lifecycle, so the generated CLI stays collision-free), plus
   `GET /components/{name}/effective-tags` (the per-component cascade). Deferred (ADR-0021): the console surface (a Tags
   directory and per-entity editor, [#189](https://github.com/hyperscaleav/omniglass/issues/189)), binding via
-  [groups](/architecture/groups/) and a `template` default ([#184](https://github.com/hyperscaleav/omniglass/issues/184)),
+  [groups](/architecture/groups/) and a `template`-scoped binding ([#184](https://github.com/hyperscaleav/omniglass/issues/184)),
   value-domain governance ([#190](https://github.com/hyperscaleav/omniglass/issues/190)), and binding onto a file
   ([#191](https://github.com/hyperscaleav/omniglass/issues/191)). Proven by a pure `internal/tag` validation unit test (key
   normalization, value bounds, the applies_to allow-list), a storage integration test (the registry CRUD and all-scope
@@ -841,7 +841,7 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   mint a key nor bind on a system it cannot write, a viewer reads but cannot mint or bind).
 - **Variable: the cascade-resolved free value.** The second member of the [config, secrets, and
   variables](/architecture/variables/) trio lands, after the secret. A **variable** is a typed **plaintext**
-  value (a macro) owned on the same exclusive arc as a secret (`global | location | system | component`) and
+  value (a macro) owned on the same exclusive arc as a secret (`platform | location | system | component`) and
   resolved most-specific-wins down the [cascade](/architecture/cascade/), but shown in the clear (no crypto, no
   masking, no reveal). Typing is **inline**: a `value_type` of `string` / `int` / `float` / `bool` / `json` plus a
   jsonb `value`, validated against the type in a pure `internal/variable` package (no shape registry, unlike the
@@ -863,7 +863,7 @@ capabilities ship, so an early slice can prove a seam without moving any page of
 - **Secret: the cascade-resolved encrypted value.** The first of the [config, credentials, and
   variables](/architecture/variables/) trio lands, and the prerequisite for the [collection](/architecture/collection/)
   driver's interface inputs ([#155](https://github.com/hyperscaleav/omniglass/issues/155)). A **secret** is a
-  typed, encrypted-at-rest value owned on the exclusive arc (`global | location | system | component`) and
+  typed, encrypted-at-rest value owned on the exclusive arc (`platform | location | system | component`) and
   resolved most-specific-wins down the [cascade](/architecture/cascade/). Its shape is a `secret_type` registry
   (per-field secrecy and origin; `snmp-community` and `basic-auth` seeded); crypto is **envelope AES-256-GCM**
   behind a pluggable KEK provider (env / file / fallback), with `(owner, name, field)` bound as AAD so a
@@ -1249,9 +1249,9 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   not-applicable guard, and value update/delete reverting the component to the default), an HTTP e2e (the effective read, the
   override set path, and the viewer-reads / operator-sets authz split at the `field:create` gate), and a scope-resolver unit
   test for the field arc kinds (a component-scoped operator resolves a subtree scope, a viewer resolves empty).
-- **Platform: the settings engine (global level).** The [settings](/architecture/settings/) subsystem ships its first
+- **Platform: the settings engine (install-wide level).** The [settings](/architecture/settings/) subsystem ships its first
   slice: a pure `settings` package that resolves an effective configuration document by deep-merging ordered layers (embedded
-  `code` defaults, an optional operator `file`, and the `global` DB override) most-specific-wins in JSON map-space, tracking
+  declared defaults, an optional operator `file`, and the install-wide DB override) most-specific-wins in JSON map-space, tracking
   per-key **provenance** and enforcing a top-down **lock** (broader level wins). The single **`setting_override`** table holds
   only the override level, since the base layers are recomputed in memory each boot and restore is therefore a delete
   ([ADR-0032](/architecture/decisions/#adr-0033-settings-persist-only-the-override-level-base-layers-are-recomputed-in-memory)),
@@ -1345,16 +1345,16 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   rows). Deferred to their own issues: the token-after-create flow (#287), node tags (#285),
   decommission (#286), and inline create for flat lists (a platform list-primitive concern). The
   [nodes](/architecture/nodes/) page stays `Partial`.
-- **Node tags (N2).** A node becomes a taggable owner kind, alongside global / component / system /
+- **Node tags (N2).** A node becomes a taggable owner kind, alongside the install-wide tier / component / system /
   location. The `tag_binding` owner arc gains a `node_id` leg (an additive migration re-adding the two
   CHECK constraints; `ON DELETE CASCADE` so a node purge drops its bindings), and the governed
   `applies_to` set can now include `node`. A node is estate-wide, not a scope tree, so tagging it needs
-  an all scope (`node:update`, reusing the identity gate) and its effective tags are the global layer
+  an all scope (`node:update`, reusing the identity gate) and its effective tags are the install-wide layer
   plus its own direct bindings, no inheritance. The generic per-entity tag routes grow the
   `/nodes/{name}:listTags` / `:setTag` / `:removeTag` methods, and the node body carries `effective_tags`.
   The console node blade gains a **Tags** panel (the shared `TagAdder`: read pills, add / remove in edit),
   and the node list a **Tags** column plus a per-key filter facet, the same shape as the component list.
-  Proven by a storage integration test (the applies_to gate, the all-scope requirement, effective = global
+  Proven by a storage integration test (the applies_to gate, the all-scope requirement, effective = install-wide
   + direct, unbind), a real-binary API test (bind / list / effective / unbind and the `node:update` 403),
   and the web suite. Follows [node identity](/architecture/nodes/) (N1); the [tags](/architecture/tags/)
   page stays `Partial`. Deferred: setting tags **during** node create (an inline-create platform concern).
@@ -1764,3 +1764,24 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   interface list still come back; **mutation-checked** in both directions. Health keeps names internally
   on purpose, since its advisory lock hashes `health/<kind>/<name>` and a mixed currency would silently
   stop serializing.
+- **The cascade's least-specific tier is `platform`.** One word, `global`, named two unrelated things: the
+  install-wide **binding tier** and the singleton estate **owner** where health and KPIs roll up. The tier is
+  renamed **`platform`** on both axes, at exactly the rung it already occupied, and `default` is documented off
+  the axis entirely ([ADR-0057](/architecture/decisions/#adr-0057-the-cascades-least-specific-tier-is-platform-and-a-default-is-not-a-tier)).
+  An idempotent migration rewrites `owner_kind` on `variable`, `secret`, and `tag_binding` plus `setting_override.scope`,
+  with the check constraints and the partial unique indexes keyed on the value; **no precedence changes, no rows are
+  added, and every existing deployment resolves byte-identically after upgrade**. The settings engine's `code` level
+  becomes **`default`** and its `global` level **`platform`**, the enum rides `make gen` into the OpenAPI, the typed
+  client, and the CLI (`tag setPlatform` / `clearPlatform`, `--owner-kind platform`), and the console renders the tier
+  and a declared default as what they are ("Declared default" carries no origin badge, because nobody set it). The
+  new capability is authorization: a write at the tier now needs **`platform:<action>`** on top of the resource
+  permission, published per route as `x-omniglass-platform-permission` and seeded to `admin` only, so an all-scoped
+  operator runs every site without being able to move the install-wide value under them. **Breaking:** a secret
+  sealed at the old tier cannot be decrypted after upgrade, since the AAD binds `ownerKind|ownerID|name|field`
+  (accepted deliberately, see the ADR). Proven by a testcontainer upgrade test (pre-rename rows resolve identically
+  after the migration, the constraints and unique indexes still hold one row per identity), the settings resolver
+  unit suite on the renamed levels, and an HTTP end-to-end authz test (an all-scoped role without `platform:*` is
+  refused at the tier and permitted below it, and the seeded roles carry the capability exactly where they should).
+  The [cascade](/architecture/cascade/) page moves to
+  `Partial`: its binding chain ships for tags, secrets, and variables, while the template bands, group placement by
+  weight, rule accumulation, and the resolve view stay `Design`.

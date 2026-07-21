@@ -47,7 +47,7 @@ description, and location; the name is read-only); enrolling is a secondary acti
 through `PATCH /nodes/{name}`.
 
 A node is also a **taggable owner**: governed [tags](/architecture/tags/) whose `applies_to` includes
-`node` bind to it (estate-wide, all-scope, `node:update`), and its effective tags are the global layer
+`node` bind to it (estate-wide, all-scope, `node:update`), and its effective tags are the `platform` layer
 plus its own direct bindings, no cascade (a node is not a scope tree). The blade carries a **Tags**
 panel and the list a Tags column and per-key filter facet, the same shape as the component list. **Decommissioning** a node (`DELETE /nodes/{name}`, `node:delete`) is a hard delete that cascades its interfaces, their derived tasks, its node-owned tags and self-telemetry, and its enrollment credential; the component telemetry it collected (owned by the component, not the node) is untouched.
 
@@ -141,8 +141,8 @@ the server derives the events. "We do not re-raise the same event next poll" is 
 
 When the server is unreachable the node **buffers in memory**, bounded; the buffer is **not durable at
 the edge** (the edge is a worker, the durable side is the server). Both the **buffer** (size, shed
-policy) and **retention** are **cascade-resolved** ([cascade](/architecture/cascade/)) with **global
-defaults**, overridable down the tree, so a chatty site gets a bigger buffer and a sensitive class a
+policy) and **retention** are **cascade-resolved** ([cascade](/architecture/cascade/)) with an
+**install-wide `platform` binding**, overridable down the tree, so a chatty site gets a bigger buffer and a sensitive class a
 longer retention, tuned like any other setting rather than per-node flags. When the buffer fills the node
 **sheds oldest metrics first and surfaces it** as a `node.buffer` datapoint (depth, drops), so shedding
 is visible, never silent.
