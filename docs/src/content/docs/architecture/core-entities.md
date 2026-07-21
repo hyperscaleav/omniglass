@@ -13,13 +13,16 @@ nest, and how everything else names one of them as owner. The shapes these entit
 
 :::note[Partial]
 Built today: `component`, `system`, and `location` as name-addressable, variable-depth (`parent_id`)
-trees with full scoped CRUD; a delete is refused while a structural child remains. `system` and
-`location` each keep a `*_type` registry, while a **component's shape comes from its `product`**
+trees with full scoped CRUD; a delete is refused while a structural child remains. Each of the three
+carries an **optional classifier** that declares what its instances expose: a component points at its
+**`product`**, a system conforms to a **`standard`**, a location is typed by its **`location_type`**
 (the `component_type` registry retired,
-[ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property_value)). The
+[ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property_value); the
+`system_type` registry was promoted to `standard`,
+[ADR-0048](/architecture/decisions/#adr-0048-the-standard-blueprint-and-the-template-fork-seed-model)). The
 **exclusive-arc** owner columns are now real, carrying the datapoint sinks, the **`event`** log sink
 (see [The event sink](#the-event-sink-the-first-arc-owned-occurrence) below), and **`property_value`**
-(see [Declared properties](#declared-properties-the-product-contract-and-the-value-store) below);
+(see [Declared properties](#declared-properties-the-classifier-contracts-and-the-value-store) below);
 `alarm` is the remaining arc-owned sink still `Design`. Still `Design`: template pinning, `system_member`
 composition, operational mode, and decommission / purge. See [implementation status](/architecture/status/).
 :::
@@ -36,10 +39,13 @@ Three nouns describe what you operate, plus the edge process that collects for t
 - A **system** is a set of components that work together to do one job. A meeting room is a system.
   So is a classroom, a video wall, a broadcast chain. The word is deliberately universal: a system
   is the unit you actually care about, whatever shape it takes. It pins a `system_template_version`,
-  is located at a location, and is classified by `system_type`.
+  is located at a location, and **conforms to a `standard`**, the blueprint it is built against. The
+  pointer is optional, mirroring `component.product_id`: a one-off system conforms to no standard and
+  simply carries no contract.
 - A **location** ties systems and components to a physical place (campus, building, floor, room).
   It is classified by `location_type` and, unlike component and system, has **no template**: for a
-  location the type is the only shape-definer. The official `location_type` set ships seeded and is
+  location the type is the only shape-definer. A starter `location_type` set ships seeded (and is
+  operator-owned, see [the seed model](#the-seed-model-forked-templates-versus-canonical-catalogs)),
   readable at `GET /types/location` (alphabetically by display name), which is what the type picker on the location form
   lists so a location is classified by a known type rather than a free-typed string. Each type also
   carries an `icon` (a glyph key like `building` or `landmark`) that the console renders as the
@@ -47,7 +53,7 @@ Three nouns describe what you operate, plus the edge process that collects for t
   glance in the tree; an unknown key falls back to `map-pin`. Each type also carries
   `allowed_parent_types` (a set of `location_type` ids and/or the reserved `root` sentinel), the
   placement constraint: empty means unconstrained, a non-empty set is enforced on create and move,
-  and the four official types ship it seeded (`campus={root}`, `building={root,campus}`,
+  and the four shipped types carry it seeded (`campus={root}`, `building={root,campus}`,
   `floor={building,campus}`, `room={floor,building,campus}`).
 - A **node** is the edge process (`omniglass --mode node`) that pulls work, reaches components over
   interfaces, and ships results ([nodes](/architecture/nodes/)). It is structural because it is a
@@ -76,7 +82,7 @@ deployment, no FK.
 | Entity | What it is | Key columns |
 |---|---|---|
 | `component` | a deployed instance (`dsp-boardroom-3`) | name (unique), **parent_id** (self-ref tree), display_name; pins a `component_template_version`; carries **`product_id`** (optional, `on delete restrict`), the source of its shape |
-| `system` | a composition of components / subsystems (the service tree) | name (unique), type, **parent_id** (self-ref tree), display_name; pins a `system_template_version`; carries `location_id`; classified by `system_type` |
+| `system` | a composition of components / subsystems (the service tree) | name (unique), **parent_id** (self-ref tree), display_name; pins a `system_template_version`; carries `location_id`; carries **`standard_id`** (optional), the blueprint it conforms to |
 | `location` | a place tree | name (unique), type, **parent_id** (self-ref tree), display_name; no template (the `location_type` is the only shape-definer) |
 | `node` | the edge process | name (the identity); carries labels, last_heartbeat_at, and its bound credential ([identity and access](/architecture/identity-access/)) |
 
@@ -113,12 +119,28 @@ capabilities), replacing the old `component_type`-as-shape notion. The restrict 
 guard the leaf catalogs deferred, so a product still referenced by a component cannot be deleted (409).
 See the [Products guide](/guides/admin/products/) for the operator surface.
 
-### Declared properties: the product contract and the value store
+### Catalog reference data: `standard`
 
-A product does not only classify, it **declares what its instances expose**. That declaration is
-**`product_property`**, the product's **contract**: one row per property the product declares
-(`product_id`, `property_name` referencing the [`property` catalog](/architecture/variables/), an
-optional `default_value` in jsonb, and a `required` flag), unique per `(product, property)`. Type and
+A **`standard`** (Huddle Room, Classroom, Auditorium, ...) is the **blueprint a system conforms to**: the
+system-side counterpart of `product`. It carries a stable `id` and `display_name`, an optional
+**`parent_standard_id`** (a self-reference: a variant points at its base standard, exactly as
+`parent_product_id` does), and the `official` boolean. It is the promotion of the former `system_type`
+label registry, which had nothing to declare
+([ADR-0048](/architecture/decisions/#adr-0048-the-standard-blueprint-and-the-template-fork-seed-model)).
+
+A **`system`** conforms to a standard through **`system.standard_id`**, and the pointer is **optional**,
+mirroring `component.product_id`: a **one-off system** that matches no blueprint is first-class and simply
+carries no contract. Conformance is **not** a copy: the standard's contract defaults resolve **live** for
+every system that conforms, until that system overrides one. See the
+[Standards guide](/guides/admin/standards/) for the operator surface.
+
+### Declared properties: the classifier contracts and the value store
+
+A classifier does not only classify, it **declares what its instances expose**. Three tables carry that
+declaration, one per classifier, all the same shape: **`product_property`** (a component's), **`standard_property`**
+(a system's), and **`location_type_property`** (a location's). Each is one row per declared property
+(`<classifier>_id`, `property_name` referencing the [`property` catalog](/architecture/variables/), an
+optional `default_value` in jsonb, and a `required` flag), unique per `(classifier, property)`. Type and
 validation are deliberately **not** repeated here: they live on the property, which stays the single
 source for what a name means.
 
@@ -127,21 +149,60 @@ sinks and `event` (`owner_kind` plus `component_id` / `system_id` / `location_id
 CHECK), plus the property name, an `instance` discriminator, a **`provenance`**, and the jsonb `value`.
 Provenance is what makes the fold work: the same table holds a value an operator **declared**, a value a
 device **observed**, a value a rule **calculated**, and a value config **intended**, and only the
-provenance says which. Today the write path fills `owner_kind=component` with `provenance=declared`; the
-rest of the arc and the other three provenances are seats for the producers that come later.
+provenance says which. Today the write path fills `provenance=declared`; the other three provenances are
+seats for the producers that come later.
 
-The read is **`EffectiveProperties`**, one query with two arms:
+The read is **`EffectiveProperties(ownerKind, ownerID)`**, one query with two arms:
 
-- the **contract arm**: every property the component's product declares, resolved to
-  `coalesce(the component's declared value, the contract default)`, marked `from_contract`;
-- the **off-contract arm**: the values set directly on the component for properties its contract does
+- the **contract arm**: every property the instance's classifier declares, resolved to
+  `coalesce(the instance's declared value, the contract default)`, marked `from_contract`;
+- the **off-contract arm**: the values set directly on the instance for properties its contract does
   not declare.
 
-A **productless** component has only the off-contract arm, so it still resolves. This pair replaces the
-retired `field_definition` / `field_value` feature: a "field" was always a property with **declared**
-provenance, and the catalog it hung off is now the product's contract
+**One resolver serves all four owner kinds.** The three classifier/instance pairs differ only in *where*
+the instance names its classifier and *which* table that classifier declares into, so those five
+identifiers (instance table, classifier column, contract table, contract key, arc column) are data in an
+`ownerContract` table and the SQL is written **once**:
+
+| Owner kind | Classifier column | Contract table |
+|---|---|---|
+| `component` | `component.product_id` | `product_property` |
+| `system` | `system.standard_id` | `standard_property` |
+| `location` | `location.location_type` | `location_type_property` |
+| `node` | (none) | (none) |
+
+An instance whose classifier is unset (a **productless** component, a **one-off** system) resolves to its
+off-contract arm alone, and a **node** has no classifier at all, so it always does. Writing the resolution
+three times would let the three drift; writing it once is the primitive-first move
+([ADR-0048](/architecture/decisions/#adr-0048-the-standard-blueprint-and-the-template-fork-seed-model)).
+Every arc is **scope-checked on the write**, so setting a value on a system or location outside your scope
+is a non-disclosing 404, not a silent success.
+
+This pair replaces the retired `field_definition` / `field_value` feature: a "field" was always a property
+with **declared** provenance, and the catalog it hung off is now the classifier's contract
 ([ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property_value)). See
 the [Properties guide](/guides/admin/properties/) for the operator surface.
+
+### The seed model: forked templates versus canonical catalogs
+
+Not everything the binary ships with is the same **kind** of thing, and conflating the two kinds is what
+makes seeded defaults painful. Omniglass splits them:
+
+- **Example content** (a `standard`, a `location_type`) is created by **forking an in-code template**. The
+  fork is **one-time, with no inheritance**: nothing in an estate points back at the template, so the
+  template can be improved in any release without touching a single tenant. What lands is an ordinary
+  **operator-owned** row (`official: false`), freely editable and deletable, and the boot seed installs it
+  **only if absent** (`ON CONFLICT DO NOTHING`). Re-seeding never reasserts over an edit; if it did, an
+  operator's rename of "Huddle Room" would silently revert on the next restart.
+- **Canonical vocabulary** (the [`property` catalog](/architecture/variables/), and later `command` and
+  `event_type`) is the shared namespace a driver maps onto, so it must stay identical install to install.
+  It seeds as `official: true` through an **authoritative upsert** (`ON CONFLICT DO UPDATE`), read-only in
+  the API, so a release can correct it. The classification catalogs (`vendor`, `driver`, `capability`,
+  `product`) sit on that same authoritative path today.
+
+The distinction is worth internalizing: **forking applies to template -> row, never to classifier ->
+instance**. A system does not fork its standard; it **conforms** to it and inherits **live**, so revising a
+standard's default moves every conforming system that has not overridden it.
 
 ## The variable-depth trees
 
@@ -157,8 +218,10 @@ component: component { class: node }
 product: product { class: node }
 location: location { class: node }
 system: system { class: node }
+standard: standard { class: node }
 component -> product: is a (N:1)
 component -> component: parent (tree)
+system -> standard: conforms to (N:1)
 system -> location: located at (N:1)
 system -> system: parent (tree)
 location -> location: parent (tree)

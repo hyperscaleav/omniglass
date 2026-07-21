@@ -25,6 +25,7 @@ import { openInEdit, consumePendingEdit } from "../lib/pendingedit";
 import { ChevronRight, Pencil, Plus, Save, Search, X, resolveIcon } from "../components/icons";
 import Button from "../components/Button";
 import InfoTip from "../components/InfoTip";
+import PropertiesPanel, { propertyResolutionBlade, ownerPropertyBladeId } from "../components/PropertiesPanel";
 import { ROOT_PLACEMENT } from "../lib/types";
 
 // Locations: the place tree on the generic TreeList (campuses, buildings, floors,
@@ -422,6 +423,15 @@ export default function Locations() {
           </div>
         </Show>
 
+        {/* The location type's contract, resolved against this location's own
+            values. The panel batches its writes into the accordion's Save, so a
+            property override commits with the location's core facts. */}
+        <PropertiesPanel
+          location={n().raw.name}
+          edit={edit}
+          onOpen={(property) => ctx.openBlade({ kind: "property-resolution", id: ownerPropertyBladeId({ kind: "location", name: n().raw.name }, property) })}
+        />
+
         <TagAdder kind="location" name={n().raw.name} canUpdate={editing() && can(me.data, "location", "update")} canCreateKey={can(me.data, "tag", "create")} />
 
         <Show when={ctx.full}>
@@ -588,6 +598,7 @@ export default function Locations() {
     onEdit: (n) => { openInEdit(n.raw.name); navigate(`/locations/${encodeURIComponent(n.raw.name)}`); },
     renderCreate: () => <LocationCreate />,
     renderDetail: (n, ctx) => <LocationDetail node={n} ctx={ctx} />,
+    extraBlades: { "property-resolution": propertyResolutionBlade },
   };
 
   return (

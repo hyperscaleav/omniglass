@@ -1,17 +1,20 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { render, screen, waitFor, fireEvent } from "@solidjs/testing-library";
+import { render, screen, waitFor, fireEvent, within } from "@solidjs/testing-library";
 import { Router, Route } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import Locations from "./Locations";
 import { LOCATIONS_KEY, LOCATION_TYPES_KEY, type Location, type LocationType } from "../lib/locations";
+import { ownerPropertiesKey, type EffectiveProperty } from "../lib/owner_properties";
 import { ME_KEY, type Me } from "../lib/auth";
 import { TAGS_KEY, entityTagsKey } from "../lib/tags";
 
 // The Locations page on the shared TreeList in the create-as-route model: New routes
 // to /locations/create (a draft accordion), Save hands off to /locations/<name> in
 // edit; the detail is read-only in view (no in-body mutation control) and editable
-// via the pencil. Data is seeded into the query cache so no server is needed; `>`
-// grants every permission.
+// via the pencil. The detail also carries the Properties panel, which resolves the
+// location type's declared-property contract against the location's own values.
+// Data is seeded into the query cache so no server is needed; `>` grants every
+// permission.
 const me: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
 const hq: Location = { id: "l-hq", name: "hq", display_name: "HQ", location_type: "campus", effective_tags: {} };
 const lab: Location = { id: "l-lab", name: "lab", display_name: "Lab", location_type: "campus", effective_tags: {} };
@@ -20,16 +23,26 @@ const types: LocationType[] = [
   { id: "campus", display_name: "Campus", icon: "landmark", official: true, allowed_parent_types: ["root"] },
   { id: "building", display_name: "Building", icon: "building", official: true, allowed_parent_types: ["root", "campus"] },
 ];
+// The campus type's contract, resolved against hq: one inherited default, plus one
+// value hq sets that no contract declares.
+const hqProperties: EffectiveProperty[] = [
+  { property_name: "site.timezone", display_name: "Time zone", data_type: "string", required: false, is_set: false, from_contract: true, default_value: "UTC", value: "UTC" },
+  { property_name: "site.note", display_name: "Note", data_type: "string", required: false, is_set: true, from_contract: false, set_value: "leased", value: "leased", value_id: "v-note" },
+];
 
 function mount(path: string, extraLocations: Location[] = []) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
-  qc.setQueryData([...LOCATIONS_KEY], [hq, lab, hqB1, ...extraLocations]);
+  const all = [hq, lab, hqB1, ...extraLocations];
+  qc.setQueryData([...LOCATIONS_KEY], all);
   qc.setQueryData([...LOCATION_TYPES_KEY], types);
   qc.setQueryData([...ME_KEY], me);
   qc.setQueryData([...TAGS_KEY], []);
   qc.setQueryData([...entityTagsKey("location", "hq")], []);
   qc.setQueryData([...entityTagsKey("location", "hq-b1")], []);
   for (const l of extraLocations) qc.setQueryData([...entityTagsKey("location", l.name)], []);
+  // Seed every location's effective properties so the detail's panel resolves
+  // from cache (the tests that fake fetch refuse any request they did not expect).
+  for (const l of all) qc.setQueryData([...ownerPropertiesKey("location", l.name)], l.name === "hq" ? hqProperties : []);
   window.history.pushState({}, "", path);
   return render(() => (
     <QueryClientProvider client={qc}>
@@ -175,5 +188,66 @@ describe("Locations create-as-route", () => {
     await waitFor(() => expect(screen.getByText("Technical name")).toBeTruthy());
     // No check button until edit begins: the name is a read-only fact.
     expect(screen.queryByLabelText("Check name")).toBeNull();
+  });
+});
+
+// The Properties panel on the location detail is the shared owner panel, pointed at
+// the location arc: the location type's contract resolved against the location's own
+// values, with anything the location sets that no contract declares grouped apart.
+describe("Locations properties panel", () => {
+  afterEach(() => window.history.pushState({}, "", "/"));
+
+  it("resolves the location type's contract on the detail, off-contract values apart", async () => {
+    mount("/locations/hq");
+    await waitFor(() => expect(screen.getByText("Properties")).toBeTruthy());
+    expect(screen.getByText("the location type contract, resolved")).toBeTruthy();
+    expect(screen.getByText("Time zone")).toBeTruthy();
+    expect(screen.getByText("UTC")).toBeTruthy();
+    const offContract = screen.getByRole("group", { name: /off contract/i });
+    expect(within(offContract).getByText("Note")).toBeTruthy();
+    expect(screen.getByText("set on this location, not declared by its location type")).toBeTruthy();
+  });
+
+  it("says where a location's properties come from when nothing is declared or set", async () => {
+    mount("/locations/lab");
+    await waitFor(() => expect(screen.getByText("Properties")).toBeTruthy());
+    expect(screen.getByText(/declared by its location type/)).toBeTruthy();
+  });
+
+  it("stages an override and flushes it to the location's own property route on Save", async () => {
+    const calls: { method: string; url: string; body: string }[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      let body = "";
+      try { body = await req.clone().text(); } catch { body = ""; }
+      calls.push({ method: req.method, url: req.url, body });
+      if (req.method === "PUT") {
+        return new Response(JSON.stringify({ location: "hq", property_name: "site.timezone", value: "America/Denver", value_id: "v-1" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ ...hq, locations: [hq], properties: hqProperties }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+
+    mount("/locations/hq");
+    await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
+    fireEvent.click(screen.getByText("Edit"));
+
+    const cell = (screen.getByText("Time zone").closest("div") as HTMLElement).parentElement as HTMLElement;
+    fireEvent.click(within(cell).getByRole("checkbox"));
+    fireEvent.input(within(cell).getByRole("textbox"), { target: { value: "America/Denver" } });
+
+    fireEvent.click(screen.getByText("Save changes"));
+
+    await waitFor(() => {
+      const put = calls.find((c) => c.method === "PUT");
+      expect(put).toBeTruthy();
+      expect(put!.url).toContain("/locations/hq/properties/site.timezone");
+      expect(JSON.parse(put!.body)).toEqual({ value: "America/Denver" });
+    });
   });
 });

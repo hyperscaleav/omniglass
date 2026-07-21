@@ -67,7 +67,8 @@ export const navItems: NavItem[] = [
     label: "Catalog", icon: Icons.Layers, hint: "The authored model: templates, types, tags, and rules.",
     children: [
       { label: "Templates", path: "/templates", hint: "Author device shapes: component and system templates, versioned." },
-      { label: "Types", path: "/types", live: true, resource: "type", hint: "Location, system, component, and secret type registries, classified by kind." },
+      { label: "Types", path: "/types", live: true, resource: "type", hint: "The location and secret type registries, classified by kind." },
+      { label: "Standards", path: "/standards", live: true, resource: "standard", hint: "The blueprints a system conforms to, each declaring the properties every conforming system exposes." },
       { label: "Properties", path: "/properties", live: true, resource: "property", hint: "The signal catalog: the canonical properties a datapoint observes and a field declares." },
       { label: "Tags", path: "/tags", live: true, resource: "tag", hint: "The governed tag key vocabulary applied across the inventory." },
       { label: "Vendors", path: "/vendors", live: true, resource: "vendor", hint: "The organizations behind products: manufacturers, integrators, developers." },

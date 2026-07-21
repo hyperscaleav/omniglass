@@ -160,6 +160,7 @@ export default defineConfig({
             { label: 'Drivers', slug: 'guides/admin/drivers' },
             { label: 'Capabilities', slug: 'guides/admin/capabilities' },
             { label: 'Products', slug: 'guides/admin/products' },
+            { label: 'Standards', slug: 'guides/admin/standards' },
           ],
         },
         {

@@ -16,8 +16,9 @@ seed-owned, or **custom**).
 A product is also what a **component** points at: `component.product_id` names the product a component
 **is**, and the product supplies that component's shape (its vendor, driver, and capability set). This
 replaces the old `component_type`-as-shape notion: a component's shape comes from its product now, not
-a separate genus. See [core entities](/architecture/core-entities/) for where the product registry
-sits in the estate model.
+a separate genus. The system side has the same arrangement one level up: a system conforms to a
+[standard](/guides/admin/standards/), which is the blueprint's counterpart of a product. See
+[core entities](/architecture/core-entities/) for where the product registry sits in the estate model.
 
 - **Kind** classifies what the product is: a **device** (a physical unit), an **app** (software), a
   **service** (something hosted), or a **vm** (a virtual machine). It defaults to **device** and is a
@@ -73,7 +74,7 @@ say what the product can **do**, the contract says what it **carries**.
   instance of that product starts with.
 - **Required** means an instance must resolve the property to a value. A component of the product
   cannot save with a required property empty (see
-  [set a property on a component](/guides/admin/properties/#set-a-property-on-a-component)).
+  [set a property on an instance](/guides/admin/properties/#set-a-property-on-an-instance)).
 - **Withdraw** (with `product:delete`, behind a confirm) removes a line from the contract. Components
   **keep** any value they set for it; the value simply reads as **off contract** from then on, since
   nothing declares it any more.

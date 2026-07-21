@@ -21,7 +21,8 @@ live in [API first](/contributing/api-first/); this page is the conventions that
 Built today: the Huma-over-chi API with the OpenAPI 3.1 document generated from the Go structs
 (`make gen`), the AIP-style resource and `:verb` routing, and the problem+json error envelope, proven
 on `/auth`, `/roles`, `/locations`, `/systems`, `/components`, `/nodes`, `/interfaces`, `/tasks`, and the
-per-component reachability read, plus the type registries. The node `:enroll` and `:claim` custom methods
+per-component reachability read, plus the type registries, the `/products` and `/standards` catalogs, and
+the classifier-contract and instance-value property routes. The node `:enroll` and `:claim` custom methods
 are the first `:verb` routes in the wild. Still `Design`:
 the expression `filter` language, idempotency keys, long-running operations over the `action` row, the
 MCP surface, the SSE relay, and the NATS node contract. See [implementation status](/architecture/status/).
@@ -392,45 +393,77 @@ A `product` body is
 `{id, display_name, kind, vendor_id, driver_id, parent_product_id, capabilities, official}`. An unknown
 vendor / driver / parent / capability reference is a 422.
 
-## Properties: a product declares, a component sets
+A **standard** ([core entities](/architecture/core-entities/#catalog-reference-data-standard)) is the
+**blueprint a system conforms to** (Huddle Room, Classroom, Auditorium), the system-side counterpart of a
+product. Because it carries its own declared-property contract it is a **Catalog entity, not a bare type
+registry**: it takes its own `standard:*` resource rather than the shared `type:*`, and its routes live at
+`/standards`, not `/types/system`. The list and read sit on the viewer floor (`standard:read`); the writes
+gate on `standard:create` / `:update` / `:delete` at the admin tier.
 
-A product's **contract** is the set of properties its instances expose
-([core entities](/architecture/core-entities/#declared-properties-the-product-contract-and-the-value-store)).
-It is a **sub-collection of the product**, addressed by property name, not a resource of its own, so the
-line is idempotent: `PUT` declares it or revises it in place. Type and validation are **not** in the body,
-they come from the [property catalog](/guides/admin/properties/).
+- `GET /standards` lists the catalog, ordered alphabetically by display name (`{standards: [standard]}`,
+  `standard:read`).
+- `POST /standards` mints a standard from `{id, display_name, parent_standard_id?}` (201,
+  `standard:create`, admin).
+- `GET /standards/{id}` reads one (`standard:read`).
+- `PATCH /standards/{id}` updates `{display_name?, parent_standard_id?}` (`standard:update`, admin).
+- `DELETE /standards/{id}` removes one (204, `standard:delete`, admin); a standard still referenced by a
+  system is refused (409).
 
-- `GET /products/{id}/properties` lists the contract, ordered by property name
-  (`{properties: [productProperty]}`, `product:read`). A `productProperty` is
-  `{property_name, default_value, required}`: the label and type are the catalog's to serve, so a surface
-  that wants them reads `/properties` alongside.
-- `PUT /products/{id}/properties/{property}` declares the property on the product, or revises the
-  declaration, from `{default_value?, required?}` (`product:update`, admin). An official (seed-owned)
-  product is read-only (422), and an unknown product or property is a 422.
-- `DELETE /products/{id}/properties/{property}` withdraws the line (204, `product:delete`, admin).
-  Instances **keep** any value they set for it, now off contract. A property the product does not
-  declare is a 404; an official product is refused (422).
+A `standard` body is `{id, display_name, parent_standard_id, official}`. An unknown parent is a 422. The
+**shipped** standards are `official: false`, so unlike a seeded product they are fully editable
+([the seed model](/architecture/core-entities/#the-seed-model-forked-templates-versus-canonical-catalogs)).
 
-A component's **values** are the same shape on the other side of the contract, and unlike the product
-routes they are **ABAC-scoped through the component**, so an out-of-read-scope component is a
-non-disclosing **404** and every write is audited.
+## Properties: a classifier declares, an instance sets
 
-- `GET /components/{name}/properties` is the **effective read** (`{properties: [effectiveProperty]}`,
-  `component:read`): every property the component's product declares, resolved to
-  `coalesce(the component's own value, the contract default)`, plus every property set directly on the
-  component that the contract does not declare. Each row carries the catalog's `display_name` and
-  `data_type`, then `value`, `default_value`, `set_value`, `is_set` (the override marker),
-  `from_contract`, `required`, and the `value_id` the surface clears. A **productless** component returns
-  only its off-contract values.
-- `PUT /components/{name}/properties/{property}` sets the component's value from `{value}`
-  (`component:update`). It is **idempotent**: the first set stores the value, a later set replaces it.
-  The property need **not** be on the contract, but it must exist in the catalog (422 otherwise).
-- `DELETE /components/{name}/properties/{property}` clears the component's value (204,
-  `component:update`), so the property falls back to the contract default, or leaves the effective read
-  entirely when it was off contract. Clearing a value the component never set is a 404.
+A **contract** is the set of properties a classifier's instances expose
+([core entities](/architecture/core-entities/#declared-properties-the-classifier-contracts-and-the-value-store)).
+Each contract is a **sub-collection of its classifier**, addressed by property name, not a resource of its
+own, so the line is idempotent: `PUT` declares it or revises it in place. Type and validation are **not**
+in the body, they come from the [property catalog](/guides/admin/properties/). Three classifiers carry a
+contract, on identical route shapes:
 
-Setting a property is the **component's own write** (`component:update`), the same rule tag bindings
-follow: the property catalog governs the vocabulary, the owning entity governs its values.
+- `GET /products/{id}/properties`, `PUT` / `DELETE /products/{id}/properties/{property}`, gated
+  `product:read` / `:update` / `:delete`.
+- `GET /standards/{id}/properties`, `PUT` / `DELETE /standards/{id}/properties/{property}`, gated
+  `standard:read` / `:update` / `:delete`.
+- `GET /location-types/{id}/properties`, `PUT` / `DELETE /location-types/{id}/properties/{property}`,
+  gated `type:read` / `:update` / `:delete` (the location type registry is still a `type` registry, so
+  its contract keeps that permission story). Note the path: the registry CRUD stays at `/types/location`,
+  while its contract hangs off the plural `/location-types` collection.
+
+The list returns `{properties: [contractProperty]}` ordered by property name, each
+`{property_name, default_value, required}`: the label and type are the catalog's to serve, so a surface
+that wants them reads `/properties` alongside. `PUT` takes `{default_value?, required?}`. `DELETE`
+withdraws the line (204); instances **keep** any value they set for it, now off contract. An **official**
+(seed-owned) classifier is read-only (422), an unknown classifier is a 404, and a property the catalog
+does not know is a 422.
+
+An instance's **values** are the same shape on the other side of the contract, and unlike the classifier
+routes they are **ABAC-scoped through the instance**, so an out-of-read-scope instance is a
+non-disclosing **404** and every write is audited. Four owners are addressable, each gated by its own
+entity's permission:
+
+- `GET /components/{name}/properties`, `PUT` / `DELETE .../{property}` (`component:read` / `:update`).
+- `GET /systems/{name}/properties`, `PUT` / `DELETE .../{property}` (`system:read` / `:update`).
+- `GET /locations/{name}/properties`, `PUT` / `DELETE .../{property}` (`location:read` / `:update`).
+
+The `GET` is the **effective read** (`{properties: [effectiveProperty]}`): every property the instance's
+classifier declares (its `product`, its `standard`, its `location_type`), resolved to
+`coalesce(the instance's own value, the contract default)`, plus every property set directly on the
+instance that the contract does not declare. Each row carries the catalog's `display_name` and
+`data_type`, then `value`, `default_value`, `set_value`, `is_set` (the override marker), `from_contract`,
+`required`, and the `value_id` the surface clears. An instance with **no classifier** (a productless
+component, a one-off system) returns only its off-contract values.
+
+`PUT .../{property}` sets the instance's value from `{value}`. It is **idempotent**: the first set stores
+the value, a later set replaces it. The property need **not** be on the contract, but it must exist in
+the catalog (422 otherwise). `DELETE .../{property}` clears it (204), so the property falls back to the
+contract default, or leaves the effective read entirely when it was off contract. Clearing a value the
+instance never set is a 404.
+
+Setting a property is the **owning entity's own write** (`component:update`, `system:update`,
+`location:update`), the same rule tag bindings follow: the property catalog governs the vocabulary, the
+owning entity governs its values.
 
 ## Files: content-addressed bytes behind a handle
 
