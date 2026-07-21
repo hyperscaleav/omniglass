@@ -42,11 +42,12 @@ func TestSystemAPI(t *testing.T) {
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
-	// Owner builds av (root) > av-sub; plus lab (root).
-	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{"name": "av", "system_type": "meeting-room"}, http.StatusCreated)
-	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{"name": "av-sub", "system_type": "huddle-room", "parent": "av"}, http.StatusCreated)
-	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{"name": "lab", "system_type": "classroom"}, http.StatusCreated)
-	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{"name": "bad", "system_type": "galaxy"}, http.StatusUnprocessableEntity)
+	// Owner builds av (root, conforming to a standard) > av-sub; plus lab (root,
+	// a one-off that conforms to none, since a standard is optional).
+	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{"name": "av", "standard_id": "meeting-room"}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{"name": "av-sub", "standard_id": "huddle-room", "parent": "av"}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{"name": "lab"}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{"name": "bad", "standard_id": "galaxy"}, http.StatusUnprocessableEntity)
 
 	// Owner lists all three.
 	var listed struct {
@@ -115,7 +116,7 @@ func TestSystemRenameAndCheckName(t *testing.T) {
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
 	// Seed a system.
-	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{"name": "av-one", "system_type": "meeting-room"}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{"name": "av-one"}, http.StatusCreated)
 
 	type nameCheck struct {
 		Valid     bool   `json:"valid"`
@@ -157,14 +158,14 @@ func TestSystemRenameAndCheckName(t *testing.T) {
 	}
 
 	// Dup rename -> 409.
-	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{"name": "av-two", "system_type": "meeting-room"}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{"name": "av-two"}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPatch, "/systems/av-two", map[string]any{"name": "av-renamed"}, http.StatusConflict)
 
 	// Bad format via PATCH -> 422 (Huma pattern rejects at the edge).
 	c.do(ownerTok, http.MethodPatch, "/systems/av-two", map[string]any{"name": "Bad Name"}, http.StatusUnprocessableEntity)
 
 	// Create-tightening: a bad name is rejected at create too, not just rename.
-	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{"name": "Bad Name", "system_type": "meeting-room"}, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{"name": "Bad Name"}, http.StatusUnprocessableEntity)
 }
 
 // checkName is scope-blind: a caller with system:update scoped to one subtree
@@ -199,10 +200,10 @@ func TestSystemCheckNameScopeBlind(t *testing.T) {
 	var av struct {
 		ID string `json:"id"`
 	}
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/systems", map[string]any{"name": "scope-av", "system_type": "meeting-room"}, http.StatusCreated), &av); err != nil {
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/systems", map[string]any{"name": "scope-av"}, http.StatusCreated), &av); err != nil {
 		t.Fatalf("decode create: %v", err)
 	}
-	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{"name": "scope-lab", "system_type": "meeting-room"}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{"name": "scope-lab"}, http.StatusCreated)
 
 	// A deploy principal (system:update) scoped ONLY to scope-av.
 	deployTok := setupScopedViewer(t, ctx, dsn, "deploy-av", "deploy", "system", av.ID)

@@ -182,17 +182,20 @@ func TestRenderQueryFlags(t *testing.T) {
 }
 
 // TestTypeRegistryCommandNames asserts the type registries (/types/location,
-// /types/system, /types/secret) resolve through nameOverride
+// /types/secret) resolve through nameOverride
 // to `type <kind> <verb>`, not the leaf-noun heuristic's `<kind> <verb>` which
-// would collide with the base entity commands.
+// would collide with the base entity commands. The standard catalog is not one
+// of them: it is a top-level collection (/standards), so the heuristic names it
+// `standard <verb>` with no override and no collision.
 func TestTypeRegistryCommandNames(t *testing.T) {
 	cases := []struct {
 		opID, path, method string
 		want                []string
 	}{
 		{"create-location-type", "/types/location", "post", []string{"type", "location", "create"}},
-		{"delete-system-type", "/types/system/{id}", "delete", []string{"type", "system", "delete"}},
+		{"delete-location-type", "/types/location/{id}", "delete", []string{"type", "location", "delete"}},
 		{"list-secret-types", "/types/secret", "get", []string{"type", "secret", "list"}},
+		{"delete-standard", "/standards/{id}", "delete", []string{"standard", "delete"}},
 	}
 	for _, tc := range cases {
 		got := commandWords(tc.path, tc.method, tc.opID)

@@ -249,6 +249,7 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 
 	registerLocationRoutes(api, a, gw)
 	registerSystemRoutes(api, a, gw)
+	registerStandardRoutes(api, a, gw)
 	registerComponentRoutes(api, a, gw)
 	registerVendorRoutes(api, a, gw)
 	registerDriverRoutes(api, a, gw)

@@ -23,10 +23,10 @@ func TestRenameSystem(t *testing.T) {
 	}
 
 	// A system with a child, so we can prove the UUID FK survives the rename.
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "av-root", SystemType: "meeting-room"}, all); err != nil {
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "av-root"}, all); err != nil {
 		t.Fatal(err)
 	}
-	child, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "av-child", SystemType: "meeting-room", ParentName: strptr("av-root")}, all)
+	child, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "av-child", ParentName: strptr("av-root")}, all)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,7 +53,7 @@ func TestRenameSystem(t *testing.T) {
 	_ = child
 
 	// The old name is free; a create can reuse it.
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "av-root", SystemType: "meeting-room"}, all); err != nil {
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "av-root"}, all); err != nil {
 		t.Fatalf("old name should be free after rename: %v", err)
 	}
 
@@ -69,7 +69,7 @@ func TestRenameSystem(t *testing.T) {
 	}
 
 	// Create-tightening: the shared validator gates create too, not just rename.
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "Bad Name", SystemType: "meeting-room"}, all); !errors.Is(err, storage.ErrInvalidName) {
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "Bad Name"}, all); !errors.Is(err, storage.ErrInvalidName) {
 		t.Fatalf("bad-format create err = %v, want ErrInvalidName", err)
 	}
 

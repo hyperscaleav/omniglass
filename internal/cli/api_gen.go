@@ -2692,6 +2692,112 @@ func generatedCommands() []*cobra.Command {
 	}
 	{
 		parent := &cobra.Command{
+			Use:   "standard",
+			Short: "Commands for the standard resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			var fDisplayName string
+			var fId string
+			var fParentStandardId string
+			cmd := &cobra.Command{
+				Use:     "create",
+				Short:   "Create a standard",
+				Long:    "Creates a custom (non-official) standard, optionally as a variant of another. Gated by standard:create.",
+				Example: "  omniglass standard create --display-name display_name --id id",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/standards")
+					body := map[string]any{}
+					if cmd.Flags().Changed("display-name") {
+						body["display_name"] = fDisplayName
+					}
+					if cmd.Flags().Changed("id") {
+						body["id"] = fId
+					}
+					if cmd.Flags().Changed("parent-standard-id") {
+						body["parent_standard_id"] = fParentStandardId
+					}
+					return runAPICommand(cmd, "POST", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
+			_ = cmd.MarkFlagRequired("display-name")
+			cmd.Flags().StringVar(&fId, "id", "", "Globally unique standard id")
+			_ = cmd.MarkFlagRequired("id")
+			cmd.Flags().StringVar(&fParentStandardId, "parent-standard-id", "", "A standard this one is a variant of")
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "delete <id>",
+				Short:   "Delete a standard",
+				Long:    "Deletes a custom standard, refused if official (422) or still referenced by a system (409). Gated by standard:delete.",
+				Example: "  omniglass standard delete <id>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/standards/%s", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "DELETE", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "get <id>",
+				Short:   "Get a standard",
+				Long:    "Fetches a standard by id. Gated by standard:read.",
+				Example: "  omniglass standard get <id>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/standards/%s", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "list",
+				Short:   "List standards",
+				Long:    "Lists the standard catalog, ordered alphabetically by display name. A standard is the blueprint a system conforms to. Gated by standard:read.",
+				Example: "  omniglass standard list",
+				Args:    cobra.ExactArgs(0),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/standards")
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			var fDisplayName string
+			var fParentStandardId string
+			cmd := &cobra.Command{
+				Use:     "update <id>",
+				Short:   "Update a standard",
+				Long:    "Patches a custom standard's display_name or parent. Official standards are read-only (422). Gated by standard:update.",
+				Example: "  omniglass standard update <id>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/standards/%s", url.PathEscape(args[0]))
+					body := map[string]any{}
+					if cmd.Flags().Changed("display-name") {
+						body["display_name"] = fDisplayName
+					}
+					if cmd.Flags().Changed("parent-standard-id") {
+						body["parent_standard_id"] = fParentStandardId
+					}
+					return runAPICommand(cmd, "PATCH", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
+			cmd.Flags().StringVar(&fParentStandardId, "parent-standard-id", "", "")
+			return cmd
+		}())
+		roots = append(roots, parent)
+	}
+	{
+		parent := &cobra.Command{
 			Use:   "statu",
 			Short: "Commands for the statu resource",
 		}
@@ -2742,12 +2848,12 @@ func generatedCommands() []*cobra.Command {
 			var fLocation string
 			var fName string
 			var fParent string
-			var fSystemType string
+			var fStandardId string
 			cmd := &cobra.Command{
 				Use:     "create",
 				Short:   "Create a system",
 				Long:    "Creates a system, optionally under a parent (a root needs an all-scoped grant) and at a location. Gated by system:create.",
-				Example: "  omniglass system create --name name --system-type system_type",
+				Example: "  omniglass system create --name name",
 				Args:    cobra.ExactArgs(0),
 				RunE: func(cmd *cobra.Command, args []string) error {
 					path := fmt.Sprintf("/api/v1/systems")
@@ -2764,8 +2870,8 @@ func generatedCommands() []*cobra.Command {
 					if cmd.Flags().Changed("parent") {
 						body["parent"] = fParent
 					}
-					if cmd.Flags().Changed("system-type") {
-						body["system_type"] = fSystemType
+					if cmd.Flags().Changed("standard-id") {
+						body["standard_id"] = fStandardId
 					}
 					return runAPICommand(cmd, "POST", path, body)
 				},
@@ -2775,8 +2881,7 @@ func generatedCommands() []*cobra.Command {
 			cmd.Flags().StringVar(&fName, "name", "", "Globally unique name (the address; lowercase letters, digits, hyphens)")
 			_ = cmd.MarkFlagRequired("name")
 			cmd.Flags().StringVar(&fParent, "parent", "", "Parent system name; omit for a root system")
-			cmd.Flags().StringVar(&fSystemType, "system-type", "", "A system_type id")
-			_ = cmd.MarkFlagRequired("system-type")
+			cmd.Flags().StringVar(&fStandardId, "standard-id", "", "A standard id; omit for a one-off system that conforms to none")
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
@@ -2886,11 +2991,11 @@ func generatedCommands() []*cobra.Command {
 		parent.AddCommand(func() *cobra.Command {
 			var fDisplayName string
 			var fName string
-			var fSystemType string
+			var fStandardId string
 			cmd := &cobra.Command{
 				Use:     "update <name>",
 				Short:   "Update a system",
-				Long:    "Patches a system's display_name or system_type. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
+				Long:    "Patches a system's display_name or standard. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
 				Example: "  omniglass system update <name>",
 				Args:    cobra.ExactArgs(1),
 				RunE: func(cmd *cobra.Command, args []string) error {
@@ -2902,15 +3007,15 @@ func generatedCommands() []*cobra.Command {
 					if cmd.Flags().Changed("name") {
 						body["name"] = fName
 					}
-					if cmd.Flags().Changed("system-type") {
-						body["system_type"] = fSystemType
+					if cmd.Flags().Changed("standard-id") {
+						body["standard_id"] = fStandardId
 					}
 					return runAPICommand(cmd, "PATCH", path, body)
 				},
 			}
 			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
 			cmd.Flags().StringVar(&fName, "name", "", "A new globally unique technical name (rename)")
-			cmd.Flags().StringVar(&fSystemType, "system-type", "", "")
+			cmd.Flags().StringVar(&fStandardId, "standard-id", "", "")
 			return cmd
 		}())
 		roots = append(roots, parent)
@@ -3212,81 +3317,6 @@ func generatedCommands() []*cobra.Command {
 					return runAPICommand(cmd, "GET", path, nil)
 				},
 			}
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			var fDisplayName string
-			var fId string
-			cmd := &cobra.Command{
-				Use:     "create",
-				Short:   "Create a system type",
-				Long:    "Creates a custom (non-official) system_type. Gated by type:create.",
-				Example: "  omniglass type system create --display-name display_name --id id",
-				Args:    cobra.ExactArgs(0),
-				RunE: func(cmd *cobra.Command, args []string) error {
-					path := fmt.Sprintf("/api/v1/types/system")
-					body := map[string]any{}
-					if cmd.Flags().Changed("display-name") {
-						body["display_name"] = fDisplayName
-					}
-					if cmd.Flags().Changed("id") {
-						body["id"] = fId
-					}
-					return runAPICommand(cmd, "POST", path, body)
-				},
-			}
-			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
-			_ = cmd.MarkFlagRequired("display-name")
-			cmd.Flags().StringVar(&fId, "id", "", "Globally unique type id")
-			_ = cmd.MarkFlagRequired("id")
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := &cobra.Command{
-				Use:     "delete <id>",
-				Short:   "Delete a system type",
-				Long:    "Deletes a custom system_type, refused if official (422) or referenced by a system (409). Gated by type:delete.",
-				Example: "  omniglass type system delete <id>",
-				Args:    cobra.ExactArgs(1),
-				RunE: func(cmd *cobra.Command, args []string) error {
-					path := fmt.Sprintf("/api/v1/types/system/%s", url.PathEscape(args[0]))
-					return runAPICommand(cmd, "DELETE", path, nil)
-				},
-			}
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := &cobra.Command{
-				Use:     "list",
-				Short:   "List system types",
-				Long:    "Lists the system_type registry, ordered alphabetically by display name. Populates the type picker on the system form. Gated by type:read.",
-				Example: "  omniglass type system list",
-				Args:    cobra.ExactArgs(0),
-				RunE: func(cmd *cobra.Command, args []string) error {
-					path := fmt.Sprintf("/api/v1/types/system")
-					return runAPICommand(cmd, "GET", path, nil)
-				},
-			}
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			var fDisplayName string
-			cmd := &cobra.Command{
-				Use:     "update <id>",
-				Short:   "Update a system type",
-				Long:    "Patches a custom system_type's display_name. Official types are read-only (422). Gated by type:update.",
-				Example: "  omniglass type system update <id>",
-				Args:    cobra.ExactArgs(1),
-				RunE: func(cmd *cobra.Command, args []string) error {
-					path := fmt.Sprintf("/api/v1/types/system/%s", url.PathEscape(args[0]))
-					body := map[string]any{}
-					if cmd.Flags().Changed("display-name") {
-						body["display_name"] = fDisplayName
-					}
-					return runAPICommand(cmd, "PATCH", path, body)
-				},
-			}
-			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
 			return cmd
 		}())
 		roots = append(roots, parent)

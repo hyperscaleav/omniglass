@@ -2455,6 +2455,101 @@ Example:
 omniglass setting update <namespace>
 ```
 
+## `omniglass standard`
+
+Commands for the standard resource
+
+### `omniglass standard create`
+
+Create a standard
+
+```
+omniglass standard create [flags]
+```
+
+Creates a custom (non-official) standard, optionally as a variant of another. Gated by standard:create.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--display-name` | string | (none) |  |
+| `--id` | string | (none) | Globally unique standard id |
+| `--parent-standard-id` | string | (none) | A standard this one is a variant of |
+
+Example:
+
+```sh
+omniglass standard create --display-name display_name --id id
+```
+
+### `omniglass standard delete`
+
+Delete a standard
+
+```
+omniglass standard delete <id>
+```
+
+Deletes a custom standard, refused if official (422) or still referenced by a system (409). Gated by standard:delete.
+
+Example:
+
+```sh
+omniglass standard delete <id>
+```
+
+### `omniglass standard get`
+
+Get a standard
+
+```
+omniglass standard get <id>
+```
+
+Fetches a standard by id. Gated by standard:read.
+
+Example:
+
+```sh
+omniglass standard get <id>
+```
+
+### `omniglass standard list`
+
+List standards
+
+```
+omniglass standard list
+```
+
+Lists the standard catalog, ordered alphabetically by display name. A standard is the blueprint a system conforms to. Gated by standard:read.
+
+Example:
+
+```sh
+omniglass standard list
+```
+
+### `omniglass standard update`
+
+Update a standard
+
+```
+omniglass standard update <id> [flags]
+```
+
+Patches a custom standard's display_name or parent. Official standards are read-only (422). Gated by standard:update.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--display-name` | string | (none) |  |
+| `--parent-standard-id` | string | (none) |  |
+
+Example:
+
+```sh
+omniglass standard update <id>
+```
+
 ## `omniglass statu`
 
 Commands for the statu resource
@@ -2515,12 +2610,12 @@ Creates a system, optionally under a parent (a root needs an all-scoped grant) a
 | `--location` | string | (none) | Location name this system is placed at |
 | `--name` | string | (none) | Globally unique name (the address; lowercase letters, digits, hyphens) |
 | `--parent` | string | (none) | Parent system name; omit for a root system |
-| `--system-type` | string | (none) | A system_type id |
+| `--standard-id` | string | (none) | A standard id; omit for a one-off system that conforms to none |
 
 Example:
 
 ```sh
-omniglass system create --name name --system-type system_type
+omniglass system create --name name
 ```
 
 ### `omniglass system delete`
@@ -2636,13 +2731,13 @@ Update a system
 omniglass system update <name> [flags]
 ```
 
-Patches a system's display_name or system_type. Gated by system:update; read and update scopes drive the 404 versus 403 split.
+Patches a system's display_name or standard. Gated by system:update; read and update scopes drive the 404 versus 403 split.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--display-name` | string | (none) |  |
 | `--name` | string | (none) | A new globally unique technical name (rename) |
-| `--system-type` | string | (none) |  |
+| `--standard-id` | string | (none) |  |
 
 Example:
 
@@ -2861,27 +2956,6 @@ Example:
 omniglass type location create --display-name display_name --id id
 ```
 
-### `omniglass type create`
-
-Create a system type
-
-```
-omniglass type create [flags]
-```
-
-Creates a custom (non-official) system_type. Gated by type:create.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--display-name` | string | (none) |  |
-| `--id` | string | (none) | Globally unique type id |
-
-Example:
-
-```sh
-omniglass type system create --display-name display_name --id id
-```
-
 ### `omniglass type delete`
 
 Delete a location type
@@ -2896,22 +2970,6 @@ Example:
 
 ```sh
 omniglass type location delete <id>
-```
-
-### `omniglass type delete`
-
-Delete a system type
-
-```
-omniglass type delete <id>
-```
-
-Deletes a custom system_type, refused if official (422) or referenced by a system (409). Gated by type:delete.
-
-Example:
-
-```sh
-omniglass type system delete <id>
 ```
 
 ### `omniglass type list`
@@ -2946,22 +3004,6 @@ Example:
 omniglass type secret list
 ```
 
-### `omniglass type list`
-
-List system types
-
-```
-omniglass type list
-```
-
-Lists the system_type registry, ordered alphabetically by display name. Populates the type picker on the system form. Gated by type:read.
-
-Example:
-
-```sh
-omniglass type system list
-```
-
 ### `omniglass type update`
 
 Update a location type
@@ -2982,26 +3024,6 @@ Example:
 
 ```sh
 omniglass type location update <id>
-```
-
-### `omniglass type update`
-
-Update a system type
-
-```
-omniglass type update <id> [flags]
-```
-
-Patches a custom system_type's display_name. Official types are read-only (422). Gated by type:update.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--display-name` | string | (none) |  |
-
-Example:
-
-```sh
-omniglass type system update <id>
 ```
 
 ## `omniglass variable`

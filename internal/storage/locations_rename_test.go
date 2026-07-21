@@ -28,7 +28,7 @@ func TestRenameLocation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "av-placed", SystemType: "meeting-room", LocationName: strptr("hq-root")}, all); err != nil {
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "av-placed", LocationName: strptr("hq-root")}, all); err != nil {
 		t.Fatal(err)
 	}
 

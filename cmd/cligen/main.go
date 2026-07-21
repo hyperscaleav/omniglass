@@ -208,10 +208,6 @@ var nameOverride = map[string]([]string){
 	"create-location-type":  {"type", "location", "create"},
 	"update-location-type":  {"type", "location", "update"},
 	"delete-location-type":  {"type", "location", "delete"},
-	"list-system-types":     {"type", "system", "list"},
-	"create-system-type":    {"type", "system", "create"},
-	"update-system-type":    {"type", "system", "update"},
-	"delete-system-type":    {"type", "system", "delete"},
 	"list-secret-types":     {"type", "secret", "list"},
 	// The product contract and the component effective read are sub-collections
 	// whose leaf noun ("properties") is the property catalog's own, so the

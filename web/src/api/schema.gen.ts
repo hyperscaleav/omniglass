@@ -1880,6 +1880,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/standards": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List standards
+         * @description Lists the standard catalog, ordered alphabetically by display name. A standard is the blueprint a system conforms to. Gated by standard:read.
+         */
+        get: operations["list-standards"];
+        put?: never;
+        /**
+         * Create a standard
+         * @description Creates a custom (non-official) standard, optionally as a variant of another. Gated by standard:create.
+         */
+        post: operations["create-standard"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/standards/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a standard
+         * @description Fetches a standard by id. Gated by standard:read.
+         */
+        get: operations["get-standard"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a standard
+         * @description Deletes a custom standard, refused if official (422) or still referenced by a system (409). Gated by standard:delete.
+         */
+        delete: operations["delete-standard"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a standard
+         * @description Patches a custom standard's display_name or parent. Official standards are read-only (422). Gated by standard:update.
+         */
+        patch: operations["update-standard"];
+        trace?: never;
+    };
     "/systems": {
         parameters: {
             query?: never;
@@ -1927,7 +1979,7 @@ export interface paths {
         head?: never;
         /**
          * Update a system
-         * @description Patches a system's display_name or system_type. Gated by system:update; read and update scopes drive the 404 versus 403 split.
+         * @description Patches a system's display_name or standard. Gated by system:update; read and update scopes drive the 404 versus 403 split.
          */
         patch: operations["update-system"];
         trace?: never;
@@ -2226,54 +2278,6 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
-        trace?: never;
-    };
-    "/types/system": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List system types
-         * @description Lists the system_type registry, ordered alphabetically by display name. Populates the type picker on the system form. Gated by type:read.
-         */
-        get: operations["list-system-types"];
-        put?: never;
-        /**
-         * Create a system type
-         * @description Creates a custom (non-official) system_type. Gated by type:create.
-         */
-        post: operations["create-system-type"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/types/system/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Delete a system type
-         * @description Deletes a custom system_type, refused if official (422) or referenced by a system (409). Gated by type:delete.
-         */
-        delete: operations["delete-system-type"];
-        options?: never;
-        head?: never;
-        /**
-         * Update a system type
-         * @description Patches a custom system_type's display_name. Official types are read-only (422). Gated by type:update.
-         */
-        patch: operations["update-system-type"];
         trace?: never;
     };
     "/variables": {
@@ -2826,6 +2830,19 @@ export interface components {
             /** @description A secret_type id */
             secret_type: string;
         };
+        CreateStandardInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateStandardInputBody.json
+             */
+            readonly $schema?: string;
+            display_name: string;
+            /** @description Globally unique standard id */
+            id: string;
+            /** @description A standard this one is a variant of */
+            parent_standard_id?: string;
+        };
         CreateSystemInputBody: {
             /**
              * Format: uri
@@ -2840,19 +2857,8 @@ export interface components {
             name: string;
             /** @description Parent system name; omit for a root system */
             parent?: string;
-            /** @description A system_type id */
-            system_type: string;
-        };
-        CreateSystemTypeInputBody: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/CreateSystemTypeInputBody.json
-             */
-            readonly $schema?: string;
-            display_name: string;
-            /** @description Globally unique type id */
-            id: string;
+            /** @description A standard id; omit for a one-off system that conforms to none */
+            standard_id?: string;
         };
         CreateTagInputBody: {
             /**
@@ -3441,14 +3447,14 @@ export interface components {
             readonly $schema?: string;
             secrets: components["schemas"]["SecretBody"][] | null;
         };
-        ListSystemTypesOutputBody: {
+        ListStandardsOutputBody: {
             /**
              * Format: uri
              * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/ListSystemTypesOutputBody.json
+             * @example /api/v1/schemas/ListStandardsOutputBody.json
              */
             readonly $schema?: string;
-            system_types: components["schemas"]["SystemTypeBody"][] | null;
+            standards: components["schemas"]["StandardBody"][] | null;
         };
         ListSystemsOutputBody: {
             /**
@@ -3959,6 +3965,18 @@ export interface components {
             };
             values: components["schemas"]["Settings"];
         };
+        StandardBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/StandardBody.json
+             */
+            readonly $schema?: string;
+            display_name: string;
+            id: string;
+            official: boolean;
+            parent_standard_id?: string;
+        };
         SvcBody: {
             label: string;
         };
@@ -3980,18 +3998,8 @@ export interface components {
             location_id?: string;
             name: string;
             parent_id?: string;
-            system_type: string;
-        };
-        SystemTypeBody: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/SystemTypeBody.json
-             */
-            readonly $schema?: string;
-            display_name: string;
-            id: string;
-            official: boolean;
+            /** @description The standard this system conforms to; omitted for a one-off system */
+            standard_id?: string;
         };
         TagBindingBody: {
             /**
@@ -4223,6 +4231,16 @@ export interface components {
                 [key: string]: string;
             };
         };
+        UpdateStandardInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/UpdateStandardInputBody.json
+             */
+            readonly $schema?: string;
+            display_name?: string;
+            parent_standard_id?: string;
+        };
         UpdateSystemInputBody: {
             /**
              * Format: uri
@@ -4233,16 +4251,7 @@ export interface components {
             display_name?: string;
             /** @description A new globally unique technical name (rename) */
             name?: string;
-            system_type?: string;
-        };
-        UpdateSystemTypeInputBody: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/UpdateSystemTypeInputBody.json
-             */
-            readonly $schema?: string;
-            display_name?: string;
+            standard_id?: string;
         };
         UpdateTagInputBody: {
             /**
@@ -8510,6 +8519,165 @@ export interface operations {
             };
         };
     };
+    "list-standards": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListStandardsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-standard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateStandardInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StandardBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-standard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The standard id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StandardBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-standard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The standard id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "update-standard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateStandardInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StandardBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "list-systems": {
         parameters: {
             query?: never;
@@ -9234,133 +9402,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ListSecretTypesOutputBody"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "list-system-types": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ListSystemTypesOutputBody"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "create-system-type": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateSystemTypeInputBody"];
-            };
-        };
-        responses: {
-            /** @description Created */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SystemTypeBody"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "delete-system-type": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The system_type id */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description No Content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "update-system-type": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateSystemTypeInputBody"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SystemTypeBody"];
                 };
             };
             /** @description Error */

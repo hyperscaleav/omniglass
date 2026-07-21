@@ -810,6 +810,30 @@ components:
         - owner_kind
         - fields
       type: object
+    CreateStandardInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateStandardInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        display_name:
+          minLength: 1
+          type: string
+        id:
+          description: Globally unique standard id
+          minLength: 1
+          type: string
+        parent_standard_id:
+          description: A standard this one is a variant of
+          type: string
+      required:
+        - id
+        - display_name
+      type: object
     CreateSystemInputBody:
       additionalProperties: false
       properties:
@@ -834,34 +858,11 @@ components:
         parent:
           description: Parent system name; omit for a root system
           type: string
-        system_type:
-          description: A system_type id
-          minLength: 1
+        standard_id:
+          description: A standard id; omit for a one-off system that conforms to none
           type: string
       required:
         - name
-        - system_type
-      type: object
-    CreateSystemTypeInputBody:
-      additionalProperties: false
-      properties:
-        $schema:
-          description: A URL to the JSON Schema for this object.
-          examples:
-            - /api/v1/schemas/CreateSystemTypeInputBody.json
-          format: uri
-          readOnly: true
-          type: string
-        display_name:
-          minLength: 1
-          type: string
-        id:
-          description: Globally unique type id
-          minLength: 1
-          type: string
-      required:
-        - id
-        - display_name
       type: object
     CreateTagInputBody:
       additionalProperties: false
@@ -1919,24 +1920,24 @@ components:
       required:
         - secrets
       type: object
-    ListSystemTypesOutputBody:
+    ListStandardsOutputBody:
       additionalProperties: false
       properties:
         $schema:
           description: A URL to the JSON Schema for this object.
           examples:
-            - /api/v1/schemas/ListSystemTypesOutputBody.json
+            - /api/v1/schemas/ListStandardsOutputBody.json
           format: uri
           readOnly: true
           type: string
-        system_types:
+        standards:
           items:
-            $ref: "#/components/schemas/SystemTypeBody"
+            $ref: "#/components/schemas/StandardBody"
           type:
             - array
             - "null"
       required:
-        - system_types
+        - standards
       type: object
     ListSystemsOutputBody:
       additionalProperties: false
@@ -2940,6 +2941,29 @@ components:
         - sources
         - locks
       type: object
+    StandardBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/StandardBody.json
+          format: uri
+          readOnly: true
+          type: string
+        display_name:
+          type: string
+        id:
+          type: string
+        official:
+          type: boolean
+        parent_standard_id:
+          type: string
+      required:
+        - id
+        - display_name
+        - official
+      type: object
     SvcBody:
       additionalProperties: false
       properties:
@@ -2980,33 +3004,12 @@ components:
           type: string
         parent_id:
           type: string
-        system_type:
+        standard_id:
+          description: The standard this system conforms to; omitted for a one-off system
           type: string
       required:
         - id
         - name
-        - system_type
-      type: object
-    SystemTypeBody:
-      additionalProperties: false
-      properties:
-        $schema:
-          description: A URL to the JSON Schema for this object.
-          examples:
-            - /api/v1/schemas/SystemTypeBody.json
-          format: uri
-          readOnly: true
-          type: string
-        display_name:
-          type: string
-        id:
-          type: string
-        official:
-          type: boolean
-      required:
-        - id
-        - display_name
-        - official
       type: object
     TagBindingBody:
       additionalProperties: false
@@ -3401,6 +3404,21 @@ components:
       required:
         - fields
       type: object
+    UpdateStandardInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/UpdateStandardInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        display_name:
+          type: string
+        parent_standard_id:
+          type: string
+      type: object
     UpdateSystemInputBody:
       additionalProperties: false
       properties:
@@ -3419,20 +3437,7 @@ components:
           minLength: 1
           pattern: ^[a-z0-9][a-z0-9-]*$
           type: string
-        system_type:
-          type: string
-      type: object
-    UpdateSystemTypeInputBody:
-      additionalProperties: false
-      properties:
-        $schema:
-          description: A URL to the JSON Schema for this object.
-          examples:
-            - /api/v1/schemas/UpdateSystemTypeInputBody.json
-          format: uri
-          readOnly: true
-          type: string
-        display_name:
+        standard_id:
           type: string
       type: object
     UpdateTagInputBody:
@@ -6885,6 +6890,128 @@ paths:
           description: Error
       summary: Restore all settings to defaults
       x-omniglass-permission: settings:update
+  /standards:
+    get:
+      description: Lists the standard catalog, ordered alphabetically by display name. A standard is the blueprint a system conforms to. Gated by standard:read.
+      operationId: list-standards
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListStandardsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List standards
+      x-omniglass-permission: standard:read
+    post:
+      description: Creates a custom (non-official) standard, optionally as a variant of another. Gated by standard:create.
+      operationId: create-standard
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateStandardInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Create a standard
+      x-omniglass-permission: standard:create
+  /standards/{id}:
+    delete:
+      description: Deletes a custom standard, refused if official (422) or still referenced by a system (409). Gated by standard:delete.
+      operationId: delete-standard
+      parameters:
+        - description: The standard id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The standard id
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Delete a standard
+      x-omniglass-permission: standard:delete
+    get:
+      description: Fetches a standard by id. Gated by standard:read.
+      operationId: get-standard
+      parameters:
+        - description: The standard id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The standard id
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get a standard
+      x-omniglass-permission: standard:read
+    patch:
+      description: Patches a custom standard's display_name or parent. Official standards are read-only (422). Gated by standard:update.
+      operationId: update-standard
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateStandardInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Update a standard
+      x-omniglass-permission: standard:update
   /systems:
     get:
       description: Lists the systems the caller may read, each filtered to its scope subtree. Gated by system:read.
@@ -6978,7 +7105,7 @@ paths:
       summary: Get a system
       x-omniglass-permission: system:read
     patch:
-      description: Patches a system's display_name or system_type. Gated by system:update; read and update scopes drive the 404 versus 403 split.
+      description: Patches a system's display_name or standard. Gated by system:update; read and update scopes drive the 404 versus 403 split.
       operationId: update-system
       parameters:
         - in: path
@@ -7463,102 +7590,6 @@ paths:
           description: Error
       summary: List secret types
       x-omniglass-permission: secret:read
-  /types/system:
-    get:
-      description: Lists the system_type registry, ordered alphabetically by display name. Populates the type picker on the system form. Gated by type:read.
-      operationId: list-system-types
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ListSystemTypesOutputBody"
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: List system types
-      x-omniglass-permission: type:read
-    post:
-      description: Creates a custom (non-official) system_type. Gated by type:create.
-      operationId: create-system-type
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateSystemTypeInputBody"
-        required: true
-      responses:
-        "201":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/SystemTypeBody"
-          description: Created
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Create a system type
-      x-omniglass-permission: type:create
-  /types/system/{id}:
-    delete:
-      description: Deletes a custom system_type, refused if official (422) or referenced by a system (409). Gated by type:delete.
-      operationId: delete-system-type
-      parameters:
-        - description: The system_type id
-          in: path
-          name: id
-          required: true
-          schema:
-            description: The system_type id
-            type: string
-      responses:
-        "204":
-          description: No Content
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Delete a system type
-      x-omniglass-permission: type:delete
-    patch:
-      description: Patches a custom system_type's display_name. Official types are read-only (422). Gated by type:update.
-      operationId: update-system-type
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UpdateSystemTypeInputBody"
-        required: true
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/SystemTypeBody"
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Update a system type
-      x-omniglass-permission: type:update
   /variables:
     get:
       description: Lists every variable. Requires an all-scope read. Gated by variable:read.

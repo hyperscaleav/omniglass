@@ -47,11 +47,21 @@ func TestLocationTypeCRUD(t *testing.T) {
 		t.Fatalf("update: %v", err)
 	}
 
-	// Official rows are read-only.
-	if _, err := gw.UpdateLocationType(ctx, "", "campus", storage.LocationTypePatch{DisplayName: &name}); !errors.Is(err, storage.ErrTypeOfficial) {
+	// A shipped location type is operator-owned example content: the estate shapes
+	// its own place vocabulary, so it is editable.
+	if _, err := gw.UpdateLocationType(ctx, "", "campus", storage.LocationTypePatch{DisplayName: &name}); err != nil {
+		t.Fatalf("update a shipped location type: %v, want it editable", err)
+	}
+
+	// The official read-only guard still stands for a row that IS official, so
+	// prove the mechanism on one.
+	if err := gw.UpsertLocationType(ctx, storage.LocationType{ID: "canon", Official: true, DisplayName: "Canonical"}); err != nil {
+		t.Fatalf("seed an official location type: %v", err)
+	}
+	if _, err := gw.UpdateLocationType(ctx, "", "canon", storage.LocationTypePatch{DisplayName: &name}); !errors.Is(err, storage.ErrTypeOfficial) {
 		t.Fatalf("update official err = %v, want ErrTypeOfficial", err)
 	}
-	if err := gw.DeleteLocationType(ctx, "", "campus"); !errors.Is(err, storage.ErrTypeOfficial) {
+	if err := gw.DeleteLocationType(ctx, "", "canon"); !errors.Is(err, storage.ErrTypeOfficial) {
 		t.Fatalf("delete official err = %v, want ErrTypeOfficial", err)
 	}
 

@@ -205,7 +205,7 @@ func TestSecretCascadeResolve(t *testing.T) {
 	mustLoc(t, gw, "campus", "campus", nil)
 	mustLoc(t, gw, "bldg", "building", strptr("campus"))
 	mustLoc(t, gw, "room", "room", strptr("bldg"))
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "sys", SystemType: "meeting-room"}, all); err != nil {
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "sys"}, all); err != nil {
 		t.Fatalf("system: %v", err)
 	}
 	comp, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{

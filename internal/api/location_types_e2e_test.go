@@ -64,9 +64,11 @@ func TestLocationTypesAPI(t *testing.T) {
 			t.Fatalf("location_types order = %v, want %v", gotIDs, want)
 		}
 	}
+	// A shipped location type is operator-owned example content, not authoritative
+	// reference data, so it carries a label but is deliberately not official.
 	for _, lt := range body.LocationTypes {
-		if lt.DisplayName == "" || !lt.Official {
-			t.Errorf("type %q: display_name=%q official=%v, want non-empty label + official", lt.ID, lt.DisplayName, lt.Official)
+		if lt.DisplayName == "" || lt.Official {
+			t.Errorf("type %q: display_name=%q official=%v, want non-empty label + operator-owned", lt.ID, lt.DisplayName, lt.Official)
 		}
 	}
 	// The icon travels the wire so the console can render each type's leading tree
@@ -122,10 +124,9 @@ func TestLocationTypeCRUDAPI(t *testing.T) {
 	c.do(ownerTok, http.MethodPatch, "/types/location/wing",
 		map[string]any{"display_name": "West Wing"}, http.StatusOK)
 
-	// Official rows are read-only (422 on update and delete).
+	// A shipped type is editable: the estate shapes its own place vocabulary.
 	c.do(ownerTok, http.MethodPatch, "/types/location/campus",
-		map[string]any{"display_name": "X"}, http.StatusUnprocessableEntity)
-	c.do(ownerTok, http.MethodDelete, "/types/location/campus", nil, http.StatusUnprocessableEntity)
+		map[string]any{"display_name": "Campus"}, http.StatusOK)
 
 	// "root" is reserved: creating a type with that id is refused (422).
 	c.do(ownerTok, http.MethodPost, "/types/location",

@@ -1,0 +1,17 @@
+# The official standards, seeded idempotently at boot (ON CONFLICT DO UPDATE).
+# A standard is the blueprint a system conforms to, the system-side counterpart
+# of a product. The catalog lists alphabetically by display_name. Starter set,
+# operator-extensible (variants hang off parent_standard_id); tune freely.
+standards:
+  - id: meeting-room
+    display_name: Meeting Room
+  - id: huddle-room
+    display_name: Huddle Room
+  - id: classroom
+    display_name: Classroom
+  - id: auditorium
+    display_name: Auditorium
+  - id: signage
+    display_name: Digital Signage
+  - id: control-room
+    display_name: Control Room

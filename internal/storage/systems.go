@@ -14,31 +14,38 @@ import (
 // System-layer sentinel errors, mirroring the location set: the non-disclosing
 // 404, the readable-but-not-actionable 403, and the request faults.
 var (
-	ErrSystemNotFound       = errors.New("storage: system not found")
-	ErrSystemForbidden      = errors.New("storage: action not permitted on this system")
-	ErrSystemOccupied       = errors.New("storage: system has child systems")
-	ErrSystemExists         = errors.New("storage: system name already exists")
-	ErrParentSystemNotFound = errors.New("storage: parent system not found")
-	ErrUnknownSystemType    = errors.New("storage: unknown system_type")
+	ErrSystemNotFound         = errors.New("storage: system not found")
+	ErrSystemForbidden        = errors.New("storage: action not permitted on this system")
+	ErrSystemOccupied         = errors.New("storage: system has child systems")
+	ErrSystemExists           = errors.New("storage: system name already exists")
+	ErrParentSystemNotFound   = errors.New("storage: parent system not found")
+	ErrUnknownStandard        = errors.New("storage: unknown standard")
+	ErrParentStandardNotFound = errors.New("storage: parent standard not found")
 )
 
-// SystemType is a registry row classifying a system (id, official, display_name),
-// the shape-definer, mirroring location_type. The registry lists alphabetically
-// by display_name; there is no ordering field.
-type SystemType struct {
-	ID          string
-	Official    bool
-	DisplayName string
+// Standard is the blueprint a system conforms to (huddle room, classroom,
+// auditorium): the system-side counterpart of product for a component. Beyond
+// the registry shape (id, official, display_name) it carries an optional parent
+// standard, so a variant inherits from a base one exactly as
+// product.parent_product_id does. The registry lists alphabetically by
+// display_name; there is no ordering field.
+type Standard struct {
+	ID               string
+	Official         bool
+	DisplayName      string
+	ParentStandardID *string
 }
 
 // System is a composition of components (the service tree): name-addressable,
-// classified by system_type, nestable via parent_id, and optionally located at
-// a location.
+// nestable via parent_id, optionally located at a location, and optionally
+// conforming to a standard. StandardID is nil for a one-off system, mirroring
+// component.product_id: a system that matches no blueprint carries only its own
+// ad-hoc values.
 type System struct {
 	ID          string
 	Name        string
 	DisplayName string
-	SystemType  string
+	StandardID  *string
 	ParentID    *string
 	LocationID  *string
 	CreatedAt   time.Time
@@ -47,11 +54,11 @@ type System struct {
 
 // SystemSpec is the create input. ParentName nil makes a root system (which only
 // an all-scoped create grant may place); LocationName optionally places it at a
-// location.
+// location; StandardID optionally names the blueprint it conforms to.
 type SystemSpec struct {
 	Name         string
 	DisplayName  string
-	SystemType   string
+	StandardID   *string
 	ParentName   *string
 	LocationName *string
 }
@@ -61,118 +68,185 @@ type SystemSpec struct {
 type SystemPatch struct {
 	Name        *string
 	DisplayName *string
-	SystemType  *string
+	StandardID  *string
 }
 
-// --- system_type registry ---------------------------------------------------
+// --- standard registry -------------------------------------------------------
 
-func (p *PG) UpsertSystemType(ctx context.Context, st SystemType) error {
+const standardCols = `id, official, display_name, parent_standard_id`
+
+func scanStandard(row pgx.Row) (*Standard, error) {
+	var st Standard
+	if err := row.Scan(&st.ID, &st.Official, &st.DisplayName, &st.ParentStandardID); err != nil {
+		return nil, err
+	}
+	return &st, nil
+}
+
+// mapStandardWriteErr translates Postgres constraint violations on a standard
+// write into the registry sentinels: a duplicate id is ErrTypeExists, and the
+// only foreign key a standard carries is its parent, so an FK violation is
+// ErrParentStandardNotFound rather than an opaque 500.
+func mapStandardWriteErr(err error) error {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		switch pgErr.Code {
+		case "23505": // unique_violation
+			return ErrTypeExists
+		case "23503": // foreign_key_violation
+			return ErrParentStandardNotFound
+		}
+	}
+	return fmt.Errorf("storage: standard write: %w", err)
+}
+
+// UpsertStandard installs or updates a standard by id, the boot-seed phase's
+// write. Idempotent: re-seeding the same id updates it in place.
+// SeedStandard inserts a shipped example standard only when it is absent. A
+// standard is operator-owned content: it is forked from an in-code template and
+// then belongs to the estate, so re-seeding must never reassert over an edit the
+// operator made. This is deliberately not UpsertStandard, whose ON CONFLICT DO
+// UPDATE is the authoritative behavior the canonical catalogs want.
+func (p *PG) SeedStandard(ctx context.Context, st Standard) error {
 	_, err := p.pool.Exec(ctx, `
-		insert into system_type (id, official, display_name)
-		values ($1, $2, $3)
-		on conflict (id) do update
-			set official = excluded.official, display_name = excluded.display_name`,
-		st.ID, st.Official, st.DisplayName)
+		insert into standard (id, official, display_name, parent_standard_id)
+		values ($1, $2, $3, $4)
+		on conflict (id) do nothing`,
+		st.ID, st.Official, st.DisplayName, st.ParentStandardID)
 	if err != nil {
-		return fmt.Errorf("storage: upsert system_type %q: %w", st.ID, err)
+		return fmt.Errorf("storage: seed standard %q: %w", st.ID, err)
 	}
 	return nil
 }
 
-func (p *PG) ListSystemTypes(ctx context.Context) ([]SystemType, error) {
-	rows, err := p.pool.Query(ctx, `select id, official, display_name from system_type order by display_name, id`)
+func (p *PG) UpsertStandard(ctx context.Context, st Standard) error {
+	_, err := p.pool.Exec(ctx, `
+		insert into standard (id, official, display_name, parent_standard_id)
+		values ($1, $2, $3, $4)
+		on conflict (id) do update
+			set official           = excluded.official,
+			    display_name       = excluded.display_name,
+			    parent_standard_id = excluded.parent_standard_id,
+			    updated_at         = now()`,
+		st.ID, st.Official, st.DisplayName, st.ParentStandardID)
 	if err != nil {
-		return nil, fmt.Errorf("storage: list system_types: %w", err)
+		return fmt.Errorf("storage: upsert standard %q: %w", st.ID, err)
+	}
+	return nil
+}
+
+// ListStandards returns every standard, ordered alphabetically by display_name
+// then id.
+func (p *PG) ListStandards(ctx context.Context) ([]Standard, error) {
+	rows, err := p.pool.Query(ctx, `select `+standardCols+` from standard order by display_name, id`)
+	if err != nil {
+		return nil, fmt.Errorf("storage: list standards: %w", err)
 	}
 	defer rows.Close()
-	var out []SystemType
+	out := []Standard{}
 	for rows.Next() {
-		var st SystemType
-		if err := rows.Scan(&st.ID, &st.Official, &st.DisplayName); err != nil {
-			return nil, fmt.Errorf("storage: scan system_type: %w", err)
+		st, err := scanStandard(rows)
+		if err != nil {
+			return nil, fmt.Errorf("storage: scan standard: %w", err)
 		}
-		out = append(out, st)
+		out = append(out, *st)
 	}
 	return out, rows.Err()
 }
 
-// SystemTypePatch carries the mutable fields of a system_type update; a nil field
-// is left unchanged.
-type SystemTypePatch struct {
-	DisplayName *string
+// GetStandard resolves one standard by id. An unknown id is ErrTypeNotFound.
+func (p *PG) GetStandard(ctx context.Context, id string) (*Standard, error) {
+	st, err := scanStandard(p.pool.QueryRow(ctx, `select `+standardCols+` from standard where id = $1`, id))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrTypeNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("storage: get standard %q: %w", id, err)
+	}
+	return st, nil
 }
 
-// CreateSystemType inserts a custom (official=false) system_type and audits it. A
-// duplicate id is ErrTypeExists.
-func (p *PG) CreateSystemType(ctx context.Context, actorID string, st SystemType) (*SystemType, error) {
+// StandardPatch carries the mutable fields of a standard update; a nil field is
+// left unchanged.
+type StandardPatch struct {
+	DisplayName      *string
+	ParentStandardID *string
+}
+
+// CreateStandard inserts a custom (official=false) standard and audits it. A
+// duplicate id is ErrTypeExists; an unknown parent is ErrParentStandardNotFound.
+func (p *PG) CreateStandard(ctx context.Context, actorID string, st Standard) (*Standard, error) {
 	st.Official = false
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("storage: begin create system_type: %w", err)
+		return nil, fmt.Errorf("storage: begin create standard: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	if _, err := tx.Exec(ctx,
-		`insert into system_type (id, official, display_name) values ($1, false, $2)`,
-		st.ID, st.DisplayName); err != nil {
-		if isUniqueViolation(err) {
-			return nil, ErrTypeExists
-		}
-		return nil, fmt.Errorf("storage: insert system_type %q: %w", st.ID, err)
+	created, err := scanStandard(tx.QueryRow(ctx, `
+		insert into standard (id, official, display_name, parent_standard_id)
+		values ($1, false, $2, $3)
+		returning `+standardCols,
+		st.ID, st.DisplayName, st.ParentStandardID))
+	if err != nil {
+		return nil, mapStandardWriteErr(err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "create", "system_type", st.ID, nil, st); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "create", "standard", created.ID, nil, created); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("storage: commit create system_type: %w", err)
+		return nil, fmt.Errorf("storage: commit create standard: %w", err)
 	}
-	return &st, nil
+	return created, nil
 }
 
-// UpdateSystemType patches a custom system_type's display_name (nil unchanged)
-// and audits it. Official rows are read-only; an unknown id is ErrTypeNotFound.
-func (p *PG) UpdateSystemType(ctx context.Context, actorID, id string, patch SystemTypePatch) (*SystemType, error) {
+// UpdateStandard patches a custom standard's display_name or parent (nil fields
+// unchanged) and audits it. Official rows are read-only (ErrTypeOfficial); an
+// unknown id is ErrTypeNotFound; an unknown parent is ErrParentStandardNotFound.
+func (p *PG) UpdateStandard(ctx context.Context, actorID, id string, patch StandardPatch) (*Standard, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("storage: begin update system_type: %w", err)
+		return nil, fmt.Errorf("storage: begin update standard: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	if err := guardTypeMutable(ctx, tx, "system_type", id); err != nil {
+	if err := guardTypeMutable(ctx, tx, "standard", id); err != nil {
 		return nil, err
 	}
-	var st SystemType
-	if err := tx.QueryRow(ctx, `
-		update system_type set
-			display_name = coalesce($2, display_name)
+	st, err := scanStandard(tx.QueryRow(ctx, `
+		update standard set
+			display_name       = coalesce($2, display_name),
+			parent_standard_id = coalesce($3, parent_standard_id),
+			updated_at         = now()
 		where id = $1
-		returning id, official, display_name`,
-		id, patch.DisplayName).
-		Scan(&st.ID, &st.Official, &st.DisplayName); err != nil {
-		return nil, fmt.Errorf("storage: update system_type %q: %w", id, err)
+		returning `+standardCols,
+		id, patch.DisplayName, patch.ParentStandardID))
+	if err != nil {
+		return nil, mapStandardWriteErr(err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "update", "system_type", id, nil, st); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "update", "standard", id, nil, st); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("storage: commit update system_type: %w", err)
+		return nil, fmt.Errorf("storage: commit update standard: %w", err)
 	}
-	return &st, nil
+	return st, nil
 }
 
-// DeleteSystemType removes a custom system_type, refusing an official row and a
-// row still referenced by a system.
-func (p *PG) DeleteSystemType(ctx context.Context, actorID, id string) error {
-	return deleteTypeRow(ctx, p, "system_type", "system_type", typeRef{table: "system", col: "system_type"}, actorID, id)
+// DeleteStandard removes a custom standard, refusing an official row and a row
+// still referenced by a system. Child standards are not a refusal: the parent FK
+// is ON DELETE SET NULL, so a variant survives its base as a standalone.
+func (p *PG) DeleteStandard(ctx context.Context, actorID, id string) error {
+	return deleteTypeRow(ctx, p, "standard", "standard", typeRef{table: "system", col: "standard_id"}, actorID, id)
 }
 
 // --- system CRUD -------------------------------------------------------------
 
-const systemCols = `id, name, coalesce(display_name, ''), system_type, parent_id, location_id, created_at, updated_at`
+const systemCols = `id, name, coalesce(display_name, ''), standard_id, parent_id, location_id, created_at, updated_at`
 
 func scanSystem(row pgx.Row) (*System, error) {
 	var s System
-	if err := row.Scan(&s.ID, &s.Name, &s.DisplayName, &s.SystemType, &s.ParentID, &s.LocationID, &s.CreatedAt, &s.UpdatedAt); err != nil {
+	if err := row.Scan(&s.ID, &s.Name, &s.DisplayName, &s.StandardID, &s.ParentID, &s.LocationID, &s.CreatedAt, &s.UpdatedAt); err != nil {
 		return nil, err
 	}
 	return &s, nil
@@ -242,11 +316,26 @@ func (p *PG) CreateSystem(ctx context.Context, actorID string, spec SystemSpec, 
 		locationID = &loc.ID
 	}
 
+	// standard is a catalog, not a scoped tree: resolve by id (a standard's id is
+	// its name) with a plain lookup. An unknown id is ErrUnknownStandard -> 422;
+	// the FK below is the belt-and-suspenders.
+	var standardID *string
+	if spec.StandardID != nil {
+		var sid string
+		err := tx.QueryRow(ctx, `select id from standard where id = $1`, *spec.StandardID).Scan(&sid)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrUnknownStandard
+		} else if err != nil {
+			return nil, fmt.Errorf("storage: resolve standard %q: %w", *spec.StandardID, err)
+		}
+		standardID = &sid
+	}
+
 	s, err := scanSystem(tx.QueryRow(ctx, `
-		insert into system (name, display_name, system_type, parent_id, location_id)
+		insert into system (name, display_name, standard_id, parent_id, location_id)
 		values ($1, $2, $3, $4, $5)
 		returning `+systemCols,
-		spec.Name, nullize(spec.DisplayName), spec.SystemType, parentID, locationID))
+		spec.Name, nullize(spec.DisplayName), standardID, parentID, locationID))
 	if err != nil {
 		return nil, mapSystemWriteErr(err)
 	}
@@ -281,11 +370,11 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 		update system set
 			name         = coalesce($2, name),
 			display_name = coalesce($3, display_name),
-			system_type  = coalesce($4, system_type),
+			standard_id  = coalesce($4, standard_id),
 			updated_at   = now()
 		where id = $1
 		returning `+systemCols,
-		before.ID, patch.Name, patch.DisplayName, patch.SystemType))
+		before.ID, patch.Name, patch.DisplayName, patch.StandardID))
 	if err != nil {
 		return nil, mapSystemWriteErr(err)
 	}
@@ -332,8 +421,12 @@ func mapSystemWriteErr(err error) error {
 			return ErrSystemExists
 		case "23503":
 			switch pgErr.ConstraintName {
-			case "system_system_type_fkey":
-				return ErrUnknownSystemType
+			// The standard FK keeps its original constraint name through the
+			// system_type -> standard_id column rename (Postgres renames the column,
+			// not the constraint), so both names are the same reference; a future
+			// schema squash would emit the standard_id one.
+			case "system_system_type_fkey", "system_standard_id_fkey":
+				return ErrUnknownStandard
 			case "system_location_id_fkey":
 				// The located-at location was removed between resolve and insert
 				// (a race); report it like the resolve-time miss (422).
