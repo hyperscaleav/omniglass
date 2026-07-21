@@ -14,9 +14,10 @@ nest, and how everything else names one of them as owner. The shapes these entit
 :::note[Partial]
 Built today: `component`, `system`, and `location` as name-addressable, variable-depth (`parent_id`)
 trees, each with its `*_type` registry and full scoped CRUD; a delete is refused while a structural
-child remains. Still `Design`: the `node` entity, template pinning, `system_member` composition, the
-exclusive-arc owner columns (no datapoints, events, or alarms yet), operational mode, and
-decommission / purge. See [implementation status](/architecture/status/).
+child remains. The **exclusive-arc** owner columns are now real, carrying the datapoint sinks and the
+**`event`** log sink (see [The event sink](#the-event-sink-the-first-arc-owned-occurrence) below);
+`alarm` is the remaining arc-owned sink still `Design`. Still `Design`: template pinning, `system_member`
+composition, operational mode, and decommission / purge. See [implementation status](/architecture/status/).
 :::
 
 ## The estate: four structural entities
@@ -165,6 +166,31 @@ This makes **system-, location-, node-, and global-level datapoints first-class*
 self-health is owned by the node), the fix for a monitoring tool that can only put state on a single
 host. The same arc owns the `event` and `alarm` rows a datapoint produces, so a system-owned datapoint
 yields a system-owned alarm. The full pattern and the storage DDL are on [storage](/architecture/storage/).
+
+### The event sink: the first arc-owned occurrence
+
+The arc's first built sink beyond the datapoint tables is **`event`**, the **log-kind sink** of the
+collection pipeline. Where a `metric_datapoint` or `state_datapoint` records a **sampled present value**
+(a reading that has a value *now*, `last()` is meaningful), an `event` records a **past occurrence**: a
+device log line, something that *happened* and whose "what is it now?" is meaningless (the
+[has-a-value-now razor](/architecture/datapoints/#the-has-a-value-now-razor-datapoint-vs-event)). A
+collected datapoint whose property is **log**-kind (the seeded starter is `syslog.line`) is no longer
+dropped at ingest: it routes to `event` as an occurrence, carrying a **`message`** (its text, from
+`string_value`) and optional structured **`attributes`** (jsonb, from `json_value`).
+
+An `event` row carries the **identical owner exclusive-arc** as a datapoint (`owner_kind` plus the
+matching `component_id` / `system_id` / `location_id` / `node_id`, under the same CHECK that exactly one
+is set) and the **same provenance** vocabulary (`observed` / `calculated` / `intended` / `declared`,
+default `observed`), so a log occurrence is owned, addressed, and confined exactly like the value
+datapoints beside it: the **same** owner-confinement and reject-not-project gates apply at ingest. This
+is why the ownership pattern above already named `event` alongside the datapoint tables; it is the same
+arc, now with a built sink on it.
+
+Closing the loop, the reserved **`event_id`** columns on `metric_datapoint` and `state_datapoint` are
+now **real foreign keys** to `event(id)` (`on delete set null`): an **intended**-provenance datapoint (a
+value a command set) references the `event` that produced it, so a datapoint's lineage can point at the
+occurrence behind it. See [datapoints](/architecture/datapoints/) for the value sinks and
+[events](/architecture/events/) for the normalized-occurrence model layered above the raw log sink.
 
 ## Structural multi-membership (a component in N systems)
 

@@ -25,7 +25,7 @@ There are two ways to operate, and they are the same API with the same checks be
 - **[Work with an entity](/guides/operator/entities/)**: opening a blade, drilling into
   children, and creating, editing, or deleting.
 - **[Nodes and reachability](/guides/operator/collection/)**: enrolling a collection node,
-  adding a protocol-named interface to a component, and reading its reachability.
+  adding a protocol-named interface to a component, and reading its reachability and events.
 
 ## Getting around
 

@@ -345,6 +345,30 @@ func TestRunIdempotent(t *testing.T) {
 			t.Errorf("seeded %s icmp.reachable = %+v, want 1", tc.iface, icmpReach)
 		}
 	}
+
+	// The example event log: a handful of log occurrences on the lobby display, so
+	// the console's event-log panel comes up populated. The count is over two Runs, so
+	// a duplicate here is the seed failing to be idempotent (the event table has an
+	// auto id and no natural unique key, so only the sentinel guard keeps a re-run a
+	// no-op).
+	var events int
+	if err := conn.QueryRow(ctx, `select count(*) from event where component_id = 'lobby-display'`).Scan(&events); err != nil {
+		t.Fatalf("count lobby-display events: %v", err)
+	}
+	if events != 6 {
+		t.Errorf("lobby-display events = %d, want 6 (seed not idempotent or incomplete)", events)
+	}
+	// One occurrence carries a structured attributes payload (the switched input); the
+	// rest are plain messages. Provenance is stamped observed by the insert.
+	var withAttrs int
+	if err := conn.QueryRow(ctx, `
+		select count(*) from event
+		where component_id = 'lobby-display' and attributes is not null and provenance = 'observed'`).Scan(&withAttrs); err != nil {
+		t.Fatalf("count lobby-display events with attributes: %v", err)
+	}
+	if withAttrs != 1 {
+		t.Errorf("lobby-display events with attributes = %d, want 1", withAttrs)
+	}
 }
 
 // assertGrant checks a seeded user holds exactly the expected role at the

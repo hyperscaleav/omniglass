@@ -1295,6 +1295,58 @@ components:
           format: uri
           type: string
       type: object
+    EventBody:
+      additionalProperties: false
+      properties:
+        attributes:
+          description: Structured attributes, when the occurrence carried a JSON payload
+        instance:
+          description: The series discriminator (e.g. the interface), when set
+          type: string
+        key:
+          description: The property name of the log (e.g. syslog.line)
+          type: string
+        message:
+          description: The occurrence message
+          type: string
+        provenance:
+          description: The lineage of the occurrence (observed for direct collection)
+          type: string
+        source:
+          description: The interface type that produced the occurrence
+          type: string
+        ts:
+          description: When the occurrence was observed
+          format: date-time
+          type: string
+      required:
+        - ts
+        - key
+        - message
+        - provenance
+      type: object
+    EventsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/EventsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        component:
+          type: string
+        events:
+          items:
+            $ref: "#/components/schemas/EventBody"
+          type:
+            - array
+            - "null"
+      required:
+        - component
+        - events
+      type: object
     FieldDefinitionBody:
       additionalProperties: false
       properties:
@@ -4319,6 +4371,33 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Effective tags for a component
+      x-omniglass-permission: component:read
+  /components/{name}/events:
+    get:
+      description: Returns the component's recent log occurrences (the log-kind sink), newest first, bounded to the last 24 hours. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+      operationId: list-component-events
+      parameters:
+        - description: The component's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The component's unique name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List a component's recent events
       x-omniglass-permission: component:read
   /components/{name}/fields:
     get:

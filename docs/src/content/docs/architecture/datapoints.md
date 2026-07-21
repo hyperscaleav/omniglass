@@ -15,8 +15,11 @@ against the `datapoint_type` registry. The observed **state** path now has its f
 computes the per-interface reachability verdict `interface.reachable` (up/down, the AND of the interface's probe
 results), and the ingest consumer **routes by the `datapoint_type` kind** (metric to `metric_datapoint`, state to
 `state_datapoint`), so the verdict lands in `state_datapoint` under the same owner-confinement, **transition-only**
-(one row per flip, guarded at the node and again at ingest). Log datapoints, calculated provenance, fusion, and
-the live NATS data-lane described below are still design. See
+(one row per flip, guarded at the node and again at ingest). A **log**-kind observation now persists too, but as
+an **`event`** occurrence (the log-kind sink), not a `log_datapoint` row: it is **no longer dropped** at ingest
+([ADR-0046](/architecture/decisions/#adr-0046-the-event-log-kind-sink)), routed to `event` under the same
+owner-confinement and reject-not-project as the metric and state sinks. The `log_datapoint` table described below,
+calculated provenance, fusion, and the live NATS data-lane are still design. See
 [ADR-0033](/architecture/decisions/#adr-0037-telemetry-is-a-protobuf-event-over-jetstream-with-an-inline-owner-confining-consumer)
 and [ADR-0034](/architecture/decisions/#adr-0038-the-reachability-verdict-is-a-built-in-state).
 :::

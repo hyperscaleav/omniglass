@@ -40,6 +40,14 @@ properties:
       results (up = every applicable probe reached the target). A built-in state:
       availability is time_in_state over it. Unknown/stale are read-time
       derivations, not stored values.
+  - name: syslog.line
+    kind: log
+    data_type: string
+    display_name: Syslog Line
+    description: >-
+      A device log line, the log-kind sink's canonical starter property: an
+      occurrence carrying a message (and optional structured attributes), routed
+      to the event table rather than sampled as a value.
   # Declared attribute properties: no kind (not observed), the starter set a field draws from.
   - name: serial_number
     data_type: string

@@ -318,6 +318,12 @@ type Gateway interface {
 	LatestState(ctx context.Context, componentName, key, instance string) (*StateDatapoint, error)
 	StateTransitions(ctx context.Context, componentName, key, instance string, since time.Time) ([]StateDatapoint, error)
 
+	// The observed-log sink: the mirror of the metric and state sinks for log-kind
+	// occurrences. reject-not-project and owner-confinement are applied by the caller
+	// before the write. ListComponentEvents backs the component event log panel.
+	InsertEvents(ctx context.Context, evs []EventOccurrence) error
+	ListComponentEvents(ctx context.Context, componentName string, since time.Time, limit int) ([]Event, error)
+
 	// The node tier: the edge runtime's enrollment lifecycle and worklist. A node
 	// is estate-wide (all-scope create/enroll/read, like a principal). The claim,
 	// authenticate, heartbeat, and worklist paths are the node's own lane (gated by

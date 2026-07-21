@@ -33,9 +33,9 @@ func TestDeriveDatapoints(t *testing.T) {
 		},
 	}
 
-	metrics, states := deriveDatapoints(ev, owner, reg)
-	if len(metrics) != 2 || len(states) != 0 {
-		t.Fatalf("derived %d metrics %d states, want 2/0 (unregistered name dropped): %+v", len(metrics), len(states), metrics)
+	metrics, states, events := deriveDatapoints(ev, owner, reg)
+	if len(metrics) != 2 || len(states) != 0 || len(events) != 0 {
+		t.Fatalf("derived %d metrics %d states %d events, want 2/0/0 (unregistered name dropped): %+v", len(metrics), len(states), len(events), metrics)
 	}
 	for _, e := range metrics {
 		if e.OwnerKind != "component" || e.OwnerID != "disp-1" || e.Source != "tcp" || e.Instance != "disp-1-tcp" {
@@ -48,9 +48,9 @@ func TestDeriveDatapoints(t *testing.T) {
 }
 
 // TestDeriveDatapointsRoutesByKind: a name registered as state routes to the state
-// slice (not metric_datapoint), stamped with the same task-interface owner; an
-// unregistered name is still dropped (reject-not-project), and a log kind (no sink
-// this checkpoint) lands in neither.
+// slice (not metric_datapoint), a name registered as log routes to the event slice,
+// each stamped with the same task-interface owner; an unregistered name is still
+// dropped (reject-not-project).
 func TestDeriveDatapointsRoutesByKind(t *testing.T) {
 	metric, state, logKind := "metric", "state", "log"
 	reg := collection.NewRegistry([]storage.Property{
@@ -65,17 +65,25 @@ func TestDeriveDatapointsRoutesByKind(t *testing.T) {
 		{Name: "some.log", Value: &ogv1.Datapoint_StringValue{StringValue: "line"}},
 		{Name: "not.registered", Value: &ogv1.Datapoint_StringValue{StringValue: "up"}},
 	}}
-	metrics, states := deriveDatapoints(ev, owner, reg)
+	metrics, states, events := deriveDatapoints(ev, owner, reg)
 	if len(metrics) != 1 || metrics[0].Key != "tcp.open" {
 		t.Fatalf("metrics = %+v, want one tcp.open", metrics)
 	}
 	if len(states) != 1 {
-		t.Fatalf("states = %+v, want one interface.reachable (log + unregistered dropped)", states)
+		t.Fatalf("states = %+v, want one interface.reachable (unregistered dropped)", states)
 	}
 	s := states[0]
 	if s.Key != "interface.reachable" || s.Value != "up" || s.OwnerKind != "component" ||
 		s.OwnerID != "disp-1" || s.Instance != "disp-1-tcp" || s.Source != "tcp" {
 		t.Fatalf("state routing/owner wrong: %+v", s)
+	}
+	if len(events) != 1 {
+		t.Fatalf("events = %+v, want one some.log (unregistered dropped)", events)
+	}
+	e := events[0]
+	if e.Key != "some.log" || e.Message != "line" || e.OwnerKind != "component" ||
+		e.OwnerID != "disp-1" || e.Instance != "disp-1-tcp" || e.Source != "tcp" {
+		t.Fatalf("log routing/owner wrong: %+v", e)
 	}
 }
 

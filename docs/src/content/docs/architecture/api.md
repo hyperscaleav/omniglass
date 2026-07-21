@@ -186,6 +186,7 @@ shape the [Shape](#shape-resources-and-verb-methods) section describes.
 | GET | `/tasks` | `task:read` |
 | GET | `/tasks/{id}` | `task:read` |
 | GET | `/components/{name}/reachability` | `component:read` |
+| GET | `/components/{name}/events` | `component:read` |
 
 **The node custom methods are the day-one enrollment handshake.** `POST /nodes/{name}:enroll` mints (or
 re-mints) the node's enrollment token and returns it **once**; the server stores only its hash and never
@@ -214,6 +215,16 @@ It is gated by `component:read` and scope-injected through the component, so an 
 non-disclosing 404 and the datapoint reads only ever run on a verified, in-scope component. It is a
 hand-written typed `GET`, an early and deliberate exception to [reads beyond one resource are
 views](#reads-beyond-one-resource-are-views), standing in until the `ViewResult` framework lands.
+
+**The event read is the log-kind mirror of the reachability read.** `GET /components/{name}/events` returns
+the component's recent **log occurrences** (the [`event` log sink](/architecture/core-entities/#the-event-sink-the-first-arc-owned-occurrence)),
+newest first, bounded to the last 24 hours and capped at 200 rows. Each row carries its `ts`, the property
+`key` (e.g. `syslog.line`), the `instance` discriminator, the `message`, optional structured `attributes`,
+its `provenance` (`observed` for direct collection), and the `source` interface type. It is gated by
+`component:read` and scope-injected through the same `GetComponent` gate as the reachability read, so an
+out-of-scope component is the same non-disclosing 404 and the event read only ever runs on a verified,
+in-scope component. Like reachability, it is a hand-written typed `GET` standing in until the `ViewResult`
+framework lands.
 
 :::note[Thin cuts today]
 These routes ship the operationally useful slice, not the full CRUD matrix. A **node** has create, list, get,
