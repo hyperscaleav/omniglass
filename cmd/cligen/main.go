@@ -217,6 +217,17 @@ var nameOverride = map[string]([]string){
 	"update-component-type": {"type", "component", "update"},
 	"delete-component-type": {"type", "component", "delete"},
 	"list-secret-types":     {"type", "secret", "list"},
+	// The product contract and the component effective read are sub-collections
+	// whose leaf noun ("properties") is the property catalog's own, so the
+	// leaf-noun heuristic would collapse all three into one `property` group with
+	// three colliding `list` / `update` / `delete` commands. Group each under the
+	// resource that owns it, as the admin session routes do.
+	"list-product-properties":   {"product", "properties"},
+	"set-product-property":      {"product", "set-property"},
+	"delete-product-property":   {"product", "delete-property"},
+	"list-component-properties": {"component", "properties"},
+	"set-component-property":    {"component", "set-property"},
+	"clear-component-property":  {"component", "clear-property"},
 }
 
 func buildCommands(doc spec, base string) []command {

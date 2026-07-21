@@ -456,6 +456,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/components/{name}/properties": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a component's effective properties
+         * @description Every property the component's product declares, resolved to the component's own value or the contract default (is_set marks the override), plus any property set directly on the component (from_contract false). Gated by component:read; an out-of-scope component is a non-disclosing 404.
+         */
+        get: operations["list-component-properties"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/components/{name}/properties/{property}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set a property on a component
+         * @description Declares a value for the property on this component, overriding the product contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by component:update; an out-of-scope component is a non-disclosing 404.
+         */
+        put: operations["set-component-property"];
+        post?: never;
+        /**
+         * Clear a property on a component
+         * @description Removes the component's declared value, so the property falls back to the product contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the component never set is a 404. Gated by component:update; an out-of-scope component is a non-disclosing 404.
+         */
+        delete: operations["clear-component-property"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/components/{name}/reachability": {
         parameters: {
             query?: never;
@@ -1644,6 +1688,50 @@ export interface paths {
         patch: operations["update-product"];
         trace?: never;
     };
+    "/products/{id}/properties": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a product's declared properties
+         * @description Lists the product's declared-property contract (what every instance of the product exposes), ordered by property name, each with its optional default and required flag. Gated by product:read.
+         */
+        get: operations["list-product-properties"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/{id}/properties/{property}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Declare a property on a product
+         * @description Declares a catalog property on a custom product, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official products are read-only (422), and an unknown product or property is a 422. Gated by product:update.
+         */
+        put: operations["set-product-property"];
+        post?: never;
+        /**
+         * Withdraw a property from a product
+         * @description Removes one line from a custom product's contract; instances keep any value they set for it, now off-contract. A property the product does not declare is a 404, and an official product is read-only (422). Gated by product:delete.
+         */
+        delete: operations["delete-product-property"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/properties": {
         parameters: {
             query?: never;
@@ -2579,6 +2667,16 @@ export interface components {
             product_id?: string;
             system_id?: string;
         };
+        ComponentPropertiesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ComponentPropertiesOutputBody.json
+             */
+            readonly $schema?: string;
+            component: string;
+            properties: components["schemas"]["EffectivePropertyBody"][] | null;
+        };
         ComponentTypeBody: {
             /**
              * Format: uri
@@ -3059,6 +3157,42 @@ export interface components {
             readonly $schema?: string;
             fields: components["schemas"]["EffectiveFieldBody"][] | null;
         };
+        EffectivePropertyBody: {
+            /** @description The declared value type, from the property catalog */
+            data_type: string;
+            /** @description The contract default; omitted when the contract sets none */
+            default_value?: unknown;
+            /** @description The property's human label; omitted when unset */
+            display_name?: string;
+            /** @description True when the component's product declares the property; false for one set directly on the component */
+            from_contract: boolean;
+            /** @description True when the component overrides the contract default */
+            is_set: boolean;
+            /** @description The catalog property name */
+            property_name: string;
+            /** @description Whether the product contract requires a value; always false off-contract */
+            required: boolean;
+            /** @description The component's override; omitted when the property is unset */
+            set_value?: unknown;
+            /** @description The effective value: the override, or the contract default when unset */
+            value?: unknown;
+            /** @description The stored value's id when set; omitted when the property is unset */
+            value_id?: string;
+        };
+        EffectivePropertyValueBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/EffectivePropertyValueBody.json
+             */
+            readonly $schema?: string;
+            component: string;
+            property_name: string;
+            /** @description The stored value, shape given by the property's data_type */
+            value: unknown;
+            /** @description The stored value's id */
+            value_id: string;
+        };
         EffectiveTagsOutputBody: {
             /**
              * Format: uri
@@ -3531,6 +3665,15 @@ export interface components {
             readonly $schema?: string;
             principals: components["schemas"]["PrincipalBody"][] | null;
         };
+        ListProductPropertiesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListProductPropertiesOutputBody.json
+             */
+            readonly $schema?: string;
+            properties: components["schemas"]["ProductPropertyBody"][] | null;
+        };
         ListProductsOutputBody: {
             /**
              * Format: uri
@@ -3748,6 +3891,20 @@ export interface components {
             official: boolean;
             parent_product_id?: string;
             vendor_id?: string;
+        };
+        ProductPropertyBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ProductPropertyBody.json
+             */
+            readonly $schema?: string;
+            /** @description The contract default, shape given by the property's data_type; omitted when the contract sets none */
+            default_value?: unknown;
+            /** @description The catalog property this product declares */
+            property_name: string;
+            /** @description Whether every instance of this product must set the property */
+            required: boolean;
         };
         PropertyBody: {
             /**
@@ -4019,6 +4176,16 @@ export interface components {
             /** @description The image (JPEG, PNG, or WebP), base64-encoded; normalized server-side to a 256x256 JPEG */
             image_base64: string;
         };
+        SetComponentPropertyInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/SetComponentPropertyInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The value to declare, shape given by the property's data_type */
+            value: unknown;
+        };
         SetFieldValueInputBody: {
             /**
              * Format: uri
@@ -4030,6 +4197,18 @@ export interface components {
             field: string;
             /** @description The literal, validated against the field's data_type */
             value: unknown;
+        };
+        SetProductPropertyInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/SetProductPropertyInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The contract default, validated against the property's data_type; omit for no default */
+            default_value?: unknown;
+            /** @description Whether every instance of this product must set the property; defaults to false */
+            required?: boolean;
         };
         Settings: {
             keybindings: components["schemas"]["Keybindings"];
@@ -5417,6 +5596,108 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["FieldValueBody"];
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-component-properties": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The component's unique name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComponentPropertiesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "set-component-property": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The component's unique name */
+                name: string;
+                /** @description The property name */
+                property: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetComponentPropertyInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EffectivePropertyValueBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "clear-component-property": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The component's unique name */
+                name: string;
+                /** @description The property name */
+                property: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {
@@ -8163,6 +8444,108 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ProductBody"];
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-product-properties": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The product id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListProductPropertiesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "set-product-property": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The product id */
+                id: string;
+                /** @description The property name */
+                property: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetProductPropertyInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductPropertyBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-product-property": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The product id */
+                id: string;
+                /** @description The property name */
+                property: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {

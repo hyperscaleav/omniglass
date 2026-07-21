@@ -325,6 +325,20 @@ func generatedCommands() []*cobra.Command {
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "clear-property <name> <property>",
+				Short:   "Clear a property on a component",
+				Long:    "Removes the component's declared value, so the property falls back to the product contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the component never set is a 404. Gated by component:update; an out-of-scope component is a non-disclosing 404.",
+				Example: "  omniglass component clear-property <name> <property>",
+				Args:    cobra.ExactArgs(2),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/components/%s/properties/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+					return runAPICommand(cmd, "DELETE", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
 			var fComponentType string
 			var fDisplayName string
 			var fLocation string
@@ -433,6 +447,20 @@ func generatedCommands() []*cobra.Command {
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "properties <name>",
+				Short:   "List a component's effective properties",
+				Long:    "Every property the component's product declares, resolved to the component's own value or the contract default (is_set marks the override), plus any property set directly on the component (from_contract false). Gated by component:read; an out-of-scope component is a non-disclosing 404.",
+				Example: "  omniglass component properties <name>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/components/%s/properties", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
 			var fKey string
 			cmd := &cobra.Command{
 				Use:     "removeTag <name>",
@@ -451,6 +479,27 @@ func generatedCommands() []*cobra.Command {
 			}
 			cmd.Flags().StringVar(&fKey, "key", "", "The tag key to remove")
 			_ = cmd.MarkFlagRequired("key")
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			var fValue string
+			cmd := &cobra.Command{
+				Use:     "set-property <name> <property>",
+				Short:   "Set a property on a component",
+				Long:    "Declares a value for the property on this component, overriding the product contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by component:update; an out-of-scope component is a non-disclosing 404.",
+				Example: "  omniglass component set-property <name> <property> --value value",
+				Args:    cobra.ExactArgs(2),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/components/%s/properties/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+					body := map[string]any{}
+					if cmd.Flags().Changed("value") {
+						body["value"] = jsonOrString(fValue)
+					}
+					return runAPICommand(cmd, "PUT", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fValue, "value", "", "The value to declare, shape given by the property's data_type")
+			_ = cmd.MarkFlagRequired("value")
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
@@ -2305,6 +2354,20 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := &cobra.Command{
+				Use:     "delete-property <id> <property>",
+				Short:   "Withdraw a property from a product",
+				Long:    "Removes one line from a custom product's contract; instances keep any value they set for it, now off-contract. A property the product does not declare is a 404, and an official product is read-only (422). Gated by product:delete.",
+				Example: "  omniglass product delete-property <id> <property>",
+				Args:    cobra.ExactArgs(2),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/products/%s/properties/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+					return runAPICommand(cmd, "DELETE", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
 				Use:     "get <id>",
 				Short:   "Get a product",
 				Long:    "Fetches a product by id, with its capabilities. Gated by product:read.",
@@ -2329,6 +2392,45 @@ func generatedCommands() []*cobra.Command {
 					return runAPICommand(cmd, "GET", path, nil)
 				},
 			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "properties <id>",
+				Short:   "List a product's declared properties",
+				Long:    "Lists the product's declared-property contract (what every instance of the product exposes), ordered by property name, each with its optional default and required flag. Gated by product:read.",
+				Example: "  omniglass product properties <id>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/products/%s/properties", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			var fDefaultValue string
+			var fRequired string
+			cmd := &cobra.Command{
+				Use:     "set-property <id> <property>",
+				Short:   "Declare a property on a product",
+				Long:    "Declares a catalog property on a custom product, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official products are read-only (422), and an unknown product or property is a 422. Gated by product:update.",
+				Example: "  omniglass product set-property <id> <property>",
+				Args:    cobra.ExactArgs(2),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/products/%s/properties/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+					body := map[string]any{}
+					if cmd.Flags().Changed("default-value") {
+						body["default_value"] = jsonOrString(fDefaultValue)
+					}
+					if cmd.Flags().Changed("required") {
+						body["required"] = jsonOrString(fRequired)
+					}
+					return runAPICommand(cmd, "PUT", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fDefaultValue, "default-value", "", "The contract default, validated against the property's data_type; omit for no default")
+			cmd.Flags().StringVar(&fRequired, "required", "", "Whether every instance of this product must set the property; defaults to false")
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {

@@ -454,6 +454,27 @@ func (UnimplementedGateway) DeleteFieldValue(context.Context, string, string, sc
 func (UnimplementedGateway) EffectiveFields(context.Context, string, scope.Set) ([]EffectiveField, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) ListProductProperties(context.Context, string) ([]ProductProperty, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) UpsertProductProperty(context.Context, string, ProductPropertySpec) error {
+	return nil
+}
+func (UnimplementedGateway) SetProductProperty(context.Context, string, string, ProductPropertySpec) (*ProductProperty, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteProductProperty(context.Context, string, string, string) error {
+	return nil
+}
+func (UnimplementedGateway) SetPropertyValue(context.Context, string, string, string, string, string, json.RawMessage, scope.Set) (*PropertyValue, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) ClearPropertyValue(context.Context, string, string, string, string, string, scope.Set) error {
+	return nil
+}
+func (UnimplementedGateway) EffectiveProperties(context.Context, string, scope.Set) ([]EffectiveProperty, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) ListTags(context.Context) ([]Tag, error) {
 	return nil, nil
 }

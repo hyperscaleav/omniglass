@@ -12,11 +12,24 @@ products:
     driver_id: cisco-xapi
     kind: device
     capabilities: [microphone, speaker, camera, codec]
+    # The declared-property contract: which properties this product declares and
+    # their defaults. An operator overrides one on a component; an unset property
+    # resolves to the default here.
+    properties:
+      - name: serial_number
+      - name: firmware_version
+      - name: model_number
+        default: '"Room Bar"'
   - id: samsung-qm55
     display_name: Samsung QM55
     vendor_id: samsung
     kind: device
     capabilities: [flat-panel-display]
+    properties:
+      - name: serial_number
+      - name: firmware_version
+      - name: model_number
+        default: '"QM55"'
   - id: shure-mxa920
     display_name: Shure MXA920
     vendor_id: shure

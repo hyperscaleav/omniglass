@@ -136,6 +136,13 @@ type productsDoc struct {
 		Kind            string   `yaml:"kind"`
 		ParentProductID string   `yaml:"parent_product_id"`
 		Capabilities    []string `yaml:"capabilities"`
+		// The declared-property contract this product ships. `default` is raw JSON
+		// (quoted in the YAML) so it round-trips into the jsonb column verbatim.
+		Properties []struct {
+			Name     string `yaml:"name"`
+			Default  string `yaml:"default"`
+			Required bool   `yaml:"required"`
+		} `yaml:"properties"`
 	} `yaml:"products"`
 }
 
@@ -351,6 +358,19 @@ func seedProducts(ctx context.Context, gw storage.Gateway) error {
 			ParentProductID: nz(p.ParentProductID), Kind: kind, Capabilities: p.Capabilities,
 		}); err != nil {
 			return err
+		}
+		// The product's declared-property contract. Seeded through the unaudited
+		// upsert path (seed owns official rows), so a re-run is a no-op.
+		for _, prop := range p.Properties {
+			var def json.RawMessage
+			if prop.Default != "" {
+				def = json.RawMessage(prop.Default)
+			}
+			if err := gw.UpsertProductProperty(ctx, p.ID, storage.ProductPropertySpec{
+				PropertyName: prop.Name, DefaultValue: def, Required: prop.Required,
+			}); err != nil {
+				return fmt.Errorf("seed: product %s property %s: %w", p.ID, prop.Name, err)
+			}
 		}
 	}
 	return nil

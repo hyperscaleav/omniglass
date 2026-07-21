@@ -296,6 +296,22 @@ Example:
 omniglass component checkName --name name
 ```
 
+### `omniglass component clear-property`
+
+Clear a property on a component
+
+```
+omniglass component clear-property <name> <property>
+```
+
+Removes the component's declared value, so the property falls back to the product contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the component never set is a 404. Gated by component:update; an out-of-scope component is a non-disclosing 404.
+
+Example:
+
+```sh
+omniglass component clear-property <name> <property>
+```
+
 ### `omniglass component create`
 
 Create a component
@@ -386,6 +402,22 @@ Example:
 omniglass component listTags <name>
 ```
 
+### `omniglass component properties`
+
+List a component's effective properties
+
+```
+omniglass component properties <name>
+```
+
+Every property the component's product declares, resolved to the component's own value or the contract default (is_set marks the override), plus any property set directly on the component (from_contract false). Gated by component:read; an out-of-scope component is a non-disclosing 404.
+
+Example:
+
+```sh
+omniglass component properties <name>
+```
+
 ### `omniglass component removeTag`
 
 Remove a tag value from a component
@@ -404,6 +436,26 @@ Example:
 
 ```sh
 omniglass component removeTag <name> --key key
+```
+
+### `omniglass component set-property`
+
+Set a property on a component
+
+```
+omniglass component set-property <name> <property> [flags]
+```
+
+Declares a value for the property on this component, overriding the product contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by component:update; an out-of-scope component is a non-disclosing 404.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--value` | string | (none) | The value to declare, shape given by the property's data_type |
+
+Example:
+
+```sh
+omniglass component set-property <name> <property> --value value
 ```
 
 ### `omniglass component setTag`
@@ -2050,6 +2102,22 @@ Example:
 omniglass product delete <id>
 ```
 
+### `omniglass product delete-property`
+
+Withdraw a property from a product
+
+```
+omniglass product delete-property <id> <property>
+```
+
+Removes one line from a custom product's contract; instances keep any value they set for it, now off-contract. A property the product does not declare is a 404, and an official product is read-only (422). Gated by product:delete.
+
+Example:
+
+```sh
+omniglass product delete-property <id> <property>
+```
+
 ### `omniglass product get`
 
 Get a product
@@ -2080,6 +2148,43 @@ Example:
 
 ```sh
 omniglass product list
+```
+
+### `omniglass product properties`
+
+List a product's declared properties
+
+```
+omniglass product properties <id>
+```
+
+Lists the product's declared-property contract (what every instance of the product exposes), ordered by property name, each with its optional default and required flag. Gated by product:read.
+
+Example:
+
+```sh
+omniglass product properties <id>
+```
+
+### `omniglass product set-property`
+
+Declare a property on a product
+
+```
+omniglass product set-property <id> <property> [flags]
+```
+
+Declares a catalog property on a custom product, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official products are read-only (422), and an unknown product or property is a 422. Gated by product:update.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--default-value` | string | (none) | The contract default, validated against the property's data_type; omit for no default |
+| `--required` | string | (none) | Whether every instance of this product must set the property; defaults to false |
+
+Example:
+
+```sh
+omniglass product set-property <id> <property>
 ```
 
 ### `omniglass product update`

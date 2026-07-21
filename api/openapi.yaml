@@ -264,6 +264,28 @@ components:
         - name
         - component_type
       type: object
+    ComponentPropertiesOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ComponentPropertiesOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        component:
+          type: string
+        properties:
+          items:
+            $ref: "#/components/schemas/EffectivePropertyBody"
+          type:
+            - array
+            - "null"
+      required:
+        - component
+        - properties
+      type: object
     ComponentTypeBody:
       additionalProperties: false
       properties:
@@ -1140,6 +1162,68 @@ components:
       required:
         - fields
       type: object
+    EffectivePropertyBody:
+      additionalProperties: false
+      properties:
+        data_type:
+          description: The declared value type, from the property catalog
+          type: string
+        default_value:
+          description: The contract default; omitted when the contract sets none
+        display_name:
+          description: The property's human label; omitted when unset
+          type: string
+        from_contract:
+          description: True when the component's product declares the property; false for one set directly on the component
+          type: boolean
+        is_set:
+          description: True when the component overrides the contract default
+          type: boolean
+        property_name:
+          description: The catalog property name
+          type: string
+        required:
+          description: Whether the product contract requires a value; always false off-contract
+          type: boolean
+        set_value:
+          description: The component's override; omitted when the property is unset
+        value:
+          description: "The effective value: the override, or the contract default when unset"
+        value_id:
+          description: The stored value's id when set; omitted when the property is unset
+          type: string
+      required:
+        - property_name
+        - data_type
+        - required
+        - is_set
+        - from_contract
+      type: object
+    EffectivePropertyValueBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/EffectivePropertyValueBody.json
+          format: uri
+          readOnly: true
+          type: string
+        component:
+          type: string
+        property_name:
+          type: string
+        value:
+          description: The stored value, shape given by the property's data_type
+        value_id:
+          description: The stored value's id
+          type: string
+      required:
+        - component
+        - property_name
+        - value
+        - value_id
+      type: object
     EffectiveTagsOutputBody:
       additionalProperties: false
       properties:
@@ -1979,6 +2063,25 @@ components:
       required:
         - principals
       type: object
+    ListProductPropertiesOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListProductPropertiesOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        properties:
+          items:
+            $ref: "#/components/schemas/ProductPropertyBody"
+          type:
+            - array
+            - "null"
+      required:
+        - properties
+      type: object
     ListProductsOutputBody:
       additionalProperties: false
       properties:
@@ -2445,6 +2548,28 @@ components:
         - kind
         - capabilities
         - official
+      type: object
+    ProductPropertyBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ProductPropertyBody.json
+          format: uri
+          readOnly: true
+          type: string
+        default_value:
+          description: The contract default, shape given by the property's data_type; omitted when the contract sets none
+        property_name:
+          description: The catalog property this product declares
+          type: string
+        required:
+          description: Whether every instance of this product must set the property
+          type: boolean
+      required:
+        - property_name
+        - required
       type: object
     PropertyBody:
       additionalProperties: false
@@ -2970,6 +3095,21 @@ components:
       required:
         - image_base64
       type: object
+    SetComponentPropertyInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/SetComponentPropertyInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        value:
+          description: The value to declare, shape given by the property's data_type
+      required:
+        - value
+      type: object
     SetFieldValueInputBody:
       additionalProperties: false
       properties:
@@ -2989,6 +3129,22 @@ components:
       required:
         - field
         - value
+      type: object
+    SetProductPropertyInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/SetProductPropertyInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        default_value:
+          description: The contract default, validated against the property's data_type; omit for no default
+        required:
+          description: Whether every instance of this product must set the property; defaults to false
+          type: boolean
       type: object
     Settings:
       additionalProperties: false
@@ -4458,6 +4614,102 @@ paths:
           description: Error
       summary: Set a field value on a component
       x-omniglass-permission: field:create
+  /components/{name}/properties:
+    get:
+      description: Every property the component's product declares, resolved to the component's own value or the contract default (is_set marks the override), plus any property set directly on the component (from_contract false). Gated by component:read; an out-of-scope component is a non-disclosing 404.
+      operationId: list-component-properties
+      parameters:
+        - description: The component's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The component's unique name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComponentPropertiesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List a component's effective properties
+      x-omniglass-permission: component:read
+  /components/{name}/properties/{property}:
+    delete:
+      description: Removes the component's declared value, so the property falls back to the product contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the component never set is a 404. Gated by component:update; an out-of-scope component is a non-disclosing 404.
+      operationId: clear-component-property
+      parameters:
+        - description: The component's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The component's unique name
+            type: string
+        - description: The property name
+          in: path
+          name: property
+          required: true
+          schema:
+            description: The property name
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Clear a property on a component
+      x-omniglass-permission: component:update
+    put:
+      description: "Declares a value for the property on this component, overriding the product contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by component:update; an out-of-scope component is a non-disclosing 404."
+      operationId: set-component-property
+      parameters:
+        - description: The component's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The component's unique name
+            type: string
+        - description: The property name
+          in: path
+          name: property
+          required: true
+          schema:
+            description: The property name
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetComponentPropertyInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EffectivePropertyValueBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Set a property on a component
+      x-omniglass-permission: component:update
   /components/{name}/reachability:
     get:
       description: Composes, per interface, the latest reachability verdict, the probe-layer signals that compose it, and the recent verdict transitions for the availability strip. Gated by component:read; an out-of-scope component is a non-disclosing 404.
@@ -6663,6 +6915,102 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Update a product
+      x-omniglass-permission: product:update
+  /products/{id}/properties:
+    get:
+      description: Lists the product's declared-property contract (what every instance of the product exposes), ordered by property name, each with its optional default and required flag. Gated by product:read.
+      operationId: list-product-properties
+      parameters:
+        - description: The product id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The product id
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListProductPropertiesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List a product's declared properties
+      x-omniglass-permission: product:read
+  /products/{id}/properties/{property}:
+    delete:
+      description: Removes one line from a custom product's contract; instances keep any value they set for it, now off-contract. A property the product does not declare is a 404, and an official product is read-only (422). Gated by product:delete.
+      operationId: delete-product-property
+      parameters:
+        - description: The product id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The product id
+            type: string
+        - description: The property name
+          in: path
+          name: property
+          required: true
+          schema:
+            description: The property name
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Withdraw a property from a product
+      x-omniglass-permission: product:delete
+    put:
+      description: Declares a catalog property on a custom product, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official products are read-only (422), and an unknown product or property is a 422. Gated by product:update.
+      operationId: set-product-property
+      parameters:
+        - description: The product id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The product id
+            type: string
+        - description: The property name
+          in: path
+          name: property
+          required: true
+          schema:
+            description: The property name
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetProductPropertyInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductPropertyBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Declare a property on a product
       x-omniglass-permission: product:update
   /properties:
     get:

@@ -390,6 +390,19 @@ type Gateway interface {
 	DeleteFieldValue(ctx context.Context, actorID, id string, read, action scope.Set) error
 	EffectiveFields(ctx context.Context, componentName string, read scope.Set) ([]EffectiveField, error)
 
+	// The declared-property tier, the fold of the fields feature onto the estate
+	// model. product_property is the product's contract (which properties it declares
+	// and their defaults); property_value is the value store on the shared owner arc.
+	// EffectiveProperties resolves a component against its product's contract
+	// (default < override) and adds the ad-hoc values the contract does not declare.
+	ListProductProperties(ctx context.Context, productID string) ([]ProductProperty, error)
+	UpsertProductProperty(ctx context.Context, productID string, spec ProductPropertySpec) error
+	SetProductProperty(ctx context.Context, actorID, productID string, spec ProductPropertySpec) (*ProductProperty, error)
+	DeleteProductProperty(ctx context.Context, actorID, productID, propertyName string) error
+	SetPropertyValue(ctx context.Context, actorID, ownerKind, ownerID, propertyName, instance string, value json.RawMessage, write scope.Set) (*PropertyValue, error)
+	ClearPropertyValue(ctx context.Context, actorID, ownerKind, ownerID, propertyName, instance string, write scope.Set) error
+	EffectiveProperties(ctx context.Context, componentName string, read scope.Set) ([]EffectiveProperty, error)
+
 	// The tag tier: the governed key vocabulary and the per-entity value
 	// bindings. Minting a key (tag:create) is a tenant-wide governance action;
 	// binding a value is the owner's own write, so the binding methods take the
