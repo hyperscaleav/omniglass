@@ -59,7 +59,7 @@ func TestNodeRoundTrip(t *testing.T) {
 	}
 
 	// Seed a component + interface + enabled task placed on node-a.
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp-1", ComponentType: "display"}, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp-1"}, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
 	conn, err := pgx.Connect(ctx, dsn)

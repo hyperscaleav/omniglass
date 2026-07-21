@@ -12,7 +12,7 @@ describe("types data layer", () => {
     vi.restoreAllMocks();
   });
 
-  it("lists all four registries and tags each row's kind", async () => {
+  it("lists all three registries and tags each row's kind", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = (input as Request).url;
       if (url.includes("/types/location")) {
@@ -23,11 +23,6 @@ describe("types data layer", () => {
       if (url.includes("/types/system")) {
         return jsonResponse({
           system_types: [{ id: "kiosk", display_name: "Kiosk", official: true }],
-        });
-      }
-      if (url.includes("/types/component")) {
-        return jsonResponse({
-          component_types: [{ id: "relay", display_name: "Relay", official: false }],
         });
       }
       if (url.includes("/types/secret")) {
@@ -46,8 +41,8 @@ describe("types data layer", () => {
     });
 
     const rows = await listTypes();
-    expect(fetchMock).toHaveBeenCalledTimes(4);
-    expect(rows).toHaveLength(4);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(rows).toHaveLength(3);
 
     const location = rows.find((r) => r.kind === "location");
     expect(location).toMatchObject({ kind: "location", id: "campus", icon: "building", allowed_parent_types: [] });
@@ -56,9 +51,6 @@ describe("types data layer", () => {
     expect(system).toMatchObject({ kind: "system", id: "kiosk" });
     expect(system?.icon).toBeUndefined();
     expect(system?.fields).toBeUndefined();
-
-    const component = rows.find((r) => r.kind === "component");
-    expect(component).toMatchObject({ kind: "component", id: "relay" });
 
     const secret = rows.find((r) => r.kind === "secret");
     expect(secret).toMatchObject({ kind: "secret", id: "credentials" });
@@ -132,12 +124,12 @@ describe("types data layer", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("deletes a component type by id", async () => {
+  it("deletes a system type by id", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
-    await deleteType("component", "relay");
+    await deleteType("system", "kiosk");
     const req = fetchMock.mock.calls[0][0] as Request;
     expect(req.method).toBe("DELETE");
-    expect(req.url).toContain("/api/v1/types/component/relay");
+    expect(req.url).toContain("/api/v1/types/system/kiosk");
   });
 
   it("rejects deleting a secret type without calling fetch", async () => {

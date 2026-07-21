@@ -43,7 +43,7 @@ template tables), [collection](/architecture/collection/#storage) (interfaces an
 - **No `tenant_id`.** Isolation is per-database (a database per tenant); there is no tenant column
   anywhere. The key registries `datapoint_type` and `event_type` carry a **`scope`** (template / org /
   official) deciding where the name is unique ([key scope](/architecture/datapoints/#key-scope-template-org-official)),
-  and the non-template registries (`interface_type`, `component_type`, `variable_type`) carry an
+  and the non-template registries (`interface_type`, `location_type`, `system_type`) carry an
   **`official` boolean**, the same axis minus the template layer: `official: true` rows are the
   ship-with canonical set distributed with the binary, and `official: false` rows are operator- or
   org-authored, local to this deployment.

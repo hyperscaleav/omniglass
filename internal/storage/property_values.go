@@ -274,3 +274,30 @@ func mapPropertyValueWriteErr(err error) error {
 	}
 	return fmt.Errorf("storage: set property value: %w", err)
 }
+
+// componentIDResolved resolves a component by name to its id and reports whether it
+// falls within the given scope. An absent component is always ErrComponentNotFound
+// (nothing to disclose); an existing but out-of-scope component is returned with
+// inScope=false so each caller picks its own sentinel: the write path forbids, the
+// non-disclosing read path 404s. It runs on any querier so it works standalone or
+// inside a transaction.
+func (p *PG) componentIDResolved(ctx context.Context, q querier, name string, s scope.Set) (id string, inScope bool, err error) {
+	c, err := scopedByName(ctx, q, componentConfig, name)
+	if err != nil {
+		return "", false, err // ErrComponentNotFound when absent
+	}
+	in, err := inScopeTree(ctx, q, componentTable, c.ID, s)
+	if err != nil {
+		return "", false, err
+	}
+	return c.ID, in, nil
+}
+
+// copyRaw returns a private copy of a jsonb column, or nil for a SQL NULL, so the
+// value does not alias pgx's row buffer.
+func copyRaw(b []byte) json.RawMessage {
+	if b == nil {
+		return nil
+	}
+	return append(json.RawMessage(nil), b...)
+}

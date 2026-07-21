@@ -158,54 +158,35 @@ files:
     content: "CONFIDENTIAL competitive bid, integrator A"
     sensitive: true
 
-# Field definitions: a couple of typed fields declared on the `display`
-# component_type, so the field primitive comes up with a schema to teach.
-# `diagonal_inches` carries a default (55); `asset_tag` and `location_note` have none,
-# so the effective-values panel shows a default-vs-plain contrast. Flat and
-# unscoped, like the type registries (no owner, no ABAC scope).
-field_definitions:
-  - component_type: display
-    name: asset_tag
-    display_name: Asset tag
-    data_type: string
-  - component_type: display
-    name: diagonal_inches
-    display_name: Diagonal inches
-    data_type: int
-    default: 55
-  - component_type: display
-    name: location_note
-    display_name: Location note
-    data_type: string
-  - component_type: display
-    name: wall_mounted
-    display_name: Wall mounted
-    data_type: bool
-    default: true
-  - component_type: display
-    name: serial_number
-    display_name: Serial number
-    data_type: string
-    required: true
+# Product contract lines: one property the dev estate adds to the Samsung QM55's
+# declared-property contract, on top of the ones the boot seed ships
+# (serial_number, firmware_version, and model_number with a default). It shows an
+# operator-extended contract in the editor, and `mac_address` carries no default,
+# so the effective-properties panel shows a default-vs-plain contrast. The product
+# and the property both come from the boot seed catalogs.
+product_properties:
+  - product: samsung-qm55
+    property: mac_address
 
 # Components: one example device placed in the estate, so the Components directory
 # comes up populated. The Lobby Display sits in the Boardroom under the west
 # building, whose subtree also carries the environment=staging tag override, so a
-# single component teaches both the field cascade and the tag cascade.
+# single component teaches both the property contract and the tag cascade. Its
+# shape comes from the product it is an instance of.
 components:
   - name: lobby-display
     display_name: Lobby Display
-    component_type: display
+    product: samsung-qm55
     location: hq-west-2-boardroom
 
-# Field values: an override the Lobby Display sets for `diagonal_inches` (65 over
-# the definition's default of 55), so the effective-values panel teaches
-# direct-vs-inherited; `asset_tag` and `location_note` stay unset to show the
-# other side of that contrast.
-field_values:
+# Property values: two overrides the Lobby Display declares over its product's
+# contract, so the effective-properties panel teaches direct-vs-inherited.
+# `model_number` stays unset and resolves to the product default ("QM55"), and
+# `mac_address` stays unset with no default, showing the other two states.
+property_values:
   - component: lobby-display
-    field: diagonal_inches
-    value: 65
-  - component: lobby-display
-    field: serial_number
+    property: serial_number
     value: SN-1183
+  - component: lobby-display
+    property: firmware_version
+    value: 2.1.4

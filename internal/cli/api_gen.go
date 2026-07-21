@@ -339,7 +339,6 @@ func generatedCommands() []*cobra.Command {
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
-			var fComponentType string
 			var fDisplayName string
 			var fLocation string
 			var fName string
@@ -350,14 +349,11 @@ func generatedCommands() []*cobra.Command {
 				Use:     "create",
 				Short:   "Create a component",
 				Long:    "Creates a component, optionally under a parent (a root needs an all-scoped grant), bound to a system and a location. Gated by component:create.",
-				Example: "  omniglass component create --component-type component_type --name name",
+				Example: "  omniglass component create --name name",
 				Args:    cobra.ExactArgs(0),
 				RunE: func(cmd *cobra.Command, args []string) error {
 					path := fmt.Sprintf("/api/v1/components")
 					body := map[string]any{}
-					if cmd.Flags().Changed("component-type") {
-						body["component_type"] = fComponentType
-					}
 					if cmd.Flags().Changed("display-name") {
 						body["display_name"] = fDisplayName
 					}
@@ -379,8 +375,6 @@ func generatedCommands() []*cobra.Command {
 					return runAPICommand(cmd, "POST", path, body)
 				},
 			}
-			cmd.Flags().StringVar(&fComponentType, "component-type", "", "A component_type id")
-			_ = cmd.MarkFlagRequired("component-type")
 			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
 			cmd.Flags().StringVar(&fLocation, "location", "", "Location name this component is placed at")
 			cmd.Flags().StringVar(&fName, "name", "", "Globally unique name (the address; lowercase letters, digits, hyphens)")
@@ -530,21 +524,17 @@ func generatedCommands() []*cobra.Command {
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
-			var fComponentType string
 			var fDisplayName string
 			var fName string
 			cmd := &cobra.Command{
 				Use:     "update <name>",
 				Short:   "Update a component",
-				Long:    "Patches a component's display_name or component_type. Gated by component:update; read and update scopes drive the 404 versus 403 split.",
+				Long:    "Patches a component's technical name or display_name. Gated by component:update; read and update scopes drive the 404 versus 403 split.",
 				Example: "  omniglass component update <name>",
 				Args:    cobra.ExactArgs(1),
 				RunE: func(cmd *cobra.Command, args []string) error {
 					path := fmt.Sprintf("/api/v1/components/%s", url.PathEscape(args[0]))
 					body := map[string]any{}
-					if cmd.Flags().Changed("component-type") {
-						body["component_type"] = fComponentType
-					}
 					if cmd.Flags().Changed("display-name") {
 						body["display_name"] = fDisplayName
 					}
@@ -554,7 +544,6 @@ func generatedCommands() []*cobra.Command {
 					return runAPICommand(cmd, "PATCH", path, body)
 				},
 			}
-			cmd.Flags().StringVar(&fComponentType, "component-type", "", "")
 			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
 			cmd.Flags().StringVar(&fName, "name", "", "A new globally unique technical name (rename)")
 			return cmd
@@ -705,215 +694,6 @@ func generatedCommands() []*cobra.Command {
 					return runAPICommand(cmd, "GET", path, nil)
 				},
 			}
-			return cmd
-		}())
-		roots = append(roots, parent)
-	}
-	{
-		parent := &cobra.Command{
-			Use:   "field",
-			Short: "Commands for the field resource",
-		}
-		parent.AddCommand(func() *cobra.Command {
-			var fField string
-			var fValue string
-			cmd := &cobra.Command{
-				Use:     "create <name>",
-				Short:   "Set a field value on a component",
-				Long:    "Sets a literal for a field defined on the component's type, validated against its data_type. Idempotent: the first set creates the value, a later set patches it in place. Gated by field:create; the component must be in the caller's field create scope.",
-				Example: "  omniglass field create <name> --field field --value value",
-				Args:    cobra.ExactArgs(1),
-				RunE: func(cmd *cobra.Command, args []string) error {
-					path := fmt.Sprintf("/api/v1/components/%s/fields", url.PathEscape(args[0]))
-					body := map[string]any{}
-					if cmd.Flags().Changed("field") {
-						body["field"] = fField
-					}
-					if cmd.Flags().Changed("value") {
-						body["value"] = jsonOrString(fValue)
-					}
-					return runAPICommand(cmd, "POST", path, body)
-				},
-			}
-			cmd.Flags().StringVar(&fField, "field", "", "The field name, defined on the component's type")
-			_ = cmd.MarkFlagRequired("field")
-			cmd.Flags().StringVar(&fValue, "value", "", "The literal, validated against the field's data_type")
-			_ = cmd.MarkFlagRequired("value")
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := &cobra.Command{
-				Use:     "list <name>",
-				Short:   "List a component's effective fields",
-				Long:    "Each field defined on the component's type, resolved to the set literal or the type default (is_set marks the override). Gated by field:read; the component must be in the caller's field read scope.",
-				Example: "  omniglass field list <name>",
-				Args:    cobra.ExactArgs(1),
-				RunE: func(cmd *cobra.Command, args []string) error {
-					path := fmt.Sprintf("/api/v1/components/%s/fields", url.PathEscape(args[0]))
-					return runAPICommand(cmd, "GET", path, nil)
-				},
-			}
-			return cmd
-		}())
-		roots = append(roots, parent)
-	}
-	{
-		parent := &cobra.Command{
-			Use:   "field-definition",
-			Short: "Commands for the field-definition resource",
-		}
-		parent.AddCommand(func() *cobra.Command {
-			var fComponentType string
-			var fDataType string
-			var fDefaultValue string
-			var fDisplayName string
-			var fName string
-			var fRequired string
-			cmd := &cobra.Command{
-				Use:     "create",
-				Short:   "Define a field",
-				Long:    "Declares a typed field on a component_type. The default, if given, is validated against data_type. Gated by field:create.",
-				Example: "  omniglass field-definition create --component-type component_type --data-type data_type --name name",
-				Args:    cobra.ExactArgs(0),
-				RunE: func(cmd *cobra.Command, args []string) error {
-					path := fmt.Sprintf("/api/v1/field-definitions")
-					body := map[string]any{}
-					if cmd.Flags().Changed("component-type") {
-						body["component_type"] = fComponentType
-					}
-					if cmd.Flags().Changed("data-type") {
-						body["data_type"] = fDataType
-					}
-					if cmd.Flags().Changed("default-value") {
-						body["default_value"] = jsonOrString(fDefaultValue)
-					}
-					if cmd.Flags().Changed("display-name") {
-						body["display_name"] = fDisplayName
-					}
-					if cmd.Flags().Changed("name") {
-						body["name"] = fName
-					}
-					if cmd.Flags().Changed("required") {
-						body["required"] = jsonOrString(fRequired)
-					}
-					return runAPICommand(cmd, "POST", path, body)
-				},
-			}
-			cmd.Flags().StringVar(&fComponentType, "component-type", "", "The component_type this field is defined on")
-			_ = cmd.MarkFlagRequired("component-type")
-			cmd.Flags().StringVar(&fDataType, "data-type", "", "The declared value type")
-			_ = cmd.MarkFlagRequired("data-type")
-			cmd.Flags().StringVar(&fDefaultValue, "default-value", "", "Optional type-level default, validated against data_type")
-			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "Optional human label; falls back to name when unset")
-			cmd.Flags().StringVar(&fName, "name", "", "The field name; unique per component_type")
-			_ = cmd.MarkFlagRequired("name")
-			cmd.Flags().StringVar(&fRequired, "required", "", "Whether every component of this type must set the field; defaults to false")
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := &cobra.Command{
-				Use:     "delete <id>",
-				Short:   "Delete a field definition",
-				Long:    "Removes a field definition by id. Gated by field:delete.",
-				Example: "  omniglass field-definition delete <id>",
-				Args:    cobra.ExactArgs(1),
-				RunE: func(cmd *cobra.Command, args []string) error {
-					path := fmt.Sprintf("/api/v1/field-definitions/%s", url.PathEscape(args[0]))
-					return runAPICommand(cmd, "DELETE", path, nil)
-				},
-			}
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := &cobra.Command{
-				Use:     "list",
-				Short:   "List field definitions",
-				Long:    "Lists every field defined on any component_type (the catalog directory). Gated by field:read.",
-				Example: "  omniglass field-definition list",
-				Args:    cobra.ExactArgs(0),
-				RunE: func(cmd *cobra.Command, args []string) error {
-					path := fmt.Sprintf("/api/v1/field-definitions")
-					return runAPICommand(cmd, "GET", path, nil)
-				},
-			}
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			var fDataType string
-			var fDefaultValue string
-			var fDisplayName string
-			var fRequired string
-			cmd := &cobra.Command{
-				Use:     "update <id>",
-				Short:   "Update a field definition",
-				Long:    "Replaces a field's data_type and default value, revalidating the default. component_type and name are fixed at creation. Gated by field:update.",
-				Example: "  omniglass field-definition update <id> --data-type data_type",
-				Args:    cobra.ExactArgs(1),
-				RunE: func(cmd *cobra.Command, args []string) error {
-					path := fmt.Sprintf("/api/v1/field-definitions/%s", url.PathEscape(args[0]))
-					body := map[string]any{}
-					if cmd.Flags().Changed("data-type") {
-						body["data_type"] = fDataType
-					}
-					if cmd.Flags().Changed("default-value") {
-						body["default_value"] = jsonOrString(fDefaultValue)
-					}
-					if cmd.Flags().Changed("display-name") {
-						body["display_name"] = fDisplayName
-					}
-					if cmd.Flags().Changed("required") {
-						body["required"] = jsonOrString(fRequired)
-					}
-					return runAPICommand(cmd, "PATCH", path, body)
-				},
-			}
-			cmd.Flags().StringVar(&fDataType, "data-type", "", "The declared value type")
-			_ = cmd.MarkFlagRequired("data-type")
-			cmd.Flags().StringVar(&fDefaultValue, "default-value", "", "Optional type-level default, validated against data_type")
-			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "Optional human label; falls back to name when unset")
-			cmd.Flags().StringVar(&fRequired, "required", "", "Whether every component of this type must set the field; defaults to false")
-			return cmd
-		}())
-		roots = append(roots, parent)
-	}
-	{
-		parent := &cobra.Command{
-			Use:   "field-value",
-			Short: "Commands for the field-value resource",
-		}
-		parent.AddCommand(func() *cobra.Command {
-			cmd := &cobra.Command{
-				Use:     "delete <id>",
-				Short:   "Delete a field value",
-				Long:    "Clears a component's override for a field, reverting it to the type default. Gated by field:delete; read and delete scopes on the owning component drive the 404 versus 403 split.",
-				Example: "  omniglass field-value delete <id>",
-				Args:    cobra.ExactArgs(1),
-				RunE: func(cmd *cobra.Command, args []string) error {
-					path := fmt.Sprintf("/api/v1/field-values/%s", url.PathEscape(args[0]))
-					return runAPICommand(cmd, "DELETE", path, nil)
-				},
-			}
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			var fValue string
-			cmd := &cobra.Command{
-				Use:     "update <id>",
-				Short:   "Update a field value",
-				Long:    "Replaces a field value's literal, revalidated against the field's fixed data_type. Gated by field:update; read and update scopes on the owning component drive the 404 versus 403 split.",
-				Example: "  omniglass field-value update <id> --value value",
-				Args:    cobra.ExactArgs(1),
-				RunE: func(cmd *cobra.Command, args []string) error {
-					path := fmt.Sprintf("/api/v1/field-values/%s", url.PathEscape(args[0]))
-					body := map[string]any{}
-					if cmd.Flags().Changed("value") {
-						body["value"] = jsonOrString(fValue)
-					}
-					return runAPICommand(cmd, "PATCH", path, body)
-				},
-			}
-			cmd.Flags().StringVar(&fValue, "value", "", "The new literal, validated against the field's fixed data_type")
-			_ = cmd.MarkFlagRequired("value")
 			return cmd
 		}())
 		roots = append(roots, parent)
@@ -3325,81 +3105,6 @@ func generatedCommands() []*cobra.Command {
 			Use:   "type",
 			Short: "Commands for the type resource",
 		}
-		parent.AddCommand(func() *cobra.Command {
-			var fDisplayName string
-			var fId string
-			cmd := &cobra.Command{
-				Use:     "create",
-				Short:   "Create a component type",
-				Long:    "Creates a custom (non-official) component_type. Gated by type:create.",
-				Example: "  omniglass type component create --display-name display_name --id id",
-				Args:    cobra.ExactArgs(0),
-				RunE: func(cmd *cobra.Command, args []string) error {
-					path := fmt.Sprintf("/api/v1/types/component")
-					body := map[string]any{}
-					if cmd.Flags().Changed("display-name") {
-						body["display_name"] = fDisplayName
-					}
-					if cmd.Flags().Changed("id") {
-						body["id"] = fId
-					}
-					return runAPICommand(cmd, "POST", path, body)
-				},
-			}
-			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
-			_ = cmd.MarkFlagRequired("display-name")
-			cmd.Flags().StringVar(&fId, "id", "", "Globally unique type id")
-			_ = cmd.MarkFlagRequired("id")
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := &cobra.Command{
-				Use:     "delete <id>",
-				Short:   "Delete a component type",
-				Long:    "Deletes a custom component_type, refused if official (422) or referenced by a component (409). Gated by type:delete.",
-				Example: "  omniglass type component delete <id>",
-				Args:    cobra.ExactArgs(1),
-				RunE: func(cmd *cobra.Command, args []string) error {
-					path := fmt.Sprintf("/api/v1/types/component/%s", url.PathEscape(args[0]))
-					return runAPICommand(cmd, "DELETE", path, nil)
-				},
-			}
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := &cobra.Command{
-				Use:     "list",
-				Short:   "List component types",
-				Long:    "Lists the component_type registry, ordered alphabetically by display name. Populates the type picker on the component form. Gated by type:read.",
-				Example: "  omniglass type component list",
-				Args:    cobra.ExactArgs(0),
-				RunE: func(cmd *cobra.Command, args []string) error {
-					path := fmt.Sprintf("/api/v1/types/component")
-					return runAPICommand(cmd, "GET", path, nil)
-				},
-			}
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			var fDisplayName string
-			cmd := &cobra.Command{
-				Use:     "update <id>",
-				Short:   "Update a component type",
-				Long:    "Patches a custom component_type's display_name. Official types are read-only (422). Gated by type:update.",
-				Example: "  omniglass type component update <id>",
-				Args:    cobra.ExactArgs(1),
-				RunE: func(cmd *cobra.Command, args []string) error {
-					path := fmt.Sprintf("/api/v1/types/component/%s", url.PathEscape(args[0]))
-					body := map[string]any{}
-					if cmd.Flags().Changed("display-name") {
-						body["display_name"] = fDisplayName
-					}
-					return runAPICommand(cmd, "PATCH", path, body)
-				},
-			}
-			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
-			return cmd
-		}())
 		parent.AddCommand(func() *cobra.Command {
 			var fAllowedParentTypes string
 			var fDisplayName string

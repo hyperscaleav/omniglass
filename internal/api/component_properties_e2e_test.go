@@ -83,7 +83,7 @@ func TestComponentPropertiesAPI(t *testing.T) {
 	c.do(ownerTok, http.MethodPut, "/products/acme-display/properties/serial_number",
 		map[string]any{"default_value": "SN-DEFAULT", "required": true}, http.StatusOK)
 	c.do(ownerTok, http.MethodPost, "/components", map[string]any{
-		"name": "disp-1", "component_type": "display", "product": "acme-display",
+		"name": "disp-1", "product": "acme-display",
 	}, http.StatusCreated)
 
 	read := func(tok, name string) componentPropertiesWire {
@@ -154,7 +154,7 @@ func TestComponentPropertiesAPI(t *testing.T) {
 	// A viewer scoped to another component reads its own but gets a non-disclosing
 	// 404 on disp-1: the *:read floor passes the gate, scope injection hides the row.
 	c.do(ownerTok, http.MethodPost, "/components", map[string]any{
-		"name": "other-1", "component_type": "display",
+		"name": "other-1",
 	}, http.StatusCreated)
 	conn, err := pgx.Connect(ctx, dsn)
 	if err != nil {

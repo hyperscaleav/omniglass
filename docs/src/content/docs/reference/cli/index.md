@@ -324,7 +324,6 @@ Creates a component, optionally under a parent (a root needs an all-scoped grant
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--component-type` | string | (none) | A component_type id |
 | `--display-name` | string | (none) |  |
 | `--location` | string | (none) | Location name this component is placed at |
 | `--name` | string | (none) | Globally unique name (the address; lowercase letters, digits, hyphens) |
@@ -335,7 +334,7 @@ Creates a component, optionally under a parent (a root needs an all-scoped grant
 Example:
 
 ```sh
-omniglass component create --component-type component_type --name name
+omniglass component create --name name
 ```
 
 ### `omniglass component delete`
@@ -487,11 +486,10 @@ Update a component
 omniglass component update <name> [flags]
 ```
 
-Patches a component's display_name or component_type. Gated by component:update; read and update scopes drive the 404 versus 403 split.
+Patches a component's technical name or display_name. Gated by component:update; read and update scopes drive the 404 versus 403 split.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--component-type` | string | (none) |  |
 | `--display-name` | string | (none) |  |
 | `--name` | string | (none) | A new globally unique technical name (rename) |
 
@@ -634,171 +632,6 @@ Example:
 
 ```sh
 omniglass event list <name>
-```
-
-## `omniglass field`
-
-Commands for the field resource
-
-### `omniglass field create`
-
-Set a field value on a component
-
-```
-omniglass field create <name> [flags]
-```
-
-Sets a literal for a field defined on the component's type, validated against its data_type. Idempotent: the first set creates the value, a later set patches it in place. Gated by field:create; the component must be in the caller's field create scope.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--field` | string | (none) | The field name, defined on the component's type |
-| `--value` | string | (none) | The literal, validated against the field's data_type |
-
-Example:
-
-```sh
-omniglass field create <name> --field field --value value
-```
-
-### `omniglass field list`
-
-List a component's effective fields
-
-```
-omniglass field list <name>
-```
-
-Each field defined on the component's type, resolved to the set literal or the type default (is_set marks the override). Gated by field:read; the component must be in the caller's field read scope.
-
-Example:
-
-```sh
-omniglass field list <name>
-```
-
-## `omniglass field-definition`
-
-Commands for the field-definition resource
-
-### `omniglass field-definition create`
-
-Define a field
-
-```
-omniglass field-definition create [flags]
-```
-
-Declares a typed field on a component_type. The default, if given, is validated against data_type. Gated by field:create.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--component-type` | string | (none) | The component_type this field is defined on |
-| `--data-type` | string | (none) | The declared value type |
-| `--default-value` | string | (none) | Optional type-level default, validated against data_type |
-| `--display-name` | string | (none) | Optional human label; falls back to name when unset |
-| `--name` | string | (none) | The field name; unique per component_type |
-| `--required` | string | (none) | Whether every component of this type must set the field; defaults to false |
-
-Example:
-
-```sh
-omniglass field-definition create --component-type component_type --data-type data_type --name name
-```
-
-### `omniglass field-definition delete`
-
-Delete a field definition
-
-```
-omniglass field-definition delete <id>
-```
-
-Removes a field definition by id. Gated by field:delete.
-
-Example:
-
-```sh
-omniglass field-definition delete <id>
-```
-
-### `omniglass field-definition list`
-
-List field definitions
-
-```
-omniglass field-definition list
-```
-
-Lists every field defined on any component_type (the catalog directory). Gated by field:read.
-
-Example:
-
-```sh
-omniglass field-definition list
-```
-
-### `omniglass field-definition update`
-
-Update a field definition
-
-```
-omniglass field-definition update <id> [flags]
-```
-
-Replaces a field's data_type and default value, revalidating the default. component_type and name are fixed at creation. Gated by field:update.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--data-type` | string | (none) | The declared value type |
-| `--default-value` | string | (none) | Optional type-level default, validated against data_type |
-| `--display-name` | string | (none) | Optional human label; falls back to name when unset |
-| `--required` | string | (none) | Whether every component of this type must set the field; defaults to false |
-
-Example:
-
-```sh
-omniglass field-definition update <id> --data-type data_type
-```
-
-## `omniglass field-value`
-
-Commands for the field-value resource
-
-### `omniglass field-value delete`
-
-Delete a field value
-
-```
-omniglass field-value delete <id>
-```
-
-Clears a component's override for a field, reverting it to the type default. Gated by field:delete; read and delete scopes on the owning component drive the 404 versus 403 split.
-
-Example:
-
-```sh
-omniglass field-value delete <id>
-```
-
-### `omniglass field-value update`
-
-Update a field value
-
-```
-omniglass field-value update <id> [flags]
-```
-
-Replaces a field value's literal, revalidated against the field's fixed data_type. Gated by field:update; read and update scopes on the owning component drive the 404 versus 403 split.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--value` | string | (none) | The new literal, validated against the field's fixed data_type |
-
-Example:
-
-```sh
-omniglass field-value update <id> --value value
 ```
 
 ## `omniglass file`
@@ -1460,6 +1293,22 @@ omniglass migrate
 
 ## `omniglass node`
 
+Run the edge node: claim, pull the worklist, and heartbeat over NATS
+
+```
+omniglass node [flags]
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--heartbeat` | duration | `30s` | heartbeat interval |
+| `--name` | string | (none) | this node's registered name (env OMNIGLASS_NODE_NAME) |
+| `--once` | bool | `false` | run a single claim + pull + heartbeat cycle and exit |
+| `--server` | string | (none) | Omniglass server base URL (env OMNIGLASS_SERVER) |
+| `--token` | string | (none) | enrollment token from POST /nodes/{name}:enroll (env OMNIGLASS_NODE_TOKEN) |
+
+## `omniglass node`
+
 Commands for the node resource
 
 ### `omniglass node claim`
@@ -1648,22 +1497,6 @@ Example:
 ```sh
 omniglass node update <name>
 ```
-
-## `omniglass node`
-
-Run the edge node: claim, pull the worklist, and heartbeat over NATS
-
-```
-omniglass node [flags]
-```
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--heartbeat` | duration | `30s` | heartbeat interval |
-| `--name` | string | (none) | this node's registered name (env OMNIGLASS_NODE_NAME) |
-| `--once` | bool | `false` | run a single claim + pull + heartbeat cycle and exit |
-| `--server` | string | (none) | Omniglass server base URL (env OMNIGLASS_SERVER) |
-| `--token` | string | (none) | enrollment token from POST /nodes/{name}:enroll (env OMNIGLASS_NODE_TOKEN) |
 
 ## `omniglass principal`
 
@@ -3007,23 +2840,25 @@ Commands for the type resource
 
 ### `omniglass type create`
 
-Create a component type
+Create a location type
 
 ```
 omniglass type create [flags]
 ```
 
-Creates a custom (non-official) component_type. Gated by type:create.
+Creates a custom (non-official) location_type. Gated by type:create.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
+| `--allowed-parent-types` | string | (none) | location_type ids and/or the reserved root sentinel this type may be placed under; empty means unconstrained |
 | `--display-name` | string | (none) |  |
-| `--id` | string | (none) | Globally unique type id |
+| `--icon` | string | (none) | A glyph key; the console falls back to map-pin when empty |
+| `--id` | string | (none) | Globally unique type id (kebab, e.g. wing); "root" is reserved |
 
 Example:
 
 ```sh
-omniglass type component create --display-name display_name --id id
+omniglass type location create --display-name display_name --id id
 ```
 
 ### `omniglass type create`
@@ -3047,43 +2882,20 @@ Example:
 omniglass type system create --display-name display_name --id id
 ```
 
-### `omniglass type create`
-
-Create a location type
-
-```
-omniglass type create [flags]
-```
-
-Creates a custom (non-official) location_type. Gated by type:create.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--allowed-parent-types` | string | (none) | location_type ids and/or the reserved root sentinel this type may be placed under; empty means unconstrained |
-| `--display-name` | string | (none) |  |
-| `--icon` | string | (none) | A glyph key; the console falls back to map-pin when empty |
-| `--id` | string | (none) | Globally unique type id (kebab, e.g. wing); "root" is reserved |
-
-Example:
-
-```sh
-omniglass type location create --display-name display_name --id id
-```
-
 ### `omniglass type delete`
 
-Delete a component type
+Delete a location type
 
 ```
 omniglass type delete <id>
 ```
 
-Deletes a custom component_type, refused if official (422) or referenced by a component (409). Gated by type:delete.
+Deletes a custom location_type, refused if official (422) or still referenced by a location (409). Gated by type:delete.
 
 Example:
 
 ```sh
-omniglass type component delete <id>
+omniglass type location delete <id>
 ```
 
 ### `omniglass type delete`
@@ -3100,22 +2912,6 @@ Example:
 
 ```sh
 omniglass type system delete <id>
-```
-
-### `omniglass type delete`
-
-Delete a location type
-
-```
-omniglass type delete <id>
-```
-
-Deletes a custom location_type, refused if official (422) or still referenced by a location (409). Gated by type:delete.
-
-Example:
-
-```sh
-omniglass type location delete <id>
 ```
 
 ### `omniglass type list`
@@ -3148,22 +2944,6 @@ Example:
 
 ```sh
 omniglass type secret list
-```
-
-### `omniglass type list`
-
-List component types
-
-```
-omniglass type list
-```
-
-Lists the component_type registry, ordered alphabetically by display name. Populates the type picker on the component form. Gated by type:read.
-
-Example:
-
-```sh
-omniglass type component list
 ```
 
 ### `omniglass type list`
@@ -3202,26 +2982,6 @@ Example:
 
 ```sh
 omniglass type location update <id>
-```
-
-### `omniglass type update`
-
-Update a component type
-
-```
-omniglass type update <id> [flags]
-```
-
-Patches a custom component_type's display_name. Official types are read-only (422). Gated by type:update.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--display-name` | string | (none) |  |
-
-Example:
-
-```sh
-omniglass type component update <id>
 ```
 
 ### `omniglass type update`

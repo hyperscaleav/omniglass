@@ -92,14 +92,6 @@ func TestSeedRolesIdempotent(t *testing.T) {
 		t.Errorf("official system_types = %d, want 6", sysTypeCount)
 	}
 
-	var compTypeCount int
-	if err := conn.QueryRow(ctx, `select count(*) from component_type where official`).Scan(&compTypeCount); err != nil {
-		t.Fatalf("count component_types: %v", err)
-	}
-	if compTypeCount != 11 {
-		t.Errorf("official component_types = %d, want 11", compTypeCount)
-	}
-
 	// The official vendors seed too, idempotently (the second Run
 	// above must not have duplicated them), and every seeded row is official
 	// (read-only in the API layer).

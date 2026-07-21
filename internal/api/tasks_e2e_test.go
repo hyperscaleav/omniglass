@@ -46,10 +46,10 @@ func TestTaskAPI(t *testing.T) {
 	}
 
 	all := scope.Set{All: true}
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "comp-a", ComponentType: "display"}, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "comp-a"}, all); err != nil {
 		t.Fatalf("create comp-a: %v", err)
 	}
-	compB, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "comp-b", ComponentType: "display"}, all)
+	compB, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "comp-b"}, all)
 	if err != nil {
 		t.Fatalf("create comp-b: %v", err)
 	}

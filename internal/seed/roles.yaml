@@ -16,7 +16,7 @@ roles:
     description: >-
       Day-to-day operations: acknowledge, snooze, and resolve alarms, and create
       or edit components, interfaces, rules, config, secrets, variables, and
-      fields.
+      properties.
       Sees and reveals the device secrets in its scope (never the admin-sensitive
       platform credentials). Inherits Viewer.
     inherits: ["viewer"]
@@ -27,7 +27,6 @@ roles:
       - "config:create,update"
       - "secret:read,reveal,create,update"
       - "variable:create,update"
-      - "field:create,update"
       - "property:create,update"
       - "alarm:ack,snooze,resolve"
       # files are shared knowledge (not in the sensitive-resource set), so the
@@ -81,7 +80,6 @@ roles:
       # etc.) a two-token wildcard cannot; a sensitive file is thus admin/owner-only.
       - "file:>"
       - "variable:*"
-      - "field:*"
       - "settings:read,update"
       - "principal_grant:*"
       - "principal_group:*"

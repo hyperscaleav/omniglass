@@ -75,8 +75,10 @@ This is the **authoritative glossary**: every official term in the architecture,
 | **correlation id** | A read-side trace id threading one causal chain end to end: the originating event through every downstream event and action it caused (event -> alarm -> flow/action -> command). Built on the causation lineage; `alarm_id` links one alarm's open/clear events, the correlation id links the whole chain. DX/observability sugar, not a datapoint kind or a stored span subsystem. |
 | **schedule** | Config: a recurring definition (cron/rrule + IANA tz + what it triggers). |
 | **timer** | The clock singleton's pending-fire working set (schedule-tick / for-sustain / runbook-wait / watchdog); a Postgres table scanned by the leader-elected clock, each fire realized onto its lane; not history. |
-| **component** | A deployed instance (device/app/service); owns datapoints; a variable-depth tree; pins a component_template_version; classified by component_type. |
-| **component_type** | Classification + field schema + type-level defaults. Carries the `official` boolean. |
+| **component** | A deployed instance (device/app/service); owns datapoints; a variable-depth tree; pins a component_template_version; points at the `product` it is, the source of its shape. |
+| **product** | The concrete SKU (Cisco Room Bar): binds a vendor, a driver, a kind, the capabilities it provides, and the property contract its instances carry. Carries the `official` boolean. |
+| **product_property** | One line of a product's declared-property contract: a catalog property, an optional default, and whether an instance must set it. |
+| **property_value** | A stored value for a property on one arc owner, tagged with its provenance (observed / calculated / intended / declared). |
 | **component_template / _version** | The device shape (collection, commands, datapoint_types, defaults, alarms); the **immutable version** instances pin. |
 | **system** | A composition of components/subsystems (the service tree); pins a system_template_version; located at a location; classified by system_type. |
 | **system_template / _version** | The system shape; the immutable version is the snapshot instances pin. Carries a frozen BOM: per role, its requirement (required canonical datapoints + commands) + health_role. |

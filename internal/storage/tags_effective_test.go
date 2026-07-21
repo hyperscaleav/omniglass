@@ -30,7 +30,7 @@ func tagEstate(t *testing.T, gw storage.Gateway) (campus, room, sysID, compID st
 		t.Fatalf("system: %v", err)
 	}
 	comp, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
-		Name: "codec", ComponentType: "codec", SystemName: strptr("av"), LocationName: strptr("room"),
+		Name: "codec", SystemName: strptr("av"), LocationName: strptr("room"),
 	}, all)
 	if err != nil {
 		t.Fatalf("component: %v", err)
@@ -139,7 +139,7 @@ func TestEffectiveTagsBatchSharedAncestor(t *testing.T) {
 	tagEstate(t, gw)
 	// A second component in the same room, no system.
 	comp2, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
-		Name: "display", ComponentType: "display", LocationName: strptr("room"),
+		Name: "display", LocationName: strptr("room"),
 	}, all)
 	if err != nil {
 		t.Fatalf("component 2: %v", err)

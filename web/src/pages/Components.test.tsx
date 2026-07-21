@@ -15,7 +15,7 @@ import { TAGS_KEY, entityTagsKey } from "../lib/tags";
 // the pencil. Data is seeded into the query cache so no server is needed; `>` grants
 // every permission.
 const me: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
-const comp: Component = { id: "c-1", name: "mic-2", display_name: "Ceiling Mic 2", component_type: "microphone", effective_tags: {} };
+const comp: Component = { id: "c-1", name: "mic-2", display_name: "Ceiling Mic 2", product_id: "shure-mxa920", effective_tags: {} };
 
 function mount(path: string) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
@@ -46,7 +46,6 @@ describe("Components create-as-route", () => {
     expect(screen.getByText("Create component")).toBeTruthy();
     // Identity + Placement fields present; the binding sections are locked.
     expect(screen.getByText("Name")).toBeTruthy();
-    expect(screen.getByText("Component type")).toBeTruthy();
     expect(screen.getByText("System")).toBeTruthy();
     expect(screen.getByText(/Available once the component is created/)).toBeTruthy();
   });

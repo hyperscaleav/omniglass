@@ -56,7 +56,7 @@ func TestTagAPI(t *testing.T) {
 	c.do(ownerTok, http.MethodPost, "/locations", map[string]any{"name": "bldg", "location_type": "building"}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPost, "/locations", map[string]any{"name": "room", "location_type": "room", "parent": "bldg"}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{"name": "sys", "system_type": "meeting-room"}, http.StatusCreated)
-	compRaw := c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "codec-1", "component_type": "codec", "system": "sys", "location": "room"}, http.StatusCreated)
+	compRaw := c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "codec-1", "system": "sys", "location": "room"}, http.StatusCreated)
 	var comp struct {
 		ID string `json:"id"`
 	}

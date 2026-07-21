@@ -25,9 +25,6 @@ var locationTypesYAML []byte
 //go:embed system_types.yaml
 var systemTypesYAML []byte
 
-//go:embed component_types.yaml
-var componentTypesYAML []byte
-
 //go:embed properties.yaml
 var propertiesYAML []byte
 
@@ -73,13 +70,6 @@ type systemTypesDoc struct {
 		ID          string `yaml:"id"`
 		DisplayName string `yaml:"display_name"`
 	} `yaml:"system_types"`
-}
-
-type componentTypesDoc struct {
-	ComponentTypes []struct {
-		ID          string `yaml:"id"`
-		DisplayName string `yaml:"display_name"`
-	} `yaml:"component_types"`
 }
 
 type propertiesDoc struct {
@@ -173,9 +163,6 @@ func Run(ctx context.Context, gw storage.Gateway) error {
 	if err := seedSystemTypes(ctx, gw); err != nil {
 		return err
 	}
-	if err := seedComponentTypes(ctx, gw); err != nil {
-		return err
-	}
 	if err := seedInterfaceTypes(ctx, gw); err != nil {
 		return err
 	}
@@ -262,23 +249,6 @@ func seedSecretTypes(ctx context.Context, gw storage.Gateway) error {
 			DisplayName:           st.DisplayName,
 			DefaultAdminSensitive: st.DefaultAdminSensitive,
 			Fields:                fields,
-		}); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func seedComponentTypes(ctx context.Context, gw storage.Gateway) error {
-	var doc componentTypesDoc
-	if err := yaml.Unmarshal(componentTypesYAML, &doc); err != nil {
-		return fmt.Errorf("seed: parse component_types: %w", err)
-	}
-	for _, ct := range doc.ComponentTypes {
-		if err := gw.UpsertComponentType(ctx, storage.ComponentType{
-			ID:          ct.ID,
-			Official:    true,
-			DisplayName: ct.DisplayName,
 		}); err != nil {
 			return err
 		}

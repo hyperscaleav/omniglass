@@ -23,10 +23,10 @@ func TestRenameComponent(t *testing.T) {
 	}
 
 	// A component with a child, so we can prove the UUID FK survives the rename.
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp-root", ComponentType: "display"}, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp-root"}, all); err != nil {
 		t.Fatal(err)
 	}
-	child, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp-child", ComponentType: "speaker", ParentName: strptr("disp-root")}, all)
+	child, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp-child", ParentName: strptr("disp-root")}, all)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,7 +53,7 @@ func TestRenameComponent(t *testing.T) {
 	_ = child
 
 	// The old name is free; a create can reuse it.
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp-root", ComponentType: "display"}, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp-root"}, all); err != nil {
 		t.Fatalf("old name should be free after rename: %v", err)
 	}
 
@@ -69,7 +69,7 @@ func TestRenameComponent(t *testing.T) {
 	}
 
 	// Create-tightening: the shared validator gates create too, not just rename.
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "Bad Name", ComponentType: "display"}, all); !errors.Is(err, storage.ErrInvalidName) {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "Bad Name"}, all); !errors.Is(err, storage.ErrInvalidName) {
 		t.Fatalf("bad-format create err = %v, want ErrInvalidName", err)
 	}
 

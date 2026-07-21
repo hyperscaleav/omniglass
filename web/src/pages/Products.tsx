@@ -4,6 +4,7 @@ import FlatList, { type FlatColumn } from "../components/FlatList";
 import KVStacked from "../components/KVStacked";
 import Button from "../components/Button";
 import { DrawerFooter } from "../components/Drawer";
+import ProductContractEditor from "../components/ProductContractEditor";
 import { Plus } from "../components/icons";
 import {
   type Product,
@@ -236,6 +237,7 @@ function ProductBladeBody(p: { id: string }): JSX.Element {
               <CapabilitiesPicker value={capabilities()} onChange={setCapabilities} />
             </Show>
           </div>
+          <ProductContractEditor productId={r().id} official={r().official} />
           <Show when={r().official}>
             <div role="alert" class="alert alert-soft text-sm"><span>Seed-owned, read-only.</span></div>
           </Show>

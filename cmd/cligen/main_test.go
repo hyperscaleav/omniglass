@@ -182,7 +182,7 @@ func TestRenderQueryFlags(t *testing.T) {
 }
 
 // TestTypeRegistryCommandNames asserts the type registries (/types/location,
-// /types/system, /types/component, /types/secret) resolve through nameOverride
+// /types/system, /types/secret) resolve through nameOverride
 // to `type <kind> <verb>`, not the leaf-noun heuristic's `<kind> <verb>` which
 // would collide with the base entity commands.
 func TestTypeRegistryCommandNames(t *testing.T) {
@@ -192,7 +192,6 @@ func TestTypeRegistryCommandNames(t *testing.T) {
 	}{
 		{"create-location-type", "/types/location", "post", []string{"type", "location", "create"}},
 		{"delete-system-type", "/types/system/{id}", "delete", []string{"type", "system", "delete"}},
-		{"list-component-types", "/types/component", "get", []string{"type", "component", "list"}},
 		{"list-secret-types", "/types/secret", "get", []string{"type", "secret", "list"}},
 	}
 	for _, tc := range cases {

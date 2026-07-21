@@ -30,46 +30,48 @@ var fixturesYAML []byte
 
 // Doc is the parsed example-data fixture.
 type Doc struct {
-	Locations        []Location        `yaml:"locations"`
-	Users            []User            `yaml:"users"`
-	Variables        []Variable        `yaml:"variables"`
-	Tags             []Tag             `yaml:"tags"`
-	TagBindings      []TagBinding      `yaml:"tag_bindings"`
-	Files            []File            `yaml:"files"`
-	FieldDefinitions []FieldDefinition `yaml:"field_definitions"`
-	Components       []Component       `yaml:"components"`
-	FieldValues      []FieldValue      `yaml:"field_values"`
+	Locations         []Location        `yaml:"locations"`
+	Users             []User            `yaml:"users"`
+	Variables         []Variable        `yaml:"variables"`
+	Tags              []Tag             `yaml:"tags"`
+	TagBindings       []TagBinding      `yaml:"tag_bindings"`
+	Files             []File            `yaml:"files"`
+	ProductProperties []ProductProperty `yaml:"product_properties"`
+	Components        []Component       `yaml:"components"`
+	PropertyValues    []PropertyValue   `yaml:"property_values"`
 }
 
-// FieldDefinition is one example typed field declared on a component_type: the
-// schema half of the field primitive. Default is decoded from YAML and, when
-// present, re-encoded to jsonb (like a Variable); an omitted default leaves the
-// field with none, so the seed can teach a default-vs-plain contrast.
-type FieldDefinition struct {
-	ComponentType string `yaml:"component_type"`
-	Name          string `yaml:"name"`
-	DisplayName   string `yaml:"display_name"`
-	DataType      string `yaml:"data_type"`
-	Default       any    `yaml:"default"`
-	Required      bool   `yaml:"required"`
+// ProductProperty is one line the dev estate adds to a product's declared-property
+// contract: the schema half of the property primitive. Property names a row in the
+// boot-seed property catalog (which owns the data type and validation). Default is
+// decoded from YAML and, when present, re-encoded to jsonb (like a Variable); an
+// omitted default leaves the line with none, so the seed can teach a
+// default-vs-plain contrast.
+type ProductProperty struct {
+	Product  string `yaml:"product"`
+	Property string `yaml:"property"`
+	Default  any    `yaml:"default"`
+	Required bool   `yaml:"required"`
 }
 
 // Component is one example device placed in the estate. Location names a fixture
-// location, resolved to its id at seed time (empty for an unplaced component); a
-// system binding is omitted for now (optional on create).
+// location, resolved to its id at seed time (empty for an unplaced component);
+// Product names a catalog SKU, whose contract supplies the component's properties.
+// A system binding is omitted for now (optional on create).
 type Component struct {
-	Name          string `yaml:"name"`
-	DisplayName   string `yaml:"display_name"`
-	ComponentType string `yaml:"component_type"`
-	Location      string `yaml:"location"`
+	Name        string `yaml:"name"`
+	DisplayName string `yaml:"display_name"`
+	Product     string `yaml:"product"`
+	Location    string `yaml:"location"`
 }
 
-// FieldValue is one example literal a component sets for a field defined on its
-// type: an override so the effective-values panel teaches direct-vs-inherited.
-// Value is decoded from YAML and re-encoded to jsonb, exactly like a Variable.
-type FieldValue struct {
+// PropertyValue is one example literal a component declares over its product's
+// contract: an override so the effective-properties panel teaches
+// direct-vs-inherited. Value is decoded from YAML and re-encoded to jsonb, exactly
+// like a Variable.
+type PropertyValue struct {
 	Component string `yaml:"component"`
-	Field     string `yaml:"field"`
+	Property  string `yaml:"property"`
 	Value     any    `yaml:"value"`
 }
 
@@ -285,66 +287,63 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 			return fmt.Errorf("devseed: create file %q: %w", f.Name, err)
 		}
 	}
-	// Field definitions: a couple of typed fields on the display component_type, so
-	// the field primitive comes up with a schema to teach (a default vs a plain
-	// field). These are catalog rows, flat and unscoped like the type registries, so
-	// they need nothing seeded before them. A default is encoded to jsonb like a
-	// variable; an omitted default stays nil. A definition that already exists
-	// (ErrFieldDefinitionConflict) is left as is, so a re-run adds nothing.
-	for _, fd := range doc.FieldDefinitions {
-		spec := storage.FieldDefinitionSpec{
-			ComponentType: fd.ComponentType, Name: fd.Name, DisplayName: fd.DisplayName, DataType: fd.DataType, Required: fd.Required,
-		}
-		if fd.Default != nil {
-			raw, err := json.Marshal(fd.Default)
+	// Product contract lines: an extra property the dev estate declares on a catalog
+	// product, so the contract editor comes up with an operator-added line beside the
+	// boot-seed ones. The product and the property catalog must already be seeded (the
+	// boot seed runs first). A default is encoded to jsonb like a variable; an omitted
+	// default stays nil. The upsert is keyed on (product, property), so a re-run
+	// rewrites the same row rather than adding one.
+	for _, pp := range doc.ProductProperties {
+		spec := storage.ProductPropertySpec{PropertyName: pp.Property, Required: pp.Required}
+		if pp.Default != nil {
+			raw, err := json.Marshal(pp.Default)
 			if err != nil {
-				return fmt.Errorf("devseed: encode field default %q: %w", fd.Name, err)
+				return fmt.Errorf("devseed: encode contract default %s/%s: %w", pp.Product, pp.Property, err)
 			}
 			spec.DefaultValue = raw
 		}
-		_, err := gw.CreateFieldDefinition(ctx, actorID, spec)
-		if errors.Is(err, storage.ErrFieldDefinitionConflict) {
-			continue
-		}
-		if err != nil {
-			return fmt.Errorf("devseed: create field definition %q: %w", fd.Name, err)
+		if err := gw.UpsertProductProperty(ctx, pp.Product, spec); err != nil {
+			return fmt.Errorf("devseed: declare contract %s/%s: %w", pp.Product, pp.Property, err)
 		}
 	}
 
 	// Components: an example device placed in the estate, so the Components directory
-	// comes up populated. Locations must already be seeded (above) for the placement
-	// to resolve. Like a location, a component has a stable name but no create-conflict
-	// sentinel, so check GetComponent for ErrComponentNotFound first and skip when
-	// already present, keeping the seed idempotent.
+	// comes up populated. Locations and products must already be seeded (above, and the
+	// boot seed) for the placement and the product binding to resolve. Like a location,
+	// a component has a stable name but no create-conflict sentinel, so check
+	// GetComponent for ErrComponentNotFound first and skip when already present,
+	// keeping the seed idempotent.
 	for _, c := range doc.Components {
 		if _, err := gw.GetComponent(ctx, c.Name, all); err == nil {
 			continue
 		} else if !errors.Is(err, storage.ErrComponentNotFound) {
 			return fmt.Errorf("devseed: check component %q: %w", c.Name, err)
 		}
-		spec := storage.ComponentSpec{
-			Name: c.Name, DisplayName: c.DisplayName, ComponentType: c.ComponentType,
-		}
+		spec := storage.ComponentSpec{Name: c.Name, DisplayName: c.DisplayName}
 		if c.Location != "" {
 			loc := c.Location
 			spec.LocationName = &loc
+		}
+		if c.Product != "" {
+			prod := c.Product
+			spec.ProductName = &prod
 		}
 		if _, err := gw.CreateComponent(ctx, actorID, spec, all); err != nil {
 			return fmt.Errorf("devseed: create component %q: %w", c.Name, err)
 		}
 	}
 
-	// Field values: an override a component sets over a definition's default (last,
-	// since both the component and the field definition must exist first), so the
-	// effective-values panel teaches direct-vs-inherited. The value is encoded to
+	// Property values: an override a component declares over its product's contract
+	// (last, since both the component and the contract line must exist first), so the
+	// effective-properties panel teaches direct-vs-inherited. The value is encoded to
 	// jsonb like a variable. The set is idempotent, so a re-run changes nothing.
-	for _, fv := range doc.FieldValues {
-		raw, err := json.Marshal(fv.Value)
+	for _, pv := range doc.PropertyValues {
+		raw, err := json.Marshal(pv.Value)
 		if err != nil {
-			return fmt.Errorf("devseed: encode field value %s/%s: %w", fv.Component, fv.Field, err)
+			return fmt.Errorf("devseed: encode property value %s/%s: %w", pv.Component, pv.Property, err)
 		}
-		if _, err := gw.SetFieldValue(ctx, actorID, fv.Component, fv.Field, raw, all); err != nil {
-			return fmt.Errorf("devseed: set field value %s/%s: %w", fv.Component, fv.Field, err)
+		if _, err := gw.SetPropertyValue(ctx, actorID, "component", pv.Component, pv.Property, "", raw, all); err != nil {
+			return fmt.Errorf("devseed: set property value %s/%s: %w", pv.Component, pv.Property, err)
 		}
 	}
 	// A worked reachability check on a component, so the console's Reachability panel
@@ -419,10 +418,9 @@ func seedReachability(ctx context.Context, gw storage.Gateway, actorID string) e
 	if _, err := gw.GetComponent(ctx, reachComponent, all); errors.Is(err, storage.ErrComponentNotFound) {
 		loc := reachLocation
 		if _, err := gw.CreateComponent(ctx, actorID, storage.ComponentSpec{
-			Name:          reachComponent,
-			DisplayName:   "Boardroom DSP",
-			ComponentType: "dsp",
-			LocationName:  &loc,
+			Name:         reachComponent,
+			DisplayName:  "Boardroom DSP",
+			LocationName: &loc,
 		}, all); err != nil {
 			return fmt.Errorf("devseed: create reachability component: %w", err)
 		}

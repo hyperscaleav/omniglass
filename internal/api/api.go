@@ -263,7 +263,6 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 	registerNodeRoutes(api, a, gw, o.natsURL)
 	registerSecretRoutes(api, a, gw)
 	registerVariableRoutes(api, a, gw)
-	registerFieldRoutes(api, a, gw)
 	registerPropertyRoutes(api, a, gw)
 	registerTagRoutes(api, a, gw)
 	registerFileRoutes(api, a, gw)

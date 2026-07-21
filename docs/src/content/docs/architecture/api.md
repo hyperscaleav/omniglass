@@ -47,7 +47,7 @@ Everything lives under `/api/v1`. The path shape is derivable, not special-cased
   bounded to that target and behind the owner takeover guard. `POST /principals/{id}/sessions:revokeAll` (a
   `{ purpose }` body, same gate and guard) bulk-ends all of one kind at once, returning the count.
 - **Singular kind sub-segments** for the typed families: `/rules/calc`, `/datapoints/metric`,
-  `/types/component`.
+  `/types/location`.
 - **Collection-level custom methods** carry the colon on the collection, not a member:
   `POST /systems:checkName` (also `/components:checkName`, `/locations:checkName`) is an advisory
   precheck for a technical-name rename, returning `{ valid, available, reason }`. It is gated by
@@ -391,6 +391,46 @@ read-only (`PATCH` and `DELETE` both 422).
 A `product` body is
 `{id, display_name, kind, vendor_id, driver_id, parent_product_id, capabilities, official}`. An unknown
 vendor / driver / parent / capability reference is a 422.
+
+## Properties: a product declares, a component sets
+
+A product's **contract** is the set of properties its instances expose
+([core entities](/architecture/core-entities/#declared-properties-the-product-contract-and-the-value-store)).
+It is a **sub-collection of the product**, addressed by property name, not a resource of its own, so the
+line is idempotent: `PUT` declares it or revises it in place. Type and validation are **not** in the body,
+they come from the [property catalog](/guides/admin/properties/).
+
+- `GET /products/{id}/properties` lists the contract, ordered by property name
+  (`{properties: [productProperty]}`, `product:read`). A `productProperty` is
+  `{property_name, default_value, required}`: the label and type are the catalog's to serve, so a surface
+  that wants them reads `/properties` alongside.
+- `PUT /products/{id}/properties/{property}` declares the property on the product, or revises the
+  declaration, from `{default_value?, required?}` (`product:update`, admin). An official (seed-owned)
+  product is read-only (422), and an unknown product or property is a 422.
+- `DELETE /products/{id}/properties/{property}` withdraws the line (204, `product:delete`, admin).
+  Instances **keep** any value they set for it, now off contract. A property the product does not
+  declare is a 404; an official product is refused (422).
+
+A component's **values** are the same shape on the other side of the contract, and unlike the product
+routes they are **ABAC-scoped through the component**, so an out-of-read-scope component is a
+non-disclosing **404** and every write is audited.
+
+- `GET /components/{name}/properties` is the **effective read** (`{properties: [effectiveProperty]}`,
+  `component:read`): every property the component's product declares, resolved to
+  `coalesce(the component's own value, the contract default)`, plus every property set directly on the
+  component that the contract does not declare. Each row carries the catalog's `display_name` and
+  `data_type`, then `value`, `default_value`, `set_value`, `is_set` (the override marker),
+  `from_contract`, `required`, and the `value_id` the surface clears. A **productless** component returns
+  only its off-contract values.
+- `PUT /components/{name}/properties/{property}` sets the component's value from `{value}`
+  (`component:update`). It is **idempotent**: the first set stores the value, a later set replaces it.
+  The property need **not** be on the contract, but it must exist in the catalog (422 otherwise).
+- `DELETE /components/{name}/properties/{property}` clears the component's value (204,
+  `component:update`), so the property falls back to the contract default, or leaves the effective read
+  entirely when it was off contract. Clearing a value the component never set is a 404.
+
+Setting a property is the **component's own write** (`component:update`), the same rule tag bindings
+follow: the property catalog governs the vocabulary, the owning entity governs its values.
 
 ## Files: content-addressed bytes behind a handle
 
