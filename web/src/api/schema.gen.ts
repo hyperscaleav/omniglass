@@ -392,6 +392,50 @@ export interface paths {
         patch: operations["update-component"];
         trace?: never;
     };
+    "/components/{name}/capabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a component's effective capabilities
+         * @description What this component actually provides: the capabilities its product declares, plus the ones the component adds, minus the ones it suppresses. This is the set the role-assignment guard checks, so a productless component that declares its own can still be staffed. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+         */
+        get: operations["list-component-capabilities"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/components/{name}/capabilities/{capability}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Declare a capability on a component
+         * @description Records this component's own fact about a capability: present true adds one its product does not claim, present false suppresses one it does. Idempotent. An unknown component or capability is a 422. Gated by component:update; an out-of-scope component is a non-disclosing 404.
+         */
+        put: operations["set-component-capability"];
+        post?: never;
+        /**
+         * Clear a capability declaration on a component
+         * @description Removes the component's own fact about the capability, so it falls back to whatever its product declares. Clearing a fact the component never declared is a 404. Gated by component:update; an out-of-scope component is a non-disclosing 404.
+         */
+        delete: operations["clear-component-capability"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/components/{name}/effective-tags": {
         parameters: {
             query?: never;
@@ -2064,6 +2108,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/standards/{id}/roles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a standard's declared roles
+         * @description Lists the roles this standard declares (every conforming system inherits them live), ordered by name, each with its quorum and the capabilities a component must provide to fill it. Gated by standard:read.
+         */
+        get: operations["list-standard-roles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/standards/{id}/roles/{role}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Declare a role on a standard
+         * @description Declares a role every conforming system needs filled, or revises it in place (the role is addressed by name, so the write is idempotent). The capability list replaces the required set wholesale. An unknown standard or capability is a 422. Gated by standard:update.
+         */
+        put: operations["set-standard-role"];
+        post?: never;
+        /**
+         * Withdraw a role from a standard
+         * @description Removes the role from the standard, and with it every assignment conforming systems made to it. A role the standard does not declare is a 404. Gated by standard:delete.
+         */
+        delete: operations["delete-standard-role"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/systems": {
         parameters: {
             query?: never;
@@ -2155,6 +2243,74 @@ export interface paths {
          * @description Removes the system's declared value, so the property falls back to the standard contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the system never set is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.
          */
         delete: operations["clear-system-property"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/systems/{name}/roles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a system's effective roles
+         * @description Every role this system needs filled: those its standard declares (from_standard true) plus those declared directly on it, each with the capabilities it requires, the components filling it, and how many more it wants before quorum (understaffed). A one-off system shows only its own. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+         */
+        get: operations["list-system-roles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/systems/{name}/roles/{role}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Declare a role on a system
+         * @description Declares a role directly on this system (how a one-off system gets roles at all, and how a conforming one adds what its standard does not cover), or revises it in place. The capability list replaces the required set wholesale. Gated by system:update; an out-of-scope system is a non-disclosing 404.
+         */
+        put: operations["set-system-role"];
+        post?: never;
+        /**
+         * Withdraw a role from a system
+         * @description Removes a role declared on this system, and with it every assignment to it. A role the system does not declare itself is a 404 (a role inherited from its standard is withdrawn on the standard, not here). Gated by system:update; an out-of-scope system is a non-disclosing 404.
+         */
+        delete: operations["delete-system-role"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/systems/{name}/roles/{role}/assignments/{component}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Assign a component to a role
+         * @description Puts this component in the role for this system. Refused with a 422 naming the missing capabilities when the component does not provide everything the role requires (its product's capabilities, plus what it adds, minus what it suppresses). Idempotent. Gated by system:update; an out-of-scope system is a non-disclosing 404.
+         */
+        put: operations["assign-system-role"];
+        post?: never;
+        /**
+         * Unassign a component from a role
+         * @description Takes this component out of the role, leaving the role understaffed until another fills it. A component that was not filling the role is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.
+         */
+        delete: operations["unassign-system-role"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2702,6 +2858,17 @@ export interface components {
             product_id?: string;
             system_id?: string;
         };
+        ComponentCapabilitiesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ComponentCapabilitiesOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The resolved set: the product's, plus the component's additions, minus its suppressions */
+            capabilities: string[] | null;
+            component: string;
+        };
         ComponentPropertiesOutputBody: {
             /**
              * Format: uri
@@ -3154,6 +3321,28 @@ export interface components {
             value: unknown;
             /** @description The stored value's id */
             value_id: string;
+        };
+        EffectiveRoleBody: {
+            /**
+             * Format: int64
+             * @description How many components fill the role
+             */
+            assigned: number;
+            /** @description The component names filling this role in this system */
+            assigned_to: string[] | null;
+            /** @description The capabilities a component must ALL provide to fill it */
+            capabilities: string[] | null;
+            display_name: string;
+            /** @description True when the role is inherited from the system's standard; false when declared on the system */
+            from_standard: boolean;
+            name: string;
+            /** Format: int64 */
+            quorum: number;
+            /**
+             * Format: int64
+             * @description How many more the role wants before quorum; zero when staffed
+             */
+            understaffed: number;
         };
         EffectiveTagsOutputBody: {
             /**
@@ -3641,6 +3830,15 @@ export interface components {
             readonly $schema?: string;
             properties: components["schemas"]["StandardPropertyBody"][] | null;
         };
+        ListStandardRolesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListStandardRolesOutputBody.json
+             */
+            readonly $schema?: string;
+            roles: components["schemas"]["SystemRoleBody"][] | null;
+        };
         ListStandardsOutputBody: {
             /**
              * Format: uri
@@ -3649,6 +3847,16 @@ export interface components {
              */
             readonly $schema?: string;
             standards: components["schemas"]["StandardBody"][] | null;
+        };
+        ListSystemRolesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListSystemRolesOutputBody.json
+             */
+            readonly $schema?: string;
+            roles: components["schemas"]["EffectiveRoleBody"][] | null;
+            system: string;
         };
         ListSystemsOutputBody: {
             /**
@@ -4053,6 +4261,23 @@ export interface components {
             official: boolean;
             permissions: string[] | null;
         };
+        RoleSpecBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/RoleSpecBody.json
+             */
+            readonly $schema?: string;
+            /** @description The capabilities a component must ALL provide; replaces the required set wholesale */
+            capabilities?: string[] | null;
+            /** @description The role's human label; defaults to the role name */
+            display_name?: string;
+            /**
+             * Format: int64
+             * @description How many components must fill the role; omit for one
+             */
+            quorum?: number;
+        };
         RolesOutputBody: {
             /**
              * Format: uri
@@ -4144,6 +4369,16 @@ export interface components {
             readonly $schema?: string;
             /** @description The image (JPEG, PNG, or WebP), base64-encoded; normalized server-side to a 256x256 JPEG */
             image_base64: string;
+        };
+        SetComponentCapabilityInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/SetComponentCapabilityInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description True to add the capability, false to suppress one the product declares */
+            present: boolean;
         };
         SetComponentPropertyInputBody: {
             /**
@@ -4314,6 +4549,25 @@ export interface components {
             value: unknown;
             /** @description The stored value's id */
             value_id: string;
+        };
+        SystemRoleBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/SystemRoleBody.json
+             */
+            readonly $schema?: string;
+            /** @description The capabilities a component must ALL provide to fill it */
+            capabilities: string[] | null;
+            /** @description The role's human label */
+            display_name: string;
+            /** @description The role's name within its owner (the address) */
+            name: string;
+            /**
+             * Format: int64
+             * @description How many components must fill the role
+             */
+            quorum: number;
         };
         TagBindingBody: {
             /**
@@ -5467,6 +5721,106 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ComponentBody"];
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-component-capabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The component's unique name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComponentCapabilitiesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "set-component-capability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The component's unique name */
+                name: string;
+                /** @description The capability id */
+                capability: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetComponentCapabilityInputBody"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "clear-component-capability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The component's unique name */
+                name: string;
+                /** @description The capability id */
+                capability: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {
@@ -9298,6 +9652,108 @@ export interface operations {
             };
         };
     };
+    "list-standard-roles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The standard id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListStandardRolesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "set-standard-role": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The standard id */
+                id: string;
+                /** @description The role name */
+                role: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RoleSpecBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemRoleBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-standard-role": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The standard id */
+                id: string;
+                /** @description The role name */
+                role: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "list-systems": {
         parameters: {
             query?: never;
@@ -9536,6 +9992,176 @@ export interface operations {
                 name: string;
                 /** @description The property name */
                 property: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-system-roles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The system's unique name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListSystemRolesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "set-system-role": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The system's unique name */
+                name: string;
+                /** @description The role name */
+                role: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RoleSpecBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemRoleBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-system-role": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The system's unique name */
+                name: string;
+                /** @description The role name */
+                role: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "assign-system-role": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The system's unique name */
+                name: string;
+                /** @description The role name */
+                role: string;
+                /** @description The component's unique name */
+                component: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "unassign-system-role": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The system's unique name */
+                name: string;
+                /** @description The role name */
+                role: string;
+                /** @description The component's unique name */
+                component: string;
             };
             cookie?: never;
         };

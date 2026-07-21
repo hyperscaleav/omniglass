@@ -304,6 +304,20 @@ func generatedCommands() []*cobra.Command {
 			Short: "Commands for the component resource",
 		}
 		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "capabilities <name>",
+				Short:   "List a component's effective capabilities",
+				Long:    "What this component actually provides: the capabilities its product declares, plus the ones the component adds, minus the ones it suppresses. This is the set the role-assignment guard checks, so a productless component that declares its own can still be staffed. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
+				Example: "  omniglass component capabilities <name>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/components/%s/capabilities", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
 			var fName string
 			cmd := &cobra.Command{
 				Use:     "checkName",
@@ -322,6 +336,20 @@ func generatedCommands() []*cobra.Command {
 			}
 			cmd.Flags().StringVar(&fName, "name", "", "The proposed technical name to check")
 			_ = cmd.MarkFlagRequired("name")
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "clear-capability <name> <capability>",
+				Short:   "Clear a capability declaration on a component",
+				Long:    "Removes the component's own fact about the capability, so it falls back to whatever its product declares. Clearing a fact the component never declared is a 404. Gated by component:update; an out-of-scope component is a non-disclosing 404.",
+				Example: "  omniglass component clear-capability <name> <capability>",
+				Args:    cobra.ExactArgs(2),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/components/%s/capabilities/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+					return runAPICommand(cmd, "DELETE", path, nil)
+				},
+			}
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
@@ -473,6 +501,27 @@ func generatedCommands() []*cobra.Command {
 			}
 			cmd.Flags().StringVar(&fKey, "key", "", "The tag key to remove")
 			_ = cmd.MarkFlagRequired("key")
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			var fPresent string
+			cmd := &cobra.Command{
+				Use:     "set-capability <name> <capability>",
+				Short:   "Declare a capability on a component",
+				Long:    "Records this component's own fact about a capability: present true adds one its product does not claim, present false suppresses one it does. Idempotent. An unknown component or capability is a 422. Gated by component:update; an out-of-scope component is a non-disclosing 404.",
+				Example: "  omniglass component set-capability <name> <capability> --present present",
+				Args:    cobra.ExactArgs(2),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/components/%s/capabilities/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+					body := map[string]any{}
+					if cmd.Flags().Changed("present") {
+						body["present"] = jsonOrString(fPresent)
+					}
+					return runAPICommand(cmd, "PUT", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fPresent, "present", "", "True to add the capability, false to suppress one the product declares")
+			_ = cmd.MarkFlagRequired("present")
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
@@ -2866,6 +2915,20 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := &cobra.Command{
+				Use:     "delete-role <id> <role>",
+				Short:   "Withdraw a role from a standard",
+				Long:    "Removes the role from the standard, and with it every assignment conforming systems made to it. A role the standard does not declare is a 404. Gated by standard:delete.",
+				Example: "  omniglass standard delete-role <id> <role>",
+				Args:    cobra.ExactArgs(2),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/standards/%s/roles/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+					return runAPICommand(cmd, "DELETE", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
 				Use:     "get <id>",
 				Short:   "Get a standard",
 				Long:    "Fetches a standard by id. Gated by standard:read.",
@@ -2907,6 +2970,20 @@ func generatedCommands() []*cobra.Command {
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "roles <id>",
+				Short:   "List a standard's declared roles",
+				Long:    "Lists the roles this standard declares (every conforming system inherits them live), ordered by name, each with its quorum and the capabilities a component must provide to fill it. Gated by standard:read.",
+				Example: "  omniglass standard roles <id>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/standards/%s/roles", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
 			var fDefaultValue string
 			var fRequired string
 			cmd := &cobra.Command{
@@ -2929,6 +3006,36 @@ func generatedCommands() []*cobra.Command {
 			}
 			cmd.Flags().StringVar(&fDefaultValue, "default-value", "", "The contract default, validated against the property's data_type; omit for no default")
 			cmd.Flags().StringVar(&fRequired, "required", "", "Whether every system conforming to this standard must set the property; defaults to false")
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			var fCapabilities string
+			var fDisplayName string
+			var fQuorum string
+			cmd := &cobra.Command{
+				Use:     "set-role <id> <role>",
+				Short:   "Declare a role on a standard",
+				Long:    "Declares a role every conforming system needs filled, or revises it in place (the role is addressed by name, so the write is idempotent). The capability list replaces the required set wholesale. An unknown standard or capability is a 422. Gated by standard:update.",
+				Example: "  omniglass standard set-role <id> <role>",
+				Args:    cobra.ExactArgs(2),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/standards/%s/roles/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+					body := map[string]any{}
+					if cmd.Flags().Changed("capabilities") {
+						body["capabilities"] = jsonOrString(fCapabilities)
+					}
+					if cmd.Flags().Changed("display-name") {
+						body["display_name"] = fDisplayName
+					}
+					if cmd.Flags().Changed("quorum") {
+						body["quorum"] = jsonOrString(fQuorum)
+					}
+					return runAPICommand(cmd, "PUT", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fCapabilities, "capabilities", "", "The capabilities a component must ALL provide; replaces the required set wholesale")
+			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "The role's human label; defaults to the role name")
+			cmd.Flags().StringVar(&fQuorum, "quorum", "", "How many components must fill the role; omit for one")
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
@@ -2984,6 +3091,20 @@ func generatedCommands() []*cobra.Command {
 			Use:   "system",
 			Short: "Commands for the system resource",
 		}
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "assign-role <name> <role> <component>",
+				Short:   "Assign a component to a role",
+				Long:    "Puts this component in the role for this system. Refused with a 422 naming the missing capabilities when the component does not provide everything the role requires (its product's capabilities, plus what it adds, minus what it suppresses). Idempotent. Gated by system:update; an out-of-scope system is a non-disclosing 404.",
+				Example: "  omniglass system assign-role <name> <role> <component>",
+				Args:    cobra.ExactArgs(3),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/systems/%s/roles/%s/assignments/%s", url.PathEscape(args[0]), url.PathEscape(args[1]), url.PathEscape(args[2]))
+					return runAPICommand(cmd, "PUT", path, nil)
+				},
+			}
+			return cmd
+		}())
 		parent.AddCommand(func() *cobra.Command {
 			var fName string
 			cmd := &cobra.Command{
@@ -3076,6 +3197,20 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := &cobra.Command{
+				Use:     "delete-role <name> <role>",
+				Short:   "Withdraw a role from a system",
+				Long:    "Removes a role declared on this system, and with it every assignment to it. A role the system does not declare itself is a 404 (a role inherited from its standard is withdrawn on the standard, not here). Gated by system:update; an out-of-scope system is a non-disclosing 404.",
+				Example: "  omniglass system delete-role <name> <role>",
+				Args:    cobra.ExactArgs(2),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/systems/%s/roles/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+					return runAPICommand(cmd, "DELETE", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
 				Use:     "get <name>",
 				Short:   "Get a system",
 				Long:    "Fetches a system by name within the caller's read scope. Out of scope is a non-disclosing 404. Gated by system:read.",
@@ -3152,6 +3287,20 @@ func generatedCommands() []*cobra.Command {
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "roles <name>",
+				Short:   "List a system's effective roles",
+				Long:    "Every role this system needs filled: those its standard declares (from_standard true) plus those declared directly on it, each with the capabilities it requires, the components filling it, and how many more it wants before quorum (understaffed). A one-off system shows only its own. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
+				Example: "  omniglass system roles <name>",
+				Args:    cobra.ExactArgs(1),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/systems/%s/roles", url.PathEscape(args[0]))
+					return runAPICommand(cmd, "GET", path, nil)
+				},
+			}
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
 			var fValue string
 			cmd := &cobra.Command{
 				Use:     "set-property <name> <property>",
@@ -3170,6 +3319,36 @@ func generatedCommands() []*cobra.Command {
 			}
 			cmd.Flags().StringVar(&fValue, "value", "", "The value to declare, shape given by the property's data_type")
 			_ = cmd.MarkFlagRequired("value")
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			var fCapabilities string
+			var fDisplayName string
+			var fQuorum string
+			cmd := &cobra.Command{
+				Use:     "set-role <name> <role>",
+				Short:   "Declare a role on a system",
+				Long:    "Declares a role directly on this system (how a one-off system gets roles at all, and how a conforming one adds what its standard does not cover), or revises it in place. The capability list replaces the required set wholesale. Gated by system:update; an out-of-scope system is a non-disclosing 404.",
+				Example: "  omniglass system set-role <name> <role>",
+				Args:    cobra.ExactArgs(2),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/systems/%s/roles/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+					body := map[string]any{}
+					if cmd.Flags().Changed("capabilities") {
+						body["capabilities"] = jsonOrString(fCapabilities)
+					}
+					if cmd.Flags().Changed("display-name") {
+						body["display_name"] = fDisplayName
+					}
+					if cmd.Flags().Changed("quorum") {
+						body["quorum"] = jsonOrString(fQuorum)
+					}
+					return runAPICommand(cmd, "PUT", path, body)
+				},
+			}
+			cmd.Flags().StringVar(&fCapabilities, "capabilities", "", "The capabilities a component must ALL provide; replaces the required set wholesale")
+			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "The role's human label; defaults to the role name")
+			cmd.Flags().StringVar(&fQuorum, "quorum", "", "How many components must fill the role; omit for one")
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
@@ -3197,6 +3376,20 @@ func generatedCommands() []*cobra.Command {
 			_ = cmd.MarkFlagRequired("key")
 			cmd.Flags().StringVar(&fValue, "value", "", "The bound value")
 			_ = cmd.MarkFlagRequired("value")
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := &cobra.Command{
+				Use:     "unassign-role <name> <role> <component>",
+				Short:   "Unassign a component from a role",
+				Long:    "Takes this component out of the role, leaving the role understaffed until another fills it. A component that was not filling the role is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.",
+				Example: "  omniglass system unassign-role <name> <role> <component>",
+				Args:    cobra.ExactArgs(3),
+				RunE: func(cmd *cobra.Command, args []string) error {
+					path := fmt.Sprintf("/api/v1/systems/%s/roles/%s/assignments/%s", url.PathEscape(args[0]), url.PathEscape(args[1]), url.PathEscape(args[2]))
+					return runAPICommand(cmd, "DELETE", path, nil)
+				},
+			}
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {

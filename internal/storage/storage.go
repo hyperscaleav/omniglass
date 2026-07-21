@@ -397,6 +397,23 @@ type Gateway interface {
 	ClearPropertyValue(ctx context.Context, actorID, ownerKind, ownerID, propertyName, instance string, write scope.Set) error
 	EffectiveProperties(ctx context.Context, ownerKind, ownerID string, read scope.Set) ([]EffectiveProperty, error)
 
+	// The role tier: a system's roles resolve from its standard (inherited) and its
+	// own ad-hoc declarations; assignment refuses a component whose resolved
+	// capabilities do not cover what the role requires.
+	EffectiveRoles(ctx context.Context, systemName string, read scope.Set) ([]EffectiveRole, error)
+	ComponentCapabilities(ctx context.Context, componentName string) ([]string, error)
+	AssignRole(ctx context.Context, actorID, systemName, roleName, componentName string, write scope.Set) error
+	UnassignRole(ctx context.Context, actorID, systemName, roleName, componentName string, write scope.Set) error
+	// The declaration side of the same tier: what a standard or a system declares
+	// it needs filled, and the capability facts a component carries on its own.
+	// ownerKind is "standard" or "system"; SeedSystemRole is the boot-seed lane.
+	ListSystemRoles(ctx context.Context, ownerKind, ownerID string) ([]SystemRole, error)
+	SetSystemRole(ctx context.Context, actorID, ownerKind, ownerID string, spec SystemRoleSpec) (*SystemRole, error)
+	DeleteSystemRole(ctx context.Context, actorID, ownerKind, ownerID, name string) error
+	SeedSystemRole(ctx context.Context, ownerKind, ownerID string, spec SystemRoleSpec) error
+	SetComponentCapability(ctx context.Context, actorID, componentName, capabilityID string, present bool) error
+	ClearComponentCapability(ctx context.Context, actorID, componentName, capabilityID string) error
+
 	// The tag tier: the governed key vocabulary and the per-entity value
 	// bindings. Minting a key (tag:create) is a tenant-wide governance action;
 	// binding a value is the owner's own write, so the binding methods take the

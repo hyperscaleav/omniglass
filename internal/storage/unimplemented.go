@@ -529,3 +529,34 @@ func (UnimplementedGateway) SetLocationTypeProperty(context.Context, string, str
 func (UnimplementedGateway) DeleteLocationTypeProperty(context.Context, string, string, string) error {
 	return nil
 }
+
+func (UnimplementedGateway) EffectiveRoles(context.Context, string, scope.Set) ([]EffectiveRole, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) ComponentCapabilities(context.Context, string) ([]string, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) AssignRole(context.Context, string, string, string, string, scope.Set) error {
+	return nil
+}
+func (UnimplementedGateway) UnassignRole(context.Context, string, string, string, string, scope.Set) error {
+	return nil
+}
+func (UnimplementedGateway) ListSystemRoles(context.Context, string, string) ([]SystemRole, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) SetSystemRole(context.Context, string, string, string, SystemRoleSpec) (*SystemRole, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteSystemRole(context.Context, string, string, string, string) error {
+	return nil
+}
+func (UnimplementedGateway) SeedSystemRole(context.Context, string, string, SystemRoleSpec) error {
+	return nil
+}
+func (UnimplementedGateway) SetComponentCapability(context.Context, string, string, string, bool) error {
+	return nil
+}
+func (UnimplementedGateway) ClearComponentCapability(context.Context, string, string, string) error {
+	return nil
+}
