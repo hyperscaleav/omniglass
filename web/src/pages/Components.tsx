@@ -274,6 +274,7 @@ export default function Components() {
             {ctx.fact("System", sysName() ? <button class="link text-sm" onClick={() => navigate(`/systems/${encodeURIComponent(sysName()!)}`)}>{n().systemName}</button> : <span class="text-base-content/50">—</span>)}
             {ctx.fact("Location", <span>{n().locationName || "—"}</span>)}
             {ctx.fact("Parent", parent() ? <button class="link text-sm" onClick={() => ctx.go(parent()!)}>{parent()!.display}</button> : <span class="text-base-content/50">Root</span>)}
+            {ctx.fact("Product", n().raw.product_id ? <span class="font-data text-sm">{n().raw.product_id}</span> : <span class="text-base-content/50">—</span>)}
           </div>
         </div>
 

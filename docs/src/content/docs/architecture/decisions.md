@@ -77,6 +77,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0042](#adr-0042-field-cascade-and-the-type-default-floor) | 2026-07-19 | Accepted | A field's resolved value is deepest-set-wins down `product -> location -> system -> component`, falling to the field's **type default** when nothing is set at any scope; the type default is the **floor** of the cascade, not a competitor to it. This slice is component-only (resolved = the component's set value, else the type default); the multi-scope cascade is tracked by #291 |
 | [ADR-0043](#adr-0043-the-property-catalog) | 2026-07-19 | Accepted | The `datapoint_type` catalog is generalized into a primitive-agnostic **`property`** catalog (the typed set of signals a datapoint observes and a field declares): the unused scope ladder becomes an `official` boolean, `value_type` becomes `data_type` (text to string, add bool), `kind` is nullable (a declared-only property has none), and `validation` is a **JSON Schema** validated by Huma's own validator (zero new dependencies). Value/source tables key by **name** (no FK), so the rename is behavior-preserving; the type-schema (`field_definition.key`) is the only binding and lands in PR-B |
 | [ADR-0044](#adr-0044-the-component-classification-catalogs) | 2026-07-20 | Accepted | The `component_make` catalog is generalized into **`vendor`** (a `kind` of manufacturer / integrator / developer), and two new leaf catalogs join it, **`driver`** (id, display_name, version) and **`capability`** (id, display_name), as the component-classification reference data: each a gated CRUD Catalog console page with read-only official seeded rows. `product` + `product_capability` + `component.product` are the next slice. This is PR2 of the estate-model shift toward property / event / command + vendor / product / driver / capability / standard / role / health |
+| [ADR-0045](#adr-0045-the-product-catalog) | 2026-07-20 | Accepted | **`product`** lands as a first-class catalog entity, the concrete SKU that binds a **`vendor`**, a **`driver`**, a **`kind`** (`device` / `app` / `service` / `vm`), and a capability set via the **`product_capability`** join; **`parent_product_id`** models variants, and **`component.product_id`** (`on delete restrict`) points a component at the SKU it is, making the product the source of a component's shape and retiring the `component_type`-as-shape notion. PR3 of the estate-model shift; consumes the vendor / driver / capability catalogs from ADR-0044 |
 
 ## Entries
 
@@ -1252,3 +1253,40 @@ below from the project's history. From here it grows one slice at a time.
 - **Refines:** [ADR-0031](#adr-0031-component_make-registry-slice-1-an-official-boolean-a-deferred-referential-guard-and-website-scheme-validation)
   (the `component_make` registry is renamed and generalized to `vendor` with a `kind`; its `official`-boolean,
   deferred-delete-guard, and website-scheme-validation calls carry over unchanged).
+
+### ADR-0045: The product catalog
+
+- **Date:** 2026-07-20 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/), [Products guide](/guides/admin/products/)
+- **Decision:** **`product`** is a first-class catalog entity, the concrete **SKU** (a Cisco Room Bar, a
+  Samsung QM55) that ties the [ADR-0044](#adr-0044-the-component-classification-catalogs) leaf catalogs
+  together. A product carries a stable `id` and `display_name`, a **`kind`** from a fixed enum (`device` /
+  `app` / `service` / `vm`, default `device`, enforced by a DB CHECK and at the API edge), an optional
+  **`vendor_id`** (who makes it) and **`driver_id`** (what talks to it), an optional **`parent_product_id`**
+  (a self-reference: a variant points at its base product), and the `official` boolean the type and
+  classification registries already use. The **capabilities** a product provides are a many-to-many set in
+  the **`product_capability`** join (a video bar provides microphone, speaker, camera, codec); setting
+  capabilities on an update replaces the whole set. It is a gated CRUD Catalog console page (`/products`) on
+  the same chassis as the leaf catalogs: seed-owned official rows read-only (update and delete 422), custom
+  rows full CRUD gated by `product:create` / `:update` / `:delete` and audited in the same transaction,
+  official rows seeded at boot. Crucially, **`component.product_id`** (`on delete restrict`) now points a
+  component at the product it **is**: the product is the source of a component's shape (its vendor, driver,
+  and capability set), **replacing the `component_type`-as-shape notion**. The restrict FK is the referential
+  guard the leaf catalogs deferred: a product still referenced by a component cannot be deleted (409). The
+  vendor, driver, and parent FKs are `on delete set null` instead (deleting a vendor nulls a product's
+  pointer, it does not block).
+- **Context:** The estate model is shifting toward property / event / command on the signal side and vendor /
+  product / driver / capability / standard / role / health on the component side.
+  [ADR-0044](#adr-0044-the-component-classification-catalogs) landed vendor, driver, and capability as leaf
+  catalogs with nothing to reference them; **product** is **PR3**, the layer they were built for and the first
+  consumer of all three. A component's shape used to be a job for a `component_type` genus; binding a component
+  to a product instead makes the shape data-driven from the SKU (the same product supplies the same vendor,
+  driver, and capabilities to every component that is one), which is why `component.product` is a `restrict` FK,
+  not `set null`: a product in use is load-bearing for its components.
+- **Deferred:** a product's own template or field-schema binding; and the remaining component-side catalogs
+  (standard, role, health).
+- **Supersedes:** the `component_type`-as-shape notion (a component's shape now comes from its `product`, not
+  its genus type). **Consumes** [ADR-0044](#adr-0044-the-component-classification-catalogs) (product is the
+  `product` layer that ADR deferred; it references vendor, driver, and capability). One divergence from the
+  leaf catalogs' prediction: their deferred delete guard lands only as the `component.product` restrict (409),
+  while a product's own vendor / driver references null out (`on delete set null`) rather than blocking the
+  referenced row's delete.

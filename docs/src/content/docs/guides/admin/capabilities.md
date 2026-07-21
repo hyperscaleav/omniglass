@@ -25,11 +25,13 @@ layer a future `product` will reference to declare what it can do. See
   "Seed-owned, read-only." Omniglass ships a starter set of official capabilities (Microphone,
   Speaker, Display, Flat Panel Display, Camera, Codec, Touch Panel), upserted idempotently at boot
   so the shared set cannot drift install to install; add a custom capability for anything else.
-- **Delete** carries no in-use guard in this slice: nothing yet references a `capability`, so
-  removing a custom row is unconditional (still refused for an official row, 422). A later slice
-  that lands `product` adds the referential guard (409 while a product still declares the
-  capability), the same delete-refused-while-referenced rule the [Types](/guides/admin/types/)
-  registry already enforces.
+- **Delete** carries no in-use guard: a [product](/guides/admin/products/) declares a `capability`
+  through the `product_capability` join, but that link is `on delete cascade`, so deleting a
+  capability drops it from those products' capability sets rather than blocking. Removing a custom
+  row is unconditional (still refused for an official row, 422). The 409
+  delete-refused-while-referenced rule the [Types](/guides/admin/types/) registry enforces lives
+  instead on `component.product_id` (a product with components cannot be deleted), not on the
+  capability.
 
 Minting a capability is admin-gated; the picker that consumes it, declaring a product's
 capabilities, does not exist yet, since it waits on `product`. The same operations are `omniglass

@@ -73,6 +73,7 @@ export const navItems: NavItem[] = [
       { label: "Vendors", path: "/vendors", live: true, resource: "vendor", hint: "The organizations behind products: manufacturers, integrators, developers." },
       { label: "Drivers", path: "/drivers", live: true, resource: "driver", hint: "The implementations that get, emit, and set a product's signals." },
       { label: "Capabilities", path: "/capabilities", live: true, resource: "capability", hint: "What a component can do: microphone, display, and the rest." },
+      { label: "Products", path: "/products", live: true, resource: "product", hint: "A concrete SKU: a vendor's product, its driver, kind, and the capabilities it provides." },
       { label: "Rules", path: "/rules", hint: "Transform, calc, and event rules, with CEL and blast-radius preview." },
     ],
   },

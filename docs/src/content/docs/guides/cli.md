@@ -288,6 +288,30 @@ A seed-owned (**official**) row, for example the `crestron` vendor or the `micro
 read-only: `update` and `delete` both 422. A vendor's `website` is validated to an `http`/`https` scheme
 on write; any other scheme (for example `javascript:`) is a 422.
 
+## Products
+
+The [product](/architecture/core-entities/#catalog-reference-data-product) commands cover the product
+registry: the concrete **SKU** that ties the vendor, driver, and capability catalogs together, and the
+thing a `component` points at. `product:read` sits on the viewer floor; the three writes
+(`product:create`, `product:update`, `product:delete`) are admin-gated.
+
+A product names its **kind** (`device`, `app`, `service`, or `vm`, default `device`), optionally its
+**vendor**, **driver**, and a **parent product** it is a variant of, and the **capabilities** it
+provides (a JSON array of capability ids):
+
+```sh
+omniglass product list                                              # the product registry
+omniglass product create --id barco-ub12 --display-name "Barco UB12" --kind device \
+  --vendor-id barco --driver-id barco-snmp --capabilities '["projector"]'
+omniglass product get barco-ub12
+omniglass product update barco-ub12 --capabilities '["projector","speaker"]'  # replaces the whole set
+omniglass product delete barco-ub12                                 # 422 if official, 409 if a component points at it
+```
+
+A seed-owned (**official**) product, for example `cisco-room-bar`, is read-only: `update` and `delete`
+both 422. A product still referenced by a **component** (`component.product_id`) cannot be deleted (409);
+an unknown vendor, driver, parent, or capability id is a 422.
+
 ## Generated versus hand-written
 
 - **Generated** (`internal/cli/api_gen.go`, do not edit): one command per API operation.

@@ -43,6 +43,9 @@ var driversYAML []byte
 //go:embed capabilities.yaml
 var capabilitiesYAML []byte
 
+//go:embed products.yaml
+var productsYAML []byte
+
 //go:embed secret_types.yaml
 var secretTypesYAML []byte
 
@@ -124,6 +127,18 @@ type capabilitiesDoc struct {
 	} `yaml:"capabilities"`
 }
 
+type productsDoc struct {
+	Products []struct {
+		ID              string   `yaml:"id"`
+		DisplayName     string   `yaml:"display_name"`
+		VendorID        string   `yaml:"vendor_id"`
+		DriverID        string   `yaml:"driver_id"`
+		Kind            string   `yaml:"kind"`
+		ParentProductID string   `yaml:"parent_product_id"`
+		Capabilities    []string `yaml:"capabilities"`
+	} `yaml:"products"`
+}
+
 type secretTypesDoc struct {
 	SecretTypes []struct {
 		ID                    string `yaml:"id"`
@@ -167,6 +182,9 @@ func Run(ctx context.Context, gw storage.Gateway) error {
 		return err
 	}
 	if err := seedCapabilities(ctx, gw); err != nil {
+		return err
+	}
+	if err := seedProducts(ctx, gw); err != nil {
 		return err
 	}
 	return seedSecretTypes(ctx, gw)
@@ -304,6 +322,33 @@ func seedCapabilities(ctx context.Context, gw storage.Gateway) error {
 	for _, c := range doc.Capabilities {
 		if err := gw.UpsertCapability(ctx, storage.Capability{
 			ID: c.ID, Official: true, DisplayName: c.DisplayName,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func seedProducts(ctx context.Context, gw storage.Gateway) error {
+	var doc productsDoc
+	if err := yaml.Unmarshal(productsYAML, &doc); err != nil {
+		return fmt.Errorf("seed: parse products: %w", err)
+	}
+	nz := func(s string) *string {
+		if s == "" {
+			return nil
+		}
+		return &s
+	}
+	for _, p := range doc.Products {
+		kind := p.Kind
+		if kind == "" {
+			kind = "device"
+		}
+		if err := gw.UpsertProduct(ctx, storage.Product{
+			ID: p.ID, Official: true, DisplayName: p.DisplayName,
+			VendorID: nz(p.VendorID), DriverID: nz(p.DriverID),
+			ParentProductID: nz(p.ParentProductID), Kind: kind, Capabilities: p.Capabilities,
 		}); err != nil {
 			return err
 		}

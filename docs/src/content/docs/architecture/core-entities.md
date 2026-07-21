@@ -76,10 +76,9 @@ deployment, no FK.
 ### Catalog reference data: vendor, driver, capability
 
 The **component-classification catalogs** are flat, seed-and-custom registries, not structural
-entities: each names a reusable fact a future `product` layer will pin, on the same official/custom
-pattern as the `*_type` registries ([Types guide](/guides/admin/types/)). Three ship today, none yet
-referenced by `component` (a `product` layer between a catalog and an instance is later work, not
-built):
+entities: each names a reusable fact the `product` layer pins, on the same official/custom
+pattern as the `*_type` registries ([Types guide](/guides/admin/types/)). Three leaf catalogs ship
+here; the **`product`** catalog (below) sits above them as the concrete SKU a `component` points at:
 
 - A **`vendor`** (Crestron, Biamp, QSC, ...) names an organization in the estate model, carrying a
   **`kind`** of `manufacturer`, `integrator`, or `developer` (default `manufacturer`). It is the
@@ -89,6 +88,23 @@ built):
 - A **`capability`** (Microphone, Display, ...) names what a component can do.
 
 See the [Vendors guide](/guides/admin/vendors/) for the operator surface.
+
+### Catalog reference data: `product`
+
+A **`product`** (Cisco Room Bar, Samsung QM55, ...) is the concrete **SKU** that ties the three leaf
+catalogs together: a stable `id` and `display_name`, a **`kind`** (`device` / `app` / `service` / `vm`,
+default `device`, a fixed enum checked in the DB and at the API edge), an optional **`vendor_id`** (who
+makes it) and **`driver_id`** (what talks to it), an optional **`parent_product_id`** (a self-reference:
+a variant points at its base product), and the `official` boolean. The capabilities a product provides
+are a many-to-many set carried in the **`product_capability`** join (`product_id`, `capability_id`); a
+video bar provides microphone, speaker, camera, and codec. The vendor, driver, and parent FKs are
+**`on delete set null`** (deleting a vendor nulls the pointer, it does not block).
+
+A **`component`** points at the product it **is** through **`component.product_id`**
+(**`on delete restrict`**): the product is the source of a component's shape (its vendor, driver, and
+capabilities), replacing the old `component_type`-as-shape notion. The restrict FK is the referential
+guard the leaf catalogs deferred, so a product still referenced by a component cannot be deleted (409).
+See the [Products guide](/guides/admin/products/) for the operator surface.
 
 ## The variable-depth trees
 

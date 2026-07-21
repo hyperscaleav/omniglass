@@ -17,6 +17,7 @@ type componentBody struct {
 	ParentID      *string           `json:"parent_id,omitempty"`
 	SystemID      *string           `json:"system_id,omitempty"`
 	LocationID    *string           `json:"location_id,omitempty"`
+	ProductID     *string           `json:"product_id,omitempty" doc:"The product (catalog SKU) this component is an instance of, if any."`
 	Actions       []string          `json:"actions,omitempty" doc:"The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces."`
 	EffectiveTags map[string]string `json:"effective_tags,omitempty" doc:"The resolved effective tags (key -> winning value) that cascade onto this component; for the Tags column. Provenance is in the effective-tags detail view."`
 }
@@ -24,7 +25,7 @@ type componentBody struct {
 func toComponentBody(c *storage.Component) componentBody {
 	return componentBody{
 		ID: c.ID, Name: c.Name, DisplayName: c.DisplayName, ComponentType: c.ComponentType,
-		ParentID: c.ParentID, SystemID: c.SystemID, LocationID: c.LocationID,
+		ParentID: c.ParentID, SystemID: c.SystemID, LocationID: c.LocationID, ProductID: c.ProductID,
 	}
 }
 
@@ -50,6 +51,7 @@ type createComponentInput struct {
 		Parent        *string `json:"parent,omitempty" doc:"Parent component name; omit for a root component"`
 		System        *string `json:"system,omitempty" doc:"Primary system name this component belongs to"`
 		Location      *string `json:"location,omitempty" doc:"Location name this component is placed at"`
+		Product       *string `json:"product,omitempty" doc:"Product id (catalog SKU) this component is an instance of"`
 	}
 }
 
@@ -232,6 +234,7 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 			ParentName:    in.Body.Parent,
 			SystemName:    in.Body.System,
 			LocationName:  in.Body.Location,
+			ProductName:   in.Body.Product,
 		}, a.scopeFor(ctx, "component", "create"))
 		if err != nil {
 			return nil, mapComponentErr(err)
@@ -318,6 +321,8 @@ func mapComponentErr(err error) error {
 		return huma.Error422UnprocessableEntity("system not found")
 	case errors.Is(err, storage.ErrLocationNotFound):
 		return huma.Error422UnprocessableEntity("location not found")
+	case errors.Is(err, storage.ErrProductNotFound):
+		return huma.Error422UnprocessableEntity("product not found")
 	default:
 		return huma.Error500InternalServerError("component operation failed")
 	}

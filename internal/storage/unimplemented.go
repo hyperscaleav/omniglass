@@ -369,6 +369,18 @@ func (UnimplementedGateway) UpdateCapability(context.Context, string, string, Ca
 	return nil, nil
 }
 func (UnimplementedGateway) DeleteCapability(context.Context, string, string) error { return nil }
+func (UnimplementedGateway) UpsertProduct(context.Context, Product) error           { return nil }
+func (UnimplementedGateway) ListProducts(context.Context) ([]Product, error)        { return nil, nil }
+func (UnimplementedGateway) GetProduct(context.Context, string) (*Product, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) CreateProduct(context.Context, string, Product) (*Product, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) UpdateProduct(context.Context, string, string, ProductPatch) (*Product, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteProduct(context.Context, string, string) error { return nil }
 func (UnimplementedGateway) UpsertSecretType(context.Context, SecretType) error         { return nil }
 func (UnimplementedGateway) ListSecretTypes(context.Context) ([]SecretType, error) {
 	return nil, nil

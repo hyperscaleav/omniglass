@@ -95,6 +95,7 @@ roles:
       - "vendor:create,update,delete"
       - "driver:create,update,delete"
       - "capability:create,update,delete"
+      - "product:create,update,delete"
       - "tag:*"
       - "unit:create"
       - "event_type:create"
