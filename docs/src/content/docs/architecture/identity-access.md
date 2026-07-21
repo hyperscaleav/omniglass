@@ -179,6 +179,15 @@ converges.
 
 ## Roles and the role hierarchy
 
+:::note[One word, two models]
+A **role** on this page is an IAM role: a capability set granted to a principal, in the `role` table, on the
+`/roles` routes. A **[system role](/architecture/core-entities/#system-roles-the-slots-a-system-needs-filled)**
+is a slot a system needs filled, in `system_role`, on the `/standards/{id}/roles` and `/systems/{name}/roles`
+routes. They are separate namespaces with no crossing, which is why the storage methods for the estate side
+are named `ListSystemRoles` / `SetSystemRole` / `DeleteSystemRole` rather than colliding with `ListRoles` /
+`UpsertRole`.
+:::
+
 A role is a **capability set**: permissions per `(resource, action)`. Roles live in a `role` table keyed by a globally unique `id`, each carrying an **`official` boolean**:
 
 - **`official: true`**: ship-with the binary, seeded via the boot phase. A release can patch a default permission via `ON CONFLICT DO UPDATE` on the seed.

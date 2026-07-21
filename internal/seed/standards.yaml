@@ -7,6 +7,20 @@
 standards:
   - id: meeting-room
     display_name: Meeting Room
+    # The roles a conforming system needs filled. A component may fill one only
+    # when it provides EVERY listed capability, so these double as the worked
+    # example of the assignment guard: the shipped Cisco Room Bar satisfies
+    # room-mic, the Samsung QM55 satisfies main-display, and a room with one
+    # bar reads as understaffed until the second lands. Seeded if absent, so an
+    # operator who retunes them keeps the edit.
+    roles:
+      - name: room-mic
+        display_name: Room Microphone
+        quorum: 2
+        capabilities: [microphone, speaker]
+      - name: main-display
+        display_name: Main Display
+        capabilities: [flat-panel-display]
   - id: huddle-room
     display_name: Huddle Room
   - id: classroom

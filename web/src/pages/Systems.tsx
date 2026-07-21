@@ -25,6 +25,7 @@ import { openInEdit, consumePendingEdit } from "../lib/pendingedit";
 import { ArrowRight, ChevronRight, Pencil, Plus, Save, Search, X } from "../components/icons";
 import Button from "../components/Button";
 import PropertiesPanel, { propertyResolutionBlade, ownerPropertyBladeId } from "../components/PropertiesPanel";
+import RolesPanel from "../components/RolesPanel";
 
 // Systems: the system inventory on the generic TreeList, the same shell as
 // Locations and Components. Systems form a tree (parent_id) and are placed at a
@@ -319,6 +320,12 @@ export default function Systems() {
             </div>
           </Show>
         </div>
+
+        {/* The slots this system needs filled, resolved the same way its
+            properties are: what the standard declares plus what the system
+            declares of its own. Assignment writes immediately (like tags), so its
+            controls appear only in edit mode, which keeps view read-only. */}
+        <RolesPanel system={n().raw.name} canUpdate={editing() && canUpdate()} />
 
         {/* The standard's contract, resolved against this system's own values.
             The panel batches its writes into the accordion's Save, so a property

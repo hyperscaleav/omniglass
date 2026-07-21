@@ -124,6 +124,43 @@ func TestSeedRolesIdempotent(t *testing.T) {
 		t.Errorf("huddle-room display_name = %q after re-seed, want the operator's edit to survive", huddleName)
 	}
 
+	// The shipped standards also declare the roles a conforming system needs
+	// filled, seeded once and left alone after: the second Run above must not
+	// have duplicated room-mic, and an operator's retune of its quorum must
+	// survive the next boot.
+	var roleCount int
+	if err := conn.QueryRow(ctx, `select count(*) from system_role
+		where owner_kind = 'standard' and standard_id = 'meeting-room'`).Scan(&roleCount); err != nil {
+		t.Fatalf("count meeting-room roles: %v", err)
+	}
+	if roleCount != 2 {
+		t.Errorf("meeting-room roles = %d, want 2 (seed not idempotent or incomplete)", roleCount)
+	}
+	var micCaps []string
+	if err := conn.QueryRow(ctx, `select array_agg(rc.capability_id order by rc.capability_id)
+		from system_role r join role_capability rc on rc.role_id = r.id
+		where r.standard_id = 'meeting-room' and r.name = 'room-mic'`).Scan(&micCaps); err != nil {
+		t.Fatalf("read room-mic capabilities: %v", err)
+	}
+	if len(micCaps) != 2 || micCaps[0] != "microphone" || micCaps[1] != "speaker" {
+		t.Errorf("room-mic capabilities = %v, want [microphone speaker]", micCaps)
+	}
+	if _, err := conn.Exec(ctx, `update system_role set quorum = 4
+		where standard_id = 'meeting-room' and name = 'room-mic'`); err != nil {
+		t.Fatalf("retune seeded role: %v", err)
+	}
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed re-run after retune: %v", err)
+	}
+	var quorum int
+	if err := conn.QueryRow(ctx, `select quorum from system_role
+		where standard_id = 'meeting-room' and name = 'room-mic'`).Scan(&quorum); err != nil {
+		t.Fatalf("read room-mic quorum: %v", err)
+	}
+	if quorum != 4 {
+		t.Errorf("room-mic quorum = %d after re-seed, want the operator's retune (4) to survive", quorum)
+	}
+
 	// The official vendors seed too, idempotently (the second Run
 	// above must not have duplicated them), and every seeded row is official
 	// (read-only in the API layer).

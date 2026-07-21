@@ -71,7 +71,7 @@ const OWNER_COPY: Record<PropertyOwnerKind, OwnerCopy> = {
     classifier: "product",
     hint: "the product contract, resolved",
     empty:
-      "A component's properties are declared by the product it is an instance of, and this component has no product contract and nothing set directly on it yet.",
+      "Nothing resolves for this component yet. A component's properties come from the product it is an instance of, plus anything set directly on it.",
     offContract: "set on this component, not declared by its product",
     self: "this component",
     chain: "contract default › this component; the deepest set wins",
@@ -84,7 +84,7 @@ const OWNER_COPY: Record<PropertyOwnerKind, OwnerCopy> = {
     classifier: "standard",
     hint: "the standard contract, resolved",
     empty:
-      "A system's properties are declared by the standard it conforms to, and this system conforms to no standard and has nothing set directly on it yet.",
+      "Nothing resolves for this system yet. A system's properties come from the standard it conforms to, plus anything set directly on it.",
     offContract: "set on this system, not declared by its standard",
     self: "this system",
     chain: "contract default › this system; the deepest set wins",
@@ -97,7 +97,7 @@ const OWNER_COPY: Record<PropertyOwnerKind, OwnerCopy> = {
     classifier: "location type",
     hint: "the location type contract, resolved",
     empty:
-      "A location's properties are declared by its location type, and this location's type declares no contract and nothing is set directly on it yet.",
+      "Nothing resolves for this location yet. A location's properties come from its location type, plus anything set directly on it.",
     offContract: "set on this location, not declared by its location type",
     self: "this location",
     chain: "contract default › this location; the deepest set wins",

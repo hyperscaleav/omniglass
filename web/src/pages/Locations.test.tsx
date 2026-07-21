@@ -211,7 +211,7 @@ describe("Locations properties panel", () => {
   it("says where a location's properties come from when nothing is declared or set", async () => {
     mount("/locations/lab");
     await waitFor(() => expect(screen.getByText("Properties")).toBeTruthy());
-    expect(screen.getByText(/declared by its location type/)).toBeTruthy();
+    expect(screen.getByText(/come from its location type/)).toBeTruthy();
   });
 
   it("stages an override and flushes it to the location's own property route on Save", async () => {

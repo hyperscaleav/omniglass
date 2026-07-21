@@ -139,6 +139,14 @@ func scopedDelete[T any](ctx context.Context, p *PG, cfg scopedConfig[T], actorI
 		return cfg.occupied
 	}
 	if _, err := tx.Exec(ctx, `delete from `+string(cfg.table)+` where id = $1`, cfg.idOf(before)); err != nil {
+		// A row that something else still references is the same "refused while
+		// occupied" answer as a row with children, so it must reach the caller as
+		// the occupied sentinel (409) rather than as an opaque server error. The
+		// child count above only sees structural children; a restrict FK from
+		// anywhere else (a component staffing a system role, say) lands here.
+		if isReferencedViolation(err) {
+			return cfg.occupied
+		}
 		return fmt.Errorf("storage: delete %s: %w", cfg.table, err)
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "delete", cfg.resource, cfg.idOf(before), before, nil); err != nil {

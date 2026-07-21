@@ -76,3 +76,41 @@ property their classifier declares, resolved to the value set here or the classi
 Overrides are staged with the rest of the edit and committed by the same **Save changes**. It is one
 surface over one resolver, so the panel reads the same on all three; the full walkthrough is in the
 [Properties guide](/guides/admin/properties/#set-a-property-on-an-instance).
+
+## Roles on a system
+
+A **system** carries one more panel: **Roles**, the slots it needs filled. A role is a slot (a room
+microphone, a main display), not a component, so the room can say what it needs before anything is
+assigned and an **empty slot stays visible**. These are slots in a room, not the
+[roles that grant people access](/guides/admin/access/); the two share only the word.
+
+Each row is one role with **where it came from**, **who fills it**, and **how many more it wants**:
+
+- **Inherited or declared here.** A role marked as coming from the standard is declared on the
+  [standard](/guides/admin/standards/) this system conforms to, and every conforming system has it.
+  A role declared on this system is this room's own. A **one-off system** (conforming to no standard)
+  has only its own.
+- **Assigned and understaffed.** A role has a **quorum**, how many components should fill it. Two
+  assigned against a quorum of two reads as staffed; one reads as short by one. That is true the
+  moment you enter it, with nothing collecting: staffing is a fact about your model, not a
+  measurement.
+- **Assign** picks a component to fill the role; **unassign** takes it out and the role goes back to
+  understaffed. Assigning the same component twice changes nothing.
+- **A component staffing a role cannot be deleted.** Unassign it first. The refusal is deliberate: a
+  delete that silently emptied a slot would leave the room quietly wrong.
+
+**An assignment can be refused, and the refusal tells you why.** A role requires a set of
+[capabilities](/guides/admin/capabilities/), and a component must provide **every** one of them.
+Assign one that does not and you get the gap by name (`missing microphone, speaker`), which is either
+a fix on the component's **Capabilities** panel or a sign that it is the wrong component for the slot.
+
+Declaring the roles is on the [Standards guide](/guides/admin/standards/#roles-what-a-conforming-system-needs-filled);
+this panel is where they get staffed.
+
+## Capabilities on a component
+
+A **component** carries a **Capabilities** panel: what it actually provides, resolved from its
+[product](/guides/admin/products/) plus what this unit adds and minus what it suppresses. It is the set
+every role assignment is checked against, and it is how a component with **no product** provides
+anything at all. The walkthrough is in the
+[Capabilities guide](/guides/admin/capabilities/#what-a-component-actually-provides).

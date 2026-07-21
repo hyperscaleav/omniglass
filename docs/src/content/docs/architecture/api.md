@@ -21,8 +21,9 @@ live in [API first](/contributing/api-first/); this page is the conventions that
 Built today: the Huma-over-chi API with the OpenAPI 3.1 document generated from the Go structs
 (`make gen`), the AIP-style resource and `:verb` routing, and the problem+json error envelope, proven
 on `/auth`, `/roles`, `/locations`, `/systems`, `/components`, `/nodes`, `/interfaces`, `/tasks`, and the
-per-component reachability read, plus the type registries, the `/products` and `/standards` catalogs, and
-the classifier-contract and instance-value property routes. The node `:enroll` and `:claim` custom methods
+per-component reachability read, plus the type registries, the `/products` and `/standards` catalogs, the
+classifier-contract and instance-value property routes, and the role declaration, resolution, and staffing
+routes. The node `:enroll` and `:claim` custom methods
 are the first `:verb` routes in the wild. Still `Design`:
 the expression `filter` language, idempotency keys, long-running operations over the `action` row, the
 MCP surface, the SSE relay, and the NATS node contract. See [implementation status](/architecture/status/).
@@ -321,8 +322,8 @@ owning entity's own write. The key vocabulary and an entity's tags read on the v
 A `tagBinding` body is `{key, value, owner_kind, owner_id?, owner_name?}`.
 
 The **component-classification catalogs** ([core entities](/architecture/core-entities/#catalog-reference-data-vendor-driver-capability))
-are Catalog reference data, flat official-vs-custom registries a future `product` layer will reference,
-on the same pattern as the `*_type` registries. Each is its own resource with the same CRUD shape: the
+are Catalog reference data, flat official-vs-custom registries the `product` layer references, on the same
+pattern as the `*_type` registries. Each is its own resource with the same CRUD shape: the
 list and read routes sit on the viewer floor (`vendor:read` / `driver:read` / `capability:read`, which
 `*:read` carries); the three writes gate on `<resource>:create` / `<resource>:update` /
 `<resource>:delete`, all at the admin tier, exactly like `type:*`. An **official** (seed-owned) row is
@@ -356,7 +357,10 @@ product's signals, with an optional **`version`**.
 
 A `driver` body is `{id, display_name, version, official}`.
 
-A **capability** (Microphone, Display, ...) names what a component can do.
+A **capability** (Microphone, Display, ...) names what a component can do. It is the vocabulary two other
+surfaces consume: a **product** declares the set its instances provide, a **component** adds to or
+suppresses that set with [its own facts](#roles-a-system-declares-a-slot-a-component-fills-it), and a
+**system role** requires a set of them.
 
 - `GET /capabilities` lists the registry, ordered alphabetically by display name
   (`{capabilities: [capability]}`, `capability:read`).
@@ -464,6 +468,59 @@ instance never set is a 404.
 Setting a property is the **owning entity's own write** (`component:update`, `system:update`,
 `location:update`), the same rule tag bindings follow: the property catalog governs the vocabulary, the
 owning entity governs its values.
+
+## Roles: a system declares a slot, a component fills it
+
+A **[system role](/architecture/core-entities/#system-roles-the-slots-a-system-needs-filled)** is a slot a
+system needs filled, and the surface is three arcs: **declaration** (what a standard says every conforming
+system needs, and what one system declares ad-hoc), **resolution** (the per-system read that merges both
+with who fills each role today), and **staffing** (assign and unassign). It is **not** the
+[IAM role](/architecture/identity-access/): `/roles` is the RBAC catalog, these routes are the estate model.
+
+A role is addressed **by name within its owner**, so like a property contract line every declaration is a
+`PUT` that declares or revises in place. The body is `{display_name?, quorum?, capabilities?}`, and
+`capabilities` **replaces** the required set wholesale (omitting one drops it). Gating follows the owner:
+
+- `GET /standards/{id}/roles` plus `PUT` / `DELETE /standards/{id}/roles/{role}`, gated `standard:read` /
+  `:update` / `:delete`. The list returns `{roles: [systemRole]}`, each
+  `{name, display_name, quorum, capabilities}`. Withdrawing a role takes every assignment conforming
+  systems made to it (a cascade), and a role the standard does not declare is a 404.
+- `PUT` / `DELETE /systems/{name}/roles/{role}`, gated `system:update`, for a role declared **directly on
+  one system**. A role the system does not declare **itself** is a 404 here: an inherited role is withdrawn
+  on the standard, not on the system that inherits it.
+- `GET /systems/{name}/roles` is the **resolved read** (`{system, roles: [effectiveRole]}`), gated
+  `system:read`. Each row is the declaration plus `from_standard` (inherited, or declared on the system),
+  `assigned_to` (the component names filling it here), `assigned`, and **`understaffed`** (how many more the
+  role wants before quorum, zero when staffed). The counts are **served, not computed by the client**, so
+  every surface reads staffing identically. A one-off system returns only its own roles.
+- `PUT /systems/{name}/roles/{role}/assignments/{component}` puts a component in the role (204,
+  idempotent), and `DELETE` takes it out (204; a component that was not filling the role is a 404). Both
+  gate on `system:update`.
+- `GET /components/{name}/capabilities` returns the **resolved set**
+  (`{component, capabilities}`, gated `component:read`): what the component's product declares, plus what
+  the component adds, minus what it suppresses. `PUT /components/{name}/capabilities/{capability}` records
+  one own fact from `{present}` (true adds, false suppresses; 204, idempotent), and `DELETE` clears the fact
+  so the component falls back to its product (204; clearing a fact it never declared is a 404). Both writes
+  gate on `component:update`, since a component's capabilities are the component's own data.
+
+Every system and component route resolves its owner **within the caller's scope first**, so an out-of-scope
+system or component is a **non-disclosing 404** on the read and the write alike, and every write is audited
+in the same transaction.
+
+**The assignment refusal is a 422 that names the gap.** When the component's resolved capabilities do not
+cover every capability the role requires, the assignment is refused with the missing capabilities listed:
+
+```
+component "panel-1" cannot fill role "table-mic": missing microphone, speaker
+```
+
+The names are sorted, so the same gap always reads the same way and two refusals are comparable. This is a
+**semantic** refusal, the 422 case in the [status table](#errors-one-problemjson-envelope), not an
+authorization one: the caller is allowed to assign, the model says this component cannot fill this slot. A
+bare 422 would be useless here, because the operator's next move (declare the missing capability on the
+component, or pick a different component) is exactly what the message has to tell them. Around it: an unknown
+role is a **404**, an unknown standard or an unknown capability on a declaration is a **422**, and an unknown
+(or out-of-scope) system or component is the same non-disclosing **404** as anywhere else.
 
 ## Files: content-addressed bytes behind a handle
 

@@ -238,6 +238,24 @@ var nameOverride = map[string]([]string){
 	"list-location-properties":      {"location", "properties"},
 	"set-location-property":         {"location", "set-property"},
 	"clear-location-property":       {"location", "clear-property"},
+	// The role surface nests three deep (a role under its owner, an assignment
+	// under the role), and its leaf nouns are already taken: "roles" is the RBAC
+	// role catalog's own (`role list`) and "capabilities" is the capability
+	// registry's. Grouping is two levels, so each goes under the resource that
+	// owns it, with the verb in the command word. The assignment pair would
+	// otherwise land as `assignment update` / `assignment delete`, which says
+	// nothing about what is being staffed.
+	"list-standard-roles":         {"standard", "roles"},
+	"set-standard-role":           {"standard", "set-role"},
+	"delete-standard-role":        {"standard", "delete-role"},
+	"list-system-roles":           {"system", "roles"},
+	"set-system-role":             {"system", "set-role"},
+	"delete-system-role":          {"system", "delete-role"},
+	"assign-system-role":          {"system", "assign-role"},
+	"unassign-system-role":        {"system", "unassign-role"},
+	"list-component-capabilities": {"component", "capabilities"},
+	"set-component-capability":    {"component", "set-capability"},
+	"clear-component-capability":  {"component", "clear-capability"},
 }
 
 func buildCommands(doc spec, base string) []command {

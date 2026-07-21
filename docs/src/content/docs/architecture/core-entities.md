@@ -23,8 +23,11 @@ carries an **optional classifier** that declares what its instances expose: a co
 **exclusive-arc** owner columns are now real, carrying the datapoint sinks, the **`event`** log sink
 (see [The event sink](#the-event-sink-the-first-arc-owned-occurrence) below), and **`property_value`**
 (see [Declared properties](#declared-properties-the-classifier-contracts-and-the-value-store) below);
-`alarm` is the remaining arc-owned sink still `Design`. Still `Design`: template pinning, `system_member`
-composition, operational mode, and decommission / purge. See [implementation status](/architecture/status/).
+`alarm` is the remaining arc-owned sink still `Design`. A system also declares the **roles** it needs
+filled, staffed by components whose **resolved capabilities** cover what the role requires (see
+[System roles](#system-roles-the-slots-a-system-needs-filled) below). Still `Design`: template pinning,
+`system_member` composition, a role's **impact** on health, operational mode, and decommission / purge.
+See [implementation status](/architecture/status/).
 :::
 
 ## The estate: four structural entities
@@ -98,7 +101,10 @@ here; the **`product`** catalog (below) sits above them as the concrete SKU a `c
   generalization of the former manufacturer-only `component_make`.
 - A **`driver`** (Generic SNMP, Cisco xAPI, ...) names the implementation that gets, emits, or sets
   a product's signals, carrying an optional **`version`**.
-- A **`capability`** (Microphone, Display, ...) names what a component can do.
+- A **`capability`** (Microphone, Display, ...) names what a component can do. It is claimed in two
+  places, a **product** (the default for its instances) and a **component** (its own facts, which add to
+  or suppress the product's), and it is what a
+  [system role](#system-roles-the-slots-a-system-needs-filled) requires.
 
 See the [Vendors guide](/guides/admin/vendors/) for the operator surface.
 
@@ -183,6 +189,72 @@ with **declared** provenance, and the catalog it hung off is now the classifier'
 ([ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property_value)). See
 the [Properties guide](/guides/admin/properties/) for the operator surface.
 
+### System roles: the slots a system needs filled
+
+A contract says what a system **carries**. A **system role** says what it **needs filled**: a table
+microphone, a main display, a confidence monitor. A role is a **slot**, not a component, so the system can
+state its shape before anything is assigned to it, and an **unfilled slot is visible** rather than absent.
+
+:::note[Not the IAM role]
+A **system role** is a slot in a system. An **[IAM role](/architecture/identity-access/)**
+(viewer / operator / admin / owner) is a capability set granted to a principal. They share only the word;
+nothing crosses between them. The storage methods are deliberately `ListSystemRoles` / `SetSystemRole` /
+`DeleteSystemRole` so they cannot be mistaken for RBAC's `ListRoles` / `UpsertRole`.
+:::
+
+Four tables carry it:
+
+| Table | Key columns | Notes |
+|---|---|---|
+| `system_role` | `owner_kind` + `standard_id` / `system_id` (the arc), `name`, `display_name`, **`quorum`** | the slot itself; the arc is the one `property_value` uses, with a one-set CHECK and a `unique nulls not distinct` key over the arc plus name |
+| `role_capability` | (`role_id`, `capability_id`) | what the role requires, **conjunctive**: a component must provide **every** listed capability |
+| `component_capability` | (`component_id`, `capability_id`, **`present`**) | the component's **own** capability facts, layered over its product's |
+| `role_assignment` | (`system_id`, `role_id`, `component_id`) | who fills the role here; the component FK is **`on delete restrict`** |
+
+**A role is declared on a standard or on a system**, the same exclusive arc the property value store uses.
+Declared on a **standard**, every conforming system **inherits it live**, exactly as a contract default does:
+add a role to Meeting Room and every meeting room is short one component until it is staffed. Declared on a
+**system**, it is ad-hoc, which is both how a **one-off system** gets roles at all and how a conforming system
+adds what its standard does not cover. A role also carries a **`quorum`**, how many components should fill it
+(a room wanting two ceiling mics has one role with quorum 2, not two roles), at least one, because a role no
+component need fill is not a role.
+
+**A capability is a fact about a component, not only about its product.** `component_capability` layers over
+the product's set: `present=true` adds a capability the product does not claim (a unit with a mic pod nobody
+modeled), `present=false` suppresses one it does (a bar whose camera is dead or removed). The resolver
+**`EffectiveCapabilities(component)`** is then:
+
+> the **product's** capabilities, UNION the component's **`present=true`** rows, MINUS its **`present=false`**
+> rows.
+
+A **productless** component resolves to just its own declarations. This is the single definition of "what this
+component can do" for the whole platform, and it is the same **contract-plus-override** shape the declared
+properties above already use, applied to capabilities instead of values.
+
+The read side is **`EffectiveRoles(system)`**: the roles its standard declares (marked `from_standard`) UNION
+those declared on it directly, each with its required capabilities, its quorum, and the components filling it
+**here**. It serves **assigned** and **understaffed** (quorum minus assignments, floored at zero) rather than
+leaving each surface to do the arithmetic, so an under-staffed room reads the same way in the console, the
+CLI, and the API.
+
+**Assignment is refused when the component cannot fill the role**, with the missing capabilities **named**:
+
+```
+component "panel-1" cannot fill role "table-mic": missing microphone, speaker
+```
+
+This is a refusal on **modeled** grounds, the same class as the location placement constraint, and naming the
+gap is the point. A bare refusal leaves an operator guessing; a named one tells them to either fix the
+component's capabilities or pick a different component. It is also why capabilities had to become a
+**resolved** set at all: `product` is optional, so a strict guard over a product-only fact would have locked
+every productless component out of every role
+([ADR-0049](/architecture/decisions/#adr-0049-the-system-role-capability-gated-staffing-and-the-resolved-capability-set)).
+
+**Quorum ships without health, on purpose.** Staffing is observable with no engine running: a role wanting two
+components with one assigned is under-staffed **today**, on data the operator entered. What an unfilled or
+failing role does to its system's health (its **impact**: outage, degraded, or none) and the SLI rollup that
+reads it are a separate concern and land with the engine behind them ([health](/architecture/health/)).
+
 ### The seed model: forked templates versus canonical catalogs
 
 Not everything the binary ships with is the same **kind** of thing, and conflating the two kinds is what
@@ -193,7 +265,8 @@ makes seeded defaults painful. Omniglass splits them:
   template can be improved in any release without touching a single tenant. What lands is an ordinary
   **operator-owned** row (`official: false`), freely editable and deletable, and the boot seed installs it
   **only if absent** (`ON CONFLICT DO NOTHING`). Re-seeding never reasserts over an edit; if it did, an
-  operator's rename of "Huddle Room" would silently revert on the next restart.
+  operator's rename of "Huddle Room" would silently revert on the next restart. The **roles** a shipped
+  standard declares ride the same lane, so retuning a seeded role's quorum survives the next boot.
 - **Canonical vocabulary** (the [`property` catalog](/architecture/variables/), and later `command` and
   `event_type`) is the shared namespace a driver maps onto, so it must stay identical install to install.
   It seeds as `official: true` through an **authoritative upsert** (`ON CONFLICT DO UPDATE`), read-only in
@@ -308,6 +381,15 @@ The binding itself is the **`system_member`** table: the **instance assignment**
 A `system_template_member` declares, per role, a **requirement** (the canonical datapoints and commands a
 member must provide) plus its `health_role`; any component whose template meets the requirement can fill
 the role, validated on assignment. Detailed on [templates](/architecture/templates/).
+
+:::note[What is built is the role model above]
+`system_member` and the frozen template BOM are still `Design`. The **built** slot is
+[`system_role`](#system-roles-the-slots-a-system-needs-filled), declared on a standard or a system rather
+than frozen into a `system_template_version`, requiring a **capability** set rather than canonical
+datapoints and commands, and assigned through `role_assignment`. The two models are reconciled when
+template pinning is built
+([ADR-0049](/architecture/decisions/#adr-0049-the-system-role-capability-gated-staffing-and-the-resolved-capability-set)).
+:::
 
 ## Operational mode: active, maintenance, disabled
 

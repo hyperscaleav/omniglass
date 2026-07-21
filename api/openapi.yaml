@@ -261,6 +261,29 @@ components:
         - id
         - name
       type: object
+    ComponentCapabilitiesOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ComponentCapabilitiesOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        capabilities:
+          description: "The resolved set: the product's, plus the component's additions, minus its suppressions"
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        component:
+          type: string
+      required:
+        - component
+        - capabilities
+      type: object
     ComponentPropertiesOutputBody:
       additionalProperties: false
       properties:
@@ -1080,6 +1103,51 @@ components:
         - property_name
         - value
         - value_id
+      type: object
+    EffectiveRoleBody:
+      additionalProperties: false
+      properties:
+        assigned:
+          description: How many components fill the role
+          format: int64
+          type: integer
+        assigned_to:
+          description: The component names filling this role in this system
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        capabilities:
+          description: The capabilities a component must ALL provide to fill it
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        display_name:
+          type: string
+        from_standard:
+          description: True when the role is inherited from the system's standard; false when declared on the system
+          type: boolean
+        name:
+          type: string
+        quorum:
+          format: int64
+          type: integer
+        understaffed:
+          description: How many more the role wants before quorum; zero when staffed
+          format: int64
+          type: integer
+      required:
+        - name
+        - display_name
+        - quorum
+        - capabilities
+        - from_standard
+        - assigned_to
+        - assigned
+        - understaffed
       type: object
     EffectiveTagsOutputBody:
       additionalProperties: false
@@ -1958,6 +2026,25 @@ components:
       required:
         - properties
       type: object
+    ListStandardRolesOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListStandardRolesOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        roles:
+          items:
+            $ref: "#/components/schemas/SystemRoleBody"
+          type:
+            - array
+            - "null"
+      required:
+        - roles
+      type: object
     ListStandardsOutputBody:
       additionalProperties: false
       properties:
@@ -1976,6 +2063,28 @@ components:
             - "null"
       required:
         - standards
+      type: object
+    ListSystemRolesOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListSystemRolesOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        roles:
+          items:
+            $ref: "#/components/schemas/EffectiveRoleBody"
+          type:
+            - array
+            - "null"
+        system:
+          type: string
+      required:
+        - system
+        - roles
       type: object
     ListSystemsOutputBody:
       additionalProperties: false
@@ -2767,6 +2876,32 @@ components:
         - effective_permissions
         - held
       type: object
+    RoleSpecBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/RoleSpecBody.json
+          format: uri
+          readOnly: true
+          type: string
+        capabilities:
+          description: The capabilities a component must ALL provide; replaces the required set wholesale
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        display_name:
+          description: The role's human label; defaults to the role name
+          type: string
+        quorum:
+          description: How many components must fill the role; omit for one
+          format: int64
+          minimum: 0
+          type: integer
+      type: object
     RolesOutputBody:
       additionalProperties: false
       properties:
@@ -2963,6 +3098,22 @@ components:
           type: string
       required:
         - image_base64
+      type: object
+    SetComponentCapabilityInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/SetComponentCapabilityInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        present:
+          description: True to add the capability, false to suppress one the product declares
+          type: boolean
+      required:
+        - present
       type: object
     SetComponentPropertyInputBody:
       additionalProperties: false
@@ -3248,6 +3399,39 @@ components:
         - property_name
         - value
         - value_id
+      type: object
+    SystemRoleBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/SystemRoleBody.json
+          format: uri
+          readOnly: true
+          type: string
+        capabilities:
+          description: The capabilities a component must ALL provide to fill it
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        display_name:
+          description: The role's human label
+          type: string
+        name:
+          description: The role's name within its owner (the address)
+          type: string
+        quorum:
+          description: How many components must fill the role
+          format: int64
+          type: integer
+      required:
+        - name
+        - display_name
+        - quorum
+        - capabilities
       type: object
     TagBindingBody:
       additionalProperties: false
@@ -4424,6 +4608,98 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Update a component
+      x-omniglass-permission: component:update
+  /components/{name}/capabilities:
+    get:
+      description: "What this component actually provides: the capabilities its product declares, plus the ones the component adds, minus the ones it suppresses. This is the set the role-assignment guard checks, so a productless component that declares its own can still be staffed. Gated by component:read; an out-of-scope component is a non-disclosing 404."
+      operationId: list-component-capabilities
+      parameters:
+        - description: The component's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The component's unique name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComponentCapabilitiesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List a component's effective capabilities
+      x-omniglass-permission: component:read
+  /components/{name}/capabilities/{capability}:
+    delete:
+      description: Removes the component's own fact about the capability, so it falls back to whatever its product declares. Clearing a fact the component never declared is a 404. Gated by component:update; an out-of-scope component is a non-disclosing 404.
+      operationId: clear-component-capability
+      parameters:
+        - description: The component's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The component's unique name
+            type: string
+        - description: The capability id
+          in: path
+          name: capability
+          required: true
+          schema:
+            description: The capability id
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Clear a capability declaration on a component
+      x-omniglass-permission: component:update
+    put:
+      description: "Records this component's own fact about a capability: present true adds one its product does not claim, present false suppresses one it does. Idempotent. An unknown capability is a 422; an unknown or out-of-scope component is a non-disclosing 404 (the component is resolved in scope first). Gated by component:update."
+      operationId: set-component-capability
+      parameters:
+        - description: The component's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The component's unique name
+            type: string
+        - description: The capability id
+          in: path
+          name: capability
+          required: true
+          schema:
+            description: The capability id
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetComponentCapabilityInputBody"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Declare a capability on a component
       x-omniglass-permission: component:update
   /components/{name}/effective-tags:
     get:
@@ -7538,6 +7814,102 @@ paths:
           description: Error
       summary: Declare a property on a standard
       x-omniglass-permission: standard:update
+  /standards/{id}/roles:
+    get:
+      description: Lists the roles this standard declares (every conforming system inherits them live), ordered by name, each with its quorum and the capabilities a component must provide to fill it. Gated by standard:read.
+      operationId: list-standard-roles
+      parameters:
+        - description: The standard id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The standard id
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListStandardRolesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List a standard's declared roles
+      x-omniglass-permission: standard:read
+  /standards/{id}/roles/{role}:
+    delete:
+      description: Removes the role from the standard, and with it every assignment conforming systems made to it. A role the standard does not declare is a 404. Gated by standard:delete.
+      operationId: delete-standard-role
+      parameters:
+        - description: The standard id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The standard id
+            type: string
+        - description: The role name
+          in: path
+          name: role
+          required: true
+          schema:
+            description: The role name
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Withdraw a role from a standard
+      x-omniglass-permission: standard:delete
+    put:
+      description: Declares a role every conforming system needs filled, or revises it in place (the role is addressed by name, so the write is idempotent). The capability list replaces the required set wholesale. An unknown standard or capability is a 422. Gated by standard:update.
+      operationId: set-standard-role
+      parameters:
+        - description: The standard id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The standard id
+            type: string
+        - description: The role name
+          in: path
+          name: role
+          required: true
+          schema:
+            description: The role name
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RoleSpecBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemRoleBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Declare a role on a standard
+      x-omniglass-permission: standard:update
   /systems:
     get:
       description: Lists the systems the caller may read, each filtered to its scope subtree. Gated by system:read.
@@ -7755,6 +8127,175 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Set a property on a system
+      x-omniglass-permission: system:update
+  /systems/{name}/roles:
+    get:
+      description: "Every role this system needs filled: those its standard declares (from_standard true) plus those declared directly on it, each with the capabilities it requires, the components filling it, and how many more it wants before quorum (understaffed). A one-off system shows only its own. Gated by system:read; an out-of-scope system is a non-disclosing 404."
+      operationId: list-system-roles
+      parameters:
+        - description: The system's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The system's unique name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListSystemRolesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List a system's effective roles
+      x-omniglass-permission: system:read
+  /systems/{name}/roles/{role}:
+    delete:
+      description: Removes a role declared on this system, and with it every assignment to it. A role the system does not declare itself is a 404 (a role inherited from its standard is withdrawn on the standard, not here). Gated by system:update; an out-of-scope system is a non-disclosing 404.
+      operationId: delete-system-role
+      parameters:
+        - description: The system's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The system's unique name
+            type: string
+        - description: The role name
+          in: path
+          name: role
+          required: true
+          schema:
+            description: The role name
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Withdraw a role from a system
+      x-omniglass-permission: system:update
+    put:
+      description: Declares a role directly on this system (how a one-off system gets roles at all, and how a conforming one adds what its standard does not cover), or revises it in place. The capability list replaces the required set wholesale. Gated by system:update; an out-of-scope system is a non-disclosing 404.
+      operationId: set-system-role
+      parameters:
+        - description: The system's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The system's unique name
+            type: string
+        - description: The role name
+          in: path
+          name: role
+          required: true
+          schema:
+            description: The role name
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RoleSpecBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemRoleBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Declare a role on a system
+      x-omniglass-permission: system:update
+  /systems/{name}/roles/{role}/assignments/{component}:
+    delete:
+      description: Takes this component out of the role, leaving the role understaffed until another fills it. A component that was not filling the role is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.
+      operationId: unassign-system-role
+      parameters:
+        - description: The system's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The system's unique name
+            type: string
+        - description: The role name
+          in: path
+          name: role
+          required: true
+          schema:
+            description: The role name
+            type: string
+        - description: The component's unique name
+          in: path
+          name: component
+          required: true
+          schema:
+            description: The component's unique name
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Unassign a component from a role
+      x-omniglass-permission: system:update
+    put:
+      description: Puts this component in the role for this system. Refused with a 422 naming the missing capabilities when the component does not provide everything the role requires (its product's capabilities, plus what it adds, minus what it suppresses). Idempotent. Gated by system:update; an out-of-scope system is a non-disclosing 404.
+      operationId: assign-system-role
+      parameters:
+        - description: The system's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The system's unique name
+            type: string
+        - description: The role name
+          in: path
+          name: role
+          required: true
+          schema:
+            description: The role name
+            type: string
+        - description: The component's unique name
+          in: path
+          name: component
+          required: true
+          schema:
+            description: The component's unique name
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Assign a component to a role
       x-omniglass-permission: system:update
   /systems/{name}:listTags:
     get:
