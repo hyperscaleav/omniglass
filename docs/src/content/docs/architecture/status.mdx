@@ -1782,6 +1782,9 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   after the migration, the constraints and unique indexes still hold one row per identity), the settings resolver
   unit suite on the renamed levels, and an HTTP end-to-end authz test (an all-scoped role without `platform:*` is
   refused at the tier and permitted below it, and the seeded roles carry the capability exactly where they should).
+  The dev seed carries the no-root-location rule into `make dev`: the example estate is a forest of three unparented
+  tops with devices under two of them, so the location binding at HQ visibly misses the East campus and only the
+  `platform` value reaches both (proven by a pure fixture test and a seeded effective-tags assertion).
   The [cascade](/architecture/cascade/) page moves to
   `Partial`: its binding chain ships for tags, secrets, and variables, while the template bands, group placement by
   weight, rule accumulation, and the resolve view stay `Design`.

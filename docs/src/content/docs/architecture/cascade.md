@@ -266,6 +266,10 @@ Airport Office are separate tops, and a fourth site added next year starts uncov
 The install-wide `60s` at **`platform`** is the only rung that reaches all of them,
 which is why the tier exists rather than a synthetic root location.
 
+`make dev` seeds this estate, so the rule is inspectable rather than illustrative:
+three unparented tops with a device under two of them, one carrying the `staging`
+tag its subtree's binding sets and the other the `prod` the `platform` binding sets.
+
 `component RM204 (500)` would top everything if it set a value directly. Additive
 rules accumulate down this same ladder, and a group can **suppress** one by name
 (the Old-firmware group suppresses the false-firing `high_memory` alarm).
