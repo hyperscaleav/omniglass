@@ -39,6 +39,21 @@ export function useSettings() {
   }));
 }
 
+// Every settings write lands at the platform tier, the least-specific level of the
+// cascade, so the server gates all three on platform:update on top of
+// settings:update. The console hides the controls from a principal missing either
+// half, but a grant revoked mid-session still reaches the server: a 403 then reads
+// as the authority gap it is, not as a generic save failure.
+export const PLATFORM_AUTHORITY_HINT =
+  "A setting applies to the whole install, so changing one needs the platform:update permission as well as settings:update.";
+
+// writeErrorMessage maps a failed settings write to what the operator should read:
+// the install-wide authority hint on a 403, the caller's own wording otherwise. Pure,
+// so the mapping is unit-tested without a query client.
+export function writeErrorMessage(status: number, fallback: string): string {
+  return status === 403 ? PLATFORM_AUTHORITY_HINT : fallback;
+}
+
 // useSettingsMe reads the caller's effective settings (client-visible namespaces
 // only). Authn-only, so any signed-in principal may read it; it feeds the theme.
 export function useSettingsMe() {
@@ -61,11 +76,11 @@ export function usePatchNamespace() {
     namespace: string,
     patch: Record<string, unknown>,
   ): Promise<{ ok: true } | { ok: false; message: string }> => {
-    const { error } = await api.PATCH("/settings/{namespace}", {
+    const { error, response } = await api.PATCH("/settings/{namespace}", {
       params: { path: { namespace } },
       body: patch,
     });
-    if (error) return { ok: false, message: "Could not save the setting." };
+    if (error) return { ok: false, message: writeErrorMessage(response.status, "Could not save the setting.") };
     await qc.invalidateQueries({ queryKey: SETTINGS_KEY });
     await qc.invalidateQueries({ queryKey: SETTINGS_ME_KEY });
     return { ok: true };
@@ -77,10 +92,10 @@ export function usePatchNamespace() {
 export function useRestoreNamespace() {
   const qc = useQueryClient();
   return async (namespace: string): Promise<{ ok: true } | { ok: false; message: string }> => {
-    const { error } = await api.DELETE("/settings/{namespace}", {
+    const { error, response } = await api.DELETE("/settings/{namespace}", {
       params: { path: { namespace } },
     });
-    if (error) return { ok: false, message: "Could not restore the namespace." };
+    if (error) return { ok: false, message: writeErrorMessage(response.status, "Could not restore the namespace.") };
     await qc.invalidateQueries({ queryKey: SETTINGS_KEY });
     await qc.invalidateQueries({ queryKey: SETTINGS_ME_KEY });
     return { ok: true };
@@ -92,8 +107,8 @@ export function useRestoreNamespace() {
 export function useRestoreAllDefaults() {
   const qc = useQueryClient();
   return async (): Promise<{ ok: true } | { ok: false; message: string }> => {
-    const { error } = await api.POST("/settings:restoreDefaults");
-    if (error) return { ok: false, message: "Could not restore defaults." };
+    const { error, response } = await api.POST("/settings:restoreDefaults");
+    if (error) return { ok: false, message: writeErrorMessage(response.status, "Could not restore defaults.") };
     await qc.invalidateQueries({ queryKey: SETTINGS_KEY });
     await qc.invalidateQueries({ queryKey: SETTINGS_ME_KEY });
     return { ok: true };

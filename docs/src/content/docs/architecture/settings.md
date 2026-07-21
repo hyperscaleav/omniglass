@@ -239,12 +239,18 @@ Two read audiences, two read endpoints, and merge-patch writes:
   only, no provenance**. Feeds the SPA at boot (theme, landing, later keybindings). Parallel to `/auth/me`, and
   correct as the cascade grows (it is the caller's own effective cascade). Dedicated, not folded into `/auth/me`,
   so a settings change invalidates a settings cache without disturbing the identity cache.
-- **`PATCH /settings/{namespace}`** (`settings:update`): an RFC 7386 JSON Merge Patch onto the namespace's override
-  at the acting scope (`global` in slice-0); `null` on a key restores it.
-- **`DELETE /settings/{namespace}`** (`settings:update`): drop the override, restoring the whole namespace to
-  defaults.
-- **`POST /settings:restoreDefaults`** (`settings:update`): an AIP custom method, a factory reset of the acting
-  scope.
+- **`PATCH /settings/{namespace}`** (`settings:update` **and** `platform:update`): an RFC 7386 JSON Merge Patch onto
+  the namespace's override at the acting scope (`platform` in slice-0); `null` on a key restores it.
+- **`DELETE /settings/{namespace}`** (`settings:update` **and** `platform:update`): drop the override, restoring the
+  whole namespace to defaults.
+- **`POST /settings:restoreDefaults`** (`settings:update` **and** `platform:update`): an AIP custom method, a factory
+  reset of the acting scope.
+
+Every settings write lands at the **platform** tier by definition (a setting applies to the whole install, never to
+part of the estate), so all three carry `platform:update` on top of `settings:update`, the same install-wide
+authority a platform-tier variable, secret, or tag binding needs. The console gates its Edit and Restore controls on
+**both**, and a principal holding only `settings:update` reads a note naming the missing capability rather than
+meeting a 403 on Save.
 
 Per doctrine 1 the effective document is a Huma struct, so the OpenAPI, the typed SPA client, the CLI command, and
 the JSONSchema all generate from it (`make gen`). The `values` field is the typed `Settings` struct: the generated
@@ -252,10 +258,10 @@ client reads a known field like `values.ui.theme` as a union (slice-0 exposed `v
 Because `code` defaults fill every key, the effective document is always fully populated; only the override
 **storage** is raw JSONB partials.
 
-The two permissions live on the admin role: `settings:read` (admin read with provenance) and `settings:update`
-(write, restore, lock and unlock). The store is a singleton, so there is no create or delete-of-resource
-permission; the client-safe values reach ordinary users through `/settings/me`, which is authn-only, not
-`settings:read`.
+The two resource permissions live on the admin role: `settings:read` (admin read with provenance) and
+`settings:update` (write, restore, lock and unlock), paired on every write with `platform:update` (also admin and
+owner). The store is a singleton, so there is no create or delete-of-resource permission; the client-safe values
+reach ordinary users through `/settings/me`, which is authn-only, not `settings:read`.
 
 ## The cascade-over-principals model
 

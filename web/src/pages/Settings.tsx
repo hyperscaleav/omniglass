@@ -4,6 +4,7 @@ import KVRow from "../components/KVRow";
 import { RotateCcw, Save, Pencil, Check } from "../components/icons";
 import { useMe, can } from "../lib/auth";
 import {
+  PLATFORM_AUTHORITY_HINT,
   useSettings,
   usePatchNamespace,
   useRestoreNamespace,
@@ -62,7 +63,16 @@ export default function Settings() {
   const restoreNamespace = useRestoreNamespace();
   const restoreAll = useRestoreAllDefaults();
 
-  const canEdit = () => can(me.data, "settings", "update");
+  // A settings write always lands at the platform tier, so the server gates all
+  // three write routes on platform:update (install-wide authority) on top of
+  // settings:update. The console gates the controls on BOTH, so an operator never
+  // earns a 403 from a control the console offered. Holding the resource half
+  // without the tier half is the one state worth explaining: the page says which
+  // capability is missing instead of going silently read-only.
+  const canWriteSettings = () => can(me.data, "settings", "update");
+  const hasPlatformAuthority = () => can(me.data, "platform", "update");
+  const canEdit = () => canWriteSettings() && hasPlatformAuthority();
+  const platformGapExplained = () => canWriteSettings() && !hasPlatformAuthority();
 
   const [editing, setEditing] = createSignal(false);
   const [restoringAll, setRestoringAll] = createSignal(false);
@@ -108,6 +118,12 @@ export default function Settings() {
           </div>
         </Show>
       </div>
+
+      <Show when={platformGapExplained()}>
+        <div class="alert alert-info text-sm" role="status">
+          {PLATFORM_AUTHORITY_HINT} These settings are read-only for you.
+        </div>
+      </Show>
 
       <Show when={pageErr()}>
         <div class="alert alert-error text-sm" role="alert">{pageErr()}</div>

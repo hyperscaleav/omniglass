@@ -122,5 +122,28 @@ describe("Settings page", () => {
     expect(await screen.findByText("theme")).toBeTruthy();
     expect(screen.queryByText("Restore all defaults")).toBeNull();
     expect(screen.queryByRole("button", { name: /edit/i })).toBeNull();
+    // No settings:update, so there is no half-held state to explain.
+    expect(screen.queryByText(/platform:update/)).toBeNull();
+  });
+
+  // A settings write lands at the platform tier, so the server gates it on
+  // platform:update on top of settings:update. The console gates on both, and says
+  // which half is missing rather than letting the operator earn a 403 on Save.
+  it("hides the write affordances and names the missing capability without platform:update", async () => {
+    const settingsOnly: Me = { principal: { id: "u-s", kind: "human" }, human: { username: "sam" }, permissions: ["settings:read,update"], grants: [] };
+    mount({ values: { ui: { theme: "omniglass-light" } }, sources: { "ui.theme": "platform" }, locks: {} }, settingsOnly);
+    expect(await screen.findByText("theme")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /edit/i })).toBeNull();
+    expect(screen.queryByText("Restore all defaults")).toBeNull();
+    expect(screen.getByText(/platform:update/)).toBeTruthy();
+  });
+
+  it("keeps the write affordances when settings:update is paired with platform:update", async () => {
+    const both: Me = { principal: { id: "u-a", kind: "human" }, human: { username: "ada" }, permissions: ["settings:read,update", "platform:update"], grants: [] };
+    mount(defaultRead, both);
+    expect(await screen.findByRole("button", { name: /edit/i })).toBeTruthy();
+    expect(screen.getByText("Restore all defaults")).toBeTruthy();
+    // Both halves held, so the explanation stays out of the way.
+    expect(screen.queryByText(/platform:update/)).toBeNull();
   });
 });
