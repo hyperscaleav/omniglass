@@ -37,6 +37,15 @@ func RollbackAll(dsn string) error {
 	})
 }
 
+// RollbackOne rolls the single most recently applied migration back, leaving the
+// database at the schema immediately before it. The production binary never rolls
+// back; this exists so a test can stand a database up at the previous schema,
+// write rows the way the old shape allowed, and then migrate forward over them,
+// which is the only honest way to assert an upgrade preserves behavior.
+func RollbackOne(dsn string) error {
+	return withDBMate(dsn, func(mate *dbmate.DB) error { return mate.Rollback() })
+}
+
 func withDBMate(dsn string, fn func(*dbmate.DB) error) error {
 	u, err := url.Parse(dsn)
 	if err != nil {
