@@ -72,7 +72,7 @@ func TestEffectiveTagsOnListBodies(t *testing.T) {
 		t.Errorf("av environment = %q, want dev", sys.EffectiveTags["environment"])
 	}
 
-	// Location list: campus resolves its own compliance tag and the global env.
+	// Location list: campus resolves its own compliance tag and the platform env.
 	loc := listOne(t, c, ownerTok, "/locations", "locations", "campus")
 	if loc.EffectiveTags["compliance"] != "pci" || loc.EffectiveTags["environment"] != "prod" {
 		t.Errorf("campus tags = %v, want compliance=pci environment=prod", loc.EffectiveTags)

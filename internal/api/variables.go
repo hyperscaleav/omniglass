@@ -54,8 +54,8 @@ type createVariableInput struct {
 	Body struct {
 		Name      string  `json:"name" minLength:"1" doc:"The cascade key; unique per owner"`
 		ValueType string  `json:"value_type" enum:"string,int,float,bool,json" doc:"The declared value type"`
-		OwnerKind string  `json:"owner_kind" enum:"global,location,system,component" doc:"Which tier owns this variable"`
-		Owner     *string `json:"owner,omitempty" doc:"The owning entity's name; omit for a global variable"`
+		OwnerKind string  `json:"owner_kind" enum:"platform,location,system,component" doc:"Which tier owns this variable"`
+		Owner     *string `json:"owner,omitempty" doc:"The owning entity's name; omit for a platform variable"`
 		Value     any     `json:"value" doc:"The value, validated against value_type"`
 	}
 }
@@ -101,7 +101,7 @@ func registerVariableRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Path:          "/variables",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Create a variable",
-		Description:   "Sets a variable at an owner scope (a global variable needs an all-scoped grant). The value is validated against value_type. Gated by variable:create.",
+		Description:   "Sets a variable at an owner scope (a platform variable needs an all-scoped grant). The value is validated against value_type. Gated by variable:create.",
 	}, "variable", "create"), func(ctx context.Context, in *createVariableInput) (*variableOutput, error) {
 		raw, err := json.Marshal(in.Body.Value)
 		if err != nil {

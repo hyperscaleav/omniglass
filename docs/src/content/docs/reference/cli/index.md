@@ -729,14 +729,10 @@ Commands for the effective-tag resource
 Effective tags for a component
 
 ```
-omniglass effective-tag list <name> [flags]
+omniglass effective-tag list <name>
 ```
 
-Resolves the tags that cascade onto a component (global -> location -> system -> component): keys union, values override most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves only from a binding on the component itself. The system band comes from MEMBERSHIP: pass ?system= to resolve against one the component belongs to (a shared device answers differently for each), or omit it to resolve against its primary membership. Gated by component:read; the component must be in the caller's component read scope.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--system` | string | (none) | Resolve against this system, which the component must be a member of. Omit to resolve against its primary membership, the default for a caller with no system in hand. |
+Resolves the tags that cascade onto a component (platform -> location -> system -> component): keys union, values override most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves only from a binding on the component itself. Gated by component:read; the component must be in the caller's component read scope.
 
 Example:
 
@@ -985,8 +981,8 @@ Creates an interface owned by a component (or a server-hosted one, which needs a
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--component` | string | (none) | Owning component, by name or id; omit for a server-hosted interface (needs an all-scoped grant) |
-| `--node` | string | (none) | Node placement, by name or id |
+| `--component` | string | (none) | Owning component name; omit for a server-hosted interface (needs an all-scoped grant) |
+| `--node` | string | (none) | Node placement name |
 | `--params` | string | (none) | Endpoint/target settings (jsonb) |
 | `--type` | string | (none) | An interface_type name (the protocol); the interface is named by it, unique within the component |
 
@@ -1056,7 +1052,7 @@ Patches an interface's node placement or params. Gated by interface:update; read
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--node` | string | (none) | Reassign the node placement, by name or id |
+| `--node` | string | (none) | Reassign the node placement |
 | `--params` | string | (none) | Replace the endpoint/target settings (jsonb) |
 
 Example:
@@ -1585,7 +1581,7 @@ Registers an edge node server-side (day-one enrollment: create, then :enroll to 
 |---|---|---|---|
 | `--description` | string | (none) |  |
 | `--display-name` | string | (none) | Operator label; falls back to the name when empty |
-| `--location` | string | (none) | Optional location the node sits in, by name or id (descriptive placement, not scope) |
+| `--location` | string | (none) | Optional location the node sits in (descriptive placement, not scope) |
 | `--name` | string | (none) | Globally unique node name (also its NATS subject token, so no dots or whitespace) |
 
 Example:
@@ -1729,7 +1725,7 @@ Patches a node's display name, description, and location (a nil field is unchang
 |---|---|---|---|
 | `--description` | string | (none) |  |
 | `--display-name` | string | (none) |  |
-| `--location` | string | (none) | Set the node's location by name or id, or "" to clear it |
+| `--location` | string | (none) | Set the node's location, or "" to clear it |
 
 Example:
 
@@ -2469,14 +2465,14 @@ Create a secret
 omniglass secret create [flags]
 ```
 
-Seals a secret at an owner scope (a global secret needs an all-scoped grant). Fields are validated and encrypted against the type shape. Gated by secret:create.
+Seals a secret at an owner scope (a platform secret needs an all-scoped grant). Fields are validated and encrypted against the type shape. Gated by secret:create.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--admin-sensitive` | string | (none) | Admin-only visibility; omit to use the type default. Setting true requires the admin tier |
 | `--fields` | string | (none) | The operator field map, validated against the type shape |
 | `--name` | string | (none) | The cascade key; unique per owner |
-| `--owner` | string | (none) | The owning entity's name; omit for a global secret |
+| `--owner` | string | (none) | The owning entity's name; omit for a platform secret |
 | `--owner-kind` | string | (none) | Which tier owns this secret |
 | `--secret-type` | string | (none) | A secret_type id |
 
@@ -3620,12 +3616,12 @@ Create a variable
 omniglass variable create [flags]
 ```
 
-Sets a variable at an owner scope (a global variable needs an all-scoped grant). The value is validated against value_type. Gated by variable:create.
+Sets a variable at an owner scope (a platform variable needs an all-scoped grant). The value is validated against value_type. Gated by variable:create.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--name` | string | (none) | The cascade key; unique per owner |
-| `--owner` | string | (none) | The owning entity's name; omit for a global variable |
+| `--owner` | string | (none) | The owning entity's name; omit for a platform variable |
 | `--owner-kind` | string | (none) | Which tier owns this variable |
 | `--value` | string | (none) | The value, validated against value_type |
 | `--value-type` | string | (none) | The declared value type |

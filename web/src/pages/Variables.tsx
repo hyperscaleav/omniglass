@@ -28,15 +28,15 @@ import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
 // Variables: the macro directory on the FlatList surface. A variable is a typed,
-// plaintext free value owned at one scope (global, or a location / system /
+// plaintext free value owned at one scope (platform, or a location / system /
 // component) and resolved down the cascade; this page is the admin directory
 // (create, inspect, edit, delete). A variable reaches a component by being sourced
 // into a field; this directory manages the cells themselves.
 
-const OWNER_KINDS: OwnerKind[] = ["global", "location", "system", "component"];
+const OWNER_KINDS: OwnerKind[] = ["platform", "location", "system", "component"];
 
 function ownerLabel(v: Variable): string {
-  if (v.owner_kind === "global") return "Global";
+  if (v.owner_kind === "platform") return "Platform";
   const tier = v.owner_kind.charAt(0).toUpperCase() + v.owner_kind.slice(1);
   return v.owner_name ? `${tier}: ${v.owner_name}` : tier;
 }
@@ -229,7 +229,7 @@ function CreateVariableForm(p: { onCreated: () => void }): JSX.Element {
 
   const [name, setName] = createSignal("");
   const [valueType, setValueType] = createSignal<ValueType>("string");
-  const [ownerKind, setOwnerKind] = createSignal<OwnerKind>("global");
+  const [ownerKind, setOwnerKind] = createSignal<OwnerKind>("platform");
   const [owner, setOwner] = createSignal("");
   const [value, setValue] = createSignal("");
   const [busy, setBusy] = createSignal(false);
@@ -249,7 +249,7 @@ function CreateVariableForm(p: { onCreated: () => void }): JSX.Element {
     submitIcon: Plus,
     submit: () => void submit(),
     busy,
-    disabled: () => !name().trim() || (ownerKind() !== "global" && !owner()),
+    disabled: () => !name().trim() || (ownerKind() !== "platform" && !owner()),
   });
 
   async function submit() {
@@ -268,7 +268,7 @@ function CreateVariableForm(p: { onCreated: () => void }): JSX.Element {
         name: name().trim(),
         value_type: valueType(),
         owner_kind: ownerKind(),
-        owner: ownerKind() === "global" ? undefined : owner() || undefined,
+        owner: ownerKind() === "platform" ? undefined : owner() || undefined,
         value: parsed,
       });
       await qc.invalidateQueries({ queryKey: VARIABLES_KEY });
@@ -296,7 +296,7 @@ function CreateVariableForm(p: { onCreated: () => void }): JSX.Element {
         </FieldRow>
         <FieldRow
           label="Scope"
-          info="The estate scope this variable attaches to. It cascades down onto the components below it: global, or a location, system, or component."
+          info="The estate scope this variable attaches to. It cascades down onto the components below it: platform, or a location, system, or component."
           docHref="https://docs.omniglass.hyperscaleav.com/architecture/variables/"
         >
           <select class="select select-bordered w-full" value={ownerKind()} onChange={(e) => { setOwnerKind(e.currentTarget.value as OwnerKind); setOwner(""); }}>
@@ -304,7 +304,7 @@ function CreateVariableForm(p: { onCreated: () => void }): JSX.Element {
           </select>
         </FieldRow>
       </div>
-      <Show when={ownerKind() !== "global"}>
+      <Show when={ownerKind() !== "platform"}>
         <FieldRow label={ownerKind().charAt(0).toUpperCase() + ownerKind().slice(1)}>
           <TreeSelect items={ownerTree()} value={owner()} onChange={setOwner} rootLabel="Choose…" />
         </FieldRow>

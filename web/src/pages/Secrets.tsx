@@ -27,15 +27,15 @@ import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
 // Secrets: the shared-credential directory on the FlatList surface. A secret is a
-// typed, encrypted-at-rest value owned at one scope (global, or a location /
+// typed, encrypted-at-rest value owned at one scope (platform, or a location /
 // system / component) and resolved down the cascade; this page is the admin
 // directory (create, inspect masked, delete). A secret reaches a component by
 // being sourced into a field; this directory manages the cells themselves.
 
-const OWNER_KINDS: OwnerKind[] = ["global", "location", "system", "component"];
+const OWNER_KINDS: OwnerKind[] = ["platform", "location", "system", "component"];
 
 function ownerLabel(s: Secret): string {
-  if (s.owner_kind === "global") return "Global";
+  if (s.owner_kind === "platform") return "Platform";
   const tier = s.owner_kind.charAt(0).toUpperCase() + s.owner_kind.slice(1);
   return s.owner_name ? `${tier}: ${s.owner_name}` : tier;
 }
@@ -220,7 +220,7 @@ function CreateSecretForm(p: { onCreated: () => void }): JSX.Element {
 
   const [name, setName] = createSignal("");
   const [typeId, setTypeId] = createSignal("");
-  const [ownerKind, setOwnerKind] = createSignal<OwnerKind>("global");
+  const [ownerKind, setOwnerKind] = createSignal<OwnerKind>("platform");
   const [owner, setOwner] = createSignal("");
   const [fields, setFields] = createSignal<Record<string, string>>({});
   const [busy, setBusy] = createSignal(false);
@@ -247,7 +247,7 @@ function CreateSecretForm(p: { onCreated: () => void }): JSX.Element {
     submitIcon: Plus,
     submit: () => void submit(),
     busy,
-    disabled: () => !typeId() || !name().trim() || (ownerKind() !== "global" && !owner()),
+    disabled: () => !typeId() || !name().trim() || (ownerKind() !== "platform" && !owner()),
   });
 
   async function submit() {
@@ -258,7 +258,7 @@ function CreateSecretForm(p: { onCreated: () => void }): JSX.Element {
         name: name().trim(),
         secret_type: typeId(),
         owner_kind: ownerKind(),
-        owner: ownerKind() === "global" ? undefined : owner() || undefined,
+        owner: ownerKind() === "platform" ? undefined : owner() || undefined,
         fields: fields(),
       });
       await qc.invalidateQueries({ queryKey: SECRETS_KEY });
@@ -287,14 +287,14 @@ function CreateSecretForm(p: { onCreated: () => void }): JSX.Element {
       <div class="grid grid-cols-2 gap-3">
         <FieldRow
           label="Scope"
-          info="The estate scope this secret attaches to. It cascades down onto the components below it: global, or a location, system, or component."
+          info="The estate scope this secret attaches to. It cascades down onto the components below it: platform, or a location, system, or component."
           docHref="https://docs.omniglass.hyperscaleav.com/architecture/variables/"
         >
           <select class="select select-bordered w-full" value={ownerKind()} onChange={(e) => { setOwnerKind(e.currentTarget.value as OwnerKind); setOwner(""); }}>
             <For each={OWNER_KINDS}>{(k) => <option value={k}>{k.charAt(0).toUpperCase() + k.slice(1)}</option>}</For>
           </select>
         </FieldRow>
-        <Show when={ownerKind() !== "global"}>
+        <Show when={ownerKind() !== "platform"}>
           <FieldRow label={ownerKind().charAt(0).toUpperCase() + ownerKind().slice(1)}>
             <TreeSelect items={ownerTree()} value={owner()} onChange={setOwner} rootLabel="Choose…" />
           </FieldRow>

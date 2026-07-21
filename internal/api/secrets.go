@@ -83,8 +83,8 @@ type createSecretInput struct {
 	Body struct {
 		Name           string            `json:"name" minLength:"1" doc:"The cascade key; unique per owner"`
 		SecretType     string            `json:"secret_type" minLength:"1" doc:"A secret_type id"`
-		OwnerKind      string            `json:"owner_kind" enum:"global,location,system,component" doc:"Which tier owns this secret"`
-		Owner          *string           `json:"owner,omitempty" doc:"The owning entity's name; omit for a global secret"`
+		OwnerKind      string            `json:"owner_kind" enum:"platform,location,system,component" doc:"Which tier owns this secret"`
+		Owner          *string           `json:"owner,omitempty" doc:"The owning entity's name; omit for a platform secret"`
 		AdminSensitive *bool             `json:"admin_sensitive,omitempty" doc:"Admin-only visibility; omit to use the type default. Setting true requires the admin tier"`
 		Fields         map[string]string `json:"fields" doc:"The operator field map, validated against the type shape"`
 	}
@@ -169,7 +169,7 @@ func registerSecretRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Path:          "/secrets",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Create a secret",
-		Description:   "Seals a secret at an owner scope (a global secret needs an all-scoped grant). Fields are validated and encrypted against the type shape. Gated by secret:create.",
+		Description:   "Seals a secret at an owner scope (a platform secret needs an all-scoped grant). Fields are validated and encrypted against the type shape. Gated by secret:create.",
 	}, "secret", "create"), func(ctx context.Context, in *createSecretInput) (*secretOutput, error) {
 		s, err := gw.CreateSecret(ctx, actorID(ctx), storage.SecretSpec{
 			Name:           in.Body.Name,
