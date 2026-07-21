@@ -2945,7 +2945,7 @@ Update a system
 omniglass system update <name> [flags]
 ```
 
-Patches a system's display_name or standard. Gated by system:update; read and update scopes drive the 404 versus 403 split.
+Patches a system's display_name or standard. An omitted standard_id leaves it unchanged; an explicit empty string clears it, converting the system to a one-off. Gated by system:update; read and update scopes drive the 404 versus 403 split.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|

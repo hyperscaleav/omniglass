@@ -3206,7 +3206,7 @@ func generatedCommands() []*cobra.Command {
 			cmd := &cobra.Command{
 				Use:     "update <name>",
 				Short:   "Update a system",
-				Long:    "Patches a system's display_name or standard. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
+				Long:    "Patches a system's display_name or standard. An omitted standard_id leaves it unchanged; an explicit empty string clears it, converting the system to a one-off. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
 				Example: "  omniglass system update <name>",
 				Args:    cobra.ExactArgs(1),
 				RunE: func(cmd *cobra.Command, args []string) error {

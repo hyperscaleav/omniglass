@@ -49,6 +49,27 @@ func TestSystemAPI(t *testing.T) {
 	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{"name": "lab"}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{"name": "bad", "standard_id": "galaxy"}, http.StatusUnprocessableEntity)
 
+	// A conforming system converts back to a one-off over the wire: an omitted
+	// standard_id leaves it alone, an explicit "" clears it. This is the path the
+	// console takes, and without it "one-off" would only be reachable at create.
+	standardOf := func(name string) string {
+		var s struct {
+			StandardID string `json:"standard_id"`
+		}
+		if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/systems/"+name, nil, http.StatusOK), &s); err != nil {
+			t.Fatalf("decode system %s: %v", name, err)
+		}
+		return s.StandardID
+	}
+	c.do(ownerTok, http.MethodPatch, "/systems/av", map[string]any{"display_name": "AV"}, http.StatusOK)
+	if got := standardOf("av"); got != "meeting-room" {
+		t.Fatalf("omitted standard_id = %q, want meeting-room kept", got)
+	}
+	c.do(ownerTok, http.MethodPatch, "/systems/av", map[string]any{"standard_id": ""}, http.StatusOK)
+	if got := standardOf("av"); got != "" {
+		t.Fatalf("cleared standard_id = %q, want empty (a one-off system)", got)
+	}
+
 	// Owner lists all three.
 	var listed struct {
 		Systems []struct {

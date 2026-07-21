@@ -205,12 +205,15 @@ func registerSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodPatch,
 		Path:        "/systems/{name}",
 		Summary:     "Update a system",
-		Description: "Patches a system's display_name or standard. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
+		Description: "Patches a system's display_name or standard. An omitted standard_id leaves it unchanged; an explicit empty string clears it, converting the system to a one-off. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
 	}, "system", "update"), func(ctx context.Context, in *updateSystemInput) (*systemOutput, error) {
 		s, err := gw.UpdateSystem(ctx, actorID(ctx), in.Name, storage.SystemPatch{
 			Name:        in.Body.Name,
 			DisplayName: in.Body.DisplayName,
-			StandardID:  emptyPtrToNil(in.Body.StandardID),
+			// Deliberately NOT emptyPtrToNil: that collapses an explicit "" into
+			// "omitted", which would make converting a classified system back to a
+			// one-off impossible. The storage layer reads "" as clear.
+			StandardID: in.Body.StandardID,
 		}, a.scopeFor(ctx, "system", "read"), a.scopeFor(ctx, "system", "update"))
 		if err != nil {
 			return nil, mapSystemErr(err)

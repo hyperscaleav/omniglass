@@ -141,4 +141,26 @@ func TestSystemStandardOptional(t *testing.T) {
 	if after.DisplayName != display || after.Name != "boardroom" {
 		t.Fatalf("patched row = %+v, want display_name %q and name boardroom kept", after, display)
 	}
+
+	// A classified system converts BACK to a one-off. An omitted standard leaves it
+	// alone; an explicit empty string clears it (the house patch convention). Without
+	// the distinction, standard_id is a one-way door and "one-off" is only reachable
+	// at create time, which would gut the point of making it optional.
+	kept, err := gw.UpdateSystem(ctx, "", "boardroom", storage.SystemPatch{DisplayName: &display}, all, all)
+	if err != nil {
+		t.Fatalf("patch without standard: %v", err)
+	}
+	if kept.StandardID == nil || *kept.StandardID != "classroom" {
+		t.Fatalf("omitted standard = %v, want classroom kept", kept.StandardID)
+	}
+	cleared, err := gw.UpdateSystem(ctx, "", "boardroom", storage.SystemPatch{StandardID: strptr("")}, all, all)
+	if err != nil {
+		t.Fatalf("clear standard: %v", err)
+	}
+	if cleared.StandardID != nil {
+		t.Fatalf("cleared standard = %q, want nil (a one-off system)", *cleared.StandardID)
+	}
+	if cleared.DisplayName != display {
+		t.Fatalf("clearing the standard also changed display_name to %q", cleared.DisplayName)
+	}
 }

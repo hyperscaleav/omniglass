@@ -370,7 +370,15 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 		update system set
 			name         = coalesce($2, name),
 			display_name = coalesce($3, display_name),
-			standard_id  = coalesce($4, standard_id),
+			-- standard_id follows the house patch convention: a nil field is left
+			-- unchanged, and a provided empty string CLEARS the column, which is how a
+			-- classified system is converted back to a one-off. coalesce alone cannot
+			-- express the difference between "omitted" and "clear".
+			standard_id  = case
+				when $4::text is null then standard_id
+				when $4 = '' then null
+				else $4
+			end,
 			updated_at   = now()
 		where id = $1
 		returning `+systemCols,

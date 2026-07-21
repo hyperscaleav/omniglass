@@ -176,7 +176,10 @@ export default function Systems() {
           await updateSystem(n().raw.name, {
             name: renamed ? name().trim() : undefined,
             display_name: display() || undefined,
-            standard_id: standard() || undefined,
+            // Send the empty string rather than dropping the key: the API reads ""
+            // as "clear", which is how the operator converts this system back to a
+            // one-off. Omitting it would silently leave the old standard in place.
+            standard_id: standard(),
           });
           await qc.invalidateQueries({ queryKey: SYSTEMS_KEY });
           if (renamed) navigate(`/systems/${encodeURIComponent(name().trim())}`);
