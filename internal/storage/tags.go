@@ -405,7 +405,7 @@ func (p *PG) ListEntityTags(ctx context.Context, ownerKind string, ownerName *st
 // teach the override. A non-propagating key resolves only from a binding on the
 // component itself. The component must be within the read scope; an out-of-scope
 // component is the non-disclosing ErrComponentNotFound.
-func (p *PG) ResolveTags(ctx context.Context, componentID string, read scope.Set) ([]ResolvedTag, error) {
+func (p *PG) ResolveTags(ctx context.Context, componentID, forSystem string, read scope.Set) ([]ResolvedTag, error) {
 	in, err := inScopeTree(ctx, p.pool, componentTable, componentID, read)
 	if err != nil {
 		return nil, err
@@ -413,7 +413,7 @@ func (p *PG) ResolveTags(ctx context.Context, componentID string, read scope.Set
 	if !in {
 		return nil, ErrComponentNotFound
 	}
-	rows, err := p.pool.Query(ctx, resolveTagsSQL, componentID)
+	rows, err := p.pool.Query(ctx, resolveTagsSQL, componentID, forSystem)
 	if err != nil {
 		return nil, fmt.Errorf("storage: resolve tags: %w", err)
 	}
@@ -446,7 +446,21 @@ func (p *PG) ResolveTags(ctx context.Context, componentID string, read scope.Set
 const resolveTagsSQL = `
 with recursive
 target as (
-    select id, system_id, location_id from component where id = $1
+    select id, name, location_id from component where id = $1
+),
+-- The system band is seeded from MEMBERSHIP. Given a system ($2), it resolves
+-- against that one, and only if the component is actually a member: naming a
+-- system it has no binding to must not lend it configuration. Given none, it
+-- falls back to the component's PRIMARY membership, which is what makes the
+-- default a convenience for callers with no system in hand rather than the rule.
+-- The chain stays single-valued because the rank below has no tiebreaker after
+-- depth, so two seeds at the same band would resolve nondeterministically.
+seed_sys as (
+    select s.id
+    from system s
+    join system_member m on m.system_id = s.name
+    join target t on t.name = m.component_id
+    where case when $2::text = '' then m.is_primary else s.name = $2::text end
 ),
 comp_chain(id, depth) as (
     select id, 0 from component where id = $1
@@ -456,7 +470,7 @@ comp_chain(id, depth) as (
     where c.parent_id is not null
 ) cycle id set comp_cyc using comp_path,
 sys_chain(id, depth) as (
-    select system_id, 0 from target where system_id is not null
+    select id, 0 from seed_sys
     union all
     select s.parent_id, sc.depth + 1
     from system s join sys_chain sc on s.id = sc.id
@@ -556,7 +570,17 @@ func (p *PG) EffectiveTags(ctx context.Context, kind string, ownerIDs []string) 
 const effectiveComponentTagsSQL = `
 with recursive
 targets as (
-    select id as target_id, id, system_id, location_id from component where id = any($1)
+    select id as target_id, id, name, location_id from component where id = any($1)
+),
+-- A list read has no system in hand, so every target seeds from its primary
+-- membership. A component in one system, which is nearly all of them, is
+-- unaffected by the distinction.
+seed_sys as (
+    select t.target_id, s.id
+    from system s
+    join system_member m on m.system_id = s.name
+    join targets t on t.name = m.component_id
+    where m.is_primary
 ),
 comp_chain(target_id, id, depth) as (
     select target_id, id, 0 from targets
@@ -566,7 +590,7 @@ comp_chain(target_id, id, depth) as (
     where c.parent_id is not null
 ) cycle id set comp_cyc using comp_path,
 sys_chain(target_id, id, depth) as (
-    select target_id, system_id, 0 from targets where system_id is not null
+    select target_id, id, 0 from seed_sys
     union all
     select sc.target_id, s.parent_id, sc.depth + 1
     from system s join sys_chain sc on s.id = sc.id
