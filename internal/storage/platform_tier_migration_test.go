@@ -12,7 +12,7 @@ import (
 
 // platformTierVersion is the migration under test: the rename of the cascade's
 // least-specific binding tier from 'global' to 'platform'.
-const platformTierVersion = "20260722130000"
+const platformTierVersion = "20260722190000"
 
 // TestPlatformTierRename asserts the migration moved the tier value: 'platform'
 // is legal on every owner_kind that carries the tier, 'global' is not, and the
@@ -266,7 +266,14 @@ func resolveAllVariables(t *testing.T, conn *pgx.Conn, componentID, tier string)
 	sql := fmt.Sprintf(`
 with recursive
 target as (
-    select id, system_id, location_id from component where id = $1
+    -- The system band comes from the component's PRIMARY membership, not from a
+    -- column: component.system_id was dropped when the cascade moved onto
+    -- system_member (ADR-0051).
+    select c.id,
+           (select sm.system_id from system_member sm
+             where sm.component_id = c.id and sm.is_primary) as system_id,
+           c.location_id
+      from component c where c.id = $1
 ),
 comp_chain(id, depth) as (
     select id, 0 from component where id = $1

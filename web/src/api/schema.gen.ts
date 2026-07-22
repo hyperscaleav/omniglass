@@ -489,7 +489,7 @@ export interface paths {
         };
         /**
          * Effective tags for a component
-         * @description Resolves the tags that cascade onto a component (platform -> location -> system -> component): keys union, values override most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves only from a binding on the component itself. Gated by component:read; the component must be in the caller's component read scope.
+         * @description Resolves the tags that cascade onto a component (platform -> location -> system -> component): keys union, values override most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves only from a binding on the component itself. The system band comes from MEMBERSHIP: pass ?system= to resolve against one the component belongs to (a shared device answers differently for each), or omit it to resolve against its primary membership. Gated by component:read; the component must be in the caller's component read scope.
          */
         get: operations["effective-tags"];
         put?: never;
@@ -3042,11 +3042,25 @@ export interface components {
                 [key: string]: string;
             };
             id: string;
+            /** @description The location's name, for display */
+            location?: string;
+            /** @description The location's id, the canonical handle */
             location_id?: string;
             name: string;
+            /** @description The parent component's name, for display; absent for a root component */
+            parent?: string;
+            /** @description The parent component's id, the canonical handle */
             parent_id?: string;
             /** @description The product (catalog SKU) this component is an instance of, if any. */
             product_id?: string;
+            /** @description Name of the component's primary system, its default when no system is named. A component may belong to several; read /components/{name}/memberships for all of them. */
+            system?: string;
+            /**
+             * Format: int64
+             * @description How many systems this component belongs to; more than one means it is shared.
+             */
+            system_count: number;
+            /** @description The primary system's id, the canonical handle */
             system_id?: string;
         };
         ComponentCapabilitiesOutputBody: {
@@ -3191,9 +3205,9 @@ export interface components {
              * @example /api/v1/schemas/CreateInterfaceInputBody.json
              */
             readonly $schema?: string;
-            /** @description Owning component name; omit for a server-hosted interface (needs an all-scoped grant) */
+            /** @description Owning component, by name or id; omit for a server-hosted interface (needs an all-scoped grant) */
             component?: string;
-            /** @description Node placement name */
+            /** @description Node placement, by name or id */
             node?: string;
             /** @description Endpoint/target settings (jsonb) */
             params?: unknown;
@@ -3271,7 +3285,7 @@ export interface components {
             description?: string;
             /** @description Operator label; falls back to the name when empty */
             display_name?: string;
-            /** @description Optional location the node sits in (descriptive placement, not scope) */
+            /** @description Optional location the node sits in, by name or id (descriptive placement, not scope) */
             location?: string;
             /** @description Globally unique node name (also its NATS subject token, so no dots or whitespace) */
             name: string;
@@ -3850,12 +3864,16 @@ export interface components {
             readonly $schema?: string;
             /** @description The owning component name; absent for a server-hosted interface */
             component?: string;
+            /** @description The owning component's id; the stable form of component */
+            component_id?: string;
             /** @description The interface's surrogate id (the address) */
             id: string;
             /** @description The friendly name, unique within the owning component */
             name: string;
             /** @description The node placement name, if assigned */
             node?: string;
+            /** @description The placed node's id; the stable form of node */
+            node_id?: string;
             /** @description The endpoint/target settings (jsonb) */
             params?: unknown;
             type: string;
@@ -4191,6 +4209,9 @@ export interface components {
             id: string;
             location_type: string;
             name: string;
+            /** @description The parent location's name, for display; absent for a site root */
+            parent?: string;
+            /** @description The parent location's id, the canonical handle */
             parent_id?: string;
         };
         LocationPropertiesOutputBody: {
@@ -4293,6 +4314,8 @@ export interface components {
             last_heartbeat_at?: string;
             /** @description The location the node sits in (descriptive placement, not scope) */
             location?: string;
+            /** @description The location's id; the stable form of location */
+            location_id?: string;
             name: string;
         };
         PlatformBindingInputBody: {
@@ -4478,6 +4501,7 @@ export interface components {
              */
             depth: number;
             key: string;
+            /** @description The owning entity's id, the canonical handle; absent for a global owner */
             owner_id?: string;
             owner_kind: string;
             owner_name?: string;
@@ -4603,6 +4627,7 @@ export interface components {
             fields: components["schemas"]["SecretFieldBody"][] | null;
             id: string;
             name: string;
+            /** @description The owning entity's id, the canonical handle; absent for a global owner */
             owner_id?: string;
             owner_kind: string;
             owner_name?: string;
@@ -4823,6 +4848,9 @@ export interface components {
                 [key: string]: string;
             };
             id: string;
+            /** @description The location's name, for display */
+            location?: string;
+            /** @description The location's id, the canonical handle */
             location_id?: string;
             /**
              * Format: int64
@@ -4830,6 +4858,9 @@ export interface components {
              */
             member_count: number;
             name: string;
+            /** @description The parent system's name, for display; absent for a root system */
+            parent?: string;
+            /** @description The parent system's id, the canonical handle */
             parent_id?: string;
             /** @description The standard this system conforms to; omitted for a one-off system */
             standard_id?: string;
@@ -4900,6 +4931,7 @@ export interface components {
              */
             readonly $schema?: string;
             key: string;
+            /** @description The owning entity's id, the canonical handle; absent for a global owner */
             owner_id?: string;
             owner_kind: string;
             owner_name?: string;
@@ -4943,8 +4975,10 @@ export interface components {
             /** @description The interface's surrogate id this task runs over */
             interface_id: string;
             mode: string;
-            /** @description The node placement, projected from the interface */
+            /** @description The node placement name, projected from the interface */
             node?: string;
+            /** @description The placed node's id; the stable form of node */
+            node_id?: string;
             /** @description The inline probe settings (jsonb) */
             spec?: unknown;
         };
@@ -5012,7 +5046,7 @@ export interface components {
              * @example /api/v1/schemas/UpdateInterfaceInputBody.json
              */
             readonly $schema?: string;
-            /** @description Reassign the node placement */
+            /** @description Reassign the node placement, by name or id */
             node?: string;
             /** @description Replace the endpoint/target settings (jsonb) */
             params?: unknown;
@@ -5062,7 +5096,7 @@ export interface components {
             readonly $schema?: string;
             description?: string;
             display_name?: string;
-            /** @description Set the node's location, or "" to clear it */
+            /** @description Set the node's location by name or id, or "" to clear it */
             location?: string;
         };
         UpdatePrincipalInputBody: {
@@ -5191,6 +5225,7 @@ export interface components {
             readonly $schema?: string;
             id: string;
             name: string;
+            /** @description The owning entity's id, the canonical handle; absent for a global owner */
             owner_id?: string;
             owner_kind: string;
             owner_name?: string;
@@ -6261,7 +6296,10 @@ export interface operations {
     };
     "effective-tags": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Resolve against this system, which the component must be a member of. Omit to resolve against its primary membership, the default for a caller with no system in hand. */
+                system?: string;
+            };
             header?: never;
             path: {
                 /** @description The component's name */
