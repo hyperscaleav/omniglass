@@ -113,12 +113,12 @@ func (p *PG) EffectiveCapabilities(ctx context.Context, q querier, componentName
 			-- what the component adds on its own
 			select cc.capability_id
 			from component_capability cc
-			where cc.component_id = $1 and cc.present
+			where cc.component_id = (select id from component where name = $1) and cc.present
 		) provided
 		where cap not in (
 			-- minus what the component suppresses
 			select capability_id from component_capability
-			where component_id = $1 and not present
+			where component_id = (select id from component where name = $1) and not present
 		)`, componentName).Scan(&caps)
 	if err != nil {
 		return nil, fmt.Errorf("storage: effective capabilities %s: %w", componentName, err)
@@ -141,7 +141,7 @@ func (p *PG) EffectiveRoles(ctx context.Context, systemName string, read scope.S
 	}
 	rows, err := p.pool.Query(ctx, `
 		with sys as (
-			select name, standard_id from system where name = $1
+			select id, name, standard_id from system where name = $1
 		),
 		roles as (
 			-- inherited: declared on the standard this system conforms to
@@ -150,15 +150,17 @@ func (p *PG) EffectiveRoles(ctx context.Context, systemName string, read scope.S
 			union all
 			-- ad-hoc: declared directly on this system
 			select r.*, false as from_standard
-			from sys join system_role r on r.owner_kind = 'system' and r.system_id = sys.name
+			from sys join system_role r on r.owner_kind = 'system' and r.system_id = sys.id
 		)
 		select roles.id, roles.name, roles.display_name, roles.quorum, roles.impact, roles.from_standard,
 		       roles.created_at, roles.updated_at,
 		       coalesce(array_agg(distinct rc.capability_id) filter (where rc.capability_id is not null), '{}') as caps,
-		       coalesce(array_agg(distinct ra.component_id) filter (where ra.component_id is not null), '{}') as assigned
+		       coalesce(array_agg(distinct ac.name) filter (where ac.name is not null), '{}') as assigned
 		from roles
 		left join role_capability rc on rc.role_id = roles.id
-		left join role_assignment ra on ra.role_id = roles.id and ra.system_id = $1
+		left join role_assignment ra on ra.role_id = roles.id
+		     and ra.system_id = (select id from system where name = $1)
+		left join component ac on ac.id = ra.component_id
 		group by roles.id, roles.name, roles.display_name, roles.quorum, roles.impact, roles.from_standard,
 		         roles.created_at, roles.updated_at
 		order by roles.name`, systemName)
@@ -228,7 +230,8 @@ func (p *PG) AssignRole(ctx context.Context, actorID, systemName, roleName, comp
 	}
 	if _, err := tx.Exec(ctx, `
 		insert into role_assignment (system_id, role_id, component_id)
-		values ($1, $2, $3)
+		values ((select id from system where name = $1), $2,
+		        (select id from component where name = $3))
 		on conflict (system_id, role_id, component_id) do nothing`,
 		systemName, roleID, componentName); err != nil {
 		return mapRoleWriteErr(err)
@@ -272,7 +275,8 @@ func (p *PG) UnassignRole(ctx context.Context, actorID, systemName, roleName, co
 	var id string
 	if err := tx.QueryRow(ctx, `
 		delete from role_assignment
-		where system_id = $1 and role_id = $2 and component_id = $3
+		where system_id = (select id from system where name = $1) and role_id = $2
+		  and component_id = (select id from component where name = $3)
 		returning id`, systemName, roleID, componentName).Scan(&id); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrAssignmentMissing
@@ -302,12 +306,12 @@ func (p *PG) resolveRole(ctx context.Context, q querier, systemName, roleName st
 		caps []string
 	)
 	err := q.QueryRow(ctx, `
-		with sys as (select name, standard_id from system where name = $1)
+		with sys as (select id, name, standard_id from system where name = $1)
 		select r.id,
 		       coalesce(array_agg(rc.capability_id) filter (where rc.capability_id is not null), '{}')
 		from sys
 		join system_role r
-		     on (r.owner_kind = 'system' and r.system_id = sys.name)
+		     on (r.owner_kind = 'system' and r.system_id = sys.id)
 		     or (r.owner_kind = 'standard' and r.standard_id = sys.standard_id)
 		left join role_capability rc on rc.role_id = r.id
 		where r.name = $2

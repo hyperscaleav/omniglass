@@ -255,7 +255,7 @@ func (p *PG) DeleteStandard(ctx context.Context, actorID, id string) error {
 // --- system CRUD -------------------------------------------------------------
 
 const systemCols = `id, name, coalesce(display_name, ''), standard_id, parent_id, location_id,
-	(select count(*) from system_member m where m.system_id = system.name),
+	(select count(*) from system_member m where m.system_id = system.id) as member_count,
 	(select p.name from system p where p.id = system.parent_id) as parent_name,
 	(select l.name from location l where l.id = system.location_id) as location_name,
 	created_at, updated_at`

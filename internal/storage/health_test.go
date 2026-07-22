@@ -102,10 +102,12 @@ func (f *healthFixture) recorded(t *testing.T, ctx context.Context, ownerKind, o
 	}
 	var n int
 	var latest *string
+	// The arc stores the owner's id; the tests speak names, so the id resolves here.
+	owner := `(select id from ` + ownerKind + ` where name = $1)`
 	if err := f.conn.QueryRow(ctx, `
 		select count(*), (select value from state_datapoint
-			where `+col+` = $1 and key = 'health' order by ts desc, id desc limit 1)
-		from state_datapoint where `+col+` = $1 and key = 'health'`, ownerID).Scan(&n, &latest); err != nil {
+			where `+col+` = `+owner+` and key = 'health' order by ts desc, id desc limit 1)
+		from state_datapoint where `+col+` = `+owner+` and key = 'health'`, ownerID).Scan(&n, &latest); err != nil {
 		t.Fatalf("read recorded health %s/%s: %v", ownerKind, ownerID, err)
 	}
 	if latest == nil {
