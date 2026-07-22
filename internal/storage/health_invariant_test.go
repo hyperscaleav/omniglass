@@ -533,7 +533,7 @@ func TestHealthRecordsProductCapabilityRipple(t *testing.T) {
 	// The test owns its product: the seeded catalog is official and an official row
 	// refuses edits, which is the whole mechanism under test here.
 	if _, err := f.gw.CreateProduct(ctx, "", storage.Product{
-		ID: "ripple-bar", DisplayName: "Ripple Bar", VendorID: ptrStr("cisco"),
+		Name: "ripple-bar", DisplayName: "Ripple Bar", VendorID: ptrStr("cisco"),
 		Capabilities: []string{"microphone", "speaker"},
 	}); err != nil {
 		t.Fatalf("create product: %v", err)

@@ -786,10 +786,6 @@ components:
           type: string
         driver_id:
           type: string
-        id:
-          description: Globally unique product id
-          minLength: 1
-          type: string
         kind:
           default: device
           enum:
@@ -798,12 +794,18 @@ components:
             - service
             - vm
           type: string
+        name:
+          description: The globally unique kebab handle; renameable
+          minLength: 1
+          type: string
         parent_product_id:
+          description: The parent product, by handle or uuid
           type: string
         vendor_id:
+          description: The vendor, by handle or uuid
           type: string
       required:
-        - id
+        - name
         - display_name
       type: object
     CreatePropertyInputBody:
@@ -1039,10 +1041,6 @@ components:
           type: string
         icon:
           type: string
-        id:
-          description: Globally unique vendor id
-          minLength: 1
-          type: string
         kind:
           default: manufacturer
           enum:
@@ -1050,12 +1048,16 @@ components:
             - integrator
             - developer
           type: string
+        name:
+          description: The globally unique kebab handle; renameable
+          minLength: 1
+          type: string
         support_phone:
           type: string
         website:
           type: string
       required:
-        - id
+        - name
         - display_name
       type: object
     DownloadFileOutputBody:
@@ -2844,6 +2846,7 @@ components:
         driver_id:
           type: string
         id:
+          description: The product's uuid, the stable handle that survives a rename
           type: string
         kind:
           enum:
@@ -2852,14 +2855,26 @@ components:
             - service
             - vm
           type: string
+        name:
+          description: The kebab handle an operator reads and types; renameable
+          type: string
         official:
           type: boolean
+        parent_product:
+          description: The parent product's handle
+          type: string
         parent_product_id:
+          description: The parent product's uuid; the stable form of parent_product
+          type: string
+        vendor:
+          description: The vendor's handle
           type: string
         vendor_id:
+          description: The vendor's uuid; the stable form of vendor
           type: string
       required:
         - id
+        - name
         - display_name
         - kind
         - capabilities
@@ -4479,12 +4494,16 @@ components:
         icon:
           type: string
         id:
+          description: The vendor's uuid, the stable handle that survives a rename
           type: string
         kind:
           enum:
             - manufacturer
             - integrator
             - developer
+          type: string
+        name:
+          description: The kebab handle an operator reads and types; renameable
           type: string
         official:
           type: boolean
@@ -4494,6 +4513,7 @@ components:
           type: string
       required:
         - id
+        - name
         - display_name
         - kind
         - official

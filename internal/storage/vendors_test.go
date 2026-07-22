@@ -23,13 +23,13 @@ func TestVendorCRUD(t *testing.T) {
 
 	// Create a custom vendor; it is official=false and round-trips its kind.
 	m, err := gw.CreateVendor(ctx, "", storage.Vendor{
-		ID: "acme", DisplayName: "Acme", Kind: "integrator", Website: "https://acme.example",
+		Name: "acme", DisplayName: "Acme", Kind: "integrator", Website: "https://acme.example",
 	})
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	if m.ID != "acme" {
-		t.Fatalf("create id = %q, want acme", m.ID)
+	if m.Name != "acme" {
+		t.Fatalf("create name = %q, want acme", m.ID)
 	}
 	if m.Kind != "integrator" {
 		t.Fatalf("create kind = %q, want integrator", m.Kind)
@@ -39,7 +39,7 @@ func TestVendorCRUD(t *testing.T) {
 	}
 
 	// Duplicate id is ErrTypeExists.
-	if _, err := gw.CreateVendor(ctx, "", storage.Vendor{ID: "acme", DisplayName: "Dup", Kind: "manufacturer"}); !errors.Is(err, storage.ErrTypeExists) {
+	if _, err := gw.CreateVendor(ctx, "", storage.Vendor{Name: "acme", DisplayName: "Dup", Kind: "manufacturer"}); !errors.Is(err, storage.ErrTypeExists) {
 		t.Fatalf("dup create err = %v, want ErrTypeExists", err)
 	}
 
@@ -60,7 +60,7 @@ func TestVendorCRUD(t *testing.T) {
 	}
 	var found *storage.Vendor
 	for i := range all {
-		if all[i].ID == "acme" {
+		if all[i].Name == "acme" {
 			found = &all[i]
 			break
 		}
@@ -98,7 +98,7 @@ func TestVendorCRUD(t *testing.T) {
 	}
 
 	// Official rows are read-only.
-	if err := gw.UpsertVendor(ctx, storage.Vendor{ID: "official-co", DisplayName: "Official Co", Kind: "manufacturer", Official: true}); err != nil {
+	if err := gw.UpsertVendor(ctx, storage.Vendor{Name: "official-co", DisplayName: "Official Co", Kind: "manufacturer", Official: true}); err != nil {
 		t.Fatalf("upsert official: %v", err)
 	}
 	if _, err := gw.UpdateVendor(ctx, "", "official-co", storage.VendorPatch{DisplayName: &dn}); !errors.Is(err, storage.ErrTypeOfficial) {

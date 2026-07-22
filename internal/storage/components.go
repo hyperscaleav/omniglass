@@ -44,8 +44,10 @@ type Component struct {
 	LocationName *string
 	LocationID   *string
 	ProductID    *string
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	// ProductHandle is the product's kebab name, projected for display beside the id.
+	ProductHandle *string
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
 }
 
 // ComponentSpec is the create input. ParentName nil makes a root component;
@@ -84,12 +86,13 @@ const componentCols = `id, name, coalesce(display_name, ''), parent_id,
 	-- tree joins, which are internal; a name is what leaves the process.
 	(select p.name from component p where p.id = component.parent_id) as parent_name,
 	(select l.name from location l where l.id = component.location_id) as location_name,
+	(select pr.name from product pr where pr.id = component.product_id) as product_handle,
 	created_at, updated_at`
 
 func scanComponent(row pgx.Row) (*Component, error) {
 	var c Component
 	if err := row.Scan(&c.ID, &c.Name, &c.DisplayName, &c.ParentID, &c.PrimarySystem, &c.PrimarySystemID, &c.SystemCount,
-		&c.LocationID, &c.ProductID, &c.ParentName, &c.LocationName, &c.CreatedAt, &c.UpdatedAt); err != nil {
+		&c.LocationID, &c.ProductID, &c.ParentName, &c.LocationName, &c.ProductHandle, &c.CreatedAt, &c.UpdatedAt); err != nil {
 		return nil, err
 	}
 	return &c, nil
@@ -186,7 +189,7 @@ func (p *PG) CreateComponent(ctx context.Context, actorID string, spec Component
 	var productID *string
 	if spec.ProductName != nil {
 		var pid string
-		err := tx.QueryRow(ctx, `select id from product where id = $1`, *spec.ProductName).Scan(&pid)
+		err := tx.QueryRow(ctx, `select id from product where `+productRefCol(*spec.ProductName)+` = $1`, *spec.ProductName).Scan(&pid)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrProductNotFound
 		} else if err != nil {
@@ -242,23 +245,36 @@ func (p *PG) UpdateComponent(ctx context.Context, actorID, name string, patch Co
 			return nil, err
 		}
 	}
+	// A product reference arrives as a handle or a uuid; the column stores the
+	// uuid. An unknown one resolves to nothing and is reported by name.
+	var patchProductID *string
+	if patch.ProductName != nil && *patch.ProductName != "" {
+		var pid string
+		err := tx.QueryRow(ctx, `select id from product where `+productRefCol(*patch.ProductName)+` = $1`, *patch.ProductName).Scan(&pid)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrProductNotFound
+		} else if err != nil {
+			return nil, fmt.Errorf("storage: resolve product %q: %w", *patch.ProductName, err)
+		}
+		patchProductID = &pid
+	}
 	after, err := scanComponent(tx.QueryRow(ctx, `
 		update component set
 			name         = coalesce($2, name),
 			display_name = coalesce($3, display_name),
 			-- product_id takes the house three states: a nil field is unchanged, an
-			-- explicit empty string clears it, anything else is the new product (whose
-			-- id is its name, so it goes in as given; an unknown one comes back from
-			-- the FK as the named ErrProductNotFound).
+			-- explicit empty string clears it, anything else names a product by
+			-- handle or uuid and is resolved to its id (an unknown one lands as NULL
+			-- and is caught below).
 			product_id   = case
 				when $4::text is null then product_id
 				when $4 = '' then null
-				else $4
+				else $5::uuid
 			end,
 			updated_at   = now()
 		where id = $1
 		returning `+componentCols,
-		before.ID, patch.Name, patch.DisplayName, patch.ProductName))
+		before.ID, patch.Name, patch.DisplayName, patch.ProductName, patchProductID))
 	if err != nil {
 		return nil, mapComponentWriteErr(err)
 	}

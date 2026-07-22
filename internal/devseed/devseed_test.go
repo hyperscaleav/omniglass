@@ -203,7 +203,7 @@ func TestRunIdempotent(t *testing.T) {
 	// idempotent.
 	var contractLines, comps, propVals int
 	if err := conn.QueryRow(ctx, `
-		select count(*) from product_property where product_id = 'samsung-qm55'`).Scan(&contractLines); err != nil {
+		select count(*) from product_property where product_id = (select id from product where name = 'samsung-qm55')`).Scan(&contractLines); err != nil {
 		t.Fatalf("count contract lines: %v", err)
 	}
 	if contractLines != 4 {

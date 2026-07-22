@@ -26,7 +26,7 @@ func TestProductPropertyCRUD(t *testing.T) {
 	}
 
 	// A custom (official=false) product owns a mutable contract.
-	if _, err := gw.CreateProduct(ctx, "", storage.Product{ID: "acme-widget", DisplayName: "Acme Widget", Kind: "device"}); err != nil {
+	if _, err := gw.CreateProduct(ctx, "", storage.Product{Name: "acme-widget", DisplayName: "Acme Widget", Kind: "device"}); err != nil {
 		t.Fatalf("create product: %v", err)
 	}
 
@@ -46,7 +46,7 @@ func TestProductPropertyCRUD(t *testing.T) {
 	if err != nil {
 		t.Fatalf("set: %v", err)
 	}
-	if pp.ProductID != "acme-widget" || pp.PropertyName != "serial_number" || !pp.Required {
+	if pp.ProductName != "acme-widget" || pp.PropertyName != "serial_number" || !pp.Required {
 		t.Fatalf("set = %+v, want acme-widget/serial_number required", pp)
 	}
 	if string(pp.DefaultValue) != `"SN-0"` {

@@ -2892,15 +2892,15 @@ func generatedCommands() []*cobra.Command {
 				var fCapabilities string
 				var fDisplayName string
 				var fDriverId string
-				var fId string
 				var fKind string
+				var fName string
 				var fParentProductId string
 				var fVendorId string
 				cmd := &cobra.Command{
 					Use:     "create",
 					Short:   "Create a product",
 					Long:    "Creates a custom (non-official) product and sets its capabilities. Gated by product:create.",
-					Example: "  omniglass product create --display-name display_name --id id",
+					Example: "  omniglass product create --display-name display_name --name name",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/products")
@@ -2914,11 +2914,11 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("driver-id") {
 							body["driver_id"] = fDriverId
 						}
-						if cmd.Flags().Changed("id") {
-							body["id"] = fId
-						}
 						if cmd.Flags().Changed("kind") {
 							body["kind"] = fKind
+						}
+						if cmd.Flags().Changed("name") {
+							body["name"] = fName
 						}
 						if cmd.Flags().Changed("parent-product-id") {
 							body["parent_product_id"] = fParentProductId
@@ -2933,11 +2933,11 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
 				_ = cmd.MarkFlagRequired("display-name")
 				cmd.Flags().StringVar(&fDriverId, "driver-id", "", "")
-				cmd.Flags().StringVar(&fId, "id", "", "Globally unique product id")
-				_ = cmd.MarkFlagRequired("id")
 				cmd.Flags().StringVar(&fKind, "kind", "", "")
-				cmd.Flags().StringVar(&fParentProductId, "parent-product-id", "", "")
-				cmd.Flags().StringVar(&fVendorId, "vendor-id", "", "")
+				cmd.Flags().StringVar(&fName, "name", "", "The globally unique kebab handle; renameable")
+				_ = cmd.MarkFlagRequired("name")
+				cmd.Flags().StringVar(&fParentProductId, "parent-product-id", "", "The parent product, by handle or uuid")
+				cmd.Flags().StringVar(&fVendorId, "vendor-id", "", "The vendor, by handle or uuid")
 				return cmd
 			}()
 			return cmd
@@ -4742,15 +4742,15 @@ func generatedCommands() []*cobra.Command {
 			cmd := func() *cobra.Command {
 				var fDisplayName string
 				var fIcon string
-				var fId string
 				var fKind string
+				var fName string
 				var fSupportPhone string
 				var fWebsite string
 				cmd := &cobra.Command{
 					Use:     "create",
 					Short:   "Create a vendor",
 					Long:    "Creates a custom (non-official) vendor. Gated by vendor:create.",
-					Example: "  omniglass vendor create --display-name display_name --id id",
+					Example: "  omniglass vendor create --display-name display_name --name name",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/vendors")
@@ -4761,11 +4761,11 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("icon") {
 							body["icon"] = fIcon
 						}
-						if cmd.Flags().Changed("id") {
-							body["id"] = fId
-						}
 						if cmd.Flags().Changed("kind") {
 							body["kind"] = fKind
+						}
+						if cmd.Flags().Changed("name") {
+							body["name"] = fName
 						}
 						if cmd.Flags().Changed("support-phone") {
 							body["support_phone"] = fSupportPhone
@@ -4779,9 +4779,9 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
 				_ = cmd.MarkFlagRequired("display-name")
 				cmd.Flags().StringVar(&fIcon, "icon", "", "")
-				cmd.Flags().StringVar(&fId, "id", "", "Globally unique vendor id")
-				_ = cmd.MarkFlagRequired("id")
 				cmd.Flags().StringVar(&fKind, "kind", "", "")
+				cmd.Flags().StringVar(&fName, "name", "", "The globally unique kebab handle; renameable")
+				_ = cmd.MarkFlagRequired("name")
 				cmd.Flags().StringVar(&fSupportPhone, "support-phone", "", "")
 				cmd.Flags().StringVar(&fWebsite, "website", "", "")
 				return cmd

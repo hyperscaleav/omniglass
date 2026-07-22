@@ -12,7 +12,8 @@ import (
 // vendorBody is the wire shape of a vendor registry row. The registry lists
 // alphabetically by display_name, like component_type.
 type vendorBody struct {
-	ID           string `json:"id"`
+	ID           string `json:"id" doc:"The vendor's uuid, the stable handle that survives a rename"`
+	Name         string `json:"name" doc:"The kebab handle an operator reads and types; renameable"`
 	DisplayName  string `json:"display_name"`
 	Kind         string `json:"kind" enum:"manufacturer,integrator,developer"`
 	Icon         string `json:"icon,omitempty"`
@@ -23,7 +24,7 @@ type vendorBody struct {
 
 func toVendorBody(m *storage.Vendor) vendorBody {
 	return vendorBody{
-		ID: m.ID, DisplayName: m.DisplayName, Kind: m.Kind, Icon: m.Icon,
+		ID: m.ID, Name: m.Name, DisplayName: m.DisplayName, Kind: m.Kind, Icon: m.Icon,
 		SupportPhone: m.SupportPhone, Website: m.Website, Official: m.Official,
 	}
 }
@@ -40,7 +41,7 @@ type vendorPathInput struct {
 
 type createVendorInput struct {
 	Body struct {
-		ID           string `json:"id" minLength:"1" doc:"Globally unique vendor id"`
+		Name         string `json:"name" minLength:"1" doc:"The globally unique kebab handle; renameable"`
 		DisplayName  string `json:"display_name" minLength:"1"`
 		Kind         string `json:"kind,omitempty" enum:"manufacturer,integrator,developer" default:"manufacturer"`
 		Icon         string `json:"icon,omitempty"`
@@ -133,7 +134,7 @@ func registerVendorRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 			return nil, huma.Error422UnprocessableEntity("website must be an http or https URL")
 		}
 		m, err := gw.CreateVendor(ctx, actorID(ctx), storage.Vendor{
-			ID: in.Body.ID, DisplayName: in.Body.DisplayName, Kind: in.Body.Kind, Icon: in.Body.Icon,
+			Name: in.Body.Name, DisplayName: in.Body.DisplayName, Kind: in.Body.Kind, Icon: in.Body.Icon,
 			SupportPhone: in.Body.SupportPhone, Website: in.Body.Website,
 		})
 		if err != nil {
