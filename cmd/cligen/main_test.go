@@ -193,7 +193,7 @@ func TestRenderQueryFlags(t *testing.T) {
 func TestTypeRegistryCommandNames(t *testing.T) {
 	cases := []struct {
 		opID, path, method string
-		want                []string
+		want               []string
 	}{
 		{"create-location-type", "/location-types", "post", []string{"location-type", "create"}},
 		{"delete-location-type", "/location-types/{id}", "delete", []string{"location-type", "delete"}},

@@ -69,7 +69,7 @@ func Resolve(grants []Grant, idx rbac.RoleIndex, resource, action string) Set {
 	excludes := action != "read" && action != "create"
 	selfApplies := action != "create"
 	var set Set
-	seen := map[string]bool{}    // a root already added to IDs (subtree ops)
+	seen := map[string]bool{} // a root already added to IDs (subtree ops)
 	selfSeen := map[string]bool{}
 	inclusive := map[string]bool{} // a root a subtree op admits in full for this action
 	excluded := map[string]bool{}  // a root a subtree_excl_root op strips for this action
