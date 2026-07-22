@@ -462,32 +462,32 @@ seed_sys as (
     join target t on t.name = m.component_id
     where case when $2::text = '' then m.is_primary else s.name = $2::text end
 ),
-comp_chain(id, depth) as (
-    select id, 0 from component where id = $1
+comp_chain(id, name, depth) as (
+    select id, name, 0 from component where id = $1
     union all
-    select c.parent_id, cc.depth + 1
-    from component c join comp_chain cc on c.id = cc.id
-    where c.parent_id is not null
+    select p.id, p.name, cc.depth + 1
+    from comp_chain cc join component c on c.id = cc.id
+    join component p on p.id = c.parent_id
 ) cycle id set comp_cyc using comp_path,
-sys_chain(id, depth) as (
-    select id, 0 from seed_sys
+sys_chain(id, name, depth) as (
+    select s.id, s.name, 0 from seed_sys j join system s on s.id = j.id
     union all
-    select s.parent_id, sc.depth + 1
-    from system s join sys_chain sc on s.id = sc.id
-    where s.parent_id is not null
+    select p.id, p.name, sc.depth + 1
+    from sys_chain sc join system s on s.id = sc.id
+    join system p on p.id = s.parent_id
 ) cycle id set sys_cyc using sys_path,
-loc_chain(id, depth) as (
-    select location_id, 0 from target where location_id is not null
+loc_chain(id, name, depth) as (
+    select l.id, l.name, 0 from target t join location l on l.id = t.location_id
     union all
-    select l.parent_id, lc.depth + 1
-    from location l join loc_chain lc on l.id = lc.id
-    where l.parent_id is not null
+    select p.id, p.name, lc.depth + 1
+    from loc_chain lc join location l on l.id = lc.id
+    join location p on p.id = l.parent_id
 ) cycle id set loc_cyc using loc_path,
 owners(owner_kind, owner_id, band, depth) as (
-                select 'global',    null::uuid, 0, 0
-    union all   select 'location',  id,         1, depth from loc_chain
-    union all   select 'system',    id,         2, depth from sys_chain
-    union all   select 'component', id,         3, depth from comp_chain
+                select 'global',    null::text, 0, 0
+    union all   select 'location',  name,       1, depth from loc_chain
+    union all   select 'system',    name,       2, depth from sys_chain
+    union all   select 'component', name,       3, depth from comp_chain
 ),
 ranked as (
     select t.id as tag_id, t.name as key, b.owner_kind, o.owner_id, o.band, o.depth, b.value,
@@ -503,9 +503,9 @@ select r.key, r.owner_kind, r.owner_id, r.band, r.depth, r.rnk,
        coalesce(c.name, sy.name, l.name, '') as owner_name,
        r.value
 from ranked r
-left join component c on r.owner_kind = 'component' and c.id = r.owner_id
-left join system    sy on r.owner_kind = 'system'   and sy.id = r.owner_id
-left join location  l on r.owner_kind = 'location'  and l.id = r.owner_id
+left join component c on r.owner_kind = 'component' and c.name = r.owner_id
+left join system    sy on r.owner_kind = 'system'   and sy.name = r.owner_id
+left join location  l on r.owner_kind = 'location'  and l.name = r.owner_id
 order by r.key, r.band desc, r.depth asc`
 
 // EffectiveTags resolves the winning effective tags for a batch of owners of one
@@ -582,32 +582,32 @@ seed_sys as (
     join targets t on t.name = m.component_id
     where m.is_primary
 ),
-comp_chain(target_id, id, depth) as (
-    select target_id, id, 0 from targets
+comp_chain(target_id, id, name, depth) as (
+    select target_id, id, name, 0 from targets
     union all
-    select cc.target_id, c.parent_id, cc.depth + 1
-    from component c join comp_chain cc on c.id = cc.id
-    where c.parent_id is not null
+    select cc.target_id, p.id, p.name, cc.depth + 1
+    from comp_chain cc join component c on c.id = cc.id
+    join component p on p.id = c.parent_id
 ) cycle id set comp_cyc using comp_path,
-sys_chain(target_id, id, depth) as (
-    select target_id, id, 0 from seed_sys
+sys_chain(target_id, id, name, depth) as (
+    select j.target_id, s.id, s.name, 0 from seed_sys j join system s on s.id = j.id
     union all
-    select sc.target_id, s.parent_id, sc.depth + 1
-    from system s join sys_chain sc on s.id = sc.id
-    where s.parent_id is not null
+    select sc.target_id, p.id, p.name, sc.depth + 1
+    from sys_chain sc join system s on s.id = sc.id
+    join system p on p.id = s.parent_id
 ) cycle id set sys_cyc using sys_path,
-loc_chain(target_id, id, depth) as (
-    select target_id, location_id, 0 from targets where location_id is not null
+loc_chain(target_id, id, name, depth) as (
+    select t.target_id, l.id, l.name, 0 from targets t join location l on l.id = t.location_id
     union all
-    select lc.target_id, l.parent_id, lc.depth + 1
-    from location l join loc_chain lc on l.id = lc.id
-    where l.parent_id is not null
+    select lc.target_id, p.id, p.name, lc.depth + 1
+    from loc_chain lc join location l on l.id = lc.id
+    join location p on p.id = l.parent_id
 ) cycle id set loc_cyc using loc_path,
 owners(target_id, owner_kind, owner_id, band, depth) as (
-                select target_id, 'global',    null::uuid, 0, 0 from targets
-    union all   select target_id, 'location',  id, 1, depth from loc_chain
-    union all   select target_id, 'system',    id, 2, depth from sys_chain
-    union all   select target_id, 'component', id, 3, depth from comp_chain
+                select target_id, 'global',    null::text, 0, 0 from targets
+    union all   select target_id, 'location',  name, 1, depth from loc_chain
+    union all   select target_id, 'system',    name, 2, depth from sys_chain
+    union all   select target_id, 'component', name, 3, depth from comp_chain
 ),
 ranked as (
     select o.target_id, t.name as key, b.value,
@@ -649,26 +649,26 @@ select target_id::text, key, value from ranked where rnk = 1 order by target_id,
 const effectiveSystemTagsSQL = `
 with recursive
 targets as (
-    select id as target_id, id, location_id from system where id = any($1)
+    select id as target_id, id, name, location_id from system where id = any($1)
 ),
-sys_chain(target_id, id, depth) as (
-    select target_id, id, 0 from targets
+sys_chain(target_id, id, name, depth) as (
+    select target_id, id, name, 0 from targets
     union all
-    select sc.target_id, s.parent_id, sc.depth + 1
-    from system s join sys_chain sc on s.id = sc.id
-    where s.parent_id is not null
+    select sc.target_id, p.id, p.name, sc.depth + 1
+    from sys_chain sc join system s on s.id = sc.id
+    join system p on p.id = s.parent_id
 ) cycle id set sys_cyc using sys_path,
-loc_chain(target_id, id, depth) as (
-    select target_id, location_id, 0 from targets where location_id is not null
+loc_chain(target_id, id, name, depth) as (
+    select t.target_id, l.id, l.name, 0 from targets t join location l on l.id = t.location_id
     union all
-    select lc.target_id, l.parent_id, lc.depth + 1
-    from location l join loc_chain lc on l.id = lc.id
-    where l.parent_id is not null
+    select lc.target_id, p.id, p.name, lc.depth + 1
+    from loc_chain lc join location l on l.id = lc.id
+    join location p on p.id = l.parent_id
 ) cycle id set loc_cyc using loc_path,
 owners(target_id, owner_kind, owner_id, band, depth) as (
-                select target_id, 'global',   null::uuid, 0, 0 from targets
-    union all   select target_id, 'location', id, 1, depth from loc_chain
-    union all   select target_id, 'system',   id, 2, depth from sys_chain
+                select target_id, 'global',   null::text, 0, 0 from targets
+    union all   select target_id, 'location', name, 1, depth from loc_chain
+    union all   select target_id, 'system',   name, 2, depth from sys_chain
 ),
 ranked as (
     select o.target_id, t.name as key, b.value,
@@ -684,16 +684,16 @@ select target_id::text, key, value from ranked where rnk = 1 order by target_id,
 
 const effectiveLocationTagsSQL = `
 with recursive
-loc_chain(target_id, id, depth) as (
-    select id, id, 0 from location where id = any($1)
+loc_chain(target_id, id, name, depth) as (
+    select id, id, name, 0 from location where id = any($1)
     union all
-    select lc.target_id, l.parent_id, lc.depth + 1
-    from location l join loc_chain lc on l.id = lc.id
-    where l.parent_id is not null
+    select lc.target_id, p.id, p.name, lc.depth + 1
+    from loc_chain lc join location l on l.id = lc.id
+    join location p on p.id = l.parent_id
 ) cycle id set loc_cyc using loc_path,
 owners(target_id, owner_kind, owner_id, band, depth) as (
-                select distinct target_id, 'global',   null::uuid, 0, 0 from loc_chain
-    union all   select target_id, 'location', id, 1, depth from loc_chain
+                select distinct target_id, 'global',   null::text, 0, 0 from loc_chain
+    union all   select target_id, 'location', name, 1, depth from loc_chain
 ),
 ranked as (
     select o.target_id, t.name as key, b.value,
@@ -714,6 +714,11 @@ select target_id::text, key, value from ranked where rnk = 1 order by target_id,
 // owner needs an all-scope action (and read); a scoped one resolves its entity
 // in the matching tree and requires it within read (else not-found) then action
 // (else forbidden). Returns a nil id and empty display name for a global owner.
+// resolveTagBindingOwner returns the value the arc column stores and the owner's
+// display name. For the three estate arcs that value IS the name, since those
+// columns reference name. The node arm is the documented exception: a node is
+// addressed by its principal_id, which is its enrollment identity and the only
+// handle it has.
 func resolveTagBindingOwner(ctx context.Context, q querier, kind string, name *string, read, action scope.Set) (*string, string, error) {
 	if kind == "global" {
 		if !action.All || !read.All {
@@ -730,19 +735,19 @@ func resolveTagBindingOwner(ctx context.Context, q querier, kind string, name *s
 		if err != nil {
 			return nil, "", err
 		}
-		return &c.ID, c.Name, nil
+		return &c.Name, c.Name, nil
 	case "system":
 		s, err := resolveScoped(ctx, q, systemConfig, *name, read, action)
 		if err != nil {
 			return nil, "", err
 		}
-		return &s.ID, s.Name, nil
+		return &s.Name, s.Name, nil
 	case "location":
 		l, err := resolveScoped(ctx, q, locationConfig, *name, read, action)
 		if err != nil {
 			return nil, "", err
 		}
-		return &l.ID, l.Name, nil
+		return &l.Name, l.Name, nil
 	case "node":
 		// A node is estate-wide (not a scope tree), so tagging it needs an all
 		// scope on both legs, like a global owner; the owner id is its principal_id.

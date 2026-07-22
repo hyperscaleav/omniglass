@@ -127,9 +127,9 @@ func (p *PG) ListVariables(ctx context.Context, read scope.Set) ([]Variable, err
 		select `+variableColsQualified("v")+`,
 		       coalesce(c.name, sy.name, l.name, '') as owner_name
 		from variable v
-		left join component c on v.component_id = c.id
-		left join system    sy on v.system_id   = sy.id
-		left join location  l on v.location_id  = l.id
+		left join component c on v.component_id = c.name
+		left join system    sy on v.system_id   = sy.name
+		left join location  l on v.location_id  = l.name
 		order by v.name`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list variables: %w", err)
@@ -272,32 +272,32 @@ seed_sys as (
     join target t on t.name = m.component_id
     where m.is_primary
 ),
-comp_chain(id, depth) as (
-    select id, 0 from component where id = $1
+comp_chain(id, name, depth) as (
+    select id, name, 0 from component where id = $1
     union all
-    select c.parent_id, cc.depth + 1
-    from component c join comp_chain cc on c.id = cc.id
-    where c.parent_id is not null
+    select p.id, p.name, cc.depth + 1
+    from comp_chain cc join component c on c.id = cc.id
+    join component p on p.id = c.parent_id
 ) cycle id set comp_cyc using comp_path,
-sys_chain(id, depth) as (
-    select id, 0 from seed_sys
+sys_chain(id, name, depth) as (
+    select s.id, s.name, 0 from seed_sys j join system s on s.id = j.id
     union all
-    select s.parent_id, sc.depth + 1
-    from system s join sys_chain sc on s.id = sc.id
-    where s.parent_id is not null
+    select p.id, p.name, sc.depth + 1
+    from sys_chain sc join system s on s.id = sc.id
+    join system p on p.id = s.parent_id
 ) cycle id set sys_cyc using sys_path,
-loc_chain(id, depth) as (
-    select location_id, 0 from target where location_id is not null
+loc_chain(id, name, depth) as (
+    select l.id, l.name, 0 from target t join location l on l.id = t.location_id
     union all
-    select l.parent_id, lc.depth + 1
-    from location l join loc_chain lc on l.id = lc.id
-    where l.parent_id is not null
+    select p.id, p.name, lc.depth + 1
+    from loc_chain lc join location l on l.id = lc.id
+    join location p on p.id = l.parent_id
 ) cycle id set loc_cyc using loc_path,
 owners(owner_kind, owner_id, band, depth) as (
-                select 'global',    null::uuid, 0, 0
-    union all   select 'location',  id,         1, depth from loc_chain
-    union all   select 'system',    id,         2, depth from sys_chain
-    union all   select 'component', id,         3, depth from comp_chain
+                select 'global',    null::text, 0, 0
+    union all   select 'location',  name,       1, depth from loc_chain
+    union all   select 'system',    name,       2, depth from sys_chain
+    union all   select 'component', name,       3, depth from comp_chain
 ),
 ranked as (
     select v.id, v.name, v.value_type, v.owner_kind, o.owner_id, o.band, o.depth, v.value,
@@ -311,9 +311,9 @@ select r.id, r.name, r.value_type, r.owner_kind, r.owner_id, r.band, r.depth, r.
        coalesce(c.name, sy.name, l.name, '') as owner_name,
        r.value
 from ranked r
-left join component c on r.owner_kind = 'component' and c.id = r.owner_id
-left join system    sy on r.owner_kind = 'system'   and sy.id = r.owner_id
-left join location  l on r.owner_kind = 'location'  and l.id = r.owner_id
+left join component c on r.owner_kind = 'component' and c.name = r.owner_id
+left join system    sy on r.owner_kind = 'system'   and sy.name = r.owner_id
+left join location  l on r.owner_kind = 'location'  and l.name = r.owner_id
 order by r.name, r.band desc, r.depth asc`
 
 // --- helpers -----------------------------------------------------------------
@@ -333,7 +333,8 @@ func (p *PG) resolveVariableOwner(ctx context.Context, q querier, kind string, n
 		return nil, ErrVariableOwnerNotFound
 	}
 	var (
-		id  string
+		id  string // for the scope walk, which is by id
+		nm  string // what the arc column stores: a name is the address
 		err error
 	)
 	switch kind {
@@ -341,19 +342,19 @@ func (p *PG) resolveVariableOwner(ctx context.Context, q querier, kind string, n
 		var c *Component
 		c, err = scopedByName(ctx, q, componentConfig, *name)
 		if c != nil {
-			id = c.ID
+			id, nm = c.ID, c.Name
 		}
 	case "system":
 		var s *System
 		s, err = scopedByName(ctx, q, systemConfig, *name)
 		if s != nil {
-			id = s.ID
+			id, nm = s.ID, s.Name
 		}
 	case "location":
 		var l *Location
 		l, err = scopedByName(ctx, q, locationConfig, *name)
 		if l != nil {
-			id = l.ID
+			id, nm = l.ID, l.Name
 		}
 	default:
 		return nil, ErrVariableOwnerNotFound
@@ -372,7 +373,7 @@ func (p *PG) resolveVariableOwner(ctx context.Context, q querier, kind string, n
 	if !inScope {
 		return nil, ErrVariableForbidden
 	}
-	return &id, nil
+	return &nm, nil
 }
 
 // variableRow is the raw scanned variable used by the action-scoped read paths
@@ -435,7 +436,18 @@ func (p *PG) variableOwnerInScope(ctx context.Context, q querier, kind string, i
 	if !ok {
 		return false, nil
 	}
-	return inScopeTree(ctx, q, tbl, *id, set)
+	// The arc stores a NAME; the scope walk is by id, so resolve it here rather
+	// than storing an id to save this lookup. Identity is internal, and the walk
+	// is the only place that needs it.
+	var ownerUUID string
+	if err := q.QueryRow(ctx,
+		`select id from `+string(tbl)+` where name = $1`, *id).Scan(&ownerUUID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, nil
+		}
+		return false, fmt.Errorf("storage: resolve owner %q for scope: %w", *id, err)
+	}
+	return inScopeTree(ctx, q, tbl, ownerUUID, set)
 }
 
 // scanVariableRow scans a CREATE/UPDATE returning-row into a Variable.
