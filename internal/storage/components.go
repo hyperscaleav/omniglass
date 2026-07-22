@@ -42,10 +42,10 @@ type Component struct {
 	// a reference that leaves the process.
 	ParentName   *string
 	LocationName *string
-	LocationID  *string
-	ProductID   *string
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	LocationID   *string
+	ProductID    *string
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }
 
 // ComponentSpec is the create input. ParentName nil makes a root component;
@@ -297,10 +297,10 @@ type ComponentInterface struct {
 // interfaces by the verified name.
 func (p *PG) ListComponentInterfaces(ctx context.Context, componentName string) ([]ComponentInterface, error) {
 	rows, err := p.pool.Query(ctx, `
-		select name, type, coalesce(node_name, ''), params
-		from interface
-		where component = $1
-		order by name asc`, componentName)
+		select i.name, i.type, coalesce((select n.name from node n where n.principal_id = i.node_name), ''), i.params
+		from interface i
+		where i.component = (select id from component where name = $1)
+		order by i.name asc`, componentName)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list interfaces for %s: %w", componentName, err)
 	}

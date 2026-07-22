@@ -349,7 +349,8 @@ func recordHealth(ctx context.Context, q txQuerier, ownerKind, ownerID string, v
 // attempts to get right. So the resolution happens here, at the write, rather
 // than by threading ids through all of it.
 //
-// A node still stores its name until the collection tier converts.
+// A node resolves to its principal_id, which is its primary key and its
+// enrollment identity.
 func ownerArcExpr(ownerKind string) string { return ownerArcExprN(ownerKind, 2) }
 
 // ownerArcExprN is the same expression at an arbitrary parameter position, since
@@ -359,6 +360,8 @@ func ownerArcExprN(ownerKind string, n int) string {
 	switch ownerKind {
 	case "component", "system", "location":
 		return `(select id from ` + ownerKind + ` where name = ` + p + `)`
+	case "node":
+		return `(select principal_id from node where name = ` + p + `)`
 	}
 	return p
 }

@@ -267,7 +267,7 @@ func TestRunIdempotent(t *testing.T) {
 		}
 	}
 	var ifaceCount int
-	if err := conn.QueryRow(ctx, `select count(*) from interface where component = 'hq-boardroom-dsp'`).Scan(&ifaceCount); err != nil {
+	if err := conn.QueryRow(ctx, `select count(*) from interface where component = (select id from component where name = 'hq-boardroom-dsp')`).Scan(&ifaceCount); err != nil {
 		t.Fatalf("count reachability interfaces: %v", err)
 	}
 	if ifaceCount != 2 {

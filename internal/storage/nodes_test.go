@@ -133,7 +133,7 @@ func TestNodeGateway(t *testing.T) {
 		t.Fatalf("connect: %v", err)
 	}
 	defer conn.Close(ctx)
-	if _, err := conn.Exec(ctx, `insert into interface (name, type, component, node_name, params) values ('disp-1-icmp', 'icmp', 'disp-1', 'node-a', '{"target":"10.0.0.1"}'::jsonb)`); err != nil {
+	if _, err := conn.Exec(ctx, `insert into interface (name, type, component, node_name, params) values ('disp-1-icmp', 'icmp', (select id from component where name = 'disp-1'), (select principal_id from node where name = 'node-a'), '{"target":"10.0.0.1"}'::jsonb)`); err != nil {
 		t.Fatalf("insert interface: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `insert into task (id, mode, interface_id, spec, enabled) values ('t-icmp', 'poll', (select id from interface where name = 'disp-1-icmp'), '{"probe":"icmp"}'::jsonb, true)`); err != nil {
@@ -368,7 +368,7 @@ func TestDeleteNode(t *testing.T) {
 		}
 		return n
 	}
-	if count(`select count(*) from interface where node_name = $1`, nodeName) != 1 {
+	if count(`select count(*) from interface where node_name = (select principal_id from node where name = $1)`, nodeName) != 1 {
 		t.Fatalf("precondition: want 1 interface on the node")
 	}
 	if count(`select count(*) from task`) != 1 {
@@ -399,7 +399,7 @@ func TestDeleteNode(t *testing.T) {
 	if n := count(`select count(*) from principal where id = $1`, node.PrincipalID); n != 0 {
 		t.Errorf("node principal rows = %d, want 0", n)
 	}
-	if n := count(`select count(*) from interface where node_name = $1`, nodeName); n != 0 {
+	if n := count(`select count(*) from interface where node_name = (select principal_id from node where name = $1)`, nodeName); n != 0 {
 		t.Errorf("interfaces = %d, want 0 (cascade)", n)
 	}
 	if n := count(`select count(*) from task`); n != 0 {

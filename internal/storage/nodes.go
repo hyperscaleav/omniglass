@@ -33,6 +33,7 @@ type Node struct {
 	DisplayName     string
 	Description     string
 	LocationName    *string
+	LocationID      *string
 	LastHeartbeatAt *time.Time
 	EnrolledAt      *time.Time
 	Enrolled        bool
@@ -79,11 +80,17 @@ type Worklist struct {
 	ConfigGeneration int64
 }
 
-const nodeCols = `principal_id, name, coalesce(display_name, ''), description, location_name, last_heartbeat_at, enrolled_at, created_at, updated_at`
+// The placement arc stores location.id, so the name is read back beside it via a
+// scalar subquery: the id is what the row points at, the name is what an operator
+// reads and types. The subquery form works in a plain select and in a RETURNING
+// list alike, so the insert and update paths need no join.
+const nodeCols = `principal_id, name, coalesce(display_name, ''), description,
+	(select l.name from location l where l.id = node.location_id) as location_name, location_id,
+	last_heartbeat_at, enrolled_at, created_at, updated_at`
 
 func scanNode(row pgx.Row) (*Node, error) {
 	var n Node
-	if err := row.Scan(&n.PrincipalID, &n.Name, &n.DisplayName, &n.Description, &n.LocationName, &n.LastHeartbeatAt, &n.EnrolledAt, &n.CreatedAt, &n.UpdatedAt); err != nil {
+	if err := row.Scan(&n.PrincipalID, &n.Name, &n.DisplayName, &n.Description, &n.LocationName, &n.LocationID, &n.LastHeartbeatAt, &n.EnrolledAt, &n.CreatedAt, &n.UpdatedAt); err != nil {
 		return nil, err
 	}
 	n.Enrolled = n.EnrolledAt != nil
@@ -104,14 +111,18 @@ func (p *PG) CreateNode(ctx context.Context, actorID string, spec NodeSpec, crea
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	locationID, err := nodeLocationID(ctx, tx, spec.LocationName)
+	if err != nil {
+		return nil, err
+	}
 	var pid string
 	if err := tx.QueryRow(ctx, `insert into principal (kind) values ('node') returning id`).Scan(&pid); err != nil {
 		return nil, fmt.Errorf("storage: create node principal: %w", err)
 	}
 	n, err := scanNode(tx.QueryRow(ctx, `
-		insert into node (principal_id, name, display_name, description, location_name)
-		values ($1, $2, nullif($3, ''), $4, nullif($5, ''))
-		returning `+nodeCols, pid, spec.Name, spec.DisplayName, spec.Description, spec.LocationName))
+		insert into node (principal_id, name, display_name, description, location_id)
+		values ($1, $2, nullif($3, ''), $4, $5)
+		returning `+nodeCols, pid, spec.Name, spec.DisplayName, spec.Description, locationID))
 	if err != nil {
 		return nil, mapNodeWriteErr(err)
 	}
@@ -145,15 +156,19 @@ func (p *PG) UpdateNode(ctx context.Context, actorID, name string, patch NodePat
 	} else if err != nil {
 		return nil, fmt.Errorf("storage: read node for update %q: %w", name, err)
 	}
+	locationID, err := nodeLocationID(ctx, tx, patch.LocationName)
+	if err != nil {
+		return nil, err
+	}
 	after, err := scanNode(tx.QueryRow(ctx, `
 		update node set
 			display_name  = coalesce($2, display_name),
 			description   = coalesce($3, description),
-			location_name = case when $4 then nullif($5, '') else location_name end,
+			location_id   = case when $4 then $5 else location_id end,
 			updated_at    = now()
 		where name = $1
 		returning `+nodeCols,
-		name, patch.DisplayName, patch.Description, patch.LocationName != nil, patch.LocationName))
+		name, patch.DisplayName, patch.Description, patch.LocationName != nil, locationID))
 	if err != nil {
 		return nil, mapNodeWriteErr(err)
 	}
@@ -341,7 +356,7 @@ func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 		select t.id, t.mode, i.name, i.type, i.params, t.spec
 		from task t
 		join interface i on i.id = t.interface_id
-		where i.node_name = $1 and t.enabled = true
+		where i.node_name = (select principal_id from node where name = $1) and t.enabled = true
 		order by t.id`, name)
 	if err != nil {
 		return Worklist{}, fmt.Errorf("storage: node worklist %q: %w", name, err)
@@ -362,7 +377,7 @@ func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 	// updated_at (epoch seconds) across the node's interfaces, 0 when none.
 	if err := p.pool.QueryRow(ctx, `
 		select coalesce(extract(epoch from max(updated_at))::bigint, 0)
-		from interface where node_name = $1`, name).Scan(&wl.ConfigGeneration); err != nil {
+		from interface where node_name = (select principal_id from node where name = $1)`, name).Scan(&wl.ConfigGeneration); err != nil {
 		return Worklist{}, fmt.Errorf("storage: node config generation %q: %w", name, err)
 	}
 	return wl, nil
@@ -412,9 +427,27 @@ func mapNodeWriteErr(err error) error {
 			return ErrNodeExists
 		case "23514": // check_violation (node_name_subject_safe_check)
 			return ErrInvalidNodeName
-		case "23503": // foreign_key_violation (location_name references a missing location)
+		case "23503": // foreign_key_violation (a placement resolved to a location that vanished mid-write)
 			return ErrLocationNotFound
 		}
 	}
 	return fmt.Errorf("storage: node write: %w", err)
+}
+
+// nodeLocationID resolves an optional placement reference (a location name or a
+// uuid) to the location id the arc stores. A nil reference leaves the placement
+// unchanged and an empty one clears it, so both map to a nil id; an unknown
+// location is ErrLocationNotFound rather than a NULL that would silently unplace
+// the node.
+func nodeLocationID(ctx context.Context, q querier, ref *string) (*string, error) {
+	if ref == nil || *ref == "" {
+		return nil, nil
+	}
+	l, err := scopedByName(ctx, q, locationConfig, *ref)
+	if errors.Is(err, ErrLocationNotFound) {
+		return nil, ErrLocationNotFound
+	} else if err != nil {
+		return nil, err
+	}
+	return &l.ID, nil
 }

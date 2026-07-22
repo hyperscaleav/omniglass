@@ -18,6 +18,7 @@ type nodeBody struct {
 	DisplayName     string            `json:"display_name,omitempty"`
 	Description     string            `json:"description,omitempty"`
 	Location        *string           `json:"location,omitempty" doc:"The location the node sits in (descriptive placement, not scope)"`
+	LocationID      *string           `json:"location_id,omitempty" doc:"The location's id; the stable form of location"`
 	Enrolled        bool              `json:"enrolled"`
 	LastHeartbeatAt *time.Time        `json:"last_heartbeat_at,omitempty"`
 	EnrolledAt      *time.Time        `json:"enrolled_at,omitempty"`
@@ -26,7 +27,7 @@ type nodeBody struct {
 
 func toNodeBody(n *storage.Node) nodeBody {
 	return nodeBody{
-		Name: n.Name, DisplayName: n.DisplayName, Description: n.Description, Location: n.LocationName,
+		Name: n.Name, DisplayName: n.DisplayName, Description: n.Description, Location: n.LocationName, LocationID: n.LocationID,
 		Enrolled: n.Enrolled, LastHeartbeatAt: n.LastHeartbeatAt, EnrolledAt: n.EnrolledAt,
 	}
 }
@@ -50,7 +51,7 @@ type createNodeInput struct {
 		Name        string  `json:"name" minLength:"1" doc:"Globally unique node name (also its NATS subject token, so no dots or whitespace)"`
 		DisplayName string  `json:"display_name,omitempty" doc:"Operator label; falls back to the name when empty"`
 		Description string  `json:"description,omitempty"`
-		Location    *string `json:"location,omitempty" doc:"Optional location the node sits in (descriptive placement, not scope)"`
+		Location    *string `json:"location,omitempty" doc:"Optional location the node sits in, by name or id (descriptive placement, not scope)"`
 	}
 }
 
@@ -61,7 +62,7 @@ type updateNodeInput struct {
 	Body struct {
 		DisplayName *string `json:"display_name,omitempty"`
 		Description *string `json:"description,omitempty"`
-		Location    *string `json:"location,omitempty" doc:"Set the node's location, or \"\" to clear it"`
+		Location    *string `json:"location,omitempty" doc:"Set the node's location by name or id, or \"\" to clear it"`
 	}
 }
 

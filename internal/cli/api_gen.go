@@ -1096,8 +1096,8 @@ func generatedCommands() []*cobra.Command {
 					return runAPICommand(cmd, "POST", path, body)
 				},
 			}
-			cmd.Flags().StringVar(&fComponent, "component", "", "Owning component name; omit for a server-hosted interface (needs an all-scoped grant)")
-			cmd.Flags().StringVar(&fNode, "node", "", "Node placement name")
+			cmd.Flags().StringVar(&fComponent, "component", "", "Owning component, by name or id; omit for a server-hosted interface (needs an all-scoped grant)")
+			cmd.Flags().StringVar(&fNode, "node", "", "Node placement, by name or id")
 			cmd.Flags().StringVar(&fParams, "params", "", "Endpoint/target settings (jsonb)")
 			cmd.Flags().StringVar(&fType, "type", "", "An interface_type name (the protocol); the interface is named by it, unique within the component")
 			_ = cmd.MarkFlagRequired("type")
@@ -1166,7 +1166,7 @@ func generatedCommands() []*cobra.Command {
 					return runAPICommand(cmd, "PATCH", path, body)
 				},
 			}
-			cmd.Flags().StringVar(&fNode, "node", "", "Reassign the node placement")
+			cmd.Flags().StringVar(&fNode, "node", "", "Reassign the node placement, by name or id")
 			cmd.Flags().StringVar(&fParams, "params", "", "Replace the endpoint/target settings (jsonb)")
 			return cmd
 		}())
@@ -1743,7 +1743,7 @@ func generatedCommands() []*cobra.Command {
 			}
 			cmd.Flags().StringVar(&fDescription, "description", "", "")
 			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "Operator label; falls back to the name when empty")
-			cmd.Flags().StringVar(&fLocation, "location", "", "Optional location the node sits in (descriptive placement, not scope)")
+			cmd.Flags().StringVar(&fLocation, "location", "", "Optional location the node sits in, by name or id (descriptive placement, not scope)")
 			cmd.Flags().StringVar(&fName, "name", "", "Globally unique node name (also its NATS subject token, so no dots or whitespace)")
 			_ = cmd.MarkFlagRequired("name")
 			return cmd
@@ -1893,7 +1893,7 @@ func generatedCommands() []*cobra.Command {
 			}
 			cmd.Flags().StringVar(&fDescription, "description", "", "")
 			cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
-			cmd.Flags().StringVar(&fLocation, "location", "", "Set the node's location, or \"\" to clear it")
+			cmd.Flags().StringVar(&fLocation, "location", "", "Set the node's location by name or id, or \"\" to clear it")
 			return cmd
 		}())
 		roots = append(roots, parent)

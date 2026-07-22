@@ -53,11 +53,12 @@ func (f *healthFixture) assertTransitionOnly(t *testing.T, ctx context.Context) 
 	// owner resolves back to a NAME here: the invariant groups by owner, and a
 	// failure message naming the entity is worth more than one printing a uuid.
 	rows, err := f.conn.Query(ctx, `
-		select coalesce(c.name, s.name, l.name, sd.node_id) as owner, sd.owner_kind, sd.value
+		select coalesce(c.name, s.name, l.name, n.name) as owner, sd.owner_kind, sd.value
 		from state_datapoint sd
 		left join component c on c.id = sd.component_id
 		left join system    s on s.id = sd.system_id
 		left join location  l on l.id = sd.location_id
+		left join node      n on n.principal_id = sd.node_id
 		where sd.key = 'health'
 		order by owner, sd.id asc`)
 	if err != nil {

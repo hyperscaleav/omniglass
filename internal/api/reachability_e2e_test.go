@@ -82,8 +82,8 @@ func TestReachabilityAPI(t *testing.T) {
 	}
 	defer conn.Close(ctx)
 	if _, err := conn.Exec(ctx, `insert into interface (name, type, component, params) values
-		('disp-1-tcp', 'tcp', 'disp-1', '{"target":"10.20.4.11","port":5000}'::jsonb),
-		('disp-1-icmp', 'icmp', 'disp-1', '{"target":"10.20.4.11"}'::jsonb)`); err != nil {
+		('disp-1-tcp', 'tcp', (select id from component where name = 'disp-1'), '{"target":"10.20.4.11","port":5000}'::jsonb),
+		('disp-1-icmp', 'icmp', (select id from component where name = 'disp-1'), '{"target":"10.20.4.11"}'::jsonb)`); err != nil {
 		t.Fatalf("insert interfaces: %v", err)
 	}
 

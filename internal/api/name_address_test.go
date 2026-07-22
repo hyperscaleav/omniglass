@@ -23,10 +23,12 @@ import (
 // referenceFields maps a uuid field to the name field that must accompany it, per
 // response schema. A schema listed here must carry both.
 var referenceFields = map[string]string{
-	"parent_id":   "parent",
-	"location_id": "location",
-	"system_id":   "system",
-	"owner_id":    "owner_name",
+	"parent_id":    "parent",
+	"location_id":  "location",
+	"system_id":    "system",
+	"owner_id":     "owner_name",
+	"component_id": "component",
+	"node_id":      "node",
 }
 
 // Schemas where a *_id field addresses something with no name to pair it with.
