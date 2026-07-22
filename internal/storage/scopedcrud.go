@@ -83,12 +83,30 @@ func scopedList[T any](ctx context.Context, p *PG, cfg scopedConfig[T], read sco
 
 // scopedByName loads one entity by its unique name (notFound if absent), with no
 // scope check; callers layer scope on top.
-func scopedByName[T any](ctx context.Context, q querier, cfg scopedConfig[T], name string) (*T, error) {
-	v, err := cfg.scan(q.QueryRow(ctx, `select `+cfg.cols+` from `+string(cfg.table)+` where name = $1`, name))
+// scopedByName resolves an entity by REFERENCE, which is either its uuid or its
+// name. The uuid is the canonical handle and the name is the friendly alias, and
+// a caller uses whichever it holds: a script that just created something has the
+// id, a human at a CLI has the name.
+//
+// The uuid is tried first, and that ordering is only unambiguous because a name
+// can never be uuid-shaped (ValidateEntityName refuses the form). Without that
+// rule the same reference would resolve differently depending on which entity
+// happened to exist, making the answer a property of the data rather than of the
+// request.
+//
+// A well-formed uuid that matches nothing is an ordinary not-found rather than a
+// fallback to a name lookup that would also miss: falling through would turn one
+// clear miss into two and report the second.
+func scopedByName[T any](ctx context.Context, q querier, cfg scopedConfig[T], ref string) (*T, error) {
+	col := "name"
+	if isUUID(ref) {
+		col = "id"
+	}
+	v, err := cfg.scan(q.QueryRow(ctx, `select `+cfg.cols+` from `+string(cfg.table)+` where `+col+` = $1`, ref))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, cfg.notFound
 	} else if err != nil {
-		return nil, fmt.Errorf("storage: load %s %q: %w", cfg.table, name, err)
+		return nil, fmt.Errorf("storage: load %s %q: %w", cfg.table, ref, err)
 	}
 	return v, nil
 }

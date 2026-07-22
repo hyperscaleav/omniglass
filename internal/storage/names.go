@@ -27,6 +27,11 @@ var entityNameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 // ("019f8754", "ab-cd-ef") keep working.
 var uuidRe = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 
+// isUUID reports whether a reference is the canonical uuid form. It is the whole
+// of the dual-accept disambiguation: a name cannot take this shape, so a match
+// here means the caller gave an id.
+func isUUID(ref string) bool { return uuidRe.MatchString(ref) }
+
 // ValidateEntityName enforces the slug rule and a 100-char ceiling. It is the
 // server-side source of truth for a component/system/location technical name.
 //

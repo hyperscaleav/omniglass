@@ -7,46 +7,52 @@ import (
 	"testing"
 )
 
-// A name is the address: every response field that points at ANOTHER entity
-// carries that entity's name, never its uuid. A uuid appears only as an entity's
-// own `id`, an opaque handle.
+// A reference carries BOTH forms: the uuid is the canonical handle and the name
+// is the label a human reads. A body carrying only one is the defect this guards.
 //
-// This guards the rule at the contract rather than in prose, because the failure
-// is invisible: a body that emits `parent_id` still serves 200s, and the cost
-// only shows up in a client that has to fetch a second collection and join by
-// hand to render one label. That is exactly how the console came to carry a
-// uuid-to-name map for systems.
+// Only the id would force every client to fetch a second collection and join by
+// hand to render a label, which is what the console did before. Only the name
+// would hide the stable handle, which is what a response briefly did after
+// ADR-0053 and is the reason that ADR is superseded. Both, uniformly, so there is
+// no rule about which references are interesting enough to label.
 //
-// The allowed list below is the whole of the exception, and every entry is an
-// entity with NO name to use instead. Adding to it is a real decision: if the
-// target has a name, the field should carry it.
-var idFieldsWithNoNameToUse = map[string]string{
-	"resource_id":  "audit rows are polymorphic: the target may be any resource, including one since deleted",
-	"value_id":     "a stored property value has no name of its own, only the property it answers",
-	"interface_id": "an interface's name is unique only within its component, so the surrogate is the address",
-	"principal_id": "a principal is addressed by uuid; its username is an authentication credential, not an address",
-	"scope_id":     "a scope root is a uuid handle on a subtree",
-	"group_id":     "a principal group is uuid-keyed",
-	"target_id":    "an impersonation target is a principal, addressed as above",
-	"node_id":      "a node is addressed by its enrollment identity",
+// This is checked against the generated OpenAPI rather than in prose because the
+// failure is invisible at runtime: a body missing one half still serves 200s, and
+// the cost only lands in whoever consumes it.
+
+// referenceFields maps a uuid field to the name field that must accompany it, per
+// response schema. A schema listed here must carry both.
+var referenceFields = map[string]string{
+	"parent_id":   "parent",
+	"location_id": "location",
+	"system_id":   "system",
 }
 
-// Catalog ids that ARE names: these registries are keyed by a human-written slug,
-// so `product_id: "cisco-room-bar"` already satisfies the rule.
-//
-// `tag_id` was listed here and should not have been: `tag` is uuid-keyed with a
-// unique name, so it is a genuine instance of the rule rather than an exception.
-// No response body emits it today, which is why the guard passed over the false
-// entry; the schema side is tracked in #340.
+// Schemas where a *_id field addresses something with no name to pair it with.
+// Each entry is a real decision: if the target has a name, carry the name too.
+var idOnlyIsCorrect = map[string]string{
+	"resource_id":  "an audit row's target is polymorphic and may since have been deleted",
+	"value_id":     "a stored property value has no name, only the property it answers",
+	"interface_id": "an interface's name is unique only within its component",
+	"principal_id": "a principal is addressed by uuid; a username is a credential, not an address",
+	"scope_id":     "a scope root is a uuid handle on a subtree",
+	"group_id":     "a principal group is uuid-keyed",
+	"target_id":    "an impersonation target is a principal, as above",
+	"node_id":      "a node is addressed by its enrollment identity, which is its primary key",
+	"owner_id":     "the tag, variable, and secret owner arcs pair with owner_name; see #346",
+}
+
+// Catalog ids that ARE names, because the registry is keyed by a written slug.
 var slugKeyedCatalogs = map[string]bool{
-	"product_id": true, "standard_id": true, "parent_standard_id": true,
-	"driver_id": true, "vendor_id": true, "parent_product_id": true, "capability_id": true,
+	"product_id": true, "standard_id": true, "parent_standard_id": true, "parent_product_id": true,
+	"driver_id": true, "vendor_id": true, "capability_id": true,
 	"location_type_id": true, "secret_type_id": true, "datapoint_type_id": true,
 	"interface_type_id": true, "property_id": true, "role_id": true, "alarm_id": true,
 	"event_id": true, "audit_id": true, "source_rule_id": true, "product_property_id": true,
+	"tag_id": true,
 }
 
-func TestResponsesAddressEntitiesByName(t *testing.T) {
+func TestReferencesCarryBothForms(t *testing.T) {
 	raw, err := os.ReadFile("../../api/openapi.json")
 	if err != nil {
 		t.Fatalf("read spec: %v", err)
@@ -54,9 +60,7 @@ func TestResponsesAddressEntitiesByName(t *testing.T) {
 	var doc struct {
 		Components struct {
 			Schemas map[string]struct {
-				Properties map[string]struct {
-					Type any `json:"type"`
-				} `json:"properties"`
+				Properties map[string]json.RawMessage `json:"properties"`
 			} `json:"schemas"`
 		} `json:"components"`
 	}
@@ -67,8 +71,13 @@ func TestResponsesAddressEntitiesByName(t *testing.T) {
 		t.Fatal("no schemas in the spec: this test would pass vacuously")
 	}
 
-	var offenders []string
+	checked := 0
 	for name, sch := range doc.Components.Schemas {
+		// Input bodies take ONE field per reference, accepting either form, so the
+		// pairing rule is about responses.
+		if strings.HasSuffix(name, "InputBody") {
+			continue
+		}
 		for field := range sch.Properties {
 			if field == "id" || !strings.HasSuffix(field, "_id") {
 				continue
@@ -76,15 +85,23 @@ func TestResponsesAddressEntitiesByName(t *testing.T) {
 			if slugKeyedCatalogs[field] {
 				continue
 			}
-			if _, allowed := idFieldsWithNoNameToUse[field]; allowed {
+			if _, ok := idOnlyIsCorrect[field]; ok {
 				continue
 			}
-			offenders = append(offenders, name+"."+field)
+			pair, ok := referenceFields[field]
+			if !ok {
+				t.Errorf("%s.%s: unknown reference field. Either pair it with a name in "+
+					"referenceFields, or record why an id alone is correct in idOnlyIsCorrect.", name, field)
+				continue
+			}
+			checked++
+			if _, has := sch.Properties[pair]; !has {
+				t.Errorf("%s carries %q but not %q: a reference carries both, the id as the handle "+
+					"and the name as the label", name, field, pair)
+			}
 		}
 	}
-	if len(offenders) > 0 {
-		t.Errorf("these response fields name another entity by uuid, but a name is the address: %v\n"+
-			"Either carry the target's name, or, if the target genuinely has no name, add the field to "+
-			"idFieldsWithNoNameToUse with the reason.", offenders)
+	if checked == 0 {
+		t.Error("no reference pairs were checked, so this test proved nothing")
 	}
 }

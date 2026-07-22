@@ -291,12 +291,18 @@ components:
         id:
           type: string
         location:
-          description: Name of the location this component is placed at
+          description: The location's name, for display
+          type: string
+        location_id:
+          description: The location's id, the canonical handle
           type: string
         name:
           type: string
         parent:
-          description: Name of the parent component; absent for a root component
+          description: The parent component's name, for display; absent for a root component
+          type: string
+        parent_id:
+          description: The parent component's id, the canonical handle
           type: string
         product_id:
           description: The product (catalog SKU) this component is an instance of, if any.
@@ -308,6 +314,9 @@ components:
           description: How many systems this component belongs to; more than one means it is shared.
           format: int64
           type: integer
+        system_id:
+          description: The primary system's id, the canonical handle
+          type: string
       required:
         - id
         - name
@@ -2490,7 +2499,10 @@ components:
         name:
           type: string
         parent:
-          description: Name of the parent location; absent for a site root
+          description: The parent location's name, for display; absent for a site root
+          type: string
+        parent_id:
+          description: The parent location's id, the canonical handle
           type: string
       required:
         - id
@@ -3653,7 +3665,10 @@ components:
         id:
           type: string
         location:
-          description: Name of the location this system sits in
+          description: The location's name, for display
+          type: string
+        location_id:
+          description: The location's id, the canonical handle
           type: string
         member_count:
           description: How many components are bound into this system
@@ -3662,7 +3677,10 @@ components:
         name:
           type: string
         parent:
-          description: Name of the parent system; absent for a root system
+          description: The parent system's name, for display; absent for a root system
+          type: string
+        parent_id:
+          description: The parent system's id, the canonical handle
           type: string
         standard_id:
           description: The standard this system conforms to; omitted for a one-off system
