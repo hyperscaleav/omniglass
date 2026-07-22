@@ -322,12 +322,12 @@ func generatedCommands() []*cobra.Command {
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
 				var fDisplayName string
-				var fId string
+				var fName string
 				cmd := &cobra.Command{
 					Use:     "create",
 					Short:   "Create a capability",
 					Long:    "Creates a custom (non-official) capability. Gated by capability:create.",
-					Example: "  omniglass capability create --display-name display_name --id id",
+					Example: "  omniglass capability create --display-name display_name --name name",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/capabilities")
@@ -335,16 +335,16 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("display-name") {
 							body["display_name"] = fDisplayName
 						}
-						if cmd.Flags().Changed("id") {
-							body["id"] = fId
+						if cmd.Flags().Changed("name") {
+							body["name"] = fName
 						}
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
 				_ = cmd.MarkFlagRequired("display-name")
-				cmd.Flags().StringVar(&fId, "id", "", "Globally unique capability id")
-				_ = cmd.MarkFlagRequired("id")
+				cmd.Flags().StringVar(&fName, "name", "", "The globally unique kebab handle; renameable")
+				_ = cmd.MarkFlagRequired("name")
 				return cmd
 			}()
 			return cmd
@@ -3634,13 +3634,13 @@ func generatedCommands() []*cobra.Command {
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
 				var fDisplayName string
-				var fId string
+				var fName string
 				var fParentStandardId string
 				cmd := &cobra.Command{
 					Use:     "create",
 					Short:   "Create a standard",
 					Long:    "Creates a custom (non-official) standard, optionally as a variant of another. Gated by standard:create.",
-					Example: "  omniglass standard create --display-name display_name --id id",
+					Example: "  omniglass standard create --display-name display_name --name name",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/standards")
@@ -3648,8 +3648,8 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("display-name") {
 							body["display_name"] = fDisplayName
 						}
-						if cmd.Flags().Changed("id") {
-							body["id"] = fId
+						if cmd.Flags().Changed("name") {
+							body["name"] = fName
 						}
 						if cmd.Flags().Changed("parent-standard-id") {
 							body["parent_standard_id"] = fParentStandardId
@@ -3659,9 +3659,9 @@ func generatedCommands() []*cobra.Command {
 				}
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
 				_ = cmd.MarkFlagRequired("display-name")
-				cmd.Flags().StringVar(&fId, "id", "", "Globally unique standard id")
-				_ = cmd.MarkFlagRequired("id")
-				cmd.Flags().StringVar(&fParentStandardId, "parent-standard-id", "", "A standard this one is a variant of")
+				cmd.Flags().StringVar(&fName, "name", "", "The globally unique kebab handle; renameable")
+				_ = cmd.MarkFlagRequired("name")
+				cmd.Flags().StringVar(&fParentStandardId, "parent-standard-id", "", "A standard this one is a variant of, by handle or uuid")
 				return cmd
 			}()
 			return cmd

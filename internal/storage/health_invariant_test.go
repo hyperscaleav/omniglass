@@ -242,7 +242,7 @@ func (f *healthFixture) staffPair(t *testing.T, ctx context.Context, standard, s
 // pairStandard declares the shared quorum-2 standard the race rooms conform to.
 func (f *healthFixture) pairStandard(t *testing.T, ctx context.Context, id string) string {
 	t.Helper()
-	if err := f.gw.UpsertStandard(ctx, storage.Standard{ID: id, DisplayName: "Pair"}); err != nil {
+	if err := f.gw.UpsertStandard(ctx, storage.Standard{Name: id, DisplayName: "Pair"}); err != nil {
 		t.Fatalf("create standard: %v", err)
 	}
 	if _, err := f.gw.SetSystemRole(ctx, "", "standard", id, storage.SystemRoleSpec{

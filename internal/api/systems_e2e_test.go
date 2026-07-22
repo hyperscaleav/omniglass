@@ -54,16 +54,16 @@ func TestSystemAPI(t *testing.T) {
 	// console takes, and without it "one-off" would only be reachable at create.
 	standardOf := func(name string) string {
 		var s struct {
-			StandardID string `json:"standard_id"`
+			Standard string `json:"standard"`
 		}
 		if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/systems/"+name, nil, http.StatusOK), &s); err != nil {
 			t.Fatalf("decode system %s: %v", name, err)
 		}
-		return s.StandardID
+		return s.Standard
 	}
 	c.do(ownerTok, http.MethodPatch, "/systems/av", map[string]any{"display_name": "AV"}, http.StatusOK)
 	if got := standardOf("av"); got != "meeting-room" {
-		t.Fatalf("omitted standard_id = %q, want meeting-room kept", got)
+		t.Fatalf("omitted standard = %q, want meeting-room kept", got)
 	}
 	c.do(ownerTok, http.MethodPatch, "/systems/av", map[string]any{"standard_id": ""}, http.StatusOK)
 	if got := standardOf("av"); got != "" {

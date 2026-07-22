@@ -110,14 +110,14 @@ func TestSeedRolesIdempotent(t *testing.T) {
 	// The property that makes them operator-owned: re-seeding must not reassert
 	// over an operator's edit. An authoritative upsert would silently revert this
 	// on the next boot.
-	if _, err := conn.Exec(ctx, `update standard set display_name = 'Our Huddle Room' where id = 'huddle-room'`); err != nil {
+	if _, err := conn.Exec(ctx, `update standard set display_name = 'Our Huddle Room' where name = 'huddle-room'`); err != nil {
 		t.Fatalf("edit seeded standard: %v", err)
 	}
 	if err := seed.Run(ctx, gw); err != nil {
 		t.Fatalf("seed re-run: %v", err)
 	}
 	var huddleName string
-	if err := conn.QueryRow(ctx, `select display_name from standard where id = 'huddle-room'`).Scan(&huddleName); err != nil {
+	if err := conn.QueryRow(ctx, `select display_name from standard where name = 'huddle-room'`).Scan(&huddleName); err != nil {
 		t.Fatalf("read huddle-room: %v", err)
 	}
 	if huddleName != "Our Huddle Room" {
@@ -130,23 +130,24 @@ func TestSeedRolesIdempotent(t *testing.T) {
 	// survive the next boot.
 	var roleCount int
 	if err := conn.QueryRow(ctx, `select count(*) from system_role
-		where owner_kind = 'standard' and standard_id = 'meeting-room'`).Scan(&roleCount); err != nil {
+		where owner_kind = 'standard' and standard_id = (select id from standard where name = 'meeting-room')`).Scan(&roleCount); err != nil {
 		t.Fatalf("count meeting-room roles: %v", err)
 	}
 	if roleCount != 2 {
 		t.Errorf("meeting-room roles = %d, want 2 (seed not idempotent or incomplete)", roleCount)
 	}
 	var micCaps []string
-	if err := conn.QueryRow(ctx, `select array_agg(rc.capability_id order by rc.capability_id)
+	if err := conn.QueryRow(ctx, `select array_agg(cap.name order by cap.name)
 		from system_role r join role_capability rc on rc.role_id = r.id
-		where r.standard_id = 'meeting-room' and r.name = 'room-mic'`).Scan(&micCaps); err != nil {
+		join capability cap on cap.id = rc.capability_id
+		where r.standard_id = (select id from standard where name = 'meeting-room') and r.name = 'room-mic'`).Scan(&micCaps); err != nil {
 		t.Fatalf("read room-mic capabilities: %v", err)
 	}
 	if len(micCaps) != 2 || micCaps[0] != "microphone" || micCaps[1] != "speaker" {
 		t.Errorf("room-mic capabilities = %v, want [microphone speaker]", micCaps)
 	}
 	if _, err := conn.Exec(ctx, `update system_role set quorum = 4
-		where standard_id = 'meeting-room' and name = 'room-mic'`); err != nil {
+		where standard_id = (select id from standard where name = 'meeting-room') and name = 'room-mic'`); err != nil {
 		t.Fatalf("retune seeded role: %v", err)
 	}
 	if err := seed.Run(ctx, gw); err != nil {
@@ -154,7 +155,7 @@ func TestSeedRolesIdempotent(t *testing.T) {
 	}
 	var quorum int
 	if err := conn.QueryRow(ctx, `select quorum from system_role
-		where standard_id = 'meeting-room' and name = 'room-mic'`).Scan(&quorum); err != nil {
+		where standard_id = (select id from standard where name = 'meeting-room') and name = 'room-mic'`).Scan(&quorum); err != nil {
 		t.Fatalf("read room-mic quorum: %v", err)
 	}
 	if quorum != 4 {

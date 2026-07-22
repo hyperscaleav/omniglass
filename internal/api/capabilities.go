@@ -11,13 +11,14 @@ import (
 // capabilityBody is the wire shape of a capability registry row. The registry
 // lists alphabetically by display_name, like component_type.
 type capabilityBody struct {
-	ID          string `json:"id"`
+	ID          string `json:"id" doc:"The capability's uuid, the stable handle that survives a rename"`
+	Name        string `json:"name" doc:"The kebab handle an operator reads and types; renameable"`
 	DisplayName string `json:"display_name"`
 	Official    bool   `json:"official"`
 }
 
 func toCapabilityBody(c *storage.Capability) capabilityBody {
-	return capabilityBody{ID: c.ID, DisplayName: c.DisplayName, Official: c.Official}
+	return capabilityBody{ID: c.ID, Name: c.Name, DisplayName: c.DisplayName, Official: c.Official}
 }
 
 type listCapabilitiesOutput struct {
@@ -32,7 +33,7 @@ type capabilityPathInput struct {
 
 type createCapabilityInput struct {
 	Body struct {
-		ID          string `json:"id" minLength:"1" doc:"Globally unique capability id"`
+		Name        string `json:"name" minLength:"1" doc:"The globally unique kebab handle; renameable"`
 		DisplayName string `json:"display_name" minLength:"1"`
 	}
 }
@@ -81,7 +82,7 @@ func registerCapabilityRoutes(api huma.API, a *authenticator, gw storage.Gateway
 		Description:   "Creates a custom (non-official) capability. Gated by capability:create.",
 	}, "capability", "create"), func(ctx context.Context, in *createCapabilityInput) (*capabilityOutput, error) {
 		c, err := gw.CreateCapability(ctx, actorID(ctx), storage.Capability{
-			ID: in.Body.ID, DisplayName: in.Body.DisplayName,
+			Name: in.Body.Name, DisplayName: in.Body.DisplayName,
 		})
 		if err != nil {
 			return nil, mapTypeErr(err, "capability")

@@ -189,7 +189,7 @@ export function CreateCapabilityForm(p: { onCreated: (id: string) => void }): JS
     setFormErr(null);
     try {
       await createCapability({
-        id: id().trim(),
+        name: id().trim(),
         display_name: displayName().trim(),
       });
       await qc.invalidateQueries({ queryKey: CAPABILITIES_KEY });

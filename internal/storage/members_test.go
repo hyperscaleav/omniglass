@@ -36,7 +36,7 @@ func newMemberFixture(t *testing.T, ctx context.Context) *memberFixture {
 	f := &memberFixture{gw: gw, all: scope.Set{All: true}}
 
 	for _, id := range []string{"member-standard"} {
-		if err := gw.UpsertStandard(ctx, storage.Standard{ID: id, DisplayName: "Member Standard"}); err != nil {
+		if err := gw.UpsertStandard(ctx, storage.Standard{Name: id, DisplayName: "Member Standard"}); err != nil {
 			t.Fatalf("standard: %v", err)
 		}
 	}

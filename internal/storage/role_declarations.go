@@ -39,7 +39,9 @@ func roleOwnerExpr(ownerKind string) string {
 	if ownerKind == "system" {
 		return `(select id from system where name = $2)`
 	}
-	return `$2`
+	// A standard is addressed by its handle or its uuid, and the column stores
+	// the uuid (ADR-0062).
+	return `(select id from standard where name = $2 or id::text = $2)`
 }
 
 func roleOwnerColumn(ownerKind string) (string, error) {
@@ -75,10 +77,11 @@ func (p *PG) ListSystemRoles(ctx context.Context, ownerKind, ownerID string) ([]
 	// needs them qualified by the role alias.
 	q := fmt.Sprintf(`
 		select r.id, r.owner_kind, r.name, r.display_name, r.quorum, r.impact, r.created_at, r.updated_at,
-		       coalesce(array_agg(rc.capability_id order by rc.capability_id)
-		                filter (where rc.capability_id is not null), '{}') as caps
+		       coalesce(array_agg(cap.name order by cap.name)
+		                filter (where cap.name is not null), '{}') as caps
 		from system_role r
 		left join role_capability rc on rc.role_id = r.id
+		left join capability cap on cap.id = rc.capability_id
 		where r.owner_kind = $1 and r.%s = %s
 		group by r.id
 		order by r.name`, col, roleOwnerExpr(ownerKind))
@@ -171,7 +174,8 @@ func (p *PG) SetSystemRole(ctx context.Context, actorID, ownerKind, ownerID stri
 	if len(spec.Capabilities) > 0 {
 		if _, err := tx.Exec(ctx, `
 			insert into role_capability (role_id, capability_id)
-			select $1, c from unnest($2::text[]) c
+			select $1, (select id from capability where name = c or id::text = c)
+			from unnest($2::text[]) c
 			on conflict (role_id, capability_id) do nothing`, r.ID, spec.Capabilities); err != nil {
 			return nil, mapRoleWriteErr(err)
 		}
@@ -265,7 +269,8 @@ func (p *PG) SetComponentCapability(ctx context.Context, actorID, componentName,
 	var id string
 	if err := tx.QueryRow(ctx, `
 		insert into component_capability (component_id, capability_id, present)
-		values ((select id from component where name = $1), $2, $3)
+		values ((select id from component where name = $1),
+		        (select id from capability where name = $2 or id::text = $2), $3)
 		on conflict (component_id, capability_id) do update
 			set present    = excluded.present,
 			    updated_at = now()
@@ -300,7 +305,8 @@ func (p *PG) ClearComponentCapability(ctx context.Context, actorID, componentNam
 	var id string
 	if err := tx.QueryRow(ctx, `
 		delete from component_capability
-		where component_id = (select id from component where name = $1) and capability_id = $2
+		where component_id = (select id from component where name = $1)
+		  and capability_id = (select id from capability where name = $2 or id::text = $2)
 		returning id`, componentName, capabilityID).Scan(&id); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrComponentCapabilityNotFound
@@ -339,9 +345,9 @@ func (p *PG) SeedSystemRole(ctx context.Context, ownerKind, ownerID string, spec
 	var id string
 	err = p.pool.QueryRow(ctx, fmt.Sprintf(`
 		insert into system_role (owner_kind, %s, name, display_name, quorum, impact)
-		values ($1, $2, $3, $4, $5, $6)
+		values ($1, %s, $3, $4, $5, $6)
 		on conflict (owner_kind, standard_id, system_id, name) do nothing
-		returning id`, col),
+		returning id`, col, roleOwnerExpr(ownerKind)),
 		ownerKind, ownerID, spec.Name, spec.DisplayName, max(spec.Quorum, 1), impact).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil // already there, and the operator owns it now
@@ -354,7 +360,8 @@ func (p *PG) SeedSystemRole(ctx context.Context, ownerKind, ownerID string, spec
 	}
 	if _, err := p.pool.Exec(ctx, `
 		insert into role_capability (role_id, capability_id)
-		select $1, c from unnest($2::text[]) c
+		select $1, (select id from capability where name = c or id::text = c)
+		from unnest($2::text[]) c
 		on conflict (role_id, capability_id) do nothing`, id, spec.Capabilities); err != nil {
 		return mapRoleWriteErr(err)
 	}

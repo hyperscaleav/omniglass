@@ -8,6 +8,7 @@ import { api } from "../api/client";
 
 export type Capability = {
   id: string;
+  name: string;
   display_name: string;
   official: boolean;
 };
@@ -21,7 +22,8 @@ export async function listCapabilities(): Promise<Capability[]> {
 }
 
 export type CreateCapability = {
-  id: string;
+  // The kebab handle. The uuid is the database\'s to mint.
+  name: string;
   display_name: string;
 };
 

@@ -9,6 +9,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // SystemRole is a slot a system needs filled, declared either on a standard (and
@@ -101,22 +102,22 @@ func (e *CapabilityShortfall) Error() string {
 // transaction.
 func (p *PG) EffectiveCapabilities(ctx context.Context, q querier, componentName string) ([]string, error) {
 	var caps []string
+	// The set is resolved by capability id and projected as name at the end (a
+	// capability id is a uuid; its handle is what the API and health rules speak).
 	err := q.QueryRow(ctx, `
-		select coalesce(array_agg(cap order by cap), '{}')
-		from (
-			-- what the product declares
-			select pc.capability_id as cap
+		select coalesce(array_agg(cap.name order by cap.name), '{}')
+		from capability cap
+		where cap.id in (
+			select pc.capability_id
 			from component c
 			join product_capability pc on pc.product_id = c.product_id
 			where c.name = $1
 			union
-			-- what the component adds on its own
 			select cc.capability_id
 			from component_capability cc
 			where cc.component_id = (select id from component where name = $1) and cc.present
-		) provided
-		where cap not in (
-			-- minus what the component suppresses
+		)
+		and cap.id not in (
 			select capability_id from component_capability
 			where component_id = (select id from component where name = $1) and not present
 		)`, componentName).Scan(&caps)
@@ -154,10 +155,11 @@ func (p *PG) EffectiveRoles(ctx context.Context, systemName string, read scope.S
 		)
 		select roles.id, roles.name, roles.display_name, roles.quorum, roles.impact, roles.from_standard,
 		       roles.created_at, roles.updated_at,
-		       coalesce(array_agg(distinct rc.capability_id) filter (where rc.capability_id is not null), '{}') as caps,
+		       coalesce(array_agg(distinct cap.name) filter (where cap.name is not null), '{}') as caps,
 		       coalesce(array_agg(distinct ac.name) filter (where ac.name is not null), '{}') as assigned
 		from roles
 		left join role_capability rc on rc.role_id = roles.id
+		left join capability cap on cap.id = rc.capability_id
 		left join role_assignment ra on ra.role_id = roles.id
 		     and ra.system_id = (select id from system where name = $1)
 		left join component ac on ac.id = ra.component_id
@@ -308,12 +310,13 @@ func (p *PG) resolveRole(ctx context.Context, q querier, systemName, roleName st
 	err := q.QueryRow(ctx, `
 		with sys as (select id, name, standard_id from system where name = $1)
 		select r.id,
-		       coalesce(array_agg(rc.capability_id) filter (where rc.capability_id is not null), '{}')
+		       coalesce(array_agg(cap.name) filter (where cap.name is not null), '{}')
 		from sys
 		join system_role r
 		     on (r.owner_kind = 'system' and r.system_id = sys.id)
 		     or (r.owner_kind = 'standard' and r.standard_id = sys.standard_id)
 		left join role_capability rc on rc.role_id = r.id
+		left join capability cap on cap.id = rc.capability_id
 		where r.name = $2
 		group by r.id`, systemName, roleName).Scan(&id, &caps)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -344,8 +347,10 @@ func mapRoleWriteErr(err error) error {
 	if isUniqueViolation(err) {
 		return ErrRoleExists
 	}
-	var pgErr interface{ SQLState() string }
-	if errors.As(err, &pgErr) && pgErr.SQLState() == "23503" {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && (pgErr.Code == "23503" ||
+		// an unknown capability name resolves to null on a not-null arc
+		(pgErr.Code == "23502" && pgErr.ColumnName == "capability_id")) {
 		return ErrRoleRefNotFound
 	}
 	return fmt.Errorf("storage: role write: %w", err)

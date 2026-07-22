@@ -14,8 +14,8 @@ import { ME_KEY, type Me } from "../lib/auth";
 // and a writable declared-property contract on its detail blade. Data is seeded
 // into the query cache so no server is needed.
 const seed: Standard[] = [
-  { id: "meeting-room", display_name: "Meeting room", official: true },
-  { id: "huddle-space", display_name: "Huddle space", official: false, parent_standard_id: "meeting-room" },
+  { id: "u-meeting-room", name: "meeting-room", display_name: "Meeting room", official: true },
+  { id: "u-huddle-space", name: "huddle-space", display_name: "Huddle space", official: false, parent_standard: "meeting-room", parent_standard_id: "u-meeting-room" },
 ];
 
 const contract: ClassifierProperty[] = [{ property_name: "seat_count", default_value: 8, required: true }];

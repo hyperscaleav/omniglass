@@ -385,9 +385,10 @@ func (p *PG) activeAlarmSeverities(ctx context.Context, q txQuerier, componentNa
 func (p *PG) degradedCapabilities(ctx context.Context, q txQuerier, componentName string) ([]string, error) {
 	var caps []string
 	if err := q.QueryRow(ctx, `
-		select coalesce(array_agg(distinct ac.capability_id), '{}')
+		select coalesce(array_agg(distinct cap.name), '{}')
 		from alarm a
 		join alarm_capability ac on ac.alarm_id = a.id
+		join capability cap on cap.id = ac.capability_id
 		where a.component_id = (select id from component where name = $1) and a.cleared_at is null`,
 		componentName).Scan(&caps); err != nil {
 		return nil, fmt.Errorf("storage: degraded capabilities %q: %w", componentName, err)
@@ -413,7 +414,7 @@ func (p *PG) systemsStaffedBy(ctx context.Context, q txQuerier, componentName st
 // a role on a standard moves every conforming system at once, which is the arc a
 // per-system recompute would miss.
 func (p *PG) conformingSystems(ctx context.Context, q txQuerier, standardID string) ([]string, error) {
-	rows, err := q.Query(ctx, `select name from system where standard_id = $1 order by name`, standardID)
+	rows, err := q.Query(ctx, `select name from system where standard_id = (select id from standard where name = $1 or id::text = $1) order by name`, standardID)
 	if err != nil {
 		return nil, fmt.Errorf("storage: conforming systems %q: %w", standardID, err)
 	}
@@ -518,12 +519,13 @@ func (p *PG) resolveHealthRoles(ctx context.Context, q txQuerier, systemName str
 			from sys join system_role r on r.owner_kind = 'system' and r.system_id = sys.id
 		)
 		select roles.id, roles.name, roles.display_name, roles.quorum, roles.impact,
-		       coalesce(array_agg(distinct rc.capability_id) filter (where rc.capability_id is not null), '{}'),
+		       coalesce(array_agg(distinct cap.name) filter (where cap.name is not null), '{}'),
 		       -- NAMES, not ids: the rollup looks each assignee's capabilities and
 		       -- alarms up by name, and the report displays them.
 		       coalesce(array_agg(distinct ac.name) filter (where ac.name is not null), '{}')
 		from roles
 		left join role_capability rc on rc.role_id = roles.id
+		left join capability cap on cap.id = rc.capability_id
 		left join role_assignment ra on ra.role_id = roles.id
 		     and ra.system_id = (select id from system where name = $1)
 		left join component ac on ac.id = ra.component_id

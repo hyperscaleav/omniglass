@@ -26,10 +26,10 @@ const product: Product = {
   official: true,
 };
 const catalog: Capability[] = [
-  { id: "touch-panel", display_name: "Touch panel", official: true },
-  { id: "speaker", display_name: "Speaker", official: true },
-  { id: "microphone", display_name: "Microphone", official: true },
-  { id: "camera", display_name: "Camera", official: true },
+  { id: "touch-panel", name: "touch-panel", display_name: "Touch panel", official: true },
+  { id: "speaker", name: "speaker", display_name: "Speaker", official: true },
+  { id: "microphone", name: "microphone", display_name: "Microphone", official: true },
+  { id: "camera", name: "camera", display_name: "Camera", official: true },
 ];
 
 const owner: Me = { principal: { id: "p", kind: "human" }, permissions: [">"], grants: [] };

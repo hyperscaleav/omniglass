@@ -20,8 +20,8 @@ import { TAGS_KEY, entityTagsKey } from "../lib/tags";
 const me: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
 const sys: System = { id: "s-1", name: "boardroom", display_name: "Boardroom", standard_id: "meeting-room", member_count: 2, effective_tags: {} };
 const standards: Standard[] = [
-  { id: "meeting-room", display_name: "Meeting room", official: true },
-  { id: "huddle-space", display_name: "Huddle space", official: false },
+  { id: "meeting-room", name: "meeting-room", display_name: "Meeting room", official: true },
+  { id: "huddle-space", name: "huddle-space", display_name: "Huddle space", official: false },
 ];
 // The standard's contract, resolved against the system: one inherited default and
 // one value the system sets directly with nothing declaring it.

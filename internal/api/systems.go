@@ -14,7 +14,8 @@ type systemBody struct {
 	ID            string            `json:"id"`
 	Name          string            `json:"name"`
 	DisplayName   string            `json:"display_name,omitempty"`
-	StandardID    string            `json:"standard_id,omitempty" doc:"The standard this system conforms to; omitted for a one-off system"`
+	Standard      string            `json:"standard,omitempty" doc:"The standard's handle, for display; omitted for a one-off system"`
+	StandardID    string            `json:"standard_id,omitempty" doc:"The standard's uuid; the stable form of standard"`
 	ParentID      *string           `json:"parent_id,omitempty" doc:"The parent system's id, the canonical handle"`
 	Parent        *string           `json:"parent,omitempty" doc:"The parent system's name, for display; absent for a root system"`
 	LocationID    *string           `json:"location_id,omitempty" doc:"The location's id, the canonical handle"`
@@ -27,7 +28,7 @@ type systemBody struct {
 func toSystemBody(s *storage.System) systemBody {
 	return systemBody{
 		ID: s.ID, Name: s.Name, DisplayName: s.DisplayName,
-		StandardID: derefStr(s.StandardID), ParentID: s.ParentID, Parent: s.ParentName, LocationID: s.LocationID, Location: s.LocationName,
+		Standard: derefStr(s.StandardName), StandardID: derefStr(s.StandardID), ParentID: s.ParentID, Parent: s.ParentName, LocationID: s.LocationID, Location: s.LocationName,
 		MemberCount: s.MemberCount,
 	}
 }
@@ -46,16 +47,18 @@ type systemOutput struct {
 // to, the system-side counterpart of a product. The catalog lists alphabetically
 // by display_name.
 type standardBody struct {
-	ID               string `json:"id"`
+	ID               string `json:"id" doc:"The standard's uuid, the stable handle that survives a rename"`
+	Name             string `json:"name" doc:"The kebab handle an operator reads and types; renameable"`
 	DisplayName      string `json:"display_name"`
-	ParentStandardID string `json:"parent_standard_id,omitempty"`
+	ParentStandard   string `json:"parent_standard,omitempty" doc:"The parent standard's handle"`
+	ParentStandardID string `json:"parent_standard_id,omitempty" doc:"The parent standard's uuid; the stable form of parent_standard"`
 	Official         bool   `json:"official"`
 }
 
 func toStandardBody(st *storage.Standard) standardBody {
 	return standardBody{
 		ID: st.ID, DisplayName: st.DisplayName,
-		ParentStandardID: derefStr(st.ParentStandardID), Official: st.Official,
+		Name: st.Name, ParentStandard: derefStr(st.ParentStandardName), ParentStandardID: derefStr(st.ParentStandardID), Official: st.Official,
 	}
 }
 
@@ -71,9 +74,9 @@ type standardPathInput struct {
 
 type createStandardInput struct {
 	Body struct {
-		ID               string `json:"id" minLength:"1" doc:"Globally unique standard id"`
+		Name             string `json:"name" minLength:"1" doc:"The globally unique kebab handle; renameable"`
 		DisplayName      string `json:"display_name" minLength:"1"`
-		ParentStandardID string `json:"parent_standard_id,omitempty" doc:"A standard this one is a variant of"`
+		ParentStandardID string `json:"parent_standard_id,omitempty" doc:"A standard this one is a variant of, by handle or uuid"`
 	}
 }
 
@@ -345,7 +348,7 @@ func registerStandardRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Description:   "Creates a custom (non-official) standard, optionally as a variant of another. Gated by standard:create.",
 	}, "standard", "create"), func(ctx context.Context, in *createStandardInput) (*standardOutput, error) {
 		st, err := gw.CreateStandard(ctx, actorID(ctx), storage.Standard{
-			ID: in.Body.ID, DisplayName: in.Body.DisplayName,
+			Name: in.Body.Name, DisplayName: in.Body.DisplayName,
 			ParentStandardID: ptrOrNil(in.Body.ParentStandardID),
 		})
 		if err != nil {
