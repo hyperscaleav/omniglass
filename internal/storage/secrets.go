@@ -505,7 +505,7 @@ func (p *PG) ResolveSecrets(ctx context.Context, componentID string, read scope.
 const resolveSecretsSQL = `
 with recursive
 target as (
-    select id, system_id, location_id from component where id = $1
+    select id, location_id from component where id = $1
 ),
 comp_chain(id, depth) as (
     select id, 0 from component where id = $1
@@ -514,13 +514,6 @@ comp_chain(id, depth) as (
     from component c join comp_chain cc on c.id = cc.id
     where c.parent_id is not null
 ) cycle id set comp_cyc using comp_path,
-sys_chain(id, depth) as (
-    select system_id, 0 from target where system_id is not null
-    union all
-    select s.parent_id, sc.depth + 1
-    from system s join sys_chain sc on s.id = sc.id
-    where s.parent_id is not null
-) cycle id set sys_cyc using sys_path,
 loc_chain(id, depth) as (
     select location_id, 0 from target where location_id is not null
     union all
@@ -531,7 +524,6 @@ loc_chain(id, depth) as (
 owners(owner_kind, owner_id, band, depth) as (
                 select 'global',    null::uuid, 0, 0
     union all   select 'location',  id,         1, depth from loc_chain
-    union all   select 'system',    id,         2, depth from sys_chain
     union all   select 'component', id,         3, depth from comp_chain
 ),
 ranked as (

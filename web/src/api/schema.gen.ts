@@ -489,7 +489,7 @@ export interface paths {
         };
         /**
          * Effective tags for a component
-         * @description Resolves the tags that cascade onto a component (global -> location -> system -> component): keys union, values override most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves only from a binding on the component itself. Gated by component:read; the component must be in the caller's component read scope.
+         * @description Resolves the tags that cascade onto a component (global -> location -> system -> component): keys union, values override most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves only from a binding on the component itself. The system band comes from MEMBERSHIP: pass ?system= to resolve against one the component belongs to (a shared device answers differently for each), or omit it to resolve against its primary membership. Gated by component:read; the component must be in the caller's component read scope.
          */
         get: operations["effective-tags"];
         put?: never;
@@ -3047,7 +3047,13 @@ export interface components {
             parent_id?: string;
             /** @description The product (catalog SKU) this component is an instance of, if any. */
             product_id?: string;
-            system_id?: string;
+            /** @description Name of the component's primary system, its default when no system is named. A component may belong to several; read /components/{name}/memberships for all of them. */
+            system?: string;
+            /**
+             * Format: int64
+             * @description How many systems this component belongs to; more than one means it is shared.
+             */
+            system_count: number;
         };
         ComponentCapabilitiesOutputBody: {
             /**
@@ -6261,7 +6267,10 @@ export interface operations {
     };
     "effective-tags": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Resolve against this system, which the component must be a member of. Omit to resolve against its primary membership, the default for a caller with no system in hand. */
+                system?: string;
+            };
             header?: never;
             path: {
                 /** @description The component's name */

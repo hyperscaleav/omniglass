@@ -5,7 +5,6 @@ import Button from "./Button";
 import { Check, X } from "./icons";
 import { describeError } from "../lib/format";
 import { COMPONENTS_KEY, listComponents, type Component as Comp } from "../lib/components";
-import { SYSTEMS_KEY, listSystems } from "../lib/systems";
 import {
   assignRole,
   staffingLabel,
@@ -47,7 +46,6 @@ export default function RolesPanel(props: { system: string; canUpdate: boolean }
     refetchOnWindowFocus: false,
   }));
   const components = useQuery(() => ({ queryKey: COMPONENTS_KEY, queryFn: listComponents }));
-  const systems = useQuery(() => ({ queryKey: SYSTEMS_KEY, queryFn: listSystems }));
 
   const roles = createMemo<EffectiveRole[]>(() => q.data ?? []);
   const inherited = createMemo(() => roles().filter((r) => r.from_standard));
@@ -62,15 +60,15 @@ export default function RolesPanel(props: { system: string; canUpdate: boolean }
   // dropped, and the ones in this system lead, since that is where an operator
   // staffs from. Everything else is still offered, because the capability guard
   // (not the placement) is what decides, and its refusal is what teaches.
-  const systemId = createMemo(() => (systems.data ?? []).find((s) => s.name === props.system)?.id);
   const label = (c: Comp) => c.display_name || c.name;
   const candidates = (role: EffectiveRole): Comp[] => {
     const taken = new Set(role.assigned_to ?? []);
-    const sid = systemId();
+    // Components whose primary is this system lead. Compared by NAME now that a
+    // component reports its primary system directly, with no uuid lookup.
     return [...(components.data ?? [])]
       .filter((c) => !taken.has(c.name))
       .sort((a, b) => {
-        const mine = Number(!!sid && b.system_id === sid) - Number(!!sid && a.system_id === sid);
+        const mine = Number(b.system === props.system) - Number(a.system === props.system);
         return mine || label(a).localeCompare(label(b));
       });
   };

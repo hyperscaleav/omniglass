@@ -261,7 +261,16 @@ func (p *PG) ResolveVariables(ctx context.Context, componentID string, read scop
 const resolveVariablesSQL = `
 with recursive
 target as (
-    select id, system_id, location_id from component where id = $1
+    select id, name, location_id from component where id = $1
+),
+-- Seeded from the component's PRIMARY membership, the same rule the tag cascade
+-- uses: single-valued, because the rank below has no tiebreaker after depth.
+seed_sys as (
+    select s.id
+    from system s
+    join system_member m on m.system_id = s.name
+    join target t on t.name = m.component_id
+    where m.is_primary
 ),
 comp_chain(id, depth) as (
     select id, 0 from component where id = $1
@@ -271,7 +280,7 @@ comp_chain(id, depth) as (
     where c.parent_id is not null
 ) cycle id set comp_cyc using comp_path,
 sys_chain(id, depth) as (
-    select system_id, 0 from target where system_id is not null
+    select id, 0 from seed_sys
     union all
     select s.parent_id, sc.depth + 1
     from system s join sys_chain sc on s.id = sc.id

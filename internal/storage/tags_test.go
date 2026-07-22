@@ -201,7 +201,7 @@ func TestTagCascadeResolve(t *testing.T) {
 	mustBind(t, gw, "asset_id", "location", strptr("campus"), "LOC-1")
 	mustBind(t, gw, "asset_id", "component", strptr("codec-1"), "A-42")
 
-	resolved, err := gw.ResolveTags(ctx, comp.ID, all)
+	resolved, err := gw.ResolveTags(ctx, comp.ID, "", all)
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
 	}
@@ -232,7 +232,7 @@ func TestTagCascadeResolve(t *testing.T) {
 	if err := gw.DeleteTagBinding(ctx, "", "environment", "component", strptr("codec-1"), all, all); err != nil {
 		t.Fatalf("delete env component binding: %v", err)
 	}
-	resolved, _ = gw.ResolveTags(ctx, comp.ID, all)
+	resolved, _ = gw.ResolveTags(ctx, comp.ID, "", all)
 	for _, r := range resolved {
 		if r.Key == "environment" && r.Winner && (r.OwnerKind != "location" || r.Value != "staging") {
 			t.Errorf("environment winner after drop = %+v, want staging on location", r)
@@ -240,7 +240,7 @@ func TestTagCascadeResolve(t *testing.T) {
 	}
 
 	// A component outside the read scope does not disclose its cascade.
-	if _, err := gw.ResolveTags(ctx, comp.ID, scope.Set{IDs: []string{"00000000-0000-0000-0000-000000000000"}}); !errors.Is(err, storage.ErrComponentNotFound) {
+	if _, err := gw.ResolveTags(ctx, comp.ID, "", scope.Set{IDs: []string{"00000000-0000-0000-0000-000000000000"}}); !errors.Is(err, storage.ErrComponentNotFound) {
 		t.Errorf("out-of-scope resolve = %v, want ErrComponentNotFound", err)
 	}
 }

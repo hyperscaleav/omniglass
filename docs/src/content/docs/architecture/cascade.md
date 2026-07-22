@@ -111,12 +111,31 @@ Ship-with **default policy** lives at `global`, the floor of the chain.
 
 ## Structural multi-membership (a component in N systems)
 
-Distinct from group membership. On the resolution side, the **primary-system
-pointer** is the single system chain that feeds the cascade for a component that
-sits in more than one system; the genuine "config differs per system" case is
-answered by **per-system effective views** computed on demand, not by merging
-chains into the resolution. See [core entities](/architecture/core-entities/) for
-the membership model.
+Distinct from group membership. A component belongs to zero or more systems through
+[`system_member`](/architecture/core-entities/#membership-what-a-role-attaches-to),
+and the resolution **takes the system to resolve against**: given one, it resolves
+against that system, and only if the component is a member of it, since naming a
+system it has no binding to must not lend it configuration. That is the "config
+differs per system" case, answered as a **per-system effective view** computed on
+demand rather than by merging chains.
+
+Asked with **no system in hand**, the chain is seeded from the component's
+**primary** membership. That is what `is_primary` is for, and it is the whole of
+what it is for: a default for context-free callers, never a rule that overrides a
+caller who named a system. A component in exactly one system, which is nearly all
+of them, never meets the distinction.
+
+The seed stays **single-valued** whichever way it is chosen, and that is a
+correctness requirement rather than a simplification: the rank below orders by band
+and then depth with **no tiebreaker after that**, so two seeds in the same band
+would resolve nondeterministically. Membership is many-valued; the chain it feeds
+is not.
+
+**Secrets carry no system band at all.** A credential authenticates a session with
+the device itself, a shared component has one password, and the room it happens to
+serve is the wrong owner for it. That is an ownership decision, not a tiebreak, and
+it removes the case where an ambiguous inheritance would have been actively
+dangerous.
 
 ## The resolve view
 

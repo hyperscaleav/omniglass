@@ -450,7 +450,7 @@ type Gateway interface {
 	SetTagBinding(ctx context.Context, actorID, key, ownerKind string, ownerName *string, value string, read, action scope.Set) (*TagBinding, error)
 	DeleteTagBinding(ctx context.Context, actorID, key, ownerKind string, ownerName *string, read, action scope.Set) error
 	ListEntityTags(ctx context.Context, ownerKind string, ownerName *string, read scope.Set) ([]TagBinding, error)
-	ResolveTags(ctx context.Context, componentID string, read scope.Set) ([]ResolvedTag, error)
+	ResolveTags(ctx context.Context, componentID, forSystem string, read scope.Set) ([]ResolvedTag, error)
 	// EffectiveTags batch-resolves the winning effective tags (key -> value) for a
 	// set of owners of one kind, feeding the directory Tags column. Scopeless: the
 	// caller passes ids already in the read scope (the rowActions batch contract).
