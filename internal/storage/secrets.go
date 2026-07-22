@@ -31,11 +31,11 @@ var (
 // origin that drive encryption, masking, and the create gate. official marks the
 // ship-with set, mirroring the other type registries.
 type SecretType struct {
-	ID                     string
-	Official               bool
-	DisplayName            string
-	DefaultAdminSensitive  bool // seeds the create form's admin_sensitive default
-	Fields                 []secret.Field
+	ID                    string
+	Official              bool
+	DisplayName           string
+	DefaultAdminSensitive bool // seeds the create form's admin_sensitive default
+	Fields                []secret.Field
 }
 
 // Shape adapts the registry row to the pure secret.Shape the primitive validates
@@ -705,10 +705,10 @@ func (p *PG) secretForAction(ctx context.Context, q querier, id string, read, ac
 // API and passed in here rather than checked on the request body.
 func (p *PG) secretRowForAction(ctx context.Context, q querier, id string, read, action scope.Set, canAdmin, canPlatform bool) (secretRow, secret.Shape, error) {
 	var (
-		row       secretRow
-		secType   string
+		row            secretRow
+		secType        string
 		comp, sys, loc *string
-		value     []byte
+		value          []byte
 	)
 	err := q.QueryRow(ctx, `
 		select id, name, secret_type, owner_kind, component_id, system_id, location_id, admin_sensitive, value

@@ -1832,3 +1832,13 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   `type` command group is gone; `location-type list` is the registry and `location-type property list`
   its contract. Addressing only: same handlers, same permission gates, same scope injection, no schema
   change.
+- **"Latest" in a calculated series means the highest id**
+  ([ADR-0061](/architecture/decisions/#adr-0061-a-calculated-series-is-current-at-its-highest-id-not-its-newest-timestamp)):
+  a health row's `ts` is `clock_timestamp()` evaluated before its identity id is assigned, so two
+  concurrent inserts can land with the two orderings disagreeing about which row is current. Every
+  production reader already ordered by id; the health test helper ordered by `ts`, which is what made
+  `make test` intermittently red with a verdict the engine never produced. `LatestState`, which backs the
+  ingest transition guard, ordered by `ts` alone and now tie-breaks on id, so a poll cycle stamping
+  several rows in one instant can no longer resolve to an arbitrary one. Reproduced deliberately (six
+  concurrent copies of the storage package; never once in nine idle full-suite runs) and verified over 24
+  runs under the same load.

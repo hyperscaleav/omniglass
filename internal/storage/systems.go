@@ -57,7 +57,7 @@ type System struct {
 	ParentName   *string
 	LocationName *string
 	CreatedAt    time.Time
-	UpdatedAt   time.Time
+	UpdatedAt    time.Time
 }
 
 // SystemSpec is the create input. ParentName nil makes a root system (which only

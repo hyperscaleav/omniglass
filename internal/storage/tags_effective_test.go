@@ -46,15 +46,15 @@ func TestEffectiveTagsComponent(t *testing.T) {
 	ctx := context.Background()
 	_, _, _, compID := tagEstate(t, gw)
 
-	mustTag(t, gw, "environment", nil, true)  // cascades
-	mustTag(t, gw, "compliance", nil, true)   // cascades
-	mustTag(t, gw, "asset_id", nil, false)    // non-propagating (flat)
+	mustTag(t, gw, "environment", nil, true) // cascades
+	mustTag(t, gw, "compliance", nil, true)  // cascades
+	mustTag(t, gw, "asset_id", nil, false)   // non-propagating (flat)
 
 	mustBind(t, gw, "environment", "platform", nil, "prod")
 	mustBind(t, gw, "environment", "location", strptr("campus"), "staging")
 	mustBind(t, gw, "environment", "system", strptr("av"), "dev") // most specific band for this key
 	mustBind(t, gw, "compliance", "location", strptr("campus"), "pci")
-	mustBind(t, gw, "asset_id", "system", strptr("av"), "SYS-1")   // must NOT reach the component
+	mustBind(t, gw, "asset_id", "system", strptr("av"), "SYS-1") // must NOT reach the component
 	mustBind(t, gw, "asset_id", "component", strptr("codec"), "C-42")
 
 	got, err := gw.EffectiveTags(ctx, "component", []string{compID})

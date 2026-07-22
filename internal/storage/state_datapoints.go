@@ -73,13 +73,19 @@ func (p *PG) InsertStateDatapoints(ctx context.Context, evs []StateDatapointEven
 // LatestState returns the most recent state row for a component series (key +
 // instance), or nil if none. It backs the ingest-side transition guard (skip a
 // write whose value equals the latest stored value) and the reachability panel.
+//
+// ts orders it, because an observed series carries the OBSERVATION time and a
+// late arrival must not displace a newer reading. id breaks the tie: a poll cycle
+// stamping several rows in the same instant would otherwise resolve to an
+// arbitrary one, and the transition guard would compare against a row that is not
+// the current value.
 func (p *PG) LatestState(ctx context.Context, componentName, key, instance string) (*StateDatapoint, error) {
 	var dp StateDatapoint
 	err := p.pool.QueryRow(ctx, `
 		select ts, owner_kind, key, instance, value, provenance, source
 		from state_datapoint
 		where component_id = (select id from component where name = $1) and key = $2 and instance = $3
-		order by ts desc
+		order by ts desc, id desc
 		limit 1`, componentName, key, instance).Scan(&dp.TS, &dp.OwnerKind, &dp.Key, &dp.Instance, &dp.Value, &dp.Provenance, &dp.Source)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
