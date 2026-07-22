@@ -40,7 +40,7 @@ export const SECRETS_KEY = ["secrets"] as const;
 export const SECRET_TYPES_KEY = ["types", "secret"] as const;
 
 export async function listSecretTypes(): Promise<SecretType[]> {
-  const { data, error } = await api.GET("/types/secret");
+  const { data, error } = await api.GET("/secret-types");
   if (error) throw error;
   return (data?.secret_types ?? []) as SecretType[];
 }

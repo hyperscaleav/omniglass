@@ -150,7 +150,7 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-location-types",
 		Method:      http.MethodGet,
-		Path:        "/types/location",
+		Path:        "/location-types",
 		Summary:     "List location types",
 		Description: "Lists the location_type registry (the shape-definers a location is classified by), ordered alphabetically by display name. Populates the type picker on the location form. Gated by type:read.",
 	}, "type", "read"), func(ctx context.Context, _ *struct{}) (*listLocationTypesOutput, error) {
@@ -172,7 +172,7 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "create-location-type",
 		Method:        http.MethodPost,
-		Path:          "/types/location",
+		Path:          "/location-types",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Create a location type",
 		Description:   "Creates a custom (non-official) location_type. Gated by type:create.",
@@ -193,7 +193,7 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "update-location-type",
 		Method:      http.MethodPatch,
-		Path:        "/types/location/{id}",
+		Path:        "/location-types/{id}",
 		Summary:     "Update a location type",
 		Description: "Patches a custom location_type's display_name or icon. Official types are read-only (422). Gated by type:update.",
 	}, "type", "update"), func(ctx context.Context, in *updateLocationTypeInput) (*locationTypeOutput, error) {
@@ -213,7 +213,7 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "delete-location-type",
 		Method:        http.MethodDelete,
-		Path:          "/types/location/{id}",
+		Path:          "/location-types/{id}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete a location type",
 		Description:   "Deletes a custom location_type, refused if official (422) or still referenced by a location (409). Gated by type:delete.",

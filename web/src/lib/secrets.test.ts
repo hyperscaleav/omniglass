@@ -32,7 +32,7 @@ describe("secrets data layer", () => {
     expect(types).toHaveLength(1);
     expect(types[0]).toMatchObject({ id: "snmp-community", official: true });
     const req = fetchMock.mock.calls[0][0] as Request;
-    expect(req.url).toContain("/api/v1/types/secret");
+    expect(req.url).toContain("/api/v1/secret-types");
   });
 
   it("posts the create body with the field map", async () => {

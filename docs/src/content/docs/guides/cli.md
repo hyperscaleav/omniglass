@@ -182,7 +182,7 @@ covers the encrypted values and `type secret` lists the shape registry. Output i
 behind `reveal`, which the server audits and which only admin and owner may call.
 
 ```sh
-omniglass type secret list                          # the shape registry (snmp-community, basic-auth)
+omniglass secret-type list                           # the shape registry (snmp-community, basic-auth)
 omniglass secret list                               # the all-scope admin directory (masked fields)
 omniglass secret create --name core-snmp --secret-type snmp-community \
   --owner-kind location --owner hq --fields '{"community":"public"}'
@@ -361,8 +361,8 @@ omniglass system property delete boardroom room_capacity             # falls bac
 The read resolves the classifier's contract against the instance's own values, so a **one-off system**
 (one conforming to no standard) and a **productless component** still resolve, to their off-contract
 values alone. The value commands are **scope-injected**: an instance outside your read scope is a
-non-disclosing 404 on the read and on the write. Note the two different names on the location-type side:
-the registry CRUD is `omniglass type location ...`, its contract is `omniglass location-type ...`.
+non-disclosing 404 on the read and on the write. The registry and its contract share one noun:
+`omniglass location-type list` is the registry, `omniglass location-type property list <id>` its contract.
 
 ## Generated versus hand-written
 

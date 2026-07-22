@@ -49,7 +49,7 @@ rows also carry an **icon** glyph key.
 
 Minting a type is admin-gated; *using* one, classifying a location by picking it on the location's own
 create or edit form, is the ordinary entity write, gated by `location:update`. The same operations are
-`omniglass type location list/create/update/delete` from the CLI (see the
+`omniglass location-type list/create/update/delete` from the CLI (see the
 [CLI reference](/reference/cli/)).
 
 ## Declared properties: the location type's contract
@@ -71,6 +71,6 @@ to. It is the same editor as a [product](/guides/admin/products/)'s or a
 
 From the CLI the contract is `omniglass location-type property list <id>`,
 `omniglass location-type property update <id> <property>`, and
-`omniglass location-type property delete <id> <property>`. Note the command name: the registry CRUD is
-`omniglass type location ...`, while the contract hangs off `omniglass location-type ...`, mirroring the
-routes (`/types/location` for the registry, `/location-types/{id}/properties` for its contract).
+`omniglass location-type property delete <id> <property>`. The registry and its contract are one noun,
+mirroring the routes (`/location-types` for the registry, `/location-types/{id}/properties` for its
+contract): a hyphen joins a two-word noun, a space means the thing beneath it.

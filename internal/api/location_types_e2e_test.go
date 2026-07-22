@@ -35,7 +35,7 @@ func TestLocationTypesAPI(t *testing.T) {
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
-	out := c.do(ownerTok, http.MethodGet, "/types/location", nil, http.StatusOK)
+	out := c.do(ownerTok, http.MethodGet, "/location-types", nil, http.StatusOK)
 	var body struct {
 		LocationTypes []struct {
 			ID                 string   `json:"id"`
@@ -117,25 +117,25 @@ func TestLocationTypeCRUDAPI(t *testing.T) {
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
 	// Create a custom type (201), then it appears in the list.
-	c.do(ownerTok, http.MethodPost, "/types/location",
+	c.do(ownerTok, http.MethodPost, "/location-types",
 		map[string]any{"id": "wing", "display_name": "Wing", "icon": "layers"}, http.StatusCreated)
 
 	// Update it (200).
-	c.do(ownerTok, http.MethodPatch, "/types/location/wing",
+	c.do(ownerTok, http.MethodPatch, "/location-types/wing",
 		map[string]any{"display_name": "West Wing"}, http.StatusOK)
 
 	// A shipped type is editable: the estate shapes its own place vocabulary.
-	c.do(ownerTok, http.MethodPatch, "/types/location/campus",
+	c.do(ownerTok, http.MethodPatch, "/location-types/campus",
 		map[string]any{"display_name": "Campus"}, http.StatusOK)
 
 	// "root" is reserved: creating a type with that id is refused (422).
-	c.do(ownerTok, http.MethodPost, "/types/location",
+	c.do(ownerTok, http.MethodPost, "/location-types",
 		map[string]any{"id": "root", "display_name": "Root"}, http.StatusUnprocessableEntity)
 
 	// allowed_parent_types round-trips through create and update.
-	c.do(ownerTok, http.MethodPost, "/types/location",
+	c.do(ownerTok, http.MethodPost, "/location-types",
 		map[string]any{"id": "annex", "display_name": "Annex", "allowed_parent_types": []string{"wing", "root"}}, http.StatusCreated)
-	out := c.do(ownerTok, http.MethodGet, "/types/location", nil, http.StatusOK)
+	out := c.do(ownerTok, http.MethodGet, "/location-types", nil, http.StatusOK)
 	var listBody struct {
 		LocationTypes []struct {
 			ID                 string   `json:"id"`
@@ -157,15 +157,15 @@ func TestLocationTypeCRUDAPI(t *testing.T) {
 	if !found {
 		t.Fatal("annex type not in list")
 	}
-	c.do(ownerTok, http.MethodPatch, "/types/location/annex",
+	c.do(ownerTok, http.MethodPatch, "/location-types/annex",
 		map[string]any{"allowed_parent_types": []string{}}, http.StatusOK)
 
 	// In use: place a location of type wing, delete is refused (409).
 	c.do(ownerTok, http.MethodPost, "/locations",
 		map[string]any{"name": "w1", "location_type": "wing"}, http.StatusCreated)
-	c.do(ownerTok, http.MethodDelete, "/types/location/wing", nil, http.StatusConflict)
+	c.do(ownerTok, http.MethodDelete, "/location-types/wing", nil, http.StatusConflict)
 
 	// Remove the location, then the type deletes (204).
 	c.do(ownerTok, http.MethodDelete, "/locations/w1", nil, http.StatusNoContent)
-	c.do(ownerTok, http.MethodDelete, "/types/location/wing", nil, http.StatusNoContent)
+	c.do(ownerTok, http.MethodDelete, "/location-types/wing", nil, http.StatusNoContent)
 }
