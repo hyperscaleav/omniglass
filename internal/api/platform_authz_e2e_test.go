@@ -63,10 +63,12 @@ func TestPlatformTierNeedsItsOwnPermission(t *testing.T) {
 	// The estate the below-tier writes land on, and a tag key to bind.
 	c.do(ownerTok, http.MethodPost, "/locations", map[string]any{"name": "ceres", "location_type": "campus"}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPost, "/tags", map[string]any{"name": "environment"}, http.StatusCreated)
-	// A tier variable the update and delete legs act on, placed by the owner
-	// (whose > tail carries the platform permission).
+	// A tier variable and a tier secret the update and delete legs act on, placed
+	// by the owner (whose > tail carries the platform permission).
 	tierVarID := createdID(t, c.do(ownerTok, http.MethodPost, "/variables",
 		varReq("tier_poll", "int", "platform", "", 10), http.StatusCreated))
+	tierSecretID := createdID(t, c.do(ownerTok, http.MethodPost, "/secrets",
+		secretReq("tier_auth", "platform", "", "public"), http.StatusCreated))
 
 	// Refused at the tier: create, update, and delete of a variable.
 	c.do(estateTok, http.MethodPost, "/variables", varReq("denied_at_tier", "string", "platform", "", "x"), http.StatusForbidden)
@@ -79,9 +81,20 @@ func TestPlatformTierNeedsItsOwnPermission(t *testing.T) {
 	c.do(estateTok, http.MethodPatch, "/variables/"+belowID, map[string]any{"value": "y"}, http.StatusOK)
 	c.do(estateTok, http.MethodDelete, "/variables/"+belowID, nil, http.StatusNoContent)
 
-	// The same split on secrets, tag bindings, and settings.
+	// The same split on secrets, across all three verbs: the tier gate on update and
+	// delete lives in the Gateway (only the stored row knows its tier), so it needs
+	// its own coverage rather than riding on the create leg.
 	c.do(estateTok, http.MethodPost, "/secrets", secretReq("tier_snmp", "platform", "", "public"), http.StatusForbidden)
-	c.do(estateTok, http.MethodPost, "/secrets", secretReq("below_snmp", "location", "ceres", "public"), http.StatusCreated)
+	c.do(estateTok, http.MethodPatch, "/secrets/"+tierSecretID, secretFieldsReq("rotated"), http.StatusForbidden)
+	c.do(estateTok, http.MethodDelete, "/secrets/"+tierSecretID, nil, http.StatusForbidden)
+
+	// Allowed below the tier, on the same three verbs: the gate is about the tier,
+	// not about the principal.
+	belowSecretID := createdID(t, c.do(estateTok, http.MethodPost, "/secrets",
+		secretReq("below_snmp", "location", "ceres", "public"), http.StatusCreated))
+	c.do(estateTok, http.MethodPatch, "/secrets/"+belowSecretID, secretFieldsReq("rotated"), http.StatusOK)
+	c.do(estateTok, http.MethodDelete, "/secrets/"+belowSecretID, nil, http.StatusNoContent)
+
 	c.do(estateTok, http.MethodPost, "/tags/environment:setPlatform", map[string]any{"value": "prod"}, http.StatusForbidden)
 	c.do(estateTok, http.MethodPost, "/tags/environment:clearPlatform", nil, http.StatusForbidden)
 	c.do(estateTok, http.MethodPost, "/locations/ceres:setTag", map[string]any{"key": "environment", "value": "prod"}, http.StatusOK)
@@ -94,6 +107,8 @@ func TestPlatformTierNeedsItsOwnPermission(t *testing.T) {
 	c.do(installTok, http.MethodPatch, "/variables/"+tierVarID, map[string]any{"value": 99}, http.StatusOK)
 	c.do(installTok, http.MethodDelete, "/variables/"+tierVarID, nil, http.StatusNoContent)
 	c.do(installTok, http.MethodPost, "/secrets", secretReq("tier_snmp", "platform", "", "public"), http.StatusCreated)
+	c.do(installTok, http.MethodPatch, "/secrets/"+tierSecretID, secretFieldsReq("rotated"), http.StatusOK)
+	c.do(installTok, http.MethodDelete, "/secrets/"+tierSecretID, nil, http.StatusNoContent)
 	c.do(installTok, http.MethodPost, "/tags/environment:setPlatform", map[string]any{"value": "prod"}, http.StatusOK)
 	c.do(installTok, http.MethodPost, "/tags/environment:clearPlatform", nil, http.StatusNoContent)
 	c.do(installTok, http.MethodPatch, "/settings/ui", map[string]any{"theme": "omniglass-light"}, http.StatusOK)
@@ -140,6 +155,12 @@ func insertRole(t *testing.T, ctx context.Context, dsn, id string, perms []strin
 		id, perms); err != nil {
 		t.Fatalf("insert role %s: %v", id, err)
 	}
+}
+
+// secretFieldsReq is the update body for an snmp-community secret: the one field
+// the shape carries, re-sealed on every write.
+func secretFieldsReq(community string) map[string]any {
+	return map[string]any{"fields": map[string]string{"community": community}}
 }
 
 // createdID pulls the id out of a create response body.
