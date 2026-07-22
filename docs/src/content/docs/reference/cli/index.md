@@ -544,6 +544,26 @@ Example:
 omniglass component delete <name>
 ```
 
+### `omniglass component effective-secret`
+
+Commands for the effective-secret resource
+
+#### `omniglass component effective-secret list`
+
+Effective secrets for a component
+
+```
+omniglass component effective-secret list <name>
+```
+
+Resolves the secrets that cascade onto a component (platform -> location -> component), with the winner and the shadowed candidates it overrode. There is NO system band: a secret is device-facing, and the room a component happens to serve is the wrong owner for a credential the device itself answers with. Fields are masked, as in the directory; plaintext is only ever the audited reveal. Gated by secret:read, which the viewer floor does not carry, and admin-sensitive secrets appear only to the admin tier.
+
+Example:
+
+```sh
+omniglass component effective-secret list <name>
+```
+
 ### `omniglass component effective-tag`
 
 Commands for the effective-tag resource
@@ -566,6 +586,26 @@ Example:
 
 ```sh
 omniglass component effective-tag list <name>
+```
+
+### `omniglass component effective-variable`
+
+Commands for the effective-variable resource
+
+#### `omniglass component effective-variable list`
+
+Effective variables for a component
+
+```
+omniglass component effective-variable list <name>
+```
+
+Resolves the variables that cascade onto a component (platform -> location -> system -> component): names union, values override most-specific-wins, with the winner and the shadowed candidates it overrode. The system band comes from the component's PRIMARY membership; resolving against a named system is not offered here yet, unlike effective-tags. Gated by variable:read; the component must be in the caller's component read scope.
+
+Example:
+
+```sh
+omniglass component effective-variable list <name>
 ```
 
 ### `omniglass component event`

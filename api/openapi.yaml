@@ -1214,6 +1214,25 @@ components:
         - assigned
         - understaffed
       type: object
+    EffectiveSecretsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/EffectiveSecretsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        secrets:
+          items:
+            $ref: "#/components/schemas/ResolvedSecretBody"
+          type:
+            - array
+            - "null"
+      required:
+        - secrets
+      type: object
     EffectiveTagsOutputBody:
       additionalProperties: false
       properties:
@@ -1232,6 +1251,25 @@ components:
             - "null"
       required:
         - tags
+      type: object
+    EffectiveVariablesOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/EffectiveVariablesOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        variables:
+          items:
+            $ref: "#/components/schemas/ResolvedVariableBody"
+          type:
+            - array
+            - "null"
+      required:
+        - variables
       type: object
     EnrollOutputBody:
       additionalProperties: false
@@ -3041,6 +3079,49 @@ components:
       required:
         - password
       type: object
+    ResolvedSecretBody:
+      additionalProperties: false
+      properties:
+        band:
+          description: "Cascade tier: 0 platform, 1 location, 3 component"
+          format: int64
+          type: integer
+        depth:
+          description: Distance up the tier's tree from the component (0 nearest)
+          format: int64
+          type: integer
+        fields:
+          items:
+            $ref: "#/components/schemas/SecretFieldBody"
+          type:
+            - array
+            - "null"
+        id:
+          type: string
+        name:
+          type: string
+        owner_id:
+          description: The owning entity's id, the canonical handle; absent for a platform owner
+          type: string
+        owner_kind:
+          type: string
+        owner_name:
+          type: string
+        secret_type:
+          type: string
+        winner:
+          description: True for the resolved secret; false for a shadowed candidate
+          type: boolean
+      required:
+        - id
+        - name
+        - secret_type
+        - owner_kind
+        - band
+        - depth
+        - winner
+        - fields
+      type: object
     ResolvedTagBody:
       additionalProperties: false
       properties:
@@ -3073,6 +3154,45 @@ components:
         - band
         - depth
         - winner
+      type: object
+    ResolvedVariableBody:
+      additionalProperties: false
+      properties:
+        band:
+          description: "Cascade tier: 0 platform, 1 location, 2 system, 3 component"
+          format: int64
+          type: integer
+        depth:
+          description: Distance up the tier's tree from the component (0 nearest)
+          format: int64
+          type: integer
+        id:
+          type: string
+        name:
+          type: string
+        owner_id:
+          description: The owning entity's id, the canonical handle; absent for a platform owner
+          type: string
+        owner_kind:
+          type: string
+        owner_name:
+          type: string
+        value:
+          description: The value, shape given by value_type
+        value_type:
+          type: string
+        winner:
+          description: True for the resolved value; false for a shadowed candidate
+          type: boolean
+      required:
+        - id
+        - name
+        - value_type
+        - owner_kind
+        - band
+        - depth
+        - winner
+        - value
       type: object
     RevealSecretOutputBody:
       additionalProperties: false
@@ -5180,6 +5300,33 @@ paths:
           description: Error
       summary: Declare a capability on a component
       x-omniglass-permission: component:update
+  /components/{name}/effective-secrets:
+    get:
+      description: "Resolves the secrets that cascade onto a component (platform -> location -> component), with the winner and the shadowed candidates it overrode. There is NO system band: a secret is device-facing, and the room a component happens to serve is the wrong owner for a credential the device itself answers with. Fields are masked, as in the directory; plaintext is only ever the audited reveal. Gated by secret:read, which the viewer floor does not carry, and admin-sensitive secrets appear only to the admin tier."
+      operationId: effective-secrets
+      parameters:
+        - description: The component's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The component's name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EffectiveSecretsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Effective secrets for a component
+      x-omniglass-permission: secret:read
   /components/{name}/effective-tags:
     get:
       description: "Resolves the tags that cascade onto a component (platform -> location -> system -> component): keys union, values override most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves only from a binding on the component itself. The system band comes from MEMBERSHIP: pass ?system= to resolve against one the component belongs to (a shared device answers differently for each), or omit it to resolve against its primary membership. Gated by component:read; the component must be in the caller's component read scope."
@@ -5214,6 +5361,33 @@ paths:
           description: Error
       summary: Effective tags for a component
       x-omniglass-permission: component:read
+  /components/{name}/effective-variables:
+    get:
+      description: "Resolves the variables that cascade onto a component (platform -> location -> system -> component): names union, values override most-specific-wins, with the winner and the shadowed candidates it overrode. The system band comes from the component's PRIMARY membership; resolving against a named system is not offered here yet, unlike effective-tags. Gated by variable:read; the component must be in the caller's component read scope."
+      operationId: effective-variables
+      parameters:
+        - description: The component's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The component's name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EffectiveVariablesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Effective variables for a component
+      x-omniglass-permission: variable:read
   /components/{name}/events:
     get:
       description: Returns the component's recent log occurrences (the log-kind sink), newest first, bounded to the last 24 hours. Gated by component:read; an out-of-scope component is a non-disclosing 404.

@@ -671,6 +671,30 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			parent := &cobra.Command{
+				Use:   "effective-secret",
+				Short: "Commands for the effective-secret resource",
+			}
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "list <name>",
+						Short:   "Effective secrets for a component",
+						Long:    "Resolves the secrets that cascade onto a component (platform -> location -> component), with the winner and the shadowed candidates it overrode. There is NO system band: a secret is device-facing, and the room a component happens to serve is the wrong owner for a credential the device itself answers with. Fields are masked, as in the directory; plaintext is only ever the audited reveal. Gated by secret:read, which the viewer floor does not carry, and admin-sensitive secrets appear only to the admin tier.",
+						Example: "  omniglass component effective-secret list <name>",
+						Args:    cobra.ExactArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/components/%s/effective-secrets", url.PathEscape(args[0]))
+							return runAPICommand(cmd, "GET", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			return parent
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			parent := &cobra.Command{
 				Use:   "effective-tag",
 				Short: "Commands for the effective-tag resource",
 			}
@@ -696,6 +720,30 @@ func generatedCommands() []*cobra.Command {
 						},
 					}
 					cmd.Flags().StringVar(&qSystem, "system", "", "Resolve against this system, which the component must be a member of. Omit to resolve against its primary membership, the default for a caller with no system in hand.")
+					return cmd
+				}()
+				return cmd
+			}())
+			return parent
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			parent := &cobra.Command{
+				Use:   "effective-variable",
+				Short: "Commands for the effective-variable resource",
+			}
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "list <name>",
+						Short:   "Effective variables for a component",
+						Long:    "Resolves the variables that cascade onto a component (platform -> location -> system -> component): names union, values override most-specific-wins, with the winner and the shadowed candidates it overrode. The system band comes from the component's PRIMARY membership; resolving against a named system is not offered here yet, unlike effective-tags. Gated by variable:read; the component must be in the caller's component read scope.",
+						Example: "  omniglass component effective-variable list <name>",
+						Args:    cobra.ExactArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/components/%s/effective-variables", url.PathEscape(args[0]))
+							return runAPICommand(cmd, "GET", path, nil)
+						},
+					}
 					return cmd
 				}()
 				return cmd
