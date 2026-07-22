@@ -233,7 +233,13 @@ func registerSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		out := &checkNameOutput{}
 		if err := storage.ValidateEntityName(in.Body.Name); err != nil {
 			out.Body.Valid = false
-			out.Body.Reason = "Use lowercase letters, digits, and hyphens."
+			// A uuid passes the slug rule, so the generic reason would describe
+			// exactly what the operator typed and explain nothing.
+			if errors.Is(err, storage.ErrNameIsUUID) {
+				out.Body.Reason = "A name cannot be a uuid: that form is reserved for an entity's id."
+			} else {
+				out.Body.Reason = "Use lowercase letters, digits, and hyphens."
+			}
 			return out, nil
 		}
 		out.Body.Valid = true
