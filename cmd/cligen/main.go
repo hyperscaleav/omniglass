@@ -201,22 +201,84 @@ var nameOverride = map[string]([]string){
 	// The self-service token creation would collapse to `token create`, colliding with
 	// the hand-written direct-DB `token <username>` command; group it under `auth`.
 	"create-auth-me-token": {"auth", "create-token"},
+	// System membership shares its leaf noun ("members") with principal-group
+	// membership, so the leaf-noun heuristic collapses both into one `member` group
+	// holding two `list` commands and two `delete` commands, where the second of
+	// each silently shadows the first. Group the system side under the resource
+	// that owns it, and read a component's systems from `component`, which is also
+	// where an operator would look for it.
+	"list-system-members":        {"system", "members"},
+	"add-system-member":          {"system", "add-member"},
+	"remove-system-member":       {"system", "remove-member"},
+	"set-primary-member":         {"system", "set-primary-member"},
+	"list-component-memberships": {"component", "systems"},
 	// The type registries live under one /types umbrella (/types/location, ...), so the
 	// leaf-noun heuristic would map each to `<kind> create` and collide with the base
 	// entity commands (location/system/component/secret). Group them under `type`.
-	"list-location-types":   {"type", "location", "list"},
-	"create-location-type":  {"type", "location", "create"},
-	"update-location-type":  {"type", "location", "update"},
-	"delete-location-type":  {"type", "location", "delete"},
-	"list-system-types":     {"type", "system", "list"},
-	"create-system-type":    {"type", "system", "create"},
-	"update-system-type":    {"type", "system", "update"},
-	"delete-system-type":    {"type", "system", "delete"},
-	"list-component-types":  {"type", "component", "list"},
-	"create-component-type": {"type", "component", "create"},
-	"update-component-type": {"type", "component", "update"},
-	"delete-component-type": {"type", "component", "delete"},
-	"list-secret-types":     {"type", "secret", "list"},
+	"list-location-types":  {"type", "location", "list"},
+	"create-location-type": {"type", "location", "create"},
+	"update-location-type": {"type", "location", "update"},
+	"delete-location-type": {"type", "location", "delete"},
+	"list-secret-types":    {"type", "secret", "list"},
+	// The product contract and the component effective read are sub-collections
+	// whose leaf noun ("properties") is the property catalog's own, so the
+	// leaf-noun heuristic would collapse all three into one `property` group with
+	// three colliding `list` / `update` / `delete` commands. Group each under the
+	// resource that owns it, as the admin session routes do.
+	"list-product-properties":   {"product", "properties"},
+	"set-product-property":      {"product", "set-property"},
+	"delete-product-property":   {"product", "delete-property"},
+	"list-component-properties": {"component", "properties"},
+	"set-component-property":    {"component", "set-property"},
+	"clear-component-property":  {"component", "clear-property"},
+	// The standard contract, the location type contract, and the system/location
+	// effective reads collapse the same way. Each goes under the resource that
+	// owns it. The location type contract takes its own `location-type` parent
+	// rather than the `type` umbrella: grouping is two levels (the parent is the
+	// first word, the command the last), so a `type properties` would not say
+	// which registry it means.
+	"list-standard-properties":      {"standard", "properties"},
+	"set-standard-property":         {"standard", "set-property"},
+	"delete-standard-property":      {"standard", "delete-property"},
+	"list-location-type-properties": {"location-type", "properties"},
+	"set-location-type-property":    {"location-type", "set-property"},
+	"delete-location-type-property": {"location-type", "delete-property"},
+	"list-system-properties":        {"system", "properties"},
+	"set-system-property":           {"system", "set-property"},
+	"clear-system-property":         {"system", "clear-property"},
+	"list-location-properties":      {"location", "properties"},
+	"set-location-property":         {"location", "set-property"},
+	"clear-location-property":       {"location", "clear-property"},
+	// The role surface nests three deep (a role under its owner, an assignment
+	// under the role), and its leaf nouns are already taken: "roles" is the RBAC
+	// role catalog's own (`role list`) and "capabilities" is the capability
+	// registry's. Grouping is two levels, so each goes under the resource that
+	// owns it, with the verb in the command word. The assignment pair would
+	// otherwise land as `assignment update` / `assignment delete`, which says
+	// nothing about what is being staffed.
+	"list-standard-roles":         {"standard", "roles"},
+	"set-standard-role":           {"standard", "set-role"},
+	"delete-standard-role":        {"standard", "delete-role"},
+	"list-system-roles":           {"system", "roles"},
+	"set-system-role":             {"system", "set-role"},
+	"delete-system-role":          {"system", "delete-role"},
+	"assign-system-role":          {"system", "assign-role"},
+	"unassign-system-role":        {"system", "unassign-role"},
+	"list-component-capabilities": {"component", "capabilities"},
+	"set-component-capability":    {"component", "set-capability"},
+	"clear-component-capability":  {"component", "clear-capability"},
+	// Alarms are a component sub-collection, so they group under the component the
+	// same way its properties and capabilities do. Left to the leaf-noun heuristic
+	// they would become a top-level `alarm list|create|delete`, which drops the
+	// component the alarm is actually about from the command word.
+	"list-component-alarms": {"component", "alarms"},
+	"raise-component-alarm": {"component", "raise-alarm"},
+	"clear-component-alarm": {"component", "clear-alarm"},
+	// The two health reads share the leaf noun "health", so the heuristic would
+	// collapse both into one `health` group with two colliding `list` commands.
+	// Each goes under the resource whose health it reports.
+	"get-system-health":   {"system", "health"},
+	"get-location-health": {"location", "health"},
 }
 
 func buildCommands(doc spec, base string) []command {
@@ -475,8 +537,12 @@ func pathParamSeg(seg string) (name, suffix string, ok bool) {
 }
 
 // singular is a naive depluralizer good enough for the AIP collection nouns in
-// use (locations, roles). A real irregular set can join nameOverride if needed.
+// use (locations, roles, properties). A real irregular set can join nameOverride
+// if needed.
 func singular(s string) string {
+	if strings.HasSuffix(s, "ies") && len(s) > 3 {
+		return s[:len(s)-3] + "y" // properties -> property
+	}
 	if strings.HasSuffix(s, "s") && len(s) > 1 {
 		return s[:len(s)-1]
 	}

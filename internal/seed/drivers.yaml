@@ -1,0 +1,16 @@
+# The official drivers, seeded idempotently at boot. A driver is the
+# implementation that gets/emits/sets a product's signals (e.g. "Generic SNMP",
+# "Cisco xAPI"); a later product slice will point at one. The registry lists
+# alphabetically by display_name. Starter set, operator-extensible later; tune
+# freely.
+drivers:
+  - id: snmp-generic
+    display_name: Generic SNMP
+    version: "1.0.0"
+  - id: cisco-xapi
+    display_name: Cisco xAPI
+  - id: crestron-cip
+    display_name: Crestron CIP
+  - id: http-json
+    display_name: HTTP JSON
+    version: "1.0.0"

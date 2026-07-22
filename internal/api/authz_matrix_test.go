@@ -30,14 +30,14 @@ type grant struct {
 type scopedEntity struct {
 	resource  string // "location", "system": drives the role permission + grant scope_kind
 	base      string // "/locations"
-	typeField string // "location_type"
+	typeField string // "location_type"; empty when the entity carries no type on create
 	typeValue string // a valid type id
 }
 
 var scopedEntities = []scopedEntity{
 	{resource: "location", base: "/locations", typeField: "location_type", typeValue: "campus"},
-	{resource: "system", base: "/systems", typeField: "system_type", typeValue: "meeting-room"},
-	{resource: "component", base: "/components", typeField: "component_type", typeValue: "display"},
+	{resource: "system", base: "/systems", typeField: "standard_id", typeValue: "meeting-room"},
+	{resource: "component", base: "/components"},
 }
 
 func (e scopedEntity) createBody(name, parent string) map[string]any {
@@ -48,7 +48,10 @@ func (e scopedEntity) createBody(name, parent string) map[string]any {
 	if e.resource == "location" && parent != "" {
 		typeValue = "building"
 	}
-	b := map[string]any{"name": name, e.typeField: typeValue}
+	b := map[string]any{"name": name}
+	if e.typeField != "" {
+		b[e.typeField] = typeValue
+	}
 	if parent != "" {
 		b["parent"] = parent
 	}

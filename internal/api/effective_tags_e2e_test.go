@@ -42,8 +42,8 @@ func TestEffectiveTagsOnListBodies(t *testing.T) {
 	// Estate: a system placed in a room, a codec under both.
 	c.do(ownerTok, http.MethodPost, "/locations", map[string]any{"name": "campus", "location_type": "campus"}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPost, "/locations", map[string]any{"name": "room", "location_type": "room", "parent": "campus"}, http.StatusCreated)
-	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{"name": "av", "system_type": "meeting-room", "location": "room"}, http.StatusCreated)
-	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "codec", "component_type": "codec", "system": "av", "location": "room"}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{"name": "av", "location": "room"}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "codec", "system": "av", "location": "room"}, http.StatusCreated)
 
 	// Tags: environment cascades, compliance set only at the campus location.
 	c.do(ownerTok, http.MethodPost, "/tags", map[string]any{"name": "environment"}, http.StatusCreated)

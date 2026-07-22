@@ -17,33 +17,42 @@ import {
   deleteSystem,
 } from "../lib/systems";
 import { LOCATIONS_KEY, listLocations } from "../lib/locations";
-import { type Component as Comp, COMPONENTS_KEY, listComponents } from "../lib/components";
+import { STANDARDS_KEY, listStandards } from "../lib/standards";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { openInEdit, consumePendingEdit } from "../lib/pendingedit";
 import { ArrowRight, ChevronRight, Pencil, Plus, Save, Search, X } from "../components/icons";
 import Button from "../components/Button";
+import PropertiesPanel, { propertyResolutionBlade, ownerPropertyBladeId } from "../components/PropertiesPanel";
+import RolesPanel from "../components/RolesPanel";
+import MembersPanel from "../components/MembersPanel";
+import HealthBadge from "../components/HealthBadge";
+import SystemHealthPanel from "../components/HealthPanel";
+import { systemHealthKey, verdictOf, verdictRank, type EstateHealth } from "../lib/health";
 
 // Systems: the system inventory on the generic TreeList, the same shell as
 // Locations and Components. Systems form a tree (parent_id) and are placed at a
-// location; each owns a set of components by primary system. Create and edit both
-// live on the detail accordion (create-as-route): New routes to /systems/create (a
-// draft), Save hands off to /systems/<id> in edit mode; the pencil flips the same
-// surface. View is read-only, edit is the only writer, per the console invariant.
-type SysNode = ListNode & { type: string; locationName: string; tags: Record<string, string>; raw: System };
+// location; each owns a set of components by primary system. A system optionally
+// conforms to a STANDARD, which declares the property contract the detail's
+// Properties panel resolves. Create and edit both live on the detail accordion
+// (create-as-route): New routes to /systems/create (a draft), Save hands off to
+// /systems/<id> in edit mode; the pencil flips the same surface. View is read-only,
+// edit is the only writer, per the console invariant.
+type SysNode = ListNode & { standard: string; locationName: string; tags: Record<string, string>; raw: System };
 
 // The static config (matrix-tested in pages/descriptors.test.ts).
 export const systemsDescriptor: PageDescriptor = {
   entity: { name: "system", plural: "Systems" },
   storageKey: "og-sys",
   columns: {
-    type: { label: "Type", width: 170 },
+    health: { label: "Health", width: 130 },
+    standard: { label: "Standard", width: 170 },
     location: { label: "Location", width: 190 },
     components: { label: "Components", width: 130 },
     tags: { label: "Tags", width: 340 },
   },
-  columnKeys: ["type", "location", "components", "tags"],
-  defaultCols: ["type", "location", "components", "tags"],
+  columnKeys: ["health", "standard", "location", "components", "tags"],
+  defaultCols: ["health", "standard", "location", "components", "tags"],
 };
 
 export default function Systems() {
@@ -54,29 +63,26 @@ export default function Systems() {
 
   const systems = useQuery(() => ({ queryKey: SYSTEMS_KEY, queryFn: listSystems }));
   const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations }));
-  const components = useQuery(() => ({ queryKey: COMPONENTS_KEY, queryFn: listComponents }));
+  const standards = useQuery(() => ({ queryKey: STANDARDS_KEY, queryFn: listStandards }));
 
   const label = (x: { name: string; display_name?: string }) => x.display_name || x.name;
   const locById = createMemo(() => new Map((locations.data ?? []).map((l) => [l.id, l] as const)));
-  const systemTypes = createMemo(() => [...new Set((systems.data ?? []).map((s) => s.system_type))].sort());
+  // The standard picker's options, and the id -> display-name lookup the tree and
+  // detail read a conforming system's standard through.
+  const standardOptions = createMemo(() =>
+    [...(standards.data ?? [])].sort((a, b) => a.display_name.localeCompare(b.display_name)),
+  );
+  const standardLabel = (id?: string) =>
+    id ? (standards.data ?? []).find((s) => s.id === id)?.display_name ?? id : "";
   const locationItems = createMemo(() => (locations.data ?? []).map((l) => ({ id: l.id, value: l.name, label: l.display_name || l.name, parentId: l.parent_id })));
   const systemItems = createMemo(() => (systems.data ?? []).map((s) => ({ id: s.id, value: s.name, label: s.display_name || s.name, parentId: s.parent_id })));
-  const compsBySystem = createMemo(() => {
-    const m = new Map<string, Comp[]>();
-    for (const c of components.data ?? []) {
-      if (!c.system_id) continue;
-      if (!m.has(c.system_id)) m.set(c.system_id, []);
-      m.get(c.system_id)!.push(c);
-    }
-    return m;
-  });
 
   // One filter facet per tag key present across the systems, derived from their
   // effective tags, so the bar can filter by any tag like any other field.
   const tagFacets = createMemo(() => {
     const keys = new Set<string>();
     for (const s of systems.data ?? []) for (const k of Object.keys(s.effective_tags ?? {})) keys.add(k);
-    return tagFilterKeys<SysNode>([...keys].sort(), new Set(["name", "type", "location"]));
+    return tagFilterKeys<SysNode>([...keys].sort(), new Set(["name", "standard", "location"]));
   });
 
   const nodes = createMemo<SysNode[]>(() => {
@@ -89,7 +95,7 @@ export default function Systems() {
         display: s.display_name || s.name,
         children: [],
         actions: s.actions,
-        type: s.system_type,
+        standard: standardLabel(s.standard_id),
         locationName: s.location_id ? label(lm.get(s.location_id) ?? { name: s.location_id }) : "",
         tags: s.effective_tags ?? {},
         raw: s,
@@ -132,11 +138,10 @@ export default function Systems() {
     const n = () => ctx.byId(props.node.id) ?? props.node;
     const parent = () => ctx.parentOf(n());
     const path = () => ctx.pathOf(n());
-    const comps = () => compsBySystem().get(n().raw.id) ?? [];
     const canUpdate = () => can(me.data, "system", "update");
 
     const [display, setDisplay] = createSignal(n().raw.display_name ?? "");
-    const [type, setType] = createSignal(n().raw.system_type ?? "");
+    const [standard, setStandard] = createSignal(n().raw.standard_id ?? "");
     const [name, setName] = createSignal(n().raw.name);
     const [nameCheck, setNameCheck] = createSignal<NameCheck | null>(null);
     const [checking, setChecking] = createSignal(false);
@@ -150,7 +155,7 @@ export default function Systems() {
     // Seed the inputs from the node each time edit begins (this also reverts a Cancel,
     // since Cancel exits edit and the next begin re-seeds).
     createEffect(on(editing, (isEditing) => {
-      if (isEditing) { setDisplay(n().raw.display_name ?? ""); setType(n().raw.system_type ?? ""); setName(n().raw.name); setNameCheck(null); }
+      if (isEditing) { setDisplay(n().raw.display_name ?? ""); setStandard(n().raw.standard_id ?? ""); setName(n().raw.name); setNameCheck(null); }
     }));
     // Consume a pending "open in edit" handoff (from create or the row pencil) once
     // the node has resolved.
@@ -165,7 +170,10 @@ export default function Systems() {
           await updateSystem(n().raw.name, {
             name: renamed ? name().trim() : undefined,
             display_name: display() || undefined,
-            system_type: type() || undefined,
+            // Send the empty string rather than dropping the key: the API reads ""
+            // as "clear", which is how the operator converts this system back to a
+            // one-off. Omitting it would silently leave the old standard in place.
+            standard_id: standard(),
           });
           await qc.invalidateQueries({ queryKey: SYSTEMS_KEY });
           if (renamed) navigate(`/systems/${encodeURIComponent(name().trim())}`);
@@ -204,7 +212,12 @@ export default function Systems() {
             when={editing()}
             fallback={
               <div class="grid grid-cols-2 gap-5">
-                {ctx.fact("Type", <span class="badge badge-ghost badge-sm">{n().type}</span>)}
+                {ctx.fact(
+                  "Standard",
+                  n().standard
+                    ? <span class="badge badge-ghost badge-sm">{n().standard}</span>
+                    : <span class="text-sm text-base-content/50">None (a one-off system)</span>,
+                )}
                 {ctx.fact("Technical name", <span class="font-data text-sm">{n().raw.name}</span>)}
               </div>
             }
@@ -212,12 +225,12 @@ export default function Systems() {
             <div class="flex flex-col gap-3">
               {ctx.field("Display name", <input class="input input-bordered w-full" value={display()} placeholder="Executive Boardroom" onInput={(e) => setDisplay(e.currentTarget.value)} />)}
               {ctx.field(
-                "System type",
-                <>
-                  <input class="input input-bordered w-full" list="sys-types-edit" value={type()} placeholder="meeting-room" onInput={(e) => setType(e.currentTarget.value)} />
-                  <datalist id="sys-types-edit"><For each={systemTypes()}>{(t) => <option value={t} />}</For></datalist>
-                </>,
-                "A system_type id.",
+                "Standard",
+                <select class="select select-bordered w-full" value={standard()} onChange={(e) => setStandard(e.currentTarget.value)}>
+                  <option value="">None (a one-off system)</option>
+                  <For each={standardOptions()}>{(s) => <option value={s.id}>{s.display_name}</option>}</For>
+                </select>,
+                "The blueprint this system conforms to; its contract declares the properties below.",
               )}
               {ctx.field(
                 "Technical name",
@@ -272,7 +285,7 @@ export default function Systems() {
                 {(c, i) => (
                   <button class="flex w-full items-center gap-2.5 px-3 py-2 text-left hover:bg-base-content/5" classList={{ "border-t border-base-300": i() > 0 }} onClick={() => ctx.go(c)}>
                     <span class="flex-1 truncate text-sm">{c.display}</span>
-                    <span class="badge badge-ghost badge-sm text-[10px]">{c.type}</span>
+                    <Show when={c.standard}><span class="badge badge-ghost badge-sm text-[10px]">{c.standard}</span></Show>
                     <ChevronRight size={14} />
                   </button>
                 )}
@@ -281,25 +294,40 @@ export default function Systems() {
           </div>
         </Show>
 
-        <div class="flex flex-col gap-1.5">
-          <div class="flex items-center justify-between">
-            <span class="eyebrow">Components</span>
-            <button class="link text-xs" onClick={() => navigate(`/components?system=${encodeURIComponent(n().raw.name)}`)}>All in this system →</button>
-          </div>
-          <Show when={comps().length} fallback={<span class="text-sm text-base-content/40">No components in this system.</span>}>
-            <div class="overflow-hidden rounded-box border border-base-300">
-              <For each={comps()}>
-                {(c, i) => (
-                  <button class="flex w-full items-center gap-2.5 px-3 py-2 text-left hover:bg-base-content/5" classList={{ "border-t border-base-300": i() > 0 }} onClick={() => navigate(`/components/${encodeURIComponent(c.name)}`)}>
-                    <span class="flex-1 truncate text-sm">{c.display_name || c.name}</span>
-                    <span class="badge badge-ghost badge-sm text-[10px]">{c.component_type}</span>
-                    <ChevronRight size={14} />
-                  </button>
-                )}
-              </For>
-            </div>
-          </Show>
-        </div>
+
+        {/* The verdict and its reconciliation: which roles are impaired, which
+            required capabilities an alarm took away, and which alarms took them.
+            It sits directly above the roles surface it reasons about, so "why is
+            this degraded" and "what are these roles" read as one thought. */}
+        <SystemHealthPanel
+          system={n().raw.name}
+          onOpenComponent={(name) => navigate(`/components/${encodeURIComponent(name)}`)}
+        />
+
+        {/* What is in this system, directly above what each one does. Membership
+            is the attachment and a role is what it does, so the two read in that
+            order: the room's contents, then the jobs. A member holding no role
+            appears only here, which is the case a staffing-only view would lose. */}
+        <MembersPanel
+          system={n().raw.name}
+          canUpdate={editing() && canUpdate()}
+          onOpenComponent={(name) => navigate(`/components/${encodeURIComponent(name)}`)}
+        />
+
+        {/* The slots this system needs filled, resolved the same way its
+            properties are: what the standard declares plus what the system
+            declares of its own. Assignment writes immediately (like tags), so its
+            controls appear only in edit mode, which keeps view read-only. */}
+        <RolesPanel system={n().raw.name} canUpdate={editing() && canUpdate()} />
+
+        {/* The standard's contract, resolved against this system's own values.
+            The panel batches its writes into the accordion's Save, so a property
+            override commits with the system's core facts, not on its own. */}
+        <PropertiesPanel
+          system={n().raw.name}
+          edit={edit}
+          onOpen={(property) => ctx.openBlade({ kind: "property-resolution", id: ownerPropertyBladeId({ kind: "system", name: n().raw.name }, property) })}
+        />
 
         <TagAdder kind="system" name={n().raw.name} canUpdate={editing() && canUpdate()} canCreateKey={can(me.data, "tag", "create")} />
 
@@ -336,7 +364,7 @@ export default function Systems() {
   function SystemCreate(): JSX.Element {
     const [name, setName] = createSignal("");
     const [display, setDisplay] = createSignal("");
-    const [type, setType] = createSignal("");
+    const [standard, setStandard] = createSignal("");
     const [location, setLocation] = createSignal("");
     const [parent, setParent] = createSignal("");
     const [busy, setBusy] = createSignal(false);
@@ -348,7 +376,7 @@ export default function Systems() {
       setFormErr(null);
       const nm = name().trim();
       try {
-        await createSystem({ name: nm, system_type: type().trim(), display_name: display().trim() || undefined, location: location() || undefined, parent: parent() || undefined });
+        await createSystem({ name: nm, standard_id: standard() || undefined, display_name: display().trim() || undefined, location: location() || undefined, parent: parent() || undefined });
         await qc.invalidateQueries({ queryKey: SYSTEMS_KEY });
         openInEdit(nm);
         navigate(`/systems/${encodeURIComponent(nm)}`);
@@ -374,12 +402,12 @@ export default function Systems() {
             {field("Name", <input class="input input-bordered w-full font-data" value={name()} placeholder="exec-boardroom" onInput={(e) => setName(e.currentTarget.value)} />, "Globally unique address.")}
             {field("Display name", <input class="input input-bordered w-full" value={display()} placeholder="Executive Boardroom" onInput={(e) => setDisplay(e.currentTarget.value)} />)}
             {field(
-              "System type",
-              <>
-                <input class="input input-bordered w-full" list="sys-types-new" value={type()} placeholder="meeting-room" onInput={(e) => setType(e.currentTarget.value)} />
-                <datalist id="sys-types-new"><For each={systemTypes()}>{(t) => <option value={t} />}</For></datalist>
-              </>,
-              "A system_type id.",
+              "Standard",
+              <select class="select select-bordered w-full" value={standard()} onChange={(e) => setStandard(e.currentTarget.value)}>
+                <option value="">None (a one-off system)</option>
+                <For each={standardOptions()}>{(s) => <option value={s.id}>{s.display_name}</option>}</For>
+              </select>,
+              "The blueprint this system conforms to. Optional.",
             )}
           </div>
         </div>
@@ -395,7 +423,7 @@ export default function Systems() {
         <div class="flex items-center gap-2 border-t border-base-300 pt-4">
           <Button icon={X} onClick={() => navigate("/systems")}>Cancel</Button>
           <span class="flex-1" />
-          <Button type="submit" intent="action" icon={Plus} disabled={busy() || !name().trim() || !type().trim()}>Create system</Button>
+          <Button type="submit" intent="action" icon={Plus} disabled={busy() || !name().trim()}>Create system</Button>
         </div>
 
         <div class="flex flex-col gap-1 opacity-50">
@@ -423,25 +451,38 @@ export default function Systems() {
     focus: () => params.name,
     loading: () => systems.isLoading,
     error: () => systems.error,
-    filterPlaceholder: "Filter by name, type, location…",
+    filterPlaceholder: "Filter by name, standard, location…",
     nameWeight: () => 500,
     cellFor: (key, n) => {
-      if (key === "type") return <span class="badge badge-ghost badge-sm">{n.type}</span>;
+      // There is no bulk health read, so the badge owns its own query per row and
+      // shares the cache key with the detail panel: opening a row costs nothing
+      // extra. Quiet until a verdict lands, so a page of rows never flashes a
+      // column of "unknown".
+      if (key === "health") return <HealthBadge system={n.raw.name} quiet />;
+      if (key === "standard") return n.standard ? <span class="badge badge-ghost badge-sm">{n.standard}</span> : <span class="text-base-content/40">—</span>;
       if (key === "location") return <span class="text-base-content/70">{n.locationName || "—"}</span>;
-      if (key === "components") return <span class="tnum text-base-content/60">{(compsBySystem().get(n.raw.id) ?? []).length}</span>;
+      if (key === "components") return <span class="tnum text-base-content/60">{n.raw.member_count}</span>;
       if (key === "tags") return <TagPills tags={n.tags} />;
       return null;
     },
     filterKeys: () => [
       { key: "name", type: "string", hint: "substring", get: (n) => `${n.display} ${n.raw.name}`, values: () => [] },
-      { key: "type", type: "string", hint: "exact", get: (n) => n.type, values: (rows) => [...new Set(rows.map((r) => r.type))].sort() },
+      { key: "standard", type: "string", hint: "exact", get: (n) => n.standard, values: (rows) => [...new Set(rows.map((r) => r.standard).filter(Boolean))].sort() },
       { key: "location", type: "string", hint: "exact", get: (n) => n.locationName, values: (rows) => [...new Set(rows.map((r) => r.locationName).filter(Boolean))].sort() },
       ...tagFacets(),
     ],
     sortVal: (n, key) => {
-      if (key === "type") return n.type.toLowerCase();
+      // Worst first on the first click, which is the only ordering anyone wants
+      // from a health column. The verdict is read from the cache the row badges
+      // filled, so the sort orders exactly what is on screen; a row whose health
+      // has not arrived sorts last rather than pretending to be healthy.
+      if (key === "health") {
+        const v = verdictOf(qc.getQueryData<EstateHealth>([...systemHealthKey(n.raw.name)])?.verdict);
+        return v ? -verdictRank(v) : 9;
+      }
+      if (key === "standard") return n.standard.toLowerCase();
       if (key === "location") return n.locationName.toLowerCase();
-      if (key === "components") return -(compsBySystem().get(n.raw.id) ?? []).length;
+      if (key === "components") return -n.raw.member_count;
       if (key === "tags") return Object.keys(n.tags).sort().join(",");
       return n.display.toLowerCase();
     },
@@ -452,6 +493,7 @@ export default function Systems() {
     onEdit: (n) => { openInEdit(n.raw.name); navigate(`/systems/${encodeURIComponent(n.raw.name)}`); },
     renderCreate: () => <SystemCreate />,
     renderDetail: (n, ctx) => <SystemDetail node={n} ctx={ctx} />,
+    extraBlades: { "property-resolution": propertyResolutionBlade },
   };
 
   return (

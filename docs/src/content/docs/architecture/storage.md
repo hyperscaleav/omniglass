@@ -43,10 +43,16 @@ template tables), [collection](/architecture/collection/#storage) (interfaces an
 - **No `tenant_id`.** Isolation is per-database (a database per tenant); there is no tenant column
   anywhere. The key registries `datapoint_type` and `event_type` carry a **`scope`** (template / org /
   official) deciding where the name is unique ([key scope](/architecture/datapoints/#key-scope-template-org-official)),
-  and the non-template registries (`interface_type`, `component_type`, `variable_type`) carry an
+  and the non-template registries and catalogs (`interface_type`, `location_type`, `secret_type`,
+  `vendor`, `driver`, `capability`, `product`, `standard`) carry an
   **`official` boolean**, the same axis minus the template layer: `official: true` rows are the
   ship-with canonical set distributed with the binary, and `official: false` rows are operator- or
-  org-authored, local to this deployment.
+  org-authored, local to this deployment. The boolean is about **authority, not provenance**: a row
+  the binary seeds is not automatically `official`. A `standard` and a `location_type` ship as
+  `official: false` and are installed **only if absent**, because they are example content an estate
+  owns and edits; the canonical catalogs (`property` above all) ship `official: true` through an
+  authoritative `ON CONFLICT DO UPDATE`, so a release can correct the shared vocabulary
+  ([the seed model](/architecture/core-entities/#the-seed-model-forked-templates-versus-canonical-catalogs)).
 - **Three storage shapes.** **Ground-truth records** are append-only and immutable, each named for
   what it is: `log_datapoint` (a datapoint kind), `audit_log` (operator actions), and the standing
   `*_log` ground-truth logs (`session_log`, `internal_log`, plus the `collection_log` /

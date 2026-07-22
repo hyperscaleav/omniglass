@@ -39,9 +39,9 @@ func TestTagValueDomainAPI(t *testing.T) {
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
-	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{"name": "av", "system_type": "meeting-room"}, http.StatusCreated)
-	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "codec", "component_type": "codec", "system": "av"}, http.StatusCreated)
-	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "codec2", "component_type": "codec", "system": "av"}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{"name": "av"}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "codec", "system": "av"}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "codec2", "system": "av"}, http.StatusCreated)
 
 	// An enum key and a free-text key.
 	c.do(ownerTok, http.MethodPost, "/tags", map[string]any{"name": "environment", "allowed_values": []string{"prod", "staging", "dev"}}, http.StatusCreated)

@@ -16,15 +16,20 @@ per-secret `admin_sensitive` flag, with a scope-filtered directory, [ADR-0025](/
 and the operator surfaces. The **`variable`**
 member ([#183](https://github.com/hyperscaleav/omniglass/issues/183)): the typed **plaintext** cell on the same
 exclusive arc, resolved down the same cascade, with a Variables directory. The built operator surfaces for both
-members are the Secrets and Variables **directories** (browse, create, edit the cells), plus the **field** slot that
-consumes a cell into a component's value surface; the standalone per-component effective-secrets and
+members are the Secrets and Variables **directories** (browse, create, edit the cells), plus the **property**
+slot that consumes a cell into a component's value surface; the standalone per-component effective-secrets and
 effective-variables panels were retired ([#281](https://github.com/hyperscaleav/omniglass/issues/281),
 [decision log](/architecture/decisions/)). Each member's section below marks what is built versus deferred; the
 [build progress](/architecture/status/#build-progress) note carries the shipped shape. A related primitive,
-the **`field`** (slice 0), a typed schema declared on a `component_type` and resolved on a component to
-set-or-default, also lands `Partial` (its macro interpolation and cross-type cascade are deferred); its
-section is below. The **config** member stays `Design`, so this page is `Partial`. (`secret` was renamed
-from `credential`; the ADR anchor keeps the old term.)
+the **`property`**, also lands `Partial`: the typed-name catalog, the **classifier contracts** that say which
+properties an instance carries (a product's, a standard's, a location type's), and the arc-owned **value
+store** are built for the `declared` provenance on a component, system, location, and node, while the
+cross-owner cascade, macro interpolation, and the other provenance producers are
+deferred; its section is below. (The standalone **fields** feature folded into it: a field was a property with
+`declared` provenance,
+[ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property_value).) The
+**config** member stays `Design`, so this page is `Partial`. (`secret` was renamed from `credential`; the ADR
+anchor keeps the old term.)
 :::
 
 Everything an operator **sets** resolves the same way: a typed value, owned at a scope, resolved
@@ -252,48 +257,69 @@ Scalar shapes (`string`, `int`, `float`, `bool`, `json`) cover the common case; 
 flagged secret (a free secret like a webhook signing token) without being a full secret cell, since it
 has no lifecycle.
 
-## field: an operator-defined typed schema on a type
+## property: one typed name, a classifier contract, a stored value
 
-:::note[Partial: slice 0, schema on a `component_type` plus set-or-default on a component]
-The first cut is **built**: an operator declares a typed **`field_definition`** on a `component_type` (a
-`name`, a `data_type` of `string` / `int` / `float` / `bool` / `json`, and an optional type-level default
-validated against the `data_type`), unique per `(component_type, name)`; every component of that type
-carries it. A component sets a **literal** `field_value` for a field defined on its type, and the
-component's **effective** value resolves to the set literal or the type default (an `is_set` flag marks the
-override). The vertical is whole: storage (transactional, audited), the API (the definition catalog is flat
-and `field:<action>`-gated, the value routes are ABAC-scoped to the owning component), the generated CLI and
-typed client, and the UI (define on the component-type blade under [Types](/guides/admin/types/), plus an
-**Effective fields** panel on the component detail that sets a literal and shows override-versus-default).
-A field also carries an optional **`display_name`**, a human label: the raw `name` stays the unique key and
-the interpolation handle, while the console shows the `display_name`, falling back to the key when unset.
-The rest of the design below is **deferred**, listed plainly so a built badge never hides drift.
+:::note[Partial: the catalog, the three classifier contracts, and the declared value on an instance]
+Three pieces are **built**. The **`property` catalog** is the primitive-agnostic registry of typed names
+(`name`, `data_type` over `string` / `int` / `float` / `bool` / `json`, optional label, unit, and a
+JSON Schema `validation`, plus a nullable observed `kind`), with seed-owned `official` rows read-only
+([ADR-0043](/architecture/decisions/#adr-0043-the-property-catalog)). Three **classifier contracts** carry
+the declaration, all the same shape: **`product_property`** (for a component), **`standard_property`** (for
+a system), and **`location_type_property`** (for a location), each naming a catalog property with an
+optional `default_value` and a `required` flag, unique per `(classifier, property)`. **`property_value`** is
+the value store, on the **same owner exclusive-arc** as the datapoint sinks and `event`, carrying an
+`instance` discriminator and a **`provenance`**; the write path fills `provenance=declared`. The read is
+**`EffectiveProperties(ownerKind, ownerID)`**, one parameterized query serving **component, system,
+location, and node**: the contract resolved to `coalesce(the instance's value, the contract default)`, plus
+the off-contract values set directly on the instance, so a **productless** component and a **one-off**
+system still resolve, and a classifier-less **node** resolves ad-hoc values alone
+([ADR-0048](/architecture/decisions/#adr-0048-the-standard-blueprint-and-the-template-fork-seed-model)). The
+vertical is whole: storage (transactional, audited), the API (each contract gated by its owner catalog's
+permission, the values gated by the owning entity's `:read` / `:update` and ABAC-scoped on **every** arc),
+the generated CLI and typed client, and the console (a **Declared properties** editor on the product,
+standard, and location type blades, and a **Properties** panel on the component, system, and location
+details). The rest of the design below is **deferred**, listed plainly so a built badge never hides drift
+([ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property_value)).
 :::
 
-A **field** is an operator-defined **typed attribute declared on a type**, the schema layer over the value
-cells above: where a variable or a secret is a single cascaded cell, a field is a named slot every instance
-of a type carries, whose value the operator sets per instance. It revives the fixed-inventory idea (Zabbix's
-`inventory_1..40` that never fit and were never custom) as a schema an operator defines per type, so "add an
-`asset_tag` field to every `display` component" is one operation, not forty fixed slots.
+A **property** is one typed name used three ways: the **catalog** says the name exists and what it means,
+a **classifier contract** says which of those names its instances carry (and what they default to), and a
+**value** row says what one owner holds for it. Where a variable or a secret is a single cascaded cell, a
+property is a named slot a whole class of things carries, whose value is set per instance. It revives the
+fixed-inventory idea (Zabbix's `inventory_1..40` that never fit and were never custom) as a contract on the
+SKU, so "every Samsung QM55 carries an `asset_tag`" is one declaration, not forty fixed slots.
 
-Slice 0 stores **literals only** and resolves on the **component alone**. What the design intends, and this
-slice does **not** yet do:
+The **provenance** column is why this is one primitive and not several. The same name and the same value
+store hold a value a device **observed**, a rule **calculated**, config **intended**, and an operator
+**declared**; only provenance separates them. A "field" was only ever the declared case, which is why it
+folded here rather than staying its own table.
 
-- **Macro interpolation of a field value** (the consumer of `$var:` / `$sec:` / `$datapoint:`). A field's
-  eventual whole job is to be the consumer of the values above: a `field_value` will hold a `$var:` /
-  `$sec:` / `$datapoint:` macro string as readily as a literal, resolved through the same interpolation
-  engine at read. Slice 0 holds **literals only**; that consumer is deferred.
-- **The cross-type cascade** (`product → location → system → component`, deepest-wins). Slice 0 resolves a
-  field on the **component alone**, set-or-default with a single owner; there is no cascade across types yet.
-- **The `sources` model**: the per-field allowed origins (`literal` / `variable` / `secret` / `datapoint` /
-  `file`), the inline pickers they drive, and the override rules.
+What the design intends, and this slice does **not** yet do:
+
+- **The cross-owner cascade** (`product -> location -> system -> component`, deepest-wins). Today a value
+  resolves on **one instance alone**: its own declared value, else its own classifier's contract default. All
+  four owner kinds resolve, but each in isolation; there is no walk **across** owners yet, even though the
+  arc is drawn for it.
+- **The non-declared producers.** `observed` (materializing a current value out of the datapoint stream),
+  `calculated` (a rule's output), and `intended` (the config member above writing a desired value) all have
+  a seat in the provenance column and nothing writing to it. The config section's "declared intent lives in
+  config, not as a row" reads against this newer shape; reconciling the two is the config member's own
+  slice.
+- **Macro interpolation of a value** (the consumer of `$var:` / `$sec:` / `$datapoint:`). A value holds a
+  literal today; holding a macro string, resolved through the same interpolation engine at read, is
+  deferred.
+- **The `sources` model**: the per-property allowed origins (`literal` / `variable` / `secret` /
+  `datapoint` / `file`), the inline pickers they drive, and the override rules.
 - **File typing** (a `file` `data_type` with accepted MIME types and formats), which would give an attached
-  file a semantic role by the field it fills (a `floor_plan`, a `firmware`).
-- **Multi-type definitions.** Slice 0 defines fields on `component_type` only; the `location_type` /
-  `system_type` / `vendor` / `product` / `driver` schemas the exclusive-arc owner model allows come later.
+  file a semantic role by the property it fills (a `floor_plan`, a `firmware`).
+- **A driver access/mode column** on the contract (whether a driver can get, set, or only declare a
+  property), which lands with the driver slice. The three classifier contracts themselves are built; a
+  **node** still has no classifier to declare one, by design.
 
-The Effective fields panel can set, re-set, and **clear** a value: the effective read returns the
-`field_value` id (`value_id`) alongside the literal, so each override row offers a **revert** control
-that deletes the value and reverts the field to its type default (gated on `field:delete`).
+The Properties panel can set, re-set, and **clear** a value: the effective read returns the
+`property_value` id (`value_id`) alongside the literal, so each override row offers a **revert** control
+that deletes the value and falls back to the contract default (the owning entity's own `:update` write,
+since a value belongs to its owner).
 
 ## tag: a normalized label vocabulary
 
@@ -405,8 +431,9 @@ exclusive-arc scope either way.
 | `secret_type` | id, **official**, schema (per-field `{name, type, secret, origin}`) | **Built.** The secret **shape** registry (`snmp-community`, `basic-auth` seeded); `official` marks shipped-canonical versus org-local, like the datapoint and role registries |
 | `secret` | (name, **owner arc**), secret_type, **`admin_sensitive`**, **value** (secret fields as `{ciphertext, nonce, wrapped_dek, key_id}` envelopes, non-secret fields plaintext) | **Built.** The encrypted cell and the `$sec:` cascade key; scope is the exclusive arc (global/location/system/component). Read masked through a **scope-filtered** directory; decrypted only through the audited `:reveal` / `:copy` path. Visibility is placement scope plus the per-secret `admin_sensitive` flag (admin-only when set); `secret` is off the `*:read` floor ([ADR-0025](/architecture/decisions/#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier)) |
 | `variable` | (name, **owner arc**), **value_type** (`string`/`int`/`float`/`bool`/`json`), **value** (jsonb) | **Built.** The plaintext variable cell and the `$var:` cascade key; scope is the exclusive arc. Typed inline (no `variable_type` registry: the value is validated against `value_type` in the app), no observed side. The **config** cell (declared/observed/reconcile) is a separate, deferred member |
-| `field_definition` | (**component_type**, name), **data_type** (`string`/`int`/`float`/`bool`/`json`), **default_value** (jsonb) | **Built (slice 0).** The typed **schema on a `component_type`**: flat and unscoped like the type registries, unique per `(component_type, name)`, with an optional type-level default validated against `data_type`. Multi-type owners (`location_type`/`system_type`/`vendor`/`product`/`driver`) are deferred |
-| `field_value` | (**field**, **component**), **value** (jsonb) | **Built (slice 0).** A component's **literal** for a field on its type; the effective read is **set-or-default** (`is_set` marks the override, `value_id` carries the row id so the UI can clear it), ABAC-scoped to the owning component. Setting, re-setting, and clearing back to the default are wired; macro-string values (`$var:`/`$sec:`/`$datapoint:`) and the cross-type cascade are deferred |
+| `property` | name (PK), **official**, **data_type** (`string`/`int`/`float`/`bool`/`json`), nullable **kind** (`metric`/`state`/`log`), display_name, unit, **validation** (JSON Schema) | **Built.** The primitive-agnostic **catalog** of typed names, the single source for what a name means whoever produces it; seed-owned `official` rows are read-only. Value tables key by the **name string**, so the catalog governs the vocabulary without owning the values ([ADR-0043](/architecture/decisions/#adr-0043-the-property-catalog)) |
+| `product_property` / `standard_property` / `location_type_property` | (**classifier**, **property**), **default_value** (jsonb), **required** | **Built.** The classifier's declared-property **contract**, one table per classifier and all the same shape: which catalog properties every instance of that product, standard, or location type exposes, with an optional default and a required flag, unique per pair. `data_type` and `validation` are **not** repeated here, they stay on `property`. Replaces the retired `field_definition`. A driver access/mode column is deferred; a `node` has no classifier by design |
+| `property_value` | (**owner arc**, property, **instance**, **provenance**), **value** (jsonb) | **Built for `declared` on all four owner kinds.** The value store, on the **same exclusive arc** as the datapoint sinks and `event`; the series key is `unique nulls not distinct`, since the arc leaves three owner columns NULL. The effective read is **contract-default-or-override** plus the off-contract set (`is_set` marks the override, `value_id` carries the row id so the UI can clear it), resolved by one owner-generic query and ABAC-scoped on **every** arc, read and write. Replaces the retired `field_value`. The `observed`/`calculated`/`intended` producers, macro-string values, and the cross-owner cascade are deferred |
 | `tag` | name, applies_to, propagates | **Built.** The **tenant-wide governed key vocabulary**; minting a key needs `tag:create` ([identity and access](/architecture/identity-access/)). No `_type`, no namespace; values bind via `tag_binding`. See [tags](/architecture/tags/) |
 | `tag_binding` | (tag, **owner arc**), value | **Built.** The `key: value` binding: **union on key, override on value** down the [cascade](/architecture/cascade/), owned on the exclusive arc (`global / location / system / component`); setting a value is the owner's own `update` write. Binding via groups and a `template` default are deferred |
 

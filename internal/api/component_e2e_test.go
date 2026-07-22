@@ -44,7 +44,7 @@ func TestComponentRenameAndCheckName(t *testing.T) {
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
 	// Seed a component.
-	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "cmp-one", "component_type": "display"}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "cmp-one"}, http.StatusCreated)
 
 	type nameCheck struct {
 		Valid     bool   `json:"valid"`
@@ -86,14 +86,14 @@ func TestComponentRenameAndCheckName(t *testing.T) {
 	}
 
 	// Dup rename -> 409.
-	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "cmp-two", "component_type": "display"}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "cmp-two"}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPatch, "/components/cmp-two", map[string]any{"name": "cmp-renamed"}, http.StatusConflict)
 
 	// Bad format via PATCH -> 422 (Huma pattern rejects at the edge).
 	c.do(ownerTok, http.MethodPatch, "/components/cmp-two", map[string]any{"name": "Bad Name"}, http.StatusUnprocessableEntity)
 
 	// Create-tightening: a bad name is rejected at create too, not just rename.
-	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "Bad Name", "component_type": "display"}, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "Bad Name"}, http.StatusUnprocessableEntity)
 }
 
 // TestComponentCheckNameScopeBlind is scope-blind: a caller with component:update
@@ -128,10 +128,10 @@ func TestComponentCheckNameScopeBlind(t *testing.T) {
 	var disp struct {
 		ID string `json:"id"`
 	}
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "scope-disp", "component_type": "display"}, http.StatusCreated), &disp); err != nil {
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "scope-disp"}, http.StatusCreated), &disp); err != nil {
 		t.Fatalf("decode create: %v", err)
 	}
-	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "scope-cam", "component_type": "camera"}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "scope-cam"}, http.StatusCreated)
 
 	// A deploy principal (component:update) scoped ONLY to scope-disp.
 	deployTok := setupScopedViewer(t, ctx, dsn, "deploy-disp", "deploy", "component", disp.ID)

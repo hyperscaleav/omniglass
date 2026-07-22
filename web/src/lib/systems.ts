@@ -4,13 +4,21 @@ import { api } from "../api/client";
 // form a tree (parent_id) and are placed at a location. Components reference a
 // primary system by id; the Components page consumes this list to resolve those
 // ids to readable names and to populate the system picker.
+//
+// A system optionally conforms to a STANDARD (the blueprint that declares its
+// property contract, the system-side counterpart of a product). It is optional: a
+// one-off system that conforms to no standard is first class.
 export type System = {
   id: string;
   name: string;
   display_name?: string;
-  system_type: string;
+  standard_id?: string;
   location_id?: string;
   parent_id?: string;
+  // How many components are bound into this system, from membership rather than
+  // any pointer on the component: membership is what says a component is in a
+  // system, and reading it elsewhere is how a fully staffed system reported zero.
+  member_count: number;
   actions?: string[];
   effective_tags?: Record<string, string>;
 };
@@ -31,7 +39,8 @@ export async function getSystem(name: string): Promise<System> {
 
 export type CreateSystem = {
   name: string;
-  system_type: string;
+  // Omit for a one-off system that conforms to no standard.
+  standard_id?: string;
   display_name?: string;
   parent?: string;
   location?: string;
@@ -46,7 +55,7 @@ export async function createSystem(body: CreateSystem): Promise<System> {
 export type UpdateSystem = {
   name?: string;
   display_name?: string;
-  system_type?: string;
+  standard_id?: string;
 };
 
 export async function updateSystem(name: string, body: UpdateSystem): Promise<System> {

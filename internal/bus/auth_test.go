@@ -29,7 +29,7 @@ func (f fakeStore) RecordHeartbeat(context.Context, string) error { return nil }
 func (f fakeStore) ResolveTaskOwner(context.Context, string, string) (storage.TaskOwner, bool, error) {
 	return storage.TaskOwner{}, false, nil
 }
-func (f fakeStore) ListDatapointTypes(context.Context) ([]storage.DatapointType, error) {
+func (f fakeStore) ListProperties(context.Context) ([]storage.Property, error) {
 	return nil, nil
 }
 func (f fakeStore) InsertMetricDatapoints(context.Context, []storage.MetricDatapointEvent) error {
@@ -40,6 +40,9 @@ func (f fakeStore) InsertStateDatapoints(context.Context, []storage.StateDatapoi
 }
 func (f fakeStore) LatestState(context.Context, string, string, string) (*storage.StateDatapoint, error) {
 	return nil, nil
+}
+func (f fakeStore) InsertEvents(context.Context, []storage.EventOccurrence) error {
+	return nil
 }
 
 // fakeClientAuth is a minimal server.ClientAuthentication that carries the

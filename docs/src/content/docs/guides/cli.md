@@ -251,25 +251,110 @@ defaults true (the value cascades to descendants); `--propagates=false` binds a 
 that resolves only on its own entity. Resolving onto a component **unions** keys and **overrides** values
 most-specific-wins down the cascade.
 
-## Component makes
+## Component classification catalogs
 
-The [component make](/architecture/core-entities/#catalog-reference-data-component_make) commands cover
-the manufacturer registry: a flat, official-vs-custom catalog on the same pattern as the `type`
-registries. `make:read` sits on the viewer floor; the three writes (`make:create`, `make:update`,
-`make:delete`) are admin-gated.
+The [component-classification catalog](/architecture/core-entities/#catalog-reference-data-vendor-driver-capability)
+commands cover the `vendor`, `driver`, and `capability` registries: flat, official-vs-custom catalogs on
+the same pattern as the `type` registries. Each resource's `:read` sits on the viewer floor; the three
+writes (`:create`, `:update`, `:delete`) are admin-gated.
+
+A **vendor** names an organization, carrying a `--kind` of `manufacturer`, `integrator`, or `developer`
+(default `manufacturer`):
 
 ```sh
-omniglass component-make list                                       # the manufacturer registry
-omniglass component-make create --id barco --display-name Barco \
+omniglass vendor list                                               # the vendor registry
+omniglass vendor create --id barco --display-name Barco --kind manufacturer \
   --icon monitor --support-phone "+1-555-0100" --website https://www.barco.com
-omniglass component-make get barco
-omniglass component-make update barco --support-phone "+1-555-0199"
-omniglass component-make delete barco                                # refused (422) if official
+omniglass vendor get barco
+omniglass vendor update barco --support-phone "+1-555-0199"
+omniglass vendor delete barco                                       # refused (422) if official
 ```
 
-A seed-owned (**official**) make, for example `crestron` or `biamp`, is read-only: `update` and `delete`
-both 422. `website` is validated to an `http`/`https` scheme on write; any other scheme (for example
-`javascript:`) is a 422.
+A **driver** names the implementation that gets, emits, or sets a product's signals, with an optional
+`--version`. A **capability** names what a component can do:
+
+```sh
+omniglass driver list                                               # the driver registry
+omniglass driver create --id barco-snmp --display-name "Barco SNMP" --version 1.0.0
+omniglass driver update barco-snmp --version 1.1.0
+omniglass driver delete barco-snmp                                  # refused (422) if official
+
+omniglass capability list                                           # the capability registry
+omniglass capability create --id projector --display-name Projector
+omniglass capability delete projector                               # refused (422) if official
+```
+
+A seed-owned (**official**) row, for example the `crestron` vendor or the `microphone` capability, is
+read-only: `update` and `delete` both 422. A vendor's `website` is validated to an `http`/`https` scheme
+on write; any other scheme (for example `javascript:`) is a 422.
+
+## Products
+
+The [product](/architecture/core-entities/#catalog-reference-data-product) commands cover the product
+registry: the concrete **SKU** that ties the vendor, driver, and capability catalogs together, and the
+thing a `component` points at. `product:read` sits on the viewer floor; the three writes
+(`product:create`, `product:update`, `product:delete`) are admin-gated.
+
+A product names its **kind** (`device`, `app`, `service`, or `vm`, default `device`), optionally its
+**vendor**, **driver**, and a **parent product** it is a variant of, and the **capabilities** it
+provides (a JSON array of capability ids):
+
+```sh
+omniglass product list                                              # the product registry
+omniglass product create --id barco-ub12 --display-name "Barco UB12" --kind device \
+  --vendor-id barco --driver-id barco-snmp --capabilities '["projector"]'
+omniglass product get barco-ub12
+omniglass product update barco-ub12 --capabilities '["projector","speaker"]'  # replaces the whole set
+omniglass product delete barco-ub12                                 # 422 if official, 409 if a component points at it
+```
+
+A seed-owned (**official**) product, for example `cisco-room-bar`, is read-only: `update` and `delete`
+both 422. A product still referenced by a **component** (`component.product_id`) cannot be deleted (409);
+an unknown vendor, driver, parent, or capability id is a 422.
+
+## Standards
+
+The [standard](/architecture/core-entities/#catalog-reference-data-standard) commands cover the
+system-side counterpart of a product: the **blueprint a system conforms to**. `standard:read` sits on the
+viewer floor; `standard:create`, `standard:update`, and `standard:delete` are admin-gated.
+
+```sh
+omniglass standard list                                             # the standard catalog
+omniglass standard create --id lecture-hall --display-name "Lecture Hall" \
+  --parent-standard-id classroom                                    # a variant of an existing standard
+omniglass standard get lecture-hall
+omniglass standard delete lecture-hall                              # 409 if a system still conforms to it
+```
+
+Unlike a seeded product, the **shipped standards are `official: false`**: they are forked from an in-code
+template once, with no inheritance, so they are yours to rename, re-parent, or delete, and the boot seed
+installs one **only if absent** rather than reasserting over your edit. The same holds for the shipped
+location types. See [the seed model](/architecture/core-entities/#the-seed-model-forked-templates-versus-canonical-catalogs).
+
+## Property contracts and values
+
+A classifier **declares** which properties its instances carry; an instance **sets** a value. Both sides
+are the same three verbs, and the contract commands hang off the classifier that owns them:
+
+```sh
+omniglass product properties cisco-room-bar                         # a product's contract
+omniglass standard properties huddle-room                           # a standard's contract
+omniglass location-type properties room                             # a location type's contract
+omniglass standard set-property huddle-room room_capacity --default-value 6 --required true
+omniglass standard delete-property huddle-room room_capacity        # systems keep any value they set
+
+omniglass component properties dsp-boardroom-3                      # the effective read
+omniglass system properties boardroom                               # same shape, system side
+omniglass location properties east-campus                           # same shape, location side
+omniglass system set-property boardroom room_capacity --value 12    # idempotent
+omniglass system clear-property boardroom room_capacity             # falls back to the contract default
+```
+
+The read resolves the classifier's contract against the instance's own values, so a **one-off system**
+(one conforming to no standard) and a **productless component** still resolve, to their off-contract
+values alone. The value commands are **scope-injected**: an instance outside your read scope is a
+non-disclosing 404 on the read and on the write. Note the two different names on the location-type side:
+the registry CRUD is `omniglass type location ...`, its contract is `omniglass location-type ...`.
 
 ## Generated versus hand-written
 

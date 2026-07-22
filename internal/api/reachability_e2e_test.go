@@ -71,7 +71,7 @@ func TestReachabilityAPI(t *testing.T) {
 	}
 
 	all := scope.Set{All: true}
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp-1", ComponentType: "display"}, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp-1"}, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
 
@@ -156,7 +156,7 @@ func TestReachabilityAPI(t *testing.T) {
 	// A viewer scoped to a different component (out of scope on disp-1) gets a
 	// non-disclosing 404: the permission passes (*:read) but scope injection hides
 	// the row.
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "other-1", ComponentType: "display"}, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "other-1"}, all); err != nil {
 		t.Fatalf("create other component: %v", err)
 	}
 	var otherID string

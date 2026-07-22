@@ -38,7 +38,7 @@ result.
 
 | Family | What it is | Examples |
 |---|---|---|
-| `component_type` | classification | device, app, cloud-api |
+| `product` | classification: the concrete SKU a component **is**, and the source of its shape | Cisco Room Bar, Samsung QM55 |
 | `component_template` | the **device shape**: everything about a class of device | Polaris DSP 16, Cisco Room Kit Pro, Q-SYS Core |
 | `component` | a deployed instance | `dsp-boardroom-3` |
 
@@ -178,6 +178,17 @@ version** and a system pins the **immutable** `system_template_version` snapshot
   whatever display is assigned ([config and credentials](/architecture/variables/)).
 
 ### Role requirements
+
+:::note[What shipped is the system role]
+This section is `Design`. The **built** role slot is
+[`system_role`](/architecture/core-entities/#system-roles-the-slots-a-system-needs-filled): declared on a
+**standard** (inherited live by every conforming system) or on one **system**, not frozen into a
+`system_template_version`; requiring a set of **capabilities**, not canonical datapoints and commands; and
+assigned through `role_assignment`, not `system_member`. The strict validate-on-assign this section calls
+for is built and does refuse by name, over the capability vocabulary. The two models reconcile when
+template pinning lands
+([ADR-0049](/architecture/decisions/#adr-0049-the-system-role-capability-gated-staffing-and-the-resolved-capability-set)).
+:::
 
 A role declares **what a member must provide**, in canonical terms; any component whose template meets it
 can fill the role:

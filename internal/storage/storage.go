@@ -185,6 +185,7 @@ type Gateway interface {
 	// UpsertLocationType installs or updates an official location type by id, the
 	// boot-seed phase's write. Idempotent.
 	UpsertLocationType(ctx context.Context, lt LocationType) error
+	SeedLocationType(ctx context.Context, lt LocationType) error
 	// ListLocationTypes returns every location type, alphabetically by display_name.
 	ListLocationTypes(ctx context.Context) ([]LocationType, error)
 	// The location_type registry CRUD (capability-only, unscoped). Create writes a
@@ -211,12 +212,15 @@ type Gateway interface {
 	LocationNameTaken(ctx context.Context, name string) (bool, error)
 	DeleteLocation(ctx context.Context, actorID, name string, read, action scope.Set) error
 
-	// The system tier: a type registry and scoped CRUD, mirroring locations.
-	UpsertSystemType(ctx context.Context, st SystemType) error
-	ListSystemTypes(ctx context.Context) ([]SystemType, error)
-	CreateSystemType(ctx context.Context, actorID string, st SystemType) (*SystemType, error)
-	UpdateSystemType(ctx context.Context, actorID, id string, patch SystemTypePatch) (*SystemType, error)
-	DeleteSystemType(ctx context.Context, actorID, id string) error
+	// The system tier: the standard catalog (the blueprint a system conforms to,
+	// the system-side counterpart of product) and scoped CRUD, mirroring locations.
+	UpsertStandard(ctx context.Context, st Standard) error
+	SeedStandard(ctx context.Context, st Standard) error
+	ListStandards(ctx context.Context) ([]Standard, error)
+	GetStandard(ctx context.Context, id string) (*Standard, error)
+	CreateStandard(ctx context.Context, actorID string, st Standard) (*Standard, error)
+	UpdateStandard(ctx context.Context, actorID, id string, patch StandardPatch) (*Standard, error)
+	DeleteStandard(ctx context.Context, actorID, id string) error
 	ListSystems(ctx context.Context, read scope.Set) ([]System, error)
 	GetSystem(ctx context.Context, name string, read scope.Set) (*System, error)
 	CreateSystem(ctx context.Context, actorID string, spec SystemSpec, create scope.Set) (*System, error)
@@ -225,11 +229,6 @@ type Gateway interface {
 	DeleteSystem(ctx context.Context, actorID, name string, read, action scope.Set) error
 
 	// The component tier: a type registry and scoped CRUD, on the same helpers.
-	UpsertComponentType(ctx context.Context, ct ComponentType) error
-	ListComponentTypes(ctx context.Context) ([]ComponentType, error)
-	CreateComponentType(ctx context.Context, actorID string, ct ComponentType) (*ComponentType, error)
-	UpdateComponentType(ctx context.Context, actorID, id string, patch ComponentTypePatch) (*ComponentType, error)
-	DeleteComponentType(ctx context.Context, actorID, id string) error
 	ListComponents(ctx context.Context, read scope.Set) ([]Component, error)
 	GetComponent(ctx context.Context, name string, read scope.Set) (*Component, error)
 	// ListComponentInterfaces returns a component's interfaces (the reachability
@@ -245,12 +244,30 @@ type Gateway interface {
 	// Crestron, ...), same shape and official-read-only guard as the type
 	// registries above but with no tree and no in-use delete guard in this
 	// slice (component_model will reference it later).
-	UpsertComponentMake(ctx context.Context, m ComponentMake) error
-	ListComponentMakes(ctx context.Context) ([]ComponentMake, error)
-	GetComponentMake(ctx context.Context, id string) (*ComponentMake, error)
-	CreateComponentMake(ctx context.Context, actorID string, m ComponentMake) (*ComponentMake, error)
-	UpdateComponentMake(ctx context.Context, actorID, id string, patch ComponentMakePatch) (*ComponentMake, error)
-	DeleteComponentMake(ctx context.Context, actorID, id string) error
+	UpsertVendor(ctx context.Context, v Vendor) error
+	ListVendors(ctx context.Context) ([]Vendor, error)
+	GetVendor(ctx context.Context, id string) (*Vendor, error)
+	CreateVendor(ctx context.Context, actorID string, v Vendor) (*Vendor, error)
+	UpdateVendor(ctx context.Context, actorID, id string, patch VendorPatch) (*Vendor, error)
+	DeleteVendor(ctx context.Context, actorID, id string) error
+	UpsertDriver(ctx context.Context, d Driver) error
+	ListDrivers(ctx context.Context) ([]Driver, error)
+	GetDriver(ctx context.Context, id string) (*Driver, error)
+	CreateDriver(ctx context.Context, actorID string, d Driver) (*Driver, error)
+	UpdateDriver(ctx context.Context, actorID, id string, patch DriverPatch) (*Driver, error)
+	DeleteDriver(ctx context.Context, actorID, id string) error
+	UpsertCapability(ctx context.Context, c Capability) error
+	ListCapabilities(ctx context.Context) ([]Capability, error)
+	GetCapability(ctx context.Context, id string) (*Capability, error)
+	CreateCapability(ctx context.Context, actorID string, c Capability) (*Capability, error)
+	UpdateCapability(ctx context.Context, actorID, id string, patch CapabilityPatch) (*Capability, error)
+	DeleteCapability(ctx context.Context, actorID, id string) error
+	UpsertProduct(ctx context.Context, m Product) error
+	ListProducts(ctx context.Context) ([]Product, error)
+	GetProduct(ctx context.Context, id string) (*Product, error)
+	CreateProduct(ctx context.Context, actorID string, m Product) (*Product, error)
+	UpdateProduct(ctx context.Context, actorID, id string, patch ProductPatch) (*Product, error)
+	DeleteProduct(ctx context.Context, actorID, id string) error
 
 	// The interface tier: operator CRUD over placement-bound connections. An
 	// interface is not a scope-tree entity of its own; it hangs off a component
@@ -274,8 +291,12 @@ type Gateway interface {
 
 	// The collection registries: estate-wide reference data (no scope.Set),
 	// seeded official and operator-extensible at org/template scope later.
-	UpsertDatapointType(ctx context.Context, dt DatapointType) error
-	ListDatapointTypes(ctx context.Context) ([]DatapointType, error)
+	UpsertProperty(ctx context.Context, prop Property) error
+	ListProperties(ctx context.Context) ([]Property, error)
+	GetProperty(ctx context.Context, name string) (*Property, error)
+	CreateProperty(ctx context.Context, actorID string, spec PropertySpec) (*Property, error)
+	UpdateProperty(ctx context.Context, actorID, name string, patch PropertyPatch) (*Property, error)
+	DeleteProperty(ctx context.Context, actorID, name string) error
 	UpsertInterfaceType(ctx context.Context, it InterfaceType) error
 	ListInterfaceTypes(ctx context.Context) ([]InterfaceType, error)
 
@@ -295,6 +316,12 @@ type Gateway interface {
 	InsertStateDatapoints(ctx context.Context, evs []StateDatapointEvent) error
 	LatestState(ctx context.Context, componentName, key, instance string) (*StateDatapoint, error)
 	StateTransitions(ctx context.Context, componentName, key, instance string, since time.Time) ([]StateDatapoint, error)
+
+	// The observed-log sink: the mirror of the metric and state sinks for log-kind
+	// occurrences. reject-not-project and owner-confinement are applied by the caller
+	// before the write. ListComponentEvents backs the component event log panel.
+	InsertEvents(ctx context.Context, evs []EventOccurrence) error
+	ListComponentEvents(ctx context.Context, componentName string, since time.Time, limit int) ([]Event, error)
 
 	// The node tier: the edge runtime's enrollment lifecycle and worklist. A node
 	// is estate-wide (all-scope create/enroll/read, like a principal). The claim,
@@ -345,22 +372,70 @@ type Gateway interface {
 	DeleteVariable(ctx context.Context, actorID, id string, read, action scope.Set) error
 	ResolveVariables(ctx context.Context, componentID string, read scope.Set) ([]ResolvedVariable, error)
 
-	// The field tier: a typed field declared on a component_type (the schema
-	// half of the field primitive), flat and unscoped like the type registries.
-	// The value a component carries for it lives in field_value (a later slice).
-	ListFieldDefinitions(ctx context.Context) ([]FieldDefinition, error)
-	CreateFieldDefinition(ctx context.Context, actorID string, spec FieldDefinitionSpec) (*FieldDefinition, error)
-	UpdateFieldDefinition(ctx context.Context, actorID, id, dataType, displayName string, required bool, def json.RawMessage) (*FieldDefinition, error)
-	DeleteFieldDefinition(ctx context.Context, actorID, id string) error
+	// The declared-property tier, the fold of the fields feature onto the estate
+	// model. product_property is the product's contract (which properties it declares
+	// and their defaults); property_value is the value store on the shared owner arc.
+	// EffectiveProperties resolves a component against its product's contract
+	// (default < override) and adds the ad-hoc values the contract does not declare.
+	ListProductProperties(ctx context.Context, productID string) ([]ProductProperty, error)
 
-	// field values: the literal a component sets for a field defined on its
-	// type (field_value, the variable table narrowed to a component owner: no
-	// owner arc, no cascade), plus the effective read that coalesces the set
-	// value with the definition's default for a component.
-	SetFieldValue(ctx context.Context, actorID, componentName, fieldName string, value json.RawMessage, create scope.Set) (*FieldValue, error)
-	UpdateFieldValue(ctx context.Context, actorID, id string, value json.RawMessage, read, action scope.Set) (*FieldValue, error)
-	DeleteFieldValue(ctx context.Context, actorID, id string, read, action scope.Set) error
-	EffectiveFields(ctx context.Context, componentName string, read scope.Set) ([]EffectiveField, error)
+	// The standard and location-type contracts: the system-side and place-side
+	// counterparts of product_property, resolved by the same owner-generic
+	// EffectiveProperties.
+	ListStandardProperties(ctx context.Context, standardID string) ([]StandardProperty, error)
+	UpsertStandardProperty(ctx context.Context, standardID string, spec StandardPropertySpec) error
+	SetStandardProperty(ctx context.Context, actorID, standardID string, spec StandardPropertySpec) (*StandardProperty, error)
+	DeleteStandardProperty(ctx context.Context, actorID, standardID, propertyName string) error
+	ListLocationTypeProperties(ctx context.Context, locationTypeID string) ([]LocationTypeProperty, error)
+	UpsertLocationTypeProperty(ctx context.Context, locationTypeID string, spec LocationTypePropertySpec) error
+	SetLocationTypeProperty(ctx context.Context, actorID, locationTypeID string, spec LocationTypePropertySpec) (*LocationTypeProperty, error)
+	DeleteLocationTypeProperty(ctx context.Context, actorID, locationTypeID, propertyName string) error
+	UpsertProductProperty(ctx context.Context, productID string, spec ProductPropertySpec) error
+	SetProductProperty(ctx context.Context, actorID, productID string, spec ProductPropertySpec) (*ProductProperty, error)
+	DeleteProductProperty(ctx context.Context, actorID, productID, propertyName string) error
+	SetPropertyValue(ctx context.Context, actorID, ownerKind, ownerID, propertyName, instance string, value json.RawMessage, write scope.Set) (*PropertyValue, error)
+	ClearPropertyValue(ctx context.Context, actorID, ownerKind, ownerID, propertyName, instance string, write scope.Set) error
+	EffectiveProperties(ctx context.Context, ownerKind, ownerID string, read scope.Set) ([]EffectiveProperty, error)
+
+	// Membership: the binding a role attaches to. Many-valued on purpose, since a
+	// shared device belongs to every system it serves, which a single pointer on
+	// the component cannot express. Staffing a role creates the membership, so the
+	// two can never disagree.
+	ListMembers(ctx context.Context, systemName string, read scope.Set) ([]Member, error)
+	ComponentMemberships(ctx context.Context, componentName string, read scope.Set) ([]Member, error)
+	AddMember(ctx context.Context, actorID, systemName, componentName string, write scope.Set) error
+	RemoveMember(ctx context.Context, actorID, systemName, componentName string, write scope.Set) error
+	SetPrimaryMember(ctx context.Context, actorID, systemName, componentName string, write scope.Set) error
+
+	// The role tier: a system's roles resolve from its standard (inherited) and its
+	// own ad-hoc declarations; assignment refuses a component whose resolved
+	// capabilities do not cover what the role requires.
+	EffectiveRoles(ctx context.Context, systemName string, read scope.Set) ([]EffectiveRole, error)
+	ComponentCapabilities(ctx context.Context, componentName string) ([]string, error)
+	AssignRole(ctx context.Context, actorID, systemName, roleName, componentName string, write scope.Set) error
+	UnassignRole(ctx context.Context, actorID, systemName, roleName, componentName string, write scope.Set) error
+	// The declaration side of the same tier: what a standard or a system declares
+	// it needs filled, and the capability facts a component carries on its own.
+	// ownerKind is "standard" or "system"; SeedSystemRole is the boot-seed lane.
+	ListSystemRoles(ctx context.Context, ownerKind, ownerID string) ([]SystemRole, error)
+	SetSystemRole(ctx context.Context, actorID, ownerKind, ownerID string, spec SystemRoleSpec) (*SystemRole, error)
+	DeleteSystemRole(ctx context.Context, actorID, ownerKind, ownerID, name string) error
+	SeedSystemRole(ctx context.Context, ownerKind, ownerID string, spec SystemRoleSpec) error
+	SetComponentCapability(ctx context.Context, actorID, componentName, capabilityID string, present bool) error
+	ClearComponentCapability(ctx context.Context, actorID, componentName, capabilityID string) error
+
+	// The health tier. An alarm degrades named capabilities on a component; the
+	// rollup turns that into a system and location verdict and RECORDS every
+	// change as a transition, so the history is edges and only edges. The
+	// recompute itself is not on this interface: it runs inside the transaction of
+	// the write that triggered it, never as a call of its own.
+	RaiseAlarm(ctx context.Context, actorID, componentName string, spec AlarmSpec) (*Alarm, error)
+	ClearAlarm(ctx context.Context, actorID, componentName, alarmID string) error
+	ListAlarms(ctx context.Context, componentName string, includeCleared bool) ([]Alarm, error)
+	// The health reads: the current verdict, why it is what it is, and the
+	// recorded transitions at or after since (a zero since is the whole history).
+	SystemHealth(ctx context.Context, systemName string, since time.Time, read scope.Set) (*HealthReport, error)
+	LocationHealth(ctx context.Context, locationName string, since time.Time, read scope.Set) (*HealthReport, error)
 
 	// The tag tier: the governed key vocabulary and the per-entity value
 	// bindings. Minting a key (tag:create) is a tenant-wide governance action;

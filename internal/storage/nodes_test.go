@@ -125,7 +125,7 @@ func TestNodeGateway(t *testing.T) {
 	}
 
 	// Worklist: seed a component + interface + enabled task bound to node-a.
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp-1", ComponentType: "display"}, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp-1"}, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
 	conn, err := pgx.Connect(ctx, dsn)
@@ -333,7 +333,7 @@ func TestDeleteNode(t *testing.T) {
 	}
 	all := scope.Set{All: true}
 
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "dsp-1", ComponentType: "dsp"}, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "dsp-1"}, all); err != nil {
 		t.Fatalf("component: %v", err)
 	}
 	node, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-del"}, all)

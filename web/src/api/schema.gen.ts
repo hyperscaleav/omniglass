@@ -288,7 +288,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/component-makes": {
+    "/capabilities": {
         parameters: {
             query?: never;
             header?: never;
@@ -296,23 +296,23 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List component makes
-         * @description Lists the component_make registry, ordered alphabetically by display name. Populates the make picker on the component_model form. Gated by make:read.
+         * List capabilities
+         * @description Lists the capability registry, ordered alphabetically by display name. Populates the capability picker on the product form. Gated by capability:read.
          */
-        get: operations["list-component-makes"];
+        get: operations["list-capabilities"];
         put?: never;
         /**
-         * Create a component make
-         * @description Creates a custom (non-official) component_make. Gated by make:create.
+         * Create a capability
+         * @description Creates a custom (non-official) capability. Gated by capability:create.
          */
-        post: operations["create-component-make"];
+        post: operations["create-capability"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/component-makes/{id}": {
+    "/capabilities/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -320,24 +320,24 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get a component make
-         * @description Fetches a component_make by id. Gated by make:read.
+         * Get a capability
+         * @description Fetches a capability by id. Gated by capability:read.
          */
-        get: operations["get-component-make"];
+        get: operations["get-capability"];
         put?: never;
         post?: never;
         /**
-         * Delete a component make
-         * @description Deletes a custom component_make, refused if official (422). Gated by make:delete.
+         * Delete a capability
+         * @description Deletes a custom capability, refused if official (422). Gated by capability:delete.
          */
-        delete: operations["delete-component-make"];
+        delete: operations["delete-capability"];
         options?: never;
         head?: never;
         /**
-         * Update a component make
-         * @description Patches a custom component_make's display_name, icon, support_phone, or website. Official makes are read-only (422). Gated by make:update.
+         * Update a capability
+         * @description Patches a custom capability's display_name. Official capabilities are read-only (422). Gated by capability:update.
          */
-        patch: operations["update-component-make"];
+        patch: operations["update-capability"];
         trace?: never;
     };
     "/components": {
@@ -380,16 +380,104 @@ export interface paths {
         post?: never;
         /**
          * Delete a component
-         * @description Deletes a component, refused while it still has child components. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.
+         * @description Deletes a component, refused (409) while it still has child components or is still referenced elsewhere, such as by a system role it staffs. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.
          */
         delete: operations["delete-component"];
         options?: never;
         head?: never;
         /**
          * Update a component
-         * @description Patches a component's display_name or component_type. Gated by component:update; read and update scopes drive the 404 versus 403 split.
+         * @description Patches a component's technical name or display_name. Gated by component:update; read and update scopes drive the 404 versus 403 split.
          */
         patch: operations["update-component"];
+        trace?: never;
+    };
+    "/components/{name}/alarms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a component's alarms
+         * @description What is currently wrong with this component, newest first, each with the capabilities it degrades. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+         */
+        get: operations["list-component-alarms"];
+        put?: never;
+        /**
+         * Raise an alarm on a component
+         * @description Records a condition on this component and the capabilities it degrades, then recomputes health in the same transaction: any role requiring a degraded capability can no longer be filled by this component, and its system and location verdicts move with it. An unknown capability is a 422. Gated by component:update; an out-of-scope component is a non-disclosing 404.
+         */
+        post: operations["raise-component-alarm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/components/{name}/alarms/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Clear an alarm
+         * @description Marks the alarm cleared and recomputes health in the same transaction, so the recovery is recorded as a transition at the moment it happened. The row is kept: what was wrong and when outlives the fix. Clearing an alarm that is already cleared or does not exist is a 404. Gated by component:update; an out-of-scope component is a non-disclosing 404.
+         */
+        delete: operations["clear-component-alarm"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/components/{name}/capabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a component's effective capabilities
+         * @description What this component actually provides: the capabilities its product declares, plus the ones the component adds, minus the ones it suppresses. This is the set the role-assignment guard checks, so a productless component that declares its own can still be staffed. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+         */
+        get: operations["list-component-capabilities"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/components/{name}/capabilities/{capability}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Declare a capability on a component
+         * @description Records this component's own fact about a capability: present true adds one its product does not claim, present false suppresses one it does. Idempotent. An unknown capability is a 422; an unknown or out-of-scope component is a non-disclosing 404 (the component is resolved in scope first). Gated by component:update.
+         */
+        put: operations["set-component-capability"];
+        post?: never;
+        /**
+         * Clear a capability declaration on a component
+         * @description Removes the component's own fact about the capability, so it falls back to whatever its product declares. Clearing a fact the component never declared is a 404. Gated by component:update; an out-of-scope component is a non-disclosing 404.
+         */
+        delete: operations["clear-component-capability"];
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/components/{name}/effective-tags": {
@@ -412,7 +500,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/components/{name}/fields": {
+    "/components/{name}/events": {
         parameters: {
             query?: never;
             header?: never;
@@ -420,17 +508,77 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List a component's effective fields
-         * @description Each field defined on the component's type, resolved to the set literal or the type default (is_set marks the override). Gated by field:read; the component must be in the caller's field read scope.
+         * List a component's recent events
+         * @description Returns the component's recent log occurrences (the log-kind sink), newest first, bounded to the last 24 hours. Gated by component:read; an out-of-scope component is a non-disclosing 404.
          */
-        get: operations["list-effective-fields"];
+        get: operations["list-component-events"];
         put?: never;
-        /**
-         * Set a field value on a component
-         * @description Sets a literal for a field defined on the component's type, validated against its data_type. Idempotent: the first set creates the value, a later set patches it in place. Gated by field:create; the component must be in the caller's field create scope.
-         */
-        post: operations["set-field-value"];
+        post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/components/{name}/memberships": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the systems a component is in
+         * @description The systems this component is bound into, ordered by name. A component may belong to several: a rack DSP serving three rooms is a member of all three, and each of them depends on it. Exactly one membership may be marked primary, the default for a question asked without a system in hand. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+         */
+        get: operations["list-component-memberships"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/components/{name}/properties": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a component's effective properties
+         * @description Every property the component's product declares, resolved to the component's own value or the contract default (is_set marks the override), plus any property set directly on the component (from_contract false). Gated by component:read; an out-of-scope component is a non-disclosing 404.
+         */
+        get: operations["list-component-properties"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/components/{name}/properties/{property}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set a property on a component
+         * @description Declares a value for the property on this component, overriding the product contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by component:update; an out-of-scope component is a non-disclosing 404.
+         */
+        put: operations["set-component-property"];
+        post?: never;
+        /**
+         * Clear a property on a component
+         * @description Removes the component's declared value, so the property falls back to the product contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the component never set is a 404. Gated by component:update; an out-of-scope component is a non-disclosing 404.
+         */
+        delete: operations["clear-component-property"];
         options?: never;
         head?: never;
         patch?: never;
@@ -536,7 +684,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/field-definitions": {
+    "/drivers": {
         parameters: {
             query?: never;
             header?: never;
@@ -544,68 +692,48 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List field definitions
-         * @description Lists every field defined on any component_type (the catalog directory). Gated by field:read.
+         * List drivers
+         * @description Lists the driver registry, ordered alphabetically by display name. Populates the driver picker on the product form. Gated by driver:read.
          */
-        get: operations["list-field-definitions"];
+        get: operations["list-drivers"];
         put?: never;
         /**
-         * Define a field
-         * @description Declares a typed field on a component_type. The default, if given, is validated against data_type. Gated by field:create.
+         * Create a driver
+         * @description Creates a custom (non-official) driver. Gated by driver:create.
          */
-        post: operations["create-field-definition"];
+        post: operations["create-driver"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/field-definitions/{id}": {
+    "/drivers/{id}": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Get a driver
+         * @description Fetches a driver by id. Gated by driver:read.
+         */
+        get: operations["get-driver"];
         put?: never;
         post?: never;
         /**
-         * Delete a field definition
-         * @description Removes a field definition by id. Gated by field:delete.
+         * Delete a driver
+         * @description Deletes a custom driver, refused if official (422). Gated by driver:delete.
          */
-        delete: operations["delete-field-definition"];
+        delete: operations["delete-driver"];
         options?: never;
         head?: never;
         /**
-         * Update a field definition
-         * @description Replaces a field's data_type and default value, revalidating the default. component_type and name are fixed at creation. Gated by field:update.
+         * Update a driver
+         * @description Patches a custom driver's display_name or version. Official drivers are read-only (422). Gated by driver:update.
          */
-        patch: operations["update-field-definition"];
-        trace?: never;
-    };
-    "/field-values/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Delete a field value
-         * @description Clears a component's override for a field, reverting it to the type default. Gated by field:delete; read and delete scopes on the owning component drive the 404 versus 403 split.
-         */
-        delete: operations["delete-field-value"];
-        options?: never;
-        head?: never;
-        /**
-         * Update a field value
-         * @description Replaces a field value's literal, revalidated against the field's fixed data_type. Gated by field:update; read and update scopes on the owning component drive the 404 versus 403 split.
-         */
-        patch: operations["update-field-value"];
+        patch: operations["update-driver"];
         trace?: never;
     };
     "/files": {
@@ -748,6 +876,50 @@ export interface paths {
         patch: operations["update-interface"];
         trace?: never;
     };
+    "/location-types/{id}/properties": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a location type's declared properties
+         * @description Lists the location type's declared-property contract (what every location of the type exposes), ordered by property name, each with its optional default and required flag. Gated by type:read.
+         */
+        get: operations["list-location-type-properties"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/location-types/{id}/properties/{property}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Declare a property on a location type
+         * @description Declares a catalog property on a custom location type, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official location types are read-only (422); an unknown type is a 404 and a property the catalog does not know is a 422. Gated by type:update.
+         */
+        put: operations["set-location-type-property"];
+        post?: never;
+        /**
+         * Withdraw a property from a location type
+         * @description Removes one line from a custom location type's contract; locations of the type keep any value they set for it, now off-contract. A property the type does not declare is a 404, and an official type is read-only (422). Gated by type:delete.
+         */
+        delete: operations["delete-location-type-property"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/locations": {
         parameters: {
             query?: never;
@@ -788,7 +960,7 @@ export interface paths {
         post?: never;
         /**
          * Delete a location
-         * @description Deletes a location, refused while it still has child locations. Gated by location:delete; read and delete scopes drive the 404 versus 403 split.
+         * @description Deletes a location, refused (409) while it still has child locations or is still referenced elsewhere. Gated by location:delete; read and delete scopes drive the 404 versus 403 split.
          */
         delete: operations["delete-location"];
         options?: never;
@@ -798,6 +970,70 @@ export interface paths {
          * @description Patches a location's display_name, location_type, or parent (a move). Gated by location:update; the read and update scopes drive the 404 versus 403 split.
          */
         patch: operations["update-location"];
+        trace?: never;
+    };
+    "/locations/{name}/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read a location's health
+         * @description The location's current verdict, worst-wins over every system placed anywhere beneath it, with those systems and their verdicts as the drill-down (the system health read names the role, the capability, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.
+         */
+        get: operations["get-location-health"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/locations/{name}/properties": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a location's effective properties
+         * @description Every property the location's type declares, resolved to the location's own value or the contract default (is_set marks the override), plus any property set directly on the location (from_contract false). Gated by location:read; an out-of-scope location is a non-disclosing 404.
+         */
+        get: operations["list-location-properties"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/locations/{name}/properties/{property}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set a property on a location
+         * @description Declares a value for the property on this location, overriding the location type contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by location:update; an out-of-scope location is a non-disclosing 404.
+         */
+        put: operations["set-location-property"];
+        post?: never;
+        /**
+         * Clear a property on a location
+         * @description Removes the location's declared value, so the property falls back to the location type contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the location never set is a 404. Gated by location:update; an out-of-scope location is a non-disclosing 404.
+         */
+        delete: operations["clear-location-property"];
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/locations/{name}:listTags": {
@@ -1520,6 +1756,154 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/products": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List products
+         * @description Lists the product registry, ordered alphabetically by display name. Each product carries its vendor, driver, kind, and capabilities. Gated by product:read.
+         */
+        get: operations["list-products"];
+        put?: never;
+        /**
+         * Create a product
+         * @description Creates a custom (non-official) product and sets its capabilities. Gated by product:create.
+         */
+        post: operations["create-product"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a product
+         * @description Fetches a product by id, with its capabilities. Gated by product:read.
+         */
+        get: operations["get-product"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a product
+         * @description Deletes a custom product, refused if official (422) or still referenced by a component (409). Gated by product:delete.
+         */
+        delete: operations["delete-product"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a product
+         * @description Patches a custom product's display_name, vendor, driver, kind, or parent, and replaces its capabilities when provided. Official products are read-only (422). Gated by product:update.
+         */
+        patch: operations["update-product"];
+        trace?: never;
+    };
+    "/products/{id}/properties": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a product's declared properties
+         * @description Lists the product's declared-property contract (what every instance of the product exposes), ordered by property name, each with its optional default and required flag. Gated by product:read.
+         */
+        get: operations["list-product-properties"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/{id}/properties/{property}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Declare a property on a product
+         * @description Declares a catalog property on a custom product, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official products are read-only (422), and an unknown product or property is a 422. Gated by product:update.
+         */
+        put: operations["set-product-property"];
+        post?: never;
+        /**
+         * Withdraw a property from a product
+         * @description Removes one line from a custom product's contract; instances keep any value they set for it, now off-contract. A property the product does not declare is a 404, and an official product is read-only (422). Gated by product:delete.
+         */
+        delete: operations["delete-product-property"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/properties": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List properties
+         * @description Lists every registered property (official and custom). The catalog is estate-wide reference data. Gated by property:read.
+         */
+        get: operations["list-property"];
+        put?: never;
+        /**
+         * Create a property
+         * @description Registers a custom property (official=false). The name must be a valid property key. Gated by property:create.
+         */
+        post: operations["create-property"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/properties/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a property
+         * @description Returns one property by name. Gated by property:read.
+         */
+        get: operations["get-property"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a property
+         * @description Removes a custom property by name. Official properties are read-only. Gated by property:delete.
+         */
+        delete: operations["delete-property"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a property
+         * @description Patches a custom property's label, description, unit, or validation (a nil field is unchanged). Data type and kind are fixed at creation. Official properties are read-only. Gated by property:update.
+         */
+        patch: operations["update-property"];
+        trace?: never;
+    };
     "/roles": {
         parameters: {
             query?: never;
@@ -1712,6 +2096,146 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/standards": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List standards
+         * @description Lists the standard catalog, ordered alphabetically by display name. A standard is the blueprint a system conforms to. Gated by standard:read.
+         */
+        get: operations["list-standards"];
+        put?: never;
+        /**
+         * Create a standard
+         * @description Creates a custom (non-official) standard, optionally as a variant of another. Gated by standard:create.
+         */
+        post: operations["create-standard"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/standards/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a standard
+         * @description Fetches a standard by id. Gated by standard:read.
+         */
+        get: operations["get-standard"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a standard
+         * @description Deletes a custom standard, refused if official (422) or still referenced by a system (409). Gated by standard:delete.
+         */
+        delete: operations["delete-standard"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a standard
+         * @description Patches a custom standard's display_name or parent. Official standards are read-only (422). Gated by standard:update.
+         */
+        patch: operations["update-standard"];
+        trace?: never;
+    };
+    "/standards/{id}/properties": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a standard's declared properties
+         * @description Lists the standard's declared-property contract (what every system conforming to it exposes), ordered by property name, each with its optional default and required flag. Gated by standard:read.
+         */
+        get: operations["list-standard-properties"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/standards/{id}/properties/{property}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Declare a property on a standard
+         * @description Declares a catalog property on a custom standard, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official standards are read-only (422); an unknown standard is a 404 and a property the catalog does not know is a 422. Gated by standard:update.
+         */
+        put: operations["set-standard-property"];
+        post?: never;
+        /**
+         * Withdraw a property from a standard
+         * @description Removes one line from a custom standard's contract; conforming systems keep any value they set for it, now off-contract. A property the standard does not declare is a 404, and an official standard is read-only (422). Gated by standard:delete.
+         */
+        delete: operations["delete-standard-property"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/standards/{id}/roles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a standard's declared roles
+         * @description Lists the roles this standard declares (every conforming system inherits them live), ordered by name, each with its quorum and the capabilities a component must provide to fill it. Gated by standard:read.
+         */
+        get: operations["list-standard-roles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/standards/{id}/roles/{role}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Declare a role on a standard
+         * @description Declares a role every conforming system needs filled, or revises it in place (the role is addressed by name, so the write is idempotent). The capability list replaces the required set wholesale. An unknown standard or capability is a 422. Gated by standard:update.
+         */
+        put: operations["set-standard-role"];
+        post?: never;
+        /**
+         * Withdraw a role from a standard
+         * @description Removes the role from the standard, and with it every assignment conforming systems made to it. A role the standard does not declare is a 404. Gated by standard:delete.
+         */
+        delete: operations["delete-standard-role"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/systems": {
         parameters: {
             query?: never;
@@ -1752,16 +2276,212 @@ export interface paths {
         post?: never;
         /**
          * Delete a system
-         * @description Deletes a system, refused while it still has child systems. Gated by system:delete; read and delete scopes drive the 404 versus 403 split.
+         * @description Deletes a system, refused (409) while it still has child systems or is still referenced elsewhere. Gated by system:delete; read and delete scopes drive the 404 versus 403 split.
          */
         delete: operations["delete-system"];
         options?: never;
         head?: never;
         /**
          * Update a system
-         * @description Patches a system's display_name or system_type. Gated by system:update; read and update scopes drive the 404 versus 403 split.
+         * @description Patches a system's display_name or standard. An omitted standard_id leaves it unchanged; an explicit empty string clears it, converting the system to a one-off. Gated by system:update; read and update scopes drive the 404 versus 403 split.
          */
         patch: operations["update-system"];
+        trace?: never;
+    };
+    "/systems/{name}/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read a system's health
+         * @description The system's current verdict and why: every role it needs filled, whether it is impaired, what an impaired role means for the system (impact), and for an impaired role the required capabilities an alarm has taken away plus the alarms that took them. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+         */
+        get: operations["get-system-health"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/systems/{name}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the components in a system
+         * @description The components bound into this system, ordered by name. Membership is what a role attaches to: every component staffing a role here is a member, and a member may also carry no role at all (a power conditioner is in the room without filling a declared slot). Gated by system:read; an out-of-scope system is a non-disclosing 404.
+         */
+        get: operations["list-system-members"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/systems/{name}/members/{component}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put a component in a system
+         * @description Binds this component into the system. Idempotent. A component's first membership becomes its primary with nobody asking, so a component in exactly one system never has to think about the concept; a later membership does not take that default away. Gated by system:update; an out-of-scope system is a non-disclosing 404.
+         */
+        put: operations["add-system-member"];
+        post?: never;
+        /**
+         * Take a component out of a system
+         * @description Unbinds this component from the system. Refused with a 409 while it still fills a role here, since removing it would leave the system staffed by a non-member: unassign the role first. A component that was not a member is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.
+         */
+        delete: operations["remove-system-member"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/systems/{name}/members/{component}:setPrimary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Make this the component's default system
+         * @description Moves the component's default to this membership. The default answers questions asked without a system in hand; it does not decide anything that names a system explicitly. A component that was not a member here is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.
+         */
+        post: operations["set-primary-member"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/systems/{name}/properties": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a system's effective properties
+         * @description Every property the system's standard declares, resolved to the system's own value or the contract default (is_set marks the override), plus any property set directly on the system (from_contract false). Gated by system:read; an out-of-scope system is a non-disclosing 404.
+         */
+        get: operations["list-system-properties"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/systems/{name}/properties/{property}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set a property on a system
+         * @description Declares a value for the property on this system, overriding the standard contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by system:update; an out-of-scope system is a non-disclosing 404.
+         */
+        put: operations["set-system-property"];
+        post?: never;
+        /**
+         * Clear a property on a system
+         * @description Removes the system's declared value, so the property falls back to the standard contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the system never set is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.
+         */
+        delete: operations["clear-system-property"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/systems/{name}/roles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a system's effective roles
+         * @description Every role this system needs filled: those its standard declares (from_standard true) plus those declared directly on it, each with the capabilities it requires, the components filling it, and how many more it wants before quorum (understaffed). A one-off system shows only its own. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+         */
+        get: operations["list-system-roles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/systems/{name}/roles/{role}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Declare a role on a system
+         * @description Declares a role directly on this system (how a one-off system gets roles at all, and how a conforming one adds what its standard does not cover), or revises it in place. The capability list replaces the required set wholesale. Gated by system:update; an out-of-scope system is a non-disclosing 404.
+         */
+        put: operations["set-system-role"];
+        post?: never;
+        /**
+         * Withdraw a role from a system
+         * @description Removes a role declared on this system, and with it every assignment to it. A role the system does not declare itself is a 404 (a role inherited from its standard is withdrawn on the standard, not here). Gated by system:update; an out-of-scope system is a non-disclosing 404.
+         */
+        delete: operations["delete-system-role"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/systems/{name}/roles/{role}/assignments/{component}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Assign a component to a role
+         * @description Puts this component in the role for this system. Refused with a 422 naming the missing capabilities when the component does not provide everything the role requires (its product's capabilities, plus what it adds, minus what it suppresses). Idempotent. Gated by system:update; an out-of-scope system is a non-disclosing 404.
+         */
+        put: operations["assign-system-role"];
+        post?: never;
+        /**
+         * Unassign a component from a role
+         * @description Takes this component out of the role, leaving the role understaffed until another fills it. A component that was not filling the role is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.
+         */
+        delete: operations["unassign-system-role"];
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/systems/{name}:listTags": {
@@ -1992,54 +2712,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/types/component": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List component types
-         * @description Lists the component_type registry, ordered alphabetically by display name. Populates the type picker on the component form. Gated by type:read.
-         */
-        get: operations["list-component-types"];
-        put?: never;
-        /**
-         * Create a component type
-         * @description Creates a custom (non-official) component_type. Gated by type:create.
-         */
-        post: operations["create-component-type"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/types/component/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Delete a component type
-         * @description Deletes a custom component_type, refused if official (422) or referenced by a component (409). Gated by type:delete.
-         */
-        delete: operations["delete-component-type"];
-        options?: never;
-        head?: never;
-        /**
-         * Update a component type
-         * @description Patches a custom component_type's display_name. Official types are read-only (422). Gated by type:update.
-         */
-        patch: operations["update-component-type"];
-        trace?: never;
-    };
     "/types/location": {
         parameters: {
             query?: never;
@@ -2108,54 +2780,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/types/system": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List system types
-         * @description Lists the system_type registry, ordered alphabetically by display name. Populates the type picker on the system form. Gated by type:read.
-         */
-        get: operations["list-system-types"];
-        put?: never;
-        /**
-         * Create a system type
-         * @description Creates a custom (non-official) system_type. Gated by type:create.
-         */
-        post: operations["create-system-type"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/types/system/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Delete a system type
-         * @description Deletes a custom system_type, refused if official (422) or referenced by a system (409). Gated by type:delete.
-         */
-        delete: operations["delete-system-type"];
-        options?: never;
-        head?: never;
-        /**
-         * Update a system type
-         * @description Patches a custom system_type's display_name. Official types are read-only (422). Gated by type:update.
-         */
-        patch: operations["update-system-type"];
-        trace?: never;
-    };
     "/variables": {
         parameters: {
             query?: never;
@@ -2204,6 +2828,58 @@ export interface paths {
         patch: operations["update-variable"];
         trace?: never;
     };
+    "/vendors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List vendors
+         * @description Lists the vendor registry, ordered alphabetically by display name. Populates the vendor picker on the product form. Gated by vendor:read.
+         */
+        get: operations["list-vendors"];
+        put?: never;
+        /**
+         * Create a vendor
+         * @description Creates a custom (non-official) vendor. Gated by vendor:create.
+         */
+        post: operations["create-vendor"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/vendors/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a vendor
+         * @description Fetches a vendor by id. Gated by vendor:read.
+         */
+        get: operations["get-vendor"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a vendor
+         * @description Deletes a custom vendor, refused if official (422). Gated by vendor:delete.
+         */
+        delete: operations["delete-vendor"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a vendor
+         * @description Patches a custom vendor's display_name, kind, icon, support_phone, or website. Official vendors are read-only (422). Gated by vendor:update.
+         */
+        patch: operations["update-vendor"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2217,6 +2893,29 @@ export interface components {
             readonly $schema?: string;
             /** @description The principal to add to the group */
             principal_id: string;
+        };
+        AlarmBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/AlarmBody.json
+             */
+            readonly $schema?: string;
+            active: boolean;
+            /** @description The capabilities this alarm degrades; empty means it reaches no role */
+            capabilities: string[] | null;
+            /**
+             * Format: date-time
+             * @description Null while the alarm is active
+             */
+            cleared_at?: string;
+            component: string;
+            id: string;
+            message: string;
+            /** Format: date-time */
+            raised_at: string;
+            /** @description info, warning, or critical */
+            severity: string;
         };
         AuditEventBody: {
             actor?: string;
@@ -2256,6 +2955,17 @@ export interface components {
             readonly $schema?: string;
             /** @description The profile picture as a base64-encoded 256x256 JPEG */
             image_base64: string;
+        };
+        CapabilityBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CapabilityBody.json
+             */
+            readonly $schema?: string;
+            display_name: string;
+            id: string;
+            official: boolean;
         };
         ChangePasswordInputBody: {
             /**
@@ -2326,7 +3036,6 @@ export interface components {
             readonly $schema?: string;
             /** @description The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces. */
             actions?: string[] | null;
-            component_type: string;
             display_name?: string;
             /** @description The resolved effective tags (key -> winning value) that cascade onto this component; for the Tags column. Provenance is in the effective-tags detail view. */
             effective_tags?: {
@@ -2336,32 +3045,41 @@ export interface components {
             location_id?: string;
             name: string;
             parent_id?: string;
+            /** @description The product (catalog SKU) this component is an instance of, if any. */
+            product_id?: string;
             system_id?: string;
         };
-        ComponentMakeBody: {
+        ComponentCapabilitiesOutputBody: {
             /**
              * Format: uri
              * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/ComponentMakeBody.json
+             * @example /api/v1/schemas/ComponentCapabilitiesOutputBody.json
              */
             readonly $schema?: string;
-            display_name: string;
-            icon?: string;
-            id: string;
-            official: boolean;
-            support_phone?: string;
-            website?: string;
+            /** @description The resolved set: the product's, plus the component's additions, minus its suppressions */
+            capabilities: string[] | null;
+            component: string;
         };
-        ComponentTypeBody: {
+        ComponentPropertiesOutputBody: {
             /**
              * Format: uri
              * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/ComponentTypeBody.json
+             * @example /api/v1/schemas/ComponentPropertiesOutputBody.json
+             */
+            readonly $schema?: string;
+            component: string;
+            properties: components["schemas"]["EffectivePropertyBody"][] | null;
+        };
+        CreateCapabilityInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateCapabilityInputBody.json
              */
             readonly $schema?: string;
             display_name: string;
+            /** @description Globally unique capability id */
             id: string;
-            official: boolean;
         };
         CreateComponentInputBody: {
             /**
@@ -2370,8 +3088,6 @@ export interface components {
              * @example /api/v1/schemas/CreateComponentInputBody.json
              */
             readonly $schema?: string;
-            /** @description A component_type id */
-            component_type: string;
             display_name?: string;
             /** @description Location name this component is placed at */
             location?: string;
@@ -2379,56 +3095,22 @@ export interface components {
             name: string;
             /** @description Parent component name; omit for a root component */
             parent?: string;
+            /** @description Product id (catalog SKU) this component is an instance of */
+            product?: string;
             /** @description Primary system name this component belongs to */
             system?: string;
         };
-        CreateComponentMakeInputBody: {
+        CreateDriverInputBody: {
             /**
              * Format: uri
              * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/CreateComponentMakeInputBody.json
+             * @example /api/v1/schemas/CreateDriverInputBody.json
              */
             readonly $schema?: string;
             display_name: string;
-            icon?: string;
-            /** @description Globally unique make id */
+            /** @description Globally unique driver id */
             id: string;
-            support_phone?: string;
-            website?: string;
-        };
-        CreateComponentTypeInputBody: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/CreateComponentTypeInputBody.json
-             */
-            readonly $schema?: string;
-            display_name: string;
-            /** @description Globally unique type id */
-            id: string;
-        };
-        CreateFieldDefinitionInputBody: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/CreateFieldDefinitionInputBody.json
-             */
-            readonly $schema?: string;
-            /** @description The component_type this field is defined on */
-            component_type: string;
-            /**
-             * @description The declared value type
-             * @enum {string}
-             */
-            data_type: "string" | "int" | "float" | "bool" | "json";
-            /** @description Optional type-level default, validated against data_type */
-            default_value?: unknown;
-            /** @description Optional human label; falls back to name when unset */
-            display_name?: string;
-            /** @description The field name; unique per component_type */
-            name: string;
-            /** @description Whether every component of this type must set the field; defaults to false */
-            required?: boolean;
+            version?: string;
         };
         CreateFileInputBody: {
             /**
@@ -2609,6 +3291,54 @@ export interface components {
             /** @description Unique sign-in name (lowercase letters, digits, and . _ -) */
             username: string;
         };
+        CreateProductInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateProductInputBody.json
+             */
+            readonly $schema?: string;
+            capabilities?: string[] | null;
+            display_name: string;
+            driver_id?: string;
+            /** @description Globally unique product id */
+            id: string;
+            /**
+             * @default device
+             * @enum {string}
+             */
+            kind: "device" | "app" | "service" | "vm";
+            parent_product_id?: string;
+            vendor_id?: string;
+        };
+        CreatePropertyInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreatePropertyInputBody.json
+             */
+            readonly $schema?: string;
+            /**
+             * @description The value type
+             * @enum {string}
+             */
+            data_type: "string" | "int" | "float" | "bool" | "json";
+            /** @description What the property means */
+            description?: string;
+            /** @description A human label */
+            display_name?: string;
+            /**
+             * @description The observed kind; omit for a declared-only property
+             * @enum {string}
+             */
+            kind?: "metric" | "state" | "log";
+            /** @description The property name (lowercase, dot-hierarchied) */
+            name: string;
+            /** @description A display unit (observed properties) */
+            unit?: string;
+            /** @description A JSON Schema fragment constraining the value */
+            validation?: unknown;
+        };
         CreateSecretInputBody: {
             /**
              * Format: uri
@@ -2634,6 +3364,19 @@ export interface components {
             /** @description A secret_type id */
             secret_type: string;
         };
+        CreateStandardInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateStandardInputBody.json
+             */
+            readonly $schema?: string;
+            display_name: string;
+            /** @description Globally unique standard id */
+            id: string;
+            /** @description A standard this one is a variant of */
+            parent_standard_id?: string;
+        };
         CreateSystemInputBody: {
             /**
              * Format: uri
@@ -2648,19 +3391,8 @@ export interface components {
             name: string;
             /** @description Parent system name; omit for a root system */
             parent?: string;
-            /** @description A system_type id */
-            system_type: string;
-        };
-        CreateSystemTypeInputBody: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/CreateSystemTypeInputBody.json
-             */
-            readonly $schema?: string;
-            display_name: string;
-            /** @description Globally unique type id */
-            id: string;
+            /** @description A standard id; omit for a one-off system that conforms to none */
+            standard_id?: string;
         };
         CreateTagInputBody: {
             /**
@@ -2702,6 +3434,25 @@ export interface components {
              */
             value_type: "string" | "int" | "float" | "bool" | "json";
         };
+        CreateVendorInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateVendorInputBody.json
+             */
+            readonly $schema?: string;
+            display_name: string;
+            icon?: string;
+            /** @description Globally unique vendor id */
+            id: string;
+            /**
+             * @default manufacturer
+             * @enum {string}
+             */
+            kind: "manufacturer" | "integrator" | "developer";
+            support_phone?: string;
+            website?: string;
+        };
         DownloadFileOutputBody: {
             /**
              * Format: uri
@@ -2714,33 +3465,77 @@ export interface components {
             content_type: string;
             name: string;
         };
-        EffectiveFieldBody: {
-            data_type: string;
-            /** @description The type-level default, shape given by data_type; the drill-in's type-default step. Omitted when the definition has no default */
-            default_value?: unknown;
-            /** @description Optional human label; omitted when unset */
-            display_name?: string;
-            field_id: string;
-            /** @description True when the component overrides the type default */
-            is_set: boolean;
-            name: string;
-            /** @description Whether every component of this type must set the field */
-            required: boolean;
-            /** @description The component's override; omitted when the field is unset */
-            set_value?: unknown;
-            /** @description The effective value: the set literal, or the type default when unset */
-            value: unknown;
-            /** @description The field_value id when set; the id to DELETE to clear the override. Omitted when the field is unset */
-            value_id?: string;
-        };
-        EffectiveFieldsOutputBody: {
+        DriverBody: {
             /**
              * Format: uri
              * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/EffectiveFieldsOutputBody.json
+             * @example /api/v1/schemas/DriverBody.json
              */
             readonly $schema?: string;
-            fields: components["schemas"]["EffectiveFieldBody"][] | null;
+            display_name: string;
+            id: string;
+            official: boolean;
+            version?: string;
+        };
+        EffectivePropertyBody: {
+            /** @description The declared value type, from the property catalog */
+            data_type: string;
+            /** @description The contract default; omitted when the contract sets none */
+            default_value?: unknown;
+            /** @description The property's human label; omitted when unset */
+            display_name?: string;
+            /** @description True when the component's product declares the property; false for one set directly on the component */
+            from_contract: boolean;
+            /** @description True when the component overrides the contract default */
+            is_set: boolean;
+            /** @description The catalog property name */
+            property_name: string;
+            /** @description Whether the product contract requires a value; always false off-contract */
+            required: boolean;
+            /** @description The component's override; omitted when the property is unset */
+            set_value?: unknown;
+            /** @description The effective value: the override, or the contract default when unset */
+            value?: unknown;
+            /** @description The stored value's id when set; omitted when the property is unset */
+            value_id?: string;
+        };
+        EffectivePropertyValueBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/EffectivePropertyValueBody.json
+             */
+            readonly $schema?: string;
+            component: string;
+            property_name: string;
+            /** @description The stored value, shape given by the property's data_type */
+            value: unknown;
+            /** @description The stored value's id */
+            value_id: string;
+        };
+        EffectiveRoleBody: {
+            /**
+             * Format: int64
+             * @description How many components fill the role
+             */
+            assigned: number;
+            /** @description The component names filling this role in this system */
+            assigned_to: string[] | null;
+            /** @description The capabilities a component must ALL provide to fill it */
+            capabilities: string[] | null;
+            display_name: string;
+            /** @description True when the role is inherited from the system's standard; false when declared on the system */
+            from_standard: boolean;
+            /** @description What an impaired role means for its system: outage, degraded, or none */
+            impact: string;
+            name: string;
+            /** Format: int64 */
+            quorum: number;
+            /**
+             * Format: int64
+             * @description How many more the role wants before quorum; zero when staffed
+             */
+            understaffed: number;
         };
         EffectiveTagsOutputBody: {
             /**
@@ -2840,36 +3635,52 @@ export interface components {
              */
             type: string;
         };
-        FieldDefinitionBody: {
+        EstateHealthOutputBody: {
             /**
              * Format: uri
              * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/FieldDefinitionBody.json
+             * @example /api/v1/schemas/EstateHealthOutputBody.json
              */
             readonly $schema?: string;
-            component_type: string;
-            data_type: string;
-            /** @description The type-level default, shape given by data_type; omitted when unset */
-            default_value?: unknown;
-            /** @description Optional human label; the raw name is the key. Omitted when unset */
-            display_name?: string;
-            id: string;
-            name: string;
-            /** @description Whether every component of this type must set the field */
-            required: boolean;
+            owner: string;
+            owner_kind: string;
+            /** @description The contributing roles; empty for a location */
+            roles: components["schemas"]["HealthRoleBody"][] | null;
+            /** @description The systems beneath a location with their verdicts; empty for a system */
+            systems: components["schemas"]["HealthSystemBody"][] | null;
+            /** @description The recorded edges over the window, oldest first: one entry per change, never a sample */
+            transitions: components["schemas"]["HealthTransitionBody"][] | null;
+            /** @description healthy, degraded, or outage: the rollup of the roles or systems served beside it */
+            verdict: string;
         };
-        FieldValueBody: {
+        EventBody: {
+            /** @description Structured attributes, when the occurrence carried a JSON payload */
+            attributes?: unknown;
+            /** @description The series discriminator (e.g. the interface), when set */
+            instance?: string;
+            /** @description The property name of the log (e.g. syslog.line) */
+            key: string;
+            /** @description The occurrence message */
+            message: string;
+            /** @description The lineage of the occurrence (observed for direct collection) */
+            provenance: string;
+            /** @description The interface type that produced the occurrence */
+            source?: string;
+            /**
+             * Format: date-time
+             * @description When the occurrence was observed
+             */
+            ts: string;
+        };
+        EventsOutputBody: {
             /**
              * Format: uri
              * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/FieldValueBody.json
+             * @example /api/v1/schemas/EventsOutputBody.json
              */
             readonly $schema?: string;
-            component_id: string;
-            field_id: string;
-            id: string;
-            /** @description The literal, shape given by the field's data_type */
-            value: unknown;
+            component: string;
+            events: components["schemas"]["EventBody"][] | null;
         };
         FileBody: {
             /**
@@ -2942,6 +3753,15 @@ export interface components {
             member_count: number;
             name: string;
         };
+        HealthAlarmBody: {
+            capabilities: string[] | null;
+            component: string;
+            id: string;
+            message: string;
+            /** Format: date-time */
+            raised_at: string;
+            severity: string;
+        };
         HealthOutputBody: {
             /**
              * Format: uri
@@ -2953,6 +3773,37 @@ export interface components {
             db: string;
             /** @description Overall health: ok when all legs pass, degraded otherwise */
             status: string;
+        };
+        HealthRoleBody: {
+            /** @description The active alarms that degraded them */
+            alarms: components["schemas"]["HealthAlarmBody"][] | null;
+            assigned_to: string[] | null;
+            /** @description The required capabilities an active alarm has taken away; empty when the role is merely short-staffed */
+            degraded: string[] | null;
+            display_name: string;
+            /** @description What an impaired role means for its system: outage, degraded, or none */
+            impact: string;
+            /** @description True when satisfying is below quorum */
+            impaired: boolean;
+            name: string;
+            /** Format: int64 */
+            quorum: number;
+            /** @description The capabilities a component must ALL provide to fill this role */
+            required: string[] | null;
+            /**
+             * Format: int64
+             * @description How many assigned components can currently fill the role
+             */
+            satisfying: number;
+        };
+        HealthSystemBody: {
+            name: string;
+            verdict: string;
+        };
+        HealthTransitionBody: {
+            /** Format: date-time */
+            ts: string;
+            verdict: string;
         };
         HumanBody: {
             /**
@@ -3046,23 +3897,34 @@ export interface components {
              */
             open_edit: string;
         };
-        ListComponentMakesOutputBody: {
+        ListAlarmsOutputBody: {
             /**
              * Format: uri
              * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/ListComponentMakesOutputBody.json
+             * @example /api/v1/schemas/ListAlarmsOutputBody.json
              */
             readonly $schema?: string;
-            makes: components["schemas"]["ComponentMakeBody"][] | null;
+            alarms: components["schemas"]["AlarmBody"][] | null;
+            component: string;
         };
-        ListComponentTypesOutputBody: {
+        ListCapabilitiesOutputBody: {
             /**
              * Format: uri
              * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/ListComponentTypesOutputBody.json
+             * @example /api/v1/schemas/ListCapabilitiesOutputBody.json
              */
             readonly $schema?: string;
-            component_types: components["schemas"]["ComponentTypeBody"][] | null;
+            capabilities: components["schemas"]["CapabilityBody"][] | null;
+        };
+        ListComponentMembershipsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListComponentMembershipsOutputBody.json
+             */
+            readonly $schema?: string;
+            component: string;
+            memberships: components["schemas"]["SystemMemberBody"][] | null;
         };
         ListComponentsOutputBody: {
             /**
@@ -3073,14 +3935,14 @@ export interface components {
             readonly $schema?: string;
             components: components["schemas"]["ComponentBody"][] | null;
         };
-        ListFieldDefinitionsOutputBody: {
+        ListDriversOutputBody: {
             /**
              * Format: uri
              * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/ListFieldDefinitionsOutputBody.json
+             * @example /api/v1/schemas/ListDriversOutputBody.json
              */
             readonly $schema?: string;
-            field_definitions: components["schemas"]["FieldDefinitionBody"][] | null;
+            drivers: components["schemas"]["DriverBody"][] | null;
         };
         ListFilesOutputBody: {
             /**
@@ -3117,6 +3979,15 @@ export interface components {
              */
             readonly $schema?: string;
             interfaces: components["schemas"]["InterfaceBody"][] | null;
+        };
+        ListLocationTypePropertiesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListLocationTypePropertiesOutputBody.json
+             */
+            readonly $schema?: string;
+            properties: components["schemas"]["LocationTypePropertyBody"][] | null;
         };
         ListLocationTypesOutputBody: {
             /**
@@ -3181,6 +4052,33 @@ export interface components {
             readonly $schema?: string;
             principals: components["schemas"]["PrincipalBody"][] | null;
         };
+        ListProductPropertiesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListProductPropertiesOutputBody.json
+             */
+            readonly $schema?: string;
+            properties: components["schemas"]["ProductPropertyBody"][] | null;
+        };
+        ListProductsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListProductsOutputBody.json
+             */
+            readonly $schema?: string;
+            products: components["schemas"]["ProductBody"][] | null;
+        };
+        ListPropertiesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListPropertiesOutputBody.json
+             */
+            readonly $schema?: string;
+            properties: components["schemas"]["PropertyBody"][] | null;
+        };
         ListSecretTypesOutputBody: {
             /**
              * Format: uri
@@ -3199,14 +4097,52 @@ export interface components {
             readonly $schema?: string;
             secrets: components["schemas"]["SecretBody"][] | null;
         };
-        ListSystemTypesOutputBody: {
+        ListStandardPropertiesOutputBody: {
             /**
              * Format: uri
              * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/ListSystemTypesOutputBody.json
+             * @example /api/v1/schemas/ListStandardPropertiesOutputBody.json
              */
             readonly $schema?: string;
-            system_types: components["schemas"]["SystemTypeBody"][] | null;
+            properties: components["schemas"]["StandardPropertyBody"][] | null;
+        };
+        ListStandardRolesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListStandardRolesOutputBody.json
+             */
+            readonly $schema?: string;
+            roles: components["schemas"]["SystemRoleBody"][] | null;
+        };
+        ListStandardsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListStandardsOutputBody.json
+             */
+            readonly $schema?: string;
+            standards: components["schemas"]["StandardBody"][] | null;
+        };
+        ListSystemMembersOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListSystemMembersOutputBody.json
+             */
+            readonly $schema?: string;
+            members: components["schemas"]["SystemMemberBody"][] | null;
+            system: string;
+        };
+        ListSystemRolesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListSystemRolesOutputBody.json
+             */
+            readonly $schema?: string;
+            roles: components["schemas"]["EffectiveRoleBody"][] | null;
+            system: string;
         };
         ListSystemsOutputBody: {
             /**
@@ -3244,6 +4180,15 @@ export interface components {
             readonly $schema?: string;
             variables: components["schemas"]["VariableBody"][] | null;
         };
+        ListVendorsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListVendorsOutputBody.json
+             */
+            readonly $schema?: string;
+            vendors: components["schemas"]["VendorBody"][] | null;
+        };
         LocationBody: {
             /**
              * Format: uri
@@ -3263,6 +4208,30 @@ export interface components {
             name: string;
             parent_id?: string;
         };
+        LocationPropertiesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/LocationPropertiesOutputBody.json
+             */
+            readonly $schema?: string;
+            location: string;
+            properties: components["schemas"]["EffectivePropertyBody"][] | null;
+        };
+        LocationPropertyValueBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/LocationPropertyValueBody.json
+             */
+            readonly $schema?: string;
+            location: string;
+            property_name: string;
+            /** @description The stored value, shape given by the property's data_type */
+            value: unknown;
+            /** @description The stored value's id */
+            value_id: string;
+        };
         LocationTypeBody: {
             /**
              * Format: uri
@@ -3275,6 +4244,20 @@ export interface components {
             icon: string;
             id: string;
             official: boolean;
+        };
+        LocationTypePropertyBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/LocationTypePropertyBody.json
+             */
+            readonly $schema?: string;
+            /** @description The contract default, shape given by the property's data_type; omitted when the contract sets none */
+            default_value?: unknown;
+            /** @description The catalog property this location type declares */
+            property_name: string;
+            /** @description Whether every location of this type must set the property */
+            required: boolean;
         };
         LoginInputBody: {
             /**
@@ -3354,6 +4337,71 @@ export interface components {
         PrincipalStruct: {
             id: string;
             kind: string;
+        };
+        ProductBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ProductBody.json
+             */
+            readonly $schema?: string;
+            capabilities: string[] | null;
+            display_name: string;
+            driver_id?: string;
+            id: string;
+            /** @enum {string} */
+            kind: "device" | "app" | "service" | "vm";
+            official: boolean;
+            parent_product_id?: string;
+            vendor_id?: string;
+        };
+        ProductPropertyBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ProductPropertyBody.json
+             */
+            readonly $schema?: string;
+            /** @description The contract default, shape given by the property's data_type; omitted when the contract sets none */
+            default_value?: unknown;
+            /** @description The catalog property this product declares */
+            property_name: string;
+            /** @description Whether every instance of this product must set the property */
+            required: boolean;
+        };
+        PropertyBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/PropertyBody.json
+             */
+            readonly $schema?: string;
+            data_type: string;
+            description?: string;
+            display_name?: string;
+            kind?: string;
+            name: string;
+            official: boolean;
+            unit?: string;
+            /** @description A JSON Schema fragment constraining the value */
+            validation?: unknown;
+        };
+        RaiseAlarmInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/RaiseAlarmInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The capabilities this condition degrades; a role requiring one of them can no longer be filled by this component */
+            capabilities?: string[] | null;
+            /** @description What is wrong, for the operator reading it later */
+            message?: string;
+            /**
+             * @description How bad it is; critical puts the component itself in outage
+             * @enum {string}
+             */
+            severity: "info" | "warning" | "critical";
         };
         ReachHistoryBody: {
             /** Format: date-time */
@@ -3516,6 +4564,28 @@ export interface components {
             official: boolean;
             permissions: string[] | null;
         };
+        RoleSpecBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/RoleSpecBody.json
+             */
+            readonly $schema?: string;
+            /** @description The capabilities a component must ALL provide; replaces the required set wholesale */
+            capabilities?: string[] | null;
+            /** @description The role's human label; defaults to the role name */
+            display_name?: string;
+            /**
+             * @description What an impaired role means for its system; omit for degraded. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display
+             * @enum {string}
+             */
+            impact?: "outage" | "degraded" | "none";
+            /**
+             * Format: int64
+             * @description How many components must fill the role; omit for one
+             */
+            quorum?: number;
+        };
         RolesOutputBody: {
             /**
              * Format: uri
@@ -3608,16 +4678,80 @@ export interface components {
             /** @description The image (JPEG, PNG, or WebP), base64-encoded; normalized server-side to a 256x256 JPEG */
             image_base64: string;
         };
-        SetFieldValueInputBody: {
+        SetComponentCapabilityInputBody: {
             /**
              * Format: uri
              * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/SetFieldValueInputBody.json
+             * @example /api/v1/schemas/SetComponentCapabilityInputBody.json
              */
             readonly $schema?: string;
-            /** @description The field name, defined on the component's type */
-            field: string;
-            /** @description The literal, validated against the field's data_type */
+            /** @description True to add the capability, false to suppress one the product declares */
+            present: boolean;
+        };
+        SetComponentPropertyInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/SetComponentPropertyInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The value to declare, shape given by the property's data_type */
+            value: unknown;
+        };
+        SetLocationPropertyInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/SetLocationPropertyInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The value to declare, shape given by the property's data_type */
+            value: unknown;
+        };
+        SetLocationTypePropertyInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/SetLocationTypePropertyInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The contract default, validated against the property's data_type; omit for no default */
+            default_value?: unknown;
+            /** @description Whether every location of this type must set the property; defaults to false */
+            required?: boolean;
+        };
+        SetProductPropertyInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/SetProductPropertyInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The contract default, validated against the property's data_type; omit for no default */
+            default_value?: unknown;
+            /** @description Whether every instance of this product must set the property; defaults to false */
+            required?: boolean;
+        };
+        SetStandardPropertyInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/SetStandardPropertyInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The contract default, validated against the property's data_type; omit for no default */
+            default_value?: unknown;
+            /** @description Whether every system conforming to this standard must set the property; defaults to false */
+            required?: boolean;
+        };
+        SetSystemPropertyInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/SetSystemPropertyInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The value to declare, shape given by the property's data_type */
             value: unknown;
         };
         Settings: {
@@ -3650,6 +4784,32 @@ export interface components {
             };
             values: components["schemas"]["Settings"];
         };
+        StandardBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/StandardBody.json
+             */
+            readonly $schema?: string;
+            display_name: string;
+            id: string;
+            official: boolean;
+            parent_standard_id?: string;
+        };
+        StandardPropertyBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/StandardPropertyBody.json
+             */
+            readonly $schema?: string;
+            /** @description The contract default, shape given by the property's data_type; omitted when the contract sets none */
+            default_value?: unknown;
+            /** @description The catalog property this standard declares */
+            property_name: string;
+            /** @description Whether every system conforming to this standard must set the property */
+            required: boolean;
+        };
         SvcBody: {
             label: string;
         };
@@ -3669,20 +4829,73 @@ export interface components {
             };
             id: string;
             location_id?: string;
+            /**
+             * Format: int64
+             * @description How many components are bound into this system
+             */
+            member_count: number;
             name: string;
             parent_id?: string;
-            system_type: string;
+            /** @description The standard this system conforms to; omitted for a one-off system */
+            standard_id?: string;
         };
-        SystemTypeBody: {
+        SystemMemberBody: {
+            /** @description Technical name of the component */
+            component: string;
+            /** @description Whether this membership is the component's default when no system is given */
+            primary: boolean;
+            /** @description Technical name of the system */
+            system: string;
+            /**
+             * Format: int64
+             * @description How many systems this component belongs to in total; more than one means it is shared
+             */
+            system_count: number;
+        };
+        SystemPropertiesOutputBody: {
             /**
              * Format: uri
              * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/SystemTypeBody.json
+             * @example /api/v1/schemas/SystemPropertiesOutputBody.json
              */
             readonly $schema?: string;
+            properties: components["schemas"]["EffectivePropertyBody"][] | null;
+            system: string;
+        };
+        SystemPropertyValueBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/SystemPropertyValueBody.json
+             */
+            readonly $schema?: string;
+            property_name: string;
+            system: string;
+            /** @description The stored value, shape given by the property's data_type */
+            value: unknown;
+            /** @description The stored value's id */
+            value_id: string;
+        };
+        SystemRoleBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/SystemRoleBody.json
+             */
+            readonly $schema?: string;
+            /** @description The capabilities a component must ALL provide to fill it */
+            capabilities: string[] | null;
+            /** @description The role's human label */
             display_name: string;
-            id: string;
-            official: boolean;
+            /** @description What an impaired role means for its system: outage, degraded, or none */
+            impact: string;
+            /** @description The role's name within its owner (the address) */
+            name: string;
+            /**
+             * Format: int64
+             * @description How many components must fill the role
+             */
+            quorum: number;
         };
         TagBindingBody: {
             /**
@@ -3753,6 +4966,15 @@ export interface components {
              */
             theme: "omniglass-dark" | "omniglass-light";
         };
+        UpdateCapabilityInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/UpdateCapabilityInputBody.json
+             */
+            readonly $schema?: string;
+            display_name?: string;
+        };
         UpdateComponentInputBody: {
             /**
              * Format: uri
@@ -3760,60 +4982,19 @@ export interface components {
              * @example /api/v1/schemas/UpdateComponentInputBody.json
              */
             readonly $schema?: string;
-            component_type?: string;
             display_name?: string;
             /** @description A new globally unique technical name (rename) */
             name?: string;
         };
-        UpdateComponentMakeInputBody: {
+        UpdateDriverInputBody: {
             /**
              * Format: uri
              * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/UpdateComponentMakeInputBody.json
+             * @example /api/v1/schemas/UpdateDriverInputBody.json
              */
             readonly $schema?: string;
             display_name?: string;
-            icon?: string;
-            support_phone?: string;
-            website?: string;
-        };
-        UpdateComponentTypeInputBody: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/UpdateComponentTypeInputBody.json
-             */
-            readonly $schema?: string;
-            display_name?: string;
-        };
-        UpdateFieldDefinitionInputBody: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/UpdateFieldDefinitionInputBody.json
-             */
-            readonly $schema?: string;
-            /**
-             * @description The declared value type
-             * @enum {string}
-             */
-            data_type: "string" | "int" | "float" | "bool" | "json";
-            /** @description Optional type-level default, validated against data_type */
-            default_value?: unknown;
-            /** @description Optional human label; falls back to name when unset */
-            display_name?: string;
-            /** @description Whether every component of this type must set the field; defaults to false */
-            required?: boolean;
-        };
-        UpdateFieldValueInputBody: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/UpdateFieldValueInputBody.json
-             */
-            readonly $schema?: string;
-            /** @description The new literal, validated against the field's fixed data_type */
-            value: unknown;
+            version?: string;
         };
         UpdateGroupInputBody: {
             /**
@@ -3903,6 +5084,37 @@ export interface components {
             /** @description Sign-in name (lowercase letters, digits, and . _ -); renaming is safe */
             username?: string;
         };
+        UpdateProductInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/UpdateProductInputBody.json
+             */
+            readonly $schema?: string;
+            capabilities?: string[];
+            display_name?: string;
+            driver_id?: string;
+            /** @enum {string} */
+            kind?: "device" | "app" | "service" | "vm";
+            parent_product_id?: string;
+            vendor_id?: string;
+        };
+        UpdatePropertyInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/UpdatePropertyInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description What the property means */
+            description?: string;
+            /** @description A human label */
+            display_name?: string;
+            /** @description A display unit */
+            unit?: string;
+            /** @description A JSON Schema fragment (replaces wholesale) */
+            validation?: unknown;
+        };
         UpdateSecretInputBody: {
             /**
              * Format: uri
@@ -3915,6 +5127,16 @@ export interface components {
                 [key: string]: string;
             };
         };
+        UpdateStandardInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/UpdateStandardInputBody.json
+             */
+            readonly $schema?: string;
+            display_name?: string;
+            parent_standard_id?: string;
+        };
         UpdateSystemInputBody: {
             /**
              * Format: uri
@@ -3925,16 +5147,7 @@ export interface components {
             display_name?: string;
             /** @description A new globally unique technical name (rename) */
             name?: string;
-            system_type?: string;
-        };
-        UpdateSystemTypeInputBody: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/UpdateSystemTypeInputBody.json
-             */
-            readonly $schema?: string;
-            display_name?: string;
+            standard_id?: string;
         };
         UpdateTagInputBody: {
             /**
@@ -3960,6 +5173,20 @@ export interface components {
             /** @description The new value, validated against the fixed value_type */
             value: unknown;
         };
+        UpdateVendorInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/UpdateVendorInputBody.json
+             */
+            readonly $schema?: string;
+            display_name?: string;
+            icon?: string;
+            /** @enum {string} */
+            kind?: "manufacturer" | "integrator" | "developer";
+            support_phone?: string;
+            website?: string;
+        };
         VariableBody: {
             /**
              * Format: uri
@@ -3975,6 +5202,22 @@ export interface components {
             /** @description The value, shape given by value_type */
             value: unknown;
             value_type: string;
+        };
+        VendorBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/VendorBody.json
+             */
+            readonly $schema?: string;
+            display_name: string;
+            icon?: string;
+            id: string;
+            /** @enum {string} */
+            kind: "manufacturer" | "integrator" | "developer";
+            official: boolean;
+            support_phone?: string;
+            website?: string;
         };
     };
     responses: never;
@@ -4500,7 +5743,7 @@ export interface operations {
             };
         };
     };
-    "list-component-makes": {
+    "list-capabilities": {
         parameters: {
             query?: never;
             header?: never;
@@ -4515,7 +5758,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ListComponentMakesOutputBody"];
+                    "application/json": components["schemas"]["ListCapabilitiesOutputBody"];
                 };
             };
             /** @description Error */
@@ -4529,7 +5772,7 @@ export interface operations {
             };
         };
     };
-    "create-component-make": {
+    "create-capability": {
         parameters: {
             query?: never;
             header?: never;
@@ -4538,7 +5781,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CreateComponentMakeInputBody"];
+                "application/json": components["schemas"]["CreateCapabilityInputBody"];
             };
         };
         responses: {
@@ -4548,7 +5791,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ComponentMakeBody"];
+                    "application/json": components["schemas"]["CapabilityBody"];
                 };
             };
             /** @description Error */
@@ -4562,12 +5805,12 @@ export interface operations {
             };
         };
     };
-    "get-component-make": {
+    "get-capability": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description The component_make id */
+                /** @description The capability id */
                 id: string;
             };
             cookie?: never;
@@ -4580,7 +5823,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ComponentMakeBody"];
+                    "application/json": components["schemas"]["CapabilityBody"];
                 };
             };
             /** @description Error */
@@ -4594,12 +5837,12 @@ export interface operations {
             };
         };
     };
-    "delete-component-make": {
+    "delete-capability": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description The component_make id */
+                /** @description The capability id */
                 id: string;
             };
             cookie?: never;
@@ -4624,7 +5867,7 @@ export interface operations {
             };
         };
     };
-    "update-component-make": {
+    "update-capability": {
         parameters: {
             query?: never;
             header?: never;
@@ -4635,7 +5878,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["UpdateComponentMakeInputBody"];
+                "application/json": components["schemas"]["UpdateCapabilityInputBody"];
             };
         };
         responses: {
@@ -4645,7 +5888,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ComponentMakeBody"];
+                    "application/json": components["schemas"]["CapabilityBody"];
                 };
             };
             /** @description Error */
@@ -4818,6 +6061,209 @@ export interface operations {
             };
         };
     };
+    "list-component-alarms": {
+        parameters: {
+            query?: {
+                /** @description Include cleared alarms, so the list is the history rather than what is wrong now */
+                include_cleared?: boolean;
+            };
+            header?: never;
+            path: {
+                /** @description The component's unique name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListAlarmsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "raise-component-alarm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The component's unique name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RaiseAlarmInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlarmBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "clear-component-alarm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The component's unique name */
+                name: string;
+                /** @description The alarm id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-component-capabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The component's unique name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComponentCapabilitiesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "set-component-capability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The component's unique name */
+                name: string;
+                /** @description The capability id */
+                capability: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetComponentCapabilityInputBody"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "clear-component-capability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The component's unique name */
+                name: string;
+                /** @description The capability id */
+                capability: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "effective-tags": {
         parameters: {
             query?: never;
@@ -4850,12 +6296,12 @@ export interface operations {
             };
         };
     };
-    "list-effective-fields": {
+    "list-component-events": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description The component's name */
+                /** @description The component's unique name */
                 name: string;
             };
             cookie?: never;
@@ -4868,7 +6314,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EffectiveFieldsOutputBody"];
+                    "application/json": components["schemas"]["EventsOutputBody"];
                 };
             };
             /** @description Error */
@@ -4882,19 +6328,85 @@ export interface operations {
             };
         };
     };
-    "set-field-value": {
+    "list-component-memberships": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description The component's name */
+                /** @description Technical name of the component */
                 name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListComponentMembershipsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-component-properties": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The component's unique name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComponentPropertiesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "set-component-property": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The component's unique name */
+                name: string;
+                /** @description The property name */
+                property: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["SetFieldValueInputBody"];
+                "application/json": components["schemas"]["SetComponentPropertyInputBody"];
             };
         };
         responses: {
@@ -4904,8 +6416,40 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["FieldValueBody"];
+                    "application/json": components["schemas"]["EffectivePropertyValueBody"];
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "clear-component-property": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The component's unique name */
+                name: string;
+                /** @description The property name */
+                property: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {
@@ -5085,7 +6629,7 @@ export interface operations {
             };
         };
     };
-    "list-field-definitions": {
+    "list-drivers": {
         parameters: {
             query?: never;
             header?: never;
@@ -5100,7 +6644,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ListFieldDefinitionsOutputBody"];
+                    "application/json": components["schemas"]["ListDriversOutputBody"];
                 };
             };
             /** @description Error */
@@ -5114,7 +6658,7 @@ export interface operations {
             };
         };
     };
-    "create-field-definition": {
+    "create-driver": {
         parameters: {
             query?: never;
             header?: never;
@@ -5123,7 +6667,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CreateFieldDefinitionInputBody"];
+                "application/json": components["schemas"]["CreateDriverInputBody"];
             };
         };
         responses: {
@@ -5133,7 +6677,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["FieldDefinitionBody"];
+                    "application/json": components["schemas"]["DriverBody"];
                 };
             };
             /** @description Error */
@@ -5147,12 +6691,44 @@ export interface operations {
             };
         };
     };
-    "delete-field-definition": {
+    "get-driver": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description The field definition's id */
+                /** @description The driver id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DriverBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-driver": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The driver id */
                 id: string;
             };
             cookie?: never;
@@ -5177,19 +6753,18 @@ export interface operations {
             };
         };
     };
-    "update-field-definition": {
+    "update-driver": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description The field definition's id */
                 id: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["UpdateFieldDefinitionInputBody"];
+                "application/json": components["schemas"]["UpdateDriverInputBody"];
             };
         };
         responses: {
@@ -5199,73 +6774,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["FieldDefinitionBody"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "delete-field-value": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The field value's id */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description No Content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "update-field-value": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The field value's id */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateFieldValueInputBody"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["FieldValueBody"];
+                    "application/json": components["schemas"]["DriverBody"];
                 };
             };
             /** @description Error */
@@ -5623,6 +7132,108 @@ export interface operations {
             };
         };
     };
+    "list-location-type-properties": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The location_type id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListLocationTypePropertiesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "set-location-type-property": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The location type id */
+                id: string;
+                /** @description The property name */
+                property: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetLocationTypePropertyInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationTypePropertyBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-location-type-property": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The location type id */
+                id: string;
+                /** @description The property name */
+                property: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "list-locations": {
         parameters: {
             query?: never;
@@ -5770,6 +7381,140 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["LocationBody"];
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-location-health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The location's unique name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EstateHealthOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-location-properties": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The location's unique name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationPropertiesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "set-location-property": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The location's unique name */
+                name: string;
+                /** @description The property name */
+                property: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetLocationPropertyInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationPropertyValueBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "clear-location-property": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The location's unique name */
+                name: string;
+                /** @description The property name */
+                property: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {
@@ -7346,6 +9091,427 @@ export interface operations {
             };
         };
     };
+    "list-products": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListProductsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-product": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateProductInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-product": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The product id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-product": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The product id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "update-product": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateProductInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-product-properties": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The product id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListProductPropertiesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "set-product-property": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The product id */
+                id: string;
+                /** @description The property name */
+                property: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetProductPropertyInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductPropertyBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-product-property": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The product id */
+                id: string;
+                /** @description The property name */
+                property: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-property": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListPropertiesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-property": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePropertyInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PropertyBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-property": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The property's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PropertyBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-property": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The property's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "update-property": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The property's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePropertyInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PropertyBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "list-roles": {
         parameters: {
             query?: never;
@@ -7720,6 +9886,369 @@ export interface operations {
             };
         };
     };
+    "list-standards": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListStandardsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-standard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateStandardInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StandardBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-standard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The standard id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StandardBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-standard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The standard id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "update-standard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateStandardInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StandardBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-standard-properties": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The standard id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListStandardPropertiesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "set-standard-property": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The standard id */
+                id: string;
+                /** @description The property name */
+                property: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetStandardPropertyInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StandardPropertyBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-standard-property": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The standard id */
+                id: string;
+                /** @description The property name */
+                property: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-standard-roles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The standard id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListStandardRolesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "set-standard-role": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The standard id */
+                id: string;
+                /** @description The role name */
+                role: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RoleSpecBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemRoleBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-standard-role": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The standard id */
+                id: string;
+                /** @description The role name */
+                role: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "list-systems": {
         parameters: {
             query?: never;
@@ -7867,6 +10396,438 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["SystemBody"];
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-system-health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The system's unique name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EstateHealthOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-system-members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Technical name of the system */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListSystemMembersOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "add-system-member": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Technical name of the system */
+                name: string;
+                /** @description Technical name of the component */
+                component: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "remove-system-member": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Technical name of the system */
+                name: string;
+                /** @description Technical name of the component */
+                component: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "set-primary-member": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Technical name of the system */
+                name: string;
+                /** @description Technical name of the component */
+                component: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-system-properties": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The system's unique name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemPropertiesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "set-system-property": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The system's unique name */
+                name: string;
+                /** @description The property name */
+                property: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetSystemPropertyInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemPropertyValueBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "clear-system-property": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The system's unique name */
+                name: string;
+                /** @description The property name */
+                property: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-system-roles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The system's unique name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListSystemRolesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "set-system-role": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The system's unique name */
+                name: string;
+                /** @description The role name */
+                role: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RoleSpecBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemRoleBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-system-role": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The system's unique name */
+                name: string;
+                /** @description The role name */
+                role: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "assign-system-role": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The system's unique name */
+                name: string;
+                /** @description The role name */
+                role: string;
+                /** @description The component's unique name */
+                component: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "unassign-system-role": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The system's unique name */
+                name: string;
+                /** @description The role name */
+                role: string;
+                /** @description The component's unique name */
+                component: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {
@@ -8301,133 +11262,6 @@ export interface operations {
             };
         };
     };
-    "list-component-types": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ListComponentTypesOutputBody"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "create-component-type": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateComponentTypeInputBody"];
-            };
-        };
-        responses: {
-            /** @description Created */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ComponentTypeBody"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "delete-component-type": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The component_type id */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description No Content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "update-component-type": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateComponentTypeInputBody"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ComponentTypeBody"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
     "list-location-types": {
         parameters: {
             query?: never;
@@ -8584,133 +11418,6 @@ export interface operations {
             };
         };
     };
-    "list-system-types": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ListSystemTypesOutputBody"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "create-system-type": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateSystemTypeInputBody"];
-            };
-        };
-        responses: {
-            /** @description Created */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SystemTypeBody"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "delete-system-type": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The system_type id */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description No Content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "update-system-type": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateSystemTypeInputBody"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SystemTypeBody"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
     "list-variables": {
         parameters: {
             query?: never;
@@ -8826,6 +11533,165 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VariableBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-vendors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListVendorsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-vendor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateVendorInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VendorBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-vendor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The vendor id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VendorBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-vendor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The vendor id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "update-vendor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateVendorInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VendorBody"];
                 };
             };
             /** @description Error */

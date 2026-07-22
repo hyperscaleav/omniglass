@@ -15,7 +15,7 @@ A datapoint and an event are different shapes (a datapoint has a value; an event
 
 **`event_type`** describes every event key: `(name, display_name, payload_schema, scope, ...)`, with the same **`scope`** (template / org / official) as the datapoint registry; a template can define a template-local event. Declaring event types (`call.started`, `cable.unplugged`, `command.sent`) is first-class and valuable: it gives events a known schema, makes them inspectable, and is what lets an event rule promote a raw log line into a *registered* event. An event key is registered here; an unregistered occurrence stays a `log_datapoint` line until a rule promotes it.
 
-The naming convention is consistent: a `_type` registry defines what a thing *is*, named for the thing (`datapoint_type`, `event_type`, like `component_type`, `interface_type`). Events get their own registry because an event is a different shape from a datapoint. The `scope` axis works the same way as for datapoints: see [key scope](/architecture/datapoints/#key-scope-template-org-official).
+The naming convention is consistent: a `_type` registry defines what a thing *is*, named for the thing (`datapoint_type`, `event_type`, like `location_type`, `interface_type`). Events get their own registry because an event is a different shape from a datapoint. The `scope` axis works the same way as for datapoints: see [key scope](/architecture/datapoints/#key-scope-template-org-official).
 
 ## Events: caught, caused, derived, scheduled
 

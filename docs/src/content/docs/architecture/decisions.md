@@ -37,7 +37,7 @@ below from the project's history. From here it grows one slice at a time.
 |---|---|---|---|
 | [ADR-0001](#adr-0001-ai-acts-as-a-user-the-agent-principal-is-deferred) | 2026-06-27 | Accepted | AI acts as a `human` / `service` principal; a first-class `agent` principal is deferred |
 | [ADR-0002](#adr-0002-roles-carry-requirements-not-an-allow-list) | 2026-06-27 | Accepted | Authorization is role + scope grants, not a per-principal allow-list |
-| [ADR-0003](#adr-0003-health-reads-ok-not-up) | 2026-06-27 | Accepted | The healthy state is named `ok`, not `up` |
+| [ADR-0003](#adr-0003-health-reads-ok-not-up) | 2026-06-27 | Superseded by [ADR-0050](#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain) | The healthy state is named `ok`, not `up` |
 | [ADR-0004](#adr-0004-credentials-ship-bearer-only) | 2026-06-27 | Resolved | Bearer shipped first; `password` credentials (argon2id) landed in identity slices 1-2. OIDC / NATS still deferred |
 | [ADR-0005](#adr-0005-the-first-owner-is-omniglass-bootstrap) | 2026-06-27 | Resolved | `omniglass bootstrap <username> [--password]`; the password-on-create path shipped, the `iam` namespace is deferred |
 | [ADR-0006](#adr-0006-the-owner-invariant-is-enforced-by-bootstrap-for-now) | 2026-06-27 | Resolved | The single-owner invariant is now a DEFERRABLE constraint trigger, landed with grant revocation |
@@ -75,6 +75,14 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0040](#adr-0040-the-task-is-derived-read-only-plumbing-projected-from-its-interface) | 2026-07-14 | Accepted | The `task` is **derived** read-only plumbing: creating an `interface` derives its one poll task, so task create/update/delete routes and the `task:create` / `:update` grants are dropped; `task.node_name` is removed and **projected** from `interface.node_name` (the worklist and telemetry owner-confinement join the interface), and a node purge cascades its interfaces and their tasks. Reverses the checkpoint-5d task-CRUD build; refines ADR-0039 |
 | [ADR-0041](#adr-0041-settings-are-a-reflected-typed-struct-with-generated-client-and-server-validation) | 2026-07-19 | Accepted | A setting is declared **once**, as a tagged field on a canonical `Settings` Go struct; reflection produces the `code` defaults layer and the namespace registry, Huma reflects the struct into the OpenAPI schema so the typed client `values` is a `Settings` struct, and both the server PATCH and the generated client validate against that **same reflected schema**. Closes the slice-0 write-validation thin cut; retires the hand-kept `defaults.yaml` and `Namespaces()` slice |
 | [ADR-0042](#adr-0042-field-cascade-and-the-type-default-floor) | 2026-07-19 | Accepted | A field's resolved value is deepest-set-wins down `product -> location -> system -> component`, falling to the field's **type default** when nothing is set at any scope; the type default is the **floor** of the cascade, not a competitor to it. This slice is component-only (resolved = the component's set value, else the type default); the multi-scope cascade is tracked by #291 |
+| [ADR-0043](#adr-0043-the-property-catalog) | 2026-07-19 | Accepted | The `datapoint_type` catalog is generalized into a primitive-agnostic **`property`** catalog (the typed set of signals a datapoint observes and a field declares): the unused scope ladder becomes an `official` boolean, `value_type` becomes `data_type` (text to string, add bool), `kind` is nullable (a declared-only property has none), and `validation` is a **JSON Schema** validated by Huma's own validator (zero new dependencies). Value/source tables key by **name** (no FK), so the rename is behavior-preserving; the type-schema (`field_definition.key`) is the only binding and lands in PR-B |
+| [ADR-0044](#adr-0044-the-component-classification-catalogs) | 2026-07-20 | Accepted | The `component_make` catalog is generalized into **`vendor`** (a `kind` of manufacturer / integrator / developer), and two new leaf catalogs join it, **`driver`** (id, display_name, version) and **`capability`** (id, display_name), as the component-classification reference data: each a gated CRUD Catalog console page with read-only official seeded rows. `product` + `product_capability` + `component.product` are the next slice. This is PR2 of the estate-model shift toward property / event / command + vendor / product / driver / capability / standard / role / health |
+| [ADR-0045](#adr-0045-the-product-catalog) | 2026-07-20 | Accepted | **`product`** lands as a first-class catalog entity, the concrete SKU that binds a **`vendor`**, a **`driver`**, a **`kind`** (`device` / `app` / `service` / `vm`), and a capability set via the **`product_capability`** join; **`parent_product_id`** models variants, and **`component.product_id`** (`on delete restrict`) points a component at the SKU it is, making the product the source of a component's shape and retiring the `component_type`-as-shape notion. PR3 of the estate-model shift; consumes the vendor / driver / capability catalogs from ADR-0044 |
+| [ADR-0046](#adr-0046-the-event-log-kind-sink) | 2026-07-20 | Accepted | A **log**-kind observation is no longer dropped at ingest: it lands in a new **`event`** table, the log-kind sink (a past occurrence) beside `metric_datapoint` / `state_datapoint` (a sampled present value). `event` carries the same datapoint owner exclusive-arc and provenance, plus `message` + `attributes`, and the reserved `event_id` FK stubs on the two datapoint tables are closed (`on delete set null`). Scope excludes the `datapoint`->`sample` rename (a later cleanup) and `property_value` / the current-value store (the fold-fields slice). P1 follow-up of the estate-model roadmap |
+| [ADR-0047](#adr-0047-the-fields-fold-product_property-and-property_value) | 2026-07-21 | Accepted | The standalone **fields** feature retires and folds into the estate model: a field was only ever a **property with `declared` provenance**, never a primitive of its own. **`product_property`** is the product's declared-property **contract** (`product_id`, `property_name`, `default_value`, `required`), replacing `field_definition`; **`property_value`** is the value store, carrying the **same owner exclusive-arc** as `metric_datapoint` / `event` plus `instance` and `provenance`, replacing `field_value`. `EffectiveProperties` unions the contract arm (`coalesce(set value, contract default)`) with the off-contract arm, so a productless component still resolves. `field_definition`, `field_value`, `component.component_type`, and the whole `component_type` registry retire. PR5 of the estate-model shift |
+| [ADR-0048](#adr-0048-the-standard-blueprint-and-the-template-fork-seed-model) | 2026-07-21 | Accepted | `system_type` is promoted to **`standard`**, the blueprint a system conforms to and the system-side counterpart of `product`: it gains `parent_standard_id` (variants), a declared-property contract, and its own `standard:*` Catalog resource, and `system.standard_id` becomes **optional**. `standard_property` and `location_type_property` join `product_property`, and one **owner-generic** `EffectiveProperties(ownerKind, ownerID)` resolves component, system, location, and node off a single parameterized template. A standard and a location type are created by **forking an in-code template** (one-time, no inheritance), so a shipped row is **operator-owned** (`official: false`, seeded **if absent**), while a system **conforms** to its standard with **live** inheritance; only the canonical catalogs keep the authoritative upsert. PR6 of the estate-model shift |
+| [ADR-0049](#adr-0049-the-system-role-capability-gated-staffing-and-the-resolved-capability-set) | 2026-07-21 | Accepted | A **`system_role`** is a slot a system needs filled (a table microphone, a main display), declared on a **standard** (inherited live by every conforming system) or on one **system** (ad-hoc) over the same exclusive arc `property_value` uses, requiring a **conjunctive** `role_capability` set and carrying a **`quorum`**. A component's capabilities become a **resolved set** (`EffectiveCapabilities` = its product's, plus its own `component_capability` `present=true` rows, minus its `present=false` ones), because `product` is optional and a strict guard over a product-only fact would lock a productless component out of every role. `AssignRole` **refuses (422) and names the missing capabilities**, joining the location placement constraint as a refusal on modeled grounds that names the parties. **Quorum** ships here (staffing is visible without health); **impact** and the SLI rollup land in PR8. Supersedes the `system_template_member` role-requirement design. PR7 of the estate-model shift |
+| [ADR-0050](#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain) | 2026-07-21 | Accepted | Health is **recorded as a transition** and **recomputed at the write**, never on read. An **`alarm`** is component-local and names the **capabilities** it degrades; a component satisfies a role only when it provides every required capability and none of them is degraded; a role below its **quorum** is impaired and contributes its **`impact`** (`outage` / `degraded` / `none`); a system takes the worst of its roles, a location the worst of its systems. The verdict domain is **`healthy` / `degraded` / `outage`** and the judgement is a **pure package** (`internal/health`), unit-tested with no database. The recorded carrier is **`state_datapoint`**, already transition-only, so the history is edges and only edges; **compute-on-read** (no history) and **write-through-on-read** (the edge timestamped when somebody looked) are both rejected. A **read never writes**, and it computes the verdict it serves from the same rows it shows, so a report cannot contradict its own evidence. PR8 of the estate-model shift, closing epic [#266](https://github.com/hyperscaleav/omniglass/issues/266) |
 
 ## Entries
 
@@ -111,6 +119,10 @@ below from the project's history. From here it grows one slice at a time.
   a rollup verdict ("is this system working?") that can be unhealthy while every device is reachable, or
   healthy while a redundant member is down. `ok` names the verdict rather than the ping, so the word does
   not promise something narrower than the model delivers.
+- **Superseded by** [ADR-0050](#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain)
+  on the **word only**. The reasoning holds and the built domain still names the verdict rather than the ping;
+  it spells the members **`healthy` / `degraded` / `outage`**, because `outage` says what a broken system means
+  to the people in the room where `down` says what a device is doing.
 
 ### ADR-0004: Credentials ship bearer-only
 
@@ -970,7 +982,7 @@ below from the project's history. From here it grows one slice at a time.
 
 ### ADR-0031: `component_make` registry slice 1, an `official` boolean, a deferred referential guard, and website scheme validation
 
-- **Date:** 2026-07-14 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/), [Makes guide](/guides/admin/makes/)
+- **Date:** 2026-07-14 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/), [Vendors guide](/guides/admin/vendors/)
 - **Decision:** Three calls on the first slice of the `component_make` manufacturer registry (id,
   display_name, icon, support_phone, website), lands ahead of the rest of the make/model catalog.
   **(1) `official boolean`, not an `origin` enum.** The design sketch (below) proposed
@@ -1116,7 +1128,7 @@ below from the project's history. From here it grows one slice at a time.
 - **Context:** The per-component effective-* panels predated the field primitive and listed **every**
   cascade-resolving cell that reached a component, which at any real depth is mostly inherited noise (a global SNMP
   community, a location poll interval) rather than anything set on that component. The
-  [field](/architecture/variables/#field-an-operator-defined-typed-schema-on-a-type) primitive
+  [field](/architecture/variables/#property-one-typed-name-a-product-contract-a-stored-value) primitive
   ([#266](https://github.com/hyperscaleav/omniglass/issues/266)) is the schema-over-cells consumer the design always
   intended: a component carries a typed set of fields, each resolving to a set literal or its type default, and the
   intended `sources` model lets a field draw its value from a variable, a secret, a datapoint, or a file. Once fields
@@ -1181,7 +1193,563 @@ below from the project's history. From here it grows one slice at a time.
   [#291](https://github.com/hyperscaleav/omniglass/issues/291); this ADR settles only the resolution rule
   and the type-default floor.
 
-### ADR-0043: operator deletes become undoable, not modifier-chorded
+### ADR-0043: The property catalog
+
+- **Date:** 2026-07-19 | **Status:** Accepted | **Pages:** [config, secrets, and variables](/architecture/variables/)
+- **Decision:** The `datapoint_type` catalog is generalized into a primitive-agnostic **`property`**
+  catalog: one typed catalog whose entry (a **property**) is a canonical, typed name that a datapoint
+  **observes** and a field **declares**, identified by a **`key`** (its canonical name). The physical
+  table is `property`; the concept, the API resource (`/properties`), the Go `Property` type, and the
+  console all read `property`, while a property's identifier (its `key`, and the `field_definition.key`
+  reference) stays `key`. Four shape changes fold `datapoint_type` in: the unused `(scope, name)` ladder
+  (`org`/`template` never had an operator write path, `template_id` was a dangling column) collapses to a
+  `name` primary key plus an **`official`** boolean (seed-owned rows are read-only); `value_type` becomes
+  **`data_type`** over the unified set `{string, int, float, bool, json}` (`text` backfills to `string`,
+  `bool` is added); **`kind`** (metric/state/log) becomes nullable, since a declared-only attribute
+  property has no observed kind; and **`validation`** is a **JSON Schema** fragment (`pattern`/`enum`/`minimum`/
+  `maximum` and, for a json-typed property, a nested object schema), enforced by Huma's own validator with the stored
+  schema loaded through `yaml.v3`, so there is **no new dependency**. Value and source tables continue to
+  key by the **name string** (no foreign key, reject-not-project at ingest exactly as before), so the
+  rename is behavior-preserving: the collection registry, the reachability BFF, and the metric/state sinks
+  keep working unchanged.
+- **Context:** Datapoints already had a typed canonical-key catalog (`datapoint_type`: name, value_type,
+  display_name, unit, validation, kind), while fields, variables, secrets, and tags had no catalog at all,
+  an operator typed a key and it was registered nowhere. Rather than build a parallel table, this slice
+  makes the one catalog primitive-agnostic so `serial_number` is the same concept whether a device reports
+  it (observed, a datapoint) or an operator types it (declared, a field). The `official` boolean chassis is
+  chosen over finishing `datapoint_type`'s never-built scope-shadow precedence: it is the proven,
+  finished model the `*_type` registries already use.
+- **Values reference the key, not a `<primitive>_key` layer:** the only binding is the type-schema
+  (`field_definition` gaining a `key` reference so a field draws from the catalog), which is **PR-B**, not
+  this slice. Provenance rides the value (an observed metric versus a declared field value share the key),
+  so reconciliation of declared-versus-observed sources needs no middle table; it is deferred.
+- **Deferred:** the `field_definition.key` reference (PR-B); the type-schema editor (how a `component_type`
+  selects properties); reconciliation (the declared-versus-observed drift signal); a console editor for the
+  validation JSON Schema (set via the API for now); variables/secrets/commands/tags adopting a `key`
+  reference; and an operator shadow of an official property.
+- **Closes:** issue [#297](https://github.com/hyperscaleav/omniglass/issues/297) (the field catalog,
+  expanded to the property catalog), under epic
+  [#266](https://github.com/hyperscaleav/omniglass/issues/266).
+
+### ADR-0044: The component classification catalogs
+
+- **Date:** 2026-07-20 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/)
+- **Decision:** The [`component_make`](#adr-0031-component_make-registry-slice-1-an-official-boolean-a-deferred-referential-guard-and-website-scheme-validation)
+  catalog is generalized into a **`vendor`** catalog carrying a **`kind`** (`manufacturer` / `integrator` /
+  `developer`), so the one organization that makes, integrates, or writes for a component is a single
+  reference entity rather than a make-only registry. Two new **leaf** catalogs join it as the rest of the
+  component-classification reference data: a **`driver`** (`id`, `display_name`, `version`, the software that
+  speaks to a component) and a **`capability`** (`id`, `display_name`, a thing a component can do). Each of the
+  three is a **gated CRUD Catalog console page** (`/vendors`, `/drivers`, `/capabilities`), reusing the
+  `official`-boolean chassis the type and property registries already use: seed-owned official rows are
+  read-only (an official row refuses update and delete, 422), a custom row is full CRUD gated by the
+  resource's `<resource>:create` / `:update` / `:delete` permission and audited in the same transaction. The
+  official rows are seeded at boot. This is a pure classification slice: **`product`** (the specific model an
+  organization sells), the **`product_capability`** link, and the **`component.product`** pointer that binds a
+  component to its product are the **next slice**, not this one.
+- **Context:** The estate model is shifting from the make/model catalog sketch toward a fuller classification
+  vocabulary: **property / event / command** on the signal side (property landed in
+  [ADR-0043](#adr-0043-the-property-catalog)) and **vendor / product / driver / capability / standard / role /
+  health** on the component side. This is **PR2** of that shift. `component_make` was manufacturer-only, but the
+  same organization concept covers an integrator who installs the estate and a developer who writes a component's
+  software, so generalizing make into a `kind`-tagged vendor is the honest widening rather than three parallel
+  organization registries. Driver and capability are leaf catalogs (no tree, no cross-references yet), so they
+  ship as the plain seeded-plus-CRUD pattern the registries already prove; they gain their bindings (a driver to
+  an interface / product, a capability to a product) when the product slice gives them something to reference.
+- **Deferred:** `product`, `product_capability`, and `component.product` (the next slice); a referential delete
+  guard on vendor / driver / capability (nothing references them yet, exactly as `component_make` shipped with no
+  guard until `component_model` was to land); and an operator shadow of an official row.
+- **Refines:** [ADR-0031](#adr-0031-component_make-registry-slice-1-an-official-boolean-a-deferred-referential-guard-and-website-scheme-validation)
+  (the `component_make` registry is renamed and generalized to `vendor` with a `kind`; its `official`-boolean,
+  deferred-delete-guard, and website-scheme-validation calls carry over unchanged).
+
+### ADR-0045: The product catalog
+
+- **Date:** 2026-07-20 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/), [Products guide](/guides/admin/products/)
+- **Decision:** **`product`** is a first-class catalog entity, the concrete **SKU** (a Cisco Room Bar, a
+  Samsung QM55) that ties the [ADR-0044](#adr-0044-the-component-classification-catalogs) leaf catalogs
+  together. A product carries a stable `id` and `display_name`, a **`kind`** from a fixed enum (`device` /
+  `app` / `service` / `vm`, default `device`, enforced by a DB CHECK and at the API edge), an optional
+  **`vendor_id`** (who makes it) and **`driver_id`** (what talks to it), an optional **`parent_product_id`**
+  (a self-reference: a variant points at its base product), and the `official` boolean the type and
+  classification registries already use. The **capabilities** a product provides are a many-to-many set in
+  the **`product_capability`** join (a video bar provides microphone, speaker, camera, codec); setting
+  capabilities on an update replaces the whole set. It is a gated CRUD Catalog console page (`/products`) on
+  the same chassis as the leaf catalogs: seed-owned official rows read-only (update and delete 422), custom
+  rows full CRUD gated by `product:create` / `:update` / `:delete` and audited in the same transaction,
+  official rows seeded at boot. Crucially, **`component.product_id`** (`on delete restrict`) now points a
+  component at the product it **is**: the product is the source of a component's shape (its vendor, driver,
+  and capability set), **replacing the `component_type`-as-shape notion**. The restrict FK is the referential
+  guard the leaf catalogs deferred: a product still referenced by a component cannot be deleted (409). The
+  vendor, driver, and parent FKs are `on delete set null` instead (deleting a vendor nulls a product's
+  pointer, it does not block).
+- **Context:** The estate model is shifting toward property / event / command on the signal side and vendor /
+  product / driver / capability / standard / role / health on the component side.
+  [ADR-0044](#adr-0044-the-component-classification-catalogs) landed vendor, driver, and capability as leaf
+  catalogs with nothing to reference them; **product** is **PR3**, the layer they were built for and the first
+  consumer of all three. A component's shape used to be a job for a `component_type` genus; binding a component
+  to a product instead makes the shape data-driven from the SKU (the same product supplies the same vendor,
+  driver, and capabilities to every component that is one), which is why `component.product` is a `restrict` FK,
+  not `set null`: a product in use is load-bearing for its components.
+- **Deferred:** a product's own template or field-schema binding; and the remaining component-side catalogs
+  (standard, role, health).
+- **Supersedes:** the `component_type`-as-shape notion (a component's shape now comes from its `product`, not
+  its genus type). **Consumes** [ADR-0044](#adr-0044-the-component-classification-catalogs) (product is the
+  `product` layer that ADR deferred; it references vendor, driver, and capability). One divergence from the
+  leaf catalogs' prediction: their deferred delete guard lands only as the `component.product` restrict (409),
+  while a product's own vendor / driver references null out (`on delete set null`) rather than blocking the
+  referenced row's delete.
+
+### ADR-0046: The `event` log-kind sink
+
+- **Date:** 2026-07-20 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/), [datapoints](/architecture/datapoints/), [data collection](/architecture/collection/), [API](/architecture/api/), [Nodes and reachability guide](/guides/operator/collection/)
+- **Decision:** A collected **log**-kind observation now has a durable home. A new **`event`** table is the
+  **log-kind sink** of the collection pipeline, the counterpart of `metric_datapoint` / `state_datapoint`: where
+  a datapoint records a **sampled present value**, an `event` records a **past occurrence** (a device log line, a
+  structured frame). It carries the **same datapoint owner exclusive-arc** (`owner_kind` plus
+  `component_id` / `system_id` / `location_id` / `node_id`, one-set CHECK) and the **same provenance** vocabulary
+  (`observed` / `calculated` / `intended` / `declared`, default `observed`) as the datapoint sinks, plus a
+  **`message`** (text) and structured **`attributes`** (jsonb). The ingest consumer's `deriveDatapoints` now
+  returns metrics, states, **and** events, and the persistence path calls **`InsertEvents`**: a **log**-kind
+  datapoint that used to be **dropped** at ingest (it had no sink) is routed to `event`, riding `string_value`
+  (its message) or `json_value` (its attributes), under the **same** owner-confinement and reject-not-project
+  gates as the metric and state sinks. A boot-seed property **`syslog.line`** (kind `log`) is the canonical
+  log-kind starter. The reserved **`event_id`** columns on `metric_datapoint` and `state_datapoint` are closed
+  into **real foreign keys** to `event(id)` (`on delete set null`), so an **intended**-provenance datapoint
+  references the `event` that produced it. Storage adds `InsertEvents` (batch, in-tx, provenance `observed`) and
+  `ListComponentEvents(name, since, limit)` (newest first); the read route **`GET /components/{name}/events`**
+  (operationId `list-component-events`, gated `component:read`, non-disclosing 404 out of scope) returns the last
+  24 hours, capped at 200, and is the log-kind mirror of the reachability read. The console component detail page
+  gains an **Events** panel over it.
+- **Context:** The estate model is shifting toward property / event / command on the signal side; property
+  landed in [ADR-0043](#adr-0043-the-property-catalog). Log was already a first-class datapoint **kind** in the
+  registry, but the ingest consumer had **no sink** for it: a log-kind datapoint was silently dropped after the
+  metric/state route split ([ADR-0038](#adr-0038-the-reachability-verdict-is-a-built-in-state)), a checkpoint gap
+  rather than a design choice. This is the **P1 follow-up** of the estate-model roadmap: give the log kind a
+  durable home so the third sink flows like the other two, and close the `event_id` stubs the datapoint tables
+  reserved for exactly this. Reusing the datapoint owner-arc and provenance (not a bespoke shape) keeps a log
+  occurrence owned, addressed, and traced identically to the values beside it, the primitive-first move.
+- **Deferred:** the **`datapoint` -> `sample`** rename (a naming cleanup that lands in a later slice, so the
+  datapoint tables keep their current names here); **`property_value`** and the materialized current-value store
+  (the [fold-fields slice](/architecture/datapoints/#reads-current-value-is-a-view)); the normalized **event_type**
+  registry and the **promotion** of a raw `event` occurrence into a registered event ([events](/architecture/events/));
+  a scope-wide `event` read (this ships the per-component read only); and any `calculated` / `intended` / `declared`
+  event producer (the write path is `observed` collection only).
+- **Supersedes:** the checkpoint behavior where a **log**-kind datapoint had no sink and was **dropped** at ingest
+  (recorded in [ADR-0038](#adr-0038-the-reachability-verdict-is-a-built-in-state)); the log kind now persists to
+  `event`. **Divergence from [datapoints](/architecture/datapoints/):** that page's present-tense design routes the
+  log kind to a **`log_datapoint`** table and treats `event` as a strictly normalized, `event_type`-registered
+  occurrence promoted from a raw line. The built log sink is the **`event`** table directly (the raw occurrence
+  lands there, not in a separate `log_datapoint` table), and the `log_datapoint` table plus the promotion ladder
+  stay `Design`; the pages carry an inline note pointing here until the two models are reconciled in the
+  fold-fields / rename cleanup.
+
+### ADR-0047: The fields fold: `product_property` and `property_value`
+
+- **Date:** 2026-07-21 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/),
+  [config, secrets, and variables](/architecture/variables/), [API](/architecture/api/),
+  [Properties guide](/guides/admin/properties/), [Products guide](/guides/admin/products/)
+- **Decision:** The standalone **fields** feature is **retired** and folded into the estate model, because a
+  **field was never a primitive**: it was a **property with `declared` provenance**, and the same is true of
+  **config** (a property with `intended` provenance). Two tables replace it. **`product_property`** is the
+  product's declared-property **contract**: `(product_id -> product, property_name -> property,
+  default_value jsonb, required bool)`, unique per `(product, property)`, so what a product's instances expose
+  is data on the SKU rather than a catalog hung off a genus type. `data_type` and `validation` are
+  **not duplicated** here; they stay in the [`property` catalog](#adr-0043-the-property-catalog), the single
+  source. **`property_value`** is the value store: it carries the **same owner exclusive-arc** as
+  `metric_datapoint` and [`event`](#adr-0046-the-event-log-kind-sink) (`owner_kind` plus
+  `component_id` / `system_id` / `location_id` / `node_id`, one-set CHECK), plus `property_name`, an
+  `instance` discriminator, a **`provenance`** (`observed` / `calculated` / `intended` / `declared`, default
+  `declared`), and a jsonb `value`. Its series key is `unique nulls not distinct`, since the arc leaves three
+  owner columns NULL and Postgres's default NULLS DISTINCT would let duplicate rows through. This slice writes
+  only `owner_kind=component` with `provenance=declared`; the rest of the arc and the other three provenances
+  are the seats later producers sit in. The resolver is **`EffectiveProperties(component, scope)`**, one SQL
+  UNION of two arms: the **contract arm** (every `product_property` of the component's product, value =
+  `coalesce(the component's declared value, the contract default)`, `from_contract=true`) and the **ad-hoc
+  arm** (declared values the contract does not declare, `from_contract=false`), so a **productless component
+  still resolves**, to its ad-hoc set alone. Six routes carry it: `GET /products/{id}/properties` and
+  `PUT` / `DELETE /products/{id}/properties/{property}` (gated `product:read` / `:update` / `:delete`, an
+  official product read-only 422), and `GET /components/{name}/properties` plus
+  `PUT` / `DELETE /components/{name}/properties/{property}` (gated `component:read` / `:update`, ABAC-scoped
+  with a non-disclosing 404 out of scope, audited). The console renames the operator word from **Fields** to
+  **Properties**: a **Properties** panel on the component detail (contract rows, plus a dashed-bordered
+  **off contract** group for the ad-hoc ones, an override toggle with an accent dot, a required property
+  blocking Save) and a **Declared properties** contract editor on the product detail (declare, edit, withdraw,
+  read-only for an official product). Retired with the feature: **`field_value`**, **`field_definition`**,
+  **`component.component_type`**, and the **`component_type`** table itself with its routes
+  (`/types/component`), its console registry section, and its seed. A component's shape now comes from its
+  **product** ([ADR-0045](#adr-0045-the-product-catalog)), still optional: a productless component simply has
+  no contract, and the category `component_type` used to carry (display, codec) is expressed by the
+  **capabilities** that product provides. The seeded products ship a starter contract (`cisco-room-bar` and
+  `samsung-qm55` declare `serial_number`, `firmware_version`, and `model_number` with defaults), and
+  `roles.yaml` drops the now-unclaimed `field:*` permissions, since `property:*` already covers the tier.
+- **Context:** [ADR-0043](#adr-0043-the-property-catalog) made the catalog primitive-agnostic and deferred the
+  one binding it needed, `field_definition.key`, so a field could draw its type from the catalog. Building
+  that binding forced the realization that the binding was the wrong shape: once a field's name, type, and
+  validation all come from a property, a "field" is a property the operator **declares** rather than the
+  device **observes**, and the only thing left that was field-specific was **where the schema hangs**. The
+  answer was already on the table: [ADR-0045](#adr-0045-the-product-catalog) made the **product** the source
+  of a component's shape, so the per-type field catalog becomes the per-product **contract** over the property
+  catalog, and the field value becomes an arc-owned, provenance-tagged **property value** beside the samples
+  and occurrences it sits next to. Folding is primitive-first: one value store the cascade, reconciliation,
+  and the current-value read can all be built on, rather than three parallel ones (`field_value` for declared,
+  the datapoint tables for observed, an unbuilt `config` table for intended).
+- **Deferred:** **`standard_property`** and **`location_type_property`** (the other contract owners, each
+  waiting on its owner entity, `standard` and a `location_type` schema); the **driver access/mode column** on
+  `product_property` (whether a driver can get, set, or only declare a property, which lands with the driver
+  slice); the **non-declared provenance producers** (`intended` config writing a desired value,
+  `observed` materializing a current value out of the datapoint stream, `calculated` from a rule), which the
+  provenance column seats but nothing writes yet; the multi-owner arc on `property_value` (only the component
+  arm is written and scope-injected today); and the **`datapoint` -> `sample`** rename, still a later cleanup.
+- **Supersedes:** [ADR-0043](#adr-0043-the-property-catalog)'s deferred **`field_definition.key`** property
+  binding. This **is** that binding, done differently: rather than a field definition gaining a key reference,
+  the field catalog itself became the **product contract over the property catalog**, and `field_definition`
+  retires. Also completes [ADR-0045](#adr-0045-the-product-catalog)'s partial supersession of the
+  **`component_type`-as-shape** notion: that ADR repointed shape at the product but left the table standing;
+  this one drops `component.component_type` and the `component_type` registry outright.
+- **Tracked under** epic [#266](https://github.com/hyperscaleav/omniglass/issues/266). This is **PR5** of the
+  estate-model shift toward property / event / command plus vendor / product / driver / capability / standard /
+  role / health.
+
+### ADR-0048: The `standard` blueprint and the template-fork seed model
+
+- **Date:** 2026-07-21 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/),
+  [API](/architecture/api/), [identity and access](/architecture/identity-access/),
+  [storage](/architecture/storage/), [Standards guide](/guides/admin/standards/),
+  [Types guide](/guides/admin/types/), [Properties guide](/guides/admin/properties/)
+- **Decision:** Three moves land together, because each one only makes sense with the others.
+
+  **1. `system_type` is promoted to `standard`.** A **standard** is the **blueprint a system conforms to**
+  (huddle room, classroom, auditorium): the system-side counterpart of
+  [`product`](#adr-0045-the-product-catalog), not a label hung off a system. The table is renamed and gains
+  **`parent_standard_id`** (a variant points at its base, mirroring `product.parent_product_id`) and a
+  declared-property **contract**. `system.system_type` becomes **`system.standard_id`** and is now
+  **optional**, exactly like `component.product_id`: a **one-off system that conforms to no standard is
+  first-class** and carries only its own ad-hoc values. The seeded rows carry over unchanged. Because a
+  standard now owns a contract, it leaves the shared `type:*` registry permission and takes its own
+  **`standard:read` / `:create` / `:update` / `:delete`** Catalog resource (read on the viewer `*:read` floor,
+  the writes at the admin tier, exactly like `product:*`), and its routes move from `/types/system` to
+  **`/standards`**.
+
+  **2. Two more contract tables, and one owner-generic resolver.** **`standard_property`** and
+  **`location_type_property`** join `product_property` on the identical shape (`<classifier>_id`,
+  `property_name`, an optional `default_value`, a `required` flag, unique per pair). `data_type` and
+  `validation` are **never** duplicated onto a contract; they stay in the [`property`
+  catalog](#adr-0043-the-property-catalog). The resolver then generalizes:
+  **`EffectiveProperties(ctx, ownerKind, ownerID, read)`** resolves **component, system, location, and node**
+  off **one** parameterized SQL template driven by an **`ownerContract`** table (instance table, classifier
+  column, contract table, contract key, arc column). Component reads its contract through
+  `component.product_id`, system through `system.standard_id`, location through `location.location_type`; a
+  **node has no classifier**, so it resolves ad-hoc values only. The query shape is unchanged from
+  [ADR-0047](#adr-0047-the-fields-fold-product_property-and-property_value): a contract arm
+  (`coalesce(the instance's value, the contract default)`, `from_contract=true`) UNION an ad-hoc arm. This is
+  the primitive-first move: three classifier/instance pairs, one resolver, so they cannot drift. Alongside it,
+  `guardOwnerScope` now scope-checks **every** owner arc on a value write (it previously returned nil for
+  everything but the component arc), so an out-of-scope system or location is a non-disclosing 404 on the
+  write path as well as the read.
+
+  **3. The seed model: templates live in code, not the database.** A standard (and a location type) is
+  created by **forking an in-code template**. The fork is **one-time, with no inheritance**, so nothing in any
+  tenant ever points back at a template and templates can be improved in any release. That dissolves the
+  shipped-defaults-versus-local-edits problem at the root: the thing the vendor updates (the template) and the
+  thing the operator owns (the row) are **never the same object**. Four consequences follow.
+
+  - **Forking applies to template -> standard, not standard -> system.** A system does not fork its standard,
+    it **conforms** to it, with **live inheritance**: the standard's contract default resolves for every
+    conforming system until that system overrides it, and revising the default moves every system that has
+    not.
+  - **Therefore a shipped standard or location type is operator-owned, not official.** Both seed with
+    **`official: false`** through **seed-if-absent** paths (`SeedStandard` / `SeedLocationType`, `ON CONFLICT
+    DO NOTHING`), never the authoritative `Upsert*`. They are freely editable and deletable from the moment
+    they land.
+  - **An authoritative upsert here would be a bug, not a policy.** `ON CONFLICT DO UPDATE` would silently
+    revert an operator's edit on the next boot, which is the exact failure this model avoids. A regression
+    test edits a seeded standard, re-runs the seed, and asserts the edit survived.
+  - **The canonical catalogs are the exception** and keep the authoritative upsert with `official: true`:
+    **`property`** (and later `command` and `event_type`) is the **shared vocabulary a driver maps onto**, so
+    a release must be able to correct it. The classification catalogs (`vendor`, `driver`, `capability`,
+    `product`, `interface_type`, `secret_type`) and `role` stay on that same authoritative path for now.
+
+  Four route groups carry the contracts and the values, all regenerated into the OpenAPI document, the cobra
+  CLI, and the typed client: `GET /standards/{id}/properties` plus
+  `PUT` / `DELETE /standards/{id}/properties/{property}` (gated `standard:read` / `:update` / `:delete`);
+  `GET /location-types/{id}/properties` plus `PUT` / `DELETE .../{property}` (gated `type:*`, since the
+  location type registry is still a `type` registry); and the value sides
+  `GET /systems/{name}/properties` plus `PUT` / `DELETE .../{property}` (gated `system:read` / `:update`) and
+  the same for `/locations/{name}/properties` (gated `location:read` / `:update`). The value routes are
+  **scope-injected**, so an out-of-scope system or location is a non-disclosing **404**.
+- **Context:** [ADR-0047](#adr-0047-the-fields-fold-product_property-and-property_value) deferred
+  `standard_property` and `location_type_property` because neither owner was ready: `system_type` was a bare
+  label registry with no contract to hang anything on. Building that contract forced the promotion, since a
+  registry that declares what its instances expose **is** a blueprint, and a blueprint is the system-side
+  `product`. Making `standard_id` optional followed immediately: a productless component was already
+  first-class, and a system that matches no blueprint has the same claim. The seed question surfaced during
+  the build and is the harder half. Shipping a room standard as an authoritative `official` row would make it
+  **read-only** (an operator could not tune "Huddle Room" to their own estate) and would **revert local edits
+  on every boot** if it were writable. Both failures come from one mistake: treating example content and
+  canonical vocabulary as the same kind of thing. Splitting them (a template in code that is forked once,
+  versus a catalog row that is upserted authoritatively) lets the release improve its examples forever without
+  ever touching an estate's data, and keeps the one thing that genuinely must stay identical install to
+  install, the property vocabulary, under release control.
+- **Deferred:** the **in-code template mechanism** itself and its create-from-template console affordance
+  ([#317](https://github.com/hyperscaleav/omniglass/issues/317)); this slice ships the seed-if-absent behavior
+  and the operator-owned rows that the mechanism will produce, with the shipped starter set still declared as
+  seed YAML. The **official / community / private catalog tiering** for `product` / `driver` / `property` /
+  `event_type` plus a **disable flag** ([#318](https://github.com/hyperscaleav/omniglass/issues/318)). Also
+  still deferred: a standard's **role set** and health composition, the non-`declared` provenance producers,
+  the cross-owner cascade over `property_value`, and the `datapoint` -> `sample` rename.
+- **Supersedes:** the **`system_type`-as-label** notion (a system's blueprint is a first-class Catalog entity
+  with its own contract and its own permission, and it is optional), completing on the system side what
+  [ADR-0045](#adr-0045-the-product-catalog) and
+  [ADR-0047](#adr-0047-the-fields-fold-product_property-and-property_value) did on the component side. Also
+  supersedes the assumption running through [ADR-0044](#adr-0044-the-component-classification-catalogs),
+  [ADR-0045](#adr-0045-the-product-catalog), and
+  [ADR-0047](#adr-0047-the-fields-fold-product_property-and-property_value) that **everything the seed ships
+  is `official` and read-only**. That now holds **only for the canonical catalogs**: the shipped standards and
+  the four shipped location types (`campus` / `building` / `floor` / `room`) are `official: false` and fully
+  editable, so any prose promising a read-only seed-owned row for those two registries is stale.
+- **Tracked under** epic [#266](https://github.com/hyperscaleav/omniglass/issues/266). This is **PR6** of the
+  estate-model shift toward property / event / command plus vendor / product / driver / capability / standard /
+  role / health.
+
+### ADR-0049: The system role: capability-gated staffing and the resolved capability set
+
+- **Date:** 2026-07-21 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/),
+  [API](/architecture/api/), [glossary](/architecture/glossary/), [templates](/architecture/templates/),
+  [health](/architecture/health/), [Standards guide](/guides/admin/standards/),
+  [Capabilities guide](/guides/admin/capabilities/), [Work with an entity](/guides/operator/entities/)
+- **Decision:** A system says **what it needs filled**, and the platform **refuses** a component that cannot
+  fill it. Four tables and two resolvers carry that.
+
+  **1. A `system_role` is a slot, declared on the arc.** A role (a table microphone, a main display) is
+  declared either on a **`standard`**, where **every conforming system inherits it live**, or **directly on
+  one `system`** (ad-hoc, which is how a one-off system gets roles at all). The two owners ride the **same
+  exclusive-arc pattern `property_value` uses**: an `owner_kind` plus `standard_id` / `system_id`, a one-set
+  CHECK, and a `unique nulls not distinct` key over the arc columns and the role name (the default NULLS
+  DISTINCT would let duplicates through the NULL arm). A role carries a **`quorum`**: how many components
+  should fill it, at least one, because a role no component need fill is not a role.
+
+  **2. `role_capability` is conjunctive.** A role requires a set of [`capability`](#adr-0044-the-component-classification-catalogs)
+  rows, and a component must provide **every** one of them. Requiring nothing admits anything, which is the
+  honest reading of an empty requirement, not a special case.
+
+  **3. A component's capabilities become a resolved set.** **`component_capability`**
+  (`component_id`, `capability_id`, `present`) is the component's **own** capability facts, layered over its
+  product's: `present=true` **adds** one the product does not claim, `present=false` **suppresses** one it
+  does. **`EffectiveCapabilities(component)`** is then the product's set UNION the additions MINUS the
+  suppressions, and a **productless component resolves to just its own declarations**. This is the single
+  definition of "what this component can do" for the whole platform, and it is the set the guard checks.
+
+  **4. `EffectiveRoles(system)` merges both arms.** The roles the system's standard declares (marked
+  `from_standard`) UNION those declared directly on it, each with its required capabilities, its quorum, and
+  the components filling it here. A one-off system has only the ad-hoc arm. The resolver serves `Assigned()`
+  and `Understaffed()` (quorum minus assignments, floored at zero) rather than leaving arithmetic to each
+  surface, so staffing reads the same way everywhere.
+
+  **5. The guard refuses, and the refusal names the gap.** `AssignRole` is a **422 when the component's
+  resolved capabilities do not cover every capability the role requires**, and the message names the missing
+  ones (`component "panel-1" cannot fill role "table-mic": missing microphone, speaker`), sorted so the same
+  gap always reads the same way. It joins the **location placement constraint** as a refusal on **modeled**
+  grounds, and follows the same rule that one set: **name the parties**. A bare "no" leaves the operator
+  nothing to do, and the whole value of modeling capability is that the refusal is actionable. Assignment is otherwise idempotent, and **`role_assignment.component_id` is
+  `on delete restrict`**, so a component staffing a role cannot be deleted out from under the system.
+
+  Eight routes carry it, regenerated into the OpenAPI document, the cobra CLI, and the typed client:
+  `GET /standards/{id}/roles` plus `PUT` / `DELETE /standards/{id}/roles/{role}` (gated `standard:read` /
+  `:update` / `:delete`); `GET /systems/{name}/roles` (the resolved read) plus
+  `PUT` / `DELETE /systems/{name}/roles/{role}` and
+  `PUT` / `DELETE /systems/{name}/roles/{role}/assignments/{component}` (gated `system:read` / `:update`);
+  and `GET /components/{name}/capabilities` plus `PUT` / `DELETE /components/{name}/capabilities/{capability}`
+  (gated `component:read` / `:update`). Every system and component route resolves its owner **within the
+  caller's scope first**, so an out-of-scope target is a non-disclosing **404**. The shipped `meeting-room`
+  standard declares `room-mic` (microphone + speaker, quorum 2) and `main-display` (flat-panel-display, chosen
+  so the shipped Samsung QM55 can actually fill it), **seeded if absent** on the
+  [operator-owned lane](#adr-0048-the-standard-blueprint-and-the-template-fork-seed-model), so an operator's
+  quorum retune survives a re-seed.
+- **Context:** The strict refusal was decided first: a role that names a requirement and then lets anything
+  fill it is decoration. But a component's capabilities came **only from its product**, and `product` is
+  deliberately **optional** on a component
+  ([ADR-0047](#adr-0047-the-fields-fold-product_property-and-property_value)), so under a strict guard a
+  **productless component could have filled no role at all**. Three ways out, and only one of them keeps both
+  halves: make product mandatory (reverses a call made one slice ago for good reasons), soften the guard to a
+  warning (throws away the point of the model), or let a **component declare its own capabilities over its
+  product's**. Layering resolves the tension without touching either commitment, and it is not a new shape: it
+  is exactly the **contract-plus-override** the declared properties already use, where a product declares a
+  default and an instance overrides it, applied to capabilities instead of values. Quorum lands in this slice
+  and impact does not, because **staffing is visible without health at all**: a role wanting 2 with 1 assigned
+  is under-staffed today, on data the operator entered, with no engine reading anything.
+- **Deferred:** **`impact`** (`outage` / `degraded` / `none`, what an unfilled or failing role does to its
+  system) and the whole **SLI rollup**, which land in **PR8** with the engine that reads them; the console
+  surfaces for both arcs (the standard's role editor, the system's roles panel, the component's capability
+  editor); **role-scoped config**, a value declared against a role slot and resolving onto whichever component
+  fills it ([templates](/architecture/templates/) describes it, nothing builds it); a **cap at quorum** (a role
+  may be over-staffed, and nothing refuses the extra assignment, because "more than enough" is not an error);
+  and the **`system_member`** composition table, which stays `Design`.
+- **Supersedes:** the **`system_template_member` role-requirement** design on
+  [templates](/architecture/templates/). That page still describes a role slot **frozen into a
+  `system_template_version`**, whose requirement is a set of **canonical datapoints and commands** and whose
+  instance assignment is a **`system_member`** row. What shipped puts the slot on the **standard / system
+  arc** (a standard is the blueprint now, so the role belongs with it), states the requirement as a
+  **capability** set (a coarser, operator-legible vocabulary that exists as a catalog today, where canonical
+  commands do not), and records the assignment in **`role_assignment`**. Templates and their frozen BOM stay
+  `Design`; the two models are reconciled when template pinning is built, and until then the built role model
+  is the one on [core entities](/architecture/core-entities/). Also supersedes the reading, running through
+  [ADR-0044](#adr-0044-the-component-classification-catalogs) and
+  [ADR-0045](#adr-0045-the-product-catalog), that **a capability is a product-only fact**: a capability is now
+  a fact about a **component**, which its product supplies a default for.
+- **Tracked under** epic [#266](https://github.com/hyperscaleav/omniglass/issues/266). This is **PR7** of the
+  estate-model shift toward property / event / command plus vendor / product / driver / capability / standard /
+  role / health.
+
+### ADR-0050: Health is a recorded transition, computed from the alarm-capability-role chain
+
+- **Date:** 2026-07-21 | **Status:** Accepted | **Pages:** [health](/architecture/health/),
+  [core entities](/architecture/core-entities/), [API](/architecture/api/), [glossary](/architecture/glossary/),
+  [Standards guide](/guides/admin/standards/), [Work with an entity](/guides/operator/entities/)
+- **Decision:** Health is a **verdict** on a system or a location, **derived** from what is wrong with the
+  components staffing it and **recorded as a transition** at the moment it changes. Five calls carry that.
+
+  **1. Capability is the routing key, and an alarm is how a component loses one.** An **`alarm`** is
+  **component-local** (`component_id`, a `severity` of `info` / `warning` / `critical`, a `message`, a
+  `raised_at`, and a **nullable `cleared_at`**), and **`alarm_capability`** names the
+  [capabilities](#adr-0044-the-component-classification-catalogs) it degrades. Clearing **keeps the row**, so
+  the record of what was wrong and when survives the fix. The chain from there is one sentence per hop: a
+  component **satisfies** a role only when it provides **every** required capability and **none of those is
+  currently degraded**; a role with fewer satisfying components than its **quorum** is **impaired**; an
+  impaired role contributes its declared **`impact`** (`outage` / `degraded` / `none`, a column on
+  `system_role`, defaulting to `degraded`); a system takes the **worst** contribution among its roles, and a
+  location the worst among the systems placed anywhere beneath it. That chain is why a capability is **flat**
+  and why a role requires a **set** of them: capability is the only vocabulary shared by the thing that breaks
+  (a component) and the thing that cares (a slot in a room), so it is the only honest place to route through.
+  **Impact lives on the role**, not on the alarm or the component, because the same broken box matters
+  differently depending on the slot it was filling: a dead confidence monitor is not a dead main display.
+
+  **2. The judgement is a pure package.** **`internal/health`** takes resolved inputs and returns a verdict,
+  with **no database**: `Component.Satisfies`, the quorum boundary, worst-wins at both levels, and the
+  impact mapping are unit tests, not SQL. Two of its defaults are deliberate **safety** calls in opposite
+  directions. An **unrecognized impact reads `degraded`**, so a bad value can never make an impaired role
+  silently harmless. An **unrecognized recorded value reads `healthy`**, so one stray row cannot paint an
+  estate broken. The rule behind both: fail loud about a **judgement**, fail quiet about a **record**.
+
+  **3. Health is recorded as a transition-only state, on `state_datapoint`.** The requirement this whole
+  design serves is an **accurate history of the edges**: exactly when a system stopped working, answerable
+  weeks later. `state_datapoint` is already that primitive (the ingest path writes a row only when the value
+  differs from the last one stored, and `StateTransitions` reads the ordered flips the reachability
+  availability strip draws), so health reuses it rather than adding a history table: the **owner arc**,
+  `provenance='calculated'`, and `source_rule='health-rollup'` (the lineage CHECK requires a non-null
+  `source_rule`). The first value for an owner is always recorded, even `healthy`, so a reader can tell
+  "healthy since we started watching" from "never evaluated".
+
+  **4. Recompute happens at the writes that can change health, in the same transaction.** Every mutation that
+  can move a verdict recomputes the affected chain before it commits: **raising** or **clearing** an alarm,
+  **assigning** or **unassigning** a component, **declaring** or **withdrawing** a role, changing a role's
+  **quorum** or **impact**, changing a component's **capabilities** or its **product**, **creating** a system,
+  and changing the **standard** it conforms to or the **location** it sits in (recomputing **both** the old
+  and the new location, since the one it left may have just improved). **A read never writes.** Two
+  alternatives were considered and rejected, and both fail the same requirement. **Compute-on-read** keeps no
+  history at all, so "when did this break" is unanswerable by construction. **Compute-and-write-through-on-read**
+  keeps a history that is **sampled by whoever opens a page**: the edge timestamp becomes the moment somebody
+  looked, not the moment the estate changed, and an estate nobody watched over a weekend has no weekend. A
+  transition is only worth recording if it is recorded **where the change happened**.
+
+  **5. A report computes the verdict it serves from the evidence it shows.** The health report originally
+  served the **last recorded** verdict while resolving the contributing roles **live**, which let a system
+  with nothing recorded yet report `healthy` beside an impaired `outage` role: the report contradicted
+  itself. The served verdict is now derived from the same resolved rows the report displays, so the headline
+  and the reason can never disagree. This is **not** self-healing on read: nothing is written, and the
+  **recorded transitions remain the source for history**. A missing trigger can therefore cost an edge in the
+  history, but it can never make a report lie about the present.
+
+  **Routes**, regenerated into the OpenAPI document, the cobra CLI, and the typed client:
+  `GET` / `POST /components/{name}/alarms` and `DELETE /components/{name}/alarms/{id}` (gated
+  `component:read` / `:update`); `GET /systems/{name}/health` and `GET /locations/{name}/health` (gated
+  `system:read` / `location:read`, scope-injected, an out-of-scope owner a non-disclosing 404), each returning
+  the verdict, the contributing roles (with the degraded capabilities and the causing alarms) or the systems
+  beneath, and the recorded transitions over the last 30 days. The CLI reads
+  `omniglass component alarms|raise-alarm|clear-alarm`, `omniglass system health`, and
+  `omniglass location health`. The seed adds a **`health`** state-kind property
+  (`healthy` / `degraded` / `outage`) so the recorded series is typed like any other.
+- **Context:** The architect's requirement was stated plainly: *"The most important thing about health is that
+  we have a real, accurate history of the edges. We need to know exactly when a system went from healthy to
+  unhealthy, and be able to look back at it weeks later."* Every call above falls out of taking that
+  literally. Once the history has to be **accurate**, the write side is the only correct place to compute
+  from, and once the carrier has to be **edges**, `state_datapoint` is already the right table and a new
+  `health_history` would have been a second, worse copy of it. Recording an **opening verdict at system
+  creation** then surfaced a latent bug the rest of the schema had been quietly carrying: every system now
+  had a `state_datapoint` row from birth, and **every rename failed on the owner foreign key**, because those
+  FKs address the owner **by name** and declared no `ON UPDATE`. Migration `20260721170000` re-adds all four
+  `state_datapoint` owner FKs with **`on update cascade`**, which is what name-as-address always meant: the
+  history follows the entity rather than pinning its old name. Health did not create that bug, it made it
+  **reachable for every system**, which is the useful kind of forcing function.
+- **Deferred:** the **same FK gap** on `metric_datapoint`, `event`, `property_value`, `alarm`, and the role
+  tables' name-addressed columns, tracked in
+  [#314](https://github.com/hyperscaleav/omniglass/issues/314). An alarm today is **written by an operator or
+  an API caller**, not produced by an [`event_rule`](/architecture/alarms-actions/) over datapoints; the rule
+  that opens and clears one automatically is the next tier. Also deferred: **system-** and **location-owned**
+  alarms (the alarm arc is component-only today), the **`unknown`** verdict with its coverage and staleness
+  reasons, the **`global`** estate top, the **SLI / SLO / SLA** family and the **KPI** set, an alarm's
+  interaction with **operational mode** (maintenance suppressing a contribution), and **dependency
+  suppression**.
+- **Supersedes:** three earlier calls on [health](/architecture/health/). (a) **The value vocabulary**:
+  [ADR-0003](#adr-0003-health-reads-ok-not-up) named the healthy state `ok` over an ordered
+  `ok < degraded < down`; the built domain is **`healthy` < `degraded` < `outage`**, keeping that entry's
+  reasoning (name the verdict, not the ping) and changing only the words, since `outage` says what a broken
+  room means to the people in it. (b) **Where impact is declared**: the design hung an optional `health`
+  impact on the **`event_rule`**, so an alarm moved its owner's health directly. Impact now lives on the
+  **role**, and an alarm reaches a system **only** through the capabilities it degrades. An alarm on a
+  component that fills no role moves that component's own verdict and nothing above it, which is the correct
+  answer and was previously an accident of tagging. (c) **`health_role`**: the `required` / `redundant` /
+  `informational` member tag on a `system_template_member` is superseded by **quorum plus impact** on a
+  `system_role`, which expresses the same three cases without a fourth vocabulary (required is quorum 1 with
+  impact `outage`, redundant is a quorum below the number assigned, informational is impact `none`). It also
+  closes [ADR-0049](#adr-0049-the-system-role-capability-gated-staffing-and-the-resolved-capability-set)'s
+  deferral of `impact` and its "quorum ships without health" note.
+- **Tracked under** epic [#266](https://github.com/hyperscaleav/omniglass/issues/266). This is **PR8** of the
+  estate-model shift toward property / event / command plus vendor / product / driver / capability / standard /
+  role / health, and the slice that **closes the epic**: it is the one that consumes what the previous seven
+  built.
+
+### ADR-0051: Membership is the attachment, and a role is what it does
+
+- **Status:** accepted, built.
+- **Context:** a component's relationship to a system was **two unrelated facts that could silently
+  disagree**. `component.system_id` was a single pointer, set once at create with no path to change it,
+  which no authorization and no health path ever read; `role_assignment` was many-to-many and carried what
+  the component actually does. Nothing reconciled them, and the console rendered the first under the heading
+  "Components" while the panel directly below listed the second, so a fully staffed system displayed
+  **`0 components`**. The contradiction was visible to operators before it was understood by us.
+- **Decision:** membership is a **first-class binding**, `system_member (system_id, component_id,
+  is_primary)`, and a role attaches to it. **Staffing a role creates the membership**, because a component
+  filling a job in a system that the system does not count as a member is a contradiction. The reverse is
+  **not** symmetric: giving up a role leaves the membership, because the device is still in the room, and a
+  member carrying no role (a power conditioner, a spare) is ordinary.
+- **Why membership cannot simply replace the pointer:** the cascade seeds its system band from **one** row
+  and ranks with `row_number() over (partition by ... order by band desc, depth asc)`, which has **no
+  tiebreaker after depth**. A many-valued seed would make an effective tag, variable, or secret resolve
+  nondeterministically for precisely the shared-device case. Membership is therefore many-valued while
+  **`is_primary`** keeps a single answer for callers with **no system in hand**. It is a **default, not a
+  resolution rule**: anything naming a system resolves against that system, and a component's first
+  membership takes the default with nobody asking, so the single-system case never meets the concept.
+- **Cascade from both ends, and deliberately no restrict on the component.** A binding is meaningless once
+  either side is gone. `role_assignment` keeps its `on delete restrict` because deleting a component that
+  fills a job would silently break a system's health; duplicating that restrict on membership would add a
+  step to every component removal while protecting nothing new.
+- **Backfill reads both of the old places.** The role table alone drops every component that belonged to a
+  system without filling a declared role; the pointer alone drops the shared device's other systems. The old
+  pointer seeds `is_primary`, since answering which system chain feeds a component's config is exactly what
+  it used to do. A component left with several memberships and no pointer gets **no** default, because there
+  is no honest way to guess which one was meant.
+- **Thin cut:** resolution behaviour does not move in this slice. `component.system_id` stays and keeps
+  feeding the four cascade resolvers unchanged, so this ships and is verified on its own.
+- **Supersedes:** [core-entities](/architecture/core-entities/)'s "a truly shared device **skips the system
+  layer**", which was the best available answer while the only binding was a single pointer. A shared device
+  is now a member of every system it serves. It also narrows that page's `system_member` design: the shipped
+  row is the binding alone, without the role column or the pin to a frozen `system_template_version`, so a
+  member can exist without a role.
+- **Tracked under** epic [#324](https://github.com/hyperscaleav/omniglass/issues/324), slice
+  [#325](https://github.com/hyperscaleav/omniglass/issues/325).
+
+### ADR-0052: operator deletes become undoable, not modifier-chorded
 
 - **Date:** 2026-07-20 | **Status:** Accepted | **Pages:** [UI](/architecture/ui/)
 - **Decision:** The keyboard epic's delete affordance is an **undoable delete**, not a modifier chord. The

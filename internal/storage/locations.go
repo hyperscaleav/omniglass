@@ -152,6 +152,23 @@ type LocationType struct {
 
 // UpsertLocationType installs or updates a location type by id, the boot-seed
 // phase's write. Idempotent: re-seeding the same id updates it in place.
+// SeedLocationType inserts a shipped example location type only when it is
+// absent. Like a standard, a location type is content an operator shapes to their
+// organization, so re-seeding must never reassert over an edit. Deliberately not
+// UpsertLocationType, whose ON CONFLICT DO UPDATE is the authoritative behavior
+// the canonical catalogs want.
+func (p *PG) SeedLocationType(ctx context.Context, lt LocationType) error {
+	_, err := p.pool.Exec(ctx, `
+		insert into location_type (id, official, display_name, icon, allowed_parent_types)
+		values ($1, $2, $3, $4, $5)
+		on conflict (id) do nothing`,
+		lt.ID, lt.Official, lt.DisplayName, lt.Icon, normalizeAllowedParentTypes(lt.AllowedParentTypes))
+	if err != nil {
+		return fmt.Errorf("storage: seed location_type %q: %w", lt.ID, err)
+	}
+	return nil
+}
+
 func (p *PG) UpsertLocationType(ctx context.Context, lt LocationType) error {
 	_, err := p.pool.Exec(ctx, `
 		insert into location_type (id, official, display_name, icon, allowed_parent_types)
@@ -482,6 +499,18 @@ func (p *PG) resolveForAction(ctx context.Context, q querier, name string, read,
 // reused by the system/component located-at resolution.
 func (p *PG) locationByName(ctx context.Context, q querier, name string) (*Location, error) {
 	return scopedByName(ctx, q, locationConfig, name)
+}
+
+// locationNameByID resolves a location id back to its name. Placements hold the
+// id while the estate-address records (health among them) hold the name, so a
+// before-image's location has to be translated before the location it points at
+// can be acted on.
+func locationNameByID(ctx context.Context, q querier, id string) (string, error) {
+	var name string
+	if err := q.QueryRow(ctx, `select name from location where id = $1`, id).Scan(&name); err != nil {
+		return "", fmt.Errorf("storage: location name for %q: %w", id, err)
+	}
+	return name, nil
 }
 
 // LocationNameTaken reports whether a location with this name exists. Scope-blind

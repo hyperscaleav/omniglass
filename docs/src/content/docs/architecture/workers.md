@@ -60,8 +60,10 @@ when an `event_rule` writes the event and alarm to PG in one transaction, after 
 committed change out to the action sender. So the rule engine never recurses unboundedly in one
 transaction; a cross-producing stage hands off to the bus, which is also what makes it independently
 durable. Calc re-entry **terminates by write-on-change** (a recompute that lands the same value
-publishes nothing, the fixpoint) with a depth cap as a cyclic-rule backstop, carrying a rollup
-(component -> system -> location health) one hop per pass. Parsing into datapoints is **not** a
+publishes nothing, the fixpoint) with a depth cap as a cyclic-rule backstop, carrying a rollup one hop
+per pass. **[Health](/architecture/health/) is the exception, and deliberately not a worker stage**: its
+rollup (component -> system -> location) runs **inside the write transaction** that changed it, because a
+verdict recomputed a hop later would record its transition at the wrong moment. Parsing into datapoints is **not** a
 worker stage; it happens at the edge ([collection](/architecture/collection/)).
 
 ## The stateless / stateful fork

@@ -21,7 +21,10 @@ live in [API first](/contributing/api-first/); this page is the conventions that
 Built today: the Huma-over-chi API with the OpenAPI 3.1 document generated from the Go structs
 (`make gen`), the AIP-style resource and `:verb` routing, and the problem+json error envelope, proven
 on `/auth`, `/roles`, `/locations`, `/systems`, `/components`, `/nodes`, `/interfaces`, `/tasks`, and the
-per-component reachability read, plus the type registries. The node `:enroll` and `:claim` custom methods
+per-component reachability read, plus the type registries, the `/products` and `/standards` catalogs, the
+classifier-contract and instance-value property routes, the role declaration, resolution, and staffing
+routes, and the component alarm plus system and location [health](#health-the-verdict-and-why) reads. The
+node `:enroll` and `:claim` custom methods
 are the first `:verb` routes in the wild. Still `Design`:
 the expression `filter` language, idempotency keys, long-running operations over the `action` row, the
 MCP surface, the SSE relay, and the NATS node contract. See [implementation status](/architecture/status/).
@@ -47,7 +50,7 @@ Everything lives under `/api/v1`. The path shape is derivable, not special-cased
   bounded to that target and behind the owner takeover guard. `POST /principals/{id}/sessions:revokeAll` (a
   `{ purpose }` body, same gate and guard) bulk-ends all of one kind at once, returning the count.
 - **Singular kind sub-segments** for the typed families: `/rules/calc`, `/datapoints/metric`,
-  `/types/component`.
+  `/types/location`.
 - **Collection-level custom methods** carry the colon on the collection, not a member:
   `POST /systems:checkName` (also `/components:checkName`, `/locations:checkName`) is an advisory
   precheck for a technical-name rename, returning `{ valid, available, reason }`. It is gated by
@@ -186,6 +189,7 @@ shape the [Shape](#shape-resources-and-verb-methods) section describes.
 | GET | `/tasks` | `task:read` |
 | GET | `/tasks/{id}` | `task:read` |
 | GET | `/components/{name}/reachability` | `component:read` |
+| GET | `/components/{name}/events` | `component:read` |
 
 **The node custom methods are the day-one enrollment handshake.** `POST /nodes/{name}:enroll` mints (or
 re-mints) the node's enrollment token and returns it **once**; the server stores only its hash and never
@@ -214,6 +218,16 @@ It is gated by `component:read` and scope-injected through the component, so an 
 non-disclosing 404 and the datapoint reads only ever run on a verified, in-scope component. It is a
 hand-written typed `GET`, an early and deliberate exception to [reads beyond one resource are
 views](#reads-beyond-one-resource-are-views), standing in until the `ViewResult` framework lands.
+
+**The event read is the log-kind mirror of the reachability read.** `GET /components/{name}/events` returns
+the component's recent **log occurrences** (the [`event` log sink](/architecture/core-entities/#the-event-sink-the-first-arc-owned-occurrence)),
+newest first, bounded to the last 24 hours and capped at 200 rows. Each row carries its `ts`, the property
+`key` (e.g. `syslog.line`), the `instance` discriminator, the `message`, optional structured `attributes`,
+its `provenance` (`observed` for direct collection), and the `source` interface type. It is gated by
+`component:read` and scope-injected through the same `GetComponent` gate as the reachability read, so an
+out-of-scope component is the same non-disclosing 404 and the event read only ever runs on a verified,
+in-scope component. Like reachability, it is a hand-written typed `GET` standing in until the `ViewResult`
+framework lands.
 
 :::note[Thin cuts today]
 These routes ship the operationally useful slice, not the full CRUD matrix. A **node** has create, list, get,
@@ -308,24 +322,255 @@ owning entity's own write. The key vocabulary and an entity's tags read on the v
 
 A `tagBinding` body is `{key, value, owner_kind, owner_id?, owner_name?}`.
 
-A **component make** ([core entities](/architecture/core-entities/#catalog-reference-data-component_make))
-is Catalog reference data, the manufacturer registry a future `component_model` will reference, on the
-same flat, official-vs-custom pattern as the `*_type` registries. The list and read routes sit on the
-viewer floor (`make:read`, which `*:read` carries); the three writes gate on `make:create` /
-`make:update` / `make:delete`, all at the admin tier, exactly like `type:*`.
+The **component-classification catalogs** ([core entities](/architecture/core-entities/#catalog-reference-data-vendor-driver-capability))
+are Catalog reference data, flat official-vs-custom registries the `product` layer references, on the same
+pattern as the `*_type` registries. Each is its own resource with the same CRUD shape: the
+list and read routes sit on the viewer floor (`vendor:read` / `driver:read` / `capability:read`, which
+`*:read` carries); the three writes gate on `<resource>:create` / `<resource>:update` /
+`<resource>:delete`, all at the admin tier, exactly like `type:*`. An **official** (seed-owned) row is
+read-only (`PATCH` and `DELETE` both 422).
 
-- `GET /component-makes` lists the registry, ordered alphabetically by display name (`{makes: [make]}`,
-  `make:read`).
-- `POST /component-makes` mints a custom make from `{id, display_name, icon?, support_phone?, website?}`
-  (201, `make:create`, admin).
-- `GET /component-makes/{id}` reads one (`make:read`).
-- `PATCH /component-makes/{id}` updates `{display_name?, icon?, support_phone?, website?}` (`make:update`,
-  admin); an **official** (seed-owned) row is read-only (422).
-- `DELETE /component-makes/{id}` removes a custom make (204, `make:delete`, admin); an official row is
-  refused (422).
+A **vendor** (Crestron, Biamp, ...) names an organization, generalizing the former manufacturer-only
+`component_make` with a **`kind`** of `manufacturer` / `integrator` / `developer` (default
+`manufacturer`, a 422 for any other value).
 
-A `make` body is `{id, display_name, icon, support_phone, website, official}`. `website` is validated to
-an `http`/`https` scheme on write (a 422 for any other scheme, for example `javascript:`).
+- `GET /vendors` lists the registry, ordered alphabetically by display name (`{vendors: [vendor]}`,
+  `vendor:read`).
+- `POST /vendors` mints a custom vendor from `{id, display_name, kind?, icon?, support_phone?, website?}`
+  (201, `vendor:create`, admin).
+- `GET /vendors/{id}` reads one (`vendor:read`).
+- `PATCH /vendors/{id}` updates `{display_name?, kind?, icon?, support_phone?, website?}` (`vendor:update`,
+  admin).
+- `DELETE /vendors/{id}` removes a custom vendor (204, `vendor:delete`, admin).
+
+A `vendor` body is `{id, display_name, kind, icon, support_phone, website, official}`. `website` is
+validated to an `http`/`https` scheme on write (a 422 for any other scheme, for example `javascript:`).
+
+A **driver** (Generic SNMP, Cisco xAPI, ...) names the implementation that gets, emits, or sets a
+product's signals, with an optional **`version`**.
+
+- `GET /drivers` lists the registry, ordered alphabetically by display name (`{drivers: [driver]}`,
+  `driver:read`).
+- `POST /drivers` mints a custom driver from `{id, display_name, version?}` (201, `driver:create`, admin).
+- `GET /drivers/{id}` reads one (`driver:read`).
+- `PATCH /drivers/{id}` updates `{display_name?, version?}` (`driver:update`, admin).
+- `DELETE /drivers/{id}` removes a custom driver (204, `driver:delete`, admin).
+
+A `driver` body is `{id, display_name, version, official}`.
+
+A **capability** (Microphone, Display, ...) names what a component can do. It is the vocabulary two other
+surfaces consume: a **product** declares the set its instances provide, a **component** adds to or
+suppresses that set with [its own facts](#roles-a-system-declares-a-slot-a-component-fills-it), and a
+**system role** requires a set of them.
+
+- `GET /capabilities` lists the registry, ordered alphabetically by display name
+  (`{capabilities: [capability]}`, `capability:read`).
+- `POST /capabilities` mints a custom capability from `{id, display_name}` (201, `capability:create`,
+  admin).
+- `GET /capabilities/{id}` reads one (`capability:read`).
+- `PATCH /capabilities/{id}` updates `{display_name?}` (`capability:update`, admin).
+- `DELETE /capabilities/{id}` removes a custom capability (204, `capability:delete`, admin).
+
+A `capability` body is `{id, display_name, official}`.
+
+A **product** ([core entities](/architecture/core-entities/#catalog-reference-data-product)) is the
+concrete **SKU** that ties the leaf catalogs together: a **vendor** (who makes it), a **driver** (what
+talks to it), a **kind** (`device` / `app` / `service` / `vm`, default `device`, a 422 for any other
+value), an optional **parent** product (a variant), and the **capabilities** it provides. It is the
+layer the catalogs above were built for, and the target of `component.product_id`. Its writes gate on
+`product:create` / `product:update` / `product:delete` at the admin tier; the list and read routes sit
+on the viewer floor (`product:read`, which `*:read` carries). An **official** (seed-owned) row is
+read-only (`PATCH` and `DELETE` both 422).
+
+- `GET /products` lists the registry, ordered alphabetically by display name (`{products: [product]}`,
+  `product:read`). Each row carries its vendor, driver, kind, and capabilities.
+- `POST /products` mints a custom product from
+  `{id, display_name, kind?, vendor_id?, driver_id?, parent_product_id?, capabilities?}` (201,
+  `product:create`, admin).
+- `GET /products/{id}` reads one, with its capabilities (`product:read`).
+- `PATCH /products/{id}` updates
+  `{display_name?, kind?, vendor_id?, driver_id?, parent_product_id?, capabilities?}` (`product:update`,
+  admin); `capabilities`, when given, **replaces** the whole set.
+- `DELETE /products/{id}` removes a custom product (204, `product:delete`, admin); an official row is
+  refused (422), and a product still referenced by a component is refused (409).
+
+A `product` body is
+`{id, display_name, kind, vendor_id, driver_id, parent_product_id, capabilities, official}`. An unknown
+vendor / driver / parent / capability reference is a 422.
+
+A **standard** ([core entities](/architecture/core-entities/#catalog-reference-data-standard)) is the
+**blueprint a system conforms to** (Huddle Room, Classroom, Auditorium), the system-side counterpart of a
+product. Because it carries its own declared-property contract it is a **Catalog entity, not a bare type
+registry**: it takes its own `standard:*` resource rather than the shared `type:*`, and its routes live at
+`/standards`, not `/types/system`. The list and read sit on the viewer floor (`standard:read`); the writes
+gate on `standard:create` / `:update` / `:delete` at the admin tier.
+
+- `GET /standards` lists the catalog, ordered alphabetically by display name (`{standards: [standard]}`,
+  `standard:read`).
+- `POST /standards` mints a standard from `{id, display_name, parent_standard_id?}` (201,
+  `standard:create`, admin).
+- `GET /standards/{id}` reads one (`standard:read`).
+- `PATCH /standards/{id}` updates `{display_name?, parent_standard_id?}` (`standard:update`, admin).
+- `DELETE /standards/{id}` removes one (204, `standard:delete`, admin); a standard still referenced by a
+  system is refused (409).
+
+A `standard` body is `{id, display_name, parent_standard_id, official}`. An unknown parent is a 422. The
+**shipped** standards are `official: false`, so unlike a seeded product they are fully editable
+([the seed model](/architecture/core-entities/#the-seed-model-forked-templates-versus-canonical-catalogs)).
+
+## Properties: a classifier declares, an instance sets
+
+A **contract** is the set of properties a classifier's instances expose
+([core entities](/architecture/core-entities/#declared-properties-the-classifier-contracts-and-the-value-store)).
+Each contract is a **sub-collection of its classifier**, addressed by property name, not a resource of its
+own, so the line is idempotent: `PUT` declares it or revises it in place. Type and validation are **not**
+in the body, they come from the [property catalog](/guides/admin/properties/). Three classifiers carry a
+contract, on identical route shapes:
+
+- `GET /products/{id}/properties`, `PUT` / `DELETE /products/{id}/properties/{property}`, gated
+  `product:read` / `:update` / `:delete`.
+- `GET /standards/{id}/properties`, `PUT` / `DELETE /standards/{id}/properties/{property}`, gated
+  `standard:read` / `:update` / `:delete`.
+- `GET /location-types/{id}/properties`, `PUT` / `DELETE /location-types/{id}/properties/{property}`,
+  gated `type:read` / `:update` / `:delete` (the location type registry is still a `type` registry, so
+  its contract keeps that permission story). Note the path: the registry CRUD stays at `/types/location`,
+  while its contract hangs off the plural `/location-types` collection.
+
+The list returns `{properties: [contractProperty]}` ordered by property name, each
+`{property_name, default_value, required}`: the label and type are the catalog's to serve, so a surface
+that wants them reads `/properties` alongside. `PUT` takes `{default_value?, required?}`. `DELETE`
+withdraws the line (204); instances **keep** any value they set for it, now off contract. An **official**
+(seed-owned) classifier is read-only (422), an unknown classifier is a 404, and a property the catalog
+does not know is a 422.
+
+An instance's **values** are the same shape on the other side of the contract, and unlike the classifier
+routes they are **ABAC-scoped through the instance**, so an out-of-read-scope instance is a
+non-disclosing **404** and every write is audited. Four owners are addressable, each gated by its own
+entity's permission:
+
+- `GET /components/{name}/properties`, `PUT` / `DELETE .../{property}` (`component:read` / `:update`).
+- `GET /systems/{name}/properties`, `PUT` / `DELETE .../{property}` (`system:read` / `:update`).
+- `GET /locations/{name}/properties`, `PUT` / `DELETE .../{property}` (`location:read` / `:update`).
+
+The `GET` is the **effective read** (`{properties: [effectiveProperty]}`): every property the instance's
+classifier declares (its `product`, its `standard`, its `location_type`), resolved to
+`coalesce(the instance's own value, the contract default)`, plus every property set directly on the
+instance that the contract does not declare. Each row carries the catalog's `display_name` and
+`data_type`, then `value`, `default_value`, `set_value`, `is_set` (the override marker), `from_contract`,
+`required`, and the `value_id` the surface clears. An instance with **no classifier** (a productless
+component, a one-off system) returns only its off-contract values.
+
+`PUT .../{property}` sets the instance's value from `{value}`. It is **idempotent**: the first set stores
+the value, a later set replaces it. The property need **not** be on the contract, but it must exist in
+the catalog (422 otherwise). `DELETE .../{property}` clears it (204), so the property falls back to the
+contract default, or leaves the effective read entirely when it was off contract. Clearing a value the
+instance never set is a 404.
+
+Setting a property is the **owning entity's own write** (`component:update`, `system:update`,
+`location:update`), the same rule tag bindings follow: the property catalog governs the vocabulary, the
+owning entity governs its values.
+
+## Roles: a system declares a slot, a component fills it
+
+A **[system role](/architecture/core-entities/#system-roles-the-slots-a-system-needs-filled)** is a slot a
+system needs filled, and the surface is three arcs: **declaration** (what a standard says every conforming
+system needs, and what one system declares ad-hoc), **resolution** (the per-system read that merges both
+with who fills each role today), and **staffing** (assign and unassign). It is **not** the
+[IAM role](/architecture/identity-access/): `/roles` is the RBAC catalog, these routes are the estate model.
+
+A role is addressed **by name within its owner**, so like a property contract line every declaration is a
+`PUT` that declares or revises in place. The body is `{display_name?, quorum?, capabilities?, impact?}`,
+`capabilities` **replaces** the required set wholesale (omitting one drops it), and `impact` is
+`outage` / `degraded` / `none` (omitted means `degraded`), what an impaired role does to its system's
+[health](#health-the-verdict-and-why). An unknown impact is a 422. Gating follows the owner:
+
+- `GET /standards/{id}/roles` plus `PUT` / `DELETE /standards/{id}/roles/{role}`, gated `standard:read` /
+  `:update` / `:delete`. The list returns `{roles: [systemRole]}`, each
+  `{name, display_name, quorum, capabilities, impact}`. Withdrawing a role takes every assignment conforming
+  systems made to it (a cascade), and a role the standard does not declare is a 404.
+- `PUT` / `DELETE /systems/{name}/roles/{role}`, gated `system:update`, for a role declared **directly on
+  one system**. A role the system does not declare **itself** is a 404 here: an inherited role is withdrawn
+  on the standard, not on the system that inherits it.
+- `GET /systems/{name}/roles` is the **resolved read** (`{system, roles: [effectiveRole]}`), gated
+  `system:read`. Each row is the declaration (including its `impact`) plus `from_standard` (inherited, or
+  declared on the system),
+  `assigned_to` (the component names filling it here), `assigned`, and **`understaffed`** (how many more the
+  role wants before quorum, zero when staffed). The counts are **served, not computed by the client**, so
+  every surface reads staffing identically. A one-off system returns only its own roles.
+- `PUT /systems/{name}/roles/{role}/assignments/{component}` puts a component in the role (204,
+  idempotent), and `DELETE` takes it out (204; a component that was not filling the role is a 404). Both
+  gate on `system:update`.
+- `GET /components/{name}/capabilities` returns the **resolved set**
+  (`{component, capabilities}`, gated `component:read`): what the component's product declares, plus what
+  the component adds, minus what it suppresses. `PUT /components/{name}/capabilities/{capability}` records
+  one own fact from `{present}` (true adds, false suppresses; 204, idempotent), and `DELETE` clears the fact
+  so the component falls back to its product (204; clearing a fact it never declared is a 404). Both writes
+  gate on `component:update`, since a component's capabilities are the component's own data.
+
+Every system and component route resolves its owner **within the caller's scope first**, so an out-of-scope
+system or component is a **non-disclosing 404** on the read and the write alike, and every write is audited
+in the same transaction.
+
+**The assignment refusal is a 422 that names the gap.** When the component's resolved capabilities do not
+cover every capability the role requires, the assignment is refused with the missing capabilities listed:
+
+```
+component "panel-1" cannot fill role "table-mic": missing microphone, speaker
+```
+
+The names are sorted, so the same gap always reads the same way and two refusals are comparable. This is a
+**semantic** refusal, the 422 case in the [status table](#errors-one-problemjson-envelope), not an
+authorization one: the caller is allowed to assign, the model says this component cannot fill this slot. A
+bare 422 would be useless here, because the operator's next move (declare the missing capability on the
+component, or pick a different component) is exactly what the message has to tell them. Around it: an unknown
+role is a **404**, an unknown standard or an unknown capability on a declaration is a **422**, and an unknown
+(or out-of-scope) system or component is the same non-disclosing **404** as anywhere else.
+
+## Health: the verdict, and why
+
+**[Health](/architecture/health/)** is two shapes on this surface: the **alarm**, which is what is wrong
+with one component, and the **report**, which is what that means for a system or a location. The split is
+the model's: an alarm is component-local, and it reaches a room only through the **capabilities** it
+degrades.
+
+An alarm hangs off its component and rides that component's gating:
+
+- `GET /components/{name}/alarms` lists them newest first (`{component, alarms: [alarm]}`,
+  `component:read`), the **active** set by default and the whole history with `include_cleared`. An
+  `alarm` body is `{id, component, severity, message, capabilities, raised_at, cleared_at?, active}`.
+- `POST /components/{name}/alarms` raises one from `{severity, message?, capabilities?}` (201,
+  `component:update`). `severity` is `info` / `warning` / `critical`; `capabilities` is what the condition
+  **takes away**, and an alarm naming none is a note on the component that reaches no system. An unknown
+  capability or a bad severity is a **422**.
+- `DELETE /components/{name}/alarms/{id}` clears it (204, `component:update`). The row is **kept**, so the
+  record of what was wrong and when outlives the fix; clearing one that is already cleared, or that
+  belongs to another component, is a **404**, because clearing twice is an explicit miss rather than a
+  silent success.
+
+Both writes **recompute health in the same transaction**, so an alarm and the verdict it caused are never
+separately visible, and the recorded edge carries the time the estate changed rather than the time
+somebody asked.
+
+The reports are one shape over two owners:
+
+- `GET /systems/{name}/health` (`system:read`) returns `{owner_kind, owner, verdict, roles, systems,
+  transitions}`. `verdict` is `healthy` / `degraded` / `outage`. `roles` is every role the system needs
+  filled, each `{name, display_name, impact, required, quorum, satisfying, impaired, assigned_to,
+  degraded, alarms}`: `satisfying` counts the assigned components that can currently fill it, `degraded`
+  names the **required** capabilities an active alarm has taken away, and `alarms` is the alarms that took
+  them. An impaired role with an **empty** `degraded` is **short-staffed**, not broken, which is a
+  different job for the operator.
+- `GET /locations/{name}/health` (`location:read`) returns the same envelope with `systems` filled
+  instead: every system placed **anywhere** beneath the location, with its verdict, as the drill-down. The
+  system read explains the rest, so the location report stays a map.
+- `transitions` is the **recorded edges** over the last 30 days, oldest first, each `{ts, verdict}`. One
+  entry per change, never a sample.
+
+Both resolve their owner **within the caller's scope first**, so an out-of-scope system or location is a
+**non-disclosing 404**, and **neither read writes anything**. The verdict served is computed from the very
+rows served beside it, so a report can never disagree with its own evidence, while the transitions stay the
+recorded history
+([ADR-0050](/architecture/decisions/#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain)).
 
 ## Files: content-addressed bytes behind a handle
 

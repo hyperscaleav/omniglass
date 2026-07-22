@@ -21,9 +21,14 @@ import Roles from "./pages/Roles";
 import Groups from "./pages/Groups";
 import Secrets from "./pages/Secrets";
 import Variables from "./pages/Variables";
+import Properties from "./pages/Properties";
 import Tags from "./pages/Tags";
 import Types from "./pages/Types";
-import ComponentMakes from "./pages/ComponentMakes";
+import Standards from "./pages/Standards";
+import Vendors from "./pages/Vendors";
+import Drivers from "./pages/Drivers";
+import Capabilities from "./pages/Capabilities";
+import Products from "./pages/Products";
 import Files from "./pages/Files";
 import Audit from "./pages/Audit";
 import Settings from "./pages/Settings";
@@ -89,7 +94,12 @@ render(
           <Route path="/variables" component={Variables} />
           <Route path="/tags" component={Tags} />
           <Route path="/types" component={Types} />
-          <Route path="/component-makes" component={ComponentMakes} />
+          <Route path="/standards" component={Standards} />
+          <Route path="/properties" component={Properties} />
+          <Route path="/vendors" component={Vendors} />
+          <Route path="/drivers" component={Drivers} />
+          <Route path="/capabilities" component={Capabilities} />
+          <Route path="/products" component={Products} />
           <Route path="/audit" component={Audit} />
           <Route path="/settings" component={Settings} />
           {STUBS.map((p) => <Route path={p} component={SectionStub} />)}

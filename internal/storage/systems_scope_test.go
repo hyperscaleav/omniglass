@@ -35,10 +35,10 @@ func TestSystemScopeCRUD(t *testing.T) {
 
 	// Build: av (root) > av-sub (subsystem) > av-leaf; plus lab (root). av is
 	// located at hq.
-	av := mustCreateSystem(t, gw, storage.SystemSpec{Name: "av", SystemType: "meeting-room", LocationName: strptr("hq")}, all)
-	mustCreateSystem(t, gw, storage.SystemSpec{Name: "av-sub", SystemType: "meeting-room", ParentName: strptr("av")}, all)
-	mustCreateSystem(t, gw, storage.SystemSpec{Name: "av-leaf", SystemType: "huddle-room", ParentName: strptr("av-sub")}, all)
-	mustCreateSystem(t, gw, storage.SystemSpec{Name: "lab", SystemType: "classroom"}, all)
+	av := mustCreateSystem(t, gw, storage.SystemSpec{Name: "av", LocationName: strptr("hq")}, all)
+	mustCreateSystem(t, gw, storage.SystemSpec{Name: "av-sub", ParentName: strptr("av")}, all)
+	mustCreateSystem(t, gw, storage.SystemSpec{Name: "av-leaf", ParentName: strptr("av-sub")}, all)
+	mustCreateSystem(t, gw, storage.SystemSpec{Name: "lab"}, all)
 
 	if av.LocationID == nil {
 		t.Error("av located-at not set")
@@ -90,17 +90,17 @@ func TestSystemScopeCRUD(t *testing.T) {
 	}
 
 	// Faults.
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "weird", SystemType: "galaxy"}, all); !errors.Is(err, storage.ErrUnknownSystemType) {
-		t.Errorf("unknown system_type = %v, want ErrUnknownSystemType", err)
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "weird", StandardID: strptr("galaxy")}, all); !errors.Is(err, storage.ErrUnknownStandard) {
+		t.Errorf("unknown standard = %v, want ErrUnknownStandard", err)
 	}
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "av", SystemType: "classroom"}, all); !errors.Is(err, storage.ErrSystemExists) {
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "av"}, all); !errors.Is(err, storage.ErrSystemExists) {
 		t.Errorf("dup name = %v, want ErrSystemExists", err)
 	}
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "bad-loc", SystemType: "classroom", LocationName: strptr("nope")}, all); !errors.Is(err, storage.ErrLocationNotFound) {
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "bad-loc", LocationName: strptr("nope")}, all); !errors.Is(err, storage.ErrLocationNotFound) {
 		t.Errorf("unknown location = %v, want ErrLocationNotFound", err)
 	}
 	// Create under out-of-scope parent forbidden.
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "x", SystemType: "classroom", ParentName: strptr("lab")}, readAV); !errors.Is(err, storage.ErrSystemForbidden) {
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "x", ParentName: strptr("lab")}, readAV); !errors.Is(err, storage.ErrSystemForbidden) {
 		t.Errorf("create under out-of-scope parent = %v, want ErrSystemForbidden", err)
 	}
 

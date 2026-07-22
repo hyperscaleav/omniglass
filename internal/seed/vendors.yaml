@@ -1,0 +1,38 @@
+# The official vendors (manufacturers), seeded idempotently at boot. A vendor
+# names an organization in the estate model (e.g. "Cisco", "Crestron"); a later
+# product slice will point at one. Each vendor carries a kind (manufacturer,
+# integrator, or developer). The registry lists alphabetically by display_name.
+# Starter set, operator-extensible later; tune freely.
+vendors:
+  - id: crestron
+    display_name: Crestron
+    kind: manufacturer
+    website: https://www.crestron.com
+  - id: biamp
+    display_name: Biamp
+    kind: manufacturer
+    website: https://www.biamp.com
+  - id: qsc
+    display_name: QSC
+    kind: manufacturer
+    website: https://www.qsc.com
+  - id: shure
+    display_name: Shure
+    kind: manufacturer
+    website: https://www.shure.com
+  - id: cisco
+    display_name: Cisco
+    kind: manufacturer
+    website: https://www.cisco.com
+  - id: extron
+    display_name: Extron
+    kind: manufacturer
+    website: https://www.extron.com
+  - id: sony
+    display_name: Sony
+    kind: manufacturer
+    website: https://www.sony.com
+  - id: samsung
+    display_name: Samsung
+    kind: manufacturer
+    website: https://www.samsung.com

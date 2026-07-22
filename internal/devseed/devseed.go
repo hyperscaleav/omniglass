@@ -30,46 +30,78 @@ var fixturesYAML []byte
 
 // Doc is the parsed example-data fixture.
 type Doc struct {
-	Locations        []Location        `yaml:"locations"`
-	Users            []User            `yaml:"users"`
-	Variables        []Variable        `yaml:"variables"`
-	Tags             []Tag             `yaml:"tags"`
-	TagBindings      []TagBinding      `yaml:"tag_bindings"`
-	Files            []File            `yaml:"files"`
-	FieldDefinitions []FieldDefinition `yaml:"field_definitions"`
-	Components       []Component       `yaml:"components"`
-	FieldValues      []FieldValue      `yaml:"field_values"`
+	Locations         []Location        `yaml:"locations"`
+	Users             []User            `yaml:"users"`
+	Variables         []Variable        `yaml:"variables"`
+	Tags              []Tag             `yaml:"tags"`
+	TagBindings       []TagBinding      `yaml:"tag_bindings"`
+	Files             []File            `yaml:"files"`
+	ProductProperties []ProductProperty `yaml:"product_properties"`
+	Components        []Component       `yaml:"components"`
+	Systems           []System          `yaml:"systems"`
+	Members           []Member          `yaml:"members"`
+	RoleAssignments   []RoleAssignment  `yaml:"role_assignments"`
+	PropertyValues    []PropertyValue   `yaml:"property_values"`
 }
 
-// FieldDefinition is one example typed field declared on a component_type: the
-// schema half of the field primitive. Default is decoded from YAML and, when
-// present, re-encoded to jsonb (like a Variable); an omitted default leaves the
-// field with none, so the seed can teach a default-vs-plain contrast.
-type FieldDefinition struct {
-	ComponentType string `yaml:"component_type"`
-	Name          string `yaml:"name"`
-	DisplayName   string `yaml:"display_name"`
-	DataType      string `yaml:"data_type"`
-	Default       any    `yaml:"default"`
-	Required      bool   `yaml:"required"`
+// System is one example system: a thing in a room that either works or does not.
+// Standard names a boot-seeded blueprint whose roles it inherits live; Location
+// names a fixture location.
+type System struct {
+	Name        string `yaml:"name"`
+	DisplayName string `yaml:"display_name"`
+	Standard    string `yaml:"standard"`
+	Location    string `yaml:"location"`
+}
+
+// Member binds a component into a system without giving it a job. The dev estate
+// needs the case explicitly, because it is the one an assignment cannot produce: a
+// component that is in the room and accounted for while filling no declared role.
+type Member struct {
+	System    string `yaml:"system"`
+	Component string `yaml:"component"`
+}
+
+// RoleAssignment staffs one of a system's roles. It also produces membership as a
+// side effect, which is the point: the seed shows both ways a component comes to
+// be in a system.
+type RoleAssignment struct {
+	System    string `yaml:"system"`
+	Role      string `yaml:"role"`
+	Component string `yaml:"component"`
+}
+
+// ProductProperty is one line the dev estate adds to a product's declared-property
+// contract: the schema half of the property primitive. Property names a row in the
+// boot-seed property catalog (which owns the data type and validation). Default is
+// decoded from YAML and, when present, re-encoded to jsonb (like a Variable); an
+// omitted default leaves the line with none, so the seed can teach a
+// default-vs-plain contrast.
+type ProductProperty struct {
+	Product  string `yaml:"product"`
+	Property string `yaml:"property"`
+	Default  any    `yaml:"default"`
+	Required bool   `yaml:"required"`
 }
 
 // Component is one example device placed in the estate. Location names a fixture
-// location, resolved to its id at seed time (empty for an unplaced component); a
-// system binding is omitted for now (optional on create).
+// location, resolved to its id at seed time (empty for an unplaced component);
+// Product names a catalog SKU, whose contract supplies the component's properties.
+// A system binding is omitted for now (optional on create).
 type Component struct {
-	Name          string `yaml:"name"`
-	DisplayName   string `yaml:"display_name"`
-	ComponentType string `yaml:"component_type"`
-	Location      string `yaml:"location"`
+	Name        string `yaml:"name"`
+	DisplayName string `yaml:"display_name"`
+	Product     string `yaml:"product"`
+	Location    string `yaml:"location"`
 }
 
-// FieldValue is one example literal a component sets for a field defined on its
-// type: an override so the effective-values panel teaches direct-vs-inherited.
-// Value is decoded from YAML and re-encoded to jsonb, exactly like a Variable.
-type FieldValue struct {
+// PropertyValue is one example literal a component declares over its product's
+// contract: an override so the effective-properties panel teaches
+// direct-vs-inherited. Value is decoded from YAML and re-encoded to jsonb, exactly
+// like a Variable.
+type PropertyValue struct {
 	Component string `yaml:"component"`
-	Field     string `yaml:"field"`
+	Property  string `yaml:"property"`
 	Value     any    `yaml:"value"`
 }
 
@@ -285,71 +317,113 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 			return fmt.Errorf("devseed: create file %q: %w", f.Name, err)
 		}
 	}
-	// Field definitions: a couple of typed fields on the display component_type, so
-	// the field primitive comes up with a schema to teach (a default vs a plain
-	// field). These are catalog rows, flat and unscoped like the type registries, so
-	// they need nothing seeded before them. A default is encoded to jsonb like a
-	// variable; an omitted default stays nil. A definition that already exists
-	// (ErrFieldDefinitionConflict) is left as is, so a re-run adds nothing.
-	for _, fd := range doc.FieldDefinitions {
-		spec := storage.FieldDefinitionSpec{
-			ComponentType: fd.ComponentType, Name: fd.Name, DisplayName: fd.DisplayName, DataType: fd.DataType, Required: fd.Required,
-		}
-		if fd.Default != nil {
-			raw, err := json.Marshal(fd.Default)
+	// Product contract lines: an extra property the dev estate declares on a catalog
+	// product, so the contract editor comes up with an operator-added line beside the
+	// boot-seed ones. The product and the property catalog must already be seeded (the
+	// boot seed runs first). A default is encoded to jsonb like a variable; an omitted
+	// default stays nil. The upsert is keyed on (product, property), so a re-run
+	// rewrites the same row rather than adding one.
+	for _, pp := range doc.ProductProperties {
+		spec := storage.ProductPropertySpec{PropertyName: pp.Property, Required: pp.Required}
+		if pp.Default != nil {
+			raw, err := json.Marshal(pp.Default)
 			if err != nil {
-				return fmt.Errorf("devseed: encode field default %q: %w", fd.Name, err)
+				return fmt.Errorf("devseed: encode contract default %s/%s: %w", pp.Product, pp.Property, err)
 			}
 			spec.DefaultValue = raw
 		}
-		_, err := gw.CreateFieldDefinition(ctx, actorID, spec)
-		if errors.Is(err, storage.ErrFieldDefinitionConflict) {
-			continue
-		}
-		if err != nil {
-			return fmt.Errorf("devseed: create field definition %q: %w", fd.Name, err)
+		if err := gw.UpsertProductProperty(ctx, pp.Product, spec); err != nil {
+			return fmt.Errorf("devseed: declare contract %s/%s: %w", pp.Product, pp.Property, err)
 		}
 	}
 
 	// Components: an example device placed in the estate, so the Components directory
-	// comes up populated. Locations must already be seeded (above) for the placement
-	// to resolve. Like a location, a component has a stable name but no create-conflict
-	// sentinel, so check GetComponent for ErrComponentNotFound first and skip when
-	// already present, keeping the seed idempotent.
+	// comes up populated. Locations and products must already be seeded (above, and the
+	// boot seed) for the placement and the product binding to resolve. Like a location,
+	// a component has a stable name but no create-conflict sentinel, so check
+	// GetComponent for ErrComponentNotFound first and skip when already present,
+	// keeping the seed idempotent.
 	for _, c := range doc.Components {
 		if _, err := gw.GetComponent(ctx, c.Name, all); err == nil {
 			continue
 		} else if !errors.Is(err, storage.ErrComponentNotFound) {
 			return fmt.Errorf("devseed: check component %q: %w", c.Name, err)
 		}
-		spec := storage.ComponentSpec{
-			Name: c.Name, DisplayName: c.DisplayName, ComponentType: c.ComponentType,
-		}
+		spec := storage.ComponentSpec{Name: c.Name, DisplayName: c.DisplayName}
 		if c.Location != "" {
 			loc := c.Location
 			spec.LocationName = &loc
+		}
+		if c.Product != "" {
+			prod := c.Product
+			spec.ProductName = &prod
 		}
 		if _, err := gw.CreateComponent(ctx, actorID, spec, all); err != nil {
 			return fmt.Errorf("devseed: create component %q: %w", c.Name, err)
 		}
 	}
 
-	// Field values: an override a component sets over a definition's default (last,
-	// since both the component and the field definition must exist first), so the
-	// effective-values panel teaches direct-vs-inherited. The value is encoded to
-	// jsonb like a variable. The set is idempotent, so a re-run changes nothing.
-	for _, fv := range doc.FieldValues {
-		raw, err := json.Marshal(fv.Value)
-		if err != nil {
-			return fmt.Errorf("devseed: encode field value %s/%s: %w", fv.Component, fv.Field, err)
+	// Systems: the thing in the room that either works or does not, conforming to a
+	// boot-seeded standard whose roles it inherits live. Locations must already be
+	// seeded for the placement to resolve. Idempotent the same way a component is.
+	for _, s := range doc.Systems {
+		if _, err := gw.GetSystem(ctx, s.Name, all); err == nil {
+			continue
+		} else if !errors.Is(err, storage.ErrSystemNotFound) {
+			return fmt.Errorf("devseed: check system %q: %w", s.Name, err)
 		}
-		if _, err := gw.SetFieldValue(ctx, actorID, fv.Component, fv.Field, raw, all); err != nil {
-			return fmt.Errorf("devseed: set field value %s/%s: %w", fv.Component, fv.Field, err)
+		spec := storage.SystemSpec{Name: s.Name, DisplayName: s.DisplayName}
+		if s.Standard != "" {
+			std := s.Standard
+			spec.StandardID = &std
+		}
+		if s.Location != "" {
+			loc := s.Location
+			spec.LocationName = &loc
+		}
+		if _, err := gw.CreateSystem(ctx, actorID, spec, all); err != nil {
+			return fmt.Errorf("devseed: create system %q: %w", s.Name, err)
+		}
+	}
+
+	// Members: a component bound into a system without a job, which is the case an
+	// assignment cannot produce. AddMember is idempotent, so a re-run changes
+	// nothing and no existence check is needed.
+	for _, m := range doc.Members {
+		if err := gw.AddMember(ctx, actorID, m.System, m.Component, all); err != nil {
+			return fmt.Errorf("devseed: add member %s/%s: %w", m.System, m.Component, err)
+		}
+	}
+
+	// Role assignments: staffing, which also creates the membership. Last of the
+	// three, since it needs both ends to exist. Idempotent on conflict.
+	for _, ra := range doc.RoleAssignments {
+		if err := gw.AssignRole(ctx, actorID, ra.System, ra.Role, ra.Component, all); err != nil {
+			return fmt.Errorf("devseed: assign %s to %s/%s: %w", ra.Component, ra.System, ra.Role, err)
+		}
+	}
+
+	// Property values: an override a component declares over its product's contract
+	// (last, since both the component and the contract line must exist first), so the
+	// effective-properties panel teaches direct-vs-inherited. The value is encoded to
+	// jsonb like a variable. The set is idempotent, so a re-run changes nothing.
+	for _, pv := range doc.PropertyValues {
+		raw, err := json.Marshal(pv.Value)
+		if err != nil {
+			return fmt.Errorf("devseed: encode property value %s/%s: %w", pv.Component, pv.Property, err)
+		}
+		if _, err := gw.SetPropertyValue(ctx, actorID, "component", pv.Component, pv.Property, "", raw, all); err != nil {
+			return fmt.Errorf("devseed: set property value %s/%s: %w", pv.Component, pv.Property, err)
 		}
 	}
 	// A worked reachability check on a component, so the console's Reachability panel
 	// renders a real verdict + availability strip instead of an empty "unknown".
 	if err := seedReachability(ctx, gw, actorID); err != nil {
+		return err
+	}
+	// A handful of example log occurrences on the lobby display, so the console's
+	// event-log panel comes up populated instead of empty.
+	if err := seedEvents(ctx, gw); err != nil {
 		return err
 	}
 	return nil
@@ -414,10 +488,9 @@ func seedReachability(ctx context.Context, gw storage.Gateway, actorID string) e
 	if _, err := gw.GetComponent(ctx, reachComponent, all); errors.Is(err, storage.ErrComponentNotFound) {
 		loc := reachLocation
 		if _, err := gw.CreateComponent(ctx, actorID, storage.ComponentSpec{
-			Name:          reachComponent,
-			DisplayName:   "Boardroom DSP",
-			ComponentType: "dsp",
-			LocationName:  &loc,
+			Name:         reachComponent,
+			DisplayName:  "Boardroom DSP",
+			LocationName: &loc,
 		}, all); err != nil {
 			return fmt.Errorf("devseed: create reachability component: %w", err)
 		}
@@ -510,6 +583,66 @@ func seedReachDatapoints(ctx context.Context, gw storage.Gateway, iface string, 
 		{OwnerKind: "component", OwnerID: reachComponent, Key: "tcp.connect_time", Instance: iface, Value: connMs, Source: "tcp", TS: recovered},
 	}); err != nil {
 		return fmt.Errorf("devseed: insert %s metric datapoints: %w", iface, err)
+	}
+	return nil
+}
+
+// The example log occurrences the dev seed installs on the lobby display, the
+// log-kind sink of the collection pipeline: a display emits device log lines (link,
+// CEC, EDID, input) so the console's event-log panel comes up populated instead of
+// empty. eventComponent names an existing fixture component (the display seeded above),
+// so the event's component_id foreign key resolves. All rows use the registered
+// log-kind key syslog.line (reject-not-project), with provenance stamped observed by
+// the insert.
+const eventComponent = "lobby-display"
+
+// exampleEvents are the display's recent log lines, each offset back from now so the
+// panel reads as a recent window (spread over the last few hours, newest last). One
+// line carries a structured attributes payload (the switched input); the rest are
+// plain messages. minsAgo is minutes before the seed's now.
+var exampleEvents = []struct {
+	message string
+	attrs   []byte
+	minsAgo int
+}{
+	{message: "power state changed to on", minsAgo: 214},
+	{message: "hdmi link state changed to up", minsAgo: 212},
+	{message: "edid read complete: 3840x2160@60", minsAgo: 211},
+	{message: "cec handshake ok", minsAgo: 127},
+	{message: "input switched to HDMI2", attrs: []byte(`{"input":"hdmi2"}`), minsAgo: 46},
+	{message: "backlight brightness set to 80%", minsAgo: 12},
+}
+
+// seedEvents installs the example log occurrences on the lobby display idempotently.
+// The event table has an auto id (bigint identity) and no natural unique key, so a
+// naive re-insert would pile up duplicates on every `make dev`; guard on the component
+// already carrying events (ListComponentEvents from the epoch, limit 1) and skip when
+// present, so a second run is a no-op. Owner = the component, instance empty (a
+// device-level log, not per-interface). Mirrors seedReachability's sentinel pattern.
+func seedEvents(ctx context.Context, gw storage.Gateway) error {
+	// Sentinel: any existing event on the component means this block already ran.
+	existing, err := gw.ListComponentEvents(ctx, eventComponent, time.Time{}, 1)
+	if err != nil {
+		return fmt.Errorf("devseed: check events: %w", err)
+	}
+	if len(existing) > 0 {
+		return nil
+	}
+	now := time.Now().UTC()
+	evs := make([]storage.EventOccurrence, 0, len(exampleEvents))
+	for _, e := range exampleEvents {
+		evs = append(evs, storage.EventOccurrence{
+			OwnerKind:  "component",
+			OwnerID:    eventComponent,
+			Key:        "syslog.line",
+			Message:    e.message,
+			Attributes: e.attrs,
+			Source:     "syslog",
+			TS:         now.Add(-time.Duration(e.minsAgo) * time.Minute),
+		})
+	}
+	if err := gw.InsertEvents(ctx, evs); err != nil {
+		return fmt.Errorf("devseed: insert events: %w", err)
 	}
 	return nil
 }

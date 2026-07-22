@@ -17,6 +17,50 @@ components:
       required:
         - principal_id
       type: object
+    AlarmBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/AlarmBody.json
+          format: uri
+          readOnly: true
+          type: string
+        active:
+          type: boolean
+        capabilities:
+          description: The capabilities this alarm degrades; empty means it reaches no role
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        cleared_at:
+          description: Null while the alarm is active
+          format: date-time
+          type: string
+        component:
+          type: string
+        id:
+          type: string
+        message:
+          type: string
+        raised_at:
+          format: date-time
+          type: string
+        severity:
+          description: info, warning, or critical
+          type: string
+      required:
+        - id
+        - component
+        - severity
+        - message
+        - capabilities
+        - raised_at
+        - active
+      type: object
     AuditEventBody:
       additionalProperties: false
       properties:
@@ -93,6 +137,27 @@ components:
           type: string
       required:
         - image_base64
+      type: object
+    CapabilityBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CapabilityBody.json
+          format: uri
+          readOnly: true
+          type: string
+        display_name:
+          type: string
+        id:
+          type: string
+        official:
+          type: boolean
+      required:
+        - id
+        - display_name
+        - official
       type: object
     ChangePasswordInputBody:
       additionalProperties: false
@@ -216,8 +281,6 @@ components:
           type:
             - array
             - "null"
-        component_type:
-          type: string
         display_name:
           type: string
         effective_tags:
@@ -233,60 +296,80 @@ components:
           type: string
         parent_id:
           type: string
+        product_id:
+          description: The product (catalog SKU) this component is an instance of, if any.
+          type: string
         system_id:
           type: string
       required:
         - id
         - name
-        - component_type
       type: object
-    ComponentMakeBody:
+    ComponentCapabilitiesOutputBody:
       additionalProperties: false
       properties:
         $schema:
           description: A URL to the JSON Schema for this object.
           examples:
-            - /api/v1/schemas/ComponentMakeBody.json
+            - /api/v1/schemas/ComponentCapabilitiesOutputBody.json
           format: uri
           readOnly: true
           type: string
-        display_name:
-          type: string
-        icon:
-          type: string
-        id:
-          type: string
-        official:
-          type: boolean
-        support_phone:
-          type: string
-        website:
+        capabilities:
+          description: "The resolved set: the product's, plus the component's additions, minus its suppressions"
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        component:
           type: string
       required:
-        - id
-        - display_name
-        - official
+        - component
+        - capabilities
       type: object
-    ComponentTypeBody:
+    ComponentPropertiesOutputBody:
       additionalProperties: false
       properties:
         $schema:
           description: A URL to the JSON Schema for this object.
           examples:
-            - /api/v1/schemas/ComponentTypeBody.json
+            - /api/v1/schemas/ComponentPropertiesOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        component:
+          type: string
+        properties:
+          items:
+            $ref: "#/components/schemas/EffectivePropertyBody"
+          type:
+            - array
+            - "null"
+      required:
+        - component
+        - properties
+      type: object
+    CreateCapabilityInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateCapabilityInputBody.json
           format: uri
           readOnly: true
           type: string
         display_name:
+          minLength: 1
           type: string
         id:
+          description: Globally unique capability id
+          minLength: 1
           type: string
-        official:
-          type: boolean
       required:
         - id
         - display_name
-        - official
       type: object
     CreateComponentInputBody:
       additionalProperties: false
@@ -297,10 +380,6 @@ components:
             - /api/v1/schemas/CreateComponentInputBody.json
           format: uri
           readOnly: true
-          type: string
-        component_type:
-          description: A component_type id
-          minLength: 1
           type: string
         display_name:
           type: string
@@ -316,47 +395,22 @@ components:
         parent:
           description: Parent component name; omit for a root component
           type: string
+        product:
+          description: Product id (catalog SKU) this component is an instance of
+          type: string
         system:
           description: Primary system name this component belongs to
           type: string
       required:
         - name
-        - component_type
       type: object
-    CreateComponentMakeInputBody:
+    CreateDriverInputBody:
       additionalProperties: false
       properties:
         $schema:
           description: A URL to the JSON Schema for this object.
           examples:
-            - /api/v1/schemas/CreateComponentMakeInputBody.json
-          format: uri
-          readOnly: true
-          type: string
-        display_name:
-          minLength: 1
-          type: string
-        icon:
-          type: string
-        id:
-          description: Globally unique make id
-          minLength: 1
-          type: string
-        support_phone:
-          type: string
-        website:
-          type: string
-      required:
-        - id
-        - display_name
-      type: object
-    CreateComponentTypeInputBody:
-      additionalProperties: false
-      properties:
-        $schema:
-          description: A URL to the JSON Schema for this object.
-          examples:
-            - /api/v1/schemas/CreateComponentTypeInputBody.json
+            - /api/v1/schemas/CreateDriverInputBody.json
           format: uri
           readOnly: true
           type: string
@@ -364,52 +418,14 @@ components:
           minLength: 1
           type: string
         id:
-          description: Globally unique type id
+          description: Globally unique driver id
           minLength: 1
+          type: string
+        version:
           type: string
       required:
         - id
         - display_name
-      type: object
-    CreateFieldDefinitionInputBody:
-      additionalProperties: false
-      properties:
-        $schema:
-          description: A URL to the JSON Schema for this object.
-          examples:
-            - /api/v1/schemas/CreateFieldDefinitionInputBody.json
-          format: uri
-          readOnly: true
-          type: string
-        component_type:
-          description: The component_type this field is defined on
-          minLength: 1
-          type: string
-        data_type:
-          description: The declared value type
-          enum:
-            - string
-            - int
-            - float
-            - bool
-            - json
-          type: string
-        default_value:
-          description: Optional type-level default, validated against data_type
-        display_name:
-          description: Optional human label; falls back to name when unset
-          type: string
-        name:
-          description: The field name; unique per component_type
-          minLength: 1
-          type: string
-        required:
-          description: Whether every component of this type must set the field; defaults to false
-          type: boolean
-      required:
-        - component_type
-        - name
-        - data_type
       type: object
     CreateFileInputBody:
       additionalProperties: false
@@ -732,6 +748,92 @@ components:
       required:
         - username
       type: object
+    CreateProductInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateProductInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        capabilities:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        display_name:
+          minLength: 1
+          type: string
+        driver_id:
+          type: string
+        id:
+          description: Globally unique product id
+          minLength: 1
+          type: string
+        kind:
+          default: device
+          enum:
+            - device
+            - app
+            - service
+            - vm
+          type: string
+        parent_product_id:
+          type: string
+        vendor_id:
+          type: string
+      required:
+        - id
+        - display_name
+      type: object
+    CreatePropertyInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreatePropertyInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        data_type:
+          description: The value type
+          enum:
+            - string
+            - int
+            - float
+            - bool
+            - json
+          type: string
+        description:
+          description: What the property means
+          type: string
+        display_name:
+          description: A human label
+          type: string
+        kind:
+          description: The observed kind; omit for a declared-only property
+          enum:
+            - metric
+            - state
+            - log
+          type: string
+        name:
+          description: The property name (lowercase, dot-hierarchied)
+          minLength: 1
+          type: string
+        unit:
+          description: A display unit (observed properties)
+          type: string
+        validation:
+          description: A JSON Schema fragment constraining the value
+      required:
+        - name
+        - data_type
+      type: object
     CreateSecretInputBody:
       additionalProperties: false
       properties:
@@ -775,6 +877,30 @@ components:
         - owner_kind
         - fields
       type: object
+    CreateStandardInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateStandardInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        display_name:
+          minLength: 1
+          type: string
+        id:
+          description: Globally unique standard id
+          minLength: 1
+          type: string
+        parent_standard_id:
+          description: A standard this one is a variant of
+          type: string
+      required:
+        - id
+        - display_name
+      type: object
     CreateSystemInputBody:
       additionalProperties: false
       properties:
@@ -799,34 +925,11 @@ components:
         parent:
           description: Parent system name; omit for a root system
           type: string
-        system_type:
-          description: A system_type id
-          minLength: 1
+        standard_id:
+          description: A standard id; omit for a one-off system that conforms to none
           type: string
       required:
         - name
-        - system_type
-      type: object
-    CreateSystemTypeInputBody:
-      additionalProperties: false
-      properties:
-        $schema:
-          description: A URL to the JSON Schema for this object.
-          examples:
-            - /api/v1/schemas/CreateSystemTypeInputBody.json
-          format: uri
-          readOnly: true
-          type: string
-        display_name:
-          minLength: 1
-          type: string
-        id:
-          description: Globally unique type id
-          minLength: 1
-          type: string
-      required:
-        - id
-        - display_name
       type: object
     CreateTagInputBody:
       additionalProperties: false
@@ -904,6 +1007,40 @@ components:
         - owner_kind
         - value
       type: object
+    CreateVendorInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateVendorInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        display_name:
+          minLength: 1
+          type: string
+        icon:
+          type: string
+        id:
+          description: Globally unique vendor id
+          minLength: 1
+          type: string
+        kind:
+          default: manufacturer
+          enum:
+            - manufacturer
+            - integrator
+            - developer
+          type: string
+        support_phone:
+          type: string
+        website:
+          type: string
+      required:
+        - id
+        - display_name
+      type: object
     DownloadFileOutputBody:
       additionalProperties: false
       properties:
@@ -926,59 +1063,139 @@ components:
         - content_type
         - content
       type: object
-    EffectiveFieldBody:
-      additionalProperties: false
-      properties:
-        data_type:
-          type: string
-        default_value:
-          description: The type-level default, shape given by data_type; the drill-in's type-default step. Omitted when the definition has no default
-        display_name:
-          description: Optional human label; omitted when unset
-          type: string
-        field_id:
-          type: string
-        is_set:
-          description: True when the component overrides the type default
-          type: boolean
-        name:
-          type: string
-        required:
-          description: Whether every component of this type must set the field
-          type: boolean
-        set_value:
-          description: The component's override; omitted when the field is unset
-        value:
-          description: "The effective value: the set literal, or the type default when unset"
-        value_id:
-          description: The field_value id when set; the id to DELETE to clear the override. Omitted when the field is unset
-          type: string
-      required:
-        - field_id
-        - name
-        - data_type
-        - required
-        - value
-        - is_set
-      type: object
-    EffectiveFieldsOutputBody:
+    DriverBody:
       additionalProperties: false
       properties:
         $schema:
           description: A URL to the JSON Schema for this object.
           examples:
-            - /api/v1/schemas/EffectiveFieldsOutputBody.json
+            - /api/v1/schemas/DriverBody.json
           format: uri
           readOnly: true
           type: string
-        fields:
+        display_name:
+          type: string
+        id:
+          type: string
+        official:
+          type: boolean
+        version:
+          type: string
+      required:
+        - id
+        - display_name
+        - official
+      type: object
+    EffectivePropertyBody:
+      additionalProperties: false
+      properties:
+        data_type:
+          description: The declared value type, from the property catalog
+          type: string
+        default_value:
+          description: The contract default; omitted when the contract sets none
+        display_name:
+          description: The property's human label; omitted when unset
+          type: string
+        from_contract:
+          description: True when the component's product declares the property; false for one set directly on the component
+          type: boolean
+        is_set:
+          description: True when the component overrides the contract default
+          type: boolean
+        property_name:
+          description: The catalog property name
+          type: string
+        required:
+          description: Whether the product contract requires a value; always false off-contract
+          type: boolean
+        set_value:
+          description: The component's override; omitted when the property is unset
+        value:
+          description: "The effective value: the override, or the contract default when unset"
+        value_id:
+          description: The stored value's id when set; omitted when the property is unset
+          type: string
+      required:
+        - property_name
+        - data_type
+        - required
+        - is_set
+        - from_contract
+      type: object
+    EffectivePropertyValueBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/EffectivePropertyValueBody.json
+          format: uri
+          readOnly: true
+          type: string
+        component:
+          type: string
+        property_name:
+          type: string
+        value:
+          description: The stored value, shape given by the property's data_type
+        value_id:
+          description: The stored value's id
+          type: string
+      required:
+        - component
+        - property_name
+        - value
+        - value_id
+      type: object
+    EffectiveRoleBody:
+      additionalProperties: false
+      properties:
+        assigned:
+          description: How many components fill the role
+          format: int64
+          type: integer
+        assigned_to:
+          description: The component names filling this role in this system
           items:
-            $ref: "#/components/schemas/EffectiveFieldBody"
+            type: string
           type:
             - array
             - "null"
+        capabilities:
+          description: The capabilities a component must ALL provide to fill it
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        display_name:
+          type: string
+        from_standard:
+          description: True when the role is inherited from the system's standard; false when declared on the system
+          type: boolean
+        impact:
+          description: "What an impaired role means for its system: outage, degraded, or none"
+          type: string
+        name:
+          type: string
+        quorum:
+          format: int64
+          type: integer
+        understaffed:
+          description: How many more the role wants before quorum; zero when staffed
+          format: int64
+          type: integer
       required:
-        - fields
+        - name
+        - display_name
+        - quorum
+        - capabilities
+        - impact
+        - from_standard
+        - assigned_to
+        - assigned
+        - understaffed
       type: object
     EffectiveTagsOutputBody:
       additionalProperties: false
@@ -1135,62 +1352,103 @@ components:
           format: uri
           type: string
       type: object
-    FieldDefinitionBody:
+    EstateHealthOutputBody:
       additionalProperties: false
       properties:
         $schema:
           description: A URL to the JSON Schema for this object.
           examples:
-            - /api/v1/schemas/FieldDefinitionBody.json
+            - /api/v1/schemas/EstateHealthOutputBody.json
           format: uri
           readOnly: true
           type: string
-        component_type:
+        owner:
           type: string
-        data_type:
+        owner_kind:
           type: string
-        default_value:
-          description: The type-level default, shape given by data_type; omitted when unset
-        display_name:
-          description: Optional human label; the raw name is the key. Omitted when unset
+        roles:
+          description: The contributing roles; empty for a location
+          items:
+            $ref: "#/components/schemas/HealthRoleBody"
+          type:
+            - array
+            - "null"
+        systems:
+          description: The systems beneath a location with their verdicts; empty for a system
+          items:
+            $ref: "#/components/schemas/HealthSystemBody"
+          type:
+            - array
+            - "null"
+        transitions:
+          description: "The recorded edges over the window, oldest first: one entry per change, never a sample"
+          items:
+            $ref: "#/components/schemas/HealthTransitionBody"
+          type:
+            - array
+            - "null"
+        verdict:
+          description: "healthy, degraded, or outage: the rollup of the roles or systems served beside it"
           type: string
-        id:
-          type: string
-        name:
-          type: string
-        required:
-          description: Whether every component of this type must set the field
-          type: boolean
       required:
-        - id
-        - component_type
-        - name
-        - data_type
-        - required
+        - owner_kind
+        - owner
+        - verdict
+        - roles
+        - systems
+        - transitions
       type: object
-    FieldValueBody:
+    EventBody:
+      additionalProperties: false
+      properties:
+        attributes:
+          description: Structured attributes, when the occurrence carried a JSON payload
+        instance:
+          description: The series discriminator (e.g. the interface), when set
+          type: string
+        key:
+          description: The property name of the log (e.g. syslog.line)
+          type: string
+        message:
+          description: The occurrence message
+          type: string
+        provenance:
+          description: The lineage of the occurrence (observed for direct collection)
+          type: string
+        source:
+          description: The interface type that produced the occurrence
+          type: string
+        ts:
+          description: When the occurrence was observed
+          format: date-time
+          type: string
+      required:
+        - ts
+        - key
+        - message
+        - provenance
+      type: object
+    EventsOutputBody:
       additionalProperties: false
       properties:
         $schema:
           description: A URL to the JSON Schema for this object.
           examples:
-            - /api/v1/schemas/FieldValueBody.json
+            - /api/v1/schemas/EventsOutputBody.json
           format: uri
           readOnly: true
           type: string
-        component_id:
+        component:
           type: string
-        field_id:
-          type: string
-        id:
-          type: string
-        value:
-          description: The literal, shape given by the field's data_type
+        events:
+          items:
+            $ref: "#/components/schemas/EventBody"
+          type:
+            - array
+            - "null"
       required:
-        - id
-        - field_id
-        - component_id
-        - value
+        - component
+        - events
       type: object
     FileBody:
       additionalProperties: false
@@ -1312,6 +1570,34 @@ components:
         - member_count
         - grant_count
       type: object
+    HealthAlarmBody:
+      additionalProperties: false
+      properties:
+        capabilities:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        component:
+          type: string
+        id:
+          type: string
+        message:
+          type: string
+        raised_at:
+          format: date-time
+          type: string
+        severity:
+          type: string
+      required:
+        - id
+        - component
+        - severity
+        - message
+        - capabilities
+        - raised_at
+      type: object
     HealthOutputBody:
       additionalProperties: false
       properties:
@@ -1331,6 +1617,88 @@ components:
       required:
         - status
         - db
+      type: object
+    HealthRoleBody:
+      additionalProperties: false
+      properties:
+        alarms:
+          description: The active alarms that degraded them
+          items:
+            $ref: "#/components/schemas/HealthAlarmBody"
+          type:
+            - array
+            - "null"
+        assigned_to:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        degraded:
+          description: The required capabilities an active alarm has taken away; empty when the role is merely short-staffed
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        display_name:
+          type: string
+        impact:
+          description: "What an impaired role means for its system: outage, degraded, or none"
+          type: string
+        impaired:
+          description: True when satisfying is below quorum
+          type: boolean
+        name:
+          type: string
+        quorum:
+          format: int64
+          type: integer
+        required:
+          description: The capabilities a component must ALL provide to fill this role
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        satisfying:
+          description: How many assigned components can currently fill the role
+          format: int64
+          type: integer
+      required:
+        - name
+        - display_name
+        - impact
+        - required
+        - quorum
+        - satisfying
+        - impaired
+        - assigned_to
+        - degraded
+        - alarms
+      type: object
+    HealthSystemBody:
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+        verdict:
+          type: string
+      required:
+        - name
+        - verdict
+      type: object
+    HealthTransitionBody:
+      additionalProperties: false
+      properties:
+        ts:
+          format: date-time
+          type: string
+        verdict:
+          type: string
+      required:
+        - ts
+        - verdict
       type: object
     HumanBody:
       additionalProperties: false
@@ -1468,43 +1836,68 @@ components:
         - command_palette
         - help
       type: object
-    ListComponentMakesOutputBody:
+    ListAlarmsOutputBody:
       additionalProperties: false
       properties:
         $schema:
           description: A URL to the JSON Schema for this object.
           examples:
-            - /api/v1/schemas/ListComponentMakesOutputBody.json
+            - /api/v1/schemas/ListAlarmsOutputBody.json
           format: uri
           readOnly: true
           type: string
-        makes:
+        alarms:
           items:
-            $ref: "#/components/schemas/ComponentMakeBody"
+            $ref: "#/components/schemas/AlarmBody"
           type:
             - array
             - "null"
+        component:
+          type: string
       required:
-        - makes
+        - component
+        - alarms
       type: object
-    ListComponentTypesOutputBody:
+    ListCapabilitiesOutputBody:
       additionalProperties: false
       properties:
         $schema:
           description: A URL to the JSON Schema for this object.
           examples:
-            - /api/v1/schemas/ListComponentTypesOutputBody.json
+            - /api/v1/schemas/ListCapabilitiesOutputBody.json
           format: uri
           readOnly: true
           type: string
-        component_types:
+        capabilities:
           items:
-            $ref: "#/components/schemas/ComponentTypeBody"
+            $ref: "#/components/schemas/CapabilityBody"
           type:
             - array
             - "null"
       required:
-        - component_types
+        - capabilities
+      type: object
+    ListComponentMembershipsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListComponentMembershipsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        component:
+          type: string
+        memberships:
+          items:
+            $ref: "#/components/schemas/SystemMemberBody"
+          type:
+            - array
+            - "null"
+      required:
+        - component
+        - memberships
       type: object
     ListComponentsOutputBody:
       additionalProperties: false
@@ -1525,24 +1918,24 @@ components:
       required:
         - components
       type: object
-    ListFieldDefinitionsOutputBody:
+    ListDriversOutputBody:
       additionalProperties: false
       properties:
         $schema:
           description: A URL to the JSON Schema for this object.
           examples:
-            - /api/v1/schemas/ListFieldDefinitionsOutputBody.json
+            - /api/v1/schemas/ListDriversOutputBody.json
           format: uri
           readOnly: true
           type: string
-        field_definitions:
+        drivers:
           items:
-            $ref: "#/components/schemas/FieldDefinitionBody"
+            $ref: "#/components/schemas/DriverBody"
           type:
             - array
             - "null"
       required:
-        - field_definitions
+        - drivers
       type: object
     ListFilesOutputBody:
       additionalProperties: false
@@ -1619,6 +2012,25 @@ components:
             - "null"
       required:
         - interfaces
+      type: object
+    ListLocationTypePropertiesOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListLocationTypePropertiesOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        properties:
+          items:
+            $ref: "#/components/schemas/LocationTypePropertyBody"
+          type:
+            - array
+            - "null"
+      required:
+        - properties
       type: object
     ListLocationTypesOutputBody:
       additionalProperties: false
@@ -1753,6 +2165,63 @@ components:
       required:
         - principals
       type: object
+    ListProductPropertiesOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListProductPropertiesOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        properties:
+          items:
+            $ref: "#/components/schemas/ProductPropertyBody"
+          type:
+            - array
+            - "null"
+      required:
+        - properties
+      type: object
+    ListProductsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListProductsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        products:
+          items:
+            $ref: "#/components/schemas/ProductBody"
+          type:
+            - array
+            - "null"
+      required:
+        - products
+      type: object
+    ListPropertiesOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListPropertiesOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        properties:
+          items:
+            $ref: "#/components/schemas/PropertyBody"
+          type:
+            - array
+            - "null"
+      required:
+        - properties
+      type: object
     ListSecretTypesOutputBody:
       additionalProperties: false
       properties:
@@ -1791,24 +2260,106 @@ components:
       required:
         - secrets
       type: object
-    ListSystemTypesOutputBody:
+    ListStandardPropertiesOutputBody:
       additionalProperties: false
       properties:
         $schema:
           description: A URL to the JSON Schema for this object.
           examples:
-            - /api/v1/schemas/ListSystemTypesOutputBody.json
+            - /api/v1/schemas/ListStandardPropertiesOutputBody.json
           format: uri
           readOnly: true
           type: string
-        system_types:
+        properties:
           items:
-            $ref: "#/components/schemas/SystemTypeBody"
+            $ref: "#/components/schemas/StandardPropertyBody"
           type:
             - array
             - "null"
       required:
-        - system_types
+        - properties
+      type: object
+    ListStandardRolesOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListStandardRolesOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        roles:
+          items:
+            $ref: "#/components/schemas/SystemRoleBody"
+          type:
+            - array
+            - "null"
+      required:
+        - roles
+      type: object
+    ListStandardsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListStandardsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        standards:
+          items:
+            $ref: "#/components/schemas/StandardBody"
+          type:
+            - array
+            - "null"
+      required:
+        - standards
+      type: object
+    ListSystemMembersOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListSystemMembersOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        members:
+          items:
+            $ref: "#/components/schemas/SystemMemberBody"
+          type:
+            - array
+            - "null"
+        system:
+          type: string
+      required:
+        - system
+        - members
+      type: object
+    ListSystemRolesOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListSystemRolesOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        roles:
+          items:
+            $ref: "#/components/schemas/EffectiveRoleBody"
+          type:
+            - array
+            - "null"
+        system:
+          type: string
+      required:
+        - system
+        - roles
       type: object
     ListSystemsOutputBody:
       additionalProperties: false
@@ -1886,6 +2437,25 @@ components:
       required:
         - variables
       type: object
+    ListVendorsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListVendorsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        vendors:
+          items:
+            $ref: "#/components/schemas/VendorBody"
+          type:
+            - array
+            - "null"
+      required:
+        - vendors
+      type: object
     LocationBody:
       additionalProperties: false
       properties:
@@ -1923,6 +2493,53 @@ components:
         - name
         - location_type
       type: object
+    LocationPropertiesOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/LocationPropertiesOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        location:
+          type: string
+        properties:
+          items:
+            $ref: "#/components/schemas/EffectivePropertyBody"
+          type:
+            - array
+            - "null"
+      required:
+        - location
+        - properties
+      type: object
+    LocationPropertyValueBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/LocationPropertyValueBody.json
+          format: uri
+          readOnly: true
+          type: string
+        location:
+          type: string
+        property_name:
+          type: string
+        value:
+          description: The stored value, shape given by the property's data_type
+        value_id:
+          description: The stored value's id
+          type: string
+      required:
+        - location
+        - property_name
+        - value
+        - value_id
+      type: object
     LocationTypeBody:
       additionalProperties: false
       properties:
@@ -1953,6 +2570,28 @@ components:
         - icon
         - allowed_parent_types
         - official
+      type: object
+    LocationTypePropertyBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/LocationTypePropertyBody.json
+          format: uri
+          readOnly: true
+          type: string
+        default_value:
+          description: The contract default, shape given by the property's data_type; omitted when the contract sets none
+        property_name:
+          description: The catalog property this location type declares
+          type: string
+        required:
+          description: Whether every location of this type must set the property
+          type: boolean
+      required:
+        - property_name
+        - required
       type: object
     LoginInputBody:
       additionalProperties: false
@@ -2120,6 +2759,131 @@ components:
       required:
         - id
         - kind
+      type: object
+    ProductBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ProductBody.json
+          format: uri
+          readOnly: true
+          type: string
+        capabilities:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        display_name:
+          type: string
+        driver_id:
+          type: string
+        id:
+          type: string
+        kind:
+          enum:
+            - device
+            - app
+            - service
+            - vm
+          type: string
+        official:
+          type: boolean
+        parent_product_id:
+          type: string
+        vendor_id:
+          type: string
+      required:
+        - id
+        - display_name
+        - kind
+        - capabilities
+        - official
+      type: object
+    ProductPropertyBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ProductPropertyBody.json
+          format: uri
+          readOnly: true
+          type: string
+        default_value:
+          description: The contract default, shape given by the property's data_type; omitted when the contract sets none
+        property_name:
+          description: The catalog property this product declares
+          type: string
+        required:
+          description: Whether every instance of this product must set the property
+          type: boolean
+      required:
+        - property_name
+        - required
+      type: object
+    PropertyBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/PropertyBody.json
+          format: uri
+          readOnly: true
+          type: string
+        data_type:
+          type: string
+        description:
+          type: string
+        display_name:
+          type: string
+        kind:
+          type: string
+        name:
+          type: string
+        official:
+          type: boolean
+        unit:
+          type: string
+        validation:
+          description: A JSON Schema fragment constraining the value
+      required:
+        - name
+        - data_type
+        - official
+      type: object
+    RaiseAlarmInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/RaiseAlarmInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        capabilities:
+          description: The capabilities this condition degrades; a role requiring one of them can no longer be filled by this component
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        message:
+          description: What is wrong, for the operator reading it later
+          type: string
+        severity:
+          description: How bad it is; critical puts the component itself in outage
+          enum:
+            - info
+            - warning
+            - critical
+          type: string
+      required:
+        - severity
       type: object
     ReachHistoryBody:
       additionalProperties: false
@@ -2417,6 +3181,39 @@ components:
         - effective_permissions
         - held
       type: object
+    RoleSpecBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/RoleSpecBody.json
+          format: uri
+          readOnly: true
+          type: string
+        capabilities:
+          description: The capabilities a component must ALL provide; replaces the required set wholesale
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        display_name:
+          description: The role's human label; defaults to the role name
+          type: string
+        impact:
+          description: "What an impaired role means for its system; omit for degraded. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display"
+          enum:
+            - outage
+            - degraded
+            - none
+          type: string
+        quorum:
+          description: How many components must fill the role; omit for one
+          format: int64
+          minimum: 0
+          type: integer
+      type: object
     RolesOutputBody:
       additionalProperties: false
       properties:
@@ -2614,24 +3411,113 @@ components:
       required:
         - image_base64
       type: object
-    SetFieldValueInputBody:
+    SetComponentCapabilityInputBody:
       additionalProperties: false
       properties:
         $schema:
           description: A URL to the JSON Schema for this object.
           examples:
-            - /api/v1/schemas/SetFieldValueInputBody.json
+            - /api/v1/schemas/SetComponentCapabilityInputBody.json
           format: uri
           readOnly: true
           type: string
-        field:
-          description: The field name, defined on the component's type
-          minLength: 1
+        present:
+          description: True to add the capability, false to suppress one the product declares
+          type: boolean
+      required:
+        - present
+      type: object
+    SetComponentPropertyInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/SetComponentPropertyInputBody.json
+          format: uri
+          readOnly: true
           type: string
         value:
-          description: The literal, validated against the field's data_type
+          description: The value to declare, shape given by the property's data_type
       required:
-        - field
+        - value
+      type: object
+    SetLocationPropertyInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/SetLocationPropertyInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        value:
+          description: The value to declare, shape given by the property's data_type
+      required:
+        - value
+      type: object
+    SetLocationTypePropertyInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/SetLocationTypePropertyInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        default_value:
+          description: The contract default, validated against the property's data_type; omit for no default
+        required:
+          description: Whether every location of this type must set the property; defaults to false
+          type: boolean
+      type: object
+    SetProductPropertyInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/SetProductPropertyInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        default_value:
+          description: The contract default, validated against the property's data_type; omit for no default
+        required:
+          description: Whether every instance of this product must set the property; defaults to false
+          type: boolean
+      type: object
+    SetStandardPropertyInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/SetStandardPropertyInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        default_value:
+          description: The contract default, validated against the property's data_type; omit for no default
+        required:
+          description: Whether every system conforming to this standard must set the property; defaults to false
+          type: boolean
+      type: object
+    SetSystemPropertyInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/SetSystemPropertyInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        value:
+          description: The value to declare, shape given by the property's data_type
+      required:
         - value
       type: object
     Settings:
@@ -2687,6 +3573,51 @@ components:
         - sources
         - locks
       type: object
+    StandardBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/StandardBody.json
+          format: uri
+          readOnly: true
+          type: string
+        display_name:
+          type: string
+        id:
+          type: string
+        official:
+          type: boolean
+        parent_standard_id:
+          type: string
+      required:
+        - id
+        - display_name
+        - official
+      type: object
+    StandardPropertyBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/StandardPropertyBody.json
+          format: uri
+          readOnly: true
+          type: string
+        default_value:
+          description: The contract default, shape given by the property's data_type; omitted when the contract sets none
+        property_name:
+          description: The catalog property this standard declares
+          type: string
+        required:
+          description: Whether every system conforming to this standard must set the property
+          type: boolean
+      required:
+        - property_name
+        - required
+      type: object
     SvcBody:
       additionalProperties: false
       properties:
@@ -2723,37 +3654,127 @@ components:
           type: string
         location_id:
           type: string
+        member_count:
+          description: How many components are bound into this system
+          format: int64
+          type: integer
         name:
           type: string
         parent_id:
           type: string
-        system_type:
+        standard_id:
+          description: The standard this system conforms to; omitted for a one-off system
           type: string
       required:
         - id
         - name
-        - system_type
+        - member_count
       type: object
-    SystemTypeBody:
+    SystemMemberBody:
+      additionalProperties: false
+      properties:
+        component:
+          description: Technical name of the component
+          type: string
+        primary:
+          description: Whether this membership is the component's default when no system is given
+          type: boolean
+        system:
+          description: Technical name of the system
+          type: string
+        system_count:
+          description: How many systems this component belongs to in total; more than one means it is shared
+          format: int64
+          type: integer
+      required:
+        - system
+        - component
+        - primary
+        - system_count
+      type: object
+    SystemPropertiesOutputBody:
       additionalProperties: false
       properties:
         $schema:
           description: A URL to the JSON Schema for this object.
           examples:
-            - /api/v1/schemas/SystemTypeBody.json
+            - /api/v1/schemas/SystemPropertiesOutputBody.json
           format: uri
           readOnly: true
           type: string
-        display_name:
+        properties:
+          items:
+            $ref: "#/components/schemas/EffectivePropertyBody"
+          type:
+            - array
+            - "null"
+        system:
           type: string
-        id:
-          type: string
-        official:
-          type: boolean
       required:
-        - id
+        - system
+        - properties
+      type: object
+    SystemPropertyValueBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/SystemPropertyValueBody.json
+          format: uri
+          readOnly: true
+          type: string
+        property_name:
+          type: string
+        system:
+          type: string
+        value:
+          description: The stored value, shape given by the property's data_type
+        value_id:
+          description: The stored value's id
+          type: string
+      required:
+        - system
+        - property_name
+        - value
+        - value_id
+      type: object
+    SystemRoleBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/SystemRoleBody.json
+          format: uri
+          readOnly: true
+          type: string
+        capabilities:
+          description: The capabilities a component must ALL provide to fill it
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        display_name:
+          description: The role's human label
+          type: string
+        impact:
+          description: "What an impaired role means for its system: outage, degraded, or none"
+          type: string
+        name:
+          description: The role's name within its owner (the address)
+          type: string
+        quorum:
+          description: How many components must fill the role
+          format: int64
+          type: integer
+      required:
+        - name
         - display_name
-        - official
+        - quorum
+        - capabilities
+        - impact
       type: object
     TagBindingBody:
       additionalProperties: false
@@ -2888,6 +3909,19 @@ components:
         - theme
         - default_landing
       type: object
+    UpdateCapabilityInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/UpdateCapabilityInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        display_name:
+          type: string
+      type: object
     UpdateComponentInputBody:
       additionalProperties: false
       properties:
@@ -2898,8 +3932,6 @@ components:
           format: uri
           readOnly: true
           type: string
-        component_type:
-          type: string
         display_name:
           type: string
         name:
@@ -2909,82 +3941,20 @@ components:
           pattern: ^[a-z0-9][a-z0-9-]*$
           type: string
       type: object
-    UpdateComponentMakeInputBody:
+    UpdateDriverInputBody:
       additionalProperties: false
       properties:
         $schema:
           description: A URL to the JSON Schema for this object.
           examples:
-            - /api/v1/schemas/UpdateComponentMakeInputBody.json
+            - /api/v1/schemas/UpdateDriverInputBody.json
           format: uri
           readOnly: true
           type: string
         display_name:
           type: string
-        icon:
+        version:
           type: string
-        support_phone:
-          type: string
-        website:
-          type: string
-      type: object
-    UpdateComponentTypeInputBody:
-      additionalProperties: false
-      properties:
-        $schema:
-          description: A URL to the JSON Schema for this object.
-          examples:
-            - /api/v1/schemas/UpdateComponentTypeInputBody.json
-          format: uri
-          readOnly: true
-          type: string
-        display_name:
-          type: string
-      type: object
-    UpdateFieldDefinitionInputBody:
-      additionalProperties: false
-      properties:
-        $schema:
-          description: A URL to the JSON Schema for this object.
-          examples:
-            - /api/v1/schemas/UpdateFieldDefinitionInputBody.json
-          format: uri
-          readOnly: true
-          type: string
-        data_type:
-          description: The declared value type
-          enum:
-            - string
-            - int
-            - float
-            - bool
-            - json
-          type: string
-        default_value:
-          description: Optional type-level default, validated against data_type
-        display_name:
-          description: Optional human label; falls back to name when unset
-          type: string
-        required:
-          description: Whether every component of this type must set the field; defaults to false
-          type: boolean
-      required:
-        - data_type
-      type: object
-    UpdateFieldValueInputBody:
-      additionalProperties: false
-      properties:
-        $schema:
-          description: A URL to the JSON Schema for this object.
-          examples:
-            - /api/v1/schemas/UpdateFieldValueInputBody.json
-          format: uri
-          readOnly: true
-          type: string
-        value:
-          description: The new literal, validated against the field's fixed data_type
-      required:
-        - value
       type: object
     UpdateGroupInputBody:
       additionalProperties: false
@@ -3129,6 +4099,58 @@ components:
           pattern: ^[a-z0-9][a-z0-9._-]*$
           type: string
       type: object
+    UpdateProductInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/UpdateProductInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        capabilities:
+          items:
+            type: string
+          type: array
+        display_name:
+          type: string
+        driver_id:
+          type: string
+        kind:
+          enum:
+            - device
+            - app
+            - service
+            - vm
+          type: string
+        parent_product_id:
+          type: string
+        vendor_id:
+          type: string
+      type: object
+    UpdatePropertyInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/UpdatePropertyInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        description:
+          description: What the property means
+          type: string
+        display_name:
+          description: A human label
+          type: string
+        unit:
+          description: A display unit
+          type: string
+        validation:
+          description: A JSON Schema fragment (replaces wholesale)
+      type: object
     UpdateSecretInputBody:
       additionalProperties: false
       properties:
@@ -3146,6 +4168,21 @@ components:
           type: object
       required:
         - fields
+      type: object
+    UpdateStandardInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/UpdateStandardInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        display_name:
+          type: string
+        parent_standard_id:
+          type: string
       type: object
     UpdateSystemInputBody:
       additionalProperties: false
@@ -3165,20 +4202,7 @@ components:
           minLength: 1
           pattern: ^[a-z0-9][a-z0-9-]*$
           type: string
-        system_type:
-          type: string
-      type: object
-    UpdateSystemTypeInputBody:
-      additionalProperties: false
-      properties:
-        $schema:
-          description: A URL to the JSON Schema for this object.
-          examples:
-            - /api/v1/schemas/UpdateSystemTypeInputBody.json
-          format: uri
-          readOnly: true
-          type: string
-        display_name:
+        standard_id:
           type: string
       type: object
     UpdateTagInputBody:
@@ -3224,6 +4248,31 @@ components:
       required:
         - value
       type: object
+    UpdateVendorInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/UpdateVendorInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        display_name:
+          type: string
+        icon:
+          type: string
+        kind:
+          enum:
+            - manufacturer
+            - integrator
+            - developer
+          type: string
+        support_phone:
+          type: string
+        website:
+          type: string
+      type: object
     VariableBody:
       additionalProperties: false
       properties:
@@ -3254,6 +4303,40 @@ components:
         - value_type
         - owner_kind
         - value
+      type: object
+    VendorBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/VendorBody.json
+          format: uri
+          readOnly: true
+          type: string
+        display_name:
+          type: string
+        icon:
+          type: string
+        id:
+          type: string
+        kind:
+          enum:
+            - manufacturer
+            - integrator
+            - developer
+          type: string
+        official:
+          type: boolean
+        support_phone:
+          type: string
+        website:
+          type: string
+      required:
+        - id
+        - display_name
+        - kind
+        - official
       type: object
 info:
   title: Omniglass
@@ -3625,16 +4708,16 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Whether the system has an owner yet
-  /component-makes:
+  /capabilities:
     get:
-      description: Lists the component_make registry, ordered alphabetically by display name. Populates the make picker on the component_model form. Gated by make:read.
-      operationId: list-component-makes
+      description: Lists the capability registry, ordered alphabetically by display name. Populates the capability picker on the product form. Gated by capability:read.
+      operationId: list-capabilities
       responses:
         "200":
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ListComponentMakesOutputBody"
+                $ref: "#/components/schemas/ListCapabilitiesOutputBody"
           description: OK
         default:
           content:
@@ -3642,23 +4725,23 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
-      summary: List component makes
-      x-omniglass-permission: make:read
+      summary: List capabilities
+      x-omniglass-permission: capability:read
     post:
-      description: Creates a custom (non-official) component_make. Gated by make:create.
-      operationId: create-component-make
+      description: Creates a custom (non-official) capability. Gated by capability:create.
+      operationId: create-capability
       requestBody:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateComponentMakeInputBody"
+              $ref: "#/components/schemas/CreateCapabilityInputBody"
         required: true
       responses:
         "201":
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ComponentMakeBody"
+                $ref: "#/components/schemas/CapabilityBody"
           description: Created
         default:
           content:
@@ -3666,19 +4749,19 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
-      summary: Create a component make
-      x-omniglass-permission: make:create
-  /component-makes/{id}:
+      summary: Create a capability
+      x-omniglass-permission: capability:create
+  /capabilities/{id}:
     delete:
-      description: Deletes a custom component_make, refused if official (422). Gated by make:delete.
-      operationId: delete-component-make
+      description: Deletes a custom capability, refused if official (422). Gated by capability:delete.
+      operationId: delete-capability
       parameters:
-        - description: The component_make id
+        - description: The capability id
           in: path
           name: id
           required: true
           schema:
-            description: The component_make id
+            description: The capability id
             type: string
       responses:
         "204":
@@ -3689,25 +4772,25 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
-      summary: Delete a component make
-      x-omniglass-permission: make:delete
+      summary: Delete a capability
+      x-omniglass-permission: capability:delete
     get:
-      description: Fetches a component_make by id. Gated by make:read.
-      operationId: get-component-make
+      description: Fetches a capability by id. Gated by capability:read.
+      operationId: get-capability
       parameters:
-        - description: The component_make id
+        - description: The capability id
           in: path
           name: id
           required: true
           schema:
-            description: The component_make id
+            description: The capability id
             type: string
       responses:
         "200":
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ComponentMakeBody"
+                $ref: "#/components/schemas/CapabilityBody"
           description: OK
         default:
           content:
@@ -3715,11 +4798,11 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
-      summary: Get a component make
-      x-omniglass-permission: make:read
+      summary: Get a capability
+      x-omniglass-permission: capability:read
     patch:
-      description: Patches a custom component_make's display_name, icon, support_phone, or website. Official makes are read-only (422). Gated by make:update.
-      operationId: update-component-make
+      description: Patches a custom capability's display_name. Official capabilities are read-only (422). Gated by capability:update.
+      operationId: update-capability
       parameters:
         - in: path
           name: id
@@ -3730,14 +4813,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/UpdateComponentMakeInputBody"
+              $ref: "#/components/schemas/UpdateCapabilityInputBody"
         required: true
       responses:
         "200":
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ComponentMakeBody"
+                $ref: "#/components/schemas/CapabilityBody"
           description: OK
         default:
           content:
@@ -3745,8 +4828,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
-      summary: Update a component make
-      x-omniglass-permission: make:update
+      summary: Update a capability
+      x-omniglass-permission: capability:update
   /components:
     get:
       description: Lists the components the caller may read, each filtered to its scope subtree. Gated by component:read.
@@ -3792,7 +4875,7 @@ paths:
       x-omniglass-permission: component:create
   /components/{name}:
     delete:
-      description: Deletes a component, refused while it still has child components. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.
+      description: Deletes a component, refused (409) while it still has child components or is still referenced elsewhere, such as by a system role it staffs. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.
       operationId: delete-component
       parameters:
         - description: The component's unique name
@@ -3840,7 +4923,7 @@ paths:
       summary: Get a component
       x-omniglass-permission: component:read
     patch:
-      description: Patches a component's display_name or component_type. Gated by component:update; read and update scopes drive the 404 versus 403 split.
+      description: Patches a component's technical name or display_name. Gated by component:update; read and update scopes drive the 404 versus 403 split.
       operationId: update-component
       parameters:
         - in: path
@@ -3869,6 +4952,194 @@ paths:
           description: Error
       summary: Update a component
       x-omniglass-permission: component:update
+  /components/{name}/alarms:
+    get:
+      description: What is currently wrong with this component, newest first, each with the capabilities it degrades. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+      operationId: list-component-alarms
+      parameters:
+        - description: The component's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The component's unique name
+            type: string
+        - description: Include cleared alarms, so the list is the history rather than what is wrong now
+          explode: false
+          in: query
+          name: include_cleared
+          schema:
+            description: Include cleared alarms, so the list is the history rather than what is wrong now
+            type: boolean
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListAlarmsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List a component's alarms
+      x-omniglass-permission: component:read
+    post:
+      description: "Records a condition on this component and the capabilities it degrades, then recomputes health in the same transaction: any role requiring a degraded capability can no longer be filled by this component, and its system and location verdicts move with it. An unknown capability is a 422. Gated by component:update; an out-of-scope component is a non-disclosing 404."
+      operationId: raise-component-alarm
+      parameters:
+        - description: The component's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The component's unique name
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RaiseAlarmInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlarmBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Raise an alarm on a component
+      x-omniglass-permission: component:update
+  /components/{name}/alarms/{id}:
+    delete:
+      description: "Marks the alarm cleared and recomputes health in the same transaction, so the recovery is recorded as a transition at the moment it happened. The row is kept: what was wrong and when outlives the fix. Clearing an alarm that is already cleared or does not exist is a 404. Gated by component:update; an out-of-scope component is a non-disclosing 404."
+      operationId: clear-component-alarm
+      parameters:
+        - description: The component's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The component's unique name
+            type: string
+        - description: The alarm id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The alarm id
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Clear an alarm
+      x-omniglass-permission: component:update
+  /components/{name}/capabilities:
+    get:
+      description: "What this component actually provides: the capabilities its product declares, plus the ones the component adds, minus the ones it suppresses. This is the set the role-assignment guard checks, so a productless component that declares its own can still be staffed. Gated by component:read; an out-of-scope component is a non-disclosing 404."
+      operationId: list-component-capabilities
+      parameters:
+        - description: The component's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The component's unique name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComponentCapabilitiesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List a component's effective capabilities
+      x-omniglass-permission: component:read
+  /components/{name}/capabilities/{capability}:
+    delete:
+      description: Removes the component's own fact about the capability, so it falls back to whatever its product declares. Clearing a fact the component never declared is a 404. Gated by component:update; an out-of-scope component is a non-disclosing 404.
+      operationId: clear-component-capability
+      parameters:
+        - description: The component's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The component's unique name
+            type: string
+        - description: The capability id
+          in: path
+          name: capability
+          required: true
+          schema:
+            description: The capability id
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Clear a capability declaration on a component
+      x-omniglass-permission: component:update
+    put:
+      description: "Records this component's own fact about a capability: present true adds one its product does not claim, present false suppresses one it does. Idempotent. An unknown capability is a 422; an unknown or out-of-scope component is a non-disclosing 404 (the component is resolved in scope first). Gated by component:update."
+      operationId: set-component-capability
+      parameters:
+        - description: The component's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The component's unique name
+            type: string
+        - description: The capability id
+          in: path
+          name: capability
+          required: true
+          schema:
+            description: The capability id
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetComponentCapabilityInputBody"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Declare a capability on a component
+      x-omniglass-permission: component:update
   /components/{name}/effective-tags:
     get:
       description: "Resolves the tags that cascade onto a component (global -> location -> system -> component): keys union, values override most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves only from a binding on the component itself. Gated by component:read; the component must be in the caller's component read scope."
@@ -3896,24 +5167,24 @@ paths:
           description: Error
       summary: Effective tags for a component
       x-omniglass-permission: component:read
-  /components/{name}/fields:
+  /components/{name}/events:
     get:
-      description: Each field defined on the component's type, resolved to the set literal or the type default (is_set marks the override). Gated by field:read; the component must be in the caller's field read scope.
-      operationId: list-effective-fields
+      description: Returns the component's recent log occurrences (the log-kind sink), newest first, bounded to the last 24 hours. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+      operationId: list-component-events
       parameters:
-        - description: The component's name
+        - description: The component's unique name
           in: path
           name: name
           required: true
           schema:
-            description: The component's name
+            description: The component's unique name
             type: string
       responses:
         "200":
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/EffectiveFieldsOutputBody"
+                $ref: "#/components/schemas/EventsOutputBody"
           description: OK
         default:
           content:
@@ -3921,31 +5192,122 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
-      summary: List a component's effective fields
-      x-omniglass-permission: field:read
-    post:
-      description: "Sets a literal for a field defined on the component's type, validated against its data_type. Idempotent: the first set creates the value, a later set patches it in place. Gated by field:create; the component must be in the caller's field create scope."
-      operationId: set-field-value
+      summary: List a component's recent events
+      x-omniglass-permission: component:read
+  /components/{name}/memberships:
+    get:
+      description: "The systems this component is bound into, ordered by name. A component may belong to several: a rack DSP serving three rooms is a member of all three, and each of them depends on it. Exactly one membership may be marked primary, the default for a question asked without a system in hand. Gated by component:read; an out-of-scope component is a non-disclosing 404."
+      operationId: list-component-memberships
       parameters:
-        - description: The component's name
+        - description: Technical name of the component
           in: path
           name: name
           required: true
           schema:
-            description: The component's name
+            description: Technical name of the component
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListComponentMembershipsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List the systems a component is in
+      x-omniglass-permission: component:read
+  /components/{name}/properties:
+    get:
+      description: Every property the component's product declares, resolved to the component's own value or the contract default (is_set marks the override), plus any property set directly on the component (from_contract false). Gated by component:read; an out-of-scope component is a non-disclosing 404.
+      operationId: list-component-properties
+      parameters:
+        - description: The component's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The component's unique name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComponentPropertiesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List a component's effective properties
+      x-omniglass-permission: component:read
+  /components/{name}/properties/{property}:
+    delete:
+      description: Removes the component's declared value, so the property falls back to the product contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the component never set is a 404. Gated by component:update; an out-of-scope component is a non-disclosing 404.
+      operationId: clear-component-property
+      parameters:
+        - description: The component's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The component's unique name
+            type: string
+        - description: The property name
+          in: path
+          name: property
+          required: true
+          schema:
+            description: The property name
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Clear a property on a component
+      x-omniglass-permission: component:update
+    put:
+      description: "Declares a value for the property on this component, overriding the product contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by component:update; an out-of-scope component is a non-disclosing 404."
+      operationId: set-component-property
+      parameters:
+        - description: The component's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The component's unique name
+            type: string
+        - description: The property name
+          in: path
+          name: property
+          required: true
+          schema:
+            description: The property name
             type: string
       requestBody:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/SetFieldValueInputBody"
+              $ref: "#/components/schemas/SetComponentPropertyInputBody"
         required: true
       responses:
         "200":
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/FieldValueBody"
+                $ref: "#/components/schemas/EffectivePropertyValueBody"
           description: OK
         default:
           content:
@@ -3953,8 +5315,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
-      summary: Set a field value on a component
-      x-omniglass-permission: field:create
+      summary: Set a property on a component
+      x-omniglass-permission: component:update
   /components/{name}/reachability:
     get:
       description: Composes, per interface, the latest reachability verdict, the probe-layer signals that compose it, and the recent verdict transitions for the availability strip. Gated by component:read; an out-of-scope component is a non-disclosing 404.
@@ -4096,16 +5458,16 @@ paths:
           description: Error
       summary: Check a component technical name
       x-omniglass-permission: component:update
-  /field-definitions:
+  /drivers:
     get:
-      description: Lists every field defined on any component_type (the catalog directory). Gated by field:read.
-      operationId: list-field-definitions
+      description: Lists the driver registry, ordered alphabetically by display name. Populates the driver picker on the product form. Gated by driver:read.
+      operationId: list-drivers
       responses:
         "200":
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ListFieldDefinitionsOutputBody"
+                $ref: "#/components/schemas/ListDriversOutputBody"
           description: OK
         default:
           content:
@@ -4113,23 +5475,23 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
-      summary: List field definitions
-      x-omniglass-permission: field:read
+      summary: List drivers
+      x-omniglass-permission: driver:read
     post:
-      description: Declares a typed field on a component_type. The default, if given, is validated against data_type. Gated by field:create.
-      operationId: create-field-definition
+      description: Creates a custom (non-official) driver. Gated by driver:create.
+      operationId: create-driver
       requestBody:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateFieldDefinitionInputBody"
+              $ref: "#/components/schemas/CreateDriverInputBody"
         required: true
       responses:
         "201":
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/FieldDefinitionBody"
+                $ref: "#/components/schemas/DriverBody"
           description: Created
         default:
           content:
@@ -4137,19 +5499,19 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
-      summary: Define a field
-      x-omniglass-permission: field:create
-  /field-definitions/{id}:
+      summary: Create a driver
+      x-omniglass-permission: driver:create
+  /drivers/{id}:
     delete:
-      description: Removes a field definition by id. Gated by field:delete.
-      operationId: delete-field-definition
+      description: Deletes a custom driver, refused if official (422). Gated by driver:delete.
+      operationId: delete-driver
       parameters:
-        - description: The field definition's id
+        - description: The driver id
           in: path
           name: id
           required: true
           schema:
-            description: The field definition's id
+            description: The driver id
             type: string
       responses:
         "204":
@@ -4160,31 +5522,25 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
-      summary: Delete a field definition
-      x-omniglass-permission: field:delete
-    patch:
-      description: Replaces a field's data_type and default value, revalidating the default. component_type and name are fixed at creation. Gated by field:update.
-      operationId: update-field-definition
+      summary: Delete a driver
+      x-omniglass-permission: driver:delete
+    get:
+      description: Fetches a driver by id. Gated by driver:read.
+      operationId: get-driver
       parameters:
-        - description: The field definition's id
+        - description: The driver id
           in: path
           name: id
           required: true
           schema:
-            description: The field definition's id
+            description: The driver id
             type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UpdateFieldDefinitionInputBody"
-        required: true
       responses:
         "200":
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/FieldDefinitionBody"
+                $ref: "#/components/schemas/DriverBody"
           description: OK
         default:
           content:
@@ -4192,54 +5548,29 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
-      summary: Update a field definition
-      x-omniglass-permission: field:update
-  /field-values/{id}:
-    delete:
-      description: Clears a component's override for a field, reverting it to the type default. Gated by field:delete; read and delete scopes on the owning component drive the 404 versus 403 split.
-      operationId: delete-field-value
-      parameters:
-        - description: The field value's id
-          in: path
-          name: id
-          required: true
-          schema:
-            description: The field value's id
-            type: string
-      responses:
-        "204":
-          description: No Content
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Delete a field value
-      x-omniglass-permission: field:delete
+      summary: Get a driver
+      x-omniglass-permission: driver:read
     patch:
-      description: Replaces a field value's literal, revalidated against the field's fixed data_type. Gated by field:update; read and update scopes on the owning component drive the 404 versus 403 split.
-      operationId: update-field-value
+      description: Patches a custom driver's display_name or version. Official drivers are read-only (422). Gated by driver:update.
+      operationId: update-driver
       parameters:
-        - description: The field value's id
-          in: path
+        - in: path
           name: id
           required: true
           schema:
-            description: The field value's id
             type: string
       requestBody:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/UpdateFieldValueInputBody"
+              $ref: "#/components/schemas/UpdateDriverInputBody"
         required: true
       responses:
         "200":
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/FieldValueBody"
+                $ref: "#/components/schemas/DriverBody"
           description: OK
         default:
           content:
@@ -4247,8 +5578,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
-      summary: Update a field value
-      x-omniglass-permission: field:update
+      summary: Update a driver
+      x-omniglass-permission: driver:update
   /files:
     get:
       description: Lists the file handles the caller may see (searchable metadata, no bytes). Sensitive files appear only to the admin tier. Gated by file:read.
@@ -4508,6 +5839,102 @@ paths:
           description: Error
       summary: Update an interface
       x-omniglass-permission: interface:update
+  /location-types/{id}/properties:
+    get:
+      description: Lists the location type's declared-property contract (what every location of the type exposes), ordered by property name, each with its optional default and required flag. Gated by type:read.
+      operationId: list-location-type-properties
+      parameters:
+        - description: The location_type id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The location_type id
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListLocationTypePropertiesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List a location type's declared properties
+      x-omniglass-permission: type:read
+  /location-types/{id}/properties/{property}:
+    delete:
+      description: Removes one line from a custom location type's contract; locations of the type keep any value they set for it, now off-contract. A property the type does not declare is a 404, and an official type is read-only (422). Gated by type:delete.
+      operationId: delete-location-type-property
+      parameters:
+        - description: The location type id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The location type id
+            type: string
+        - description: The property name
+          in: path
+          name: property
+          required: true
+          schema:
+            description: The property name
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Withdraw a property from a location type
+      x-omniglass-permission: type:delete
+    put:
+      description: Declares a catalog property on a custom location type, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official location types are read-only (422); an unknown type is a 404 and a property the catalog does not know is a 422. Gated by type:update.
+      operationId: set-location-type-property
+      parameters:
+        - description: The location type id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The location type id
+            type: string
+        - description: The property name
+          in: path
+          name: property
+          required: true
+          schema:
+            description: The property name
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetLocationTypePropertyInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocationTypePropertyBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Declare a property on a location type
+      x-omniglass-permission: type:update
   /locations:
     get:
       description: Lists the locations the caller may read, each filtered to its scope subtree. Gated by location:read.
@@ -4553,7 +5980,7 @@ paths:
       x-omniglass-permission: location:create
   /locations/{name}:
     delete:
-      description: Deletes a location, refused while it still has child locations. Gated by location:delete; read and delete scopes drive the 404 versus 403 split.
+      description: Deletes a location, refused (409) while it still has child locations or is still referenced elsewhere. Gated by location:delete; read and delete scopes drive the 404 versus 403 split.
       operationId: delete-location
       parameters:
         - description: The location's unique name
@@ -4629,6 +6056,129 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Update a location
+      x-omniglass-permission: location:update
+  /locations/{name}/health:
+    get:
+      description: The location's current verdict, worst-wins over every system placed anywhere beneath it, with those systems and their verdicts as the drill-down (the system health read names the role, the capability, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.
+      operationId: get-location-health
+      parameters:
+        - description: The location's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The location's unique name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EstateHealthOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Read a location's health
+      x-omniglass-permission: location:read
+  /locations/{name}/properties:
+    get:
+      description: Every property the location's type declares, resolved to the location's own value or the contract default (is_set marks the override), plus any property set directly on the location (from_contract false). Gated by location:read; an out-of-scope location is a non-disclosing 404.
+      operationId: list-location-properties
+      parameters:
+        - description: The location's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The location's unique name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocationPropertiesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List a location's effective properties
+      x-omniglass-permission: location:read
+  /locations/{name}/properties/{property}:
+    delete:
+      description: Removes the location's declared value, so the property falls back to the location type contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the location never set is a 404. Gated by location:update; an out-of-scope location is a non-disclosing 404.
+      operationId: clear-location-property
+      parameters:
+        - description: The location's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The location's unique name
+            type: string
+        - description: The property name
+          in: path
+          name: property
+          required: true
+          schema:
+            description: The property name
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Clear a property on a location
+      x-omniglass-permission: location:update
+    put:
+      description: "Declares a value for the property on this location, overriding the location type contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by location:update; an out-of-scope location is a non-disclosing 404."
+      operationId: set-location-property
+      parameters:
+        - description: The location's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The location's unique name
+            type: string
+        - description: The property name
+          in: path
+          name: property
+          required: true
+          schema:
+            description: The property name
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetLocationPropertyInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocationPropertyValueBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Set a property on a location
       x-omniglass-permission: location:update
   /locations/{name}:listTags:
     get:
@@ -5917,6 +7467,348 @@ paths:
           description: Error
       summary: Set a principal's profile picture
       x-omniglass-permission: principal:set-avatar
+  /products:
+    get:
+      description: Lists the product registry, ordered alphabetically by display name. Each product carries its vendor, driver, kind, and capabilities. Gated by product:read.
+      operationId: list-products
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListProductsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List products
+      x-omniglass-permission: product:read
+    post:
+      description: Creates a custom (non-official) product and sets its capabilities. Gated by product:create.
+      operationId: create-product
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProductInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Create a product
+      x-omniglass-permission: product:create
+  /products/{id}:
+    delete:
+      description: Deletes a custom product, refused if official (422) or still referenced by a component (409). Gated by product:delete.
+      operationId: delete-product
+      parameters:
+        - description: The product id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The product id
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Delete a product
+      x-omniglass-permission: product:delete
+    get:
+      description: Fetches a product by id, with its capabilities. Gated by product:read.
+      operationId: get-product
+      parameters:
+        - description: The product id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The product id
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get a product
+      x-omniglass-permission: product:read
+    patch:
+      description: Patches a custom product's display_name, vendor, driver, kind, or parent, and replaces its capabilities when provided. Official products are read-only (422). Gated by product:update.
+      operationId: update-product
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProductInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Update a product
+      x-omniglass-permission: product:update
+  /products/{id}/properties:
+    get:
+      description: Lists the product's declared-property contract (what every instance of the product exposes), ordered by property name, each with its optional default and required flag. Gated by product:read.
+      operationId: list-product-properties
+      parameters:
+        - description: The product id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The product id
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListProductPropertiesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List a product's declared properties
+      x-omniglass-permission: product:read
+  /products/{id}/properties/{property}:
+    delete:
+      description: Removes one line from a custom product's contract; instances keep any value they set for it, now off-contract. A property the product does not declare is a 404, and an official product is read-only (422). Gated by product:delete.
+      operationId: delete-product-property
+      parameters:
+        - description: The product id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The product id
+            type: string
+        - description: The property name
+          in: path
+          name: property
+          required: true
+          schema:
+            description: The property name
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Withdraw a property from a product
+      x-omniglass-permission: product:delete
+    put:
+      description: Declares a catalog property on a custom product, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official products are read-only (422), and an unknown product or property is a 422. Gated by product:update.
+      operationId: set-product-property
+      parameters:
+        - description: The product id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The product id
+            type: string
+        - description: The property name
+          in: path
+          name: property
+          required: true
+          schema:
+            description: The property name
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetProductPropertyInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductPropertyBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Declare a property on a product
+      x-omniglass-permission: product:update
+  /properties:
+    get:
+      description: Lists every registered property (official and custom). The catalog is estate-wide reference data. Gated by property:read.
+      operationId: list-property
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListPropertiesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List properties
+      x-omniglass-permission: property:read
+    post:
+      description: Registers a custom property (official=false). The name must be a valid property key. Gated by property:create.
+      operationId: create-property
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePropertyInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PropertyBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Create a property
+      x-omniglass-permission: property:create
+  /properties/{name}:
+    delete:
+      description: Removes a custom property by name. Official properties are read-only. Gated by property:delete.
+      operationId: delete-property
+      parameters:
+        - description: The property's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The property's name
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Delete a property
+      x-omniglass-permission: property:delete
+    get:
+      description: Returns one property by name. Gated by property:read.
+      operationId: get-property
+      parameters:
+        - description: The property's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The property's name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PropertyBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get a property
+      x-omniglass-permission: property:read
+    patch:
+      description: Patches a custom property's label, description, unit, or validation (a nil field is unchanged). Data type and kind are fixed at creation. Official properties are read-only. Gated by property:update.
+      operationId: update-property
+      parameters:
+        - description: The property's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The property's name
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePropertyInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PropertyBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Update a property
+      x-omniglass-permission: property:update
   /roles:
     get:
       description: Lists the roles with their metadata and effective (flattened) permissions. Gated by the role:read:admin capability.
@@ -6197,6 +8089,320 @@ paths:
           description: Error
       summary: Restore all settings to defaults
       x-omniglass-permission: settings:update
+  /standards:
+    get:
+      description: Lists the standard catalog, ordered alphabetically by display name. A standard is the blueprint a system conforms to. Gated by standard:read.
+      operationId: list-standards
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListStandardsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List standards
+      x-omniglass-permission: standard:read
+    post:
+      description: Creates a custom (non-official) standard, optionally as a variant of another. Gated by standard:create.
+      operationId: create-standard
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateStandardInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Create a standard
+      x-omniglass-permission: standard:create
+  /standards/{id}:
+    delete:
+      description: Deletes a custom standard, refused if official (422) or still referenced by a system (409). Gated by standard:delete.
+      operationId: delete-standard
+      parameters:
+        - description: The standard id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The standard id
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Delete a standard
+      x-omniglass-permission: standard:delete
+    get:
+      description: Fetches a standard by id. Gated by standard:read.
+      operationId: get-standard
+      parameters:
+        - description: The standard id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The standard id
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get a standard
+      x-omniglass-permission: standard:read
+    patch:
+      description: Patches a custom standard's display_name or parent. Official standards are read-only (422). Gated by standard:update.
+      operationId: update-standard
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateStandardInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Update a standard
+      x-omniglass-permission: standard:update
+  /standards/{id}/properties:
+    get:
+      description: Lists the standard's declared-property contract (what every system conforming to it exposes), ordered by property name, each with its optional default and required flag. Gated by standard:read.
+      operationId: list-standard-properties
+      parameters:
+        - description: The standard id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The standard id
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListStandardPropertiesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List a standard's declared properties
+      x-omniglass-permission: standard:read
+  /standards/{id}/properties/{property}:
+    delete:
+      description: Removes one line from a custom standard's contract; conforming systems keep any value they set for it, now off-contract. A property the standard does not declare is a 404, and an official standard is read-only (422). Gated by standard:delete.
+      operationId: delete-standard-property
+      parameters:
+        - description: The standard id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The standard id
+            type: string
+        - description: The property name
+          in: path
+          name: property
+          required: true
+          schema:
+            description: The property name
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Withdraw a property from a standard
+      x-omniglass-permission: standard:delete
+    put:
+      description: Declares a catalog property on a custom standard, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official standards are read-only (422); an unknown standard is a 404 and a property the catalog does not know is a 422. Gated by standard:update.
+      operationId: set-standard-property
+      parameters:
+        - description: The standard id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The standard id
+            type: string
+        - description: The property name
+          in: path
+          name: property
+          required: true
+          schema:
+            description: The property name
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetStandardPropertyInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardPropertyBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Declare a property on a standard
+      x-omniglass-permission: standard:update
+  /standards/{id}/roles:
+    get:
+      description: Lists the roles this standard declares (every conforming system inherits them live), ordered by name, each with its quorum and the capabilities a component must provide to fill it. Gated by standard:read.
+      operationId: list-standard-roles
+      parameters:
+        - description: The standard id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The standard id
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListStandardRolesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List a standard's declared roles
+      x-omniglass-permission: standard:read
+  /standards/{id}/roles/{role}:
+    delete:
+      description: Removes the role from the standard, and with it every assignment conforming systems made to it. A role the standard does not declare is a 404. Gated by standard:delete.
+      operationId: delete-standard-role
+      parameters:
+        - description: The standard id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The standard id
+            type: string
+        - description: The role name
+          in: path
+          name: role
+          required: true
+          schema:
+            description: The role name
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Withdraw a role from a standard
+      x-omniglass-permission: standard:delete
+    put:
+      description: Declares a role every conforming system needs filled, or revises it in place (the role is addressed by name, so the write is idempotent). The capability list replaces the required set wholesale. An unknown standard or capability is a 422. Gated by standard:update.
+      operationId: set-standard-role
+      parameters:
+        - description: The standard id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The standard id
+            type: string
+        - description: The role name
+          in: path
+          name: role
+          required: true
+          schema:
+            description: The role name
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RoleSpecBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemRoleBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Declare a role on a standard
+      x-omniglass-permission: standard:update
   /systems:
     get:
       description: Lists the systems the caller may read, each filtered to its scope subtree. Gated by system:read.
@@ -6242,7 +8448,7 @@ paths:
       x-omniglass-permission: system:create
   /systems/{name}:
     delete:
-      description: Deletes a system, refused while it still has child systems. Gated by system:delete; read and delete scopes drive the 404 versus 403 split.
+      description: Deletes a system, refused (409) while it still has child systems or is still referenced elsewhere. Gated by system:delete; read and delete scopes drive the 404 versus 403 split.
       operationId: delete-system
       parameters:
         - description: The system's unique name
@@ -6290,7 +8496,7 @@ paths:
       summary: Get a system
       x-omniglass-permission: system:read
     patch:
-      description: Patches a system's display_name or system_type. Gated by system:update; read and update scopes drive the 404 versus 403 split.
+      description: Patches a system's display_name or standard. An omitted standard_id leaves it unchanged; an explicit empty string clears it, converting the system to a one-off. Gated by system:update; read and update scopes drive the 404 versus 403 split.
       operationId: update-system
       parameters:
         - in: path
@@ -6318,6 +8524,414 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Update a system
+      x-omniglass-permission: system:update
+  /systems/{name}/health:
+    get:
+      description: "The system's current verdict and why: every role it needs filled, whether it is impaired, what an impaired role means for the system (impact), and for an impaired role the required capabilities an alarm has taken away plus the alarms that took them. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404."
+      operationId: get-system-health
+      parameters:
+        - description: The system's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The system's unique name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EstateHealthOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Read a system's health
+      x-omniglass-permission: system:read
+  /systems/{name}/members:
+    get:
+      description: "The components bound into this system, ordered by name. Membership is what a role attaches to: every component staffing a role here is a member, and a member may also carry no role at all (a power conditioner is in the room without filling a declared slot). Gated by system:read; an out-of-scope system is a non-disclosing 404."
+      operationId: list-system-members
+      parameters:
+        - description: Technical name of the system
+          in: path
+          name: name
+          required: true
+          schema:
+            description: Technical name of the system
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListSystemMembersOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List the components in a system
+      x-omniglass-permission: system:read
+  /systems/{name}/members/{component}:
+    delete:
+      description: "Unbinds this component from the system. Refused with a 409 while it still fills a role here, since removing it would leave the system staffed by a non-member: unassign the role first. A component that was not a member is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404."
+      operationId: remove-system-member
+      parameters:
+        - description: Technical name of the system
+          in: path
+          name: name
+          required: true
+          schema:
+            description: Technical name of the system
+            type: string
+        - description: Technical name of the component
+          in: path
+          name: component
+          required: true
+          schema:
+            description: Technical name of the component
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Take a component out of a system
+      x-omniglass-permission: system:update
+    put:
+      description: Binds this component into the system. Idempotent. A component's first membership becomes its primary with nobody asking, so a component in exactly one system never has to think about the concept; a later membership does not take that default away. Gated by system:update; an out-of-scope system is a non-disclosing 404.
+      operationId: add-system-member
+      parameters:
+        - description: Technical name of the system
+          in: path
+          name: name
+          required: true
+          schema:
+            description: Technical name of the system
+            type: string
+        - description: Technical name of the component
+          in: path
+          name: component
+          required: true
+          schema:
+            description: Technical name of the component
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Put a component in a system
+      x-omniglass-permission: system:update
+  /systems/{name}/members/{component}:setPrimary:
+    post:
+      description: Moves the component's default to this membership. The default answers questions asked without a system in hand; it does not decide anything that names a system explicitly. A component that was not a member here is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.
+      operationId: set-primary-member
+      parameters:
+        - description: Technical name of the system
+          in: path
+          name: name
+          required: true
+          schema:
+            description: Technical name of the system
+            type: string
+        - description: Technical name of the component
+          in: path
+          name: component
+          required: true
+          schema:
+            description: Technical name of the component
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Make this the component's default system
+      x-omniglass-permission: system:update
+  /systems/{name}/properties:
+    get:
+      description: Every property the system's standard declares, resolved to the system's own value or the contract default (is_set marks the override), plus any property set directly on the system (from_contract false). Gated by system:read; an out-of-scope system is a non-disclosing 404.
+      operationId: list-system-properties
+      parameters:
+        - description: The system's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The system's unique name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemPropertiesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List a system's effective properties
+      x-omniglass-permission: system:read
+  /systems/{name}/properties/{property}:
+    delete:
+      description: Removes the system's declared value, so the property falls back to the standard contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the system never set is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.
+      operationId: clear-system-property
+      parameters:
+        - description: The system's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The system's unique name
+            type: string
+        - description: The property name
+          in: path
+          name: property
+          required: true
+          schema:
+            description: The property name
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Clear a property on a system
+      x-omniglass-permission: system:update
+    put:
+      description: "Declares a value for the property on this system, overriding the standard contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by system:update; an out-of-scope system is a non-disclosing 404."
+      operationId: set-system-property
+      parameters:
+        - description: The system's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The system's unique name
+            type: string
+        - description: The property name
+          in: path
+          name: property
+          required: true
+          schema:
+            description: The property name
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetSystemPropertyInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemPropertyValueBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Set a property on a system
+      x-omniglass-permission: system:update
+  /systems/{name}/roles:
+    get:
+      description: "Every role this system needs filled: those its standard declares (from_standard true) plus those declared directly on it, each with the capabilities it requires, the components filling it, and how many more it wants before quorum (understaffed). A one-off system shows only its own. Gated by system:read; an out-of-scope system is a non-disclosing 404."
+      operationId: list-system-roles
+      parameters:
+        - description: The system's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The system's unique name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListSystemRolesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List a system's effective roles
+      x-omniglass-permission: system:read
+  /systems/{name}/roles/{role}:
+    delete:
+      description: Removes a role declared on this system, and with it every assignment to it. A role the system does not declare itself is a 404 (a role inherited from its standard is withdrawn on the standard, not here). Gated by system:update; an out-of-scope system is a non-disclosing 404.
+      operationId: delete-system-role
+      parameters:
+        - description: The system's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The system's unique name
+            type: string
+        - description: The role name
+          in: path
+          name: role
+          required: true
+          schema:
+            description: The role name
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Withdraw a role from a system
+      x-omniglass-permission: system:update
+    put:
+      description: Declares a role directly on this system (how a one-off system gets roles at all, and how a conforming one adds what its standard does not cover), or revises it in place. The capability list replaces the required set wholesale. Gated by system:update; an out-of-scope system is a non-disclosing 404.
+      operationId: set-system-role
+      parameters:
+        - description: The system's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The system's unique name
+            type: string
+        - description: The role name
+          in: path
+          name: role
+          required: true
+          schema:
+            description: The role name
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RoleSpecBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemRoleBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Declare a role on a system
+      x-omniglass-permission: system:update
+  /systems/{name}/roles/{role}/assignments/{component}:
+    delete:
+      description: Takes this component out of the role, leaving the role understaffed until another fills it. A component that was not filling the role is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.
+      operationId: unassign-system-role
+      parameters:
+        - description: The system's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The system's unique name
+            type: string
+        - description: The role name
+          in: path
+          name: role
+          required: true
+          schema:
+            description: The role name
+            type: string
+        - description: The component's unique name
+          in: path
+          name: component
+          required: true
+          schema:
+            description: The component's unique name
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Unassign a component from a role
+      x-omniglass-permission: system:update
+    put:
+      description: Puts this component in the role for this system. Refused with a 422 naming the missing capabilities when the component does not provide everything the role requires (its product's capabilities, plus what it adds, minus what it suppresses). Idempotent. Gated by system:update; an out-of-scope system is a non-disclosing 404.
+      operationId: assign-system-role
+      parameters:
+        - description: The system's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The system's unique name
+            type: string
+        - description: The role name
+          in: path
+          name: role
+          required: true
+          schema:
+            description: The role name
+            type: string
+        - description: The component's unique name
+          in: path
+          name: component
+          required: true
+          schema:
+            description: The component's unique name
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Assign a component to a role
       x-omniglass-permission: system:update
   /systems/{name}:listTags:
     get:
@@ -6660,102 +9274,6 @@ paths:
           description: Error
       summary: Get a task
       x-omniglass-permission: task:read
-  /types/component:
-    get:
-      description: Lists the component_type registry, ordered alphabetically by display name. Populates the type picker on the component form. Gated by type:read.
-      operationId: list-component-types
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ListComponentTypesOutputBody"
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: List component types
-      x-omniglass-permission: type:read
-    post:
-      description: Creates a custom (non-official) component_type. Gated by type:create.
-      operationId: create-component-type
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateComponentTypeInputBody"
-        required: true
-      responses:
-        "201":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ComponentTypeBody"
-          description: Created
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Create a component type
-      x-omniglass-permission: type:create
-  /types/component/{id}:
-    delete:
-      description: Deletes a custom component_type, refused if official (422) or referenced by a component (409). Gated by type:delete.
-      operationId: delete-component-type
-      parameters:
-        - description: The component_type id
-          in: path
-          name: id
-          required: true
-          schema:
-            description: The component_type id
-            type: string
-      responses:
-        "204":
-          description: No Content
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Delete a component type
-      x-omniglass-permission: type:delete
-    patch:
-      description: Patches a custom component_type's display_name. Official types are read-only (422). Gated by type:update.
-      operationId: update-component-type
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UpdateComponentTypeInputBody"
-        required: true
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ComponentTypeBody"
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Update a component type
-      x-omniglass-permission: type:update
   /types/location:
     get:
       description: Lists the location_type registry (the shape-definers a location is classified by), ordered alphabetically by display name. Populates the type picker on the location form. Gated by type:read.
@@ -6871,102 +9389,6 @@ paths:
           description: Error
       summary: List secret types
       x-omniglass-permission: secret:read
-  /types/system:
-    get:
-      description: Lists the system_type registry, ordered alphabetically by display name. Populates the type picker on the system form. Gated by type:read.
-      operationId: list-system-types
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ListSystemTypesOutputBody"
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: List system types
-      x-omniglass-permission: type:read
-    post:
-      description: Creates a custom (non-official) system_type. Gated by type:create.
-      operationId: create-system-type
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateSystemTypeInputBody"
-        required: true
-      responses:
-        "201":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/SystemTypeBody"
-          description: Created
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Create a system type
-      x-omniglass-permission: type:create
-  /types/system/{id}:
-    delete:
-      description: Deletes a custom system_type, refused if official (422) or referenced by a system (409). Gated by type:delete.
-      operationId: delete-system-type
-      parameters:
-        - description: The system_type id
-          in: path
-          name: id
-          required: true
-          schema:
-            description: The system_type id
-            type: string
-      responses:
-        "204":
-          description: No Content
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Delete a system type
-      x-omniglass-permission: type:delete
-    patch:
-      description: Patches a custom system_type's display_name. Official types are read-only (422). Gated by type:update.
-      operationId: update-system-type
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UpdateSystemTypeInputBody"
-        required: true
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/SystemTypeBody"
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Update a system type
-      x-omniglass-permission: type:update
   /variables:
     get:
       description: Lists every variable. Requires an all-scope read. Gated by variable:read.
@@ -7065,6 +9487,128 @@ paths:
           description: Error
       summary: Update a variable's value
       x-omniglass-permission: variable:update
+  /vendors:
+    get:
+      description: Lists the vendor registry, ordered alphabetically by display name. Populates the vendor picker on the product form. Gated by vendor:read.
+      operationId: list-vendors
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListVendorsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List vendors
+      x-omniglass-permission: vendor:read
+    post:
+      description: Creates a custom (non-official) vendor. Gated by vendor:create.
+      operationId: create-vendor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateVendorInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VendorBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Create a vendor
+      x-omniglass-permission: vendor:create
+  /vendors/{id}:
+    delete:
+      description: Deletes a custom vendor, refused if official (422). Gated by vendor:delete.
+      operationId: delete-vendor
+      parameters:
+        - description: The vendor id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The vendor id
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Delete a vendor
+      x-omniglass-permission: vendor:delete
+    get:
+      description: Fetches a vendor by id. Gated by vendor:read.
+      operationId: get-vendor
+      parameters:
+        - description: The vendor id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The vendor id
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VendorBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get a vendor
+      x-omniglass-permission: vendor:read
+    patch:
+      description: Patches a custom vendor's display_name, kind, icon, support_phone, or website. Official vendors are read-only (422). Gated by vendor:update.
+      operationId: update-vendor
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateVendorInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VendorBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Update a vendor
+      x-omniglass-permission: vendor:update
 servers:
   - url: /api/v1
 

@@ -4,14 +4,16 @@ import { api } from "../api/client";
 // the page stays declarative and the calls are unit-testable against a mocked
 // client. Shapes follow the OpenAPI (see api/components.go). Components form a
 // tree (parent_id), and each is bound to a primary system and a location by id.
+// A component's shape comes from the product it is an instance of (product_id),
+// whose contract declares the properties every instance exposes.
 export type Component = {
   id: string;
   name: string;
   display_name?: string;
-  component_type: string;
   location_id?: string;
   parent_id?: string;
   system_id?: string;
+  product_id?: string;
   actions?: string[];
   effective_tags?: Record<string, string>;
 };
@@ -32,11 +34,11 @@ export async function getComponent(name: string): Promise<Component> {
 
 export type CreateComponent = {
   name: string;
-  component_type: string;
   display_name?: string;
   parent?: string;
   system?: string;
   location?: string;
+  product?: string;
 };
 
 export async function createComponent(body: CreateComponent): Promise<Component> {
@@ -48,7 +50,6 @@ export async function createComponent(body: CreateComponent): Promise<Component>
 export type UpdateComponent = {
   name?: string;
   display_name?: string;
-  component_type?: string;
 };
 
 export async function updateComponent(name: string, body: UpdateComponent): Promise<Component> {

@@ -15,8 +15,11 @@ against the `datapoint_type` registry. The observed **state** path now has its f
 computes the per-interface reachability verdict `interface.reachable` (up/down, the AND of the interface's probe
 results), and the ingest consumer **routes by the `datapoint_type` kind** (metric to `metric_datapoint`, state to
 `state_datapoint`), so the verdict lands in `state_datapoint` under the same owner-confinement, **transition-only**
-(one row per flip, guarded at the node and again at ingest). Log datapoints, calculated provenance, fusion, and
-the live NATS data-lane described below are still design. See
+(one row per flip, guarded at the node and again at ingest). A **log**-kind observation now persists too, but as
+an **`event`** occurrence (the log-kind sink), not a `log_datapoint` row: it is **no longer dropped** at ingest
+([ADR-0046](/architecture/decisions/#adr-0046-the-event-log-kind-sink)), routed to `event` under the same
+owner-confinement and reject-not-project as the metric and state sinks. The `log_datapoint` table described below,
+calculated provenance, fusion, and the live NATS data-lane are still design. See
 [ADR-0033](/architecture/decisions/#adr-0037-telemetry-is-a-protobuf-event-over-jetstream-with-an-inline-owner-confining-consumer)
 and [ADR-0034](/architecture/decisions/#adr-0038-the-reachability-verdict-is-a-built-in-state).
 :::
@@ -39,7 +42,7 @@ Treating log as a datapoint removes the usual special case: an alarm on a log li
 
 ### Ownership: the exclusive-arc
 
-A datapoint attaches to a **structural entity**, not only a component. The owner is the **exclusive-arc**: an `owner_kind` enum plus the matching typed FK (`component_id` / `system_id` / `location_id` / `node_id`, or none for the singleton **`global`** estate root) with a CHECK that exactly the column matching `owner_kind` is set. The same arc owns `event` and `alarm` rows. This makes **system-, location-, node-, and global-level datapoints first-class** (e.g. `health` is a `state_datapoint` owned by a system, and estate-wide availability is owned by `global`), the fix for Zabbix's inability to put state on a group of hosts. See Ownership on the spine for the full pattern and the storage DDL.
+A datapoint attaches to a **structural entity**, not only a component. The owner is the **exclusive-arc**: an `owner_kind` enum plus the matching typed FK (`component_id` / `system_id` / `location_id` / `node_id`, or none for the singleton **`global`** estate root) with a CHECK that exactly the column matching `owner_kind` is set. The same arc owns `event` rows, and is the design for `alarm` (component-local today). This makes **system-, location-, node-, and global-level datapoints first-class** (`health` is a `state_datapoint` owned by a component, a system, or a location today, and estate-wide availability will be owned by `global`), the fix for Zabbix's inability to put state on a group of hosts. See Ownership on the spine for the full pattern and the storage DDL.
 
 ### The instance dimension: many values of one key on one owner
 
@@ -71,7 +74,7 @@ A datapoint and an event are different shapes (a datapoint has a value; an event
 
 **`datapoint_type`** describes every datapoint key: `(name, scope, template_id?, kind, value_type, unit, precision, fusion_policy, validation)`, with the **`scope`** (`template` / `org` / `official`) deciding where the name is unique (see [Key scope](#key-scope-template-org-official)). One registry across all three datapoint kinds (metric/state/log). The kind is decided by the key, not at runtime: the compiler bakes each key's kind into the edge unit, so a value routes to the right table with no runtime lookup, the same way at every scope. `fusion_policy` is the key's read-time **default** for reducing multiple perspectives, a hint rather than a mandate (see [Fusion](#fusion)). A key names a **measurement, never its owner** (`temperature`, not `room.temperature`), with snake_case segments in a dot hierarchy and the **canonical unit** in the `unit` field (`fan.speed` + `unit: rpm`, not `fan_rpm`); the ship-with official set lives in `internal/registry/defaults.yaml`. Adding or naming one: the `canonical-datapoint` skill.
 
-The naming convention is consistent: a `_type` registry defines what a thing *is*, named for the thing (`datapoint_type`, `event_type`, like `component_type`, `interface_type`). `datapoint_type` spans the three datapoint kinds, and events get their own registry because an event is a different shape.
+The naming convention is consistent: a `_type` registry defines what a thing *is*, named for the thing (`datapoint_type`, `event_type`, like `location_type`, `interface_type`). `datapoint_type` spans the three datapoint kinds, and events get their own registry because an event is a different shape.
 
 **Datapoint key naming is owner-agnostic.** A key names a *measurement*, never its owner: `temperature` is a Celsius reading whether a codec's thermals or a room's ambient sensor produced it, and the owner (component / system / location / node / global) plus a template's labels and the function that collected it give it context. So there is no `system.` / `device.` / `room.` prefix; keys group by measurement domain (`cpu.utilization`, `power.state`, `video.input`, `audio.level`, `network.icmp.rtt`). This is the normalization the product hinges on: one canonical path means one comparable signal across every vendor, which is what makes cross-fleet dashboards and AI useful. The official set is seeded from `internal/registry/defaults.yaml` following OpenTelemetry semantic conventions for the IT leaves (`cpu.utilization`, `memory.usage`; semconv's own `system.` prefix is dropped to avoid colliding with the `system` entity type) and the [OpenAV minimum-device-functionality guidelines](https://github.com/OpenAVCloud/specifications/blob/main/min-device-functionality/OAVC-AV-Device-Minimum-Functionality-Guidelines.md) for AV signals. A template declares its datapoints at **template** scope, or references an **org** or **official** key: the distro mints **official** keys, the deployment mints **org** keys, and a template mints its own **template**-scoped keys (the Zabbix model, where two templates can both declare an `input` with no collision).
 

@@ -20,6 +20,13 @@ model underneath is [identity and access](/architecture/identity-access/).
 
 ## Roles
 
+:::note[Not a system role]
+A **role** here is an access role: a capability set you grant to a person. A
+**[system role](/guides/admin/standards/#roles-what-a-conforming-system-needs-filled)** is something else
+entirely, a slot in a room that a component fills (a table microphone, a main display). The two share the
+word and nothing else, and neither one can grant or deny the other.
+:::
+
 **Admin > Roles** (with `role:read:admin`) is the catalog of the built-in roles on the same list surface as Users
 and Groups: a directory row per role (its id, whether it is **official**, what it inherits, and how many
 permissions it confers), ordered least to most powerful (viewer, operator, deploy, admin, owner). Open a row for

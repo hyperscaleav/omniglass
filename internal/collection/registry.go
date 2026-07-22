@@ -1,23 +1,26 @@
 // Package collection holds the node-side collection engine and the pure helpers
 // the ingest path shares with it. Registry answers reject-not-project: a
-// measurement name lands only if it is a registered datapoint_type.
+// measurement name lands only if it is a registered, observable property.
 package collection
 
 import "github.com/hyperscaleav/omniglass/internal/storage"
 
-// Registry is an immutable snapshot of the datapoint_type vocabulary, built from
-// a ListDatapointTypes read. It is pure: no I/O, safe to hold and share.
+// Registry is an immutable snapshot of the observable-property vocabulary, built
+// from a ListProperties read. It is pure: no I/O, safe to hold and share.
 type Registry struct {
 	kinds map[string]string // name -> kind
 }
 
-// NewRegistry snapshots the registered types. A later scope-precedence pass
-// (private shadows official) refines this; slice 1 is official-only, so last
-// write wins on name.
-func NewRegistry(types []storage.DatapointType) Registry {
-	kinds := make(map[string]string, len(types))
-	for _, dt := range types {
-		kinds[dt.Name] = dt.Kind
+// NewRegistry snapshots the observable properties: those carrying a kind
+// (metric/state/log). A declared-only property (nil kind) is not collectable, so
+// it is omitted. A later scope-precedence pass refines this; today last write wins
+// on name.
+func NewRegistry(properties []storage.Property) Registry {
+	kinds := make(map[string]string, len(properties))
+	for _, p := range properties {
+		if p.Kind != nil {
+			kinds[p.Name] = *p.Kind
+		}
 	}
 	return Registry{kinds: kinds}
 }

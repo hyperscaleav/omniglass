@@ -45,7 +45,7 @@ Every operation lives under `/api/v1/*`. The path shape is derivable, not specia
   `/nodes/{name}:heartbeat`, `/rules/calc:validate`, `/components/{name}:apply`,
   `/views/{id}:run`.
 - **Singular kind sub-segments**: `/rules/calc`, `/datapoints/metric`,
-  `/types/component`, `/types/event`.
+  `/types/location`, `/types/event`.
 - **official / private namespace** on every registry and rule family (below).
 - **List conventions** (AIP-132 target): `filter` / `orderBy` / `pageSize`+
   `pageToken` (cursor, never offset) / `fields`. The `filter` runs through the one pluggable

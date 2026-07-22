@@ -101,20 +101,33 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 		return
 	}
 
-	types, err := s.store.ListDatapointTypes(ctx)
+	properties, err := s.store.ListProperties(ctx)
 	if err != nil {
 		s.nakOrTerm(msg) // transient registry read failure: redeliver (bounded)
 		return
 	}
-	reg := collection.NewRegistry(types)
+	reg := collection.NewRegistry(properties)
 
 	// Route by the registry kind (the cp3-deferred "route by kind" note): a metric
-	// name lands in metric_datapoint, a state name in state_datapoint. Both survive
-	// the SAME owner-confinement and reject-not-project above; the split is only the
-	// sink, not a second trust decision.
-	metrics, states := deriveDatapoints(&ev, owner, reg)
+	// name lands in metric_datapoint, a state name in state_datapoint, a log name in
+	// event. All survive the SAME owner-confinement and reject-not-project above; the
+	// split is only the sink, not a second trust decision.
+	//
+	// NOTE(#311): the three sinks each write in their own transaction, then the
+	// message is acked once. Under at-least-once redelivery, a failure in a later
+	// write after an earlier one committed re-runs the committed write on redelivery;
+	// metric_datapoint and event have no uniqueness key, so that double-inserts. This
+	// is a pre-existing multi-tx-then-ack characteristic (adding the event write only
+	// widens the window); atomic-or-idempotent ingest is tracked separately.
+	metrics, states, events := deriveDatapoints(&ev, owner, reg)
 	if len(metrics) > 0 {
 		if err := s.store.InsertMetricDatapoints(ctx, metrics); err != nil {
+			s.nakOrTerm(msg) // DB write failed: redeliver (bounded)
+			return
+		}
+	}
+	if len(events) > 0 {
+		if err := s.store.InsertEvents(ctx, events); err != nil {
 			s.nakOrTerm(msg) // DB write failed: redeliver (bounded)
 			return
 		}
@@ -194,13 +207,14 @@ func (s *Server) dedupeStates(ctx context.Context, states []storage.StateDatapoi
 // deriveDatapoints turns a decoded Event + its resolved owner into the typed rows
 // to persist, split by datapoint kind. Pure: no I/O. reject-not-project drops any
 // datapoint whose name is not a registered datapoint_type; the registry kind then
-// routes a metric to the metric slice and a state to the state slice (a log kind
-// has no sink this checkpoint, dropped). The owner is stamped identically for both
-// from the task's interface: owner_kind=component, source=interface type,
-// instance=interface name; provenance is observed (the insert path fixes that).
-func deriveDatapoints(ev *ogv1.Event, owner storage.TaskOwner, reg collection.Registry) ([]storage.MetricDatapointEvent, []storage.StateDatapointEvent) {
+// routes a metric to the metric slice, a state to the state slice, and a log to the
+// event slice. The owner is stamped identically for all three from the task's
+// interface: owner_kind=component, source=interface type, instance=interface name;
+// provenance is observed (the insert path fixes that).
+func deriveDatapoints(ev *ogv1.Event, owner storage.TaskOwner, reg collection.Registry) ([]storage.MetricDatapointEvent, []storage.StateDatapointEvent, []storage.EventOccurrence) {
 	var metrics []storage.MetricDatapointEvent
 	var states []storage.StateDatapointEvent
+	var events []storage.EventOccurrence
 	for _, dp := range ev.GetDatapoints() {
 		kind, ok := reg.Allows(dp.GetName())
 		if !ok {
@@ -235,9 +249,24 @@ func deriveDatapoints(ev *ogv1.Event, owner storage.TaskOwner, reg collection.Re
 				Source:    owner.InterfaceType,
 				TS:        datapointTime(ev, dp),
 			})
+		case "log":
+			msg, attrs, ok := logValue(dp)
+			if !ok {
+				continue
+			}
+			events = append(events, storage.EventOccurrence{
+				OwnerKind:  "component",
+				OwnerID:    owner.Component,
+				Key:        dp.GetName(),
+				Instance:   owner.InterfaceName,
+				Message:    msg,
+				Attributes: attrs,
+				Source:     owner.InterfaceType,
+				TS:         datapointTime(ev, dp),
+			})
 		}
 	}
-	return metrics, states
+	return metrics, states, events
 }
 
 // numericValue extracts a metric's float value from the datapoint's typed oneof.
@@ -262,6 +291,20 @@ func stringValue(dp *ogv1.Datapoint) (string, bool) {
 		return v.StringValue, true
 	}
 	return "", false
+}
+
+// logValue extracts a log occurrence's payload from the datapoint's typed oneof.
+// A log rides string_value (its message) or json_value (structured attributes); a
+// numeric/empty value is not a log and yields ok=false (the caller skips it).
+func logValue(dp *ogv1.Datapoint) (string, []byte, bool) {
+	switch v := dp.GetValue().(type) {
+	case *ogv1.Datapoint_StringValue:
+		return v.StringValue, nil, true
+	case *ogv1.Datapoint_JsonValue:
+		return "", v.JsonValue, true
+	default:
+		return "", nil, false
+	}
 }
 
 // datapointTime resolves the timestamp for one datapoint: its own ts if set, else

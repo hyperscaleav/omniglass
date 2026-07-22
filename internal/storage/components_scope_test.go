@@ -33,14 +33,14 @@ func TestComponentScopeCRUD(t *testing.T) {
 	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "rm-1", LocationType: "campus"}, all); err != nil {
 		t.Fatalf("seed location: %v", err)
 	}
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "sys-1", SystemType: "meeting-room"}, all); err != nil {
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "sys-1"}, all); err != nil {
 		t.Fatalf("seed system: %v", err)
 	}
 
 	// disp (root, bound to sys-1 @ rm-1) > sub; plus cam (root).
-	disp := mustCreateComponent(t, gw, storage.ComponentSpec{Name: "disp", ComponentType: "display", SystemName: strptr("sys-1"), LocationName: strptr("rm-1")}, all)
-	mustCreateComponent(t, gw, storage.ComponentSpec{Name: "sub", ComponentType: "speaker", ParentName: strptr("disp")}, all)
-	mustCreateComponent(t, gw, storage.ComponentSpec{Name: "cam", ComponentType: "camera"}, all)
+	disp := mustCreateComponent(t, gw, storage.ComponentSpec{Name: "disp", SystemName: strptr("sys-1"), LocationName: strptr("rm-1")}, all)
+	mustCreateComponent(t, gw, storage.ComponentSpec{Name: "sub", ParentName: strptr("disp")}, all)
+	mustCreateComponent(t, gw, storage.ComponentSpec{Name: "cam"}, all)
 
 	if disp.SystemID == nil || disp.LocationID == nil {
 		t.Errorf("disp belongs-to/located-at not set: %+v", disp)
@@ -65,13 +65,10 @@ func TestComponentScopeCRUD(t *testing.T) {
 	}
 
 	// FK faults.
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "x", ComponentType: "galaxy"}, all); !errors.Is(err, storage.ErrUnknownComponentType) {
-		t.Errorf("unknown type = %v, want ErrUnknownComponentType", err)
-	}
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "y", ComponentType: "display", SystemName: strptr("nope")}, all); !errors.Is(err, storage.ErrSystemNotFound) {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "y", SystemName: strptr("nope")}, all); !errors.Is(err, storage.ErrSystemNotFound) {
 		t.Errorf("unknown system = %v, want ErrSystemNotFound", err)
 	}
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp", ComponentType: "display"}, all); !errors.Is(err, storage.ErrComponentExists) {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp"}, all); !errors.Is(err, storage.ErrComponentExists) {
 		t.Errorf("dup name = %v, want ErrComponentExists", err)
 	}
 

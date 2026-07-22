@@ -1,0 +1,33 @@
+# Example standards, seeded only when absent (ON CONFLICT DO NOTHING) and owned by
+# the operator once they land: editing one is never reverted on the next boot.
+# A standard is the blueprint a system conforms to, the system-side counterpart of
+# a product. These stand in until standards are created by forking an in-code
+# template (#317); they are illustrative, not authoritative. The catalog lists
+# alphabetically by display_name; variants hang off parent_standard_id.
+standards:
+  - id: meeting-room
+    display_name: Meeting Room
+    # The roles a conforming system needs filled. A component may fill one only
+    # when it provides EVERY listed capability, so these double as the worked
+    # example of the assignment guard: the shipped Cisco Room Bar satisfies
+    # room-mic, the Samsung QM55 satisfies main-display, and a room with one
+    # bar reads as understaffed until the second lands. Seeded if absent, so an
+    # operator who retunes them keeps the edit.
+    roles:
+      - name: room-mic
+        display_name: Room Microphone
+        quorum: 2
+        capabilities: [microphone, speaker]
+      - name: main-display
+        display_name: Main Display
+        capabilities: [flat-panel-display]
+  - id: huddle-room
+    display_name: Huddle Room
+  - id: classroom
+    display_name: Classroom
+  - id: auditorium
+    display_name: Auditorium
+  - id: signage
+    display_name: Digital Signage
+  - id: control-room
+    display_name: Control Room
