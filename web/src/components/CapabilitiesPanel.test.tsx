@@ -18,7 +18,8 @@ import { ME_KEY, type Me } from "../lib/auth";
 // suppression it made.
 const resolved = ["touch-panel", "microphone"];
 const product: Product = {
-  id: "crestron-tsw",
+  id: "u-crestron-tsw",
+  name: "crestron-tsw",
   display_name: "Crestron TSW",
   kind: "device",
   capabilities: ["touch-panel", "speaker"],

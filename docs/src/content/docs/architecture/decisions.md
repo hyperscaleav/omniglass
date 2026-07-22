@@ -2122,3 +2122,29 @@ below from the project's history. From here it grows one slice at a time.
   reads through `LocationHealth`, which reports the **recorded** verdict; `SystemHealth` recomputes live
   and cannot witness the defect.
 - **Tracked as** [#356](https://github.com/hyperscaleav/omniglass/issues/356).
+
+### ADR-0062: A registry takes a uuid primary key and a renameable handle
+
+- **Date:** 2026-07-22 | **Status:** Accepted | **Pages:** [storage](/architecture/storage/), [api-first](/contributing/api-first/)
+- **Decision:** a registry has a **uuid `id`** and a **unique, renameable `name`**, the shape `tag` and every
+  estate entity already have. `product` and `vendor` convert first; the remaining seven follow, slice by
+  slice, tracked as [#262](https://github.com/hyperscaleav/omniglass/issues/262).
+- **Context:** [ADR-0056](#adr-0056-every-foreign-key-stores-a-primary-key) says every foreign key stores
+  its target's primary key, and epic #343 made that true everywhere **except** the slug-keyed registries,
+  where the name *is* the key. That exception was the last place a foreign key referenced a mutable,
+  human-authored string. A product id was a typo or a rebrand away from being wrong forever, and two
+  device packs both defining `cisco-room-kit-pro` collide on the primary key itself.
+- **`name`, not `slug` or `key`.** Six tables and every estate entity already call the human handle `name`,
+  and the API bodies already say `name`. A third word for the same concept would be worse than the
+  inconsistency it fixed. Renaming the family to `slug` later is a separate, mechanical decision.
+- **The registries already disagreed with each other**, which is worth recording: `property` and
+  `interface_type` call their slug `name`, while `capability`, `driver`, `location_type`, `secret_type`,
+  and `standard` call theirs `id`. So the later slices are a **rename** for five of them and an addition
+  for two, not one uniform change.
+- **`node` stays the exception.** Its primary key is `principal_id`, because a node is the detail row of a
+  principal and its key IS that foreign key. It is deliberate and it is not changing.
+- **The API carries both and accepts either**, as the estate entities do: `id` (uuid) and `name` (handle)
+  on every body, and a path or reference resolves whichever form it is given. A kebab handle can never
+  look like a uuid, so the two cannot collide.
+- **The rename test is written first, each slice.** It renames a handle and asserts every reference still
+  resolves and now reads the new one. That is the capability the epic buys, so it is what the slice proves.

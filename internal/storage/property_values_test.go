@@ -44,7 +44,7 @@ func TestEffectiveProperties(t *testing.T) {
 	// A custom product with a two-property contract: one with a default, one
 	// required with no default.
 	if _, err := gw.CreateProduct(ctx, "", storage.Product{
-		ID: "acme-panel", DisplayName: "Acme Panel", Kind: "device",
+		Name: "acme-panel", DisplayName: "Acme Panel", Kind: "device",
 	}); err != nil {
 		t.Fatalf("create product: %v", err)
 	}

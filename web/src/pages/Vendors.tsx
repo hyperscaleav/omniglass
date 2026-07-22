@@ -282,7 +282,7 @@ export function CreateVendorForm(p: { onCreated: (id: string) => void }): JSX.El
     setFormErr(null);
     try {
       await createVendor({
-        id: id().trim(),
+        name: id().trim(),
         display_name: displayName().trim(),
         kind: kind(),
         icon: icon().trim() || undefined,

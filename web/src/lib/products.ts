@@ -12,6 +12,7 @@ export type ProductKind = "device" | "app" | "service" | "vm";
 
 export type Product = {
   id: string;
+  name: string;
   display_name: string;
   kind: ProductKind;
   vendor_id?: string;
@@ -30,7 +31,8 @@ export async function listProducts(): Promise<Product[]> {
 }
 
 export type CreateProduct = {
-  id: string;
+  // The kebab handle. The uuid is the database\'s to mint.
+  name: string;
   display_name: string;
   kind: ProductKind;
   vendor_id?: string;

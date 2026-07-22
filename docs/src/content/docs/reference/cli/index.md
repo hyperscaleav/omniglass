@@ -2328,15 +2328,15 @@ Creates a custom (non-official) product and sets its capabilities. Gated by prod
 | `--capabilities` | string | (none) |  |
 | `--display-name` | string | (none) |  |
 | `--driver-id` | string | (none) |  |
-| `--id` | string | (none) | Globally unique product id |
 | `--kind` | string | (none) |  |
-| `--parent-product-id` | string | (none) |  |
-| `--vendor-id` | string | (none) |  |
+| `--name` | string | (none) | The globally unique kebab handle; renameable |
+| `--parent-product-id` | string | (none) | The parent product, by handle or uuid |
+| `--vendor-id` | string | (none) | The vendor, by handle or uuid |
 
 Example:
 
 ```sh
-omniglass product create --display-name display_name --id id
+omniglass product create --display-name display_name --name name
 ```
 
 ### `omniglass product delete`
@@ -3806,15 +3806,15 @@ Creates a custom (non-official) vendor. Gated by vendor:create.
 |---|---|---|---|
 | `--display-name` | string | (none) |  |
 | `--icon` | string | (none) |  |
-| `--id` | string | (none) | Globally unique vendor id |
 | `--kind` | string | (none) |  |
+| `--name` | string | (none) | The globally unique kebab handle; renameable |
 | `--support-phone` | string | (none) |  |
 | `--website` | string | (none) |  |
 
 Example:
 
 ```sh
-omniglass vendor create --display-name display_name --id id
+omniglass vendor create --display-name display_name --name name
 ```
 
 ### `omniglass vendor delete`

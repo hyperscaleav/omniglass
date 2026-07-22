@@ -11,6 +11,7 @@ export type VendorKind = "manufacturer" | "integrator" | "developer";
 
 export type Vendor = {
   id: string;
+  name: string;
   display_name: string;
   kind: VendorKind;
   official: boolean;
@@ -28,7 +29,8 @@ export async function listVendors(): Promise<Vendor[]> {
 }
 
 export type CreateVendor = {
-  id: string;
+  // The kebab handle. The uuid is the database\'s to mint.
+  name: string;
   display_name: string;
   kind: VendorKind;
   icon?: string;

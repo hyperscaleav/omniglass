@@ -54,7 +54,7 @@ func TestProductPropertiesAPI(t *testing.T) {
 	// Only a custom product's contract is operator-owned, so the surface under test
 	// needs one of its own.
 	c.do(ownerTok, http.MethodPost, "/products", map[string]any{
-		"id": "acme-panel", "display_name": "Acme Panel", "kind": "device",
+		"name": "acme-panel", "display_name": "Acme Panel", "kind": "device",
 	}, http.StatusCreated)
 
 	// PUT declares the line. The property must already exist in the catalog

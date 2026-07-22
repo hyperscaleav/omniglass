@@ -78,7 +78,7 @@ func TestComponentPropertiesAPI(t *testing.T) {
 	// A custom product declaring one property, and a component that is an instance
 	// of it: the contract is what the effective read resolves against.
 	c.do(ownerTok, http.MethodPost, "/products", map[string]any{
-		"id": "acme-display", "display_name": "Acme Display", "kind": "device",
+		"name": "acme-display", "display_name": "Acme Display", "kind": "device",
 	}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPut, "/products/acme-display/properties/serial_number",
 		map[string]any{"default_value": "SN-DEFAULT", "required": true}, http.StatusOK)

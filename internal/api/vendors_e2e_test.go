@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/api"
@@ -54,24 +55,30 @@ func TestVendorsAPI(t *testing.T) {
 
 	// The viewer cannot create (403, capability fast-reject).
 	c.do(viewerTok, http.MethodPost, "/vendors",
-		map[string]any{"id": "nope", "display_name": "Nope"}, http.StatusForbidden)
+		map[string]any{"name": "nope", "display_name": "Nope"}, http.StatusForbidden)
 
 	// Admin (owner) creates a custom make.
 	var created struct {
 		ID       string `json:"id"`
+		Name     string `json:"name"`
 		Official bool   `json:"official"`
 	}
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/vendors",
-		map[string]any{"id": "acme", "display_name": "Acme"}, http.StatusCreated), &created); err != nil {
+		map[string]any{"name": "acme", "display_name": "Acme"}, http.StatusCreated), &created); err != nil {
 		t.Fatalf("decode create: %v", err)
 	}
-	if created.ID != "acme" || created.Official {
-		t.Fatalf("created = %+v, want id=acme official=false", created)
+	// The body carries BOTH: the uuid that survives a rename and the handle an
+	// operator typed.
+	if created.Name != "acme" || created.Official {
+		t.Fatalf("created = %+v, want name=acme official=false", created)
+	}
+	if !strings.Contains(created.ID, "-") || created.ID == "acme" {
+		t.Fatalf("created id = %q, want a uuid distinct from the handle", created.ID)
 	}
 
 	// Duplicate id is a 409, exercising the shared mapTypeErr ErrTypeExists branch.
 	c.do(ownerTok, http.MethodPost, "/vendors",
-		map[string]any{"id": "acme", "display_name": "Dup"}, http.StatusConflict)
+		map[string]any{"name": "acme", "display_name": "Dup"}, http.StatusConflict)
 
 	// The custom row is fully mutable.
 	c.do(ownerTok, http.MethodPatch, "/vendors/acme",
@@ -83,9 +90,9 @@ func TestVendorsAPI(t *testing.T) {
 	// that bypasses the client's own scheme check), on both create and update.
 	// A normal https:// website succeeds.
 	c.do(ownerTok, http.MethodPost, "/vendors",
-		map[string]any{"id": "evil", "display_name": "Evil", "website": "javascript:alert(1)"}, http.StatusUnprocessableEntity)
+		map[string]any{"name": "evil", "display_name": "Evil", "website": "javascript:alert(1)"}, http.StatusUnprocessableEntity)
 	c.do(ownerTok, http.MethodPost, "/vendors",
-		map[string]any{"id": "acme2", "display_name": "Acme 2", "website": "https://acme.example"}, http.StatusCreated)
+		map[string]any{"name": "acme2", "display_name": "Acme 2", "website": "https://acme.example"}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPatch, "/vendors/acme",
 		map[string]any{"website": "javascript:alert(1)"}, http.StatusUnprocessableEntity)
 	c.do(ownerTok, http.MethodPatch, "/vendors/acme",

@@ -3355,14 +3355,16 @@ export interface components {
             capabilities?: string[] | null;
             display_name: string;
             driver_id?: string;
-            /** @description Globally unique product id */
-            id: string;
             /**
              * @default device
              * @enum {string}
              */
             kind: "device" | "app" | "service" | "vm";
+            /** @description The globally unique kebab handle; renameable */
+            name: string;
+            /** @description The parent product, by handle or uuid */
             parent_product_id?: string;
+            /** @description The vendor, by handle or uuid */
             vendor_id?: string;
         };
         CreatePropertyInputBody: {
@@ -3497,13 +3499,13 @@ export interface components {
             readonly $schema?: string;
             display_name: string;
             icon?: string;
-            /** @description Globally unique vendor id */
-            id: string;
             /**
              * @default manufacturer
              * @enum {string}
              */
             kind: "manufacturer" | "integrator" | "developer";
+            /** @description The globally unique kebab handle; renameable */
+            name: string;
             support_phone?: string;
             website?: string;
         };
@@ -4424,11 +4426,20 @@ export interface components {
             capabilities: string[] | null;
             display_name: string;
             driver_id?: string;
+            /** @description The product's uuid, the stable handle that survives a rename */
             id: string;
             /** @enum {string} */
             kind: "device" | "app" | "service" | "vm";
+            /** @description The kebab handle an operator reads and types; renameable */
+            name: string;
             official: boolean;
+            /** @description The parent product's handle */
+            parent_product?: string;
+            /** @description The parent product's uuid; the stable form of parent_product */
             parent_product_id?: string;
+            /** @description The vendor's handle */
+            vendor?: string;
+            /** @description The vendor's uuid; the stable form of vendor */
             vendor_id?: string;
         };
         ProductPropertyBody: {
@@ -5345,9 +5356,12 @@ export interface components {
             readonly $schema?: string;
             display_name: string;
             icon?: string;
+            /** @description The vendor's uuid, the stable handle that survives a rename */
             id: string;
             /** @enum {string} */
             kind: "manufacturer" | "integrator" | "developer";
+            /** @description The kebab handle an operator reads and types; renameable */
+            name: string;
             official: boolean;
             support_phone?: string;
             website?: string;

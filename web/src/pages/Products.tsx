@@ -272,7 +272,7 @@ export function CreateProductForm(p: { onCreated: (id: string) => void }): JSX.E
     setFormErr(null);
     try {
       await createProduct({
-        id: id().trim(),
+        name: id().trim(),
         display_name: displayName().trim(),
         kind: kind(),
         vendor_id: vendorId() || undefined,

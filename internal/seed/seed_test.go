@@ -182,7 +182,7 @@ func TestSeedRolesIdempotent(t *testing.T) {
 	// upserts it rather than duplicating (the contract is keyed by product +
 	// property).
 	var barContract int
-	if err := conn.QueryRow(ctx, `select count(*) from product_property where product_id = 'cisco-room-bar'`).Scan(&barContract); err != nil {
+	if err := conn.QueryRow(ctx, `select count(*) from product_property where product_id = (select id from product where name = 'cisco-room-bar')`).Scan(&barContract); err != nil {
 		t.Fatalf("count cisco-room-bar contract: %v", err)
 	}
 	if barContract != 3 {
@@ -190,7 +190,7 @@ func TestSeedRolesIdempotent(t *testing.T) {
 	}
 	var barModelDefault string
 	if err := conn.QueryRow(ctx, `select default_value #>> '{}' from product_property
-		where product_id = 'cisco-room-bar' and property_name = 'model_number'`).Scan(&barModelDefault); err != nil {
+		where product_id = (select id from product where name = 'cisco-room-bar') and property_name = 'model_number'`).Scan(&barModelDefault); err != nil {
 		t.Fatalf("read cisco-room-bar model_number default: %v", err)
 	}
 	if barModelDefault != "Room Bar" {
@@ -199,7 +199,7 @@ func TestSeedRolesIdempotent(t *testing.T) {
 
 	// Re-running Run keeps the metadata fields, not just the initial insert.
 	var crestronWebsite string
-	if err := conn.QueryRow(ctx, `select website from vendor where id = 'crestron'`).Scan(&crestronWebsite); err != nil {
+	if err := conn.QueryRow(ctx, `select website from vendor where name = 'crestron'`).Scan(&crestronWebsite); err != nil {
 		t.Fatalf("read crestron website: %v", err)
 	}
 	if crestronWebsite != "https://www.crestron.com" {

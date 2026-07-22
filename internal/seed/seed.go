@@ -276,7 +276,9 @@ func seedVendors(ctx context.Context, gw storage.Gateway) error {
 	}
 	for _, v := range doc.Vendors {
 		if err := gw.UpsertVendor(ctx, storage.Vendor{
-			ID:          v.ID,
+			// The seed ships kebab handles, never uuids: the row's id is the
+			// database's to mint and must survive a re-seed.
+			Name:        v.ID,
 			Official:    true,
 			DisplayName: v.DisplayName,
 			Kind:        v.Kind,
@@ -336,7 +338,7 @@ func seedProducts(ctx context.Context, gw storage.Gateway) error {
 			kind = "device"
 		}
 		if err := gw.UpsertProduct(ctx, storage.Product{
-			ID: p.ID, Official: true, DisplayName: p.DisplayName,
+			Name: p.ID, Official: true, DisplayName: p.DisplayName,
 			VendorID: nz(p.VendorID), DriverID: nz(p.DriverID),
 			ParentProductID: nz(p.ParentProductID), Kind: kind, Capabilities: p.Capabilities,
 		}); err != nil {

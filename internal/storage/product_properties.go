@@ -18,6 +18,7 @@ import (
 type ProductProperty struct {
 	ID           string
 	ProductID    string
+	ProductName  string
 	PropertyName string
 	DefaultValue json.RawMessage // nil when the contract sets no default
 	Required     bool
@@ -34,14 +35,18 @@ type ProductPropertySpec struct {
 	Required     bool
 }
 
-const productPropertyCols = `id, product_id, property_name, default_value, required, created_at, updated_at`
+// product_id stores the product's uuid; its handle comes back beside it so a
+// caller reads what it wrote rather than an opaque key.
+const productPropertyCols = `id, product_id,
+	(select p.name from product p where p.id = product_property.product_id) as product_handle,
+	property_name, default_value, required, created_at, updated_at`
 
 func scanProductProperty(row pgx.Row) (*ProductProperty, error) {
 	var (
 		pp  ProductProperty
 		def []byte // NULL when the contract sets no default
 	)
-	if err := row.Scan(&pp.ID, &pp.ProductID, &pp.PropertyName, &def, &pp.Required, &pp.CreatedAt, &pp.UpdatedAt); err != nil {
+	if err := row.Scan(&pp.ID, &pp.ProductID, &pp.ProductName, &pp.PropertyName, &def, &pp.Required, &pp.CreatedAt, &pp.UpdatedAt); err != nil {
 		return nil, err
 	}
 	pp.DefaultValue = copyRaw(def)
@@ -75,9 +80,12 @@ func mapProductPropertyWriteErr(err error) error {
 // and the boot-seed path so both keep the same semantics. It runs on any
 // querier, so the seed path needs no transaction for its single statement.
 func upsertProductPropertyRow(ctx context.Context, q querier, productID string, spec ProductPropertySpec) (*ProductProperty, error) {
+	if _, err := resolveProductRef(ctx, q, productID); err != nil {
+		return nil, ErrTypeNotFound
+	}
 	pp, err := scanProductProperty(q.QueryRow(ctx, `
 		insert into product_property (product_id, property_name, default_value, required)
-		values ($1, $2, $3, $4)
+		values ((select id from product where `+productRefCol(productID)+` = $1), $2, $3, $4)
 		on conflict (product_id, property_name) do update
 			set default_value = excluded.default_value,
 			    required      = excluded.required,
@@ -95,7 +103,7 @@ func upsertProductPropertyRow(ctx context.Context, q querier, productID string, 
 // product is indistinguishable from one with an empty contract, since the read
 // side has nothing to disclose.
 func (p *PG) ListProductProperties(ctx context.Context, productID string) ([]ProductProperty, error) {
-	rows, err := p.pool.Query(ctx, `select `+productPropertyCols+` from product_property where product_id = $1 order by property_name`, productID)
+	rows, err := p.pool.Query(ctx, `select `+productPropertyCols+` from product_property where product_id = (select id from product where `+productRefCol(productID)+` = $1) order by property_name`, productID)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list product properties %q: %w", productID, err)
 	}
@@ -130,7 +138,7 @@ func (p *PG) SetProductProperty(ctx context.Context, actorID, productID string, 
 	// The before-image decides create vs update and gives the audit its old side.
 	var before any
 	prior, err := scanProductProperty(tx.QueryRow(ctx,
-		`select `+productPropertyCols+` from product_property where product_id = $1 and property_name = $2`,
+		`select `+productPropertyCols+` from product_property where product_id = (select id from product where `+productRefCol(productID)+` = $1) and property_name = $2`,
 		productID, spec.PropertyName))
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
@@ -174,7 +182,7 @@ func (p *PG) DeleteProductProperty(ctx context.Context, actorID, productID, prop
 	// the withdrawn declaration and a missing row is caught without a second read.
 	before, err := scanProductProperty(tx.QueryRow(ctx, `
 		delete from product_property
-		where product_id = $1 and property_name = $2
+		where product_id = (select id from product where `+productRefCol(productID)+` = $1) and property_name = $2
 		returning `+productPropertyCols, productID, propertyName))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrTypeNotFound
