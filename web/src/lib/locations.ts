@@ -41,7 +41,7 @@ export async function listLocations(): Promise<Location[]> {
 }
 
 export async function listLocationTypes(): Promise<LocationType[]> {
-  const { data, error } = await api.GET("/types/location");
+  const { data, error } = await api.GET("/location-types");
   if (error) throw error;
   return (data?.location_types ?? []) as LocationType[];
 }

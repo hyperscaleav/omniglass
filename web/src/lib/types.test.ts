@@ -15,12 +15,12 @@ describe("types data layer", () => {
   it("lists both registries and tags each row's kind", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = (input as Request).url;
-      if (url.includes("/types/location")) {
+      if (url.includes("/location-types")) {
         return jsonResponse({
           location_types: [{ id: "campus", display_name: "Campus", icon: "building", official: true }],
         });
       }
-      if (url.includes("/types/secret")) {
+      if (url.includes("/secret-types")) {
         return jsonResponse({
           secret_types: [
             {
@@ -54,7 +54,7 @@ describe("types data layer", () => {
     await createType("location", { id: "wing", display_name: "Wing", icon: "map-pin" });
     const req = fetchMock.mock.calls[0][0] as Request;
     expect(req.method).toBe("POST");
-    expect(req.url).toContain("/api/v1/types/location");
+    expect(req.url).toContain("/api/v1/location-types");
     const sent = await req.json();
     expect(sent).toMatchObject({ id: "wing", display_name: "Wing", icon: "map-pin" });
   });
@@ -82,7 +82,7 @@ describe("types data layer", () => {
     await updateType("location", "wing", { display_name: "Wing v2" });
     const req = fetchMock.mock.calls[0][0] as Request;
     expect(req.method).toBe("PATCH");
-    expect(req.url).toContain("/api/v1/types/location/wing");
+    expect(req.url).toContain("/api/v1/location-types/wing");
     const sent = await req.json();
     expect(sent).toMatchObject({ display_name: "Wing v2" });
   });
@@ -119,7 +119,7 @@ describe("types data layer", () => {
     await deleteType("location", "wing");
     const req = fetchMock.mock.calls[0][0] as Request;
     expect(req.method).toBe("DELETE");
-    expect(req.url).toContain("/api/v1/types/location/wing");
+    expect(req.url).toContain("/api/v1/location-types/wing");
   });
 
   it("rejects deleting a secret type without calling fetch", async () => {

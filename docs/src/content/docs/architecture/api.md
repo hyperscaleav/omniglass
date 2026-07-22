@@ -50,7 +50,7 @@ Everything lives under `/api/v1`. The path shape is derivable, not special-cased
   bounded to that target and behind the owner takeover guard. `POST /principals/{id}/sessions:revokeAll` (a
   `{ purpose }` body, same gate and guard) bulk-ends all of one kind at once, returning the count.
 - **Singular kind sub-segments** for the typed families: `/rules/calc`, `/datapoints/metric`,
-  `/types/location`.
+  `/location-types`.
 - **Collection-level custom methods** carry the colon on the collection, not a member:
   `POST /systems:checkName` (also `/components:checkName`, `/locations:checkName`) is an advisory
   precheck for a technical-name rename, returning `{ valid, available, reason }`. It is gated by
@@ -250,7 +250,7 @@ gates on **`secret:reveal`**, a permission the `*:read` floor does **not** carry
 everything" grant sees only masks and **only admin (`secret:*`) and owner (`>`) reveal**. Every
 `:reveal` writes an [audit](/architecture/audit/) row (verb `reveal`) in the same call.
 
-- `GET /types/secret` lists the shape registry, each `{id, display_name, official, fields:[{name, type,
+- `GET /secret-types` lists the shape registry, each `{id, display_name, official, fields:[{name, type,
   secret, origin}]}` (`secret:read`).
 - `GET /secrets` is the **all-scope admin directory** (`{secrets: [secret]}`); like the principal
   directory it needs an all-scope grant, and a non-all scope is a 403 (`secret:read`).
@@ -453,7 +453,7 @@ contract, on identical route shapes:
   `standard:read` / `:update` / `:delete`.
 - `GET /location-types/{id}/properties`, `PUT` / `DELETE /location-types/{id}/properties/{property}`,
   gated `type:read` / `:update` / `:delete` (the location type registry is still a `type` registry, so
-  its contract keeps that permission story). Note the path: the registry CRUD stays at `/types/location`,
+  its contract keeps that permission story). Note the path: the registry CRUD stays at `/location-types`,
   while its contract hangs off the plural `/location-types` collection.
 
 The list returns `{properties: [contractProperty]}` ordered by property name, each

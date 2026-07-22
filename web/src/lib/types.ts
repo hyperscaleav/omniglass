@@ -40,8 +40,8 @@ export const TYPES_KEY = ["types"] as const;
 
 export async function listTypes(): Promise<TypeRow[]> {
   const [locationRes, secretRes] = await Promise.all([
-    api.GET("/types/location"),
-    api.GET("/types/secret"),
+    api.GET("/location-types"),
+    api.GET("/secret-types"),
   ]);
 
   if (locationRes.error) throw locationRes.error;
@@ -77,7 +77,7 @@ export type CreateType = {
 export async function createType(kind: TypeKind, body: CreateType): Promise<void> {
   switch (kind) {
     case "location": {
-      const { error } = await api.POST("/types/location", { body });
+      const { error } = await api.POST("/location-types", { body });
       if (error) throw error;
       return;
     }
@@ -95,7 +95,7 @@ export type UpdateType = {
 export async function updateType(kind: TypeKind, id: string, body: UpdateType): Promise<void> {
   switch (kind) {
     case "location": {
-      const { error } = await api.PATCH("/types/location/{id}", { params: { path: { id } }, body });
+      const { error } = await api.PATCH("/location-types/{id}", { params: { path: { id } }, body });
       if (error) throw error;
       return;
     }
@@ -107,7 +107,7 @@ export async function updateType(kind: TypeKind, id: string, body: UpdateType): 
 export async function deleteType(kind: TypeKind, id: string): Promise<void> {
   switch (kind) {
     case "location": {
-      const { error } = await api.DELETE("/types/location/{id}", { params: { path: { id } } });
+      const { error } = await api.DELETE("/location-types/{id}", { params: { path: { id } } });
       if (error) throw error;
       return;
     }

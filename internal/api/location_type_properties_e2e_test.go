@@ -53,7 +53,7 @@ func TestLocationTypePropertiesAPI(t *testing.T) {
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
-	c.do(ownerTok, http.MethodPost, "/types/location", map[string]any{
+	c.do(ownerTok, http.MethodPost, "/location-types", map[string]any{
 		"id": "annex", "display_name": "Annex", "allowed_parent_types": []string{"campus"},
 	}, http.StatusCreated)
 

@@ -5886,6 +5886,102 @@ paths:
           description: Error
       summary: Update an interface
       x-omniglass-permission: interface:update
+  /location-types:
+    get:
+      description: Lists the location_type registry (the shape-definers a location is classified by), ordered alphabetically by display name. Populates the type picker on the location form. Gated by type:read.
+      operationId: list-location-types
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListLocationTypesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List location types
+      x-omniglass-permission: type:read
+    post:
+      description: Creates a custom (non-official) location_type. Gated by type:create.
+      operationId: create-location-type
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateLocationTypeInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocationTypeBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Create a location type
+      x-omniglass-permission: type:create
+  /location-types/{id}:
+    delete:
+      description: Deletes a custom location_type, refused if official (422) or still referenced by a location (409). Gated by type:delete.
+      operationId: delete-location-type
+      parameters:
+        - description: The location_type id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The location_type id
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Delete a location type
+      x-omniglass-permission: type:delete
+    patch:
+      description: Patches a custom location_type's display_name or icon. Official types are read-only (422). Gated by type:update.
+      operationId: update-location-type
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateLocationTypeInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocationTypeBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Update a location type
+      x-omniglass-permission: type:update
   /location-types/{id}/properties:
     get:
       description: Lists the location type's declared-property contract (what every location of the type exposes), ordered by property name, each with its optional default and required flag. Gated by type:read.
@@ -7875,6 +7971,25 @@ paths:
           description: Error
       summary: List roles
       x-omniglass-permission: role:read:admin
+  /secret-types:
+    get:
+      description: Lists the secret_type shapes a secret can take, for the create form. Gated by secret:read.
+      operationId: list-secret-types
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListSecretTypesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List secret types
+      x-omniglass-permission: secret:read
   /secrets:
     get:
       description: Lists the secrets the caller may see, with masked fields, filtered to the read scope; admin-sensitive secrets appear only to the admin tier. Gated by secret:read, which the viewer floor does not carry (secret is a sensitive resource).
@@ -9329,121 +9444,6 @@ paths:
           description: Error
       summary: Get a task
       x-omniglass-permission: task:read
-  /types/location:
-    get:
-      description: Lists the location_type registry (the shape-definers a location is classified by), ordered alphabetically by display name. Populates the type picker on the location form. Gated by type:read.
-      operationId: list-location-types
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ListLocationTypesOutputBody"
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: List location types
-      x-omniglass-permission: type:read
-    post:
-      description: Creates a custom (non-official) location_type. Gated by type:create.
-      operationId: create-location-type
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateLocationTypeInputBody"
-        required: true
-      responses:
-        "201":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/LocationTypeBody"
-          description: Created
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Create a location type
-      x-omniglass-permission: type:create
-  /types/location/{id}:
-    delete:
-      description: Deletes a custom location_type, refused if official (422) or still referenced by a location (409). Gated by type:delete.
-      operationId: delete-location-type
-      parameters:
-        - description: The location_type id
-          in: path
-          name: id
-          required: true
-          schema:
-            description: The location_type id
-            type: string
-      responses:
-        "204":
-          description: No Content
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Delete a location type
-      x-omniglass-permission: type:delete
-    patch:
-      description: Patches a custom location_type's display_name or icon. Official types are read-only (422). Gated by type:update.
-      operationId: update-location-type
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UpdateLocationTypeInputBody"
-        required: true
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/LocationTypeBody"
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Update a location type
-      x-omniglass-permission: type:update
-  /types/secret:
-    get:
-      description: Lists the secret_type shapes a secret can take, for the create form. Gated by secret:read.
-      operationId: list-secret-types
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ListSecretTypesOutputBody"
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: List secret types
-      x-omniglass-permission: secret:read
   /variables:
     get:
       description: Lists every variable. Requires an all-scope read. Gated by variable:read.

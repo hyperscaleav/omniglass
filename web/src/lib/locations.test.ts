@@ -33,7 +33,7 @@ describe("locations data layer", () => {
     expect(types).toHaveLength(1);
     expect(types[0]).toMatchObject({ id: "campus", display_name: "Campus", allowed_parent_types: ["root"] });
     const req = fetchMock.mock.calls[0][0] as Request;
-    expect(req.url).toContain("/api/v1/types/location");
+    expect(req.url).toContain("/api/v1/location-types");
   });
 
   it("posts the create body", async () => {

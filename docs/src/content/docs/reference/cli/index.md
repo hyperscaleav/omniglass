@@ -1347,6 +1347,61 @@ omniglass location update <name>
 
 Commands for the location-type resource
 
+### `omniglass location-type create`
+
+Create a location type
+
+```
+omniglass location-type create [flags]
+```
+
+Creates a custom (non-official) location_type. Gated by type:create.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--allowed-parent-types` | string | (none) | location_type ids and/or the reserved root sentinel this type may be placed under; empty means unconstrained |
+| `--display-name` | string | (none) |  |
+| `--icon` | string | (none) | A glyph key; the console falls back to map-pin when empty |
+| `--id` | string | (none) | Globally unique type id (kebab, e.g. wing); "root" is reserved |
+
+Example:
+
+```sh
+omniglass location-type create --display-name display_name --id id
+```
+
+### `omniglass location-type delete`
+
+Delete a location type
+
+```
+omniglass location-type delete <id>
+```
+
+Deletes a custom location_type, refused if official (422) or still referenced by a location (409). Gated by type:delete.
+
+Example:
+
+```sh
+omniglass location-type delete <id>
+```
+
+### `omniglass location-type list`
+
+List location types
+
+```
+omniglass location-type list
+```
+
+Lists the location_type registry (the shape-definers a location is classified by), ordered alphabetically by display name. Populates the type picker on the location form. Gated by type:read.
+
+Example:
+
+```sh
+omniglass location-type list
+```
+
 ### `omniglass location-type property`
 
 Commands for the property resource
@@ -1402,6 +1457,28 @@ Example:
 
 ```sh
 omniglass location-type property update <id> <property>
+```
+
+### `omniglass location-type update`
+
+Update a location type
+
+```
+omniglass location-type update <id> [flags]
+```
+
+Patches a custom location_type's display_name or icon. Official types are read-only (422). Gated by type:update.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--allowed-parent-types` | string | (none) | Replaces the allowed-parent set; omit to leave unchanged, [] to clear back to unconstrained |
+| `--display-name` | string | (none) |  |
+| `--icon` | string | (none) |  |
+
+Example:
+
+```sh
+omniglass location-type update <id>
 ```
 
 ## `omniglass migrate`
@@ -2586,6 +2663,26 @@ Example:
 omniglass secret update <id> --fields fields
 ```
 
+## `omniglass secret-type`
+
+Commands for the secret-type resource
+
+### `omniglass secret-type list`
+
+List secret types
+
+```
+omniglass secret-type list
+```
+
+Lists the secret_type shapes a secret can take, for the create form. Gated by secret:read.
+
+Example:
+
+```sh
+omniglass secret-type list
+```
+
 ## `omniglass seed-dev`
 
 Seed a dev database with example locations, users, and grants (idempotent; never for production)
@@ -3570,111 +3667,6 @@ Issues a new bearer credential for an existing principal, addressed by username,
 |---|---|---|---|
 | `--description` | string | (none) | what the token is for (required) |
 | `--ttl` | duration | `2160h0m0s` | how long the token is valid before it expires (max 365 days) |
-
-## `omniglass type`
-
-Commands for the type resource
-
-### `omniglass type location`
-
-Commands for the location resource
-
-#### `omniglass type location create`
-
-Create a location type
-
-```
-omniglass type location create [flags]
-```
-
-Creates a custom (non-official) location_type. Gated by type:create.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--allowed-parent-types` | string | (none) | location_type ids and/or the reserved root sentinel this type may be placed under; empty means unconstrained |
-| `--display-name` | string | (none) |  |
-| `--icon` | string | (none) | A glyph key; the console falls back to map-pin when empty |
-| `--id` | string | (none) | Globally unique type id (kebab, e.g. wing); "root" is reserved |
-
-Example:
-
-```sh
-omniglass type location create --display-name display_name --id id
-```
-
-#### `omniglass type location delete`
-
-Delete a location type
-
-```
-omniglass type location delete <id>
-```
-
-Deletes a custom location_type, refused if official (422) or still referenced by a location (409). Gated by type:delete.
-
-Example:
-
-```sh
-omniglass type location delete <id>
-```
-
-#### `omniglass type location list`
-
-List location types
-
-```
-omniglass type location list
-```
-
-Lists the location_type registry (the shape-definers a location is classified by), ordered alphabetically by display name. Populates the type picker on the location form. Gated by type:read.
-
-Example:
-
-```sh
-omniglass type location list
-```
-
-#### `omniglass type location update`
-
-Update a location type
-
-```
-omniglass type location update <id> [flags]
-```
-
-Patches a custom location_type's display_name or icon. Official types are read-only (422). Gated by type:update.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--allowed-parent-types` | string | (none) | Replaces the allowed-parent set; omit to leave unchanged, [] to clear back to unconstrained |
-| `--display-name` | string | (none) |  |
-| `--icon` | string | (none) |  |
-
-Example:
-
-```sh
-omniglass type location update <id>
-```
-
-### `omniglass type secret`
-
-Commands for the secret resource
-
-#### `omniglass type secret list`
-
-List secret types
-
-```
-omniglass type secret list
-```
-
-Lists the secret_type shapes a secret can take, for the create form. Gated by secret:read.
-
-Example:
-
-```sh
-omniglass type secret list
-```
 
 ## `omniglass variable`
 

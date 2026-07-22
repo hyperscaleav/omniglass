@@ -129,7 +129,7 @@ describe("Types page", () => {
       const req = input as Request;
       const method = req.method;
       const url = req.url;
-      if (method === "PATCH" && url.includes("/types/location/wing")) {
+      if (method === "PATCH" && url.includes("/location-types/wing")) {
         sent = JSON.parse(await req.clone().text());
         return new Response(
           JSON.stringify({ id: "wing", display_name: "Wing", official: false, icon: "map-pin", allowed_parent_types: ["campus", "root"] }),

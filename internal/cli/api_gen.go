@@ -1679,6 +1679,80 @@ func generatedCommands() []*cobra.Command {
 			Short: "Commands for the location-type resource",
 		}
 		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fAllowedParentTypes string
+				var fDisplayName string
+				var fIcon string
+				var fId string
+				cmd := &cobra.Command{
+					Use:     "create",
+					Short:   "Create a location type",
+					Long:    "Creates a custom (non-official) location_type. Gated by type:create.",
+					Example: "  omniglass location-type create --display-name display_name --id id",
+					Args:    cobra.ExactArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/location-types")
+						body := map[string]any{}
+						if cmd.Flags().Changed("allowed-parent-types") {
+							body["allowed_parent_types"] = jsonOrString(fAllowedParentTypes)
+						}
+						if cmd.Flags().Changed("display-name") {
+							body["display_name"] = fDisplayName
+						}
+						if cmd.Flags().Changed("icon") {
+							body["icon"] = fIcon
+						}
+						if cmd.Flags().Changed("id") {
+							body["id"] = fId
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fAllowedParentTypes, "allowed-parent-types", "", "location_type ids and/or the reserved root sentinel this type may be placed under; empty means unconstrained")
+				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
+				_ = cmd.MarkFlagRequired("display-name")
+				cmd.Flags().StringVar(&fIcon, "icon", "", "A glyph key; the console falls back to map-pin when empty")
+				cmd.Flags().StringVar(&fId, "id", "", "Globally unique type id (kebab, e.g. wing); \"root\" is reserved")
+				_ = cmd.MarkFlagRequired("id")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "delete <id>",
+					Short:   "Delete a location type",
+					Long:    "Deletes a custom location_type, refused if official (422) or still referenced by a location (409). Gated by type:delete.",
+					Example: "  omniglass location-type delete <id>",
+					Args:    cobra.ExactArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/location-types/%s", url.PathEscape(args[0]))
+						return runAPICommand(cmd, "DELETE", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "list",
+					Short:   "List location types",
+					Long:    "Lists the location_type registry (the shape-definers a location is classified by), ordered alphabetically by display name. Populates the type picker on the location form. Gated by type:read.",
+					Example: "  omniglass location-type list",
+					Args:    cobra.ExactArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/location-types")
+						return runAPICommand(cmd, "GET", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
 			parent := &cobra.Command{
 				Use:   "property",
 				Short: "Commands for the property resource",
@@ -1746,6 +1820,39 @@ func generatedCommands() []*cobra.Command {
 				return cmd
 			}())
 			return parent
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fAllowedParentTypes string
+				var fDisplayName string
+				var fIcon string
+				cmd := &cobra.Command{
+					Use:     "update <id>",
+					Short:   "Update a location type",
+					Long:    "Patches a custom location_type's display_name or icon. Official types are read-only (422). Gated by type:update.",
+					Example: "  omniglass location-type update <id>",
+					Args:    cobra.ExactArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/location-types/%s", url.PathEscape(args[0]))
+						body := map[string]any{}
+						if cmd.Flags().Changed("allowed-parent-types") {
+							body["allowed_parent_types"] = jsonOrString(fAllowedParentTypes)
+						}
+						if cmd.Flags().Changed("display-name") {
+							body["display_name"] = fDisplayName
+						}
+						if cmd.Flags().Changed("icon") {
+							body["icon"] = fIcon
+						}
+						return runAPICommand(cmd, "PATCH", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fAllowedParentTypes, "allowed-parent-types", "", "Replaces the allowed-parent set; omit to leave unchanged, [] to clear back to unconstrained")
+				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
+				cmd.Flags().StringVar(&fIcon, "icon", "", "")
+				return cmd
+			}()
+			return cmd
 		}())
 		return parent
 	}())
@@ -3285,6 +3392,30 @@ func generatedCommands() []*cobra.Command {
 	}())
 	roots = append(roots, func() *cobra.Command {
 		parent := &cobra.Command{
+			Use:   "secret-type",
+			Short: "Commands for the secret-type resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "list",
+					Short:   "List secret types",
+					Long:    "Lists the secret_type shapes a secret can take, for the create form. Gated by secret:read.",
+					Example: "  omniglass secret-type list",
+					Args:    cobra.ExactArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/secret-types")
+						return runAPICommand(cmd, "GET", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		return parent
+	}())
+	roots = append(roots, func() *cobra.Command {
+		parent := &cobra.Command{
 			Use:   "session",
 			Short: "Commands for the session resource",
 		}
@@ -4439,151 +4570,6 @@ func generatedCommands() []*cobra.Command {
 				return cmd
 			}()
 			return cmd
-		}())
-		return parent
-	}())
-	roots = append(roots, func() *cobra.Command {
-		parent := &cobra.Command{
-			Use:   "type",
-			Short: "Commands for the type resource",
-		}
-		parent.AddCommand(func() *cobra.Command {
-			parent := &cobra.Command{
-				Use:   "location",
-				Short: "Commands for the location resource",
-			}
-			parent.AddCommand(func() *cobra.Command {
-				cmd := func() *cobra.Command {
-					var fAllowedParentTypes string
-					var fDisplayName string
-					var fIcon string
-					var fId string
-					cmd := &cobra.Command{
-						Use:     "create",
-						Short:   "Create a location type",
-						Long:    "Creates a custom (non-official) location_type. Gated by type:create.",
-						Example: "  omniglass type location create --display-name display_name --id id",
-						Args:    cobra.ExactArgs(0),
-						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/types/location")
-							body := map[string]any{}
-							if cmd.Flags().Changed("allowed-parent-types") {
-								body["allowed_parent_types"] = jsonOrString(fAllowedParentTypes)
-							}
-							if cmd.Flags().Changed("display-name") {
-								body["display_name"] = fDisplayName
-							}
-							if cmd.Flags().Changed("icon") {
-								body["icon"] = fIcon
-							}
-							if cmd.Flags().Changed("id") {
-								body["id"] = fId
-							}
-							return runAPICommand(cmd, "POST", path, body)
-						},
-					}
-					cmd.Flags().StringVar(&fAllowedParentTypes, "allowed-parent-types", "", "location_type ids and/or the reserved root sentinel this type may be placed under; empty means unconstrained")
-					cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
-					_ = cmd.MarkFlagRequired("display-name")
-					cmd.Flags().StringVar(&fIcon, "icon", "", "A glyph key; the console falls back to map-pin when empty")
-					cmd.Flags().StringVar(&fId, "id", "", "Globally unique type id (kebab, e.g. wing); \"root\" is reserved")
-					_ = cmd.MarkFlagRequired("id")
-					return cmd
-				}()
-				return cmd
-			}())
-			parent.AddCommand(func() *cobra.Command {
-				cmd := func() *cobra.Command {
-					cmd := &cobra.Command{
-						Use:     "delete <id>",
-						Short:   "Delete a location type",
-						Long:    "Deletes a custom location_type, refused if official (422) or still referenced by a location (409). Gated by type:delete.",
-						Example: "  omniglass type location delete <id>",
-						Args:    cobra.ExactArgs(1),
-						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/types/location/%s", url.PathEscape(args[0]))
-							return runAPICommand(cmd, "DELETE", path, nil)
-						},
-					}
-					return cmd
-				}()
-				return cmd
-			}())
-			parent.AddCommand(func() *cobra.Command {
-				cmd := func() *cobra.Command {
-					cmd := &cobra.Command{
-						Use:     "list",
-						Short:   "List location types",
-						Long:    "Lists the location_type registry (the shape-definers a location is classified by), ordered alphabetically by display name. Populates the type picker on the location form. Gated by type:read.",
-						Example: "  omniglass type location list",
-						Args:    cobra.ExactArgs(0),
-						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/types/location")
-							return runAPICommand(cmd, "GET", path, nil)
-						},
-					}
-					return cmd
-				}()
-				return cmd
-			}())
-			parent.AddCommand(func() *cobra.Command {
-				cmd := func() *cobra.Command {
-					var fAllowedParentTypes string
-					var fDisplayName string
-					var fIcon string
-					cmd := &cobra.Command{
-						Use:     "update <id>",
-						Short:   "Update a location type",
-						Long:    "Patches a custom location_type's display_name or icon. Official types are read-only (422). Gated by type:update.",
-						Example: "  omniglass type location update <id>",
-						Args:    cobra.ExactArgs(1),
-						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/types/location/%s", url.PathEscape(args[0]))
-							body := map[string]any{}
-							if cmd.Flags().Changed("allowed-parent-types") {
-								body["allowed_parent_types"] = jsonOrString(fAllowedParentTypes)
-							}
-							if cmd.Flags().Changed("display-name") {
-								body["display_name"] = fDisplayName
-							}
-							if cmd.Flags().Changed("icon") {
-								body["icon"] = fIcon
-							}
-							return runAPICommand(cmd, "PATCH", path, body)
-						},
-					}
-					cmd.Flags().StringVar(&fAllowedParentTypes, "allowed-parent-types", "", "Replaces the allowed-parent set; omit to leave unchanged, [] to clear back to unconstrained")
-					cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
-					cmd.Flags().StringVar(&fIcon, "icon", "", "")
-					return cmd
-				}()
-				return cmd
-			}())
-			return parent
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			parent := &cobra.Command{
-				Use:   "secret",
-				Short: "Commands for the secret resource",
-			}
-			parent.AddCommand(func() *cobra.Command {
-				cmd := func() *cobra.Command {
-					cmd := &cobra.Command{
-						Use:     "list",
-						Short:   "List secret types",
-						Long:    "Lists the secret_type shapes a secret can take, for the create form. Gated by secret:read.",
-						Example: "  omniglass type secret list",
-						Args:    cobra.ExactArgs(0),
-						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/types/secret")
-							return runAPICommand(cmd, "GET", path, nil)
-						},
-					}
-					return cmd
-				}()
-				return cmd
-			}())
-			return parent
 		}())
 		return parent
 	}())

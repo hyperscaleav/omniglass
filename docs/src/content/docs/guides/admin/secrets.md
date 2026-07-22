@@ -47,4 +47,4 @@ anyone below admin, so their existence and field names never appear to an operat
   note naming what is missing.
 
 From the CLI the same surface is `omniglass secret list` / `create` / `update` / `reveal` / `delete`
-and `omniglass type secret list` (see the [CLI reference](/reference/cli/)).
+and `omniglass secret-type list` (see the [CLI reference](/reference/cli/)).
