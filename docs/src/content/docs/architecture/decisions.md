@@ -1964,6 +1964,10 @@ below from the project's history. From here it grows one slice at a time.
      from install-wide **authority**: a senior operator may hold an all-scope grant without being able to
      change the value that applies to the whole install. `platform:*` is seeded to `admin` (and reaches
      `owner` through `>`); `operator` and `deploy` hold no `platform` write, and nothing implies one.
+     "Nothing implies one" is enforced by putting `platform` in the **sensitive-resource set** beside
+     `secret` and `settings` ([ADR-0025](#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier)),
+     so a bare single-token `*` never names it: a custom role carrying `*:update` holds every estate write
+     and still no install-wide authority. Only a literal, a `platform:*`, or a `>` names the tier.
   6. **`root` is not used as a tier name**, so `location_type.allowed_parent_types` keeps its reserved `"root"`
      sentinel meaning "top, no parent", unchanged.
 - **Context:** One word named two unrelated things, in two engines, with three spellings. On the estate axis

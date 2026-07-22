@@ -35,6 +35,17 @@ func TestSetAllows(t *testing.T) {
 		{"secret:* reaches secret read", []string{"secret:*"}, "secret", "read", true},
 		{"owner > reaches secret read", []string{">"}, "secret", "read", true},
 		{"*:read still reaches a non-sensitive resource (variable)", []string{"*:read"}, "variable", "read", true},
+		// platform is sensitive for a different reason than secret: it is not a
+		// resource anyone reads, it is install-wide AUTHORITY (the right to write at
+		// the cascade's least-specific tier). Full-estate reach must not confer it, so
+		// a bare resource wildcard does not name it: only a literal grant, a
+		// platform:* resource wildcard, or owner's > does.
+		{"*:update does not reach platform:update", []string{"*:update"}, "platform", "update", false},
+		{"*:* does not reach platform:create", []string{"*:*"}, "platform", "create", false},
+		{"*:read does not floor platform:read", []string{"*:read"}, "platform", "read", false},
+		{"literal platform:update reaches it", []string{"platform:update"}, "platform", "update", true},
+		{"platform:* reaches platform:delete", []string{"platform:*"}, "platform", "delete", true},
+		{"owner > reaches platform:update", []string{">"}, "platform", "update", true},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

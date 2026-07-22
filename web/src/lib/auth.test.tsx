@@ -46,6 +46,18 @@ describe("can", () => {
     expect(can(me([":read"]), "location", "read")).toBe(false);
     expect(can(me(["location:"]), "location", "read")).toBe(false);
   });
+  // `platform` is in the sensitive set on the server (internal/rbac/rbac.go): it is
+  // install-wide AUTHORITY, not estate reach, so a bare resource wildcard must not
+  // name it. The console mirrors that set, or it would offer the tier controls to a
+  // principal the server refuses.
+  it("keeps a bare resource wildcard away from the install-wide platform permission", () => {
+    expect(can(me(["*:update"]), "platform", "update")).toBe(false);
+    expect(can(me(["*:*"]), "platform", "create")).toBe(false);
+    expect(can(me(["*:read"]), "platform", "read")).toBe(false);
+    expect(can(me(["platform:update"]), "platform", "update")).toBe(true);
+    expect(can(me(["platform:*"]), "platform", "delete")).toBe(true);
+    expect(can(me([">"]), "platform", "update")).toBe(true);
+  });
 });
 
 // The auth hooks are the unit under test; fetch is the seam we fake, so these

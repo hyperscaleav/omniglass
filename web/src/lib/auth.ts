@@ -179,9 +179,13 @@ export async function fetchMyAvatar(): Promise<string | null> {
 // `:read` floor, so the viewer floor (`*:read`) cannot enumerate them. A literal
 // grant, a `<resource>:*`, and owner's `>` still name them. `secret` is here so a
 // field tech does not see the platform-credential directory (per-secret
-// admin_sensitivity, enforced server-side, then fences individual rows). Keep this
-// in sync with the Go set.
-const SENSITIVE_RESOURCES = new Set(["secret"]);
+// admin_sensitivity, enforced server-side, then fences individual rows).
+// `platform` is here for a different reason: it is not a resource anyone reads, it
+// is install-wide AUTHORITY (the right to write at the cascade's least-specific
+// tier), and full-estate reach must not confer it. Keep this in sync with the Go
+// set: the server's copy is what admits the request, and a console that disagrees
+// either hides a control that works or offers one the server refuses.
+const SENSITIVE_RESOURCES = new Set(["secret", "platform"]);
 
 // A permission is a colon-delimited topic pattern, matched exactly like the server
 // rbac core that authorizes the request: a literal matches itself, `*` matches

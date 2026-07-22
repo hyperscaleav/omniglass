@@ -72,4 +72,19 @@ func TestCovers(t *testing.T) {
 	if !set(">").Covers(set("secret:reveal")) {
 		t.Error("owner > should cover secret:reveal")
 	}
+	// platform is sensitive too: a granter holding a bare write wildcard holds
+	// estate reach, not install-wide authority, so it must not be able to confer
+	// the tier permission (nor impersonate a principal that holds it).
+	if set("*:update").Covers(set("platform:update")) {
+		t.Error("*:update must not cover platform:update (install-wide authority is not estate reach)")
+	}
+	if set("*:*").Covers(set("platform:update")) {
+		t.Error("*:* must not cover platform:update (install-wide authority is not estate reach)")
+	}
+	if !set("platform:*").Covers(set("platform:update")) {
+		t.Error("platform:* should cover platform:update")
+	}
+	if !set(">").Covers(set("platform:update")) {
+		t.Error("owner > should cover platform:update")
+	}
 }
