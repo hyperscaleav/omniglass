@@ -23,7 +23,7 @@ import {
 import { SYSTEMS_KEY, listSystems } from "../lib/systems";
 import { LOCATIONS_KEY, listLocations } from "../lib/locations";
 import { COMPONENTS_KEY, listComponents } from "../lib/components";
-import { useMe, can } from "../lib/auth";
+import { useMe, can, canAtPlatform, platformTierGap, platformAuthorityHint } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
@@ -145,10 +145,23 @@ function VariableBladeBody(p: { id: string }): JSX.Element {
     }
   }
 
+  // A variable at the platform tier is install-wide, so the server gates its write
+  // on platform:<action> on top of variable:<action>. The footer gates on the same
+  // pair, so an operator never earns a 403 from a control the blade offered; below
+  // the tier the resource permission alone still decides.
+  const mayWrite = (action: string) => {
+    const v = variable();
+    if (!v) return false;
+    return v.owner_kind === "platform" ? canAtPlatform(me.data, "variable", action) : can(me.data, "variable", action);
+  };
+  // Holding the resource half without the tier half is the one state worth
+  // explaining: the actions are gone and nothing else on the blade says why.
+  const tierGap = () => (variable()?.owner_kind === "platform" ? platformTierGap(me.data, "variable", ["update", "delete"]) : []);
+
   edit.bind({
-    editable: () => !!variable() && can(me.data, "variable", "update"),
+    editable: () => mayWrite("update"),
     save,
-    destructive: () => (variable() && can(me.data, "variable", "delete") ? { label: "Delete", tone: "danger", onClick: removeVariable } : undefined),
+    destructive: () => (mayWrite("delete") ? { label: "Delete", tone: "danger", onClick: removeVariable } : undefined),
   });
 
   return (
@@ -157,6 +170,11 @@ function VariableBladeBody(p: { id: string }): JSX.Element {
         <div class="flex flex-col gap-4">
           <Show when={err()}>
             <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
+          </Show>
+          <Show when={tierGap().length > 0}>
+            <div role="status" class="alert alert-info alert-soft text-sm">
+              <span>{platformAuthorityHint("A variable", tierGap())}</span>
+            </div>
           </Show>
           <div class="grid grid-cols-2 gap-3 text-sm">
             <KVStacked label="Type" value={<span class="badge badge-ghost badge-sm">{v().value_type}</span>} />
@@ -223,6 +241,7 @@ export function ValueInput(p: { valueType: ValueType; value: string; onInput: (v
 // again server-side.
 function CreateVariableForm(p: { onCreated: () => void }): JSX.Element {
   const qc = useQueryClient();
+  const me = useMe();
   const systems = useQuery(() => ({ queryKey: SYSTEMS_KEY, queryFn: listSystems }));
   const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations }));
   const components = useQuery(() => ({ queryKey: COMPONENTS_KEY, queryFn: listComponents }));
@@ -234,6 +253,18 @@ function CreateVariableForm(p: { onCreated: () => void }): JSX.Element {
   const [value, setValue] = createSignal("");
   const [busy, setBusy] = createSignal(false);
   const [formErr, setFormErr] = createSignal<string | null>(null);
+
+  // The Scope select offers only the tiers this principal may actually write at.
+  // The platform tier is install-wide, gated server-side on platform:create on top
+  // of variable:create, so offering it to a caller holding only the resource half
+  // would be offering a control the server refuses.
+  const tierGap = () => platformTierGap(me.data, "variable", ["create"]);
+  const ownerKinds = createMemo(() => (tierGap().length > 0 ? OWNER_KINDS.filter((k) => k !== "platform") : OWNER_KINDS));
+  // Keep the choice inside the offered set: /auth/me may resolve after the form
+  // mounts, and the default ("platform") is exactly the one that can fall away.
+  createEffect(() => {
+    if (!ownerKinds().includes(ownerKind())) setOwnerKind(ownerKinds()[0]);
+  });
 
   const ownerTree = createMemo<TreeNode[]>(() => {
     switch (ownerKind()) {
@@ -298,9 +329,10 @@ function CreateVariableForm(p: { onCreated: () => void }): JSX.Element {
           label="Scope"
           info="The estate scope this variable attaches to. It cascades down onto the components below it: platform, or a location, system, or component."
           docHref="https://docs.omniglass.hyperscaleav.com/architecture/variables/"
+          hint={tierGap().length > 0 ? platformAuthorityHint("A variable", tierGap()) : undefined}
         >
           <select class="select select-bordered w-full" value={ownerKind()} onChange={(e) => { setOwnerKind(e.currentTarget.value as OwnerKind); setOwner(""); }}>
-            <For each={OWNER_KINDS}>{(k) => <option value={k}>{k.charAt(0).toUpperCase() + k.slice(1)}</option>}</For>
+            <For each={ownerKinds()}>{(k) => <option value={k}>{k.charAt(0).toUpperCase() + k.slice(1)}</option>}</For>
           </select>
         </FieldRow>
       </div>

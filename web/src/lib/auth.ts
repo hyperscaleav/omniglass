@@ -249,3 +249,28 @@ export function can(me: Me | null | undefined, ...tokens: string[]): boolean {
   }
   return false;
 }
+
+// A write at the `platform` tier, the cascade's least-specific rung, applies to the
+// whole install, so the server gates it on `platform:<action>` on top of the
+// resource permission: full-estate SCOPE is reach, not install-wide authority.
+// canAtPlatform is that pair, the check a console control writing at the tier gates
+// on, so the console never offers a control the server refuses.
+export function canAtPlatform(me: Me | null | undefined, resource: string, action: string): boolean {
+  return can(me, resource, action) && can(me, "platform", action);
+}
+
+// platformTierGap lists the install-wide capabilities a principal would need for
+// the given actions but does not hold, counting only the actions it holds the
+// resource half of. Empty means nothing to explain: either it holds both halves, or
+// it holds neither and the control is absent for the ordinary reason.
+export function platformTierGap(me: Me | null | undefined, resource: string, actions: string[]): string[] {
+  return actions.filter((a) => can(me, resource, a) && !can(me, "platform", a)).map((a) => `platform:${a}`);
+}
+
+// platformAuthorityHint is what a half-held principal reads instead of meeting a
+// 403: the tier's blast radius, then the capabilities it is missing by name. `what`
+// names the thing being written ("A variable"), `missing` comes from
+// platformTierGap.
+export function platformAuthorityHint(what: string, missing: string[]): string {
+  return `${what} at the platform tier applies to the whole install, so writing one needs ${missing.join(" and ")} on top of the resource permission.`;
+}

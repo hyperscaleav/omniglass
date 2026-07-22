@@ -1776,7 +1776,12 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   and a declared default as what they are ("Declared default" carries no origin badge, because nobody set it). The
   new capability is authorization: a write at the tier now needs **`platform:<action>`** on top of the resource
   permission, published per route as `x-omniglass-platform-permission` and seeded to `admin` only, so an all-scoped
-  operator runs every site without being able to move the install-wide value under them. **Breaking:** a secret
+  operator runs every site without being able to move the install-wide value under them. `platform` joins the
+  **sensitive-resource set** (with `secret` and `settings`) so a bare `*:update` cannot reach it: install-wide
+  authority is never implied by estate reach, in the rbac core and in the console's mirror of it. The console gates
+  every tier control on **both** halves, on all three surfaces that write at the tier: the Settings page, and the
+  Secrets and Variables pages, where a caller without the tier half is not offered the Platform scope on the create
+  form nor Edit / Delete on a tier row, and reads which capability is missing instead of meeting a 403. **Breaking:** a secret
   sealed at the old tier cannot be decrypted after upgrade, since the AAD binds `ownerKind|ownerID|name|field`
   (accepted deliberately, see the ADR). Proven by a testcontainer upgrade test (pre-rename rows resolve identically
   after the migration, the constraints and unique indexes still hold one row per identity), the settings resolver
