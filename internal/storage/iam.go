@@ -189,10 +189,10 @@ type Principal struct {
 	// reversible until purged). Nil means live. Distinct from Active, which is the
 	// reversible disable (suspend) toggle.
 	ArchivedAt *time.Time
-	Human   *HumanProfile
-	Service *ServiceProfile
-	Node    *NodeProfile
-	Grants  []Grant
+	Human      *HumanProfile
+	Service    *ServiceProfile
+	Node       *NodeProfile
+	Grants     []Grant
 	// Groups are the principal groups this principal belongs to (id + label), so the
 	// admin directory can show membership without a per-row fetch. The grants those
 	// groups confer already ride Grants (tagged with GroupID); this names them.

@@ -103,10 +103,20 @@ func (f *healthFixture) recorded(t *testing.T, ctx context.Context, ownerKind, o
 	var n int
 	var latest *string
 	// The arc stores the owner's id; the tests speak names, so the id resolves here.
+	//
+	// "Latest" is the highest id, NOT the newest ts, matching every production read
+	// of a recorded verdict (recordHealth's transition check, subtreeSystemHealth,
+	// SystemHealth). A health row's ts is clock_timestamp() evaluated in the SELECT
+	// list, while its id comes from the identity sequence applied when the row is
+	// inserted, so the timestamp is taken BEFORE the id is assigned. Two concurrent
+	// inserts can therefore land with ts inverted relative to id, and a reader
+	// ordering by ts then disagrees with the writer about which row is current.
+	// This helper used to order by ts, which is why it reported verdicts the
+	// gateway never produced (#356).
 	owner := `(select id from ` + ownerKind + ` where name = $1)`
 	if err := f.conn.QueryRow(ctx, `
 		select count(*), (select value from state_datapoint
-			where `+col+` = `+owner+` and key = 'health' order by ts desc, id desc limit 1)
+			where `+col+` = `+owner+` and key = 'health' order by id desc limit 1)
 		from state_datapoint where `+col+` = `+owner+` and key = 'health'`, ownerID).Scan(&n, &latest); err != nil {
 		t.Fatalf("read recorded health %s/%s: %v", ownerKind, ownerID, err)
 	}

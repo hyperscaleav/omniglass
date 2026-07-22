@@ -114,7 +114,7 @@ type Location struct {
 	// The name the API addresses the parent by; ParentID above is internal.
 	ParentName *string
 	CreatedAt  time.Time
-	UpdatedAt    time.Time
+	UpdatedAt  time.Time
 }
 
 // LocationSpec is the create input. ParentName nil makes a root location, which
