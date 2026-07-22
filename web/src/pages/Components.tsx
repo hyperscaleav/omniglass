@@ -1,4 +1,4 @@
-import { entityLabel } from "../lib/entities";
+import { createIdentity, entityLabel } from "../lib/entities";
 import { For, Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { useNavigate, useParams, useSearchParams } from "@solidjs/router";
@@ -363,8 +363,9 @@ export default function Components() {
   // component exists. Create commits the row and hands off to /components/<name> in
   // edit mode.
   function ComponentCreate(): JSX.Element {
-    const [name, setName] = createSignal("");
-    const [display, setDisplay] = createSignal("");
+    // Display name leads and the key follows it, stopping the moment the
+    // operator edits the key by hand (lib/entities).
+    const { display, setDisplay, name, setName, keyDerived } = createIdentity();
     const [system, setSystem] = createSignal("");
     const [location, setLocation] = createSignal("");
     const [parent, setParent] = createSignal("");
@@ -406,8 +407,8 @@ export default function Components() {
         <div class="flex flex-col gap-1.5">
           <span class="eyebrow">Identity</span>
           <div class="flex flex-col gap-3">
-            {field("Name", <input class="input input-bordered w-full font-data" value={name()} placeholder="mic-2" onInput={(e) => setName(e.currentTarget.value)} />, "Globally unique address.")}
-            {field("Display name", <input class="input input-bordered w-full" value={display()} placeholder="Ceiling Mic 2" onInput={(e) => setDisplay(e.currentTarget.value)} />)}
+            {field("Display name", <input class="input input-bordered w-full" value={display()} placeholder="Ceiling Mic 2" onInput={(e) => setDisplay(e.currentTarget.value)} />, "What an operator reads. Optional.")}
+            {field("Name", <input class="input input-bordered w-full font-data" value={name()} placeholder="mic-2" onInput={(e) => setName(e.currentTarget.value)} />, () => (keyDerived() ? "Derived from the display name. Edit to set your own." : "Globally unique address, used by the API and CLI."))}
           </div>
         </div>
 
@@ -439,12 +440,12 @@ export default function Components() {
   }
 
   // A labelled field for the create surface (the detail accordion uses ctx.field).
-  function field(labelText: string, control: JSX.Element, hint?: string): JSX.Element {
+  function field(labelText: string, control: JSX.Element, hint?: string | (() => string)): JSX.Element {
     return (
       <label class="flex flex-col gap-1">
         <span class="text-[12px] font-medium text-base-content/70">{labelText}</span>
         {control}
-        <Show when={hint}><span class="text-[11px] text-base-content/40">{hint}</span></Show>
+        <Show when={hint}><span class="text-[11px] text-base-content/40">{typeof hint === "function" ? hint() : hint}</span></Show>
       </label>
     );
   }

@@ -281,3 +281,51 @@ describe("Locations list identity", () => {
     expect(screen.getAllByText("hq-boardroom-nvx-tx")).toHaveLength(1);
   });
 });
+
+// The create form leads with the display name and derives the key from it, so an
+// operator types "Conf Room 301" and never has to invent `conf-room-301` or think
+// about the character class the API enforces.
+//
+// What each tier can actually witness, which is worth being precise about:
+//
+//   - THIS file proves the page is WIRED to the primitive. Remove the derivation
+//     and both tests below fail. A unit test on the hook cannot tell you a page
+//     forgot to use it.
+//   - lib/entities.test.ts proves the SUPPRESSION: that a hand-edited key stops
+//     following. That cannot be asserted from here. Once a user types into an
+//     input, its DOM value property no longer tracks the signal, so `key.value`
+//     returns what the test typed and would pass even with the rule removed. The
+//     hint tracks ownership rather than suppression, so it cannot witness it
+//     either. Mutation-checked in both files.
+describe("Locations create identity", () => {
+  afterEach(() => window.history.pushState({}, "", "/"));
+
+  const fields = async () => {
+    mount("/locations/create");
+    await waitFor(() => expect(screen.getByText("New location")).toBeTruthy());
+    const display = screen.getByPlaceholderText("Conf Room 301") as HTMLInputElement;
+    const key = screen.getByPlaceholderText("hq-a-301") as HTMLInputElement;
+    return { display, key };
+  };
+
+  it("derives the key as the display name is typed", async () => {
+    const { display, key } = await fields();
+    fireEvent.input(display, { target: { value: "Conf Room 301" } });
+    await waitFor(() => expect(key.value).toBe("conf-room-301"));
+  });
+
+  it("stops advertising the key as derived once it is edited by hand", async () => {
+    const { display, key } = await fields();
+    fireEvent.input(display, { target: { value: "Conf Room 301" } });
+    await waitFor(() => expect(key.value).toBe("conf-room-301"));
+
+    fireEvent.input(key, { target: { value: "hq-a-301" } });
+    fireEvent.input(display, { target: { value: "Conference Room 301 East" } });
+
+    // The observable this CAN assert: the field stops advertising itself as
+    // derived once the operator takes it, which is what they see.
+    await waitFor(() => expect(display.value).toBe("Conference Room 301 East"));
+    expect(screen.getByText(/Globally unique address/)).toBeTruthy();
+    expect(screen.queryByText(/Derived from the display name/)).toBeNull();
+  });
+});
