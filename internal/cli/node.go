@@ -9,11 +9,17 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// newNodeCmd is the edge run mode: enroll (claim the NATS credential), pull the
-// worklist, and heartbeat. Outbound-only: the node dials the server, never the
-// reverse. Flags fall back to the OMNIGLASS_* env so a systemd unit or container
-// can supply them without putting the token on the command line.
-func newNodeCmd() *cobra.Command {
+// newNodeRunCmd is the edge run mode: enroll (claim the NATS credential), pull
+// the worklist, and heartbeat. Outbound-only: the node dials the server, never
+// the reverse. Flags fall back to the OMNIGLASS_* env so a systemd unit or
+// container can supply them without putting the token on the command line.
+//
+// It is `node run`, a leaf under the generated `node` group, not a top-level
+// `node`. As a top-level command it occupied the same name as the generated
+// group and swallowed every node API command: `omniglass node list` resolved to
+// the daemon and failed asking for --token. A mode reads as a verb anyway,
+// beside `node list` and `node enroll`.
+func newNodeRunCmd() *cobra.Command {
 	var (
 		serverURL string
 		name      string
@@ -22,7 +28,7 @@ func newNodeCmd() *cobra.Command {
 		once      bool
 	)
 	cmd := &cobra.Command{
-		Use:   "node",
+		Use:   "run",
 		Short: "Run the edge node: claim, pull the worklist, and heartbeat over NATS",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if serverURL == "" {

@@ -112,6 +112,15 @@ omniglass node update edge-hq --display-name "HQ Edge" --location hq-west   # ne
 omniglass node delete edge-hq   # needs node:delete; decommissions the node (cascades its interfaces, tasks, and enrollment)
 ```
 
+Every command above is new in practice, not only in the docs: a hand-written `node` run
+mode occupied the same name as the generated `node` group, so cobra resolved `omniglass
+node list` to the daemon and it failed asking for `--token`. The run mode is now
+`omniglass node run`, a verb beside the others:
+
+```sh
+omniglass node run --name edge-hq --token ogp_...   # the edge daemon: claim, pull the worklist, heartbeat
+```
+
 The node-facing `claim` exchange is public (the enrollment token is the authentication), so
 a node presents its name and token to receive its NATS credential:
 

@@ -26,7 +26,6 @@ func newRoot(version string) *cobra.Command {
 	// Hand-written commands: the run modes and the trusted bootstrap lane.
 	root.AddCommand(
 		newServerCmd(version),
-		newNodeCmd(),
 		newMigrateCmd(),
 		newBootstrapCmd(),
 		newTokenCmd(),
@@ -38,6 +37,15 @@ func newRoot(version string) *cobra.Command {
 	// generated set.
 	addClientFlags(root)
 	root.AddCommand(generatedCommands()...)
+
+	// The edge run mode hangs off the generated `node` group rather than the
+	// root, so `node run` sits beside `node list`. Attached after generation
+	// because the group is generated; if the API ever stops exposing node
+	// routes the mode would vanish silently, which TestNodeRunIsReachable
+	// catches.
+	if g, _, err := root.Find([]string{"node"}); err == nil && g != root {
+		g.AddCommand(newNodeRunCmd())
+	}
 
 	return root
 }
