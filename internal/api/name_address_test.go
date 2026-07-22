@@ -33,9 +33,14 @@ var idFieldsWithNoNameToUse = map[string]string{
 
 // Catalog ids that ARE names: these registries are keyed by a human-written slug,
 // so `product_id: "cisco-room-bar"` already satisfies the rule.
+//
+// `tag_id` was listed here and should not have been: `tag` is uuid-keyed with a
+// unique name, so it is a genuine instance of the rule rather than an exception.
+// No response body emits it today, which is why the guard passed over the false
+// entry; the schema side is tracked in #340.
 var slugKeyedCatalogs = map[string]bool{
 	"product_id": true, "standard_id": true, "parent_standard_id": true,
-	"driver_id": true, "vendor_id": true, "parent_product_id": true, "capability_id": true, "tag_id": true,
+	"driver_id": true, "vendor_id": true, "parent_product_id": true, "capability_id": true,
 	"location_type_id": true, "secret_type_id": true, "datapoint_type_id": true,
 	"interface_type_id": true, "property_id": true, "role_id": true, "alarm_id": true,
 	"event_id": true, "audit_id": true, "source_rule_id": true, "product_property_id": true,
