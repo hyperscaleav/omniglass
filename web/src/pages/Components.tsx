@@ -27,6 +27,7 @@ import ReachabilityPanel from "../components/ReachabilityPanel";
 import EventsPanel from "../components/EventsPanel";
 import { interfaceBlade, interfaceCreateBlade } from "../components/interfaceBlades";
 import PropertiesPanel, { propertyResolutionBlade, propertyBladeId } from "../components/PropertiesPanel";
+import ResolutionPanel from "../components/ResolutionPanel";
 import CapabilitiesPanel from "../components/CapabilitiesPanel";
 import AlarmsPanel from "../components/AlarmsPanel";
 
@@ -310,6 +311,10 @@ export default function Components() {
             which keeps view read-only. */}
         <AlarmsPanel component={n().raw.name} canUpdate={editing() && canUpdate()} />
         <EventsPanel name={n().raw.name} />
+        {/* Why the tag values are what they are, and for a shared component,
+            which system it is being asked about. The list's pills answer what;
+            this answers why, which is the only question when one looks wrong. */}
+        <ResolutionPanel component={n().raw.name} />
         <PropertiesPanel
           component={n().raw.name}
           edit={edit}
