@@ -12,14 +12,14 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
-// The owner arcs on tag_binding, variable, and secret reference their owner by
-// NAME. A name is only safe as a key if a rename carries, which is what the
-// `on update cascade` on those foreign keys is for, and this is the test that
-// justifies the clause.
+// A rename must never disturb a binding. The arcs reference the owner's uuid,
+// which a rename does not touch, so this holds for the strongest possible reason:
+// there is nothing to rewrite and no cascade to get wrong.
 //
-// It could not fail before the conversion: the arcs held uuids, which a rename
-// never touches, so the bindings survived for a reason that no longer applies.
-// After it, they survive only because the database rewrites the references.
+// The test is kept from the period when these arcs keyed by name and needed
+// `on update cascade` to survive this. It is worth keeping precisely because it
+// is now cheap to satisfy: if anyone reintroduces a name-keyed arc, this is what
+// notices when the rename starts failing or orphaning rows.
 func TestOwnerArcsSurviveARename(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -78,8 +78,7 @@ func TestOwnerArcsSurviveARename(t *testing.T) {
 			winnerOwner(before, "environment"))
 	}
 
-	// The rename. Without `on update cascade` this either fails outright on the
-	// foreign key or silently orphans all three bindings.
+	// The rename. Nothing references the name, so this is a single-row update.
 	newName := "new-room"
 	if _, err := gw.UpdateLocation(ctx, "", "old-room", storage.LocationPatch{Name: &newName}, all, all); err != nil {
 		t.Fatalf("rename location: %v", err)
@@ -90,7 +89,8 @@ func TestOwnerArcsSurviveARename(t *testing.T) {
 		t.Fatalf("resolve after: %v", err)
 	}
 	if got := winnerOwner(after, "environment"); got != "new-room" {
-		t.Errorf("tag owner after the rename = %q, want new-room: the binding must follow its owner", got)
+		t.Errorf("tag owner after the rename = %q, want new-room: the binding points at the id, "+
+			"so it follows the entity and reports its current name", got)
 	}
 
 	// The variable and the secret followed too, which is what proves the clause is

@@ -4495,6 +4495,8 @@ export interface components {
              */
             depth: number;
             key: string;
+            /** @description The owning entity's id, the canonical handle; absent for a global owner */
+            owner_id?: string;
             owner_kind: string;
             owner_name?: string;
             value: string;
@@ -4619,6 +4621,8 @@ export interface components {
             fields: components["schemas"]["SecretFieldBody"][] | null;
             id: string;
             name: string;
+            /** @description The owning entity's id, the canonical handle; absent for a global owner */
+            owner_id?: string;
             owner_kind: string;
             owner_name?: string;
             secret_type: string;
@@ -4921,6 +4925,8 @@ export interface components {
              */
             readonly $schema?: string;
             key: string;
+            /** @description The owning entity's id, the canonical handle; absent for a global owner */
+            owner_id?: string;
             owner_kind: string;
             owner_name?: string;
             value: string;
@@ -5211,6 +5217,8 @@ export interface components {
             readonly $schema?: string;
             id: string;
             name: string;
+            /** @description The owning entity's id, the canonical handle; absent for a global owner */
+            owner_id?: string;
             owner_kind: string;
             owner_name?: string;
             /** @description The value, shape given by value_type */

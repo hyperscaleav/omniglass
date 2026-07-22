@@ -23,6 +23,7 @@ type tagBindingBody struct {
 	Key       string  `json:"key"`
 	Value     string  `json:"value"`
 	OwnerKind string  `json:"owner_kind"`
+	OwnerID   *string `json:"owner_id,omitempty" doc:"The owning entity's id, the canonical handle; absent for a global owner"`
 	OwnerName string  `json:"owner_name,omitempty"`
 }
 
@@ -33,6 +34,7 @@ type resolvedTagBody struct {
 	Key       string  `json:"key"`
 	Value     string  `json:"value"`
 	OwnerKind string  `json:"owner_kind"`
+	OwnerID   *string `json:"owner_id,omitempty" doc:"The owning entity's id, the canonical handle; absent for a global owner"`
 	OwnerName string  `json:"owner_name,omitempty"`
 	Band      int     `json:"band" doc:"Cascade tier: 0 global, 1 location, 2 system, 3 component"`
 	Depth     int     `json:"depth" doc:"Distance up the tier's tree from the component (0 nearest)"`
@@ -46,7 +48,7 @@ func toTagBody(t *storage.Tag) tagBody {
 func toTagBindingBody(b *storage.TagBinding) tagBindingBody {
 	return tagBindingBody{
 		Key: b.Key, Value: b.Value,
-		OwnerKind: b.OwnerKind,  OwnerName: b.OwnerName,
+		OwnerKind: b.OwnerKind, OwnerName: b.OwnerName,
 	}
 }
 
@@ -268,7 +270,7 @@ func registerTagRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		for _, r := range resolved {
 			out.Body.Tags = append(out.Body.Tags, resolvedTagBody{
 				Key: r.Key, Value: r.Value,
-				OwnerKind: r.OwnerKind, OwnerName: r.OwnerName,
+				OwnerKind: r.OwnerKind, OwnerID: r.OwnerID, OwnerName: r.OwnerName,
 				Band: r.Band, Depth: r.Depth, Winner: r.Winner,
 			})
 		}

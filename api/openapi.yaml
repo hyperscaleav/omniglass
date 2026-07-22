@@ -3045,6 +3045,9 @@ components:
           type: integer
         key:
           type: string
+        owner_id:
+          description: The owning entity's id, the canonical handle; absent for a global owner
+          type: string
         owner_kind:
           type: string
         owner_name:
@@ -3276,6 +3279,9 @@ components:
         id:
           type: string
         name:
+          type: string
+        owner_id:
+          description: The owning entity's id, the canonical handle; absent for a global owner
           type: string
         owner_kind:
           type: string
@@ -3808,6 +3814,9 @@ components:
           type: string
         key:
           type: string
+        owner_id:
+          description: The owning entity's id, the canonical handle; absent for a global owner
+          type: string
         owner_kind:
           type: string
         owner_name:
@@ -4304,6 +4313,9 @@ components:
         id:
           type: string
         name:
+          type: string
+        owner_id:
+          description: The owning entity's id, the canonical handle; absent for a global owner
           type: string
         owner_kind:
           type: string
