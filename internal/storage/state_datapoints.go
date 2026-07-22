@@ -59,7 +59,7 @@ func (p *PG) InsertStateDatapoints(ctx context.Context, evs []StateDatapointEven
 			ts = time.Now().UTC()
 		}
 		sql := fmt.Sprintf(`insert into state_datapoint (ts, owner_kind, %s, key, instance, value, provenance, source)
-			values ($1, $2, $3, $4, $5, $6, 'observed', $7)`, col)
+			values ($1, $2, %s, $4, $5, $6, 'observed', $7)`, col, ownerArcExprN(ev.OwnerKind, 3))
 		if _, err := tx.Exec(ctx, sql, ts, ev.OwnerKind, ev.OwnerID, ev.Key, ev.Instance, ev.Value, ev.Source); err != nil {
 			return fmt.Errorf("storage: insert state datapoint %s/%s: %w", ev.OwnerID, ev.Key, err)
 		}
@@ -78,7 +78,7 @@ func (p *PG) LatestState(ctx context.Context, componentName, key, instance strin
 	err := p.pool.QueryRow(ctx, `
 		select ts, owner_kind, key, instance, value, provenance, source
 		from state_datapoint
-		where component_id = $1 and key = $2 and instance = $3
+		where component_id = (select id from component where name = $1) and key = $2 and instance = $3
 		order by ts desc
 		limit 1`, componentName, key, instance).Scan(&dp.TS, &dp.OwnerKind, &dp.Key, &dp.Instance, &dp.Value, &dp.Provenance, &dp.Source)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -97,7 +97,7 @@ func (p *PG) StateTransitions(ctx context.Context, componentName, key, instance 
 	rows, err := p.pool.Query(ctx, `
 		select ts, owner_kind, key, instance, value, provenance, source
 		from state_datapoint
-		where component_id = $1 and key = $2 and instance = $3 and ts >= $4
+		where component_id = (select id from component where name = $1) and key = $2 and instance = $3 and ts >= $4
 		order by ts asc`, componentName, key, instance, since)
 	if err != nil {
 		return nil, fmt.Errorf("storage: state transitions %s/%s[%s]: %w", componentName, key, instance, err)

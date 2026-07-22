@@ -458,8 +458,8 @@ target as (
 seed_sys as (
     select s.id
     from system s
-    join system_member m on m.system_id = s.name
-    join target t on t.name = m.component_id
+    join system_member m on m.system_id = s.id
+    join target t on t.id = m.component_id
     where case when $2::text = '' then m.is_primary else s.name = $2::text end
 ),
 comp_chain(id, depth) as (
@@ -578,8 +578,8 @@ targets as (
 seed_sys as (
     select t.target_id, s.id
     from system s
-    join system_member m on m.system_id = s.name
-    join targets t on t.name = m.component_id
+    join system_member m on m.system_id = s.id
+    join targets t on t.id = m.component_id
     where m.is_primary
 ),
 comp_chain(target_id, id, depth) as (

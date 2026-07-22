@@ -268,8 +268,8 @@ target as (
 seed_sys as (
     select s.id
     from system s
-    join system_member m on m.system_id = s.name
-    join target t on t.name = m.component_id
+    join system_member m on m.system_id = s.id
+    join target t on t.id = m.component_id
     where m.is_primary
 ),
 comp_chain(id, depth) as (

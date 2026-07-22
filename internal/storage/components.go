@@ -73,10 +73,12 @@ type ComponentPatch struct {
 // --- component CRUD (read/delete via the generic helpers) --------------------
 
 const componentCols = `id, name, coalesce(display_name, ''), parent_id,
-	(select m.system_id from system_member m where m.component_id = component.name and m.is_primary),
-	(select s.id from system s join system_member m on m.system_id = s.name
-	  where m.component_id = component.name and m.is_primary) as primary_system_id,
-	(select count(*) from system_member m where m.component_id = component.name),
+	-- The primary membership, both forms: the name for display and the id as the
+	-- canonical handle. The arc points at the primary key, so the join is by id.
+	(select s.name from system s join system_member m on m.system_id = s.id
+	  where m.component_id = component.id and m.is_primary) as primary_system,
+	(select m.system_id from system_member m where m.component_id = component.id and m.is_primary) as primary_system_id,
+	(select count(*) from system_member m where m.component_id = component.id) as system_count,
 	location_id, product_id,
 	-- The names the API addresses these by. The ids stay for the scope walks and
 	-- tree joins, which are internal; a name is what leaves the process.

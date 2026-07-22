@@ -53,7 +53,9 @@ func TestEffectiveCapabilities(t *testing.T) {
 
 	// The component adds one its product does not claim, and suppresses one it does.
 	if _, err := conn.Exec(ctx, `insert into component_capability (component_id, capability_id, present)
-		values ('bar-1','touch-panel',true), ('bar-1','camera',false)`); err != nil {
+		select id, 'touch-panel', true from component where name = 'bar-1'
+		union all
+		select id, 'camera', false from component where name = 'bar-1'`); err != nil {
 		t.Fatalf("declare component capabilities: %v", err)
 	}
 	got, _ = gw.EffectiveCapabilities(ctx, conn, "bar-1")
@@ -71,7 +73,8 @@ func TestEffectiveCapabilities(t *testing.T) {
 	if got, _ = gw.EffectiveCapabilities(ctx, conn, "loose-mic"); len(got) != 0 {
 		t.Fatalf("productless with no declarations = %v, want empty", got)
 	}
-	if _, err := conn.Exec(ctx, `insert into component_capability (component_id, capability_id) values ('loose-mic','microphone')`); err != nil {
+	if _, err := conn.Exec(ctx, `insert into component_capability (component_id, capability_id)
+		select id, 'microphone' from component where name = 'loose-mic'`); err != nil {
 		t.Fatalf("declare on productless: %v", err)
 	}
 	if got, _ = gw.EffectiveCapabilities(ctx, conn, "loose-mic"); !hasAll(got, "microphone") || len(got) != 1 {
@@ -131,7 +134,7 @@ func TestEffectiveRolesAndAssignment(t *testing.T) {
 	}
 	if _, err := conn.Exec(ctx, `
 		insert into system_role (owner_kind, system_id, name, display_name)
-		values ('system','hq-huddle','wall-display','Wall display')`); err != nil {
+		select 'system', id, 'wall-display', 'Wall display' from system where name = 'hq-huddle'`); err != nil {
 		t.Fatalf("declare ad-hoc role: %v", err)
 	}
 
@@ -202,7 +205,9 @@ func TestEffectiveRolesAndAssignment(t *testing.T) {
 		t.Fatalf("create productless: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `insert into component_capability (component_id, capability_id)
-		values ('loose-mic','microphone'), ('loose-mic','speaker')`); err != nil {
+		select id, 'microphone' from component where name = 'loose-mic'
+		union all
+		select id, 'speaker' from component where name = 'loose-mic'`); err != nil {
 		t.Fatalf("declare capabilities: %v", err)
 	}
 	if err := gw.AssignRole(ctx, "", "hq-huddle", "table-mic", "loose-mic", all); err != nil {

@@ -328,17 +328,39 @@ func recordHealth(ctx context.Context, q txQuerier, ownerKind, ownerID string, v
 	// event_id and audit_id stay null. The CHECK enforces exactly that shape.
 	// The WHERE is the transition rule: no previous row (is distinct from null) or
 	// a different one writes; the same value writes nothing.
-	sql := fmt.Sprintf(`insert into state_datapoint (ts, owner_kind, %s, key, instance, value, provenance, source_rule)
-		select clock_timestamp(), $1::text, $2::text, $3::text, '', $4::text, 'calculated', $5::text
+	owner := ownerArcExpr(ownerKind)
+	sql := fmt.Sprintf(`insert into state_datapoint (ts, owner_kind, %[1]s, key, instance, value, provenance, source_rule)
+		select clock_timestamp(), $1::text, %[3]s, $3::text, '', $4::text, 'calculated', $5::text
 		where $4::text is distinct from (
 			select value from state_datapoint
-			where %s = $2::text and key = $3::text and instance = ''
+			where %[1]s = %[3]s and key = $3::text and instance = ''
 			order by id desc
-			limit 1)`, col, col)
+			limit 1)`, col, col, owner)
 	if _, err := q.Exec(ctx, sql, ownerKind, ownerID, healthKey, v.String(), healthRule); err != nil {
 		return fmt.Errorf("storage: record health %s/%s: %w", ownerKind, ownerID, err)
 	}
 	return nil
+}
+
+// ownerArcExpr is the SQL for the value a health owner column stores, given the
+// reference the recompute passes around. The recompute speaks NAMES throughout
+// (recomputeChain takes them, newNameSet dedupes them, the advisory lock keys on
+// one), and that is deliberately left alone: it is the part that took two
+// attempts to get right. So the resolution happens here, at the write, rather
+// than by threading ids through all of it.
+//
+// A node still stores its name until the collection tier converts.
+func ownerArcExpr(ownerKind string) string { return ownerArcExprN(ownerKind, 2) }
+
+// ownerArcExprN is the same expression at an arbitrary parameter position, since
+// the reads and the write do not agree on where the owner sits.
+func ownerArcExprN(ownerKind string, n int) string {
+	p := fmt.Sprintf("$%d::text", n)
+	switch ownerKind {
+	case "component", "system", "location":
+		return `(select id from ` + ownerKind + ` where name = ` + p + `)`
+	}
+	return p
 }
 
 // activeAlarmSeverities lists the severities of a component's active alarms, the
@@ -347,7 +369,7 @@ func (p *PG) activeAlarmSeverities(ctx context.Context, q txQuerier, componentNa
 	var severities []string
 	if err := q.QueryRow(ctx, `
 		select coalesce(array_agg(severity), '{}')
-		from alarm where component_id = $1 and cleared_at is null`,
+		from alarm where component_id = (select id from component where name = $1) and cleared_at is null`,
 		componentName).Scan(&severities); err != nil {
 		return nil, fmt.Errorf("storage: active alarm severities %q: %w", componentName, err)
 	}
@@ -363,7 +385,7 @@ func (p *PG) degradedCapabilities(ctx context.Context, q txQuerier, componentNam
 		select coalesce(array_agg(distinct ac.capability_id), '{}')
 		from alarm a
 		join alarm_capability ac on ac.alarm_id = a.id
-		where a.component_id = $1 and a.cleared_at is null`,
+		where a.component_id = (select id from component where name = $1) and a.cleared_at is null`,
 		componentName).Scan(&caps); err != nil {
 		return nil, fmt.Errorf("storage: degraded capabilities %q: %w", componentName, err)
 	}
@@ -374,7 +396,8 @@ func (p *PG) degradedCapabilities(ctx context.Context, q txQuerier, componentNam
 // whose verdict its condition can move.
 func (p *PG) systemsStaffedBy(ctx context.Context, q txQuerier, componentName string) ([]string, error) {
 	rows, err := q.Query(ctx, `
-		select distinct system_id from role_assignment where component_id = $1 order by system_id`,
+		select distinct s.name from role_assignment ra join system s on s.id = ra.system_id
+		where ra.component_id = (select id from component where name = $1) order by 1`,
 		componentName)
 	if err != nil {
 		return nil, fmt.Errorf("storage: systems staffed by %q: %w", componentName, err)
@@ -453,7 +476,7 @@ func (p *PG) locationVerdict(ctx context.Context, q txQuerier, locationName stri
 		select distinct on (sd.system_id) sd.value
 		from state_datapoint sd
 		where sd.key = $2
-		  and sd.system_id in (select name from system where location_id in (select id from subtree))
+		  and sd.system_id in (select id from system where location_id in (select id from subtree))
 		order by sd.system_id, sd.id desc`, locationName, healthKey)
 	if err != nil {
 		return health.Healthy, fmt.Errorf("storage: location verdict %q: %w", locationName, err)
@@ -482,21 +505,25 @@ func (p *PG) locationVerdict(ctx context.Context, q txQuerier, locationName stri
 func (p *PG) resolveHealthRoles(ctx context.Context, q txQuerier, systemName string) ([]resolvedRole, error) {
 	rows, err := q.Query(ctx, `
 		with sys as (
-			select name, standard_id from system where name = $1
+			select id, name, standard_id from system where name = $1
 		),
 		roles as (
 			select r.id, r.name, r.display_name, r.quorum, r.impact
 			from sys join system_role r on r.owner_kind = 'standard' and r.standard_id = sys.standard_id
 			union all
 			select r.id, r.name, r.display_name, r.quorum, r.impact
-			from sys join system_role r on r.owner_kind = 'system' and r.system_id = sys.name
+			from sys join system_role r on r.owner_kind = 'system' and r.system_id = sys.id
 		)
 		select roles.id, roles.name, roles.display_name, roles.quorum, roles.impact,
 		       coalesce(array_agg(distinct rc.capability_id) filter (where rc.capability_id is not null), '{}'),
-		       coalesce(array_agg(distinct ra.component_id) filter (where ra.component_id is not null), '{}')
+		       -- NAMES, not ids: the rollup looks each assignee's capabilities and
+		       -- alarms up by name, and the report displays them.
+		       coalesce(array_agg(distinct ac.name) filter (where ac.name is not null), '{}')
 		from roles
 		left join role_capability rc on rc.role_id = roles.id
-		left join role_assignment ra on ra.role_id = roles.id and ra.system_id = $1
+		left join role_assignment ra on ra.role_id = roles.id
+		     and ra.system_id = (select id from system where name = $1)
+		left join component ac on ac.id = ra.component_id
 		group by roles.id, roles.name, roles.display_name, roles.quorum, roles.impact
 		order by roles.name`, systemName)
 	if err != nil {
@@ -705,7 +732,7 @@ func (p *PG) subtreeSystemHealth(ctx context.Context, q txQuerier, locationName 
 		)
 		select s.name, coalesce((
 			select sd.value from state_datapoint sd
-			where sd.system_id = s.name and sd.key = $2 and sd.instance = ''
+			where sd.system_id = s.id and sd.key = $2 and sd.instance = ''
 			order by sd.id desc
 			limit 1
 		), 'healthy')
@@ -737,8 +764,8 @@ func healthTransitions(ctx context.Context, q txQuerier, ownerKind, ownerID stri
 		return nil, err
 	}
 	sql := fmt.Sprintf(`select ts, value from state_datapoint
-		where %s = $1 and key = $2 and instance = '' and ts >= $3
-		order by ts asc, id asc`, col)
+		where %s = %s and key = $2 and instance = '' and ts >= $3
+		order by ts asc, id asc`, col, ownerArcExprN(ownerKind, 1))
 	rows, err := q.Query(ctx, sql, ownerID, healthKey, since)
 	if err != nil {
 		return nil, fmt.Errorf("storage: health transitions %s/%s: %w", ownerKind, ownerID, err)
