@@ -57,8 +57,8 @@ TOK=$(app token dev --description "docs capture" 2>/dev/null | grep -o 'ogp_[A-Z
 # A couple of secrets so the Secrets surface renders real rows (idempotent).
 sec() { docker run --rm --network "$NET" -v "$ROOT/bin/omniglass:/omniglass:ro" \
   -e OMNIGLASS_SERVER=http://ogshots-srv:8080 -e OMNIGLASS_TOKEN="$TOK" "$APPIMG" /omniglass "$@" >/dev/null 2>&1 || true; }
-sec secret create --name device-basic --secret-type basic-auth --owner-kind global --fields '{"username":"admin","password":"s3cret-pw"}'
-sec secret create --name core-snmp --secret-type snmp-community --owner-kind global --fields '{"community":"public"}'
+sec secret create --name device-basic --secret-type basic-auth --owner-kind platform --fields '{"username":"admin","password":"s3cret-pw"}'
+sec secret create --name core-snmp --secret-type snmp-community --owner-kind platform --fields '{"community":"public"}'
 
 mkdir -p "$OUT"
 docker run --rm --network "$NET" -v "$ROOT:/w" -w /w \
