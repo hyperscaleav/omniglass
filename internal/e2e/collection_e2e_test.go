@@ -112,7 +112,7 @@ func TestCollectionEndToEnd(t *testing.T) {
 
 	// Run the real node binary once: claim, pull, probe the live listener, publish.
 	out, code := runCLI(t, root, binPath, os.Environ())(
-		"node", "--server", "http://"+addr, "--name", "site-a", "--token", token, "--once")
+		"node", "run", "--server", "http://"+addr, "--name", "site-a", "--token", token, "--once")
 	if code != 0 {
 		t.Fatalf("omniglass node exit %d:\n%s", code, out)
 	}

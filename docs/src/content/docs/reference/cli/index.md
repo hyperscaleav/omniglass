@@ -1694,6 +1694,22 @@ Example:
 omniglass node removeTag <name> --key key
 ```
 
+### `omniglass node run`
+
+Run the edge node: claim, pull the worklist, and heartbeat over NATS
+
+```
+omniglass node run [flags]
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--heartbeat` | duration | `30s` | heartbeat interval |
+| `--name` | string | (none) | this node's registered name (env OMNIGLASS_NODE_NAME) |
+| `--once` | bool | `false` | run a single claim + pull + heartbeat cycle and exit |
+| `--server` | string | (none) | Omniglass server base URL (env OMNIGLASS_SERVER) |
+| `--token` | string | (none) | enrollment token from POST /nodes/{name}:enroll (env OMNIGLASS_NODE_TOKEN) |
+
 ### `omniglass node setTag`
 
 Set a tag value on a node
@@ -1736,22 +1752,6 @@ Example:
 ```sh
 omniglass node update <name>
 ```
-
-## `omniglass node`
-
-Run the edge node: claim, pull the worklist, and heartbeat over NATS
-
-```
-omniglass node [flags]
-```
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--heartbeat` | duration | `30s` | heartbeat interval |
-| `--name` | string | (none) | this node's registered name (env OMNIGLASS_NODE_NAME) |
-| `--once` | bool | `false` | run a single claim + pull + heartbeat cycle and exit |
-| `--server` | string | (none) | Omniglass server base URL (env OMNIGLASS_SERVER) |
-| `--token` | string | (none) | enrollment token from POST /nodes/{name}:enroll (env OMNIGLASS_NODE_TOKEN) |
 
 ## `omniglass principal`
 
