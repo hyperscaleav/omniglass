@@ -456,9 +456,26 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
               <Show when={p.row.path && p.row.path.length}>
                 <span class="truncate text-[11px] text-base-content/40">{p.row.path!.map((x) => x.display).join(" › ")}</span>
               </Show>
-              <span class="truncate" style={{ "font-weight": cfg.nameWeight ? cfg.nameWeight(n) : 500 }}>
+              {/* The label, then the key beneath it. A row's id IS its key (the
+                  kebab name the API and CLI address it by), so an operator can
+                  read what to type without opening the row. It is always shown
+                  rather than revealed on hover: hover does not exist on touch,
+                  is not discoverable, and cannot be selected to copy, and
+                  copying it into a CLI invocation is the point.
+
+                  When the entity has no display name the label IS the key, so
+                  it is rendered once, in the data face, which marks it as an
+                  identifier rather than a name somebody chose. */}
+              <span
+                class="truncate"
+                classList={{ "font-data text-[13px]": n.display === n.id }}
+                style={{ "font-weight": cfg.nameWeight ? cfg.nameWeight(n) : 500 }}
+              >
                 {n.display}
               </span>
+              <Show when={n.display !== n.id}>
+                <span class="truncate font-data text-[11px] text-base-content/40">{n.id}</span>
+              </Show>
             </span>
           </span>
         </td>

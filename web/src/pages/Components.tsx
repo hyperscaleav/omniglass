@@ -1,3 +1,4 @@
+import { entityLabel } from "../lib/entities";
 import { For, Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { useNavigate, useParams, useSearchParams } from "@solidjs/router";
@@ -78,7 +79,6 @@ export default function Components() {
   const systems = useQuery(() => ({ queryKey: SYSTEMS_KEY, queryFn: listSystems }));
   const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations }));
 
-  const label = (x: { name: string; display_name?: string }) => x.display_name || x.name;
   const sysByName = createMemo(() => new Map((systems.data ?? []).map((s) => [s.name, s] as const)));
   const locById = createMemo(() => new Map((locations.data ?? []).map((l) => [l.id, l] as const)));
 
@@ -99,14 +99,14 @@ export default function Components() {
     for (const c of list) {
       byId.set(c.name, {
         id: c.name,
-        display: c.display_name || c.name,
+        display: entityLabel(c),
         children: [],
         actions: c.actions,
         product: c.product_id ?? "",
-        systemName: c.system ? label(sysByName().get(c.system) ?? { name: c.system }) : "",
+        systemName: c.system ? entityLabel(sysByName().get(c.system) ?? { name: c.system }) : "",
         systemAddr: c.system ?? "",
         systemCount: c.system_count ?? 0,
-        locationName: c.location ? label(lm.get(c.location) ?? { name: c.location }) : "",
+        locationName: c.location ? entityLabel(lm.get(c.location) ?? { name: c.location }) : "",
         tags: c.effective_tags ?? {},
         raw: c,
       });
@@ -414,12 +414,12 @@ export default function Components() {
         <div class="flex flex-col gap-1.5">
           <span class="eyebrow">Placement</span>
           <div class="grid grid-cols-2 gap-3">
-            {field("System", <TreeSelect items={(systems.data ?? []).map((s) => ({ id: s.id, value: s.name, label: label(s), parentId: s.parent }))} value={system()} onChange={setSystem} rootLabel="None" />)}
-            {field("Location", <TreeSelect items={(locations.data ?? []).map((l) => ({ id: l.id, value: l.name, label: label(l), parentId: l.parent }))} value={location()} onChange={setLocation} rootLabel="None" />)}
+            {field("System", <TreeSelect items={(systems.data ?? []).map((s) => ({ id: s.id, value: s.name, label: entityLabel(s), parentId: s.parent }))} value={system()} onChange={setSystem} rootLabel="None" />)}
+            {field("Location", <TreeSelect items={(locations.data ?? []).map((l) => ({ id: l.id, value: l.name, label: entityLabel(l), parentId: l.parent }))} value={location()} onChange={setLocation} rootLabel="None" />)}
           </div>
           {field(
             "Parent component",
-            <TreeSelect items={(components.data ?? []).map((c) => ({ id: c.id, value: c.name, label: label(c), parentId: c.parent }))} value={parent()} onChange={setParent} rootLabel="Root (no parent)" />,
+            <TreeSelect items={(components.data ?? []).map((c) => ({ id: c.id, value: c.name, label: entityLabel(c), parentId: c.parent }))} value={parent()} onChange={setParent} rootLabel="Root (no parent)" />,
             "Omit for a root component.",
           )}
         </div>

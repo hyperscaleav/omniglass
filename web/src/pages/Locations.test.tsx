@@ -251,3 +251,33 @@ describe("Locations properties panel", () => {
     });
   });
 });
+
+// The list row carries BOTH identities: the display name an operator reads, and
+// the key the API and CLI address the row by. The key is what somebody types into
+// `omniglass location get <key>`, so it is on the row rather than behind a hover:
+// hover does not exist on touch, is not discoverable, and cannot be selected to
+// copy.
+//
+// Before this the row showed one or the other and never both, and the rule that
+// picked between them was written out six times across the console.
+describe("Locations list identity", () => {
+  afterEach(() => window.history.pushState({}, "", "/"));
+
+  it("shows the display name with the key beneath it", async () => {
+    mount("/locations");
+    await waitFor(() => expect(screen.getByText("HQ")).toBeTruthy());
+    // Both, on the same row, not one standing in for the other.
+    const row = screen.getByText("HQ").closest("tr")!;
+    expect(within(row).getByText("hq")).toBeTruthy();
+  });
+
+  it("shows the key once when the entity has no display name", async () => {
+    const bare: Location = { id: "l-bare", name: "hq-boardroom-nvx-tx", location_type: "campus", effective_tags: {} };
+    mount("/locations", [bare]);
+    await waitFor(() => expect(screen.getByText("hq-boardroom-nvx-tx")).toBeTruthy());
+    // Rendered once, not duplicated as label-plus-key: the label IS the key, and
+    // nothing is derived from it (a sentence-cased "Hq boardroom nvx tx" would
+    // read as a typo and mangle every acronym in the domain).
+    expect(screen.getAllByText("hq-boardroom-nvx-tx")).toHaveLength(1);
+  });
+});

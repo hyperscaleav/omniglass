@@ -1,3 +1,4 @@
+import { entityLabel } from "../lib/entities";
 import { For, Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
@@ -268,9 +269,9 @@ function CreateVariableForm(p: { onCreated: () => void }): JSX.Element {
 
   const ownerTree = createMemo<TreeNode[]>(() => {
     switch (ownerKind()) {
-      case "location": return (locations.data ?? []).map((l) => ({ id: l.name, value: l.name, label: l.display_name || l.name, parentId: l.parent }));
-      case "system": return (systems.data ?? []).map((s) => ({ id: s.name, value: s.name, label: s.display_name || s.name, parentId: s.parent }));
-      case "component": return (components.data ?? []).map((c) => ({ id: c.name, value: c.name, label: c.display_name || c.name, parentId: c.parent }));
+      case "location": return (locations.data ?? []).map((l) => ({ id: l.name, value: l.name, label: entityLabel(l), parentId: l.parent }));
+      case "system": return (systems.data ?? []).map((s) => ({ id: s.name, value: s.name, label: entityLabel(s), parentId: s.parent }));
+      case "component": return (components.data ?? []).map((c) => ({ id: c.name, value: c.name, label: entityLabel(c), parentId: c.parent }));
       default: return [];
     }
   });
