@@ -65,7 +65,14 @@ func (p *PG) InsertEvents(ctx context.Context, evs []EventOccurrence) error {
 		}
 		sql := fmt.Sprintf(`insert into event (ts, owner_kind, %s, key, instance, message, attributes, provenance, source)
 			values ($1, $2, $3, $4, $5, $6, $7, 'observed', $8)`, col)
-		if _, err := tx.Exec(ctx, sql, ts, ev.OwnerKind, ev.OwnerID, ev.Key, ev.Instance, ev.Message, attrs, ev.Source); err != nil {
+		// The arc points at the primary key, so the owner reference resolves to a
+		// uuid before it is stored. A node still stores its name until the
+		// collection tier converts.
+		arc, err := p.ownerArcValue(ctx, tx, ev.OwnerKind, ev.OwnerID)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, sql, ts, ev.OwnerKind, arc, ev.Key, ev.Instance, ev.Message, attrs, ev.Source); err != nil {
 			return fmt.Errorf("storage: insert event %s/%s: %w", ev.OwnerID, ev.Key, err)
 		}
 	}
@@ -81,7 +88,7 @@ func (p *PG) ListComponentEvents(ctx context.Context, componentName string, sinc
 	rows, err := p.pool.Query(ctx, `
 		select id, ts, owner_kind, key, instance, message, attributes, provenance, source
 		from event
-		where component_id = $1 and ts >= $2
+		where component_id = (select id from component where name = $1) and ts >= $2
 		order by ts desc
 		limit $3`, componentName, since, limit)
 	if err != nil {

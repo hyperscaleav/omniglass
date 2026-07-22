@@ -173,7 +173,8 @@ func TestRunIdempotent(t *testing.T) {
 	}
 	if err := conn.QueryRow(ctx, `
 		select count(*) from property_value
-		where owner_kind = 'component' and component_id = 'lobby-display'`).Scan(&propVals); err != nil {
+		where owner_kind = 'component'
+		  and component_id = (select id from component where name = 'lobby-display')`).Scan(&propVals); err != nil {
 		t.Fatalf("count property values: %v", err)
 	}
 	if propVals != 2 {
@@ -341,7 +342,7 @@ func TestRunIdempotent(t *testing.T) {
 	// auto id and no natural unique key, so only the sentinel guard keeps a re-run a
 	// no-op).
 	var events int
-	if err := conn.QueryRow(ctx, `select count(*) from event where component_id = 'lobby-display'`).Scan(&events); err != nil {
+	if err := conn.QueryRow(ctx, `select count(*) from event where component_id = (select id from component where name = 'lobby-display')`).Scan(&events); err != nil {
 		t.Fatalf("count lobby-display events: %v", err)
 	}
 	if events != 6 {
@@ -352,7 +353,8 @@ func TestRunIdempotent(t *testing.T) {
 	var withAttrs int
 	if err := conn.QueryRow(ctx, `
 		select count(*) from event
-		where component_id = 'lobby-display' and attributes is not null and provenance = 'observed'`).Scan(&withAttrs); err != nil {
+		where component_id = (select id from component where name = 'lobby-display')
+		  and attributes is not null and provenance = 'observed'`).Scan(&withAttrs); err != nil {
 		t.Fatalf("count lobby-display events with attributes: %v", err)
 	}
 	if withAttrs != 1 {
