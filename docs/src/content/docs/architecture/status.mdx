@@ -1254,11 +1254,11 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   declared defaults, an optional operator `file`, and the install-wide DB override) most-specific-wins in JSON map-space, tracking
   per-key **provenance** and enforcing a top-down **lock** (broader level wins). The single **`setting_override`** table holds
   only the override level, since the base layers are recomputed in memory each boot and restore is therefore a delete
-  ([ADR-0032](/architecture/decisions/#adr-0033-settings-persist-only-the-override-level-base-layers-are-recomputed-in-memory)),
+  ([ADR-0033](/architecture/decisions/#adr-0033-settings-persist-only-the-override-level-base-layers-are-recomputed-in-memory)),
   and its Gateway methods are **unscoped**, gated by the `settings:<action>` permission alone
-  ([ADR-0033](/architecture/decisions/#adr-0034-the-settings-gateway-is-unscoped-only-the-permission-gates-it)), reusing the
+  ([ADR-0034](/architecture/decisions/#adr-0034-the-settings-gateway-is-unscoped-only-the-permission-gates-it)), reusing the
   [cascade](/architecture/cascade/) primitive on the principal axis
-  ([ADR-0034](/architecture/decisions/#adr-0035-settings-resolve-as-a-cascade-over-principals-with-a-broader-wins-lock)). The
+  ([ADR-0035](/architecture/decisions/#adr-0035-settings-resolve-as-a-cascade-over-principals-with-a-broader-wins-lock)). The
   API exposes an admin **`GET /settings`** with provenance, a client-safe authn-only **`GET /settings/me`**, and **`PATCH`** /
   **`DELETE`** / **`POST /settings:restoreDefaults`** writes under `settings:read` / `settings:update`; the generated CLI and
   typed client follow. Two `profile`-domain namespaces seed (**`ui`** and **`keybindings`**), and **`ui.theme` is wired end to

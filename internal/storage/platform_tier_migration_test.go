@@ -96,8 +96,8 @@ func TestPlatformTierIndexNames(t *testing.T) {
 }
 
 // TestPlatformTierRenamePreservesResolution asserts an upgrade over a database
-// holding 'global' rows leaves every effective value identical. The tier keeps
-// band 0, so nothing may resolve differently.
+// holding 'global' rows leaves every effective value identical: the rename moves a
+// name, not a rung, so nothing may resolve differently.
 //
 // The harness has no way to migrate up to an arbitrary version, so the database
 // is stood at the pre-rename schema by migrating fully and rolling back to just
@@ -249,10 +249,18 @@ func constraintExists(t *testing.T, conn *pgx.Conn, name string) bool {
 }
 
 // resolveAllVariables runs the structural cascade for a component and returns the
-// winning value per name. tier names the least-specific rung, which is the only
-// thing the rename moves: it sits at band 0 either way, so resolving with 'global'
-// before and 'platform' after must produce the same map. The query mirrors
-// storage.resolveVariablesSQL, which is unexported.
+// winning value per name. tier names the least-specific rung, the only thing the
+// rename moves, so resolving with 'global' before and 'platform' after must produce
+// the same map. The query is a COPY of storage.resolveVariablesSQL (unexported, so
+// it cannot be called from this package) with the rung's name substituted.
+//
+// Being a copy, it does not pin the production bands: the 0 below is this test's
+// own, and changing the band in variables.go would leave this green. The rung's
+// place in the ordering is guarded where it belongs, by TestVariableCascadeResolve
+// and TestSecretCascadeResolve, which drive the real Gateway and assert a location,
+// system, and component binding each beat the platform rung. What this helper pins
+// is narrower and is the migration's actual contract: renaming the rung changes no
+// resolved value.
 func resolveAllVariables(t *testing.T, conn *pgx.Conn, componentID, tier string) map[string]string {
 	t.Helper()
 	sql := fmt.Sprintf(`
