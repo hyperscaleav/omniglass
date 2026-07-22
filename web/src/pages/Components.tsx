@@ -45,6 +45,7 @@ type CompNode = ListNode & {
   product: string;
   systemName: string;
   systemAddr: string;
+  systemCount: number;
   locationName: string;
   tags: Record<string, string>;
   raw: Comp;
@@ -77,7 +78,7 @@ export default function Components() {
   const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations }));
 
   const label = (x: { name: string; display_name?: string }) => x.display_name || x.name;
-  const sysById = createMemo(() => new Map((systems.data ?? []).map((s) => [s.id, s] as const)));
+  const sysByName = createMemo(() => new Map((systems.data ?? []).map((s) => [s.name, s] as const)));
   const locById = createMemo(() => new Map((locations.data ?? []).map((l) => [l.id, l] as const)));
 
   // One filter facet per tag key present across the components, derived from
@@ -93,7 +94,6 @@ export default function Components() {
   const nodes = createMemo<CompNode[]>(() => {
     const list = components.data ?? [];
     const byId = new Map<string, CompNode>();
-    const sm = sysById();
     const lm = locById();
     for (const c of list) {
       byId.set(c.id, {
@@ -102,8 +102,9 @@ export default function Components() {
         children: [],
         actions: c.actions,
         product: c.product_id ?? "",
-        systemName: c.system_id ? label(sm.get(c.system_id) ?? { name: c.system_id }) : "",
-        systemAddr: c.system_id ? (sm.get(c.system_id)?.name ?? c.system_id) : "",
+        systemName: c.system ? label(sysByName().get(c.system) ?? { name: c.system }) : "",
+        systemAddr: c.system ?? "",
+        systemCount: c.system_count ?? 0,
         locationName: c.location_id ? label(lm.get(c.location_id) ?? { name: c.location_id }) : "",
         tags: c.effective_tags ?? {},
         raw: c,
@@ -148,7 +149,7 @@ export default function Components() {
     const n = () => ctx.byId(props.node.id) ?? props.node;
     const parent = () => ctx.parentOf(n());
     const path = () => ctx.pathOf(n());
-    const sysName = () => { const sid = n().raw.system_id; return sid ? sysById().get(sid)?.name : undefined; };
+    const sysName = () => n().raw.system;
     const canUpdate = () => can(me.data, "component", "update");
 
     const [display, setDisplay] = createSignal(n().raw.display_name ?? "");
@@ -265,7 +266,16 @@ export default function Components() {
         <div class="flex flex-col gap-1.5">
           <span class="eyebrow">Placement</span>
           <div class="grid grid-cols-2 gap-5">
-            {ctx.fact("System", sysName() ? <button class="link text-sm" onClick={() => navigate(`/systems/${encodeURIComponent(sysName()!)}`)}>{n().systemName}</button> : <span class="text-base-content/50">—</span>)}
+            {ctx.fact("System", sysName() ? (
+              <span class="flex items-baseline gap-1.5">
+                <button class="link text-sm" onClick={() => navigate(`/systems/${encodeURIComponent(sysName()!)}`)}>{n().systemName}</button>
+                {/* Its primary is only part of the answer when it serves more than
+                    one, so the row says so rather than implying exclusivity. */}
+                <Show when={n().systemCount > 1}>
+                  <span class="text-[11px] text-warning">+{n().systemCount - 1} more</span>
+                </Show>
+              </span>
+            ) : <span class="text-base-content/50">—</span>)}
             {ctx.fact("Location", <span>{n().locationName || "—"}</span>)}
             {ctx.fact("Parent", parent() ? <button class="link text-sm" onClick={() => ctx.go(parent()!)}>{parent()!.display}</button> : <span class="text-base-content/50">Root</span>)}
             {ctx.fact("Product", n().raw.product_id ? <span class="font-data text-sm">{n().raw.product_id}</span> : <span class="text-base-content/50">—</span>)}
@@ -449,7 +459,7 @@ export default function Components() {
     nameWeight: () => 500,
     cellFor: (key, n) => {
       if (key === "product") return n.product ? <span class="badge badge-ghost badge-sm font-data">{n.product}</span> : <span class="text-base-content/40">—</span>;
-      if (key === "system") return <span class="text-base-content/70">{n.systemName || "—"}</span>;
+      if (key === "system") return <span class="text-base-content/70">{n.systemName || "—"}{n.systemCount > 1 ? ` +${n.systemCount - 1}` : ""}</span>;
       if (key === "location") return <span class="text-base-content/70">{n.locationName || "—"}</span>;
       if (key === "tags") return <TagPills tags={n.tags} />;
       return null;

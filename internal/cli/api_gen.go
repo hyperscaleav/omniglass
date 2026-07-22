@@ -793,17 +793,26 @@ func generatedCommands() []*cobra.Command {
 			Short: "Commands for the effective-tag resource",
 		}
 		parent.AddCommand(func() *cobra.Command {
+			var qSystem string
 			cmd := &cobra.Command{
 				Use:     "list <name>",
 				Short:   "Effective tags for a component",
-				Long:    "Resolves the tags that cascade onto a component (global -> location -> system -> component): keys union, values override most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves only from a binding on the component itself. Gated by component:read; the component must be in the caller's component read scope.",
+				Long:    "Resolves the tags that cascade onto a component (global -> location -> system -> component): keys union, values override most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves only from a binding on the component itself. The system band comes from MEMBERSHIP: pass ?system= to resolve against one the component belongs to (a shared device answers differently for each), or omit it to resolve against its primary membership. Gated by component:read; the component must be in the caller's component read scope.",
 				Example: "  omniglass effective-tag list <name>",
 				Args:    cobra.ExactArgs(1),
 				RunE: func(cmd *cobra.Command, args []string) error {
 					path := fmt.Sprintf("/api/v1/components/%s/effective-tags", url.PathEscape(args[0]))
+					q := url.Values{}
+					if cmd.Flags().Changed("system") {
+						q.Set("system", fmt.Sprintf("%v", qSystem))
+					}
+					if enc := q.Encode(); enc != "" {
+						path += "?" + enc
+					}
 					return runAPICommand(cmd, "GET", path, nil)
 				},
 			}
+			cmd.Flags().StringVar(&qSystem, "system", "", "Resolve against this system, which the component must be a member of. Omit to resolve against its primary membership, the default for a caller with no system in hand.")
 			return cmd
 		}())
 		roots = append(roots, parent)

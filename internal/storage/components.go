@@ -29,7 +29,13 @@ type Component struct {
 	Name        string
 	DisplayName string
 	ParentID    *string
-	SystemID    *string
+	// PrimarySystem is the name of the component's default system, and SystemCount
+	// how many it belongs to in total. Both are derived from system_member rather
+	// than stored: a component can be in several systems, so there is no single
+	// pointer to keep. The name rather than an id, because a name is the address
+	// the API speaks.
+	PrimarySystem *string
+	SystemCount   int
 	LocationID  *string
 	ProductID   *string
 	CreatedAt   time.Time
@@ -60,11 +66,15 @@ type ComponentPatch struct {
 
 // --- component CRUD (read/delete via the generic helpers) --------------------
 
-const componentCols = `id, name, coalesce(display_name, ''), parent_id, system_id, location_id, product_id, created_at, updated_at`
+const componentCols = `id, name, coalesce(display_name, ''), parent_id,
+	(select m.system_id from system_member m where m.component_id = component.name and m.is_primary),
+	(select count(*) from system_member m where m.component_id = component.name),
+	location_id, product_id, created_at, updated_at`
 
 func scanComponent(row pgx.Row) (*Component, error) {
 	var c Component
-	if err := row.Scan(&c.ID, &c.Name, &c.DisplayName, &c.ParentID, &c.SystemID, &c.LocationID, &c.ProductID, &c.CreatedAt, &c.UpdatedAt); err != nil {
+	if err := row.Scan(&c.ID, &c.Name, &c.DisplayName, &c.ParentID, &c.PrimarySystem, &c.SystemCount,
+		&c.LocationID, &c.ProductID, &c.CreatedAt, &c.UpdatedAt); err != nil {
 		return nil, err
 	}
 	return &c, nil
@@ -138,13 +148,13 @@ func (p *PG) CreateComponent(ctx context.Context, actorID string, spec Component
 		parentID = &parent.ID
 	}
 
-	var systemID *string
+	// A system named at create becomes a MEMBERSHIP rather than a column on the
+	// component: the relation lives in system_member, and this is simply the first
+	// one. Resolved here so an unknown name is a 422 before anything is written.
 	if spec.SystemName != nil {
-		s, err := scopedByName(ctx, tx, systemConfig, *spec.SystemName)
-		if err != nil {
+		if _, err := scopedByName(ctx, tx, systemConfig, *spec.SystemName); err != nil {
 			return nil, err // ErrSystemNotFound -> 422
 		}
-		systemID = &s.ID
 	}
 	var locationID *string
 	if spec.LocationName != nil {
@@ -171,12 +181,23 @@ func (p *PG) CreateComponent(ctx context.Context, actorID string, spec Component
 	}
 
 	c, err := scanComponent(tx.QueryRow(ctx, `
-		insert into component (name, display_name, parent_id, system_id, location_id, product_id)
-		values ($1, $2, $3, $4, $5, $6)
+		insert into component (name, display_name, parent_id, location_id, product_id)
+		values ($1, $2, $3, $4, $5)
 		returning `+componentCols,
-		spec.Name, nullize(spec.DisplayName), parentID, systemID, locationID, productID))
+		spec.Name, nullize(spec.DisplayName), parentID, locationID, productID))
 	if err != nil {
 		return nil, mapComponentWriteErr(err)
+	}
+	// The membership after the row exists, since it references the component by
+	// name. Re-read so the returned component carries the primary it just gained.
+	if spec.SystemName != nil {
+		if err := addMemberTx(ctx, tx, *spec.SystemName, spec.Name); err != nil {
+			return nil, err
+		}
+		if c, err = scanComponent(tx.QueryRow(ctx,
+			`select `+componentCols+` from component where id = $1`, c.ID)); err != nil {
+			return nil, fmt.Errorf("storage: re-read component after membership: %w", err)
+		}
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "create", "component", c.ID, nil, c); err != nil {
 		return nil, err
@@ -291,8 +312,6 @@ func mapComponentWriteErr(err error) error {
 			return ErrComponentExists
 		case "23503":
 			switch pgErr.ConstraintName {
-			case "component_system_id_fkey":
-				return ErrSystemNotFound
 			case "component_location_id_fkey":
 				return ErrLocationNotFound
 			case "component_product_id_fkey":

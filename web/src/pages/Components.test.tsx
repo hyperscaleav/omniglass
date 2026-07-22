@@ -15,7 +15,7 @@ import { TAGS_KEY, entityTagsKey } from "../lib/tags";
 // the pencil. Data is seeded into the query cache so no server is needed; `>` grants
 // every permission.
 const me: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
-const comp: Component = { id: "c-1", name: "mic-2", display_name: "Ceiling Mic 2", product_id: "shure-mxa920", effective_tags: {} };
+const comp: Component = { id: "c-1", name: "mic-2", display_name: "Ceiling Mic 2", product_id: "shure-mxa920", system_count: 0, effective_tags: {} };
 
 function mount(path: string) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });

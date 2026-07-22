@@ -14,7 +14,8 @@ type componentBody struct {
 	Name          string            `json:"name"`
 	DisplayName   string            `json:"display_name,omitempty"`
 	ParentID      *string           `json:"parent_id,omitempty"`
-	SystemID      *string           `json:"system_id,omitempty"`
+	System        *string           `json:"system,omitempty" doc:"Name of the component's primary system, its default when no system is named. A component may belong to several; read /components/{name}/memberships for all of them."`
+	SystemCount   int               `json:"system_count" doc:"How many systems this component belongs to; more than one means it is shared."`
 	LocationID    *string           `json:"location_id,omitempty"`
 	ProductID     *string           `json:"product_id,omitempty" doc:"The product (catalog SKU) this component is an instance of, if any."`
 	Actions       []string          `json:"actions,omitempty" doc:"The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces."`
@@ -24,7 +25,7 @@ type componentBody struct {
 func toComponentBody(c *storage.Component) componentBody {
 	return componentBody{
 		ID: c.ID, Name: c.Name, DisplayName: c.DisplayName,
-		ParentID: c.ParentID, SystemID: c.SystemID, LocationID: c.LocationID, ProductID: c.ProductID,
+		ParentID: c.ParentID, System: c.PrimarySystem, SystemCount: c.SystemCount, LocationID: c.LocationID, ProductID: c.ProductID,
 	}
 }
 

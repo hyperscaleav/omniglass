@@ -105,12 +105,24 @@ func TestSystemMemberBackfill(t *testing.T) {
 		}
 	}
 
-	// Reconstruct the pre-migration world: the rows exist in the old two places,
-	// and system_member is empty, exactly as it was the instant before the backfill
-	// ran on a real database.
+	// Reconstruct the pre-migration world. component.system_id has since been
+	// dropped (20260722130000), so the column is put back and repopulated from the
+	// memberships the fixture created through it: the backfill is a historical
+	// migration and must still be tested against the schema it actually ran on,
+	// not against today's.
+	if _, err := conn.Exec(ctx, `alter table component add column system_id uuid references system (id)`); err != nil {
+		t.Fatalf("restore the dropped column: %v", err)
+	}
+	if _, err := conn.Exec(ctx, `
+		update component c set system_id = s.id
+		from system_member m join system s on s.name = m.system_id
+		where m.component_id = c.name and m.is_primary and c.name in ('bf-pointed', 'bf-both')`); err != nil {
+		t.Fatalf("repopulate the pointer: %v", err)
+	}
 	if _, err := conn.Exec(ctx, `delete from system_member`); err != nil {
 		t.Fatalf("clear memberships: %v", err)
 	}
+	t.Cleanup(func() { _, _ = conn.Exec(ctx, `alter table component drop column if exists system_id`) })
 
 	if _, err := conn.Exec(ctx, backfillSQL(t)); err != nil {
 		t.Fatalf("run backfill: %v", err)

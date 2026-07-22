@@ -220,6 +220,9 @@ func TestSecretCascadeResolve(t *testing.T) {
 	mustSecret(t, gw, "poll", "global", nil, "global-val")
 	mustSecret(t, gw, "poll", "location", strptr("campus"), "campus-val")
 	mustSecret(t, gw, "poll", "location", strptr("room"), "room-val")
+	// Bound on the system and deliberately NOT expected below: a secret is
+	// device-facing, so the cascade carries no system band. The room a component
+	// serves is the wrong owner for a credential the device itself answers with.
 	mustSecret(t, gw, "poll", "system", strptr("sys"), "sys-val")
 	mustSecret(t, gw, "poll", "component", strptr("codec-1"), "comp-val")
 
@@ -227,8 +230,14 @@ func TestSecretCascadeResolve(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
 	}
-	if len(resolved) != 5 {
-		t.Fatalf("resolved candidates = %d, want 5 (global, 2 loc, sys, comp)", len(resolved))
+	if len(resolved) != 4 {
+		t.Fatalf("resolved candidates = %d, want 4 (global, 2 loc, comp): the system-owned "+
+			"secret must not reach a component", len(resolved))
+	}
+	for _, r := range resolved {
+		if r.OwnerKind == "system" {
+			t.Errorf("a system-owned secret reached the component: %+v", r)
+		}
 	}
 	var winner *storage.ResolvedSecret
 	winners := 0
@@ -245,7 +254,9 @@ func TestSecretCascadeResolve(t *testing.T) {
 		t.Errorf("winner = %s/%s, want component/codec-1", winner.OwnerKind, winner.OwnerName)
 	}
 
-	// Remove the component-tier secret: the system tier now wins.
+	// Remove the component-tier secret: the DEEPER LOCATION wins, not the system.
+	// The system-owned secret is still sitting there and still does not count,
+	// because a credential belongs to the device rather than to the room it serves.
 	list, _ := gw.ListSecrets(ctx, all, true)
 	deleteByOwner(t, gw, list, "component")
 	resolved, err = gw.ResolveSecrets(ctx, comp.ID, all, true)
@@ -253,11 +264,11 @@ func TestSecretCascadeResolve(t *testing.T) {
 		t.Fatalf("resolve 2: %v", err)
 	}
 	winner = pickWinner(t, resolved)
-	if winner.OwnerKind != "system" {
-		t.Errorf("winner after comp removed = %s, want system", winner.OwnerKind)
+	if winner.OwnerKind != "location" {
+		t.Errorf("winner after comp removed = %s, want location (the system band is gone)", winner.OwnerKind)
 	}
 
-	// Remove the system tier: the deeper location (room) beats campus.
+	// Removing the system-owned secret changes nothing, since it never competed.
 	list, _ = gw.ListSecrets(ctx, all, true)
 	deleteByOwner(t, gw, list, "system")
 	resolved, err = gw.ResolveSecrets(ctx, comp.ID, all, true)

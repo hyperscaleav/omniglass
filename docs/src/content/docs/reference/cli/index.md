@@ -729,10 +729,14 @@ Commands for the effective-tag resource
 Effective tags for a component
 
 ```
-omniglass effective-tag list <name>
+omniglass effective-tag list <name> [flags]
 ```
 
-Resolves the tags that cascade onto a component (global -> location -> system -> component): keys union, values override most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves only from a binding on the component itself. Gated by component:read; the component must be in the caller's component read scope.
+Resolves the tags that cascade onto a component (global -> location -> system -> component): keys union, values override most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves only from a binding on the component itself. The system band comes from MEMBERSHIP: pass ?system= to resolve against one the component belongs to (a shared device answers differently for each), or omit it to resolve against its primary membership. Gated by component:read; the component must be in the caller's component read scope.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--system` | string | (none) | Resolve against this system, which the component must be a member of. Omit to resolve against its primary membership, the default for a caller with no system in hand. |
 
 Example:
 

@@ -52,9 +52,9 @@ const roles: EffectiveRole[] = [
 
 const system: System = { id: "s-1", name: "boardroom", display_name: "Boardroom", member_count: 3 };
 const components: Comp[] = [
-  { id: "c-1", name: "mic-1", display_name: "Ceiling Mic 1", system_id: "s-1" },
-  { id: "c-2", name: "panel-1", display_name: "Touch Panel 1", system_id: "s-1" },
-  { id: "c-3", name: "disp-1", display_name: "Display 1", system_id: "s-1" },
+  { id: "c-1", name: "mic-1", display_name: "Ceiling Mic 1", system: "boardroom", system_count: 1 },
+  { id: "c-2", name: "panel-1", display_name: "Touch Panel 1", system: "boardroom", system_count: 1 },
+  { id: "c-3", name: "disp-1", display_name: "Display 1", system: "boardroom", system_count: 1 },
 ];
 
 const owner: Me = { principal: { id: "p", kind: "human" }, permissions: [">"], grants: [] };
