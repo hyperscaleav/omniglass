@@ -118,8 +118,8 @@ rest of the detail, and **Cancel** discards them.
   same scope check runs on the **write**, so setting a property on a system or location outside your
   scope is a 404 too, never a silent success.
 
-From the CLI, the contract side is `omniglass product properties|set-property|delete-property`,
-`omniglass standard properties|set-property|delete-property`, and
-`omniglass location-type properties|set-property|delete-property`; the value side is
-`omniglass component|system|location properties|set-property|clear-property` (see the
+From the CLI, the contract side is `omniglass product property list|set-property|delete-property`,
+`omniglass standard property list|set-property|delete-property`, and
+`omniglass location-type property list|set-property|delete-property`; the value side is
+`omniglass component|system|location property list|set-property|clear-property` (see the
 [CLI reference](/reference/cli/)).

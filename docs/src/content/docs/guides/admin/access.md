@@ -85,4 +85,4 @@ locked out of administration.
 Hovering a role in the picker shows its description and the permissions it grants, so you can see what
 you are assigning before you stage it.
 
-From the CLI a direct grant is `omniglass grant create <id>` / `grant delete <id> <grantId>`.
+From the CLI a direct grant is `omniglass principal principal grant create <id>` / `principal grant delete <id> <grantId>`.

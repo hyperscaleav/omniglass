@@ -65,6 +65,6 @@ The resolved set is what the [role assignment](/guides/admin/standards/#staff-a-
 guard checks, so this panel is where you go when an assignment was refused for a capability you know
 the device has: declare it here, then assign.
 
-From the CLI: `omniglass component capabilities <name>`,
-`omniglass component set-capability <name> <capability> --present true|false`, and
-`omniglass component clear-capability <name> <capability>`.
+From the CLI: `omniglass component capability list <name>`,
+`omniglass component capability update <name> <capability> --present true|false`, and
+`omniglass component capability delete <name> <capability>`.

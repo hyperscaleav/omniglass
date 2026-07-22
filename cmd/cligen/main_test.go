@@ -49,7 +49,7 @@ func TestBodyFieldsJSON(t *testing.T) {
 
 	// The rendered source parses the JSON fields and passes the scalar through.
 	cmd := buildCommand(doc, "/api/v1", "/things", "post", op)
-	out, err := render(group([]command{cmd}))
+	out, err := render(tree([]command{cmd}))
 	if err != nil {
 		t.Fatalf("render: %v", err)
 	}
@@ -164,7 +164,7 @@ func TestRenderQueryFlags(t *testing.T) {
 		},
 	}
 	cmd := buildCommand(spec{}, "/api/v1", "/principals", "get", op)
-	out, err := render(group([]command{cmd}))
+	out, err := render(tree([]command{cmd}))
 	if err != nil {
 		t.Fatalf("render: %v", err)
 	}
