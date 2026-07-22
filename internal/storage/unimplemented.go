@@ -536,6 +536,21 @@ func (UnimplementedGateway) EffectiveRoles(context.Context, string, scope.Set) (
 func (UnimplementedGateway) ComponentCapabilities(context.Context, string) ([]string, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) ListMembers(context.Context, string, scope.Set) ([]Member, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) ComponentMemberships(context.Context, string, scope.Set) ([]Member, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) AddMember(context.Context, string, string, string, scope.Set) error {
+	return nil
+}
+func (UnimplementedGateway) RemoveMember(context.Context, string, string, string, scope.Set) error {
+	return nil
+}
+func (UnimplementedGateway) SetPrimaryMember(context.Context, string, string, string, scope.Set) error {
+	return nil
+}
 func (UnimplementedGateway) AssignRole(context.Context, string, string, string, string, scope.Set) error {
 	return nil
 }

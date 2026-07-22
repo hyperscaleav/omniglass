@@ -178,6 +178,28 @@ components:
     display_name: Lobby Display
     product: samsung-qm55
     location: hq-west-2-boardroom
+  - name: shared-bar
+    display_name: Shared Room Bar
+    product: cisco-room-bar
+    location: hq-west-2-boardroom
+  - name: boardroom-a-bar
+    display_name: Boardroom A Bar
+    product: cisco-room-bar
+    location: hq-west-2-boardroom
+  - name: boardroom-a-panel
+    display_name: Boardroom A Display
+    product: samsung-qm55
+    location: hq-west-2-boardroom
+  - name: boardroom-b-panel
+    display_name: Boardroom B Display
+    product: samsung-qm55
+    location: hq-west-2-boardroom
+  # No product on purpose: it provides no capability, so no role can want it. It
+  # is in the room and accounted for, and nothing more, which is exactly the case
+  # membership exists to carry.
+  - name: boardroom-power
+    display_name: Boardroom Power Conditioner
+    location: hq-west-2-boardroom
 
 # Property values: two overrides the Lobby Display declares over its product's
 # contract, so the effective-properties panel teaches direct-vs-inherited.
@@ -190,3 +212,45 @@ property_values:
   - component: lobby-display
     property: firmware_version
     value: 2.1.4
+
+# Two systems in one room: a divisible boardroom with an air wall down the middle.
+# This is the case a single system pointer on a component could never express, and
+# it is why membership is many-valued: the shared room bar feeds BOTH halves and is a
+# member of each, while the mics and displays belong to one half only.
+systems:
+  - name: boardroom-a
+    display_name: Boardroom A
+    standard: meeting-room
+    location: hq-west-2-boardroom
+  - name: boardroom-b
+    display_name: Boardroom B
+    standard: meeting-room
+    location: hq-west-2-boardroom
+
+# Membership without a job. The shared bar staffs the microphone role in both halves
+# (below, through assignment), but the power conditioner fills no declared role at
+# all: it is in the room, it is accounted for, and no role wants it. A model that
+# only knew about staffing would lose it.
+members:
+  - system: boardroom-a
+    component: boardroom-power
+
+# Staffing, which creates the membership as a side effect. boardroom-a is fully
+# staffed and reads healthy; boardroom-b is one microphone short of its quorum of
+# two, so it reads degraded and the Health panel names the reason.
+role_assignments:
+  - system: boardroom-a
+    role: room-mic
+    component: shared-bar
+  - system: boardroom-a
+    role: room-mic
+    component: boardroom-a-bar
+  - system: boardroom-a
+    role: main-display
+    component: boardroom-a-panel
+  - system: boardroom-b
+    role: room-mic
+    component: shared-bar
+  - system: boardroom-b
+    role: main-display
+    component: boardroom-b-panel

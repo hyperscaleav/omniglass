@@ -588,6 +588,22 @@ Example:
 omniglass component setTag <name> --key key --value value
 ```
 
+### `omniglass component systems`
+
+List the systems a component is in
+
+```
+omniglass component systems <name>
+```
+
+The systems this component is bound into, ordered by name. A component may belong to several: a rack DSP serving three rooms is a member of all three, and each of them depends on it. Exactly one membership may be marked primary, the default for a question asked without a system in hand. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+
+Example:
+
+```sh
+omniglass component systems <name>
+```
+
 ### `omniglass component update`
 
 Update a component
@@ -2917,6 +2933,22 @@ omniglass statu list
 
 Commands for the system resource
 
+### `omniglass system add-member`
+
+Put a component in a system
+
+```
+omniglass system add-member <name> <component>
+```
+
+Binds this component into the system. Idempotent. A component's first membership becomes its primary with nobody asking, so a component in exactly one system never has to think about the concept; a later membership does not take that default away. Gated by system:update; an out-of-scope system is a non-disclosing 404.
+
+Example:
+
+```sh
+omniglass system add-member <name> <component>
+```
+
 ### `omniglass system assign-role`
 
 Assign a component to a role
@@ -3089,6 +3121,22 @@ Example:
 omniglass system listTags <name>
 ```
 
+### `omniglass system members`
+
+List the components in a system
+
+```
+omniglass system members <name>
+```
+
+The components bound into this system, ordered by name. Membership is what a role attaches to: every component staffing a role here is a member, and a member may also carry no role at all (a power conditioner is in the room without filling a declared slot). Gated by system:read; an out-of-scope system is a non-disclosing 404.
+
+Example:
+
+```sh
+omniglass system members <name>
+```
+
 ### `omniglass system properties`
 
 List a system's effective properties
@@ -3103,6 +3151,22 @@ Example:
 
 ```sh
 omniglass system properties <name>
+```
+
+### `omniglass system remove-member`
+
+Take a component out of a system
+
+```
+omniglass system remove-member <name> <component>
+```
+
+Unbinds this component from the system. Refused with a 409 while it still fills a role here, since removing it would leave the system staffed by a non-member: unassign the role first. A component that was not a member is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.
+
+Example:
+
+```sh
+omniglass system remove-member <name> <component>
 ```
 
 ### `omniglass system removeTag`
@@ -3139,6 +3203,22 @@ Example:
 
 ```sh
 omniglass system roles <name>
+```
+
+### `omniglass system set-primary-member`
+
+Make this the component's default system
+
+```
+omniglass system set-primary-member <name> <component>
+```
+
+Moves the component's default to this membership. The default answers questions asked without a system in hand; it does not decide anything that names a system explicitly. A component that was not a member here is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.
+
+Example:
+
+```sh
+omniglass system set-primary-member <name> <component>
 ```
 
 ### `omniglass system set-property`

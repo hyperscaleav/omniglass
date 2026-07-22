@@ -38,7 +38,37 @@ type Doc struct {
 	Files             []File            `yaml:"files"`
 	ProductProperties []ProductProperty `yaml:"product_properties"`
 	Components        []Component       `yaml:"components"`
+	Systems           []System          `yaml:"systems"`
+	Members           []Member          `yaml:"members"`
+	RoleAssignments   []RoleAssignment  `yaml:"role_assignments"`
 	PropertyValues    []PropertyValue   `yaml:"property_values"`
+}
+
+// System is one example system: a thing in a room that either works or does not.
+// Standard names a boot-seeded blueprint whose roles it inherits live; Location
+// names a fixture location.
+type System struct {
+	Name        string `yaml:"name"`
+	DisplayName string `yaml:"display_name"`
+	Standard    string `yaml:"standard"`
+	Location    string `yaml:"location"`
+}
+
+// Member binds a component into a system without giving it a job. The dev estate
+// needs the case explicitly, because it is the one an assignment cannot produce: a
+// component that is in the room and accounted for while filling no declared role.
+type Member struct {
+	System    string `yaml:"system"`
+	Component string `yaml:"component"`
+}
+
+// RoleAssignment staffs one of a system's roles. It also produces membership as a
+// side effect, which is the point: the seed shows both ways a component comes to
+// be in a system.
+type RoleAssignment struct {
+	System    string `yaml:"system"`
+	Role      string `yaml:"role"`
+	Component string `yaml:"component"`
 }
 
 // ProductProperty is one line the dev estate adds to a product's declared-property
@@ -330,6 +360,46 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 		}
 		if _, err := gw.CreateComponent(ctx, actorID, spec, all); err != nil {
 			return fmt.Errorf("devseed: create component %q: %w", c.Name, err)
+		}
+	}
+
+	// Systems: the thing in the room that either works or does not, conforming to a
+	// boot-seeded standard whose roles it inherits live. Locations must already be
+	// seeded for the placement to resolve. Idempotent the same way a component is.
+	for _, s := range doc.Systems {
+		if _, err := gw.GetSystem(ctx, s.Name, all); err == nil {
+			continue
+		} else if !errors.Is(err, storage.ErrSystemNotFound) {
+			return fmt.Errorf("devseed: check system %q: %w", s.Name, err)
+		}
+		spec := storage.SystemSpec{Name: s.Name, DisplayName: s.DisplayName}
+		if s.Standard != "" {
+			std := s.Standard
+			spec.StandardID = &std
+		}
+		if s.Location != "" {
+			loc := s.Location
+			spec.LocationName = &loc
+		}
+		if _, err := gw.CreateSystem(ctx, actorID, spec, all); err != nil {
+			return fmt.Errorf("devseed: create system %q: %w", s.Name, err)
+		}
+	}
+
+	// Members: a component bound into a system without a job, which is the case an
+	// assignment cannot produce. AddMember is idempotent, so a re-run changes
+	// nothing and no existence check is needed.
+	for _, m := range doc.Members {
+		if err := gw.AddMember(ctx, actorID, m.System, m.Component, all); err != nil {
+			return fmt.Errorf("devseed: add member %s/%s: %w", m.System, m.Component, err)
+		}
+	}
+
+	// Role assignments: staffing, which also creates the membership. Last of the
+	// three, since it needs both ends to exist. Idempotent on conflict.
+	for _, ra := range doc.RoleAssignments {
+		if err := gw.AssignRole(ctx, actorID, ra.System, ra.Role, ra.Component, all); err != nil {
+			return fmt.Errorf("devseed: assign %s to %s/%s: %w", ra.Component, ra.System, ra.Role, err)
 		}
 	}
 

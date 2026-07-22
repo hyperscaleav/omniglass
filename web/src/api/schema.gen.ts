@@ -520,6 +520,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/components/{name}/memberships": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the systems a component is in
+         * @description The systems this component is bound into, ordered by name. A component may belong to several: a rack DSP serving three rooms is a member of all three, and each of them depends on it. Exactly one membership may be marked primary, the default for a question asked without a system in hand. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+         */
+        get: operations["list-component-memberships"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/components/{name}/properties": {
         parameters: {
             query?: never;
@@ -2288,6 +2308,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/systems/{name}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the components in a system
+         * @description The components bound into this system, ordered by name. Membership is what a role attaches to: every component staffing a role here is a member, and a member may also carry no role at all (a power conditioner is in the room without filling a declared slot). Gated by system:read; an out-of-scope system is a non-disclosing 404.
+         */
+        get: operations["list-system-members"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/systems/{name}/members/{component}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put a component in a system
+         * @description Binds this component into the system. Idempotent. A component's first membership becomes its primary with nobody asking, so a component in exactly one system never has to think about the concept; a later membership does not take that default away. Gated by system:update; an out-of-scope system is a non-disclosing 404.
+         */
+        put: operations["add-system-member"];
+        post?: never;
+        /**
+         * Take a component out of a system
+         * @description Unbinds this component from the system. Refused with a 409 while it still fills a role here, since removing it would leave the system staffed by a non-member: unassign the role first. A component that was not a member is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.
+         */
+        delete: operations["remove-system-member"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/systems/{name}/members/{component}:setPrimary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Make this the component's default system
+         * @description Moves the component's default to this membership. The default answers questions asked without a system in hand; it does not decide anything that names a system explicitly. A component that was not a member here is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.
+         */
+        post: operations["set-primary-member"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/systems/{name}/properties": {
         parameters: {
             query?: never;
@@ -3827,6 +3911,16 @@ export interface components {
             readonly $schema?: string;
             capabilities: components["schemas"]["CapabilityBody"][] | null;
         };
+        ListComponentMembershipsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListComponentMembershipsOutputBody.json
+             */
+            readonly $schema?: string;
+            component: string;
+            memberships: components["schemas"]["SystemMemberBody"][] | null;
+        };
         ListComponentsOutputBody: {
             /**
              * Format: uri
@@ -4024,6 +4118,16 @@ export interface components {
              */
             readonly $schema?: string;
             standards: components["schemas"]["StandardBody"][] | null;
+        };
+        ListSystemMembersOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListSystemMembersOutputBody.json
+             */
+            readonly $schema?: string;
+            members: components["schemas"]["SystemMemberBody"][] | null;
+            system: string;
         };
         ListSystemRolesOutputBody: {
             /**
@@ -4720,10 +4824,28 @@ export interface components {
             };
             id: string;
             location_id?: string;
+            /**
+             * Format: int64
+             * @description How many components are bound into this system
+             */
+            member_count: number;
             name: string;
             parent_id?: string;
             /** @description The standard this system conforms to; omitted for a one-off system */
             standard_id?: string;
+        };
+        SystemMemberBody: {
+            /** @description Technical name of the component */
+            component: string;
+            /** @description Whether this membership is the component's default when no system is given */
+            primary: boolean;
+            /** @description Technical name of the system */
+            system: string;
+            /**
+             * Format: int64
+             * @description How many systems this component belongs to in total; more than one means it is shared
+             */
+            system_count: number;
         };
         SystemPropertiesOutputBody: {
             /**
@@ -6188,6 +6310,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EventsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-component-memberships": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Technical name of the component */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListComponentMembershipsOutputBody"];
                 };
             };
             /** @description Error */
@@ -10269,6 +10423,134 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["EstateHealthOutputBody"];
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-system-members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Technical name of the system */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListSystemMembersOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "add-system-member": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Technical name of the system */
+                name: string;
+                /** @description Technical name of the component */
+                component: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "remove-system-member": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Technical name of the system */
+                name: string;
+                /** @description Technical name of the component */
+                component: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "set-primary-member": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Technical name of the system */
+                name: string;
+                /** @description Technical name of the component */
+                component: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {
