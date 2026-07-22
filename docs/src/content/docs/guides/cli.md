@@ -178,7 +178,8 @@ normalizes it to a 256x256 JPEG. An administrator manages **any** principal's pi
 ## Secrets
 
 The [secret](/architecture/variables/) commands are generated like every other resource. `secret`
-covers the encrypted values and `type secret` lists the shape registry. Output is masked JSON, the same as the console; plaintext lives
+covers the encrypted values, `secret-type` lists the shape registry, and `component
+effective-secret` reads the masked cascade onto one component. Output is masked JSON, the same as the console; plaintext lives
 behind `reveal`, which the server audits and which only admin and owner may call.
 
 ```sh
@@ -189,12 +190,13 @@ omniglass secret create --name core-snmp --secret-type snmp-community \
 omniglass secret update <id> --fields '{"community":"s3cret"}'   # an omitted field keeps its value
 omniglass secret reveal <id>                        # audited plaintext decrypt (secret:reveal)
 omniglass secret delete <id>
+
+omniglass component effective-secret list codec-1   # the masked cascade resolved onto a component
 ```
 
-There is no command that resolves the cascade onto one component for either secrets or
-variables: the resolvers exist in the Storage Gateway but no API route exposes them, so no
-command generates ([#359](https://github.com/hyperscaleav/omniglass/issues/359)). Only
-`component effective-tag list` has its route today.
+The effective read answers **which** secret applies to a device and where it comes from, never
+what it contains: fields are masked exactly as the directory masks them, and plaintext is only
+ever `secret reveal`. It rides `secret:read`, which the viewer floor does not carry.
 
 `--owner-kind` is one of `platform | location | system | component`; `--owner` names the owning entity
 and is omitted for a `platform` secret (the install-wide tier, which needs an all-scope grant plus
@@ -203,7 +205,8 @@ and is omitted for a `platform` secret (the install-wide tier, which needs an al
 ## Variables
 
 The [variable](/architecture/variables/) commands are generated the same way. `variable` covers the
-plaintext values. There is no reveal: the value is shown in the clear.
+plaintext values and `component effective-variable` reads the cascade onto one component. There is
+no reveal: the value is shown in the clear.
 
 ```sh
 omniglass variable list                             # the all-scope admin directory
@@ -213,7 +216,14 @@ omniglass variable create --name retry --value-type json --owner-kind platform \
   --value '{"retries":3,"backoff":"1s"}'
 omniglass variable update <id> --value 60           # validated against the fixed value_type
 omniglass variable delete <id>
+
+omniglass component effective-variable list codec-1   # the cascade resolved onto a component
 ```
+
+Both effective reads return the **winner and the candidates it beat**, with the tier each came
+from, so the answer explains itself rather than just asserting a value. The variable cascade
+resolves the system band from the component's **primary** membership; resolving against a named
+system is offered only by `component effective-tag list` today.
 
 `--value-type` is one of `string | int | float | bool | json`. `--value` is **parsed as JSON**, so a
 bare `30`, `true`, or `{"k":"v"}` sends the number, the boolean, or the object; a bare word like `HDMI1`

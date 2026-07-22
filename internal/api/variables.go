@@ -77,7 +77,62 @@ type updateVariableInput struct {
 // operators), delete by variable:delete (admin, owner). A write at the platform
 // tier needs platform:<action> on top: an all-scoped operator reaches every
 // entity's variable without reaching the install-wide one.
+// resolvedVariableBody is one entry in a component's effective-variables cascade:
+// the variable, where in the chain its owner sits, and whether it is the winner or
+// a shadowed candidate. It mirrors resolvedTagBody, because it is the same cascade.
+type resolvedVariableBody struct {
+	ID        string  `json:"id"`
+	Name      string  `json:"name"`
+	ValueType string  `json:"value_type"`
+	OwnerKind string  `json:"owner_kind"`
+	OwnerID   *string `json:"owner_id,omitempty" doc:"The owning entity's id, the canonical handle; absent for a platform owner"`
+	OwnerName string  `json:"owner_name,omitempty"`
+	Band      int     `json:"band" doc:"Cascade tier: 0 platform, 1 location, 2 system, 3 component"`
+	Depth     int     `json:"depth" doc:"Distance up the tier's tree from the component (0 nearest)"`
+	Winner    bool    `json:"winner" doc:"True for the resolved value; false for a shadowed candidate"`
+	Value     any     `json:"value" doc:"The value, shape given by value_type"`
+}
+
+type effectiveVariablesInput struct {
+	Name string `path:"name" doc:"The component's name"`
+}
+
+type effectiveVariablesOutput struct {
+	Body struct {
+		Variables []resolvedVariableBody `json:"variables"`
+	}
+}
+
 func registerVariableRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
+	huma.Register(api, a.gated(huma.Operation{
+		OperationID: "effective-variables",
+		Method:      http.MethodGet,
+		Path:        "/components/{name}/effective-variables",
+		Summary:     "Effective variables for a component",
+		Description: "Resolves the variables that cascade onto a component (platform -> location -> system -> component): names union, values override most-specific-wins, with the winner and the shadowed candidates it overrode. The system band comes from the component's PRIMARY membership; resolving against a named system is not offered here yet, unlike effective-tags. Gated by variable:read; the component must be in the caller's component read scope.",
+	}, "variable", "read"), func(ctx context.Context, in *effectiveVariablesInput) (*effectiveVariablesOutput, error) {
+		comp, err := gw.GetComponent(ctx, in.Name, a.scopeFor(ctx, "component", "read"))
+		if err != nil {
+			return nil, mapComponentErr(err)
+		}
+		resolved, err := gw.ResolveVariables(ctx, comp.ID, a.scopeFor(ctx, "variable", "read"))
+		if err != nil {
+			return nil, mapVariableErr(err)
+		}
+		out := &effectiveVariablesOutput{}
+		out.Body.Variables = make([]resolvedVariableBody, 0, len(resolved))
+		for i := range resolved {
+			r := &resolved[i]
+			out.Body.Variables = append(out.Body.Variables, resolvedVariableBody{
+				ID: r.ID, Name: r.Name, ValueType: r.ValueType,
+				OwnerKind: r.OwnerKind, OwnerID: r.OwnerID, OwnerName: r.OwnerName,
+				Band: r.Band, Depth: r.Depth, Winner: r.Winner,
+				Value: decodeVariableValue(r.Value),
+			})
+		}
+		return out, nil
+	})
+
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-variables",
 		Method:      http.MethodGet,

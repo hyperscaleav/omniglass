@@ -120,7 +120,66 @@ func (a *authenticator) canSecretAdmin(ctx context.Context, action string) bool 
 	return ok && perms.Allows("secret", action, "admin")
 }
 
+// resolvedSecretBody is one entry in a component's effective-secrets cascade. Its
+// fields are MASKED exactly as the directory masks them: this surface answers
+// which secret applies to a device and where it comes from, never what it
+// contains. Plaintext stays behind the audited reveal.
+type resolvedSecretBody struct {
+	ID         string            `json:"id"`
+	Name       string            `json:"name"`
+	SecretType string            `json:"secret_type"`
+	OwnerKind  string            `json:"owner_kind"`
+	OwnerID    *string           `json:"owner_id,omitempty" doc:"The owning entity's id, the canonical handle; absent for a platform owner"`
+	OwnerName  string            `json:"owner_name,omitempty"`
+	Band       int               `json:"band" doc:"Cascade tier: 0 platform, 1 location, 3 component"`
+	Depth      int               `json:"depth" doc:"Distance up the tier's tree from the component (0 nearest)"`
+	Winner     bool              `json:"winner" doc:"True for the resolved secret; false for a shadowed candidate"`
+	Fields     []secretFieldBody `json:"fields"`
+}
+
+type effectiveSecretsInput struct {
+	Name string `path:"name" doc:"The component's name"`
+}
+
+type effectiveSecretsOutput struct {
+	Body struct {
+		Secrets []resolvedSecretBody `json:"secrets"`
+	}
+}
+
 func registerSecretRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
+	huma.Register(api, a.gated(huma.Operation{
+		OperationID: "effective-secrets",
+		Method:      http.MethodGet,
+		Path:        "/components/{name}/effective-secrets",
+		Summary:     "Effective secrets for a component",
+		Description: "Resolves the secrets that cascade onto a component (platform -> location -> component), with the winner and the shadowed candidates it overrode. There is NO system band: a secret is device-facing, and the room a component happens to serve is the wrong owner for a credential the device itself answers with. Fields are masked, as in the directory; plaintext is only ever the audited reveal. Gated by secret:read, which the viewer floor does not carry, and admin-sensitive secrets appear only to the admin tier.",
+	}, "secret", "read"), func(ctx context.Context, in *effectiveSecretsInput) (*effectiveSecretsOutput, error) {
+		comp, err := gw.GetComponent(ctx, in.Name, a.scopeFor(ctx, "component", "read"))
+		if err != nil {
+			return nil, mapComponentErr(err)
+		}
+		resolved, err := gw.ResolveSecrets(ctx, comp.ID, a.scopeFor(ctx, "secret", "read"), a.canSecretAdmin(ctx, "read"))
+		if err != nil {
+			return nil, mapSecretErr(err)
+		}
+		out := &effectiveSecretsOutput{}
+		out.Body.Secrets = make([]resolvedSecretBody, 0, len(resolved))
+		for i := range resolved {
+			r := &resolved[i]
+			fields := make([]secretFieldBody, 0, len(r.Fields))
+			for _, f := range r.Fields {
+				fields = append(fields, secretFieldBody{Name: f.Name, Value: f.Value, Secret: f.Secret})
+			}
+			out.Body.Secrets = append(out.Body.Secrets, resolvedSecretBody{
+				ID: r.ID, Name: r.Name, SecretType: r.SecretType,
+				OwnerKind: r.OwnerKind, OwnerID: r.OwnerID, OwnerName: r.OwnerName,
+				Band: r.Band, Depth: r.Depth, Winner: r.Winner, Fields: fields,
+			})
+		}
+		return out, nil
+	})
+
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-secret-types",
 		Method:      http.MethodGet,
