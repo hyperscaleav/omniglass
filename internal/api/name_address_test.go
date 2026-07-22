@@ -26,6 +26,7 @@ var referenceFields = map[string]string{
 	"parent_id":   "parent",
 	"location_id": "location",
 	"system_id":   "system",
+	"owner_id":    "owner_name",
 }
 
 // Schemas where a *_id field addresses something with no name to pair it with.
@@ -39,7 +40,6 @@ var idOnlyIsCorrect = map[string]string{
 	"group_id":     "a principal group is uuid-keyed",
 	"target_id":    "an impersonation target is a principal, as above",
 	"node_id":      "a node is addressed by its enrollment identity, which is its primary key",
-	"owner_id":     "the tag, variable, and secret owner arcs pair with owner_name; see #346",
 }
 
 // Catalog ids that ARE names, because the registry is keyed by a written slug.
