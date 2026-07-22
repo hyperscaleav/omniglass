@@ -4,8 +4,7 @@ import FlatList, { type FlatColumn } from "../components/FlatList";
 import TreeSelect from "../components/TreeSelect";
 import KVStacked from "../components/KVStacked";
 import FieldRow from "../components/FieldRow";
-import Button from "../components/Button";
-import { DrawerFooter } from "../components/Drawer";
+import { useFormActions } from "../lib/formactions";
 import { Plus } from "../components/icons";
 import { type TreeNode } from "../lib/treeselect";
 import {
@@ -245,8 +244,15 @@ function CreateVariableForm(p: { onCreated: () => void }): JSX.Element {
     }
   });
 
-  async function submit(e: Event) {
-    e.preventDefault();
+  useFormActions().bind({
+    submitLabel: "Create variable",
+    submitIcon: Plus,
+    submit: () => void submit(),
+    busy,
+    disabled: () => !name().trim() || (ownerKind() !== "global" && !owner()),
+  });
+
+  async function submit() {
     setBusy(true);
     setFormErr(null);
     let parsed: unknown;
@@ -275,7 +281,7 @@ function CreateVariableForm(p: { onCreated: () => void }): JSX.Element {
   }
 
   return (
-    <form class="flex min-h-full flex-col gap-4" onSubmit={submit}>
+    <form class="flex flex-col gap-4" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
@@ -306,9 +312,6 @@ function CreateVariableForm(p: { onCreated: () => void }): JSX.Element {
       <FieldRow label="Value" hint={valueType() === "json" ? "A JSON object, array, or scalar." : valueType() === "bool" ? "true or false." : undefined}>
         <ValueInput valueType={valueType()} value={value()} onInput={setValue} />
       </FieldRow>
-      <DrawerFooter>
-        <Button type="submit" intent="action" icon={Plus} disabled={busy() || !name().trim() || (ownerKind() !== "global" && !owner())}>Create variable</Button>
-      </DrawerFooter>
     </form>
   );
 }

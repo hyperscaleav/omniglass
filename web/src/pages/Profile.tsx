@@ -1,12 +1,13 @@
 import { Show, For, createSignal, createEffect, createResource } from "solid-js";
 import PasswordField from "../components/PasswordField";
 import Button from "../components/Button";
-import Drawer, { DrawerFooter } from "../components/Drawer";
+import Drawer from "../components/Drawer";
+import { useFormActions } from "../lib/formactions";
 import SessionsList from "../components/SessionsList";
 import { passwordError, isPasswordPolicyMessage } from "../lib/validate";
 import { useMe, useUpdateProfile, useChangePassword, setMyAvatar, removeMyAvatar, fetchMyAvatar } from "../lib/auth";
 import { useSessions, useRevokeSession, useRevokeAllSelfSessions, createSelfToken, type Session } from "../lib/sessions";
-import { Check, Copy, Key, LogOut, Plus, Save, Trash, X } from "../components/icons";
+import { Check, Copy, Key, LogOut, Plus, Save, Trash } from "../components/icons";
 
 // Profile is the signed-in operator's own account surface: edit your display name
 // and email, change your password, and (pedagogically) see the identity model you
@@ -63,8 +64,7 @@ export default function Profile() {
     setNewToken(null);
     setTokenOpen(true);
   }
-  async function createToken(e: SubmitEvent) {
-    e.preventDefault();
+  async function createToken() {
     setTokenBusy(true);
     setTokenErr(null);
     const ttl = typeof tokenTtl() === "number" ? (tokenTtl() as number) : undefined;
@@ -121,8 +121,7 @@ export default function Profile() {
   // The change-password form lives in a slide-over so the page stays a compact
   // Profile + Access, rather than a third stacked form.
   const [pwOpen, setPwOpen] = createSignal(false);
-  async function savePassword(e: SubmitEvent) {
-    e.preventDefault();
+  async function savePassword() {
     if (next() !== confirm()) {
       setPwMsg({ tone: "error", text: "The new passwords do not match." });
       return;
@@ -182,6 +181,129 @@ export default function Profile() {
       setAvatarMsg({ tone: "error", text: r.message });
     }
   }
+
+  // The slide-over bodies are components, not inline JSX, so that each one renders
+  // INSIDE the Drawer's action-slot provider and can register its own buttons. They
+  // close over this component's signals, so nothing is threaded through props. The
+  // token drawer has two: the create form, and the show-once reveal that replaces it,
+  // each binding its own action as it mounts.
+  const PasswordBody = () => {
+    useFormActions().bind({
+      submitLabel: "Change password",
+      submitIcon: Save,
+      submit: () => void savePassword(),
+      busy: pwBusy,
+      disabled: () => !current() || !next() || next() !== confirm() || !!passwordError(next(), human()?.username),
+      cancel: () => setPwOpen(false),
+    });
+    return (
+      <form onSubmit={(e) => { e.preventDefault(); void savePassword(); }} class="flex flex-col gap-3">
+        <div>
+          <label class="eyebrow mb-1.5 block" for="pw-current">Current password</label>
+          <input
+            id="pw-current"
+            type="password"
+            autocomplete="current-password"
+            class="input input-bordered w-full font-data"
+            value={current()}
+            onInput={(e) => setCurrent(e.currentTarget.value)}
+            disabled={pwBusy()}
+            required
+          />
+        </div>
+        <div>
+          <label class="eyebrow mb-1.5 block" for="pw-new">New password</label>
+          <PasswordField id="pw-new" value={next()} onInput={(v) => { setNext(v); setPwFieldError(null); }} username={human()?.username} disabled={pwBusy()} serverError={pwFieldError()} required generate />
+          <p class="mt-1 text-[11px] text-base-content/40">At least 12 characters, not a common password.</p>
+        </div>
+        <div>
+          <label class="eyebrow mb-1.5 block" for="pw-confirm">Confirm new password</label>
+          <input
+            id="pw-confirm"
+            type="password"
+            autocomplete="new-password"
+            class="input input-bordered w-full font-data"
+            value={confirm()}
+            onInput={(e) => setConfirm(e.currentTarget.value)}
+            disabled={pwBusy()}
+            required
+          />
+          <Show when={confirm() && next() !== confirm()}>
+            <p class="mt-1 text-[11px] text-error">Passwords do not match.</p>
+          </Show>
+        </div>
+        <Note note={pwMsg()} />
+      </form>
+    );
+  };
+
+  const TokenFormBody = () => {
+    useFormActions().bind({
+      submitLabel: "Create token",
+      submitIcon: Plus,
+      submit: () => void createToken(),
+      busy: tokenBusy,
+      disabled: () => !tokenDesc().trim(),
+      cancel: () => setTokenOpen(false),
+    });
+    return (
+      <form onSubmit={(e) => { e.preventDefault(); void createToken(); }} class="flex flex-col gap-3">
+        <div>
+          <label class="eyebrow mb-1.5 block" for="tok-desc">Description</label>
+          <input
+            id="tok-desc"
+            class="input input-bordered w-full"
+            placeholder="What is this token for? (e.g. CI pipeline)"
+            value={tokenDesc()}
+            onInput={(e) => setTokenDesc(e.currentTarget.value)}
+            disabled={tokenBusy()}
+            required
+          />
+          <p class="mt-1 text-[11px] text-base-content/40">Required, so you can tell your tokens apart later.</p>
+        </div>
+        <div>
+          <label class="eyebrow mb-1.5 block" for="tok-ttl">Expires in (days)</label>
+          <input
+            id="tok-ttl"
+            type="number"
+            min="1"
+            max="365"
+            class="input input-bordered w-full font-data"
+            value={tokenTtl()}
+            onInput={(e) => setTokenTtl(e.currentTarget.value === "" ? "" : Number(e.currentTarget.value))}
+            disabled={tokenBusy()}
+          />
+          <p class="mt-1 text-[11px] text-base-content/40">Default 90, maximum 365. Every token is time-bounded.</p>
+        </div>
+        <Show when={tokenErr()}>
+          <div role="alert" class="alert alert-error alert-soft text-sm"><span>{tokenErr()}</span></div>
+        </Show>
+      </form>
+    );
+  };
+
+  const TokenRevealBody = () => {
+    useFormActions().bind({
+      submitLabel: "Done",
+      submitIcon: Check,
+      submit: () => setTokenOpen(false),
+    });
+    return (
+      <div class="flex flex-col gap-3">
+        <div role="alert" class="alert alert-success alert-soft text-sm">
+          <span>Token created. Copy it now: for your security it is not shown again.</span>
+        </div>
+        <div>
+          <label class="eyebrow mb-1.5 block" for="tok-secret">Your new token</label>
+          <div class="flex gap-2">
+            <input id="tok-secret" readonly class="input input-bordered w-full font-data text-xs" value={newToken()!} />
+            <Button icon={Copy} onClick={copyToken}>Copy</Button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
 
   return (
     <section class="og-stack flex flex-col">
@@ -333,106 +455,12 @@ export default function Profile() {
       </div>
 
       <Drawer open={pwOpen()} onClose={() => setPwOpen(false)} title="Change password">
-        <form onSubmit={savePassword} class="flex min-h-full flex-col gap-3">
-          <div>
-            <label class="eyebrow mb-1.5 block" for="pw-current">Current password</label>
-            <input
-              id="pw-current"
-              type="password"
-              autocomplete="current-password"
-              class="input input-bordered w-full font-data"
-              value={current()}
-              onInput={(e) => setCurrent(e.currentTarget.value)}
-              disabled={pwBusy()}
-              required
-            />
-          </div>
-          <div>
-            <label class="eyebrow mb-1.5 block" for="pw-new">New password</label>
-            <PasswordField id="pw-new" value={next()} onInput={(v) => { setNext(v); setPwFieldError(null); }} username={human()?.username} disabled={pwBusy()} serverError={pwFieldError()} required generate />
-            <p class="mt-1 text-[11px] text-base-content/40">At least 12 characters, not a common password.</p>
-          </div>
-          <div>
-            <label class="eyebrow mb-1.5 block" for="pw-confirm">Confirm new password</label>
-            <input
-              id="pw-confirm"
-              type="password"
-              autocomplete="new-password"
-              class="input input-bordered w-full font-data"
-              value={confirm()}
-              onInput={(e) => setConfirm(e.currentTarget.value)}
-              disabled={pwBusy()}
-              required
-            />
-            <Show when={confirm() && next() !== confirm()}>
-              <p class="mt-1 text-[11px] text-error">Passwords do not match.</p>
-            </Show>
-          </div>
-          <Note note={pwMsg()} />
-          <DrawerFooter>
-            <Button icon={X} onClick={() => setPwOpen(false)} disabled={pwBusy()}>Cancel</Button>
-            <Button type="submit" intent="action" icon={Save} loading={pwBusy()} disabled={!current() || !next() || next() !== confirm() || !!passwordError(next(), human()?.username)}>Change password</Button>
-          </DrawerFooter>
-        </form>
+        <PasswordBody />
       </Drawer>
 
       <Drawer open={tokenOpen()} onClose={() => setTokenOpen(false)} title="Create API token">
-        <Show
-          when={newToken()}
-          fallback={
-            <form onSubmit={createToken} class="flex min-h-full flex-col gap-3">
-              <div>
-                <label class="eyebrow mb-1.5 block" for="tok-desc">Description</label>
-                <input
-                  id="tok-desc"
-                  class="input input-bordered w-full"
-                  placeholder="What is this token for? (e.g. CI pipeline)"
-                  value={tokenDesc()}
-                  onInput={(e) => setTokenDesc(e.currentTarget.value)}
-                  disabled={tokenBusy()}
-                  required
-                />
-                <p class="mt-1 text-[11px] text-base-content/40">Required, so you can tell your tokens apart later.</p>
-              </div>
-              <div>
-                <label class="eyebrow mb-1.5 block" for="tok-ttl">Expires in (days)</label>
-                <input
-                  id="tok-ttl"
-                  type="number"
-                  min="1"
-                  max="365"
-                  class="input input-bordered w-full font-data"
-                  value={tokenTtl()}
-                  onInput={(e) => setTokenTtl(e.currentTarget.value === "" ? "" : Number(e.currentTarget.value))}
-                  disabled={tokenBusy()}
-                />
-                <p class="mt-1 text-[11px] text-base-content/40">Default 90, maximum 365. Every token is time-bounded.</p>
-              </div>
-              <Show when={tokenErr()}>
-                <div role="alert" class="alert alert-error alert-soft text-sm"><span>{tokenErr()}</span></div>
-              </Show>
-              <DrawerFooter>
-                <Button icon={X} onClick={() => setTokenOpen(false)} disabled={tokenBusy()}>Cancel</Button>
-                <Button type="submit" intent="action" icon={Plus} loading={tokenBusy()} disabled={!tokenDesc().trim()}>Create token</Button>
-              </DrawerFooter>
-            </form>
-          }
-        >
-          <div class="flex min-h-full flex-col gap-3">
-            <div role="alert" class="alert alert-success alert-soft text-sm">
-              <span>Token created. Copy it now: for your security it is not shown again.</span>
-            </div>
-            <div>
-              <label class="eyebrow mb-1.5 block" for="tok-secret">Your new token</label>
-              <div class="flex gap-2">
-                <input id="tok-secret" readonly class="input input-bordered w-full font-data text-xs" value={newToken()!} />
-                <Button icon={Copy} onClick={copyToken}>Copy</Button>
-              </div>
-            </div>
-            <DrawerFooter>
-              <Button intent="action" icon={Check} onClick={() => setTokenOpen(false)}>Done</Button>
-            </DrawerFooter>
-          </div>
+        <Show when={newToken()} fallback={<TokenFormBody />}>
+          <TokenRevealBody />
         </Show>
       </Drawer>
     </section>

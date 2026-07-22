@@ -17,7 +17,7 @@ import {
 import BladeStack from "./BladeStack";
 import Button from "./Button";
 import KVStacked from "./KVStacked";
-import { type BladeDef, type BladeEdit, type BladeRef, createBladeController, createEditSlot, useBladeEdit } from "../lib/blades";
+import { type BladeDef, type BladeEdit, type BladeRef, BladesContext, createBladeController, createEditSlot, useBladeEdit } from "../lib/blades";
 
 // TreeList: the one config-driven tree-list body (composing ListShell), the inventory shell. Every entity page (Components,
 // Systems, Locations) is a config over this, never a fork. It owns the filter
@@ -636,7 +636,12 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
   const isCreate = () => cfg.focus?.() === "create" && !!cfg.renderCreate;
 
   return (
-    <>
+    // The blade controller is shared through context, not just handed to BladeStack:
+    // a blade BODY (an interface blade drilling to its component) calls useBlades to
+    // push or pop, and without the provider it throws before it renders. FlatList has
+    // always done this; TreeList did not, which left both interface blades dead on
+    // every TreeList page (#336).
+    <BladesContext.Provider value={blades}>
       <Show when={cfg.error?.()}>
         <div role="alert" class="alert alert-error alert-soft mb-4 text-sm">
           <span>Could not load {cfg.entity.plural.toLowerCase()}: {describeError(cfg.error?.())}</span>
@@ -663,6 +668,6 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
           </Drawer>
         )}
       </Show>
-    </>
+    </BladesContext.Provider>
   );
 }

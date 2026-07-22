@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { useNavigate, useParams } from "@solidjs/router";
 import TreeList, { type FormState, type ListConfig, type ListCtx, type ListNode, type PageDescriptor } from "../components/TreeList";
 import Button from "../components/Button";
-import { DrawerFooter } from "../components/Drawer";
+import { useFormActions } from "../lib/formactions";
 import { Download, Plus, Trash } from "../components/icons";
 import {
   type FileRow,
@@ -216,6 +216,20 @@ function FileForm(props: { form: FormState<FileNode>; close: () => void; ctx: Li
   // toggle otherwise so the operator is not offered a choice the server rejects.
   const canSetSensitive = () => can(me.data, "file", "create", "admin");
 
+  // Bound by the create body, not here: a file has no edit path, so the shell must
+  // not draw an Upload bar over the cannot-be-edited note. The binding mounts and
+  // unmounts with the form it belongs to.
+  const UploadAction = () => {
+    useFormActions().bind({
+      submitLabel: "Upload file",
+      submitIcon: Plus,
+      submit: () => void submit(),
+      busy,
+      disabled: () => content() === null,
+    });
+    return null;
+  };
+
   function onPick(input: HTMLInputElement) {
     const f = input.files?.[0];
     if (!f) {
@@ -236,8 +250,7 @@ function FileForm(props: { form: FormState<FileNode>; close: () => void; ctx: Li
     reader.readAsDataURL(f);
   }
 
-  async function submit(e: Event) {
-    e.preventDefault();
+  async function submit() {
     const c = content();
     if (c === null) {
       setFormErr("Choose a file to upload.");
@@ -266,7 +279,8 @@ function FileForm(props: { form: FormState<FileNode>; close: () => void; ctx: Li
       when={props.form.mode === "create"}
       fallback={<p class="text-sm text-base-content/50">Files cannot be edited. Delete and re-upload to replace one.</p>}
     >
-      <form class="flex min-h-full flex-col gap-4" onSubmit={submit}>
+      <form class="flex flex-col gap-4" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
+        <UploadAction />
         <Show when={formErr()}>
           <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
         </Show>
@@ -285,9 +299,6 @@ function FileForm(props: { form: FormState<FileNode>; close: () => void; ctx: Li
             <span>Sensitive (only the admin tier can see or download it)</span>
           </label>
         </Show>
-        <DrawerFooter>
-          <Button type="submit" intent="action" icon={Plus} loading={busy()} disabled={content() === null}>Upload file</Button>
-        </DrawerFooter>
       </form>
     </Show>
   );

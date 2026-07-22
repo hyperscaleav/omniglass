@@ -1,6 +1,5 @@
 import { For, Show, createEffect, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
-import Button from "./Button";
 import { Sliders } from "./icons";
 import KVStacked from "./KVStacked";
 import {
@@ -194,7 +193,6 @@ function InterfaceCreateBody(props: { component: string }): JSX.Element {
   return (
     <CreateInterfaceForm
       component={props.component}
-      close={() => blades.pop()}
       onCreated={(created) => {
         void qc.invalidateQueries({ queryKey: REACHABILITY_KEY(props.component) });
         blades.pop();
@@ -209,7 +207,7 @@ function InterfaceCreateBody(props: { component: string }): JSX.Element {
 // `component` is set the interface always belongs to it, so the form pre-sets that
 // component and hides the picker. On success it invalidates the list and hands the
 // created interface to onCreated, which opens its detail blade.
-function CreateInterfaceForm(props: { close: () => void; onCreated: (i: Interface) => void; component?: string }) {
+function CreateInterfaceForm(props: { onCreated: (i: Interface) => void; component?: string }) {
   const qc = useQueryClient();
   const components = useQuery(() => ({ queryKey: COMPONENTS_KEY, queryFn: () => listComponents(), enabled: !props.component }));
   const [type, setType] = createSignal<string>(INTERFACE_TYPES[0]);
@@ -219,8 +217,16 @@ function CreateInterfaceForm(props: { close: () => void; onCreated: (i: Interfac
   const [busy, setBusy] = createSignal(false);
   const [err, setErr] = createSignal<string | null>(null);
 
-  async function submit(e: SubmitEvent) {
-    e.preventDefault();
+  // This create form is hosted on the BLADE stack, not in a Drawer, so its action
+  // registers on the blade's footer slot rather than the Drawer's. Same contract
+  // either way: the body declares what the button does and the shell draws it. No
+  // Cancel, because a blade already has two ways out (the header close and Back)
+  // and every other blade in the stack reads the same.
+  useBladeEdit().bind({
+    primary: () => ({ label: "Create interface", onClick: () => void submit(), busy }),
+  });
+
+  async function submit() {
     setBusy(true);
     setErr(null);
     try {
@@ -240,7 +246,7 @@ function CreateInterfaceForm(props: { close: () => void; onCreated: (i: Interfac
   }
 
   return (
-    <form class="flex flex-col gap-3" onSubmit={submit}>
+    <form class="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
       <p class="text-xs text-base-content/50">An API on a component, named by its protocol (its type). Its reachability task derives automatically.</p>
       <Show when={err()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
@@ -276,13 +282,6 @@ function CreateInterfaceForm(props: { close: () => void; onCreated: (i: Interfac
         <label class="eyebrow mb-1.5 block" for="new-iface-target">Target</label>
         <input id="new-iface-target" autocomplete="off" class="input input-bordered w-full font-data" value={target()} placeholder="10.0.0.1:22" onInput={(e) => setTarget(e.currentTarget.value)} disabled={busy()} />
         <p class="mt-1 text-[11px] text-base-content/40">host:port for tcp, host for icmp.</p>
-      </div>
-      <div class="mt-1 flex justify-end gap-2">
-        <Button type="button" intent="quiet" onClick={props.close} disabled={busy()}>Cancel</Button>
-        <Button type="submit" intent="action" disabled={busy()}>
-          <Show when={busy()}><span class="loading loading-spinner loading-xs" /></Show>
-          Create interface
-        </Button>
       </div>
     </form>
   );

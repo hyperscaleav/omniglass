@@ -2,8 +2,7 @@ import { Show, createEffect, createMemo, createSignal, on, type JSX } from "soli
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import KVStacked from "../components/KVStacked";
-import Button from "../components/Button";
-import { DrawerFooter } from "../components/Drawer";
+import { useFormActions } from "../lib/formactions";
 import { Plus } from "../components/icons";
 import {
   type Capability,
@@ -177,8 +176,15 @@ export function CreateCapabilityForm(p: { onCreated: (id: string) => void }): JS
   const [busy, setBusy] = createSignal(false);
   const [formErr, setFormErr] = createSignal<string | null>(null);
 
-  async function submit(e: Event) {
-    e.preventDefault();
+  useFormActions().bind({
+    submitLabel: "Create capability",
+    submitIcon: Plus,
+    submit: () => void submit(),
+    busy,
+    disabled: () => !id().trim() || !displayName().trim(),
+  });
+
+  async function submit() {
     setBusy(true);
     setFormErr(null);
     try {
@@ -196,7 +202,7 @@ export function CreateCapabilityForm(p: { onCreated: (id: string) => void }): JS
   }
 
   return (
-    <form class="flex min-h-full flex-col gap-4" onSubmit={submit}>
+    <form class="flex flex-col gap-4" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
@@ -206,9 +212,6 @@ export function CreateCapabilityForm(p: { onCreated: (id: string) => void }): JS
       <Field label="Display name">
         <input class="input input-bordered w-full" value={displayName()} placeholder="Microphone" onInput={(e) => setDisplayName(e.currentTarget.value)} />
       </Field>
-      <DrawerFooter>
-        <Button type="submit" intent="action" icon={Plus} disabled={busy() || !id().trim() || !displayName().trim()}>Create capability</Button>
-      </DrawerFooter>
     </form>
   );
 }

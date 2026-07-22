@@ -57,6 +57,17 @@ CLI is generated the same way. `make gen` regenerates all of it; a non-empty dif
 - **Blades are ephemeral, the full page is addressable.** A row opens a stacked blade (the Azure
   model); Maximize promotes it to the `/<entity>/:name` URL. The blade stack holds node ids, so a
   blade survives a refetch.
+- **The shell owns the action rail; the body registers, never draws.** A panel's buttons are
+  declared, not laid out: a blade body binds through `lib/blades` (`destructive`, `secondary`,
+  `primary`, plus the Edit/Save cycle) and a Drawer form body binds through `lib/formactions`
+  (`submitLabel`, `submitIcon`, `submit`, `busy`, `disabled`, `cancel`). `BladeStack` and `Drawer`
+  each draw the resulting bar, both through the one `PanelFooter` rail, so spacing and chrome
+  cannot drift between them. A body that renders its own button row is a bug, and
+  `rail-ownership.test.ts` fails on it. This replaced an opt-in `DrawerFooter` helper that each
+  form had to remember to wrap its buttons in: two forms forgot, and stayed wrong for months while
+  the helper was copied into six new pages around them. A convention can be forgotten; a slot
+  cannot. Full-page create forms still draw their own inline rail and converge when the CRUD form
+  primitive lands.
 - **Client preferences in localStorage, for now.** Column order/visibility and the widget board
   persist per browser; the eventual home is a per-principal user-preferences endpoint (a
   read/write swap), not the cascade.
@@ -112,7 +123,7 @@ themes at the same weight as the soft hues. The same reason keeps `type` values 
 
 ## Primitives (the reuse target)
 
-`ListView`, `FilterBar`, `Drawer`, `Donut`, `Badge`, `Fact`, `Page`, `DataTable`,
+`ListView`, `FilterBar`, `Drawer`, `PanelFooter`, `Donut`, `Badge`, `Fact`, `Page`, `DataTable`,
 `CommandPalette`, plus the `Sidebar` / `TopBar` shell. New inventory pages consume these; new
 surface *classes* (dashboards, alarms, explore, learn) add their own primitive rather than
 bending `ListView`.

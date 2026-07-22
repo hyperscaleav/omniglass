@@ -1,11 +1,19 @@
 import { type JSX, Show } from "solid-js";
 import { Dialog } from "@kobalte/core/dialog";
 import { X } from "./icons";
+import Button from "./Button";
+import PanelFooter from "./PanelFooter";
+import { FormActionsContext, createFormActions } from "../lib/formactions";
 
 // Drawer: a right slide-over on Kobalte Dialog. Kobalte owns focus-trap, focus
-// restore, Esc, scroll-lock, and the ARIA wiring; this only styles the shell.
-// headerExtra is a slot beside the close button (e.g. a maximize button for a
-// detail blade).
+// restore, Esc, scroll-lock, and the ARIA wiring; this styles the shell and owns
+// the action rail.
+//
+// The rail belongs to the Drawer, not to the body. A form body registers what its
+// buttons DO (see lib/formactions) and renders fields only; this draws the pinned
+// bar, exactly as BladeStack draws the blade's. A body that binds nothing gets no
+// bar, which is right for a read-only slide-over. headerExtra is a slot beside the
+// close button (e.g. a maximize button for a detail blade).
 export default function Drawer(props: {
   open: boolean;
   onClose: () => void;
@@ -13,6 +21,7 @@ export default function Drawer(props: {
   headerExtra?: JSX.Element;
   children: JSX.Element;
 }) {
+  const actions = createFormActions();
   return (
     <Dialog open={props.open} onOpenChange={(o) => !o && props.onClose()}>
       <Dialog.Portal>
@@ -27,23 +36,35 @@ export default function Drawer(props: {
               </Dialog.CloseButton>
             </div>
           </header>
-          <div class="flex-1 overflow-auto p-5">{props.children}</div>
+          <FormActionsContext.Provider value={actions}>
+            <div class="flex-1 overflow-auto p-5">{props.children}</div>
+            <Show when={actions.binding()}>
+              {(b) => (
+                <PanelFooter>
+                  <div class="ml-auto flex items-center gap-2">
+                    <Show when={b().cancel}>
+                      {(c) => (
+                        <Button icon={X} onClick={() => c()()} disabled={b().busy?.()}>
+                          {b().cancelLabel ?? "Cancel"}
+                        </Button>
+                      )}
+                    </Show>
+                    <Button
+                      intent="action"
+                      icon={b().submitIcon}
+                      onClick={() => b().submit()}
+                      loading={b().busy?.()}
+                      disabled={b().disabled?.()}
+                    >
+                      {b().submitLabel}
+                    </Button>
+                  </div>
+                </PanelFooter>
+              )}
+            </Show>
+          </FormActionsContext.Provider>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog>
-  );
-}
-
-// DrawerFooter pins a create/edit form's action buttons to the bottom of the
-// Drawer as a footer rail, matching the detail blade's footer bar, instead of
-// letting them float at the end of a short form. It stays INSIDE the form (so a
-// submit button still submits): the form is a flex column with `min-h-full`, and
-// `mt-auto` pushes this to the bottom; `sticky bottom-0` keeps it in view when the
-// fields scroll, and the negative margins bleed it to the Drawer's padded edges.
-export function DrawerFooter(props: { children: JSX.Element }) {
-  return (
-    <div class="sticky bottom-0 -mx-5 -mb-5 mt-auto flex items-center justify-end gap-2 border-t border-base-300 bg-base-100 px-5 py-3">
-      {props.children}
-    </div>
   );
 }
