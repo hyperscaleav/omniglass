@@ -70,8 +70,8 @@ func TestTagAPI(t *testing.T) {
 	// Duplicate key is a conflict.
 	c.do(ownerTok, http.MethodPost, "/tags", map[string]any{"name": "environment"}, http.StatusConflict)
 
-	// Bind environment down the cascade: global -> room -> component.
-	c.do(ownerTok, http.MethodPost, "/tags/environment:setGlobal", map[string]any{"value": "prod"}, http.StatusOK)
+	// Bind environment down the cascade: platform -> room -> component.
+	c.do(ownerTok, http.MethodPost, "/tags/environment:setPlatform", map[string]any{"value": "prod"}, http.StatusOK)
 	setTag(c, ownerTok, "locations", "room", "environment", "staging", http.StatusOK)
 	setTag(c, ownerTok, "components", "codec-1", "environment", "dev", http.StatusOK)
 	// asset_id is non-propagating: bind it above the component (room) and on it.
@@ -130,7 +130,7 @@ func TestTagAPI(t *testing.T) {
 	setTag(c, opTok, "components", "codec-1", "environment", "op-set", http.StatusOK)
 	c.do(opTok, http.MethodPost, "/tags", map[string]any{"name": "coined"}, http.StatusForbidden)
 	setTag(c, opTok, "systems", "sys", "environment", "x", http.StatusForbidden)
-	c.do(opTok, http.MethodPost, "/tags/environment:setGlobal", map[string]any{"value": "x"}, http.StatusForbidden)
+	c.do(opTok, http.MethodPost, "/tags/environment:setPlatform", map[string]any{"value": "x"}, http.StatusForbidden)
 
 	// A component-scoped viewer: may read keys and the cascade, forbidden to mint
 	// or bind.

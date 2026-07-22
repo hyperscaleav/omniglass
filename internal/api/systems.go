@@ -21,7 +21,7 @@ type systemBody struct {
 	Location      *string           `json:"location,omitempty" doc:"The location's name, for display"`
 	MemberCount   int               `json:"member_count" doc:"How many components are bound into this system"`
 	Actions       []string          `json:"actions,omitempty" doc:"The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces."`
-	EffectiveTags map[string]string `json:"effective_tags,omitempty" doc:"The resolved effective tags (key -> winning value) that cascade onto this system (global, its location, its system tree); for the Tags column."`
+	EffectiveTags map[string]string `json:"effective_tags,omitempty" doc:"The resolved effective tags (key -> winning value) that cascade onto this system (platform, its location, its system tree); for the Tags column."`
 }
 
 func toSystemBody(s *storage.System) systemBody {

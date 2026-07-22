@@ -20,6 +20,7 @@ import (
 // end with realistically-granted principals.
 type settingsFixture struct {
 	c      *apiClient
+	gw     storage.Gateway
 	admin  string
 	viewer string
 }
@@ -43,6 +44,7 @@ func newSettingsFixture(t *testing.T) settingsFixture {
 	t.Cleanup(srv.Close)
 	return settingsFixture{
 		c:      &apiClient{t: t, ctx: ctx, base: srv.URL},
+		gw:     gw,
 		admin:  principalWithGrants(t, ctx, dsn, "settings-admin", []grant{{role: "admin", scopeKind: "all"}}),
 		viewer: principalWithGrants(t, ctx, dsn, "settings-viewer", []grant{{role: "viewer", scopeKind: "all"}}),
 	}
@@ -73,8 +75,8 @@ func TestSettingsAdminReadReturnsProvenance(t *testing.T) {
 	if body.Values["ui"]["theme"] != "omniglass-dark" {
 		t.Fatalf("effective ui.theme = %v, want default omniglass-dark", body.Values["ui"]["theme"])
 	}
-	if body.Sources["ui.theme"] != "code" {
-		t.Fatalf("ui.theme source = %v, want code", body.Sources["ui.theme"])
+	if body.Sources["ui.theme"] != "default" {
+		t.Fatalf("ui.theme source = %v, want default", body.Sources["ui.theme"])
 	}
 }
 
@@ -86,8 +88,49 @@ func TestSettingsPatchThenReadReflectsOverride(t *testing.T) {
 	if body.Values["ui"]["theme"] != "omniglass-light" {
 		t.Fatalf("after patch ui.theme = %v, want omniglass-light", body.Values["ui"]["theme"])
 	}
-	if body.Sources["ui.theme"] != "global" {
-		t.Fatalf("after patch source = %v, want global", body.Sources["ui.theme"])
+	if body.Sources["ui.theme"] != "platform" {
+		t.Fatalf("after patch source = %v, want platform", body.Sources["ui.theme"])
+	}
+}
+
+// TestSettingsReadResolvesRowsStoredAtPlatformScope drives the read half of the
+// round trip against the scope the rows actually carry. The platform-tier migration
+// rewrote every setting_override row to scope 'platform', and the column carried no
+// check constraint at the time, so an engine still asking the Gateway for 'global'
+// found nothing and silently served defaults: every operator override orphaned, with
+// no error anywhere. The scope CHECK now stops the write half of that drift; this
+// test covers the read half, which no constraint can catch.
+// Writing the row through the Gateway (not the API) pins the durable value
+// independently of whatever scope the write path happens to use.
+func TestSettingsReadResolvesRowsStoredAtPlatformScope(t *testing.T) {
+	f := newSettingsFixture(t)
+	if _, err := f.gw.UpsertSettingOverride(f.c.ctx, "", "platform", "ui",
+		map[string]any{"theme": "omniglass-light"}, nil); err != nil {
+		t.Fatalf("seed platform override: %v", err)
+	}
+	raw := f.c.do(f.admin, http.MethodGet, "/settings", nil, http.StatusOK)
+	body := decodeSettings(t, raw)
+	if body.Values["ui"]["theme"] != "omniglass-light" {
+		t.Fatalf("ui.theme = %v, want the stored override omniglass-light (the platform row was not read)", body.Values["ui"]["theme"])
+	}
+	if body.Sources["ui.theme"] != "platform" {
+		t.Fatalf("ui.theme source = %v, want platform", body.Sources["ui.theme"])
+	}
+}
+
+// TestSettingsPatchStoresAtPlatformScope drives the write half: the console write
+// must land on the same scope the migration and the resolver speak, or the next
+// release's rows are orphaned all over again.
+func TestSettingsPatchStoresAtPlatformScope(t *testing.T) {
+	f := newSettingsFixture(t)
+	f.c.do(f.admin, http.MethodPatch, "/settings/ui", map[string]any{"theme": "omniglass-light"}, http.StatusOK)
+
+	rows, err := f.gw.GetSettingOverrides(f.c.ctx, "platform")
+	if err != nil {
+		t.Fatalf("read platform overrides: %v", err)
+	}
+	if len(rows) != 1 || rows[0].Namespace != "ui" || rows[0].Doc["theme"] != "omniglass-light" {
+		t.Fatalf("platform-scope rows = %+v, want one ui row with theme=omniglass-light", rows)
 	}
 }
 

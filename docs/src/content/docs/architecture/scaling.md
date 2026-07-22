@@ -156,20 +156,22 @@ across dozens of tables and APIs:
   store**: feature flags, the buffer and retention defaults, CDC routing, integration settings, UI
   defaults, official-registry overrides. This is now the [settings engine](/architecture/settings/), which
   generalizes "one place" from a flat table into ordered layers resolved most-specific-wins down the
-  principal hierarchy (global to group to user), with per-key provenance and top-down locks. An operator
+  principal hierarchy (platform to group to user), with per-key provenance and top-down locks. An operator
   **settings file** (`settings.json` or YAML) is the GitOps layer, read into memory at boot and mounting
   cleanly as a **Kubernetes ConfigMap** (and a future operator); only the **override** an operator sets
   through the API is persisted in Postgres (audited), while the file and the embedded defaults are
   recomputed each boot, so restore is a delete and the file never drifts into a second authoritative copy
-  ([ADR-0032](/architecture/decisions/#adr-0032-settings-persist-only-the-override-level-base-layers-are-recomputed-in-memory)).
+  ([ADR-0033](/architecture/decisions/#adr-0033-settings-persist-only-the-override-level-base-layers-are-recomputed-in-memory)).
   The same declarative source drives a laptop and a fleet.
 
 This is distinct from estate [config and variables](/architecture/variables/), which describe the
 *estate* and resolve down the cascade. The settings store describes the **platform itself**, and there is
 exactly one home for it, the single source of truth core settings deserve.
 
-:::note[Partial: the settings engine's global level]
-The settings store is built at the **global** level: the pure resolver, the `setting_override` table, the
+:::note[Partial: the settings engine's platform level]
+The settings store is built at the **platform** level (the install-wide rung, renamed from `global` by
+[ADR-0057](/architecture/decisions/#adr-0057-the-cascades-least-specific-tier-is-platform-and-a-default-is-not-a-tier)):
+the pure resolver, the `setting_override` table, the
 admin API, the two `settings:<action>` permissions, and the Admin settings page, with `ui.theme` wired
 through to re-theme the SPA (see [settings](/architecture/settings/)). The **group** and **user** cascade
 rungs, and the `platform`-domain settings (`retention`, CDC routing, integrations) named above, are the

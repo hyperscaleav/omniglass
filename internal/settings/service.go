@@ -8,9 +8,9 @@ import "context"
 // the Gateway.
 type OverridesFunc func(ctx context.Context, scope string) (Doc, map[string][]string, error)
 
-// Service resolves effective settings from the three slice-0 levels: embedded code
-// defaults, the operator file (captured at boot), and the global DB override (read
-// live per call). It holds no per-request state.
+// Service resolves effective settings from the three slice-0 levels: the type's own
+// declared defaults, the operator file (captured at boot), and the platform DB
+// override (read live per call). It holds no per-request state.
 type Service struct {
 	defaults  Doc
 	file      Doc
@@ -26,16 +26,18 @@ func NewService(file Doc, overrides OverridesFunc) *Service {
 	return &Service{defaults: Defaults(), file: file, overrides: overrides}
 }
 
-// Resolve builds the level stack (code, file, global) and resolves it.
+// Resolve builds the level stack (default, file, platform) and resolves it. The
+// scope passed to the override reader is the value the rows carry, so a rename of
+// the tier is a rename here and in the schema together.
 func (s *Service) Resolve(ctx context.Context) (Resolved, error) {
-	globalDoc, globalLocks, err := s.overrides(ctx, "global")
+	platformDoc, platformLocks, err := s.overrides(ctx, "platform")
 	if err != nil {
 		return Resolved{}, err
 	}
 	return Resolve(
-		Level{Name: "code", Doc: s.defaults},
+		Level{Name: "default", Doc: s.defaults},
 		Level{Name: "file", Doc: s.file},
-		Level{Name: "global", Doc: globalDoc, Locks: globalLocks},
+		Level{Name: "platform", Doc: platformDoc, Locks: platformLocks},
 	), nil
 }
 

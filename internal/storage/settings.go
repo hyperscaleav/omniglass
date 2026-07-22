@@ -11,7 +11,9 @@ import (
 )
 
 // SettingOverride is one override row: the values and locked key-paths an operator
-// set at a cascade level for a namespace. Slice-0 uses scope "global" only.
+// set at a cascade level for a namespace. Slice-0 uses scope "platform" only. The
+// "default" level is the type's own declaration, off the cascade axis, and is never
+// a row here.
 type SettingOverride struct {
 	Scope     string
 	Namespace string
@@ -19,7 +21,7 @@ type SettingOverride struct {
 	Locks     []string
 }
 
-// GetSettingOverrides returns every global override row at a scope. Unscoped:
+// GetSettingOverrides returns every platform override row at a scope. Unscoped:
 // platform settings describe the platform, not the estate, so no ABAC scope
 // applies; the route gates on settings:read.
 func (p *PG) GetSettingOverrides(ctx context.Context, scope string) ([]SettingOverride, error) {
@@ -50,9 +52,9 @@ func (p *PG) GetSettingOverrides(ctx context.Context, scope string) ([]SettingOv
 	return out, rows.Err()
 }
 
-// UpsertSettingOverride inserts or replaces the (scope, namespace) global row and
-// audits it. principal_id is NULL (global). The ON CONFLICT target is the identity
-// constraint, which treats the NULL principal as one value.
+// UpsertSettingOverride inserts or replaces the (scope, namespace) platform row and
+// audits it. principal_id is NULL (platform-wide, no principal). The ON CONFLICT
+// target is the identity constraint, which treats the NULL principal as one value.
 func (p *PG) UpsertSettingOverride(ctx context.Context, actorID, scope, namespace string, doc map[string]any, locks []string) (*SettingOverride, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -71,7 +73,7 @@ func (p *PG) UpsertSettingOverride(ctx context.Context, actorID, scope, namespac
 }
 
 // MergePatchSettingOverride applies an RFC 7386 JSON Merge Patch to the (scope,
-// namespace) global override as a single atomic read-modify-write. A
+// namespace) platform override as a single atomic read-modify-write. A
 // transaction-scoped advisory lock keyed on (scope, namespace) serializes concurrent
 // patches to the same namespace so no update is lost. A plain SELECT FOR UPDATE would
 // not suffice: on the first patch the row does not exist yet, so there is nothing to
@@ -116,9 +118,10 @@ func (p *PG) MergePatchSettingOverride(ctx context.Context, actorID, scope, name
 	return o, nil
 }
 
-// upsertOverrideTx inserts or replaces the (scope, namespace) global row and audits
-// it, inside the caller's transaction. principal_id is NULL (global); the ON CONFLICT
-// target is the identity constraint, which treats the NULL principal as one value.
+// upsertOverrideTx inserts or replaces the (scope, namespace) platform row and audits
+// it, inside the caller's transaction. principal_id is NULL (platform-wide, no
+// principal); the ON CONFLICT target is the identity constraint, which treats the
+// NULL principal as one value.
 func upsertOverrideTx(ctx context.Context, tx pgx.Tx, actorID, scope, namespace string, doc map[string]any, locks []string) (*SettingOverride, error) {
 	if doc == nil {
 		doc = map[string]any{}
@@ -150,7 +153,7 @@ func upsertOverrideTx(ctx context.Context, tx pgx.Tx, actorID, scope, namespace 
 	return &o, nil
 }
 
-// DeleteSettingOverride drops one namespace's global row (restore to defaults) and
+// DeleteSettingOverride drops one namespace's platform row (restore to defaults) and
 // audits it. A missing row is not an error: restore is idempotent.
 func (p *PG) DeleteSettingOverride(ctx context.Context, actorID, scope, namespace string) error {
 	tx, err := p.pool.Begin(ctx)
@@ -170,7 +173,7 @@ func (p *PG) DeleteSettingOverride(ctx context.Context, actorID, scope, namespac
 	return tx.Commit(ctx)
 }
 
-// DeleteAllSettingOverrides removes every global override (a factory reset) and
+// DeleteAllSettingOverrides removes every platform override (a factory reset) and
 // audits it once with an empty resource id.
 func (p *PG) DeleteAllSettingOverrides(ctx context.Context, actorID, scope string) error {
 	tx, err := p.pool.Begin(ctx)

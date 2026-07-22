@@ -93,6 +93,50 @@ func TestFixturesShape(t *testing.T) {
 	}
 }
 
+// TestFixturesEstateIsAForest is a pure check that the example estate teaches the
+// no-root-location rule: the location tree is a forest with more than one
+// unparented top, and devices sit under more than one of those tops. With every
+// device under a single top, a binding at that top looks like it covers the
+// estate, and the reason the install-wide `platform` tier exists (it is the only
+// rung that reaches all of the tops) is invisible in the console.
+func TestFixturesEstateIsAForest(t *testing.T) {
+	doc, err := devseed.Fixtures()
+	if err != nil {
+		t.Fatalf("parse fixtures: %v", err)
+	}
+
+	parentOf := map[string]string{}
+	var tops []string
+	for _, l := range doc.Locations {
+		parentOf[l.Name] = l.Parent
+		if l.Parent == "" {
+			tops = append(tops, l.Name)
+		}
+	}
+	if len(tops) < 2 {
+		t.Fatalf("unparented tops = %d %v, want at least 2 (the tree is a forest, there is no root location)", len(tops), tops)
+	}
+
+	// topOf walks a location up to its unparented ancestor. TestFixturesShape
+	// already proves every parent is declared before its child, so the walk
+	// terminates.
+	topOf := func(name string) string {
+		for parentOf[name] != "" {
+			name = parentOf[name]
+		}
+		return name
+	}
+	occupied := map[string]bool{}
+	for _, c := range doc.Components {
+		if c.Location != "" {
+			occupied[topOf(c.Location)] = true
+		}
+	}
+	if len(occupied) < 2 {
+		t.Errorf("fixture components occupy %d of %d tops (%v), want at least 2 so a binding at one top visibly misses the other", len(occupied), len(tops), occupied)
+	}
+}
+
 // TestRunIdempotent proves devseed.Run lands the example estate (and the worked
 // reachability check) through the Storage Gateway and that a second run neither
 // duplicates nor errors: make dev runs it on every start. Reference data (roles,
@@ -359,6 +403,77 @@ func TestRunIdempotent(t *testing.T) {
 	}
 	if withAttrs != 1 {
 		t.Errorf("lobby-display events with attributes = %d, want 1", withAttrs)
+	}
+}
+
+// TestSeededEstateTeachesPlatformReach carries the forest into the database and
+// proves what it is there to teach: the seeded estate has as many unparented tops
+// as the fixture declares (no row stands in for a root), and the platform binding
+// is the only rung that reaches all of them. The component under the HQ subtree
+// reads that subtree's location override, while the component under a different
+// top falls back to the install-wide `platform` value, which is the case a
+// synthetic root location would have hidden.
+func TestSeededEstateTeachesPlatformReach(t *testing.T) {
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("boot seed: %v", err)
+	}
+	if err := devseed.Run(ctx, gw, ""); err != nil {
+		t.Fatalf("devseed run: %v", err)
+	}
+
+	doc, err := devseed.Fixtures()
+	if err != nil {
+		t.Fatalf("parse fixtures: %v", err)
+	}
+	wantTops := 0
+	for _, l := range doc.Locations {
+		if l.Parent == "" {
+			wantTops++
+		}
+	}
+
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer conn.Close(ctx)
+	var tops int
+	if err := conn.QueryRow(ctx, `select count(*) from location where parent_id is null`).Scan(&tops); err != nil {
+		t.Fatalf("count tops: %v", err)
+	}
+	if tops < 2 || tops != wantTops {
+		t.Fatalf("unparented locations = %d, want %d (at least 2: the tree is a forest, nothing seeds a root)", tops, wantTops)
+	}
+
+	// The two placed components, one per top. Their effective tags are the whole
+	// point: same key, different rung, because the location binding stops at its
+	// own top's subtree.
+	all := scope.Set{All: true}
+	underHQ, err := gw.GetComponent(ctx, "lobby-display", all)
+	if err != nil {
+		t.Fatalf("get hq component: %v", err)
+	}
+	underEast, err := gw.GetComponent(ctx, "auditorium-display", all)
+	if err != nil {
+		t.Fatalf("get east component: %v", err)
+	}
+	eff, err := gw.EffectiveTags(ctx, "component", []string{underHQ.ID, underEast.ID})
+	if err != nil {
+		t.Fatalf("effective tags: %v", err)
+	}
+	if got := eff[underHQ.ID]["environment"]; got != "staging" {
+		t.Errorf("lobby-display environment = %q, want staging (the hq-west location binding wins)", got)
+	}
+	if got := eff[underEast.ID]["environment"]; got != "prod" {
+		t.Errorf("auditorium-display environment = %q, want prod (a different top, so only the platform binding reaches it)", got)
 	}
 }
 

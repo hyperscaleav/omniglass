@@ -874,12 +874,12 @@ components:
           minLength: 1
           type: string
         owner:
-          description: The owning entity's name; omit for a global secret
+          description: The owning entity's name; omit for a platform secret
           type: string
         owner_kind:
           description: Which tier owns this secret
           enum:
-            - global
+            - platform
             - location
             - system
             - component
@@ -997,12 +997,12 @@ components:
           minLength: 1
           type: string
         owner:
-          description: The owning entity's name; omit for a global variable
+          description: The owning entity's name; omit for a platform variable
           type: string
         owner_kind:
           description: Which tier owns this variable
           enum:
-            - global
+            - platform
             - location
             - system
             - component
@@ -1502,23 +1502,6 @@ components:
         - sha256
         - sensitive
         - created_at
-      type: object
-    GlobalBindingInputBody:
-      additionalProperties: false
-      properties:
-        $schema:
-          description: A URL to the JSON Schema for this object.
-          examples:
-            - /api/v1/schemas/GlobalBindingInputBody.json
-          format: uri
-          readOnly: true
-          type: string
-        value:
-          description: The bound value
-          minLength: 1
-          type: string
-      required:
-        - value
       type: object
     GrantBody:
       additionalProperties: false
@@ -2496,7 +2479,7 @@ components:
         effective_tags:
           additionalProperties:
             type: string
-          description: The resolved effective tags (key -> winning value) that cascade onto this location (global and its location tree); for the Tags column.
+          description: The resolved effective tags (key -> winning value) that cascade onto this location (platform and its location tree); for the Tags column.
           type: object
         id:
           type: string
@@ -2698,7 +2681,7 @@ components:
         effective_tags:
           additionalProperties:
             type: string
-          description: "The resolved effective tags (key -> winning value) on this node: its direct bindings plus propagating global tags. For the Tags column and the blade pills."
+          description: "The resolved effective tags (key -> winning value) on this node: its direct bindings plus propagating platform tags. For the Tags column and the blade pills."
           type: object
         enrolled:
           type: boolean
@@ -2719,6 +2702,23 @@ components:
       required:
         - name
         - enrolled
+      type: object
+    PlatformBindingInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/PlatformBindingInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        value:
+          description: The bound value
+          minLength: 1
+          type: string
+      required:
+        - value
       type: object
     PrincipalBody:
       additionalProperties: false
@@ -3045,7 +3045,7 @@ components:
       additionalProperties: false
       properties:
         band:
-          description: "Cascade tier: 0 global, 1 location, 2 system, 3 component"
+          description: "Cascade tier: 0 platform, 1 location, 2 system, 3 component"
           format: int64
           type: integer
         depth:
@@ -3591,7 +3591,7 @@ components:
         sources:
           additionalProperties:
             type: string
-          description: key 'namespace.key' to the winning level (code|file|global)
+          description: key 'namespace.key' to the winning level (default|file|platform)
           type: object
         values:
           $ref: "#/components/schemas/Settings"
@@ -3675,7 +3675,7 @@ components:
         effective_tags:
           additionalProperties:
             type: string
-          description: The resolved effective tags (key -> winning value) that cascade onto this system (global, its location, its system tree); for the Tags column.
+          description: The resolved effective tags (key -> winning value) that cascade onto this system (platform, its location, its system tree); for the Tags column.
           type: object
         id:
           type: string
@@ -5182,7 +5182,7 @@ paths:
       x-omniglass-permission: component:update
   /components/{name}/effective-tags:
     get:
-      description: "Resolves the tags that cascade onto a component (global -> location -> system -> component): keys union, values override most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves only from a binding on the component itself. The system band comes from MEMBERSHIP: pass ?system= to resolve against one the component belongs to (a shared device answers differently for each), or omit it to resolve against its primary membership. Gated by component:read; the component must be in the caller's component read scope."
+      description: "Resolves the tags that cascade onto a component (platform -> location -> system -> component): keys union, values override most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves only from a binding on the component itself. The system band comes from MEMBERSHIP: pass ?system= to resolve against one the component belongs to (a shared device answers differently for each), or omit it to resolve against its primary membership. Gated by component:read; the component must be in the caller's component read scope."
       operationId: effective-tags
       parameters:
         - description: The component's name
@@ -7895,7 +7895,7 @@ paths:
       summary: List secrets
       x-omniglass-permission: secret:read
     post:
-      description: Seals a secret at an owner scope (a global secret needs an all-scoped grant). Fields are validated and encrypted against the type shape. Gated by secret:create.
+      description: Seals a secret at an owner scope. Fields are validated and encrypted against the type shape. Gated by secret:create, plus platform:create when owner_kind is platform (the install-wide tier).
       operationId: create-secret
       requestBody:
         content:
@@ -7918,9 +7918,10 @@ paths:
           description: Error
       summary: Create a secret
       x-omniglass-permission: secret:create
+      x-omniglass-platform-permission: platform:create
   /secrets/{id}:
     delete:
-      description: Removes a secret by id. Gated by secret:delete; read and delete scopes on the owner drive the 404 versus 403 split.
+      description: Removes a secret by id. Gated by secret:delete, plus platform:delete when the secret sits at the platform tier; read and delete scopes on the owner drive the 404 versus 403 split.
       operationId: delete-secret
       parameters:
         - description: The secret's id
@@ -7941,8 +7942,9 @@ paths:
           description: Error
       summary: Delete a secret
       x-omniglass-permission: secret:delete
+      x-omniglass-platform-permission: platform:delete
     patch:
-      description: Replaces the given field values on a secret, re-sealing secret fields. Only values change; name, type, and owner are fixed at creation. An omitted field keeps its value. Gated by secret:update.
+      description: Replaces the given field values on a secret, re-sealing secret fields. Only values change; name, type, and owner are fixed at creation. An omitted field keeps its value. Gated by secret:update, plus platform:update when the secret sits at the platform tier.
       operationId: update-secret
       parameters:
         - description: The secret's id
@@ -7973,6 +7975,7 @@ paths:
           description: Error
       summary: Update a secret's field values
       x-omniglass-permission: secret:update
+      x-omniglass-platform-permission: platform:update
   /secrets/{id}:copy:
     post:
       description: Decrypts and returns a secret's field values for a clipboard copy, audited under the copy verb (distinct from an on-screen reveal). Same exposure and the same secret:reveal gate as reveal.
@@ -8066,7 +8069,7 @@ paths:
       summary: Get the caller's effective settings
   /settings/{namespace}:
     delete:
-      description: Drops the namespace's global override, restoring file and code defaults. Gated by settings:update.
+      description: Drops the namespace's platform override, restoring the file layer and the declared defaults. Gated by settings:update and platform:update.
       operationId: delete-settings-namespace
       parameters:
         - description: the settings namespace
@@ -8087,8 +8090,9 @@ paths:
           description: Error
       summary: Restore a settings namespace to defaults
       x-omniglass-permission: settings:update
+      x-omniglass-platform-permission: platform:update
     patch:
-      description: Applies an RFC 7386 JSON Merge Patch to the namespace's global override; null on a key restores it. Gated by settings:update.
+      description: Applies an RFC 7386 JSON Merge Patch to the namespace's platform override; null on a key restores it. Gated by settings:update and platform:update.
       operationId: patch-settings-namespace
       parameters:
         - description: the settings namespace, e.g. ui
@@ -8121,9 +8125,10 @@ paths:
           description: Error
       summary: Update a settings namespace
       x-omniglass-permission: settings:update
+      x-omniglass-platform-permission: platform:update
   /settings:restoreDefaults:
     post:
-      description: Removes every global override (a factory reset). Gated by settings:update.
+      description: Removes every platform override (a factory reset). Gated by settings:update and platform:update.
       operationId: restore-settings-defaults
       responses:
         "204":
@@ -8136,6 +8141,7 @@ paths:
           description: Error
       summary: Restore all settings to defaults
       x-omniglass-permission: settings:update
+      x-omniglass-platform-permission: platform:update
   /standards:
     get:
       description: Lists the standard catalog, ordered alphabetically by display name. A standard is the blueprint a system conforms to. Gated by standard:read.
@@ -9192,10 +9198,10 @@ paths:
           description: Error
       summary: Update a tag key
       x-omniglass-permission: tag:update
-  /tags/{name}:clearGlobal:
+  /tags/{name}:clearPlatform:
     post:
-      description: Removes the global binding for a key. Gated by tag:update (all-scope).
-      operationId: clear-global-tag
+      description: Removes the platform-tier binding for a key. Gated by tag:update (all-scope) and platform:update.
+      operationId: clear-platform-tag
       parameters:
         - description: The tag key
           in: path
@@ -9213,12 +9219,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
-      summary: Clear a global tag value
+      summary: Clear a platform tag value
       x-omniglass-permission: tag:update
-  /tags/{name}:setGlobal:
+      x-omniglass-platform-permission: platform:update
+  /tags/{name}:setPlatform:
     post:
-      description: Binds a tenant-wide default value for a key at the global scope. Gated by tag:update (all-scope).
-      operationId: set-global-tag
+      description: Binds an install-wide default value for a key at the platform tier. Gated by tag:update (all-scope) and platform:update.
+      operationId: set-platform-tag
       parameters:
         - description: The tag key
           in: path
@@ -9231,7 +9238,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/GlobalBindingInputBody"
+              $ref: "#/components/schemas/PlatformBindingInputBody"
         required: true
       responses:
         "200":
@@ -9246,8 +9253,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
-      summary: Set a global tag value
+      summary: Set a platform tag value
       x-omniglass-permission: tag:update
+      x-omniglass-platform-permission: platform:update
   /tags/{name}:values:
     get:
       description: Returns the distinct values already bound for a key across the estate, for value autocomplete on a free-text key (an enum key carries its allowed set on the key itself). Rides the tag:read floor.
@@ -9456,7 +9464,7 @@ paths:
       summary: List variables (admin directory)
       x-omniglass-permission: variable:read
     post:
-      description: Sets a variable at an owner scope (a global variable needs an all-scoped grant). The value is validated against value_type. Gated by variable:create.
+      description: Sets a variable at an owner scope. The value is validated against value_type. Gated by variable:create, plus platform:create when owner_kind is platform (the install-wide tier).
       operationId: create-variable
       requestBody:
         content:
@@ -9479,9 +9487,10 @@ paths:
           description: Error
       summary: Create a variable
       x-omniglass-permission: variable:create
+      x-omniglass-platform-permission: platform:create
   /variables/{id}:
     delete:
-      description: Removes a variable by id. Gated by variable:delete; read and delete scopes on the owner drive the 404 versus 403 split.
+      description: Removes a variable by id. Gated by variable:delete, plus platform:delete when the variable sits at the platform tier; read and delete scopes on the owner drive the 404 versus 403 split.
       operationId: delete-variable
       parameters:
         - description: The variable's id
@@ -9502,8 +9511,9 @@ paths:
           description: Error
       summary: Delete a variable
       x-omniglass-permission: variable:delete
+      x-omniglass-platform-permission: platform:delete
     patch:
-      description: Replaces a variable's value, validated against its fixed value_type. Only the value changes; name, type, and owner are fixed at creation. Gated by variable:update.
+      description: Replaces a variable's value, validated against its fixed value_type. Only the value changes; name, type, and owner are fixed at creation. Gated by variable:update, plus platform:update when the variable sits at the platform tier.
       operationId: update-variable
       parameters:
         - description: The variable's id
@@ -9534,6 +9544,7 @@ paths:
           description: Error
       summary: Update a variable's value
       x-omniglass-permission: variable:update
+      x-omniglass-platform-permission: platform:update
   /vendors:
     get:
       description: Lists the vendor registry, ordered alphabetically by display name. Populates the vendor picker on the product form. Gated by vendor:read.

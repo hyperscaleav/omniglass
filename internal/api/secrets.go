@@ -83,8 +83,8 @@ type createSecretInput struct {
 	Body struct {
 		Name           string            `json:"name" minLength:"1" doc:"The cascade key; unique per owner"`
 		SecretType     string            `json:"secret_type" minLength:"1" doc:"A secret_type id"`
-		OwnerKind      string            `json:"owner_kind" enum:"global,location,system,component" doc:"Which tier owns this secret"`
-		Owner          *string           `json:"owner,omitempty" doc:"The owning entity's name; omit for a global secret"`
+		OwnerKind      string            `json:"owner_kind" enum:"platform,location,system,component" doc:"Which tier owns this secret"`
+		Owner          *string           `json:"owner,omitempty" doc:"The owning entity's name; omit for a platform secret"`
 		AdminSensitive *bool             `json:"admin_sensitive,omitempty" doc:"Admin-only visibility; omit to use the type default. Setting true requires the admin tier"`
 		Fields         map[string]string `json:"fields" doc:"The operator field map, validated against the type shape"`
 	}
@@ -163,14 +163,20 @@ func registerSecretRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		return out, nil
 	})
 
-	huma.Register(api, a.gated(huma.Operation{
+	huma.Register(api, a.platformGated(a.gated(huma.Operation{
 		OperationID:   "create-secret",
 		Method:        http.MethodPost,
 		Path:          "/secrets",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Create a secret",
-		Description:   "Seals a secret at an owner scope (a global secret needs an all-scoped grant). Fields are validated and encrypted against the type shape. Gated by secret:create.",
-	}, "secret", "create"), func(ctx context.Context, in *createSecretInput) (*secretOutput, error) {
+		Description:   "Seals a secret at an owner scope. Fields are validated and encrypted against the type shape. Gated by secret:create, plus platform:create when owner_kind is platform (the install-wide tier).",
+	}, "secret", "create"), "create"), func(ctx context.Context, in *createSecretInput) (*secretOutput, error) {
+		// The body says which tier the write lands at, so the tier gate runs here.
+		if in.Body.OwnerKind == platformTier {
+			if err := a.requirePlatform(ctx, "create"); err != nil {
+				return nil, err
+			}
+		}
 		s, err := gw.CreateSecret(ctx, actorID(ctx), storage.SecretSpec{
 			Name:           in.Body.Name,
 			SecretType:     in.Body.SecretType,
@@ -185,31 +191,35 @@ func registerSecretRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		return &secretOutput{Body: toSecretBody(s)}, nil
 	})
 
-	huma.Register(api, a.gated(huma.Operation{
+	huma.Register(api, a.platformGated(a.gated(huma.Operation{
 		OperationID: "update-secret",
 		Method:      http.MethodPatch,
 		Path:        "/secrets/{id}",
 		Summary:     "Update a secret's field values",
-		Description: "Replaces the given field values on a secret, re-sealing secret fields. Only values change; name, type, and owner are fixed at creation. An omitted field keeps its value. Gated by secret:update.",
-	}, "secret", "update"), func(ctx context.Context, in *updateSecretInput) (*secretOutput, error) {
+		Description: "Replaces the given field values on a secret, re-sealing secret fields. Only values change; name, type, and owner are fixed at creation. An omitted field keeps its value. Gated by secret:update, plus platform:update when the secret sits at the platform tier.",
+	}, "secret", "update"), "update"), func(ctx context.Context, in *updateSecretInput) (*secretOutput, error) {
+		// Only the stored row knows its tier, so the resolved permission rides with
+		// the call and the Gateway applies it beside the scope split.
 		s, err := gw.UpdateSecret(ctx, actorID(ctx), in.ID, in.Body.Fields,
-			a.scopeFor(ctx, "secret", "read"), a.scopeFor(ctx, "secret", "update"), a.canSecretAdmin(ctx, "update"))
+			a.scopeFor(ctx, "secret", "read"), a.scopeFor(ctx, "secret", "update"),
+			a.canSecretAdmin(ctx, "update"), a.canPlatform(ctx, "update"))
 		if err != nil {
 			return nil, mapSecretErr(err)
 		}
 		return &secretOutput{Body: toSecretBody(s)}, nil
 	})
 
-	huma.Register(api, a.gated(huma.Operation{
+	huma.Register(api, a.platformGated(a.gated(huma.Operation{
 		OperationID:   "delete-secret",
 		Method:        http.MethodDelete,
 		Path:          "/secrets/{id}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete a secret",
-		Description:   "Removes a secret by id. Gated by secret:delete; read and delete scopes on the owner drive the 404 versus 403 split.",
-	}, "secret", "delete"), func(ctx context.Context, in *secretIDInput) (*struct{}, error) {
+		Description:   "Removes a secret by id. Gated by secret:delete, plus platform:delete when the secret sits at the platform tier; read and delete scopes on the owner drive the 404 versus 403 split.",
+	}, "secret", "delete"), "delete"), func(ctx context.Context, in *secretIDInput) (*struct{}, error) {
 		if err := gw.DeleteSecret(ctx, actorID(ctx), in.ID,
-			a.scopeFor(ctx, "secret", "read"), a.scopeFor(ctx, "secret", "delete"), a.canSecretAdmin(ctx, "delete")); err != nil {
+			a.scopeFor(ctx, "secret", "read"), a.scopeFor(ctx, "secret", "delete"),
+			a.canSecretAdmin(ctx, "delete"), a.canPlatform(ctx, "delete")); err != nil {
 			return nil, mapSecretErr(err)
 		}
 		return nil, nil

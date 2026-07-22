@@ -732,7 +732,7 @@ Effective tags for a component
 omniglass effective-tag list <name> [flags]
 ```
 
-Resolves the tags that cascade onto a component (global -> location -> system -> component): keys union, values override most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves only from a binding on the component itself. The system band comes from MEMBERSHIP: pass ?system= to resolve against one the component belongs to (a shared device answers differently for each), or omit it to resolve against its primary membership. Gated by component:read; the component must be in the caller's component read scope.
+Resolves the tags that cascade onto a component (platform -> location -> system -> component): keys union, values override most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves only from a binding on the component itself. The system band comes from MEMBERSHIP: pass ?system= to resolve against one the component belongs to (a shared device answers differently for each), or omit it to resolve against its primary membership. Gated by component:read; the component must be in the caller's component read scope.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -2469,14 +2469,14 @@ Create a secret
 omniglass secret create [flags]
 ```
 
-Seals a secret at an owner scope (a global secret needs an all-scoped grant). Fields are validated and encrypted against the type shape. Gated by secret:create.
+Seals a secret at an owner scope. Fields are validated and encrypted against the type shape. Gated by secret:create, plus platform:create when owner_kind is platform (the install-wide tier).
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--admin-sensitive` | string | (none) | Admin-only visibility; omit to use the type default. Setting true requires the admin tier |
 | `--fields` | string | (none) | The operator field map, validated against the type shape |
 | `--name` | string | (none) | The cascade key; unique per owner |
-| `--owner` | string | (none) | The owning entity's name; omit for a global secret |
+| `--owner` | string | (none) | The owning entity's name; omit for a platform secret |
 | `--owner-kind` | string | (none) | Which tier owns this secret |
 | `--secret-type` | string | (none) | A secret_type id |
 
@@ -2494,7 +2494,7 @@ Delete a secret
 omniglass secret delete <id>
 ```
 
-Removes a secret by id. Gated by secret:delete; read and delete scopes on the owner drive the 404 versus 403 split.
+Removes a secret by id. Gated by secret:delete, plus platform:delete when the secret sits at the platform tier; read and delete scopes on the owner drive the 404 versus 403 split.
 
 Example:
 
@@ -2542,7 +2542,7 @@ Update a secret's field values
 omniglass secret update <id> [flags]
 ```
 
-Replaces the given field values on a secret, re-sealing secret fields. Only values change; name, type, and owner are fixed at creation. An omitted field keeps its value. Gated by secret:update.
+Replaces the given field values on a secret, re-sealing secret fields. Only values change; name, type, and owner are fixed at creation. An omitted field keeps its value. Gated by secret:update, plus platform:update when the secret sits at the platform tier.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -2654,7 +2654,7 @@ Restore a settings namespace to defaults
 omniglass setting delete <namespace>
 ```
 
-Drops the namespace's global override, restoring file and code defaults. Gated by settings:update.
+Drops the namespace's platform override, restoring the file layer and the declared defaults. Gated by settings:update and platform:update.
 
 Example:
 
@@ -2686,7 +2686,7 @@ Restore all settings to defaults
 omniglass setting restoreDefaults
 ```
 
-Removes every global override (a factory reset). Gated by settings:update.
+Removes every platform override (a factory reset). Gated by settings:update and platform:update.
 
 Example:
 
@@ -2702,7 +2702,7 @@ Update a settings namespace
 omniglass setting update <namespace>
 ```
 
-Applies an RFC 7386 JSON Merge Patch to the namespace's global override; null on a key restores it. Gated by settings:update.
+Applies an RFC 7386 JSON Merge Patch to the namespace's platform override; null on a key restores it. Gated by settings:update and platform:update.
 
 Example:
 
@@ -3331,20 +3331,20 @@ omniglass system update <name>
 
 Commands for the tag resource
 
-### `omniglass tag clearGlobal`
+### `omniglass tag clearPlatform`
 
-Clear a global tag value
+Clear a platform tag value
 
 ```
-omniglass tag clearGlobal <name>
+omniglass tag clearPlatform <name>
 ```
 
-Removes the global binding for a key. Gated by tag:update (all-scope).
+Removes the platform-tier binding for a key. Gated by tag:update (all-scope) and platform:update.
 
 Example:
 
 ```sh
-omniglass tag clearGlobal <name>
+omniglass tag clearPlatform <name>
 ```
 
 ### `omniglass tag create`
@@ -3402,15 +3402,15 @@ Example:
 omniglass tag list
 ```
 
-### `omniglass tag setGlobal`
+### `omniglass tag setPlatform`
 
-Set a global tag value
+Set a platform tag value
 
 ```
-omniglass tag setGlobal <name> [flags]
+omniglass tag setPlatform <name> [flags]
 ```
 
-Binds a tenant-wide default value for a key at the global scope. Gated by tag:update (all-scope).
+Binds an install-wide default value for a key at the platform tier. Gated by tag:update (all-scope) and platform:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -3419,7 +3419,7 @@ Binds a tenant-wide default value for a key at the global scope. Gated by tag:up
 Example:
 
 ```sh
-omniglass tag setGlobal <name> --value value
+omniglass tag setPlatform <name> --value value
 ```
 
 ### `omniglass tag update`
@@ -3620,12 +3620,12 @@ Create a variable
 omniglass variable create [flags]
 ```
 
-Sets a variable at an owner scope (a global variable needs an all-scoped grant). The value is validated against value_type. Gated by variable:create.
+Sets a variable at an owner scope. The value is validated against value_type. Gated by variable:create, plus platform:create when owner_kind is platform (the install-wide tier).
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--name` | string | (none) | The cascade key; unique per owner |
-| `--owner` | string | (none) | The owning entity's name; omit for a global variable |
+| `--owner` | string | (none) | The owning entity's name; omit for a platform variable |
 | `--owner-kind` | string | (none) | Which tier owns this variable |
 | `--value` | string | (none) | The value, validated against value_type |
 | `--value-type` | string | (none) | The declared value type |
@@ -3644,7 +3644,7 @@ Delete a variable
 omniglass variable delete <id>
 ```
 
-Removes a variable by id. Gated by variable:delete; read and delete scopes on the owner drive the 404 versus 403 split.
+Removes a variable by id. Gated by variable:delete, plus platform:delete when the variable sits at the platform tier; read and delete scopes on the owner drive the 404 versus 403 split.
 
 Example:
 
@@ -3676,7 +3676,7 @@ Update a variable's value
 omniglass variable update <id> [flags]
 ```
 
-Replaces a variable's value, validated against its fixed value_type. Only the value changes; name, type, and owner are fixed at creation. Gated by variable:update.
+Replaces a variable's value, validated against its fixed value_type. Only the value changes; name, type, and owner are fixed at creation. Gated by variable:update, plus platform:update when the variable sits at the platform tier.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|

@@ -81,9 +81,11 @@ system -> c2
 system -> c3
 ```
 
-Above the four sits the singleton **`global`** estate root: the top owner above every location where
-estate-wide health and KPIs roll up, and the top of the [cascade](/architecture/cascade/). One per
-deployment, no FK.
+Above the four sits the singleton **`global`** estate owner: the top owner above every location where
+estate-wide health and KPIs roll up. One per deployment, no FK. It is an **owner**, nothing else: it is
+not a location (the location tree is a forest of N unparented tops with no root) and it is not the
+[cascade](/architecture/cascade/)'s least-specific binding tier, which is **`platform`**
+([ADR-0057](/architecture/decisions/#adr-0057-the-cascades-least-specific-tier-is-platform-and-a-default-is-not-a-tier)).
 
 | Entity | What it is | Key columns |
 |---|---|---|

@@ -797,7 +797,7 @@ func generatedCommands() []*cobra.Command {
 			cmd := &cobra.Command{
 				Use:     "list <name>",
 				Short:   "Effective tags for a component",
-				Long:    "Resolves the tags that cascade onto a component (global -> location -> system -> component): keys union, values override most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves only from a binding on the component itself. The system band comes from MEMBERSHIP: pass ?system= to resolve against one the component belongs to (a shared device answers differently for each), or omit it to resolve against its primary membership. Gated by component:read; the component must be in the caller's component read scope.",
+				Long:    "Resolves the tags that cascade onto a component (platform -> location -> system -> component): keys union, values override most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves only from a binding on the component itself. The system band comes from MEMBERSHIP: pass ?system= to resolve against one the component belongs to (a shared device answers differently for each), or omit it to resolve against its primary membership. Gated by component:read; the component must be in the caller's component read scope.",
 				Example: "  omniglass effective-tag list <name>",
 				Args:    cobra.ExactArgs(1),
 				RunE: func(cmd *cobra.Command, args []string) error {
@@ -2730,7 +2730,7 @@ func generatedCommands() []*cobra.Command {
 			cmd := &cobra.Command{
 				Use:     "create",
 				Short:   "Create a secret",
-				Long:    "Seals a secret at an owner scope (a global secret needs an all-scoped grant). Fields are validated and encrypted against the type shape. Gated by secret:create.",
+				Long:    "Seals a secret at an owner scope. Fields are validated and encrypted against the type shape. Gated by secret:create, plus platform:create when owner_kind is platform (the install-wide tier).",
 				Example: "  omniglass secret create --fields fields --name name --owner-kind owner_kind --secret-type secret_type",
 				Args:    cobra.ExactArgs(0),
 				RunE: func(cmd *cobra.Command, args []string) error {
@@ -2762,7 +2762,7 @@ func generatedCommands() []*cobra.Command {
 			_ = cmd.MarkFlagRequired("fields")
 			cmd.Flags().StringVar(&fName, "name", "", "The cascade key; unique per owner")
 			_ = cmd.MarkFlagRequired("name")
-			cmd.Flags().StringVar(&fOwner, "owner", "", "The owning entity's name; omit for a global secret")
+			cmd.Flags().StringVar(&fOwner, "owner", "", "The owning entity's name; omit for a platform secret")
 			cmd.Flags().StringVar(&fOwnerKind, "owner-kind", "", "Which tier owns this secret")
 			_ = cmd.MarkFlagRequired("owner-kind")
 			cmd.Flags().StringVar(&fSecretType, "secret-type", "", "A secret_type id")
@@ -2773,7 +2773,7 @@ func generatedCommands() []*cobra.Command {
 			cmd := &cobra.Command{
 				Use:     "delete <id>",
 				Short:   "Delete a secret",
-				Long:    "Removes a secret by id. Gated by secret:delete; read and delete scopes on the owner drive the 404 versus 403 split.",
+				Long:    "Removes a secret by id. Gated by secret:delete, plus platform:delete when the secret sits at the platform tier; read and delete scopes on the owner drive the 404 versus 403 split.",
 				Example: "  omniglass secret delete <id>",
 				Args:    cobra.ExactArgs(1),
 				RunE: func(cmd *cobra.Command, args []string) error {
@@ -2816,7 +2816,7 @@ func generatedCommands() []*cobra.Command {
 			cmd := &cobra.Command{
 				Use:     "update <id>",
 				Short:   "Update a secret's field values",
-				Long:    "Replaces the given field values on a secret, re-sealing secret fields. Only values change; name, type, and owner are fixed at creation. An omitted field keeps its value. Gated by secret:update.",
+				Long:    "Replaces the given field values on a secret, re-sealing secret fields. Only values change; name, type, and owner are fixed at creation. An omitted field keeps its value. Gated by secret:update, plus platform:update when the secret sits at the platform tier.",
 				Example: "  omniglass secret update <id> --fields fields",
 				Args:    cobra.ExactArgs(1),
 				RunE: func(cmd *cobra.Command, args []string) error {
@@ -2899,7 +2899,7 @@ func generatedCommands() []*cobra.Command {
 			cmd := &cobra.Command{
 				Use:     "delete <namespace>",
 				Short:   "Restore a settings namespace to defaults",
-				Long:    "Drops the namespace's global override, restoring file and code defaults. Gated by settings:update.",
+				Long:    "Drops the namespace's platform override, restoring the file layer and the declared defaults. Gated by settings:update and platform:update.",
 				Example: "  omniglass setting delete <namespace>",
 				Args:    cobra.ExactArgs(1),
 				RunE: func(cmd *cobra.Command, args []string) error {
@@ -2927,7 +2927,7 @@ func generatedCommands() []*cobra.Command {
 			cmd := &cobra.Command{
 				Use:     "restoreDefaults",
 				Short:   "Restore all settings to defaults",
-				Long:    "Removes every global override (a factory reset). Gated by settings:update.",
+				Long:    "Removes every platform override (a factory reset). Gated by settings:update and platform:update.",
 				Example: "  omniglass setting restoreDefaults",
 				Args:    cobra.ExactArgs(0),
 				RunE: func(cmd *cobra.Command, args []string) error {
@@ -2941,7 +2941,7 @@ func generatedCommands() []*cobra.Command {
 			cmd := &cobra.Command{
 				Use:     "update <namespace>",
 				Short:   "Update a settings namespace",
-				Long:    "Applies an RFC 7386 JSON Merge Patch to the namespace's global override; null on a key restores it. Gated by settings:update.",
+				Long:    "Applies an RFC 7386 JSON Merge Patch to the namespace's platform override; null on a key restores it. Gated by settings:update and platform:update.",
 				Example: "  omniglass setting update <namespace>",
 				Args:    cobra.ExactArgs(1),
 				RunE: func(cmd *cobra.Command, args []string) error {
@@ -3616,13 +3616,13 @@ func generatedCommands() []*cobra.Command {
 		}
 		parent.AddCommand(func() *cobra.Command {
 			cmd := &cobra.Command{
-				Use:     "clearGlobal <name>",
-				Short:   "Clear a global tag value",
-				Long:    "Removes the global binding for a key. Gated by tag:update (all-scope).",
-				Example: "  omniglass tag clearGlobal <name>",
+				Use:     "clearPlatform <name>",
+				Short:   "Clear a platform tag value",
+				Long:    "Removes the platform-tier binding for a key. Gated by tag:update (all-scope) and platform:update.",
+				Example: "  omniglass tag clearPlatform <name>",
 				Args:    cobra.ExactArgs(1),
 				RunE: func(cmd *cobra.Command, args []string) error {
-					path := fmt.Sprintf("/api/v1/tags/%s:clearGlobal", url.PathEscape(args[0]))
+					path := fmt.Sprintf("/api/v1/tags/%s:clearPlatform", url.PathEscape(args[0]))
 					return runAPICommand(cmd, "POST", path, nil)
 				},
 			}
@@ -3695,13 +3695,13 @@ func generatedCommands() []*cobra.Command {
 		parent.AddCommand(func() *cobra.Command {
 			var fValue string
 			cmd := &cobra.Command{
-				Use:     "setGlobal <name>",
-				Short:   "Set a global tag value",
-				Long:    "Binds a tenant-wide default value for a key at the global scope. Gated by tag:update (all-scope).",
-				Example: "  omniglass tag setGlobal <name> --value value",
+				Use:     "setPlatform <name>",
+				Short:   "Set a platform tag value",
+				Long:    "Binds an install-wide default value for a key at the platform tier. Gated by tag:update (all-scope) and platform:update.",
+				Example: "  omniglass tag setPlatform <name> --value value",
 				Args:    cobra.ExactArgs(1),
 				RunE: func(cmd *cobra.Command, args []string) error {
-					path := fmt.Sprintf("/api/v1/tags/%s:setGlobal", url.PathEscape(args[0]))
+					path := fmt.Sprintf("/api/v1/tags/%s:setPlatform", url.PathEscape(args[0]))
 					body := map[string]any{}
 					if cmd.Flags().Changed("value") {
 						body["value"] = fValue
@@ -3924,7 +3924,7 @@ func generatedCommands() []*cobra.Command {
 			cmd := &cobra.Command{
 				Use:     "create",
 				Short:   "Create a variable",
-				Long:    "Sets a variable at an owner scope (a global variable needs an all-scoped grant). The value is validated against value_type. Gated by variable:create.",
+				Long:    "Sets a variable at an owner scope. The value is validated against value_type. Gated by variable:create, plus platform:create when owner_kind is platform (the install-wide tier).",
 				Example: "  omniglass variable create --name name --owner-kind owner_kind --value value --value-type value_type",
 				Args:    cobra.ExactArgs(0),
 				RunE: func(cmd *cobra.Command, args []string) error {
@@ -3950,7 +3950,7 @@ func generatedCommands() []*cobra.Command {
 			}
 			cmd.Flags().StringVar(&fName, "name", "", "The cascade key; unique per owner")
 			_ = cmd.MarkFlagRequired("name")
-			cmd.Flags().StringVar(&fOwner, "owner", "", "The owning entity's name; omit for a global variable")
+			cmd.Flags().StringVar(&fOwner, "owner", "", "The owning entity's name; omit for a platform variable")
 			cmd.Flags().StringVar(&fOwnerKind, "owner-kind", "", "Which tier owns this variable")
 			_ = cmd.MarkFlagRequired("owner-kind")
 			cmd.Flags().StringVar(&fValue, "value", "", "The value, validated against value_type")
@@ -3963,7 +3963,7 @@ func generatedCommands() []*cobra.Command {
 			cmd := &cobra.Command{
 				Use:     "delete <id>",
 				Short:   "Delete a variable",
-				Long:    "Removes a variable by id. Gated by variable:delete; read and delete scopes on the owner drive the 404 versus 403 split.",
+				Long:    "Removes a variable by id. Gated by variable:delete, plus platform:delete when the variable sits at the platform tier; read and delete scopes on the owner drive the 404 versus 403 split.",
 				Example: "  omniglass variable delete <id>",
 				Args:    cobra.ExactArgs(1),
 				RunE: func(cmd *cobra.Command, args []string) error {
@@ -3992,7 +3992,7 @@ func generatedCommands() []*cobra.Command {
 			cmd := &cobra.Command{
 				Use:     "update <id>",
 				Short:   "Update a variable's value",
-				Long:    "Replaces a variable's value, validated against its fixed value_type. Only the value changes; name, type, and owner are fixed at creation. Gated by variable:update.",
+				Long:    "Replaces a variable's value, validated against its fixed value_type. Only the value changes; name, type, and owner are fixed at creation. Gated by variable:update, plus platform:update when the variable sits at the platform tier.",
 				Example: "  omniglass variable update <id> --value value",
 				Args:    cobra.ExactArgs(1),
 				RunE: func(cmd *cobra.Command, args []string) error {

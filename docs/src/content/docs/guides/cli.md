@@ -185,9 +185,9 @@ omniglass secret delete <id>
 omniglass effective-secret list <component>         # the masked cascade resolved onto a component
 ```
 
-`--owner-kind` is one of `global | location | system | component`; `--owner` names the owning entity
-and is omitted for a `global` secret (which needs an all-scope grant). Field maps pass as a JSON object
-to `--fields`, validated against the type's shape.
+`--owner-kind` is one of `platform | location | system | component`; `--owner` names the owning entity
+and is omitted for a `platform` secret (the install-wide tier, which needs an all-scope grant plus
+`platform:create`). Field maps pass as a JSON object to `--fields`, validated against the type's shape.
 
 ## Variables
 
@@ -199,7 +199,7 @@ the value is shown in the clear.
 omniglass variable list                             # the all-scope admin directory
 omniglass variable create --name poll_interval --value-type int \
   --owner-kind system --owner east-auditorium-av --value 30
-omniglass variable create --name retry --value-type json --owner-kind global \
+omniglass variable create --name retry --value-type json --owner-kind platform \
   --value '{"retries":3,"backoff":"1s"}'
 omniglass variable update <id> --value 60           # validated against the fixed value_type
 omniglass variable delete <id>
@@ -220,7 +220,7 @@ in the [admin guide](/guides/admin/) and listed in full in the [CLI reference](/
 ## Tags
 
 The [tag](/architecture/tags/) commands split along the governance line. The `tag` resource covers the
-**key vocabulary** (minting, editing, and deleting keys, plus the global default binding), while binding a
+**key vocabulary** (minting, editing, and deleting keys, plus the install-wide `platform` binding), while binding a
 value onto an entity is a **custom method on the entity** (`component set-tag` and friends), so it needs
 only the write the operator already holds on that entity. `effective-tag` reads the resolved cascade onto
 one component.
@@ -230,8 +230,8 @@ omniglass tag list                                  # the governed key vocabular
 omniglass tag create --name environment             # mint a key (tag:create, admin)
 omniglass tag create --name rack_position --applies-to '["location"]' --propagates=false
 omniglass tag update environment --applies-to '["component","system"]'
-omniglass tag setGlobal environment --value prod    # a tenant-wide default (tag:update)
-omniglass tag clearGlobal environment
+omniglass tag setPlatform environment --value prod  # an install-wide default (tag:update + platform:update)
+omniglass tag clearPlatform environment
 omniglass tag delete environment                    # cascades its bindings
 
 omniglass component setTag codec-1 --key environment --value dev    # component:update

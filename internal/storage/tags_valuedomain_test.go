@@ -67,7 +67,7 @@ func TestDistinctTagValues(t *testing.T) {
 	comp := seedTree(t, gw)
 	mustTag(t, gw, "environment", nil, true)
 
-	mustBind(t, gw, "environment", "global", nil, "prod")
+	mustBind(t, gw, "environment", "platform", nil, "prod")
 	mustBind(t, gw, "environment", "location", strptr("campus"), "staging")
 	mustBind(t, gw, "environment", "component", strptr("codec-1"), "prod") // duplicate value, collapses
 	_ = comp

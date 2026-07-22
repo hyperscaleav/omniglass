@@ -135,7 +135,10 @@ func TestRolesViewNetPermissions(t *testing.T) {
 		}
 	}
 	// Sample entries that must be present (a spread across resources and tiers).
-	for _, want := range []string{"component:read", "component:delete", "audit:read:admin", "role:read:admin", "secret:reveal"} {
+	// platform:<action> rides in on platformGated, so the tier gate a write at the
+	// least-specific cascade level needs is in the universe like any primary gate,
+	// and the roles view can report it held or missing.
+	for _, want := range []string{"component:read", "component:delete", "audit:read:admin", "role:read:admin", "secret:reveal", "platform:create", "platform:update", "platform:delete"} {
 		if !slices.Contains(uni, want) {
 			t.Errorf("permission_universe missing %q; got %v", want, uni)
 		}

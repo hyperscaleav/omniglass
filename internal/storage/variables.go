@@ -31,16 +31,16 @@ type Variable struct {
 	ID        string
 	Name      string
 	ValueType string          // string | int | float | bool | json
-	OwnerKind string          // global | component | system | location
-	OwnerID   *string         // the owning entity id; nil for the global singleton
-	OwnerName string          // the owning entity's name (empty for global), for display
+	OwnerKind string          // platform | component | system | location
+	OwnerID   *string         // the owning entity id; nil for the platform singleton
+	OwnerName string          // the owning entity's name (empty for platform), for display
 	Value     json.RawMessage // the jsonb value, typed by ValueType
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
 
 // VariableSpec is the create input. OwnerName is the owning entity's name
-// (resolved to its id), nil for a global variable. Value is the jsonb value,
+// (resolved to its id), nil for a platform variable. Value is the jsonb value,
 // validated against ValueType before any write.
 type VariableSpec struct {
 	Name      string
@@ -52,7 +52,7 @@ type VariableSpec struct {
 
 // ResolvedVariable is one entry in a component's effective-variables cascade: the
 // winning-or-shadowed variable, the owner it comes from, and where that owner sits
-// in the chain. Band orders the tiers (0 global, 1 location, 2 system, 3
+// in the chain. Band orders the tiers (0 platform, 1 location, 2 system, 3
 // component) and Depth is the distance up that tier's tree; the highest band then
 // lowest depth wins. Winner marks the resolved value; the shadowed entries come
 // back too so the surface can teach the override.
@@ -73,7 +73,7 @@ const variableCols = `id, name, value_type, owner_kind, component_id, system_id,
 
 // CreateVariable writes a new variable at its owner scope. The value_type and the
 // value are validated (app-level typing), the owner is resolved and scope-checked
-// (a global variable needs an all create scope; a scoped one needs its owner
+// (a platform variable needs an all create scope; a scoped one needs its owner
 // within the create scope), and the row plus its audit are written in one
 // transaction.
 func (p *PG) CreateVariable(ctx context.Context, actorID string, spec VariableSpec, create scope.Set) (*Variable, error) {
@@ -116,7 +116,7 @@ func (p *PG) CreateVariable(ctx context.Context, actorID string, spec VariableSp
 }
 
 // ListVariables returns every variable (the admin directory). Requires an
-// all-scope read: a variable is owned across three trees plus a global tier, so
+// all-scope read: a variable is owned across three trees plus a platform tier, so
 // slice-1 lists it only for the all-scope operator; the scoped, per-component view
 // is ResolveVariables. A non-all read is ErrVariableForbidden.
 func (p *PG) ListVariables(ctx context.Context, read scope.Set) ([]Variable, error) {
@@ -150,15 +150,17 @@ func (p *PG) ListVariables(ctx context.Context, read scope.Set) ([]Variable, err
 // UpdateVariable replaces a variable's value, validated against its fixed
 // value_type, audited. Name, type, and owner are fixed at creation. Requires the
 // owner within the action scope; an unknown or out-of-scope id is
-// ErrVariableNotFound.
-func (p *PG) UpdateVariable(ctx context.Context, actorID, id string, value json.RawMessage, read, action scope.Set) (*Variable, error) {
+// ErrVariableNotFound. canPlatform is the caller's platform:update permission: a
+// variable at the platform tier is install-wide, so an all-scoped caller without
+// it is ErrVariableForbidden.
+func (p *PG) UpdateVariable(ctx context.Context, actorID, id string, value json.RawMessage, read, action scope.Set, canPlatform bool) (*Variable, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("storage: begin update variable: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	row, err := p.variableRowForAction(ctx, tx, id, read, action)
+	row, err := p.variableRowForAction(ctx, tx, id, read, action, canPlatform)
 	if err != nil {
 		return nil, err
 	}
@@ -186,16 +188,17 @@ func (p *PG) UpdateVariable(ctx context.Context, actorID, id string, value json.
 }
 
 // DeleteVariable removes a variable by id, audited. The owner must be within the
-// action scope (all for a global variable); an unknown id or one out of read scope
-// is the non-disclosing ErrVariableNotFound.
-func (p *PG) DeleteVariable(ctx context.Context, actorID, id string, read, action scope.Set) error {
+// action scope (all for a platform variable); an unknown id or one out of read scope
+// is the non-disclosing ErrVariableNotFound. canPlatform is the caller's
+// platform:delete permission, required to remove a variable at the platform tier.
+func (p *PG) DeleteVariable(ctx context.Context, actorID, id string, read, action scope.Set, canPlatform bool) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("storage: begin delete variable: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	row, err := p.variableRowForAction(ctx, tx, id, read, action)
+	row, err := p.variableRowForAction(ctx, tx, id, read, action, canPlatform)
 	if err != nil {
 		return err
 	}
@@ -213,7 +216,7 @@ func (p *PG) DeleteVariable(ctx context.Context, actorID, id string, read, actio
 }
 
 // ResolveVariables returns the effective variables for a component: every variable
-// that resolves onto it down the structural cascade (global -> location tree ->
+// that resolves onto it down the structural cascade (platform -> location tree ->
 // system tree -> component tree, deepest and most-specific winning), with the
 // shadowed candidates included so the surface can teach the override. The
 // component must be within the read scope; an out-of-scope component is the
@@ -294,7 +297,7 @@ loc_chain(id, depth) as (
     where l.parent_id is not null
 ) cycle id set loc_cyc using loc_path,
 owners(owner_kind, owner_id, band, depth) as (
-                select 'global',    null::uuid, 0, 0
+                select 'platform',  null::uuid, 0, 0
     union all   select 'location',  id,         1, depth from loc_chain
     union all   select 'system',    id,         2, depth from sys_chain
     union all   select 'component', id,         3, depth from comp_chain
@@ -319,11 +322,11 @@ order by r.name, r.band desc, r.depth asc`
 // --- helpers -----------------------------------------------------------------
 
 // resolveVariableOwner turns an owner kind + optional name into the owning id,
-// enforcing the create scope: a global variable needs an all create scope; a
+// enforcing the create scope: a platform variable needs an all create scope; a
 // scoped one resolves its owner in the matching tree and requires it within the
-// create scope. Returns a nil id for a global owner.
+// create scope. Returns a nil id for a platform owner.
 func (p *PG) resolveVariableOwner(ctx context.Context, q querier, kind string, name *string, create scope.Set) (*string, error) {
-	if kind == "global" {
+	if kind == "platform" {
 		if !create.All {
 			return nil, ErrVariableForbidden
 		}
@@ -388,9 +391,12 @@ type variableRow struct {
 
 // variableRowForAction fetches a variable by id and enforces the read-then-action
 // scope split on its owner: read (owner in read scope, else the non-disclosing
-// not-found) then the action (owner in action scope, else forbidden). A global
-// variable needs the all scope on each leg.
-func (p *PG) variableRowForAction(ctx context.Context, q querier, id string, read, action scope.Set) (variableRow, error) {
+// not-found) then the action (owner in action scope, else forbidden). A platform
+// variable needs the all scope on each leg, plus the caller's platform permission
+// for the action (canPlatform): the tier is install-wide, so scope alone does not
+// carry it. Only the stored row knows its tier, which is why the permission is
+// resolved by the API and passed in here rather than checked on the request body.
+func (p *PG) variableRowForAction(ctx context.Context, q querier, id string, read, action scope.Set, canPlatform bool) (variableRow, error) {
 	var (
 		row            variableRow
 		comp, sys, loc *string
@@ -418,14 +424,17 @@ func (p *PG) variableRowForAction(ctx context.Context, q querier, id string, rea
 	} else if !ok {
 		return variableRow{}, ErrVariableForbidden
 	}
+	if row.ownerKind == "platform" && !canPlatform {
+		return variableRow{}, ErrVariableForbidden
+	}
 	return row, nil
 }
 
 // variableOwnerInScope reports whether a variable's owner falls within a scope
-// set: a global variable needs the all scope; a scoped one defers to the owner
+// set: a platform variable needs the all scope; a scoped one defers to the owner
 // tree.
 func (p *PG) variableOwnerInScope(ctx context.Context, q querier, kind string, id *string, set scope.Set) (bool, error) {
-	if kind == "global" {
+	if kind == "platform" {
 		return set.All, nil
 	}
 	if id == nil {

@@ -489,7 +489,7 @@ export interface paths {
         };
         /**
          * Effective tags for a component
-         * @description Resolves the tags that cascade onto a component (global -> location -> system -> component): keys union, values override most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves only from a binding on the component itself. The system band comes from MEMBERSHIP: pass ?system= to resolve against one the component belongs to (a shared device answers differently for each), or omit it to resolve against its primary membership. Gated by component:read; the component must be in the caller's component read scope.
+         * @description Resolves the tags that cascade onto a component (platform -> location -> system -> component): keys union, values override most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves only from a binding on the component itself. The system band comes from MEMBERSHIP: pass ?system= to resolve against one the component belongs to (a shared device answers differently for each), or omit it to resolve against its primary membership. Gated by component:read; the component must be in the caller's component read scope.
          */
         get: operations["effective-tags"];
         put?: never;
@@ -1939,7 +1939,7 @@ export interface paths {
         put?: never;
         /**
          * Create a secret
-         * @description Seals a secret at an owner scope (a global secret needs an all-scoped grant). Fields are validated and encrypted against the type shape. Gated by secret:create.
+         * @description Seals a secret at an owner scope. Fields are validated and encrypted against the type shape. Gated by secret:create, plus platform:create when owner_kind is platform (the install-wide tier).
          */
         post: operations["create-secret"];
         delete?: never;
@@ -1960,14 +1960,14 @@ export interface paths {
         post?: never;
         /**
          * Delete a secret
-         * @description Removes a secret by id. Gated by secret:delete; read and delete scopes on the owner drive the 404 versus 403 split.
+         * @description Removes a secret by id. Gated by secret:delete, plus platform:delete when the secret sits at the platform tier; read and delete scopes on the owner drive the 404 versus 403 split.
          */
         delete: operations["delete-secret"];
         options?: never;
         head?: never;
         /**
          * Update a secret's field values
-         * @description Replaces the given field values on a secret, re-sealing secret fields. Only values change; name, type, and owner are fixed at creation. An omitted field keeps its value. Gated by secret:update.
+         * @description Replaces the given field values on a secret, re-sealing secret fields. Only values change; name, type, and owner are fixed at creation. An omitted field keeps its value. Gated by secret:update, plus platform:update when the secret sits at the platform tier.
          */
         patch: operations["update-secret"];
         trace?: never;
@@ -2064,14 +2064,14 @@ export interface paths {
         post?: never;
         /**
          * Restore a settings namespace to defaults
-         * @description Drops the namespace's global override, restoring file and code defaults. Gated by settings:update.
+         * @description Drops the namespace's platform override, restoring the file layer and the declared defaults. Gated by settings:update and platform:update.
          */
         delete: operations["delete-settings-namespace"];
         options?: never;
         head?: never;
         /**
          * Update a settings namespace
-         * @description Applies an RFC 7386 JSON Merge Patch to the namespace's global override; null on a key restores it. Gated by settings:update.
+         * @description Applies an RFC 7386 JSON Merge Patch to the namespace's platform override; null on a key restores it. Gated by settings:update and platform:update.
          */
         patch: operations["patch-settings-namespace"];
         trace?: never;
@@ -2087,7 +2087,7 @@ export interface paths {
         put?: never;
         /**
          * Restore all settings to defaults
-         * @description Removes every global override (a factory reset). Gated by settings:update.
+         * @description Removes every platform override (a factory reset). Gated by settings:update and platform:update.
          */
         post: operations["restore-settings-defaults"];
         delete?: never;
@@ -2612,7 +2612,7 @@ export interface paths {
         patch: operations["update-tag"];
         trace?: never;
     };
-    "/tags/{name}:clearGlobal": {
+    "/tags/{name}:clearPlatform": {
         parameters: {
             query?: never;
             header?: never;
@@ -2622,17 +2622,17 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Clear a global tag value
-         * @description Removes the global binding for a key. Gated by tag:update (all-scope).
+         * Clear a platform tag value
+         * @description Removes the platform-tier binding for a key. Gated by tag:update (all-scope) and platform:update.
          */
-        post: operations["clear-global-tag"];
+        post: operations["clear-platform-tag"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/tags/{name}:setGlobal": {
+    "/tags/{name}:setPlatform": {
         parameters: {
             query?: never;
             header?: never;
@@ -2642,10 +2642,10 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Set a global tag value
-         * @description Binds a tenant-wide default value for a key at the global scope. Gated by tag:update (all-scope).
+         * Set a platform tag value
+         * @description Binds an install-wide default value for a key at the platform tier. Gated by tag:update (all-scope) and platform:update.
          */
-        post: operations["set-global-tag"];
+        post: operations["set-platform-tag"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2795,7 +2795,7 @@ export interface paths {
         put?: never;
         /**
          * Create a variable
-         * @description Sets a variable at an owner scope (a global variable needs an all-scoped grant). The value is validated against value_type. Gated by variable:create.
+         * @description Sets a variable at an owner scope. The value is validated against value_type. Gated by variable:create, plus platform:create when owner_kind is platform (the install-wide tier).
          */
         post: operations["create-variable"];
         delete?: never;
@@ -2816,14 +2816,14 @@ export interface paths {
         post?: never;
         /**
          * Delete a variable
-         * @description Removes a variable by id. Gated by variable:delete; read and delete scopes on the owner drive the 404 versus 403 split.
+         * @description Removes a variable by id. Gated by variable:delete, plus platform:delete when the variable sits at the platform tier; read and delete scopes on the owner drive the 404 versus 403 split.
          */
         delete: operations["delete-variable"];
         options?: never;
         head?: never;
         /**
          * Update a variable's value
-         * @description Replaces a variable's value, validated against its fixed value_type. Only the value changes; name, type, and owner are fixed at creation. Gated by variable:update.
+         * @description Replaces a variable's value, validated against its fixed value_type. Only the value changes; name, type, and owner are fixed at creation. Gated by variable:update, plus platform:update when the variable sits at the platform tier.
          */
         patch: operations["update-variable"];
         trace?: never;
@@ -3368,13 +3368,13 @@ export interface components {
             };
             /** @description The cascade key; unique per owner */
             name: string;
-            /** @description The owning entity's name; omit for a global secret */
+            /** @description The owning entity's name; omit for a platform secret */
             owner?: string;
             /**
              * @description Which tier owns this secret
              * @enum {string}
              */
-            owner_kind: "global" | "location" | "system" | "component";
+            owner_kind: "platform" | "location" | "system" | "component";
             /** @description A secret_type id */
             secret_type: string;
         };
@@ -3433,13 +3433,13 @@ export interface components {
             readonly $schema?: string;
             /** @description The cascade key; unique per owner */
             name: string;
-            /** @description The owning entity's name; omit for a global variable */
+            /** @description The owning entity's name; omit for a platform variable */
             owner?: string;
             /**
              * @description Which tier owns this variable
              * @enum {string}
              */
-            owner_kind: "global" | "location" | "system" | "component";
+            owner_kind: "platform" | "location" | "system" | "component";
             /** @description The value, validated against value_type */
             value: unknown;
             /**
@@ -3713,16 +3713,6 @@ export interface components {
             sha256: string;
             /** Format: int64 */
             size: number;
-        };
-        GlobalBindingInputBody: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/GlobalBindingInputBody.json
-             */
-            readonly $schema?: string;
-            /** @description The bound value */
-            value: string;
         };
         GrantBody: {
             /**
@@ -4212,7 +4202,7 @@ export interface components {
             /** @description The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces. */
             actions?: string[] | null;
             display_name?: string;
-            /** @description The resolved effective tags (key -> winning value) that cascade onto this location (global and its location tree); for the Tags column. */
+            /** @description The resolved effective tags (key -> winning value) that cascade onto this location (platform and its location tree); for the Tags column. */
             effective_tags?: {
                 [key: string]: string;
             };
@@ -4313,7 +4303,7 @@ export interface components {
             readonly $schema?: string;
             description?: string;
             display_name?: string;
-            /** @description The resolved effective tags (key -> winning value) on this node: its direct bindings plus propagating global tags. For the Tags column and the blade pills. */
+            /** @description The resolved effective tags (key -> winning value) on this node: its direct bindings plus propagating platform tags. For the Tags column and the blade pills. */
             effective_tags?: {
                 [key: string]: string;
             };
@@ -4327,6 +4317,16 @@ export interface components {
             /** @description The location's id; the stable form of location */
             location_id?: string;
             name: string;
+        };
+        PlatformBindingInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/PlatformBindingInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The bound value */
+            value: string;
         };
         PrincipalBody: {
             /**
@@ -4492,7 +4492,7 @@ export interface components {
         ResolvedTagBody: {
             /**
              * Format: int64
-             * @description Cascade tier: 0 global, 1 location, 2 system, 3 component
+             * @description Cascade tier: 0 platform, 1 location, 2 system, 3 component
              */
             band: number;
             /**
@@ -4798,7 +4798,7 @@ export interface components {
             locks: {
                 [key: string]: string;
             };
-            /** @description key 'namespace.key' to the winning level (code|file|global) */
+            /** @description key 'namespace.key' to the winning level (default|file|platform) */
             sources: {
                 [key: string]: string;
             };
@@ -4843,7 +4843,7 @@ export interface components {
             /** @description The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces. */
             actions?: string[] | null;
             display_name?: string;
-            /** @description The resolved effective tags (key -> winning value) that cascade onto this system (global, its location, its system tree); for the Tags column. */
+            /** @description The resolved effective tags (key -> winning value) that cascade onto this system (platform, its location, its system tree); for the Tags column. */
             effective_tags?: {
                 [key: string]: string;
             };
@@ -11136,7 +11136,7 @@ export interface operations {
             };
         };
     };
-    "clear-global-tag": {
+    "clear-platform-tag": {
         parameters: {
             query?: never;
             header?: never;
@@ -11166,7 +11166,7 @@ export interface operations {
             };
         };
     };
-    "set-global-tag": {
+    "set-platform-tag": {
         parameters: {
             query?: never;
             header?: never;
@@ -11178,7 +11178,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["GlobalBindingInputBody"];
+                "application/json": components["schemas"]["PlatformBindingInputBody"];
             };
         };
         responses: {

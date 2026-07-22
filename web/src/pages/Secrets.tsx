@@ -22,20 +22,20 @@ import {
 import { SYSTEMS_KEY, listSystems } from "../lib/systems";
 import { LOCATIONS_KEY, listLocations } from "../lib/locations";
 import { COMPONENTS_KEY, listComponents } from "../lib/components";
-import { useMe, can } from "../lib/auth";
+import { useMe, can, canAtPlatform, platformTierGap, platformAuthorityHint } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
 // Secrets: the shared-credential directory on the FlatList surface. A secret is a
-// typed, encrypted-at-rest value owned at one scope (global, or a location /
+// typed, encrypted-at-rest value owned at one scope (platform, or a location /
 // system / component) and resolved down the cascade; this page is the admin
 // directory (create, inspect masked, delete). A secret reaches a component by
 // being sourced into a field; this directory manages the cells themselves.
 
-const OWNER_KINDS: OwnerKind[] = ["global", "location", "system", "component"];
+const OWNER_KINDS: OwnerKind[] = ["platform", "location", "system", "component"];
 
 function ownerLabel(s: Secret): string {
-  if (s.owner_kind === "global") return "Global";
+  if (s.owner_kind === "platform") return "Platform";
   const tier = s.owner_kind.charAt(0).toUpperCase() + s.owner_kind.slice(1);
   return s.owner_name ? `${tier}: ${s.owner_name}` : tier;
 }
@@ -161,12 +161,25 @@ function SecretBladeBody(p: { id: string }): JSX.Element {
     }
   }
 
+  // A secret at the platform tier is install-wide, so the server gates its write on
+  // platform:<action> on top of secret:<action>. The footer gates on the same pair,
+  // so an operator never earns a 403 from a control the blade offered; below the
+  // tier the resource permission alone still decides.
+  const mayWrite = (action: string) => {
+    const s = secret();
+    if (!s) return false;
+    return s.owner_kind === "platform" ? canAtPlatform(me.data, "secret", action) : can(me.data, "secret", action);
+  };
+  // Holding the resource half without the tier half is the one state worth
+  // explaining: the actions are gone and nothing else on the blade says why.
+  const tierGap = () => (secret()?.owner_kind === "platform" ? platformTierGap(me.data, "secret", ["update", "delete"]) : []);
+
   // The footer action rail: Edit (pencil -> inline field edit -> Save/Cancel) for
   // secret:update, and Delete as the destructive action.
   edit.bind({
-    editable: () => !!secret() && can(me.data, "secret", "update"),
+    editable: () => mayWrite("update"),
     save,
-    destructive: () => (secret() && can(me.data, "secret", "delete") ? { label: "Delete", tone: "danger", onClick: removeSecret } : undefined),
+    destructive: () => (mayWrite("delete") ? { label: "Delete", tone: "danger", onClick: removeSecret } : undefined),
   });
 
   return (
@@ -175,6 +188,11 @@ function SecretBladeBody(p: { id: string }): JSX.Element {
         <div class="flex flex-col gap-4">
           <Show when={err()}>
             <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
+          </Show>
+          <Show when={tierGap().length > 0}>
+            <div role="status" class="alert alert-info alert-soft text-sm">
+              <span>{platformAuthorityHint("A secret", tierGap())}</span>
+            </div>
           </Show>
           <div class="grid grid-cols-2 gap-3 text-sm">
             <KVStacked label="Type" value={<span class="badge badge-ghost badge-sm">{s().secret_type}</span>} />
@@ -213,6 +231,7 @@ function SecretBladeBody(p: { id: string }): JSX.Element {
 // fields. Secret fields use a password input; the values are sealed server-side.
 function CreateSecretForm(p: { onCreated: () => void }): JSX.Element {
   const qc = useQueryClient();
+  const me = useMe();
   const types = useQuery(() => ({ queryKey: SECRET_TYPES_KEY, queryFn: listSecretTypes }));
   const systems = useQuery(() => ({ queryKey: SYSTEMS_KEY, queryFn: listSystems }));
   const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations }));
@@ -220,11 +239,23 @@ function CreateSecretForm(p: { onCreated: () => void }): JSX.Element {
 
   const [name, setName] = createSignal("");
   const [typeId, setTypeId] = createSignal("");
-  const [ownerKind, setOwnerKind] = createSignal<OwnerKind>("global");
+  const [ownerKind, setOwnerKind] = createSignal<OwnerKind>("platform");
   const [owner, setOwner] = createSignal("");
   const [fields, setFields] = createSignal<Record<string, string>>({});
   const [busy, setBusy] = createSignal(false);
   const [formErr, setFormErr] = createSignal<string | null>(null);
+
+  // The Scope select offers only the tiers this principal may actually write at.
+  // The platform tier is install-wide, gated server-side on platform:create on top
+  // of secret:create, so offering it to a caller holding only the resource half
+  // would be offering a control the server refuses.
+  const tierGap = () => platformTierGap(me.data, "secret", ["create"]);
+  const ownerKinds = createMemo(() => (tierGap().length > 0 ? OWNER_KINDS.filter((k) => k !== "platform") : OWNER_KINDS));
+  // Keep the choice inside the offered set: /auth/me may resolve after the form
+  // mounts, and the default ("platform") is exactly the one that can fall away.
+  createEffect(() => {
+    if (!ownerKinds().includes(ownerKind())) setOwnerKind(ownerKinds()[0]);
+  });
 
   const shape = createMemo(() => (types.data ?? []).find((t) => t.id === typeId()));
   // The fields the operator fills (lifecycle-origin fields are set by the secret's
@@ -247,7 +278,7 @@ function CreateSecretForm(p: { onCreated: () => void }): JSX.Element {
     submitIcon: Plus,
     submit: () => void submit(),
     busy,
-    disabled: () => !typeId() || !name().trim() || (ownerKind() !== "global" && !owner()),
+    disabled: () => !typeId() || !name().trim() || (ownerKind() !== "platform" && !owner()),
   });
 
   async function submit() {
@@ -258,7 +289,7 @@ function CreateSecretForm(p: { onCreated: () => void }): JSX.Element {
         name: name().trim(),
         secret_type: typeId(),
         owner_kind: ownerKind(),
-        owner: ownerKind() === "global" ? undefined : owner() || undefined,
+        owner: ownerKind() === "platform" ? undefined : owner() || undefined,
         fields: fields(),
       });
       await qc.invalidateQueries({ queryKey: SECRETS_KEY });
@@ -287,14 +318,15 @@ function CreateSecretForm(p: { onCreated: () => void }): JSX.Element {
       <div class="grid grid-cols-2 gap-3">
         <FieldRow
           label="Scope"
-          info="The estate scope this secret attaches to. It cascades down onto the components below it: global, or a location, system, or component."
+          info="The estate scope this secret attaches to. It cascades down onto the components below it: platform, or a location, system, or component."
           docHref="https://docs.omniglass.hyperscaleav.com/architecture/variables/"
+          hint={tierGap().length > 0 ? platformAuthorityHint("A secret", tierGap()) : undefined}
         >
           <select class="select select-bordered w-full" value={ownerKind()} onChange={(e) => { setOwnerKind(e.currentTarget.value as OwnerKind); setOwner(""); }}>
-            <For each={OWNER_KINDS}>{(k) => <option value={k}>{k.charAt(0).toUpperCase() + k.slice(1)}</option>}</For>
+            <For each={ownerKinds()}>{(k) => <option value={k}>{k.charAt(0).toUpperCase() + k.slice(1)}</option>}</For>
           </select>
         </FieldRow>
-        <Show when={ownerKind() !== "global"}>
+        <Show when={ownerKind() !== "platform"}>
           <FieldRow label={ownerKind().charAt(0).toUpperCase() + ownerKind().slice(1)}>
             <TreeSelect items={ownerTree()} value={owner()} onChange={setOwner} rootLabel="Choose…" />
           </FieldRow>

@@ -22,7 +22,7 @@ type nodeBody struct {
 	Enrolled        bool              `json:"enrolled"`
 	LastHeartbeatAt *time.Time        `json:"last_heartbeat_at,omitempty"`
 	EnrolledAt      *time.Time        `json:"enrolled_at,omitempty"`
-	EffectiveTags   map[string]string `json:"effective_tags,omitempty" doc:"The resolved effective tags (key -> winning value) on this node: its direct bindings plus propagating global tags. For the Tags column and the blade pills."`
+	EffectiveTags   map[string]string `json:"effective_tags,omitempty" doc:"The resolved effective tags (key -> winning value) on this node: its direct bindings plus propagating platform tags. For the Tags column and the blade pills."`
 }
 
 func toNodeBody(n *storage.Node) nodeBody {

@@ -34,7 +34,7 @@ A group:
 ## Placement: one specificity scale
 
 Structural layers auto-derive a specificity from position, weight-free, and the operator never tunes
-it: `global` lowest, then the templates, then the location / system / component trees by depth, then
+it: `platform` lowest, then the templates, then the location / system / component trees by depth, then
 the entity's own **instance** at the ceiling. A **group's weight is its specificity on that same
 scale**, so a group sits wherever its weight lands relative to the structural bands: a high weight
 beats deployment (a must-apply override), a low weight loses to it (a default that deployment

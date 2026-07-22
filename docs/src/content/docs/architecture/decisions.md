@@ -65,9 +65,10 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0028](#adr-0028-rank-retired-from-the-type-registries-sort-is-alphabetical) | 2026-07-14 | Accepted | `rank` is dropped from `location_type`, `system_type`, and `component_type`; the three list operations sort by `display_name, id` instead |
 | [ADR-0029](#adr-0029-files-slice-1-a-content-addressed-blob-store-and-a-tenant-wide-file-handle) | 2026-07-14 | Accepted | Files slice 1: a content-addressed `blob` store primitive (pgblobs) and a tenant-wide `file` handle; no placement arc (a file is 1:many, its locality is a future attachment), a binary `sensitive` flag reusing the secret `:admin` tier (defaults off), a delete frees its unreferenced blob synchronously (async mark-sweep GC deferred), base64-in-JSON on the wire |
 | [ADR-0031](#adr-0031-component_make-registry-slice-1-an-official-boolean-a-deferred-referential-guard-and-website-scheme-validation) | 2026-07-14 | Accepted | `component_make` slice 1: an `official` boolean (not an `origin` enum) for consistency with the type registries; the in-use referential delete guard deferred to the `component_model` slice (nothing references a make yet); `website` scheme-validated to `http`/`https`, client and server, against stored XSS |
-| [ADR-0032](#adr-0032-settings-persist-only-the-override-level-base-layers-are-recomputed-in-memory) | 2026-07-17 | Accepted | The settings engine persists only the override level; the `code` and `file` base layers are recomputed in memory each boot, so restore is a delete (diverges from scaling.md's "materialized in Postgres") |
-| [ADR-0033](#adr-0033-the-settings-gateway-is-unscoped-only-the-permission-gates-it) | 2026-07-17 | Accepted | Settings Gateway methods are unscoped: ABAC storage-scope is not applicable to platform / principal config; only the `settings:<action>` permission gates them |
-| [ADR-0034](#adr-0034-settings-resolve-as-a-cascade-over-principals-with-a-broader-wins-lock) | 2026-07-17 | Accepted | Settings resolve down the principal hierarchy reusing the cascade primitive, with per-key provenance and a top-down broader-wins lock |
+| [ADR-0032](#adr-0032-the-required-permission-is-published-per-route-and-the-permission-universe-is-route-derived) | 2026-07-17 | Accepted | Every gated route stamps its required permission into the OpenAPI (`x-omniglass-permission`), so the permission universe is derived from the routes rather than a hand-kept catalog |
+| [ADR-0033](#adr-0033-settings-persist-only-the-override-level-base-layers-are-recomputed-in-memory) | 2026-07-17 | Accepted | The settings engine persists only the override level; the `code` and `file` base layers are recomputed in memory each boot, so restore is a delete (diverges from scaling.md's "materialized in Postgres") |
+| [ADR-0034](#adr-0034-the-settings-gateway-is-unscoped-only-the-permission-gates-it) | 2026-07-17 | Accepted | Settings Gateway methods are unscoped: ABAC storage-scope is not applicable to platform / principal config; only the `settings:<action>` permission gates them |
+| [ADR-0035](#adr-0035-settings-resolve-as-a-cascade-over-principals-with-a-broader-wins-lock) | 2026-07-17 | Accepted | Settings resolve down the principal hierarchy reusing the cascade primitive, with per-key provenance and a top-down broader-wins lock |
 | [ADR-0036](#adr-0036-a-node-is-a-kindnode-principal-with-an-interim-bearer-credential-and-static-per-connection-nats-subject-permissions) | 2026-07-07 | Accepted | A node is a `principal` of `kind=node` with a 1:1 detail table and a bearer `credential` row (interim shared secret), and per-node NATS isolation is static per-connection subject permissions via an in-process auth callback; nkey/JWT deferred |
 | [ADR-0037](#adr-0037-telemetry-is-a-protobuf-event-over-jetstream-with-an-inline-owner-confining-consumer) | 2026-07-07 | Accepted | Telemetry is a protobuf `Event` over a JetStream durable consumer; the consumer binds the owner from the task's interface and confines a node to its own tasks inline (no separate raw-telemetry table or Postgres queue); raw persistence + replay and label-based multi-owner routing deferred |
 | [ADR-0038](#adr-0038-the-reachability-verdict-is-a-built-in-state) | 2026-07-07 | Accepted | The per-interface reachability verdict `interface.reachable` is a built-in **state** (not a metric); availability is `time_in_state` over it; readiness is interface-type-defaulted and interface-overridable, node-executed, not a `calc_rule` |
@@ -84,6 +85,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0049](#adr-0049-the-system-role-capability-gated-staffing-and-the-resolved-capability-set) | 2026-07-21 | Accepted | A **`system_role`** is a slot a system needs filled (a table microphone, a main display), declared on a **standard** (inherited live by every conforming system) or on one **system** (ad-hoc) over the same exclusive arc `property_value` uses, requiring a **conjunctive** `role_capability` set and carrying a **`quorum`**. A component's capabilities become a **resolved set** (`EffectiveCapabilities` = its product's, plus its own `component_capability` `present=true` rows, minus its `present=false` ones), because `product` is optional and a strict guard over a product-only fact would lock a productless component out of every role. `AssignRole` **refuses (422) and names the missing capabilities**, joining the location placement constraint as a refusal on modeled grounds that names the parties. **Quorum** ships here (staffing is visible without health); **impact** and the SLI rollup land in PR8. Supersedes the `system_template_member` role-requirement design. PR7 of the estate-model shift |
 | [ADR-0050](#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain) | 2026-07-21 | Accepted | Health is **recorded as a transition** and **recomputed at the write**, never on read. An **`alarm`** is component-local and names the **capabilities** it degrades; a component satisfies a role only when it provides every required capability and none of them is degraded; a role below its **quorum** is impaired and contributes its **`impact`** (`outage` / `degraded` / `none`); a system takes the worst of its roles, a location the worst of its systems. The verdict domain is **`healthy` / `degraded` / `outage`** and the judgement is a **pure package** (`internal/health`), unit-tested with no database. The recorded carrier is **`state_datapoint`**, already transition-only, so the history is edges and only edges; **compute-on-read** (no history) and **write-through-on-read** (the edge timestamped when somebody looked) are both rejected. A **read never writes**, and it computes the verdict it serves from the same rows it shows, so a report cannot contradict its own evidence. PR8 of the estate-model shift, closing epic [#266](https://github.com/hyperscaleav/omniglass/issues/266) |
 | [ADR-0054](#adr-0054-the-shell-owns-a-panels-action-rail-the-body-registers-and-never-draws) | 2026-07-21 | Accepted | A panel's action bar is **declared, not laid out**: a blade body binds through `lib/blades`, a Drawer form body through `lib/formactions`, and `BladeStack` / `Drawer` draw the result through the one `PanelFooter` rail. The opt-in `DrawerFooter` helper is deleted. A convention a body must remember can be forgotten, and was, by two forms for months while it was copied into six new pages around them |
+| [ADR-0057](#adr-0057-the-cascades-least-specific-tier-is-platform-and-a-default-is-not-a-tier) | 2026-07-21 | Accepted | The cascade's least-specific **binding** tier is renamed `global` to **`platform`** on both axes (same rung, no precedence change); a **`default`** is off the axis entirely, a column on a type declaration rather than a tier; there is **no root location**; a write at the tier needs its own **`platform:<action>`** permission. **Breaking:** a secret sealed at the old tier can no longer be decrypted (the AEAD binds the owner kind) |
 
 ## Entries
 
@@ -1069,6 +1071,7 @@ below from the project's history. From here it grows one slice at a time.
 - **Closes:** issue [#271](https://github.com/hyperscaleav/omniglass/issues/271) (settings engine slice-0), under
   epic [#270](https://github.com/hyperscaleav/omniglass/issues/270). Design:
   `docs/superpowers/specs/2026-07-17-settings-engine-design.md`.
+- **Amended by [ADR-0057](#adr-0057-the-cascades-least-specific-tier-is-platform-and-a-default-is-not-a-tier):** the model is unchanged, the level names are not: `code` is now `default` (off the axis, the setting's own declaration) and `global` is now `platform` (the install-wide rung).
 
 ### ADR-0034: the settings Gateway is unscoped; only the permission gates it
 
@@ -1089,6 +1092,7 @@ below from the project's history. From here it grows one slice at a time.
   **will** be constrained by the acting principal (a user edits only their own `user` row), but that is a
   per-principal ownership check, a different mechanism than estate ABAC, not a return of tree scope.
 - **Closes:** issue [#271](https://github.com/hyperscaleav/omniglass/issues/271) (settings engine slice-0).
+- **Amended by [ADR-0057](#adr-0057-the-cascades-least-specific-tier-is-platform-and-a-default-is-not-a-tier):** the model is unchanged, the level names are not: `code` is now `default` (off the axis, the setting's own declaration) and `global` is now `platform` (the install-wide rung).
 
 ### ADR-0035: settings resolve as a cascade over principals with a broader-wins lock
 
@@ -1112,6 +1116,7 @@ below from the project's history. From here it grows one slice at a time.
   override is supplied through a narrow function seam so the package never imports storage.
 - **Closes:** issue [#271](https://github.com/hyperscaleav/omniglass/issues/271) (settings engine slice-0), under
   epic [#270](https://github.com/hyperscaleav/omniglass/issues/270).
+- **Amended by [ADR-0057](#adr-0057-the-cascades-least-specific-tier-is-platform-and-a-default-is-not-a-tier):** the model is unchanged, the level names are not: `code` is now `default` (off the axis, the setting's own declaration) and `global` is now `platform` (the install-wide rung).
 
 ### ADR-0036: retire the standalone effective-secrets and effective-variables per-component panels; fields become the component value surface
 
@@ -1193,6 +1198,11 @@ below from the project's history. From here it grows one slice at a time.
 - **Closes the gap:** the multi-scope cascade is tracked by
   [#291](https://github.com/hyperscaleav/omniglass/issues/291); this ADR settles only the resolution rule
   and the type-default floor.
+- **Amended by [ADR-0057](#adr-0057-the-cascades-least-specific-tier-is-platform-and-a-default-is-not-a-tier):**
+  the resolution outcome is unchanged (any value set at any scope beats the default, and the default is what
+  remains when the arc is empty), but the default is **off the axis**, a column on the definition row, rather
+  than the cascade's bottom rung. The vocabulary moved; the rule did not.
+
 
 ### ADR-0043: The property catalog
 
@@ -1411,6 +1421,11 @@ below from the project's history. From here it grows one slice at a time.
 - **Tracked under** epic [#266](https://github.com/hyperscaleav/omniglass/issues/266). This is **PR5** of the
   estate-model shift toward property / event / command plus vendor / product / driver / capability / standard /
   role / health.
+- **Amended by [ADR-0057](#adr-0057-the-cascades-least-specific-tier-is-platform-and-a-default-is-not-a-tier):**
+  the contract default is unchanged, its vocabulary is. `coalesce(the instance's set value, the contract
+  default)` is the fall-through to a **declaration**, not the bottom rung of a cascade, so
+  `product_property.default_value` (and its two siblings) is the shipped instance of the off-axis default
+  rather than a tier under `platform`.
 
 ### ADR-0048: The `standard` blueprint and the template-fork seed model
 
@@ -1916,3 +1931,72 @@ below from the project's history. From here it grows one slice at a time.
   by uuid alone; the per-tier rename tests fail if an arc stops following a rename. Each conversion was
   **mutation-checked** rather than trusted: breaking the projection had to turn the suite red.
 - **Tracked as** [#343](https://github.com/hyperscaleav/omniglass/issues/343).
+
+### ADR-0057: The cascade's least-specific tier is `platform`, and a `default` is not a tier
+
+- **Date:** 2026-07-21 | **Status:** Accepted | **Pages:** [cascade](/architecture/cascade/), [settings](/architecture/settings/), [config, secrets, and variables](/architecture/variables/), [tags](/architecture/tags/), [identity and access](/architecture/identity-access/), [scaling and deployment](/architecture/scaling/)
+- **Decision:** Six calls, one vocabulary.
+  1. **`global` becomes `platform`** as the cascade's least-specific **binding** tier, on **both** axes: the
+     estate arc (`owner_kind` on `variable`, `secret`, and `tag_binding`) and the settings level
+     (`setting_override.scope`). It occupies exactly the rung it occupied before (`segment_rank 0`). It is a
+     decision like every other rung, what an admin set for the **whole install**, not a floor beneath the chain.
+  2. **`code` becomes `default`, and a `default` is off the axis on both engines.** A default is what a value
+     **is** absent any decision: a column on a definition row, beside the unit, the kind, and the validation
+     rule. It is not a rung, it shadows nothing, and nothing shadows it; the fold **falls through** to it when
+     no rung bound anything, and the resolve view reports it as a declaration rather than as a winning source.
+     A default is a column on a declaration row, so **a kind with no declaration row has no default**: a
+     setting has one (its struct tag) and a property has one on its classifier's contract
+     (`product_property.default_value` and its `standard_property` / `location_type_property` siblings, read as
+     `coalesce(the instance's set value, the contract default)` by `EffectiveProperties`,
+     [ADR-0047](#adr-0047-the-fields-fold-product_property-and-property_value)), while a variable, a secret,
+     and a tag have none. Absent means absent. Note the property default sits on the **contract**, not on the
+     `property` catalog entry: the catalog declares what a name means, a classifier declares what it is for
+     the things that conform to it. That is a narrower claim than the one this ADR was drafted against, when
+     the precedent was the retired `field_definition.default_value` hanging off a `component_type`, and it is
+     the stronger one for the rule here, since the coalesce is the fall-through in the code path itself.
+  3. **There is no root location.** The location tree keeps N unparented tops. A tier above today's tops is a
+     new `location_type` and a real node, never a magic one, and a top-level location is not a substitute for
+     `platform`: binding at one top misses every sibling, and a top added later is silently uncovered.
+  4. **The install-wide tier survives on the estate axis**, uniform across kinds:
+     `platform | location | system | component`.
+  5. **A write at the tier needs `platform:<action>`**, checked in addition to the resource permission and
+     published per route as an `x-omniglass-platform-permission` stamp. This separates full-estate **scope**
+     from install-wide **authority**: a senior operator may hold an all-scope grant without being able to
+     change the value that applies to the whole install. `platform:*` is seeded to `admin` (and reaches
+     `owner` through `>`); `operator` and `deploy` hold no `platform` write, and nothing implies one.
+     "Nothing implies one" is enforced by putting `platform` in the **sensitive-resource set** beside
+     `secret` and `settings` ([ADR-0025](#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier)),
+     so a bare single-token `*` never names it: a custom role carrying `*:update` holds every estate write
+     and still no install-wide authority. Only a literal, a `platform:*`, or a `>` names the tier.
+  6. **`root` is not used as a tier name**, so `location_type.allowed_parent_types` keeps its reserved `"root"`
+     sentinel meaning "top, no parent", unchanged.
+- **Context:** One word named two unrelated things, in two engines, with three spellings. On the estate axis
+  `global` was both a **tier** an operator writes at and, in the prose, a **floor** where ship-with policy
+  supposedly lived: [cascade](/architecture/cascade/) read "Ship-with default policy lives at `global`, the
+  floor of the chain", three lines under a heading that says the registry is **outside** the cascade. That was
+  drift, not design: `internal/seed/` writes eight YAML files and every one defines a **type**; none writes a
+  **binding**, and there has never been a ship-with row at the tier. Meanwhile the settings engine had already
+  split the two ideas and picked different words for them (`code` for the declaration, `global` for the
+  install-wide override), so the same distinction existed twice under three names. Separately, `global` also
+  names the singleton estate **owner** where health and KPIs roll up (a different concept that keeps the name),
+  which made "global" ambiguous in the one place ambiguity is most expensive. Naming the binding tier
+  `platform` and the declaration `default` gives each idea one word, and it drops an assumption the estate
+  never had: that "everything" and "the planet the sites are on" are the same thing.
+- **What does not change:** no precedence change (every row keeps its rung under a new name, so no deployment
+  resolves differently), no new rows (the migration renames a value, inserting nothing and adding no column),
+  no reordering of the segment ranks or the comparison key, and no capability removed.
+- **Breaking change, accepted deliberately:** `secretAAD` binds a sealed field to its owner arc,
+  `ownerKind|ownerID|name|field`. A secret sealed at the tier **before** this rename authenticates against
+  `global|global|...`; after it, the derivation yields `platform|platform|...`, the AEAD check fails, and
+  **that ciphertext never opens again**. Only the renamed tier is affected: a scoped secret carries a real
+  owner id and is untouched. Accepted because no deployment holds tier secrets yet, and each alternative
+  (freezing the AAD at the legacy string, a Go-side re-seal backfill, or a reveal-time fallback) buys
+  compatibility nothing currently needs at the price of a permanent legacy branch. Recorded here rather than
+  discovered later by a reader.
+- **Amends:** [ADR-0033](#adr-0033-settings-persist-only-the-override-level-base-layers-are-recomputed-in-memory),
+  [ADR-0034](#adr-0034-the-settings-gateway-is-unscoped-only-the-permission-gates-it),
+  [ADR-0035](#adr-0035-settings-resolve-as-a-cascade-over-principals-with-a-broader-wins-lock), and
+  [ADR-0042](#adr-0042-field-cascade-and-the-type-default-floor), and
+  [ADR-0047](#adr-0047-the-fields-fold-product_property-and-property_value). Each keeps its model; only the
+  level names and the default's place in the vocabulary move.
+- **Closes:** issue [#316](https://github.com/hyperscaleav/omniglass/issues/316).

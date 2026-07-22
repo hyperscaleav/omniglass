@@ -72,9 +72,10 @@ func runServer(ctx context.Context, _ string) error {
 	defer busSrv.Shutdown()
 	log.Info("embedded nats-server listening", "addr", c.NatsAddr)
 
-	// Settings engine: the operator file layer is captured once at boot; the code
-	// defaults are embedded; the global DB override is read live per request via a
-	// closure over the Gateway (a function seam so settings does not import storage).
+	// Settings engine: the operator file layer is captured once at boot; the declared
+	// defaults are reflected from the type; the platform DB override is read live per
+	// request via a closure over the Gateway (a function seam so settings does not
+	// import storage).
 	settingsFile, err := settings.LoadFile(c.SettingsFile)
 	if err != nil {
 		return fmt.Errorf("server: load settings file: %w", err)

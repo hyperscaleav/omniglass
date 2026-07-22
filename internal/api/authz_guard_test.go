@@ -96,6 +96,10 @@ type apiOp struct {
 	path       string // base-relative (the apiClient prepends /api/v1)
 	pathParams []string
 	perm       string // the x-omniglass-permission stamp, empty when unstamped
+	// platformPerm is the x-omniglass-platform-permission stamp: the SECOND
+	// permission a route enforces when its write lands at the platform tier (the
+	// install-wide cascade level). Empty for a route that never writes there.
+	platformPerm string
 }
 
 // operations parses the generated OpenAPI for the live operation set, so the
@@ -112,7 +116,8 @@ func operations(t *testing.T, gw storage.Gateway) []apiOp {
 				Name string `json:"name"`
 				In   string `json:"in"`
 			} `json:"parameters"`
-			Permission string `json:"x-omniglass-permission"`
+			Permission         string `json:"x-omniglass-permission"`
+			PlatformPermission string `json:"x-omniglass-platform-permission"`
 		} `json:"paths"`
 	}
 	if err := json.Unmarshal(raw, &doc); err != nil {
@@ -127,7 +132,10 @@ func operations(t *testing.T, gw storage.Gateway) []apiOp {
 					params = append(params, pa.Name)
 				}
 			}
-			out = append(out, apiOp{method: strings.ToUpper(m), path: p, pathParams: params, perm: op.Permission})
+			out = append(out, apiOp{
+				method: strings.ToUpper(m), path: p, pathParams: params,
+				perm: op.Permission, platformPerm: op.PlatformPermission,
+			})
 		}
 	}
 	return out
@@ -149,6 +157,9 @@ func TestEveryGateIsPublished(t *testing.T) {
 			if op.perm != "" {
 				t.Errorf("%s is in the ungated allow-list but carries x-omniglass-permission %q; an ungated route must not be stamped", key, op.perm)
 			}
+			if op.platformPerm != "" {
+				t.Errorf("%s is in the ungated allow-list but carries x-omniglass-platform-permission %q; an ungated route must not be stamped", key, op.platformPerm)
+			}
 			continue
 		}
 		if op.perm == "" {
@@ -158,6 +169,13 @@ func TestEveryGateIsPublished(t *testing.T) {
 		// The stamp must be a well-formed <resource>:<action>[:tier] permission.
 		if n := len(strings.Split(op.perm, ":")); n < 2 || n > 3 {
 			t.Errorf("%s has malformed x-omniglass-permission %q (want <resource>:<action>[:tier])", key, op.perm)
+		}
+		// A platform-tier stamp is published the same way, and is always a
+		// platform:<action> permission (the install-wide second gate).
+		if pp := op.platformPerm; pp != "" {
+			if !strings.HasPrefix(pp, "platform:") || len(strings.Split(pp, ":")) != 2 {
+				t.Errorf("%s has malformed x-omniglass-platform-permission %q (want platform:<action>)", key, pp)
+			}
 		}
 	}
 }

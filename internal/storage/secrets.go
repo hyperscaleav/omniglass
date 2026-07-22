@@ -53,9 +53,9 @@ type Secret struct {
 	ID         string
 	Name       string
 	SecretType string
-	OwnerKind  string  // global | component | system | location
-	OwnerID    *string // the owning entity id; nil for the global singleton
-	OwnerName  string  // the owning entity's name (empty for global), for display
+	OwnerKind  string  // platform | component | system | location
+	OwnerID    *string // the owning entity id; nil for the platform singleton
+	OwnerName  string  // the owning entity's name (empty for platform), for display
 	Fields     []ResolvedField
 	// AdminSensitive flips this secret's actions to the :admin tier: it is hidden
 	// from the directory and un-revealable for a caller without the admin tier,
@@ -67,7 +67,7 @@ type Secret struct {
 }
 
 // SecretSpec is the create input. OwnerName is the owning entity's name
-// (resolved to its id), nil for a global secret. Fields is the operator's
+// (resolved to its id), nil for a platform secret. Fields is the operator's
 // plaintext field map, validated and sealed against the type's shape.
 type SecretSpec struct {
 	Name           string
@@ -90,7 +90,7 @@ type ResolvedField struct {
 
 // ResolvedSecret is one entry in a component's effective-secrets cascade: the
 // winning-or-shadowed secret, the owner it comes from, and where that owner sits
-// in the chain. Band orders the tiers (0 global, 1 location, 2 system, 3
+// in the chain. Band orders the tiers (0 platform, 1 location, 2 system, 3
 // component) and Depth is the distance up that tier's tree (0 at the nearest
 // node); the highest band then lowest depth wins. Winner marks the resolved
 // value; the shadowed entries are returned too so the surface can teach the
@@ -170,7 +170,7 @@ func scanSecretType(row pgx.Row) (*SecretType, error) {
 const secretCols = `id, name, secret_type, owner_kind, component_id, system_id, location_id, value, created_at, updated_at, admin_sensitive`
 
 // CreateSecret seals a new secret at its owner scope. The owner is resolved and
-// scope-checked (a global secret needs an all create scope; a scoped one needs
+// scope-checked (a platform secret needs an all create scope; a scoped one needs
 // its owner within the create scope), the fields are validated and sealed
 // against the type shape, and the row plus its audit are written in one
 // transaction. Secret fields are AES-256-GCM sealed with their (owner, name,
@@ -299,16 +299,17 @@ func (p *PG) ListSecrets(ctx context.Context, read scope.Set, canAdmin bool) ([]
 }
 
 // DeleteSecret removes a secret by id, audited. The owner must be within the
-// action scope (all for a global secret); an unknown id or one out of read scope
-// is the non-disclosing ErrSecretNotFound.
-func (p *PG) DeleteSecret(ctx context.Context, actorID, id string, read, action scope.Set, canAdmin bool) error {
+// action scope (all for a platform secret); an unknown id or one out of read scope
+// is the non-disclosing ErrSecretNotFound. canPlatform is the caller's
+// platform:delete permission, required to remove a secret at the platform tier.
+func (p *PG) DeleteSecret(ctx context.Context, actorID, id string, read, action scope.Set, canAdmin, canPlatform bool) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("storage: begin delete secret: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	before, err := p.secretForAction(ctx, tx, id, read, action, canAdmin)
+	before, err := p.secretForAction(ctx, tx, id, read, action, canAdmin, canPlatform)
 	if err != nil {
 		return err
 	}
@@ -332,8 +333,9 @@ func (p *PG) DeleteSecret(ctx context.Context, actorID, id string, read, action 
 // call, so leaving a secret field blank there omits it (keeps the current
 // value); a direct API client that means "keep" must omit the field, not send
 // it empty. Requires the owner within the action scope; an unknown or
-// out-of-scope id is ErrSecretNotFound.
-func (p *PG) UpdateSecret(ctx context.Context, actorID, id string, fields map[string]string, read, action scope.Set, canAdmin bool) (*Secret, error) {
+// out-of-scope id is ErrSecretNotFound. canPlatform is the caller's
+// platform:update permission, required to edit a secret at the platform tier.
+func (p *PG) UpdateSecret(ctx context.Context, actorID, id string, fields map[string]string, read, action scope.Set, canAdmin, canPlatform bool) (*Secret, error) {
 	if p.secret == nil {
 		return nil, ErrNoSecretProvider
 	}
@@ -343,7 +345,7 @@ func (p *PG) UpdateSecret(ctx context.Context, actorID, id string, fields map[st
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	row, shape, err := p.secretRowForAction(ctx, tx, id, read, action, canAdmin)
+	row, shape, err := p.secretRowForAction(ctx, tx, id, read, action, canAdmin, canPlatform)
 	if err != nil {
 		return nil, err
 	}
@@ -409,7 +411,10 @@ func (p *PG) decryptSecret(ctx context.Context, actorID, id, verb string, read, 
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	row, shape, err := p.secretRowForAction(ctx, tx, id, read, action, canAdmin)
+	// Revealing reads a secret, it never writes at the platform tier, so the tier
+	// permission does not apply here: the read/action scopes and the admin tier are
+	// the whole gate. Passing true keeps the shared fetch from re-gating a read.
+	row, shape, err := p.secretRowForAction(ctx, tx, id, read, action, canAdmin, true)
 	if err != nil {
 		return nil, err
 	}
@@ -449,7 +454,7 @@ func (p *PG) decryptSecret(ctx context.Context, actorID, id, verb string, read, 
 // --- cascade resolver --------------------------------------------------------
 
 // ResolveSecrets returns the effective secrets for a component: every secret
-// that resolves onto it down the structural cascade (global -> location tree ->
+// that resolves onto it down the structural cascade (platform -> location tree ->
 // system tree -> component tree, deepest and most-specific winning), each masked,
 // with the shadowed candidates included so the surface can teach the override.
 // The component must be within the read scope (a secret that cascades from a
@@ -522,7 +527,7 @@ loc_chain(id, depth) as (
     where l.parent_id is not null
 ) cycle id set loc_cyc using loc_path,
 owners(owner_kind, owner_id, band, depth) as (
-                select 'global',    null::uuid, 0, 0
+                select 'platform',  null::uuid, 0, 0
     union all   select 'location',  id,         1, depth from loc_chain
     union all   select 'component', id,         3, depth from comp_chain
 ),
@@ -547,11 +552,11 @@ order by r.name, r.band desc, r.depth asc`
 // --- helpers -----------------------------------------------------------------
 
 // resolveSecretOwner turns an owner kind + optional name into the owning id,
-// enforcing the create scope: a global secret needs an all create scope; a
+// enforcing the create scope: a platform secret needs an all create scope; a
 // scoped one resolves its owner in the matching tree and requires it within the
-// create scope. Returns a nil id for a global owner.
+// create scope. Returns a nil id for a platform owner.
 func (p *PG) resolveSecretOwner(ctx context.Context, q querier, kind string, name *string, create scope.Set) (*string, error) {
-	if kind == "global" {
+	if kind == "platform" {
 		if !create.All {
 			return nil, ErrSecretForbidden
 		}
@@ -637,7 +642,7 @@ func (p *PG) sealFields(ctx context.Context, shape secret.Shape, ownerKind strin
 // secretAAD binds a sealed field to its owner arc, name, and field, so a
 // ciphertext authenticates only in the exact row it was sealed for.
 func secretAAD(ownerKind string, ownerID *string, name, field string) []byte {
-	oid := "global"
+	oid := "platform"
 	if ownerID != nil {
 		oid = *ownerID
 	}
@@ -645,7 +650,7 @@ func secretAAD(ownerKind string, ownerID *string, name, field string) []byte {
 }
 
 // arcColumns maps an owner kind + id to the three nullable arc columns, exactly
-// one set for a scoped owner, all null for the global singleton.
+// one set for a scoped owner, all null for the platform singleton.
 func arcColumns(kind string, id *string) (comp, sys, loc *string) {
 	switch kind {
 	case "component":
@@ -678,8 +683,8 @@ type secretRow struct {
 
 // secretForAction fetches a secret by id and enforces the read-then-action scope
 // split on its owner, returning the masked Secret for the audit before-image.
-func (p *PG) secretForAction(ctx context.Context, q querier, id string, read, action scope.Set, canAdmin bool) (*Secret, error) {
-	row, shape, err := p.secretRowForAction(ctx, q, id, read, action, canAdmin)
+func (p *PG) secretForAction(ctx context.Context, q querier, id string, read, action scope.Set, canAdmin, canPlatform bool) (*Secret, error) {
+	row, shape, err := p.secretRowForAction(ctx, q, id, read, action, canAdmin, canPlatform)
 	if err != nil {
 		return nil, err
 	}
@@ -693,9 +698,12 @@ func (p *PG) secretForAction(ctx context.Context, q querier, id string, read, ac
 
 // secretRowForAction is the shared fetch-and-scope-check: the secret is read
 // (owner in read scope, else the non-disclosing not-found) then gated for the
-// action (owner in action scope, else forbidden). A global secret needs the
-// all scope on each leg.
-func (p *PG) secretRowForAction(ctx context.Context, q querier, id string, read, action scope.Set, canAdmin bool) (secretRow, secret.Shape, error) {
+// action (owner in action scope, else forbidden). A platform secret needs the
+// all scope on each leg, plus the caller's platform permission for the action
+// (canPlatform): the tier is install-wide, so scope alone does not carry it. Only
+// the stored row knows its tier, which is why the permission is resolved by the
+// API and passed in here rather than checked on the request body.
+func (p *PG) secretRowForAction(ctx context.Context, q querier, id string, read, action scope.Set, canAdmin, canPlatform bool) (secretRow, secret.Shape, error) {
 	var (
 		row       secretRow
 		secType   string
@@ -732,6 +740,9 @@ func (p *PG) secretRowForAction(ctx context.Context, q querier, id string, read,
 	} else if !ok {
 		return secretRow{}, secret.Shape{}, ErrSecretForbidden
 	}
+	if row.ownerKind == "platform" && !canPlatform {
+		return secretRow{}, secret.Shape{}, ErrSecretForbidden
+	}
 	st, err := p.GetSecretType(ctx, secType)
 	if err != nil {
 		return secretRow{}, secret.Shape{}, err
@@ -740,9 +751,9 @@ func (p *PG) secretRowForAction(ctx context.Context, q querier, id string, read,
 }
 
 // secretOwnerInScope reports whether a secret's owner falls within a scope set:
-// a global secret needs the all scope; a scoped one defers to the owner tree.
+// a platform secret needs the all scope; a scoped one defers to the owner tree.
 func (p *PG) secretOwnerInScope(ctx context.Context, q querier, kind string, id *string, set scope.Set) (bool, error) {
-	if kind == "global" {
+	if kind == "platform" {
 		return set.All, nil
 	}
 	if id == nil {

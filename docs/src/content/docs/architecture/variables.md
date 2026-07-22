@@ -53,8 +53,8 @@ kinds share that resolution but differ in what they are keyed to and what lifecy
 | example | `video.input = HDMI1` | an `snmp-community`, a `basic-auth` | `poll_interval = 30s`, a base URL, a label |
 
 The common thread is the cascade and an exclusive-arc scope (exactly one of
-`global | template | location | system | component`): the same exclusive-arc ownership as
-datapoints, plus a `template`-scoped default the datapoint arc lacks (and unlike datapoints,
+`platform | template | location | system | component`): the same exclusive-arc ownership as
+datapoints, plus a `template`-scoped binding the datapoint arc lacks (and unlike datapoints,
 config is not `node`-owned). The three are not three subsystems; they are three uses of one
 "set a value, resolve it down a scope" idea.
 
@@ -140,7 +140,7 @@ binding shape on the template.
 ## secret: a typed, encrypted cascaded value
 
 A **secret** is an access secret: a typed value, encrypted at rest, owned on the exclusive arc
-(`global | location | system | component`) and resolved most-specific-wins down the cascade like config
+(`platform | location | system | component`) and resolved most-specific-wins down the cascade like config
 and variables, but sealed so its value never sits in the clear. Its first slice is **built**
 ([ADR-0017](/architecture/decisions/#adr-0017-credential-is-renamed-secret-the-cascade-is-the-reuse-mechanism)):
 the typed cell, the crypto, the cascade resolver, and the operator surfaces. A **sensitivity ladder** is
@@ -148,6 +148,12 @@ not a flag any value carries; a secret is its own primitive because it is stored
 only through a masked, audited path. (Within the secret primitive, a **binary** `admin_sensitive` flag
 does split admin-only platform credentials from operator-visible device secrets, described below; that is
 a visibility tier, not an arbitrary sensitivity level bolted onto every value.)
+
+**Two senses of "platform", kept apart.** A **platform credential** is a *kind of secret*, a vendor or
+cloud account key (a Zoom client secret) as opposed to a device secret, and it is marked by the
+`admin_sensitive` flag at whatever scope it sits. The **`platform` tier** is a *place on the cascade*,
+the install-wide rung. A device secret can sit at the `platform` tier, and a platform credential can sit
+on one location; the words are unrelated.
 
 **Shape is a `secret_type` registry.** A secret has a structured **`secret_type`** shape: a per-field
 list of `{name, type, secret, origin}`, so one field is secret (an `snmp-community` string, a password)
@@ -181,7 +187,8 @@ clipboard **copy**, recorded under distinct `reveal` and `copy` verbs), and **ev
 
 **Two axes decide who reaches a secret** ([ADR-0025](/architecture/decisions/#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier)).
 **Placement scope** (where the secret attaches on the exclusive arc) gives locality: a Singapore-scoped
-field tech creates and reveals device secrets under Singapore and cannot reach one attached at global.
+field tech creates and reveals device secrets under Singapore and cannot reach one attached at the
+`platform` tier.
 A per-secret **`admin_sensitive` flag** gives same-scope sensitivity: when set, every action on that
 secret is lifted to the **`:admin` tier**, so a platform credential (a Zoom client secret) stays
 admin/owner-only even at the same scope as an operational device secret an operator sees. `secret` is
@@ -230,7 +237,7 @@ cell (a `value_type` of `string` / `int` / `float` / `bool` / `json`, its value 
 against the type in the app), owned on the exclusive arc and resolved down the cascade, with a Variables directory.
 It **grants `variable:create,update` to operators** (delete stays
 admin and owner), mirroring the secret member. Three parts of the design below are deferred: the **`template`**
-owner scope (slice 1 mirrors the secret arc, `global | location | system | component`; template scope and cascade
+owner scope (slice 1 mirrors the secret arc, `platform | location | system | component`; template scope and cascade
 groups are [#184](https://github.com/hyperscaleav/omniglass/issues/184)); a **`variable_type` registry** (slice 1
 types inline with the `value_type` enum, no registry table, matching the "operator-defined, not curated" model); and
 the **`$var:` consumer** and the **secret-flagged** variable. These divergences are logged in the
@@ -239,7 +246,7 @@ the **`$var:` consumer** and the **secret-flagged** variable. These divergences 
 
 A **variable** is the leftover, and the most familiar: a value you splice into behavior that is **not**
 a device signal and carries no lifecycle, like a poll interval, a base URL, an environment label, or a
-tuning constant. These are Zabbix-style **macros**, resolved `global → template → instance` down the
+tuning constant. These are Zabbix-style **macros**, resolved `platform → template → instance` down the
 same cascade and interpolated as `$var:<name>` into functions, interface definitions, and rule
 scopes.
 
@@ -247,9 +254,9 @@ scopes.
   "operator-defined, not curated" namespace genuinely applies). There is no registry authority and no
   pre-registration; sprawl is controlled by a creation **role-gate** ([IAM](/architecture/identity-access/))
   and by every variable being **surfaced in the tree** as it is added.
-- **Global and template-local are the same primitive at different scopes.** A global macro
-  (a company-wide NTP server) and a template-local one (a device class's default poll interval) differ
-  only by where on the cascade they sit.
+- **Install-wide and template-local are the same primitive at different scopes.** A `platform` macro
+  (a company-wide NTP server) and a template-local one (a device class's poll interval) differ only by
+  where on the cascade they sit.
 - A variable has **no observed side and no reconcile**; nothing on a device mirrors a poll interval.
   That absence is exactly what separates it from config.
 
@@ -346,9 +353,9 @@ stays routine. The UI **autocompletes keys from the registry** as you type, so y
 existing key instead of coining a near-duplicate.
 
 **Values bind down the cascade.** A `tag_binding` sets a value for a key at any scope
-(`global | template | location | system | component`) and through [groups](/architecture/groups/),
+(`platform | template | location | system | component`) and through [groups](/architecture/groups/),
 exactly like config and variables. Keys **union** (an entity surfaces every tag bound at or above it);
-values **override** most-specific-wins. A [template](/architecture/templates/) seeds default tags onto
+values **override** most-specific-wins. A [template](/architecture/templates/) binds its own tags onto
 its component (`category: audio-dsp`). Because resolution is cascaded, you tag a location once and every
 system and component beneath it inherits it, which is what makes tags a practical scoping dimension: a
 high-weight [group](/architecture/groups/) can key a rule-set off `compliance: pci`, an action can read
@@ -366,11 +373,11 @@ Free-text values ship either way; the question is how much governance a key plac
 ## What's shared
 
 - **The cascade.** Config, secrets, and variables resolve most-specific-wins down
-  `global → … → component`, with a template-scoped value as a shipped default; **tags** resolve down
+  `platform → … → component`, with a template-scoped value as a shipped baseline; **tags** resolve down
   the same cascade with a union-on-key, override-on-value combinator. One resolver
   ([cascade](/architecture/cascade/)).
 - **The exclusive-arc scope.** Each value is owned at exactly one scope: the same exclusive-arc
-  ownership as datapoints, plus a `template`-scoped default the datapoint arc lacks (and config is
+  ownership as datapoints, plus a `template`-scoped binding the datapoint arc lacks (and config is
   not `node`-owned).
 - **Typing.** A secret takes a structured `secret_type` shape registry (per-field secrecy and origin);
   a variable types inline against its `value_type` (a scalar, validated in the app, no registry); config
@@ -429,11 +436,11 @@ exclusive-arc scope either way.
 | Table | Key columns | Notes |
 |---|---|---|
 | `secret_type` | id, **official**, schema (per-field `{name, type, secret, origin}`) | **Built.** The secret **shape** registry (`snmp-community`, `basic-auth` seeded); `official` marks shipped-canonical versus org-local, like the datapoint and role registries |
-| `secret` | (name, **owner arc**), secret_type, **`admin_sensitive`**, **value** (secret fields as `{ciphertext, nonce, wrapped_dek, key_id}` envelopes, non-secret fields plaintext) | **Built.** The encrypted cell and the `$sec:` cascade key; scope is the exclusive arc (global/location/system/component). Read masked through a **scope-filtered** directory; decrypted only through the audited `:reveal` / `:copy` path. Visibility is placement scope plus the per-secret `admin_sensitive` flag (admin-only when set); `secret` is off the `*:read` floor ([ADR-0025](/architecture/decisions/#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier)) |
+| `secret` | (name, **owner arc**), secret_type, **`admin_sensitive`**, **value** (secret fields as `{ciphertext, nonce, wrapped_dek, key_id}` envelopes, non-secret fields plaintext) | **Built.** The encrypted cell and the `$sec:` cascade key; scope is the exclusive arc (platform/location/system/component). Read masked through a **scope-filtered** directory; decrypted only through the audited `:reveal` / `:copy` path. Visibility is placement scope plus the per-secret `admin_sensitive` flag (admin-only when set); `secret` is off the `*:read` floor ([ADR-0025](/architecture/decisions/#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier)) |
 | `variable` | (name, **owner arc**), **value_type** (`string`/`int`/`float`/`bool`/`json`), **value** (jsonb) | **Built.** The plaintext variable cell and the `$var:` cascade key; scope is the exclusive arc. Typed inline (no `variable_type` registry: the value is validated against `value_type` in the app), no observed side. The **config** cell (declared/observed/reconcile) is a separate, deferred member |
 | `property` | name (PK), **official**, **data_type** (`string`/`int`/`float`/`bool`/`json`), nullable **kind** (`metric`/`state`/`log`), display_name, unit, **validation** (JSON Schema) | **Built.** The primitive-agnostic **catalog** of typed names, the single source for what a name means whoever produces it; seed-owned `official` rows are read-only. Value tables key by the **name string**, so the catalog governs the vocabulary without owning the values ([ADR-0043](/architecture/decisions/#adr-0043-the-property-catalog)) |
 | `product_property` / `standard_property` / `location_type_property` | (**classifier**, **property**), **default_value** (jsonb), **required** | **Built.** The classifier's declared-property **contract**, one table per classifier and all the same shape: which catalog properties every instance of that product, standard, or location type exposes, with an optional default and a required flag, unique per pair. `data_type` and `validation` are **not** repeated here, they stay on `property`. Replaces the retired `field_definition`. A driver access/mode column is deferred; a `node` has no classifier by design |
 | `property_value` | (**owner arc**, property, **instance**, **provenance**), **value** (jsonb) | **Built for `declared` on all four owner kinds.** The value store, on the **same exclusive arc** as the datapoint sinks and `event`; the series key is `unique nulls not distinct`, since the arc leaves three owner columns NULL. The effective read is **contract-default-or-override** plus the off-contract set (`is_set` marks the override, `value_id` carries the row id so the UI can clear it), resolved by one owner-generic query and ABAC-scoped on **every** arc, read and write. Replaces the retired `field_value`. The `observed`/`calculated`/`intended` producers, macro-string values, and the cross-owner cascade are deferred |
 | `tag` | name, applies_to, propagates | **Built.** The **tenant-wide governed key vocabulary**; minting a key needs `tag:create` ([identity and access](/architecture/identity-access/)). No `_type`, no namespace; values bind via `tag_binding`. See [tags](/architecture/tags/) |
-| `tag_binding` | (tag, **owner arc**), value | **Built.** The `key: value` binding: **union on key, override on value** down the [cascade](/architecture/cascade/), owned on the exclusive arc (`global / location / system / component`); setting a value is the owner's own `update` write. Binding via groups and a `template` default are deferred |
+| `tag_binding` | (tag, **owner arc**), value | **Built.** The `key: value` binding: **union on key, override on value** down the [cascade](/architecture/cascade/), owned on the exclusive arc (`platform / location / system / component`); setting a value is the owner's own `update` write. Binding via groups and a `template`-scoped binding are deferred |
 
