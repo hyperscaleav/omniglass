@@ -2,6 +2,7 @@ import { type JSX, For, Show, createEffect, onCleanup } from "solid-js";
 import { Dynamic } from "solid-js/web";
 import { Ban, ChevronLeft, MoreHorizontal, Pencil, RotateCcw, Save, Trash, X } from "./icons";
 import Button from "./Button";
+import PanelFooter from "./PanelFooter";
 import { type BladeController, type BladeDef, BladeEditContext, createEditSlot } from "../lib/blades";
 
 // BladeStack: the Azure-style right-hand blade stack, lifted out of TreeList so
@@ -118,7 +119,7 @@ export default function BladeStack(props: {
                         right cluster. Rendered only when the body registers an action, so
                         a read-only blade (a role) has no bar. */}
                     <Show when={edit.editable() || !!edit.destructive() || edit.secondary().length > 0 || !!edit.primary()}>
-                      <footer class="flex flex-none items-center gap-2 border-t border-base-300 bg-base-100 px-4 py-3" classList={{ "pointer-events-none opacity-55": !isTop() }}>
+                      <PanelFooter dimmed={!isTop()}>
                         <Show when={edit.destructive()}>
                           {(dst) => (
                             <Button
@@ -141,7 +142,12 @@ export default function BladeStack(props: {
                           </Show>
                           <Show when={!edit.editing() && edit.primary()}>
                             {(pr) => (
-                              <Button intent="action" onClick={() => pr().onClick()}>
+                              <Button
+                                intent="action"
+                                onClick={() => pr().onClick()}
+                                loading={pr().busy?.()}
+                                disabled={pr().disabled?.()}
+                              >
                                 {pr().icon}{pr().label}
                               </Button>
                             )}
@@ -156,7 +162,7 @@ export default function BladeStack(props: {
                             </Show>
                           </Show>
                         </div>
-                      </footer>
+                      </PanelFooter>
                     </Show>
                     {/* Clicking a covered blade returns to it: push its own ref, which
                         truncates-to-existing and folds the stack back to this depth. */}

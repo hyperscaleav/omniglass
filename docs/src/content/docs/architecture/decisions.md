@@ -83,6 +83,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0048](#adr-0048-the-standard-blueprint-and-the-template-fork-seed-model) | 2026-07-21 | Accepted | `system_type` is promoted to **`standard`**, the blueprint a system conforms to and the system-side counterpart of `product`: it gains `parent_standard_id` (variants), a declared-property contract, and its own `standard:*` Catalog resource, and `system.standard_id` becomes **optional**. `standard_property` and `location_type_property` join `product_property`, and one **owner-generic** `EffectiveProperties(ownerKind, ownerID)` resolves component, system, location, and node off a single parameterized template. A standard and a location type are created by **forking an in-code template** (one-time, no inheritance), so a shipped row is **operator-owned** (`official: false`, seeded **if absent**), while a system **conforms** to its standard with **live** inheritance; only the canonical catalogs keep the authoritative upsert. PR6 of the estate-model shift |
 | [ADR-0049](#adr-0049-the-system-role-capability-gated-staffing-and-the-resolved-capability-set) | 2026-07-21 | Accepted | A **`system_role`** is a slot a system needs filled (a table microphone, a main display), declared on a **standard** (inherited live by every conforming system) or on one **system** (ad-hoc) over the same exclusive arc `property_value` uses, requiring a **conjunctive** `role_capability` set and carrying a **`quorum`**. A component's capabilities become a **resolved set** (`EffectiveCapabilities` = its product's, plus its own `component_capability` `present=true` rows, minus its `present=false` ones), because `product` is optional and a strict guard over a product-only fact would lock a productless component out of every role. `AssignRole` **refuses (422) and names the missing capabilities**, joining the location placement constraint as a refusal on modeled grounds that names the parties. **Quorum** ships here (staffing is visible without health); **impact** and the SLI rollup land in PR8. Supersedes the `system_template_member` role-requirement design. PR7 of the estate-model shift |
 | [ADR-0050](#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain) | 2026-07-21 | Accepted | Health is **recorded as a transition** and **recomputed at the write**, never on read. An **`alarm`** is component-local and names the **capabilities** it degrades; a component satisfies a role only when it provides every required capability and none of them is degraded; a role below its **quorum** is impaired and contributes its **`impact`** (`outage` / `degraded` / `none`); a system takes the worst of its roles, a location the worst of its systems. The verdict domain is **`healthy` / `degraded` / `outage`** and the judgement is a **pure package** (`internal/health`), unit-tested with no database. The recorded carrier is **`state_datapoint`**, already transition-only, so the history is edges and only edges; **compute-on-read** (no history) and **write-through-on-read** (the edge timestamped when somebody looked) are both rejected. A **read never writes**, and it computes the verdict it serves from the same rows it shows, so a report cannot contradict its own evidence. PR8 of the estate-model shift, closing epic [#266](https://github.com/hyperscaleav/omniglass/issues/266) |
+| [ADR-0054](#adr-0054-the-shell-owns-a-panels-action-rail-the-body-registers-and-never-draws) | 2026-07-21 | Accepted | A panel's action bar is **declared, not laid out**: a blade body binds through `lib/blades`, a Drawer form body through `lib/formactions`, and `BladeStack` / `Drawer` draw the result through the one `PanelFooter` rail. The opt-in `DrawerFooter` helper is deleted. A convention a body must remember can be forgotten, and was, by two forms for months while it was copied into six new pages around them |
 
 ## Entries
 
@@ -1813,3 +1814,30 @@ below from the project's history. From here it grows one slice at a time.
 - **Breaking.** Response shapes change. At v0.0.0 this is the right moment, since the cost only grows.
 - **Tracked as** [#334](https://github.com/hyperscaleav/omniglass/issues/334), following
   [#328](https://github.com/hyperscaleav/omniglass/issues/328).
+### ADR-0054: The shell owns a panel's action rail; the body registers and never draws
+
+- **Date:** 2026-07-21 | **Status:** Accepted | **Pages:** [design system](/contributing/design-system/)
+- **Decision:** A panel's action buttons are **declared as data, not laid out as markup**. A blade body
+  binds `destructive` / `secondary` / `primary` (plus the Edit -> Save cycle) through `lib/blades`; a
+  Drawer form body binds `submitLabel` / `submitIcon` / `submit` / `busy` / `disabled` / `cancel`
+  through `lib/formactions`. `BladeStack` and `Drawer` each compose their own button vocabulary but
+  draw it through the single `PanelFooter` rail. A form body renders **no footer markup at all**.
+- **Context:** The blade already worked this way. The Drawer did not: its rail was an opt-in
+  `DrawerFooter` helper that every form body had to remember to import and wrap its buttons in.
+  Fourteen forms remembered. Two did not, and hand-rolled their own right-aligned row instead, where
+  they survived nine merged PRs unchanged while the helper was copied into six newly added pages
+  around them. The cost was not only the two misses: among the forms that did use it, some rendered a
+  Cancel and some did not, some spun a spinner and some swapped the label to "Creating...". A rail
+  reached by convention drifts in both directions at once.
+- **Why a slot rather than a lint rule:** A lint rule finds the miss after it is written. A slot makes
+  it unwriteable: there is no exported helper to forget, and a body that wants a button has exactly
+  one way to ask for one. The enforcement is the deleted export, and `rail-ownership.test.ts` is the
+  belt to that braces.
+- **Scope, honestly:** This converges **two** of the three rails. Full-page create forms
+  (Locations, Systems, Components) still draw an inline `border-t ... pt-4` row of their own. That
+  rail is inline in a scrolling page rather than pinned to the viewport, so it is a different layout
+  problem, and it converges when the CRUD form primitive lands and owns both form factors.
+- **Deliberate convergences:** submit labels no longer change while in flight (the shell's spinner
+  says it), and the new-interface blade lost its Cancel button, since a blade already dismisses two
+  ways and no other blade in the stack carries one.
+- **Tracked under** [#332](https://github.com/hyperscaleav/omniglass/issues/332).

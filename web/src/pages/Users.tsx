@@ -2,7 +2,7 @@ import { For, Show, createSignal } from "solid-js";
 import { useSearchParams } from "@solidjs/router";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
-import { DrawerFooter } from "../components/Drawer";
+import { useFormActions } from "../lib/formactions";
 import PasswordField from "../components/PasswordField";
 import { type Principal, PRINCIPALS_KEY, listPrincipals, createPrincipal, openPrincipalInEdit, principalName, kindBadge } from "../lib/principals";
 import UserAvatar from "../components/UserAvatar";
@@ -11,8 +11,7 @@ import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { handleError, emailError, passwordError, isPasswordPolicyMessage } from "../lib/validate";
 import type { FilterKey } from "../lib/predicate";
-import { Plus, X } from "../components/icons";
-import Button from "../components/Button";
+import { Plus } from "../components/icons";
 
 // Users: the admin principal directory, a config over the shared FlatList. A row per
 // principal (human or service account) opens its detail as a blade (rooted here on
@@ -127,8 +126,16 @@ function CreateUserForm(props: { close: () => void; onCreated: (p: Principal) =>
   // the password field, not in the head-of-form alert, so it reads like the client checks.
   const [pwServerError, setPwServerError] = createSignal<string | null>(null);
 
-  async function submit(e: SubmitEvent) {
-    e.preventDefault();
+  useFormActions().bind({
+    submitLabel: "Create user",
+    submitIcon: Plus,
+    submit: () => void submit(),
+    busy,
+    disabled: () => !username().trim() || !!handleError(username()) || !!emailError(email()) || !!passwordError(password(), username()),
+    cancel: props.close,
+  });
+
+  async function submit() {
     setBusy(true);
     setErr(null);
     setPwServerError(null);
@@ -155,7 +162,7 @@ function CreateUserForm(props: { close: () => void; onCreated: (p: Principal) =>
   }
 
   return (
-    <form class="flex min-h-full flex-col gap-3" onSubmit={submit}>
+    <form class="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
       <p class="text-xs text-base-content/50">Creates a human principal. Assign roles afterwards; a user with no grants can sign in but has no permissions.</p>
       <Show when={err()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
@@ -179,10 +186,6 @@ function CreateUserForm(props: { close: () => void; onCreated: (p: Principal) =>
         <PasswordField id="new-password" value={password()} onInput={(v) => { setPassword(v); setPwServerError(null); }} username={username()} disabled={busy()} serverError={pwServerError()} generate />
         <p class="mt-1 text-[11px] text-base-content/40">Optional. At least 12 characters. The user changes it after signing in.</p>
       </div>
-      <DrawerFooter>
-        <Button icon={X} onClick={props.close} disabled={busy()}>Cancel</Button>
-        <Button type="submit" intent="action" icon={Plus} loading={busy()} disabled={!username().trim() || !!handleError(username()) || !!emailError(email()) || !!passwordError(password(), username())}>Create user</Button>
-      </DrawerFooter>
     </form>
   );
 }

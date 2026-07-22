@@ -8,9 +8,8 @@ import { identityRegistry } from "../lib/identityBlades";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { handleError } from "../lib/validate";
-import { Plus, X } from "../components/icons";
-import { DrawerFooter } from "../components/Drawer";
-import Button from "../components/Button";
+import { Plus } from "../components/icons";
+import { useFormActions } from "../lib/formactions";
 
 // Groups: the principal-group admin surface, a config over the shared FlatList. A
 // group holds role x scope grants that its members inherit, so an admin assigns
@@ -79,8 +78,16 @@ function CreateGroupForm(props: { onCreated: (g: Group) => void; onClose: () => 
   const [busy, setBusy] = createSignal(false);
   const [err, setErr] = createSignal<string | null>(null);
 
-  async function submit(e: SubmitEvent) {
-    e.preventDefault();
+  useFormActions().bind({
+    submitLabel: "Create group",
+    submitIcon: Plus,
+    submit: () => void submit(),
+    busy,
+    disabled: () => !name().trim() || !!handleError(name()),
+    cancel: props.onClose,
+  });
+
+  async function submit() {
     setBusy(true);
     setErr(null);
     try {
@@ -101,7 +108,7 @@ function CreateGroupForm(props: { onCreated: (g: Group) => void; onClose: () => 
   }
 
   return (
-    <form class="flex min-h-full flex-col gap-3" onSubmit={submit}>
+    <form class="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
       <p class="text-xs text-base-content/50">Creates a group. Members inherit the group's role grants; add members and grants afterwards.</p>
       <Show when={err()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
@@ -119,10 +126,6 @@ function CreateGroupForm(props: { onCreated: (g: Group) => void; onClose: () => 
         <span class="eyebrow">Description</span>
         <input class="input input-bordered w-full" value={description()} onInput={(e) => setDescription(e.currentTarget.value)} disabled={busy()} />
       </label>
-      <DrawerFooter>
-        <Button icon={X} onClick={props.onClose} disabled={busy()}>Cancel</Button>
-        <Button type="submit" intent="action" icon={Plus} disabled={busy() || !name().trim() || !!handleError(name())}>{busy() ? "Creating..." : "Create group"}</Button>
-      </DrawerFooter>
     </form>
   );
 }

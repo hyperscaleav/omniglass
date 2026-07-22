@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
+import { createSignal } from "solid-js";
 import { render, fireEvent, screen, waitFor } from "@solidjs/testing-library";
 import { createBladeController, useBladeEdit, type BladeDef } from "../lib/blades";
 import BladeStack from "./BladeStack";
@@ -94,5 +95,43 @@ describe("BladeStack", () => {
     render(() => <BladeStack controller={ctl} registry={registry} />);
     ctl.push({ kind: "user", id: "a" });
     expect(screen.queryByLabelText("Edit")).toBeNull();
+  });
+
+  // A create form hosted ON the blade stack (the new-interface blade) binds `primary`
+  // and renders no buttons of its own, so the primary slot has to carry the gating a
+  // submit button needs: disabled while the form is incomplete, spinning while in
+  // flight. Without this the body would have to draw its own bar again.
+  it("gates and spins a bound primary action", () => {
+    const ctl = createBladeController();
+    const [ready, setReady] = createSignal(false);
+    const [busy, setBusy] = createSignal(false);
+    const onClick = vi.fn();
+    const creating: Record<string, BladeDef> = {
+      create: {
+        Title: () => <>New interface</>,
+        Body: () => {
+          useBladeEdit().bind({
+            primary: () => ({ label: "Create interface", onClick, disabled: () => !ready(), busy }),
+          });
+          return <div>fields</div>;
+        },
+      },
+    };
+    render(() => <BladeStack controller={ctl} registry={creating} />);
+    ctl.push({ kind: "create", id: "c1" });
+
+    const btn = screen.getByText("Create interface").closest("button") as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+    fireEvent.click(btn);
+    expect(onClick).not.toHaveBeenCalled();
+
+    setReady(true);
+    expect(btn.disabled).toBe(false);
+    fireEvent.click(btn);
+    expect(onClick).toHaveBeenCalledOnce();
+
+    setBusy(true);
+    expect(btn.disabled).toBe(true);
+    expect(btn.querySelector(".loading-spinner")).toBeTruthy();
   });
 });
