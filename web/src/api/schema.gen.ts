@@ -3042,11 +3042,15 @@ export interface components {
                 [key: string]: string;
             };
             id: string;
-            /** @description Name of the location this component is placed at */
+            /** @description The location's name, for display */
             location?: string;
+            /** @description The location's id, the canonical handle */
+            location_id?: string;
             name: string;
-            /** @description Name of the parent component; absent for a root component */
+            /** @description The parent component's name, for display; absent for a root component */
             parent?: string;
+            /** @description The parent component's id, the canonical handle */
+            parent_id?: string;
             /** @description The product (catalog SKU) this component is an instance of, if any. */
             product_id?: string;
             /** @description Name of the component's primary system, its default when no system is named. A component may belong to several; read /components/{name}/memberships for all of them. */
@@ -3056,6 +3060,8 @@ export interface components {
              * @description How many systems this component belongs to; more than one means it is shared.
              */
             system_count: number;
+            /** @description The primary system's id, the canonical handle */
+            system_id?: string;
         };
         ComponentCapabilitiesOutputBody: {
             /**
@@ -4209,8 +4215,10 @@ export interface components {
             id: string;
             location_type: string;
             name: string;
-            /** @description Name of the parent location; absent for a site root */
+            /** @description The parent location's name, for display; absent for a site root */
             parent?: string;
+            /** @description The parent location's id, the canonical handle */
+            parent_id?: string;
         };
         LocationPropertiesOutputBody: {
             /**
@@ -4830,16 +4838,20 @@ export interface components {
                 [key: string]: string;
             };
             id: string;
-            /** @description Name of the location this system sits in */
+            /** @description The location's name, for display */
             location?: string;
+            /** @description The location's id, the canonical handle */
+            location_id?: string;
             /**
              * Format: int64
              * @description How many components are bound into this system
              */
             member_count: number;
             name: string;
-            /** @description Name of the parent system; absent for a root system */
+            /** @description The parent system's name, for display; absent for a root system */
             parent?: string;
+            /** @description The parent system's id, the canonical handle */
+            parent_id?: string;
             /** @description The standard this system conforms to; omitted for a one-off system */
             standard_id?: string;
         };

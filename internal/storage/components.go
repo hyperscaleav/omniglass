@@ -34,8 +34,9 @@ type Component struct {
 	// than stored: a component can be in several systems, so there is no single
 	// pointer to keep. The name rather than an id, because a name is the address
 	// the API speaks.
-	PrimarySystem *string
-	SystemCount   int
+	PrimarySystem   *string
+	PrimarySystemID *string
+	SystemCount     int
 	// ParentName and LocationName are how the API addresses this component's
 	// placement. The *ID fields beside them are internal: a uuid is identity, never
 	// a reference that leaves the process.
@@ -73,6 +74,8 @@ type ComponentPatch struct {
 
 const componentCols = `id, name, coalesce(display_name, ''), parent_id,
 	(select m.system_id from system_member m where m.component_id = component.name and m.is_primary),
+	(select s.id from system s join system_member m on m.system_id = s.name
+	  where m.component_id = component.name and m.is_primary) as primary_system_id,
 	(select count(*) from system_member m where m.component_id = component.name),
 	location_id, product_id,
 	-- The names the API addresses these by. The ids stay for the scope walks and
@@ -83,7 +86,7 @@ const componentCols = `id, name, coalesce(display_name, ''), parent_id,
 
 func scanComponent(row pgx.Row) (*Component, error) {
 	var c Component
-	if err := row.Scan(&c.ID, &c.Name, &c.DisplayName, &c.ParentID, &c.PrimarySystem, &c.SystemCount,
+	if err := row.Scan(&c.ID, &c.Name, &c.DisplayName, &c.ParentID, &c.PrimarySystem, &c.PrimarySystemID, &c.SystemCount,
 		&c.LocationID, &c.ProductID, &c.ParentName, &c.LocationName, &c.CreatedAt, &c.UpdatedAt); err != nil {
 		return nil, err
 	}
