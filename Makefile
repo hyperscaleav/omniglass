@@ -67,11 +67,16 @@ TEST_PARALLEL ?= 4
 test: test-web
 	go test -p $(TEST_PARALLEL) ./...
 
-# The SPA unit + theming-ban tests (vitest). Part of the local gate so web-only
-# regressions (an illegible badge class, a broken page descriptor) are caught
-# before merge, not just by the Go suite.
+# The SPA typecheck + unit and theming-ban tests. Part of the local gate so
+# web-only regressions (an illegible badge class, a broken page descriptor, a
+# type error) are caught before merge, not just by the Go suite.
+#
+# typecheck runs FIRST and is a gate, not advice. vitest transpiles via esbuild
+# and never typechecks, so a type error passes the suite silently: that is how
+# three unresolved `node:` imports sat on main long enough to become background
+# noise everybody scrolled past (#252).
 test-web:
-	cd web && npm install && npm run test
+	cd web && npm install && npm run typecheck && npm run test
 
 # Fast iteration: unit/pure tests only. -short skips anything that needs a
 # Postgres container or builds the binary.

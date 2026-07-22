@@ -24,6 +24,7 @@
     "@solidjs/testing-library": "^0.8.10",
     "@tailwindcss/vite": "^4.1.0",
     "@testing-library/jest-dom": "^6.9.1",
+    "@types/node": "26.1.1",
     "daisyui": "^5.0.0",
     "gray-matter": "^4.0.3",
     "jsdom": "^29.1.1",
