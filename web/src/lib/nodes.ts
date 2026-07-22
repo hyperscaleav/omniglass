@@ -1,3 +1,4 @@
+import { entityLabel } from "./entities";
 import { api } from "../api/client";
 import type { FilterKey } from "./predicate";
 
@@ -23,8 +24,10 @@ export type Node = {
 // nodeLabel is the node's human label: its display_name, falling back to the
 // name (the key/estate address) when unset. Used as the blade title and the list
 // row label, mirroring how component/system/location present name vs display_name.
+// nodeLabel is entityLabel, kept as a named export because the node columns and
+// blade title read better with it. The rule itself lives in one place.
 export function nodeLabel(n: Node): string {
-  return n.display_name?.trim() || n.name;
+  return entityLabel(n);
 }
 
 // The once-shown enrollment token exchange result. It is deliberately NOT stored

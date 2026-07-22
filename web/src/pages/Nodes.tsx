@@ -1,3 +1,4 @@
+import { entityLabel } from "../lib/entities";
 import { Show, For, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import { Dialog } from "@kobalte/core/dialog";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
@@ -295,7 +296,7 @@ function NodeBladeBody(props: { name: string; onEnrolled: (out: EnrollOutput) =>
             >
               <select class="select select-bordered w-full" value={location()} onChange={(e) => setLocation(e.currentTarget.value)}>
                 <option value="">(unplaced)</option>
-                <For each={locations.data ?? []}>{(l) => <option value={l.name}>{l.display_name || l.name}</option>}</For>
+                <For each={locations.data ?? []}>{(l) => <option value={l.name}>{entityLabel(l)}</option>}</For>
               </select>
             </Show>
           </div>
@@ -414,7 +415,7 @@ function CreateNodeForm(props: { close: () => void; onEnrolled: (out: EnrollOutp
         <label class="eyebrow mb-1.5 block" for="new-node-location">Location</label>
         <select id="new-node-location" class="select select-bordered w-full" value={location()} onChange={(e) => setLocation(e.currentTarget.value)} disabled={busy()}>
           <option value="">(unplaced)</option>
-          <For each={locations.data ?? []}>{(l) => <option value={l.name}>{l.display_name || l.name}</option>}</For>
+          <For each={locations.data ?? []}>{(l) => <option value={l.name}>{entityLabel(l)}</option>}</For>
         </select>
       </div>
       <div>

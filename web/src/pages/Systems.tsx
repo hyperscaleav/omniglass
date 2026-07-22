@@ -1,3 +1,4 @@
+import { entityLabel } from "../lib/entities";
 import { For, Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { useNavigate, useParams } from "@solidjs/router";
@@ -65,7 +66,6 @@ export default function Systems() {
   const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations }));
   const standards = useQuery(() => ({ queryKey: STANDARDS_KEY, queryFn: listStandards }));
 
-  const label = (x: { name: string; display_name?: string }) => x.display_name || x.name;
   const locById = createMemo(() => new Map((locations.data ?? []).map((l) => [l.id, l] as const)));
   // The standard picker's options, and the id -> display-name lookup the tree and
   // detail read a conforming system's standard through.
@@ -74,8 +74,8 @@ export default function Systems() {
   );
   const standardLabel = (id?: string) =>
     id ? (standards.data ?? []).find((s) => s.id === id)?.display_name ?? id : "";
-  const locationItems = createMemo(() => (locations.data ?? []).map((l) => ({ id: l.name, value: l.name, label: l.display_name || l.name, parentId: l.parent })));
-  const systemItems = createMemo(() => (systems.data ?? []).map((s) => ({ id: s.name, value: s.name, label: s.display_name || s.name, parentId: s.parent })));
+  const locationItems = createMemo(() => (locations.data ?? []).map((l) => ({ id: l.name, value: l.name, label: entityLabel(l), parentId: l.parent })));
+  const systemItems = createMemo(() => (systems.data ?? []).map((s) => ({ id: s.name, value: s.name, label: entityLabel(s), parentId: s.parent })));
 
   // One filter facet per tag key present across the systems, derived from their
   // effective tags, so the bar can filter by any tag like any other field.
@@ -92,11 +92,11 @@ export default function Systems() {
     for (const s of list) {
       byId.set(s.name, {
         id: s.name,
-        display: s.display_name || s.name,
+        display: entityLabel(s),
         children: [],
         actions: s.actions,
         standard: standardLabel(s.standard_id),
-        locationName: s.location ? label(lm.get(s.location) ?? { name: s.location }) : "",
+        locationName: s.location ? entityLabel(lm.get(s.location) ?? { name: s.location }) : "",
         tags: s.effective_tags ?? {},
         raw: s,
       });
