@@ -290,11 +290,13 @@ components:
           type: object
         id:
           type: string
-        location_id:
+        location:
+          description: Name of the location this component is placed at
           type: string
         name:
           type: string
-        parent_id:
+        parent:
+          description: Name of the parent component; absent for a root component
           type: string
         product_id:
           description: The product (catalog SKU) this component is an instance of, if any.
@@ -2487,7 +2489,8 @@ components:
           type: string
         name:
           type: string
-        parent_id:
+        parent:
+          description: Name of the parent location; absent for a site root
           type: string
       required:
         - id
@@ -3030,8 +3033,6 @@ components:
           type: integer
         key:
           type: string
-        owner_id:
-          type: string
         owner_kind:
           type: string
         owner_name:
@@ -3263,8 +3264,6 @@ components:
         id:
           type: string
         name:
-          type: string
-        owner_id:
           type: string
         owner_kind:
           type: string
@@ -3653,7 +3652,8 @@ components:
           type: object
         id:
           type: string
-        location_id:
+        location:
+          description: Name of the location this system sits in
           type: string
         member_count:
           description: How many components are bound into this system
@@ -3661,7 +3661,8 @@ components:
           type: integer
         name:
           type: string
-        parent_id:
+        parent:
+          description: Name of the parent system; absent for a root system
           type: string
         standard_id:
           description: The standard this system conforms to; omitted for a one-off system
@@ -3788,8 +3789,6 @@ components:
           readOnly: true
           type: string
         key:
-          type: string
-        owner_id:
           type: string
         owner_kind:
           type: string
@@ -4287,8 +4286,6 @@ components:
         id:
           type: string
         name:
-          type: string
-        owner_id:
           type: string
         owner_kind:
           type: string

@@ -50,7 +50,7 @@ describe("locations data layer", () => {
 
   it("patches the parent to move a location", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ id: "3", name: "hq-b1", location_type: "building", parent_id: "l-lab" }),
+      jsonResponse({ id: "3", name: "hq-b1", location_type: "building", parent: "lab" }),
     );
     const moved = await updateLocation("hq-b1", { parent: "lab" });
     expect(moved.name).toBe("hq-b1");

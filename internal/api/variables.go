@@ -18,7 +18,6 @@ type variableBody struct {
 	Name      string  `json:"name"`
 	ValueType string  `json:"value_type"`
 	OwnerKind string  `json:"owner_kind"`
-	OwnerID   *string `json:"owner_id,omitempty"`
 	OwnerName string  `json:"owner_name,omitempty"`
 	Value     any     `json:"value" doc:"The value, shape given by value_type"`
 }
@@ -26,7 +25,7 @@ type variableBody struct {
 func toVariableBody(v *storage.Variable) variableBody {
 	return variableBody{
 		ID: v.ID, Name: v.Name, ValueType: v.ValueType,
-		OwnerKind: v.OwnerKind, OwnerID: v.OwnerID, OwnerName: v.OwnerName,
+		OwnerKind: v.OwnerKind, OwnerName: v.OwnerName,
 		Value: decodeVariableValue(v.Value),
 	}
 }

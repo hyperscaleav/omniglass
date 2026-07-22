@@ -14,7 +14,7 @@ export type Variable = {
   name: string;
   value_type: string;
   owner_kind: string;
-  owner_id?: string;
+
   owner_name?: string;
   value: unknown;
 };

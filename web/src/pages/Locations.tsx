@@ -83,12 +83,12 @@ export default function Locations() {
     const list = locations.data ?? [];
     const byId = new Map<string, LocNode>();
     for (const l of list) {
-      byId.set(l.id, { id: l.name, display: l.display_name || l.name, children: [], type: l.location_type, actions: l.actions, tags: l.effective_tags ?? {}, raw: l });
+      byId.set(l.name, { id: l.name, display: l.display_name || l.name, children: [], type: l.location_type, actions: l.actions, tags: l.effective_tags ?? {}, raw: l });
     }
     const roots: LocNode[] = [];
     for (const l of list) {
-      const node = byId.get(l.id)!;
-      const parent = l.parent_id ? byId.get(l.parent_id) : undefined;
+      const node = byId.get(l.name)!;
+      const parent = l.parent ? byId.get(l.parent) : undefined;
       if (parent) parent.children.push(node);
       else roots.push(node);
     }
@@ -233,7 +233,7 @@ export default function Locations() {
     const parentCandidates = createMemo(() => {
       const allowed = allowedParentTypes();
       const pool = allowed.length === 0 ? (locations.data ?? []) : (locations.data ?? []).filter((l) => allowed.includes(l.location_type));
-      return pool.map((l) => ({ id: l.id, value: l.name, label: l.display_name || l.name, parentId: l.parent_id, rank: TYPE_RANK[l.location_type] ?? 9 }));
+      return pool.map((l) => ({ id: l.name, value: l.name, label: l.display_name || l.name, parentId: l.parent, rank: TYPE_RANK[l.location_type] ?? 9 }));
     });
     const parentTypeLabel = (id: string) => (id === ROOT_PLACEMENT ? "Root" : locationTypes.data?.find((t) => t.id === id)?.display_name ?? id);
     const parentHint = () =>
@@ -529,7 +529,7 @@ export default function Locations() {
             {field(
               "Parent",
               <TreeSelect
-                items={(locations.data ?? []).map((l) => ({ id: l.id, value: l.name, label: l.display_name || l.name, parentId: l.parent_id, rank: TYPE_RANK[l.location_type] ?? 9 }))}
+                items={(locations.data ?? []).map((l) => ({ id: l.name, value: l.name, label: l.display_name || l.name, parentId: l.parent, rank: TYPE_RANK[l.location_type] ?? 9 }))}
                 value={parent()}
                 onChange={setParent}
                 rootLabel="Root (no parent)"

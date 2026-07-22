@@ -18,7 +18,7 @@ import { TAGS_KEY, entityTagsKey } from "../lib/tags";
 const me: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
 const hq: Location = { id: "l-hq", name: "hq", display_name: "HQ", location_type: "campus", effective_tags: {} };
 const lab: Location = { id: "l-lab", name: "lab", display_name: "Lab", location_type: "campus", effective_tags: {} };
-const hqB1: Location = { id: "l-b1", name: "hq-b1", display_name: "HQ B1", location_type: "building", parent_id: "l-hq", effective_tags: {} };
+const hqB1: Location = { id: "l-b1", name: "hq-b1", display_name: "HQ B1", location_type: "building", parent: "hq", effective_tags: {} };
 const types: LocationType[] = [
   { id: "campus", display_name: "Campus", icon: "landmark", official: true, allowed_parent_types: ["root"] },
   { id: "building", display_name: "Building", icon: "building", official: true, allowed_parent_types: ["root", "campus"] },
@@ -142,7 +142,7 @@ describe("Locations create-as-route", () => {
       const url = req.url;
       if (method === "PATCH" && url.includes("/locations/b2")) {
         captured = JSON.parse(await req.clone().text());
-        return new Response(JSON.stringify({ ...b2, parent_id: "l-hq" }), { status: 200, headers: { "Content-Type": "application/json" } });
+        return new Response(JSON.stringify({ ...b2, parent: "hq" }), { status: 200, headers: { "Content-Type": "application/json" } });
       }
       throw new Error(`unexpected fetch in this test: ${method} ${url}`);
     });

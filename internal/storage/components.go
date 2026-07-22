@@ -36,6 +36,11 @@ type Component struct {
 	// the API speaks.
 	PrimarySystem *string
 	SystemCount   int
+	// ParentName and LocationName are how the API addresses this component's
+	// placement. The *ID fields beside them are internal: a uuid is identity, never
+	// a reference that leaves the process.
+	ParentName   *string
+	LocationName *string
 	LocationID  *string
 	ProductID   *string
 	CreatedAt   time.Time
@@ -69,12 +74,17 @@ type ComponentPatch struct {
 const componentCols = `id, name, coalesce(display_name, ''), parent_id,
 	(select m.system_id from system_member m where m.component_id = component.name and m.is_primary),
 	(select count(*) from system_member m where m.component_id = component.name),
-	location_id, product_id, created_at, updated_at`
+	location_id, product_id,
+	-- The names the API addresses these by. The ids stay for the scope walks and
+	-- tree joins, which are internal; a name is what leaves the process.
+	(select p.name from component p where p.id = component.parent_id) as parent_name,
+	(select l.name from location l where l.id = component.location_id) as location_name,
+	created_at, updated_at`
 
 func scanComponent(row pgx.Row) (*Component, error) {
 	var c Component
 	if err := row.Scan(&c.ID, &c.Name, &c.DisplayName, &c.ParentID, &c.PrimarySystem, &c.SystemCount,
-		&c.LocationID, &c.ProductID, &c.CreatedAt, &c.UpdatedAt); err != nil {
+		&c.LocationID, &c.ProductID, &c.ParentName, &c.LocationName, &c.CreatedAt, &c.UpdatedAt); err != nil {
 		return nil, err
 	}
 	return &c, nil

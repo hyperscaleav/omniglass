@@ -8,7 +8,7 @@ export type Location = {
   name: string;
   display_name?: string;
   location_type: string;
-  parent_id?: string;
+  parent?: string;
   actions?: string[];
   effective_tags?: Record<string, string>;
 };

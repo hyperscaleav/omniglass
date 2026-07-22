@@ -16,7 +16,7 @@ type locationBody struct {
 	Name          string            `json:"name"`
 	DisplayName   string            `json:"display_name,omitempty"`
 	LocationType  string            `json:"location_type"`
-	ParentID      *string           `json:"parent_id,omitempty"`
+	Parent        *string           `json:"parent,omitempty" doc:"Name of the parent location; absent for a site root"`
 	Actions       []string          `json:"actions,omitempty" doc:"The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces."`
 	EffectiveTags map[string]string `json:"effective_tags,omitempty" doc:"The resolved effective tags (key -> winning value) that cascade onto this location (global and its location tree); for the Tags column."`
 }
@@ -24,7 +24,7 @@ type locationBody struct {
 func toLocationBody(l *storage.Location) locationBody {
 	return locationBody{
 		ID: l.ID, Name: l.Name, DisplayName: l.DisplayName,
-		LocationType: l.LocationType, ParentID: l.ParentID,
+		LocationType: l.LocationType, Parent: l.ParentName,
 	}
 }
 

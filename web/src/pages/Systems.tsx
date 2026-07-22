@@ -74,8 +74,8 @@ export default function Systems() {
   );
   const standardLabel = (id?: string) =>
     id ? (standards.data ?? []).find((s) => s.id === id)?.display_name ?? id : "";
-  const locationItems = createMemo(() => (locations.data ?? []).map((l) => ({ id: l.id, value: l.name, label: l.display_name || l.name, parentId: l.parent_id })));
-  const systemItems = createMemo(() => (systems.data ?? []).map((s) => ({ id: s.id, value: s.name, label: s.display_name || s.name, parentId: s.parent_id })));
+  const locationItems = createMemo(() => (locations.data ?? []).map((l) => ({ id: l.name, value: l.name, label: l.display_name || l.name, parentId: l.parent })));
+  const systemItems = createMemo(() => (systems.data ?? []).map((s) => ({ id: s.name, value: s.name, label: s.display_name || s.name, parentId: s.parent })));
 
   // One filter facet per tag key present across the systems, derived from their
   // effective tags, so the bar can filter by any tag like any other field.
@@ -90,21 +90,21 @@ export default function Systems() {
     const lm = locById();
     const byId = new Map<string, SysNode>();
     for (const s of list) {
-      byId.set(s.id, {
+      byId.set(s.name, {
         id: s.name,
         display: s.display_name || s.name,
         children: [],
         actions: s.actions,
         standard: standardLabel(s.standard_id),
-        locationName: s.location_id ? label(lm.get(s.location_id) ?? { name: s.location_id }) : "",
+        locationName: s.location ? label(lm.get(s.location) ?? { name: s.location }) : "",
         tags: s.effective_tags ?? {},
         raw: s,
       });
     }
     const roots: SysNode[] = [];
     for (const s of list) {
-      const node = byId.get(s.id)!;
-      const parent = s.parent_id ? byId.get(s.parent_id) : undefined;
+      const node = byId.get(s.name)!;
+      const parent = s.parent ? byId.get(s.parent) : undefined;
       if (parent) parent.children.push(node);
       else roots.push(node);
     }

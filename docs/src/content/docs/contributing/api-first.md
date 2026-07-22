@@ -30,6 +30,32 @@ One command runs them all (`make gen`); each has a focused target (`make gen-api
 `gen-cli`, `gen-schema`, `gen-proto`). The committed `*.pb.go` and JSONSchema let a
 contributor build without protoc or a running server.
 
+## A name is the address, a uuid is identity
+
+**Every request and response addresses another entity by its `name`.** A uuid appears in the
+API only as an entity's **own** `id`, an opaque handle. It is never how one row points at
+another.
+
+The test is a **round trip**: a response body can be fed back to the write that produced it.
+Create a component with `{"parent": "rack"}` and read it back as `{"parent": "rack"}`, not as
+`{"parent_id": "0198f2c4-..."}`. When that fails, every client has to fetch a second
+collection and join by uuid to render one label, and they each do it slightly differently.
+
+Two exceptions, both narrow:
+
+- **An entity with no name** is legitimately addressed by id: an interface (its name is unique
+  only within its component), a stored property value, an audit row, a grant, a principal.
+- **A slug-keyed catalog** already satisfies the rule, because its id *is* the name:
+  `product_id: "cisco-room-bar"`.
+
+Internally a table may key by either, but a **new table references an estate entity by
+`name`**, with `on update cascade` so a rename does not orphan it. That is what every table
+from the collection era onward already does.
+
+`TestResponsesAddressEntitiesByName` enforces this over the generated OpenAPI, so a body
+cannot reintroduce a uuid reference silently. Its allow-list is the whole of the exception,
+and adding to it is a decision: if the target has a name, carry the name.
+
 ## Conventions (AIP-style)
 
 These are the conventions a route follows while you write it; the complete [API

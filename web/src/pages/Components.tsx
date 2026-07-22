@@ -97,7 +97,7 @@ export default function Components() {
     const byId = new Map<string, CompNode>();
     const lm = locById();
     for (const c of list) {
-      byId.set(c.id, {
+      byId.set(c.name, {
         id: c.name,
         display: c.display_name || c.name,
         children: [],
@@ -106,15 +106,15 @@ export default function Components() {
         systemName: c.system ? label(sysByName().get(c.system) ?? { name: c.system }) : "",
         systemAddr: c.system ?? "",
         systemCount: c.system_count ?? 0,
-        locationName: c.location_id ? label(lm.get(c.location_id) ?? { name: c.location_id }) : "",
+        locationName: c.location ? label(lm.get(c.location) ?? { name: c.location }) : "",
         tags: c.effective_tags ?? {},
         raw: c,
       });
     }
     const roots: CompNode[] = [];
     for (const c of list) {
-      const node = byId.get(c.id)!;
-      const parent = c.parent_id ? byId.get(c.parent_id) : undefined;
+      const node = byId.get(c.name)!;
+      const parent = c.parent ? byId.get(c.parent) : undefined;
       if (parent) parent.children.push(node);
       else roots.push(node);
     }
@@ -414,12 +414,12 @@ export default function Components() {
         <div class="flex flex-col gap-1.5">
           <span class="eyebrow">Placement</span>
           <div class="grid grid-cols-2 gap-3">
-            {field("System", <TreeSelect items={(systems.data ?? []).map((s) => ({ id: s.id, value: s.name, label: label(s), parentId: s.parent_id }))} value={system()} onChange={setSystem} rootLabel="None" />)}
-            {field("Location", <TreeSelect items={(locations.data ?? []).map((l) => ({ id: l.id, value: l.name, label: label(l), parentId: l.parent_id }))} value={location()} onChange={setLocation} rootLabel="None" />)}
+            {field("System", <TreeSelect items={(systems.data ?? []).map((s) => ({ id: s.id, value: s.name, label: label(s), parentId: s.parent }))} value={system()} onChange={setSystem} rootLabel="None" />)}
+            {field("Location", <TreeSelect items={(locations.data ?? []).map((l) => ({ id: l.id, value: l.name, label: label(l), parentId: l.parent }))} value={location()} onChange={setLocation} rootLabel="None" />)}
           </div>
           {field(
             "Parent component",
-            <TreeSelect items={(components.data ?? []).map((c) => ({ id: c.id, value: c.name, label: label(c), parentId: c.parent_id }))} value={parent()} onChange={setParent} rootLabel="Root (no parent)" />,
+            <TreeSelect items={(components.data ?? []).map((c) => ({ id: c.id, value: c.name, label: label(c), parentId: c.parent }))} value={parent()} onChange={setParent} rootLabel="Root (no parent)" />,
             "Omit for a root component.",
           )}
         </div>

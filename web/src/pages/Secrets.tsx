@@ -236,9 +236,9 @@ function CreateSecretForm(p: { onCreated: () => void }): JSX.Element {
   // TreeSelect, same as the location/parent pickers).
   const ownerTree = createMemo<TreeNode[]>(() => {
     switch (ownerKind()) {
-      case "location": return (locations.data ?? []).map((l) => ({ id: l.id, value: l.name, label: l.display_name || l.name, parentId: l.parent_id }));
-      case "system": return (systems.data ?? []).map((s) => ({ id: s.id, value: s.name, label: s.display_name || s.name, parentId: s.parent_id }));
-      case "component": return (components.data ?? []).map((c) => ({ id: c.id, value: c.name, label: c.display_name || c.name, parentId: c.parent_id }));
+      case "location": return (locations.data ?? []).map((l) => ({ id: l.name, value: l.name, label: l.display_name || l.name, parentId: l.parent }));
+      case "system": return (systems.data ?? []).map((s) => ({ id: s.name, value: s.name, label: s.display_name || s.name, parentId: s.parent }));
+      case "component": return (components.data ?? []).map((c) => ({ id: c.name, value: c.name, label: c.display_name || c.name, parentId: c.parent }));
       default: return [];
     }
   });
