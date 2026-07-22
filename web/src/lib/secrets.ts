@@ -31,7 +31,7 @@ export type Secret = {
   name: string;
   secret_type: string;
   owner_kind: string;
-  owner_id?: string;
+
   owner_name?: string;
   fields: SecretField[];
 };

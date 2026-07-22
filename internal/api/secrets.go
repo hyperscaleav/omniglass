@@ -40,7 +40,6 @@ type secretBody struct {
 	Name           string            `json:"name"`
 	SecretType     string            `json:"secret_type"`
 	OwnerKind      string            `json:"owner_kind"`
-	OwnerID        *string           `json:"owner_id,omitempty"`
 	OwnerName      string            `json:"owner_name,omitempty"`
 	AdminSensitive bool              `json:"admin_sensitive" doc:"When true, only the admin tier may see or reveal this secret, regardless of placement"`
 	Fields         []secretFieldBody `json:"fields"`
@@ -57,7 +56,7 @@ func toSecretFieldBodies(fs []storage.ResolvedField) []secretFieldBody {
 func toSecretBody(s *storage.Secret) secretBody {
 	return secretBody{
 		ID: s.ID, Name: s.Name, SecretType: s.SecretType,
-		OwnerKind: s.OwnerKind, OwnerID: s.OwnerID, OwnerName: s.OwnerName,
+		OwnerKind: s.OwnerKind, OwnerName: s.OwnerName,
 		AdminSensitive: s.AdminSensitive,
 		Fields:         toSecretFieldBodies(s.Fields),
 	}

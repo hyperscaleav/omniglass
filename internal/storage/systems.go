@@ -53,7 +53,10 @@ type System struct {
 	// relation that says what is in a system, and reading it from anywhere else is
 	// how a fully staffed system came to report zero components.
 	MemberCount int
-	CreatedAt   time.Time
+	// The names the API addresses placement by; the ids above are internal.
+	ParentName   *string
+	LocationName *string
+	CreatedAt    time.Time
 	UpdatedAt   time.Time
 }
 
@@ -252,12 +255,15 @@ func (p *PG) DeleteStandard(ctx context.Context, actorID, id string) error {
 // --- system CRUD -------------------------------------------------------------
 
 const systemCols = `id, name, coalesce(display_name, ''), standard_id, parent_id, location_id,
-	(select count(*) from system_member m where m.system_id = system.name), created_at, updated_at`
+	(select count(*) from system_member m where m.system_id = system.name),
+	(select p.name from system p where p.id = system.parent_id) as parent_name,
+	(select l.name from location l where l.id = system.location_id) as location_name,
+	created_at, updated_at`
 
 func scanSystem(row pgx.Row) (*System, error) {
 	var s System
 	if err := row.Scan(&s.ID, &s.Name, &s.DisplayName, &s.StandardID, &s.ParentID, &s.LocationID,
-		&s.MemberCount, &s.CreatedAt, &s.UpdatedAt); err != nil {
+		&s.MemberCount, &s.ParentName, &s.LocationName, &s.CreatedAt, &s.UpdatedAt); err != nil {
 		return nil, err
 	}
 	return &s, nil

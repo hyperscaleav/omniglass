@@ -13,10 +13,10 @@ type componentBody struct {
 	ID            string            `json:"id"`
 	Name          string            `json:"name"`
 	DisplayName   string            `json:"display_name,omitempty"`
-	ParentID      *string           `json:"parent_id,omitempty"`
+	Parent        *string           `json:"parent,omitempty" doc:"Name of the parent component; absent for a root component"`
 	System        *string           `json:"system,omitempty" doc:"Name of the component's primary system, its default when no system is named. A component may belong to several; read /components/{name}/memberships for all of them."`
 	SystemCount   int               `json:"system_count" doc:"How many systems this component belongs to; more than one means it is shared."`
-	LocationID    *string           `json:"location_id,omitempty"`
+	Location      *string           `json:"location,omitempty" doc:"Name of the location this component is placed at"`
 	ProductID     *string           `json:"product_id,omitempty" doc:"The product (catalog SKU) this component is an instance of, if any."`
 	Actions       []string          `json:"actions,omitempty" doc:"The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces."`
 	EffectiveTags map[string]string `json:"effective_tags,omitempty" doc:"The resolved effective tags (key -> winning value) that cascade onto this component; for the Tags column. Provenance is in the effective-tags detail view."`
@@ -25,7 +25,7 @@ type componentBody struct {
 func toComponentBody(c *storage.Component) componentBody {
 	return componentBody{
 		ID: c.ID, Name: c.Name, DisplayName: c.DisplayName,
-		ParentID: c.ParentID, System: c.PrimarySystem, SystemCount: c.SystemCount, LocationID: c.LocationID, ProductID: c.ProductID,
+		Parent: c.ParentName, System: c.PrimarySystem, SystemCount: c.SystemCount, Location: c.LocationName, ProductID: c.ProductID,
 	}
 }
 

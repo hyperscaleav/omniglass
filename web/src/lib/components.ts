@@ -11,8 +11,8 @@ export type Component = {
   id: string;
   name: string;
   display_name?: string;
-  location_id?: string;
-  parent_id?: string;
+  location?: string;
+  parent?: string;
   // The name of the component's primary system, its default when no system is
   // named, and how many it belongs to in total. Derived from membership: a
   // component can be in several, so there is no single pointer to read.

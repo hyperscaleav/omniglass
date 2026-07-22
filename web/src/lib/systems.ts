@@ -13,8 +13,8 @@ export type System = {
   name: string;
   display_name?: string;
   standard_id?: string;
-  location_id?: string;
-  parent_id?: string;
+  location?: string;
+  parent?: string;
   // How many components are bound into this system, from membership rather than
   // any pointer on the component: membership is what says a component is in a
   // system, and reading it elsewhere is how a fully staffed system reported zero.

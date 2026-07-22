@@ -3042,9 +3042,11 @@ export interface components {
                 [key: string]: string;
             };
             id: string;
-            location_id?: string;
+            /** @description Name of the location this component is placed at */
+            location?: string;
             name: string;
-            parent_id?: string;
+            /** @description Name of the parent component; absent for a root component */
+            parent?: string;
             /** @description The product (catalog SKU) this component is an instance of, if any. */
             product_id?: string;
             /** @description Name of the component's primary system, its default when no system is named. A component may belong to several; read /components/{name}/memberships for all of them. */
@@ -4207,7 +4209,8 @@ export interface components {
             id: string;
             location_type: string;
             name: string;
-            parent_id?: string;
+            /** @description Name of the parent location; absent for a site root */
+            parent?: string;
         };
         LocationPropertiesOutputBody: {
             /**
@@ -4484,7 +4487,6 @@ export interface components {
              */
             depth: number;
             key: string;
-            owner_id?: string;
             owner_kind: string;
             owner_name?: string;
             value: string;
@@ -4609,7 +4611,6 @@ export interface components {
             fields: components["schemas"]["SecretFieldBody"][] | null;
             id: string;
             name: string;
-            owner_id?: string;
             owner_kind: string;
             owner_name?: string;
             secret_type: string;
@@ -4829,14 +4830,16 @@ export interface components {
                 [key: string]: string;
             };
             id: string;
-            location_id?: string;
+            /** @description Name of the location this system sits in */
+            location?: string;
             /**
              * Format: int64
              * @description How many components are bound into this system
              */
             member_count: number;
             name: string;
-            parent_id?: string;
+            /** @description Name of the parent system; absent for a root system */
+            parent?: string;
             /** @description The standard this system conforms to; omitted for a one-off system */
             standard_id?: string;
         };
@@ -4906,7 +4909,6 @@ export interface components {
              */
             readonly $schema?: string;
             key: string;
-            owner_id?: string;
             owner_kind: string;
             owner_name?: string;
             value: string;
@@ -5197,7 +5199,6 @@ export interface components {
             readonly $schema?: string;
             id: string;
             name: string;
-            owner_id?: string;
             owner_kind: string;
             owner_name?: string;
             /** @description The value, shape given by value_type */
