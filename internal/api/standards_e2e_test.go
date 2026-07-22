@@ -16,7 +16,9 @@ import (
 // standardWire is the decoded standard wire shape for the e2e assertions.
 type standardWire struct {
 	ID               string `json:"id"`
+	Name             string `json:"name"`
 	DisplayName      string `json:"display_name"`
+	ParentStandard   string `json:"parent_standard"`
 	ParentStandardID string `json:"parent_standard_id"`
 	Official         bool   `json:"official"`
 }
@@ -63,33 +65,33 @@ func TestStandardsAPI(t *testing.T) {
 
 	// The viewer cannot create (403, capability fast-reject).
 	c.do(viewerTok, http.MethodPost, "/standards",
-		map[string]any{"id": "nope", "display_name": "Nope"}, http.StatusForbidden)
+		map[string]any{"name": "nope", "display_name": "Nope"}, http.StatusForbidden)
 
 	// Admin (owner) creates a custom standard, then a variant of it.
 	var created standardWire
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/standards",
-		map[string]any{"id": "kiosk", "display_name": "Kiosk"}, http.StatusCreated), &created); err != nil {
+		map[string]any{"name": "kiosk", "display_name": "Kiosk"}, http.StatusCreated), &created); err != nil {
 		t.Fatalf("decode create: %v", err)
 	}
-	if created.ID != "kiosk" || created.Official {
-		t.Fatalf("created = %+v, want id=kiosk official=false", created)
+	if created.Name != "kiosk" || created.Official {
+		t.Fatalf("created = %+v, want name=kiosk official=false", created)
 	}
 	var variant standardWire
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/standards",
-		map[string]any{"id": "kiosk-outdoor", "display_name": "Outdoor Kiosk", "parent_standard_id": "kiosk"},
+		map[string]any{"name": "kiosk-outdoor", "display_name": "Outdoor Kiosk", "parent_standard_id": "kiosk"},
 		http.StatusCreated), &variant); err != nil {
 		t.Fatalf("decode create variant: %v", err)
 	}
-	if variant.ParentStandardID != "kiosk" {
-		t.Fatalf("variant parent = %q, want kiosk", variant.ParentStandardID)
+	if variant.ParentStandard != "kiosk" {
+		t.Fatalf("variant parent = %q, want kiosk", variant.ParentStandard)
 	}
 	c.do(ownerTok, http.MethodDelete, "/standards/kiosk-outdoor", nil, http.StatusNoContent)
 
 	// Duplicate id is a 409; an unknown parent is a 422.
 	c.do(ownerTok, http.MethodPost, "/standards",
-		map[string]any{"id": "kiosk", "display_name": "Dup"}, http.StatusConflict)
+		map[string]any{"name": "kiosk", "display_name": "Dup"}, http.StatusConflict)
 	c.do(ownerTok, http.MethodPost, "/standards",
-		map[string]any{"id": "orphan", "display_name": "Orphan", "parent_standard_id": "no-such-standard"},
+		map[string]any{"name": "orphan", "display_name": "Orphan", "parent_standard_id": "no-such-standard"},
 		http.StatusUnprocessableEntity)
 
 	// The custom row is mutable, and the patch reads back on GET.

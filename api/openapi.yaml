@@ -151,11 +151,16 @@ components:
         display_name:
           type: string
         id:
+          description: The capability's uuid, the stable handle that survives a rename
+          type: string
+        name:
+          description: The kebab handle an operator reads and types; renameable
           type: string
         official:
           type: boolean
       required:
         - id
+        - name
         - display_name
         - official
       type: object
@@ -380,12 +385,12 @@ components:
         display_name:
           minLength: 1
           type: string
-        id:
-          description: Globally unique capability id
+        name:
+          description: The globally unique kebab handle; renameable
           minLength: 1
           type: string
       required:
-        - id
+        - name
         - display_name
       type: object
     CreateComponentInputBody:
@@ -909,15 +914,15 @@ components:
         display_name:
           minLength: 1
           type: string
-        id:
-          description: Globally unique standard id
+        name:
+          description: The globally unique kebab handle; renameable
           minLength: 1
           type: string
         parent_standard_id:
-          description: A standard this one is a variant of
+          description: A standard this one is a variant of, by handle or uuid
           type: string
       required:
-        - id
+        - name
         - display_name
       type: object
     CreateSystemInputBody:
@@ -3748,13 +3753,22 @@ components:
         display_name:
           type: string
         id:
+          description: The standard's uuid, the stable handle that survives a rename
+          type: string
+        name:
+          description: The kebab handle an operator reads and types; renameable
           type: string
         official:
           type: boolean
+        parent_standard:
+          description: The parent standard's handle
+          type: string
         parent_standard_id:
+          description: The parent standard's uuid; the stable form of parent_standard
           type: string
       required:
         - id
+        - name
         - display_name
         - official
       type: object
@@ -3832,8 +3846,11 @@ components:
         parent_id:
           description: The parent system's id, the canonical handle
           type: string
+        standard:
+          description: The standard's handle, for display; omitted for a one-off system
+          type: string
         standard_id:
-          description: The standard this system conforms to; omitted for a one-off system
+          description: The standard's uuid; the stable form of standard
           type: string
       required:
         - id

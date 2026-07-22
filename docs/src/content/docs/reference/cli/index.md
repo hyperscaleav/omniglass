@@ -285,12 +285,12 @@ Creates a custom (non-official) capability. Gated by capability:create.
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--display-name` | string | (none) |  |
-| `--id` | string | (none) | Globally unique capability id |
+| `--name` | string | (none) | The globally unique kebab handle; renameable |
 
 Example:
 
 ```sh
-omniglass capability create --display-name display_name --id id
+omniglass capability create --display-name display_name --name name
 ```
 
 ### `omniglass capability delete`
@@ -2916,13 +2916,13 @@ Creates a custom (non-official) standard, optionally as a variant of another. Ga
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--display-name` | string | (none) |  |
-| `--id` | string | (none) | Globally unique standard id |
-| `--parent-standard-id` | string | (none) | A standard this one is a variant of |
+| `--name` | string | (none) | The globally unique kebab handle; renameable |
+| `--parent-standard-id` | string | (none) | A standard this one is a variant of, by handle or uuid |
 
 Example:
 
 ```sh
-omniglass standard create --display-name display_name --id id
+omniglass standard create --display-name display_name --name name
 ```
 
 ### `omniglass standard delete`

@@ -158,6 +158,10 @@ func mapProductWriteErr(err error) error {
 		switch pgErr.Code {
 		case "23505": // unique_violation
 			return ErrTypeExists
+		case "23502": // not-null on capability_id: an unknown capability name resolved to null
+			if pgErr.ColumnName == "capability_id" {
+				return ErrProductRefNotFound
+			}
 		case "23503": // foreign_key_violation
 			return ErrProductRefNotFound
 		}
@@ -175,7 +179,7 @@ type productCapabilityLoader interface {
 
 // loadProductCapabilities returns a product's capability ids, sorted.
 func loadProductCapabilities(ctx context.Context, q productCapabilityLoader, productID string) ([]string, error) {
-	rows, err := q.Query(ctx, `select capability_id from product_capability where product_id = (select id from product where `+productRefCol(productID)+` = $1) order by capability_id`, productID)
+	rows, err := q.Query(ctx, `select cap.name from product_capability pc join capability cap on cap.id = pc.capability_id where pc.product_id = (select id from product where `+productRefCol(productID)+` = $1) order by cap.name`, productID)
 	if err != nil {
 		return nil, fmt.Errorf("storage: load product capabilities %q: %w", productID, err)
 	}
@@ -205,7 +209,7 @@ func replaceProductCapabilities(ctx context.Context, tx pgx.Tx, productRef strin
 	for _, c := range caps {
 		if _, err := tx.Exec(ctx, `
 			insert into product_capability (product_id, capability_id)
-			values ($1, $2)
+			values ($1, (select id from capability where name = $2 or id::text = $2))
 			on conflict (product_id, capability_id) do nothing`, productID, c); err != nil {
 			return mapProductWriteErr(err)
 		}
@@ -291,7 +295,7 @@ func (p *PG) ListProducts(ctx context.Context) ([]Product, error) {
 // allProductCapabilities returns every product's capability ids keyed by product
 // id, each slice sorted, in one query (avoids an N+1 over the list).
 func (p *PG) allProductCapabilities(ctx context.Context) (map[string][]string, error) {
-	rows, err := p.pool.Query(ctx, `select product_id, capability_id from product_capability order by product_id, capability_id`)
+	rows, err := p.pool.Query(ctx, `select pc.product_id, cap.name from product_capability pc join capability cap on cap.id = pc.capability_id order by pc.product_id, cap.name`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list product capabilities: %w", err)
 	}

@@ -21,27 +21,28 @@ func TestStandardCRUD(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	st, err := gw.CreateStandard(ctx, "", storage.Standard{ID: "kiosk", DisplayName: "Kiosk"})
+	st, err := gw.CreateStandard(ctx, "", storage.Standard{Name: "kiosk", DisplayName: "Kiosk"})
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
 	if st.Official {
 		t.Fatalf("new standard official=true, want false")
 	}
-	if _, err := gw.CreateStandard(ctx, "", storage.Standard{ID: "kiosk", DisplayName: "Dup"}); !errors.Is(err, storage.ErrTypeExists) {
+	if _, err := gw.CreateStandard(ctx, "", storage.Standard{Name: "kiosk", DisplayName: "Dup"}); !errors.Is(err, storage.ErrTypeExists) {
 		t.Fatalf("dup create err = %v, want ErrTypeExists", err)
 	}
 
 	// A variant parents onto an existing standard; an unknown parent is the
 	// dedicated sentinel, not a raw FK error.
-	variant, err := gw.CreateStandard(ctx, "", storage.Standard{ID: "kiosk-outdoor", DisplayName: "Outdoor Kiosk", ParentStandardID: strptr("kiosk")})
+	variant, err := gw.CreateStandard(ctx, "", storage.Standard{Name: "kiosk-outdoor", DisplayName: "Outdoor Kiosk", ParentStandardID: strptr("kiosk")})
 	if err != nil {
 		t.Fatalf("create variant: %v", err)
 	}
-	if variant.ParentStandardID == nil || *variant.ParentStandardID != "kiosk" {
-		t.Fatalf("variant parent = %v, want kiosk", variant.ParentStandardID)
+	// The arc stores the parent's uuid; ParentStandardName carries its handle.
+	if variant.ParentStandardName == nil || *variant.ParentStandardName != "kiosk" {
+		t.Fatalf("variant parent = %v, want kiosk", variant.ParentStandardName)
 	}
-	if _, err := gw.CreateStandard(ctx, "", storage.Standard{ID: "orphan", DisplayName: "Orphan", ParentStandardID: strptr("nope")}); !errors.Is(err, storage.ErrParentStandardNotFound) {
+	if _, err := gw.CreateStandard(ctx, "", storage.Standard{Name: "orphan", DisplayName: "Orphan", ParentStandardID: strptr("nope")}); !errors.Is(err, storage.ErrParentStandardNotFound) {
 		t.Fatalf("unknown parent err = %v, want ErrParentStandardNotFound", err)
 	}
 	if err := gw.DeleteStandard(ctx, "", "kiosk-outdoor"); err != nil {
@@ -77,7 +78,7 @@ func TestStandardCRUD(t *testing.T) {
 
 	// The official read-only guard still stands for a row that IS official (the
 	// canonical catalogs rely on it), so prove the mechanism on one.
-	if err := gw.UpsertStandard(ctx, storage.Standard{ID: "canon", Official: true, DisplayName: "Canonical"}); err != nil {
+	if err := gw.UpsertStandard(ctx, storage.Standard{Name: "canon", Official: true, DisplayName: "Canonical"}); err != nil {
 		t.Fatalf("seed an official standard: %v", err)
 	}
 	if _, err := gw.UpdateStandard(ctx, "", "canon", storage.StandardPatch{DisplayName: &name}); !errors.Is(err, storage.ErrTypeOfficial) {
@@ -120,8 +121,8 @@ func TestSystemStandardOptional(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create conforming: %v", err)
 	}
-	if conforming.StandardID == nil || *conforming.StandardID != "meeting-room" {
-		t.Fatalf("conforming standard = %v, want meeting-room", conforming.StandardID)
+	if conforming.StandardName == nil || *conforming.StandardName != "meeting-room" {
+		t.Fatalf("conforming standard = %v, want meeting-room", conforming.StandardName)
 	}
 
 	// The patch retargets the standard; the display_name it does not carry is
@@ -135,8 +136,8 @@ func TestSystemStandardOptional(t *testing.T) {
 	if err != nil {
 		t.Fatalf("update standard: %v", err)
 	}
-	if after.StandardID == nil || *after.StandardID != "classroom" {
-		t.Fatalf("patched standard = %v, want classroom", after.StandardID)
+	if after.StandardName == nil || *after.StandardName != "classroom" {
+		t.Fatalf("patched standard = %v, want classroom", after.StandardName)
 	}
 	if after.DisplayName != display || after.Name != "boardroom" {
 		t.Fatalf("patched row = %+v, want display_name %q and name boardroom kept", after, display)
@@ -150,8 +151,8 @@ func TestSystemStandardOptional(t *testing.T) {
 	if err != nil {
 		t.Fatalf("patch without standard: %v", err)
 	}
-	if kept.StandardID == nil || *kept.StandardID != "classroom" {
-		t.Fatalf("omitted standard = %v, want classroom kept", kept.StandardID)
+	if kept.StandardName == nil || *kept.StandardName != "classroom" {
+		t.Fatalf("omitted standard = %v, want classroom kept", kept.StandardName)
 	}
 	cleared, err := gw.UpdateSystem(ctx, "", "boardroom", storage.SystemPatch{StandardID: strptr("")}, all, all)
 	if err != nil {

@@ -3004,7 +3004,10 @@ export interface components {
              */
             readonly $schema?: string;
             display_name: string;
+            /** @description The capability's uuid, the stable handle that survives a rename */
             id: string;
+            /** @description The kebab handle an operator reads and types; renameable */
+            name: string;
             official: boolean;
         };
         ChangePasswordInputBody: {
@@ -3132,8 +3135,8 @@ export interface components {
              */
             readonly $schema?: string;
             display_name: string;
-            /** @description Globally unique capability id */
-            id: string;
+            /** @description The globally unique kebab handle; renameable */
+            name: string;
         };
         CreateComponentInputBody: {
             /**
@@ -3428,9 +3431,9 @@ export interface components {
              */
             readonly $schema?: string;
             display_name: string;
-            /** @description Globally unique standard id */
-            id: string;
-            /** @description A standard this one is a variant of */
+            /** @description The globally unique kebab handle; renameable */
+            name: string;
+            /** @description A standard this one is a variant of, by handle or uuid */
             parent_standard_id?: string;
         };
         CreateSystemInputBody: {
@@ -4926,8 +4929,14 @@ export interface components {
              */
             readonly $schema?: string;
             display_name: string;
+            /** @description The standard's uuid, the stable handle that survives a rename */
             id: string;
+            /** @description The kebab handle an operator reads and types; renameable */
+            name: string;
             official: boolean;
+            /** @description The parent standard's handle */
+            parent_standard?: string;
+            /** @description The parent standard's uuid; the stable form of parent_standard */
             parent_standard_id?: string;
         };
         StandardPropertyBody: {
@@ -4976,7 +4985,9 @@ export interface components {
             parent?: string;
             /** @description The parent system's id, the canonical handle */
             parent_id?: string;
-            /** @description The standard this system conforms to; omitted for a one-off system */
+            /** @description The standard's handle, for display; omitted for a one-off system */
+            standard?: string;
+            /** @description The standard's uuid; the stable form of standard */
             standard_id?: string;
         };
         SystemMemberBody: {

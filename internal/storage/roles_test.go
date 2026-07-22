@@ -53,9 +53,9 @@ func TestEffectiveCapabilities(t *testing.T) {
 
 	// The component adds one its product does not claim, and suppresses one it does.
 	if _, err := conn.Exec(ctx, `insert into component_capability (component_id, capability_id, present)
-		select id, 'touch-panel', true from component where name = 'bar-1'
+		select id, (select id from capability where name = 'touch-panel'), true from component where name = 'bar-1'
 		union all
-		select id, 'camera', false from component where name = 'bar-1'`); err != nil {
+		select id, (select id from capability where name = 'camera'), false from component where name = 'bar-1'`); err != nil {
 		t.Fatalf("declare component capabilities: %v", err)
 	}
 	got, _ = gw.EffectiveCapabilities(ctx, conn, "bar-1")
@@ -74,7 +74,7 @@ func TestEffectiveCapabilities(t *testing.T) {
 		t.Fatalf("productless with no declarations = %v, want empty", got)
 	}
 	if _, err := conn.Exec(ctx, `insert into component_capability (component_id, capability_id)
-		select id, 'microphone' from component where name = 'loose-mic'`); err != nil {
+		select id, (select id from capability where name = 'microphone') from component where name = 'loose-mic'`); err != nil {
 		t.Fatalf("declare on productless: %v", err)
 	}
 	if got, _ = gw.EffectiveCapabilities(ctx, conn, "loose-mic"); !hasAll(got, "microphone") || len(got) != 1 {
@@ -111,7 +111,7 @@ func TestEffectiveRolesAndAssignment(t *testing.T) {
 	// what the boot seed happens to declare cannot change what this asserts. It
 	// wants a table mic (microphone + speaker, quorum 2); the system itself also
 	// declares an ad-hoc display role.
-	if err := gw.UpsertStandard(ctx, storage.Standard{ID: "test-huddle", DisplayName: "Test Huddle"}); err != nil {
+	if err := gw.UpsertStandard(ctx, storage.Standard{Name: "test-huddle", DisplayName: "Test Huddle"}); err != nil {
 		t.Fatalf("create standard: %v", err)
 	}
 	std := "test-huddle"
@@ -121,7 +121,7 @@ func TestEffectiveRolesAndAssignment(t *testing.T) {
 	var micRole string
 	if err := conn.QueryRow(ctx, `
 		insert into system_role (owner_kind, standard_id, name, display_name, quorum)
-		values ('standard','test-huddle','table-mic','Table microphone',2)
+		values ('standard',(select id from standard where name = 'test-huddle'),'table-mic','Table microphone',2)
 		returning id`).Scan(&micRole); err != nil {
 		t.Fatalf("declare standard role: %v", err)
 	}
@@ -129,7 +129,7 @@ func TestEffectiveRolesAndAssignment(t *testing.T) {
 	// reach across owners and constrain what any other standard may declare.
 	if _, err := conn.Exec(ctx, `
 		insert into role_capability (role_id, capability_id)
-		select $1, c from unnest(array['microphone','speaker']) c`, micRole); err != nil {
+		select $1, (select id from capability where name = c) from unnest(array['microphone','speaker']) c`, micRole); err != nil {
 		t.Fatalf("require capabilities: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `
@@ -205,9 +205,9 @@ func TestEffectiveRolesAndAssignment(t *testing.T) {
 		t.Fatalf("create productless: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `insert into component_capability (component_id, capability_id)
-		select id, 'microphone' from component where name = 'loose-mic'
+		select id, (select id from capability where name = 'microphone') from component where name = 'loose-mic'
 		union all
-		select id, 'speaker' from component where name = 'loose-mic'`); err != nil {
+		select id, (select id from capability where name = 'speaker') from component where name = 'loose-mic'`); err != nil {
 		t.Fatalf("declare capabilities: %v", err)
 	}
 	if err := gw.AssignRole(ctx, "", "hq-huddle", "table-mic", "loose-mic", all); err != nil {

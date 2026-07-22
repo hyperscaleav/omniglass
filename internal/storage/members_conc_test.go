@@ -42,7 +42,7 @@ func TestFirstMembershipRaceIsSerialized(t *testing.T) {
 	all := scope.Set{All: true}
 
 	std := "race-standard"
-	if err := gw.UpsertStandard(ctx, storage.Standard{ID: std, DisplayName: "Race"}); err != nil {
+	if err := gw.UpsertStandard(ctx, storage.Standard{Name: std, DisplayName: "Race"}); err != nil {
 		t.Fatalf("standard: %v", err)
 	}
 	for _, s := range []string{"race-a", "race-b"} {

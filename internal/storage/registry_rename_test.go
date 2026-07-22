@@ -107,4 +107,37 @@ func TestRegistryHandleRenameKeepsReferences(t *testing.T) {
 	if comp.ProductHandle == nil || *comp.ProductHandle != "acme-soundbar" {
 		t.Errorf("component product reads %v, want acme-soundbar", comp.ProductHandle)
 	}
+
+	// Slice 2: a capability and a standard rename with every reference intact.
+	// The product requires microphone; the standard has a role requiring it and a
+	// property contract; renaming both must leave all of that resolving.
+	if _, err := gw.CreateStandard(ctx, "", storage.Standard{Name: "huddle", DisplayName: "Huddle"}); err != nil {
+		t.Fatalf("standard: %v", err)
+	}
+	if _, err := gw.SetSystemRole(ctx, "", "standard", "huddle", storage.SystemRoleSpec{
+		Name: "mic", DisplayName: "Mic", Quorum: 1, Capabilities: []string{"microphone"}, Impact: "degraded"}); err != nil {
+		t.Fatalf("role: %v", err)
+	}
+	if _, err := conn.Exec(ctx, `update capability set name = 'mic-cap' where name = 'microphone'`); err != nil {
+		t.Fatalf("rename capability: %v", err)
+	}
+	if _, err := conn.Exec(ctx, `update standard set name = 'huddle-space' where name = 'huddle'`); err != nil {
+		t.Fatalf("rename standard: %v", err)
+	}
+	// The product's required set still resolves, now reading the capability's new
+	// handle; the role still requires it; the standard is addressable by its new one.
+	after, err := gw.GetProduct(ctx, "acme-soundbar")
+	if err != nil {
+		t.Fatalf("get product after capability rename: %v", err)
+	}
+	if len(after.Capabilities) != 1 || after.Capabilities[0] != "mic-cap" {
+		t.Errorf("product capabilities = %v, want [mic-cap] through the rename", after.Capabilities)
+	}
+	roles, err := gw.ListSystemRoles(ctx, "standard", "huddle-space")
+	if err != nil {
+		t.Fatalf("list roles by the renamed standard: %v", err)
+	}
+	if len(roles) != 1 || len(roles[0].Capabilities) != 1 || roles[0].Capabilities[0] != "mic-cap" {
+		t.Errorf("role requirement = %v, want [mic-cap]", roles)
+	}
 }

@@ -30,10 +30,13 @@ var (
 // product.parent_product_id does. The registry lists alphabetically by
 // display_name; there is no ordering field.
 type Standard struct {
-	ID               string
-	Official         bool
-	DisplayName      string
-	ParentStandardID *string
+	// ID is the uuid primary key and Name the renameable kebab handle (ADR-0062).
+	ID                 string
+	Name               string
+	Official           bool
+	DisplayName        string
+	ParentStandardID   *string
+	ParentStandardName *string
 }
 
 // System is a composition of components (the service tree): name-addressable,
@@ -42,12 +45,13 @@ type Standard struct {
 // component.product_id: a system that matches no blueprint carries only its own
 // ad-hoc values.
 type System struct {
-	ID          string
-	Name        string
-	DisplayName string
-	StandardID  *string
-	ParentID    *string
-	LocationID  *string
+	ID           string
+	Name         string
+	DisplayName  string
+	StandardID   *string
+	StandardName *string
+	ParentID     *string
+	LocationID   *string
 	// MemberCount is how many components are bound into this system. It comes from
 	// system_member, not from any pointer on the component: membership is the
 	// relation that says what is in a system, and reading it from anywhere else is
@@ -85,11 +89,14 @@ type SystemPatch struct {
 
 // --- standard registry -------------------------------------------------------
 
-const standardCols = `id, official, display_name, parent_standard_id`
+// parent_standard_id stores a uuid; the parent's handle is projected beside it,
+// as the estate arcs do.
+const standardCols = `id, name, official, display_name, parent_standard_id,
+	(select p.name from standard p where p.id = standard.parent_standard_id) as parent_handle`
 
 func scanStandard(row pgx.Row) (*Standard, error) {
 	var st Standard
-	if err := row.Scan(&st.ID, &st.Official, &st.DisplayName, &st.ParentStandardID); err != nil {
+	if err := row.Scan(&st.ID, &st.Name, &st.Official, &st.DisplayName, &st.ParentStandardID, &st.ParentStandardName); err != nil {
 		return nil, err
 	}
 	return &st, nil
@@ -121,26 +128,26 @@ func mapStandardWriteErr(err error) error {
 // UPDATE is the authoritative behavior the canonical catalogs want.
 func (p *PG) SeedStandard(ctx context.Context, st Standard) error {
 	_, err := p.pool.Exec(ctx, `
-		insert into standard (id, official, display_name, parent_standard_id)
-		values ($1, $2, $3, $4)
-		on conflict (id) do nothing`,
-		st.ID, st.Official, st.DisplayName, st.ParentStandardID)
+		insert into standard (name, official, display_name, parent_standard_id)
+		values ($1, $2, $3, (select id from standard where name = nullif($4, '')))
+		on conflict (name) do nothing`,
+		st.Name, st.Official, st.DisplayName, st.ParentStandardID)
 	if err != nil {
-		return fmt.Errorf("storage: seed standard %q: %w", st.ID, err)
+		return fmt.Errorf("storage: seed standard %q: %w", st.Name, err)
 	}
 	return nil
 }
 
 func (p *PG) UpsertStandard(ctx context.Context, st Standard) error {
 	_, err := p.pool.Exec(ctx, `
-		insert into standard (id, official, display_name, parent_standard_id)
-		values ($1, $2, $3, $4)
-		on conflict (id) do update
+		insert into standard (name, official, display_name, parent_standard_id)
+		values ($1, $2, $3, (select id from standard where name = nullif($4, '')))
+		on conflict (name) do update
 			set official           = excluded.official,
 			    display_name       = excluded.display_name,
 			    parent_standard_id = excluded.parent_standard_id,
 			    updated_at         = now()`,
-		st.ID, st.Official, st.DisplayName, st.ParentStandardID)
+		st.Name, st.Official, st.DisplayName, st.ParentStandardID)
 	if err != nil {
 		return fmt.Errorf("storage: upsert standard %q: %w", st.ID, err)
 	}
@@ -150,7 +157,7 @@ func (p *PG) UpsertStandard(ctx context.Context, st Standard) error {
 // ListStandards returns every standard, ordered alphabetically by display_name
 // then id.
 func (p *PG) ListStandards(ctx context.Context) ([]Standard, error) {
-	rows, err := p.pool.Query(ctx, `select `+standardCols+` from standard order by display_name, id`)
+	rows, err := p.pool.Query(ctx, `select `+standardCols+` from standard order by display_name, name`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list standards: %w", err)
 	}
@@ -168,7 +175,7 @@ func (p *PG) ListStandards(ctx context.Context) ([]Standard, error) {
 
 // GetStandard resolves one standard by id. An unknown id is ErrTypeNotFound.
 func (p *PG) GetStandard(ctx context.Context, id string) (*Standard, error) {
-	st, err := scanStandard(p.pool.QueryRow(ctx, `select `+standardCols+` from standard where id = $1`, id))
+	st, err := scanStandard(p.pool.QueryRow(ctx, `select `+standardCols+` from standard where `+registryRefCol("standard", id)+` = $1`, id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrTypeNotFound
 	}
@@ -195,11 +202,17 @@ func (p *PG) CreateStandard(ctx context.Context, actorID string, st Standard) (*
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	if st.ParentStandardID != nil && *st.ParentStandardID != "" {
+		var known bool
+		if err := tx.QueryRow(ctx, `select true from standard where `+registryRefCol("standard", *st.ParentStandardID)+` = $1`, *st.ParentStandardID).Scan(&known); err != nil {
+			return nil, ErrParentStandardNotFound
+		}
+	}
 	created, err := scanStandard(tx.QueryRow(ctx, `
-		insert into standard (id, official, display_name, parent_standard_id)
-		values ($1, false, $2, $3)
+		insert into standard (name, official, display_name, parent_standard_id)
+		values ($1, false, $2, (select id from standard where name = $3 or id::text = $3))
 		returning `+standardCols,
-		st.ID, st.DisplayName, st.ParentStandardID))
+		st.Name, st.DisplayName, st.ParentStandardID))
 	if err != nil {
 		return nil, mapStandardWriteErr(err)
 	}
@@ -228,9 +241,9 @@ func (p *PG) UpdateStandard(ctx context.Context, actorID, id string, patch Stand
 	st, err := scanStandard(tx.QueryRow(ctx, `
 		update standard set
 			display_name       = coalesce($2, display_name),
-			parent_standard_id = coalesce($3, parent_standard_id),
+			parent_standard_id = coalesce((select id from standard where name = $3 or id::text = $3), parent_standard_id),
 			updated_at         = now()
-		where id = $1
+		where `+registryRefCol("standard", id)+` = $1
 		returning `+standardCols,
 		id, patch.DisplayName, patch.ParentStandardID))
 	if err != nil {
@@ -254,7 +267,9 @@ func (p *PG) DeleteStandard(ctx context.Context, actorID, id string) error {
 
 // --- system CRUD -------------------------------------------------------------
 
-const systemCols = `id, name, coalesce(display_name, ''), standard_id, parent_id, location_id,
+const systemCols = `id, name, coalesce(display_name, ''), standard_id,
+	(select st.name from standard st where st.id = system.standard_id) as standard_handle,
+	parent_id, location_id,
 	(select count(*) from system_member m where m.system_id = system.id) as member_count,
 	(select p.name from system p where p.id = system.parent_id) as parent_name,
 	(select l.name from location l where l.id = system.location_id) as location_name,
@@ -262,7 +277,7 @@ const systemCols = `id, name, coalesce(display_name, ''), standard_id, parent_id
 
 func scanSystem(row pgx.Row) (*System, error) {
 	var s System
-	if err := row.Scan(&s.ID, &s.Name, &s.DisplayName, &s.StandardID, &s.ParentID, &s.LocationID,
+	if err := row.Scan(&s.ID, &s.Name, &s.DisplayName, &s.StandardID, &s.StandardName, &s.ParentID, &s.LocationID,
 		&s.MemberCount, &s.ParentName, &s.LocationName, &s.CreatedAt, &s.UpdatedAt); err != nil {
 		return nil, err
 	}
@@ -355,7 +370,7 @@ func (p *PG) CreateSystem(ctx context.Context, actorID string, spec SystemSpec, 
 	var standardID *string
 	if spec.StandardID != nil {
 		var sid string
-		err := tx.QueryRow(ctx, `select id from standard where id = $1`, *spec.StandardID).Scan(&sid)
+		err := tx.QueryRow(ctx, `select id from standard where `+registryRefCol("standard", *spec.StandardID)+` = $1`, *spec.StandardID).Scan(&sid)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrUnknownStandard
 		} else if err != nil {
@@ -418,6 +433,14 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 		}
 		locationPatch = &loc.ID
 	}
+	var standardPatchID *string
+	if patch.StandardID != nil && *patch.StandardID != "" {
+		var sid string
+		if err := tx.QueryRow(ctx, `select id from standard where `+registryRefCol("standard", *patch.StandardID)+` = $1`, *patch.StandardID).Scan(&sid); err != nil {
+			return nil, ErrUnknownStandard
+		}
+		standardPatchID = &sid
+	}
 	after, err := scanSystem(tx.QueryRow(ctx, `
 		update system set
 			name         = coalesce($2, name),
@@ -429,7 +452,7 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 			standard_id  = case
 				when $4::text is null then standard_id
 				when $4 = '' then null
-				else $4
+				else $6::uuid
 			end,
 			-- location_id takes the same three states, already resolved to an id. The
 			-- column is a uuid, so the branch that sets it casts: a CASE cannot mix
@@ -442,7 +465,7 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 			updated_at   = now()
 		where id = $1
 		returning `+systemCols,
-		before.ID, patch.Name, patch.DisplayName, patch.StandardID, locationPatch))
+		before.ID, patch.Name, patch.DisplayName, patch.StandardID, locationPatch, standardPatchID))
 	if err != nil {
 		return nil, mapSystemWriteErr(err)
 	}

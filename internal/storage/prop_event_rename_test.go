@@ -35,7 +35,7 @@ func TestPropertiesAndEventsSurviveARename(t *testing.T) {
 	all := scope.Set{All: true}
 
 	std := "rename-standard"
-	if err := gw.UpsertStandard(ctx, storage.Standard{ID: std, DisplayName: "Rename"}); err != nil {
+	if err := gw.UpsertStandard(ctx, storage.Standard{Name: std, DisplayName: "Rename"}); err != nil {
 		t.Fatalf("standard: %v", err)
 	}
 	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "old-sys", StandardID: &std}, all); err != nil {

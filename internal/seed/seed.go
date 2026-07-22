@@ -313,7 +313,7 @@ func seedCapabilities(ctx context.Context, gw storage.Gateway) error {
 	}
 	for _, c := range doc.Capabilities {
 		if err := gw.UpsertCapability(ctx, storage.Capability{
-			ID: c.ID, Official: true, DisplayName: c.DisplayName,
+			Name: c.ID, Official: true, DisplayName: c.DisplayName,
 		}); err != nil {
 			return err
 		}
@@ -374,7 +374,7 @@ func seedStandards(ctx context.Context, gw storage.Gateway) error {
 		// Shipped standards are example content the operator owns once it lands,
 		// not authoritative reference data: seeded if absent, never reasserted.
 		if err := gw.SeedStandard(ctx, storage.Standard{
-			ID:               st.ID,
+			Name:             st.ID,
 			Official:         false,
 			DisplayName:      st.DisplayName,
 			ParentStandardID: parent,

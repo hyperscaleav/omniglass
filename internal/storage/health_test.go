@@ -53,7 +53,7 @@ func newHealthFixture(t *testing.T) *healthFixture {
 	f.mustLocation(t, ctx, "hq-b1", "building", ptrStr("hq"))
 	f.mustLocation(t, ctx, "hq-r1", "room", ptrStr("hq-b1"))
 
-	if err := gw.UpsertStandard(ctx, storage.Standard{ID: "health-huddle", DisplayName: "Health Huddle"}); err != nil {
+	if err := gw.UpsertStandard(ctx, storage.Standard{Name: "health-huddle", DisplayName: "Health Huddle"}); err != nil {
 		t.Fatalf("create standard: %v", err)
 	}
 	std, room := "health-huddle", "hq-r1"
@@ -529,7 +529,7 @@ func TestHealthReportOfAFreshSystem(t *testing.T) {
 
 	// The standard and its role exist BEFORE the system does, which is the ordering
 	// that used to leave nothing recorded for the system at read time.
-	if err := f.gw.UpsertStandard(ctx, storage.Standard{ID: "health-podium", DisplayName: "Health Podium"}); err != nil {
+	if err := f.gw.UpsertStandard(ctx, storage.Standard{Name: "health-podium", DisplayName: "Health Podium"}); err != nil {
 		t.Fatalf("create standard: %v", err)
 	}
 	if _, err := f.gw.SetSystemRole(ctx, "", "standard", "health-podium", storage.SystemRoleSpec{
@@ -617,7 +617,7 @@ func TestHealthMovesOnStandardChange(t *testing.T) {
 	f := newHealthFixture(t)
 	ctx := context.Background()
 
-	if err := f.gw.UpsertStandard(ctx, storage.Standard{ID: "health-podium", DisplayName: "Health Podium"}); err != nil {
+	if err := f.gw.UpsertStandard(ctx, storage.Standard{Name: "health-podium", DisplayName: "Health Podium"}); err != nil {
 		t.Fatalf("create standard: %v", err)
 	}
 	if _, err := f.gw.SetSystemRole(ctx, "", "standard", "health-podium", storage.SystemRoleSpec{
@@ -627,7 +627,7 @@ func TestHealthMovesOnStandardChange(t *testing.T) {
 	}
 	// A second standard that claims nothing at all: conforming to it is what makes
 	// the system healthy again.
-	if err := f.gw.UpsertStandard(ctx, storage.Standard{ID: "health-plain", DisplayName: "Health Plain"}); err != nil {
+	if err := f.gw.UpsertStandard(ctx, storage.Standard{Name: "health-plain", DisplayName: "Health Plain"}); err != nil {
 		t.Fatalf("create plain standard: %v", err)
 	}
 	std, room := "health-podium", "hq-r1"
