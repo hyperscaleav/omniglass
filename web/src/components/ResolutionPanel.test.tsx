@@ -12,7 +12,7 @@ const tags: ResolvedTag[] = [
   // The system band wins over a location binding it shadows.
   { key: "environment", value: "prod", owner_kind: "system", owner_name: "boardroom-a", band: 2, depth: 0, winner: true },
   { key: "environment", value: "staging", owner_kind: "location", owner_name: "boardroom", band: 1, depth: 0, winner: false },
-  { key: "owner", value: "av-team", owner_kind: "global", owner_name: "", band: 0, depth: 0, winner: true },
+  { key: "owner", value: "av-team", owner_kind: "platform", owner_name: "", band: 0, depth: 0, winner: true },
 ] as ResolvedTag[];
 
 const shared: Member[] = [
@@ -57,9 +57,12 @@ describe("ResolutionPanel", () => {
     expect(getByText(/staging from location boardroom/)).toBeTruthy();
   });
 
-  it("names the global tier for a value nothing overrode", () => {
+  // The install-wide tier is `platform` (ADR-0057). This fixture said `global`,
+  // a value the API stopped producing at that rename, and the label said `global`
+  // too, so the two were stale together and the test passed all the way through.
+  it("names the platform tier for a value nothing overrode", () => {
     const { getByText } = mount();
-    expect(getByText(/from global/)).toBeTruthy();
+    expect(getByText(/from platform/)).toBeTruthy();
   });
 
   // The selector is why this panel exists, and it must appear only when there is
@@ -80,7 +83,9 @@ describe("ResolutionPanel", () => {
   });
 
   it("re-resolves against the chosen system", async () => {
-    const spy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    // A fresh Response per call: a body can only be read once, and the panel
+    // now issues three requests, so a single shared Response starves two of them.
+    const spy = vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
       json({
         tags: [
           { key: "environment", value: "lab", owner_kind: "system", owner_name: "boardroom-b", band: 2, depth: 0, winner: true },
@@ -90,14 +95,18 @@ describe("ResolutionPanel", () => {
     const { getByLabelText, findByText } = mount();
     fireEvent.change(getByLabelText("Resolve against"), { target: { value: "boardroom-b" } });
     await waitFor(() => expect(spy).toHaveBeenCalled());
-    const arg = spy.mock.calls[0]?.[0] as Request | string;
-    const url = typeof arg === "string" ? arg : arg.url;
-    expect(url).toContain("system=boardroom-b");
+    // The panel now fetches three cascades, so the tag request is not
+    // necessarily the first call. Only the tag cascade takes a system: a
+    // variable resolves against the primary membership and a secret has no
+    // system band, so neither must carry the parameter.
+    const urls = spy.mock.calls.map(([arg]) => (typeof arg === "string" ? arg : (arg as Request).url));
+    expect(urls.some((u) => u.includes("effective-tags") && u.includes("system=boardroom-b"))).toBe(true);
+    expect(urls.filter((u) => !u.includes("effective-tags")).every((u) => !u.includes("system="))).toBe(true);
     expect(await findByText("lab")).toBeTruthy();
   });
 
   it("says so plainly when nothing reaches the component", () => {
     const { getByText } = mount({ rows: [], members: solo, name: "solo-bar" });
-    expect(getByText("No tags reach this component.")).toBeTruthy();
+    expect(getByText("No values reach this component.")).toBeTruthy();
   });
 });
