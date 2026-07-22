@@ -42,7 +42,9 @@ describe("action rail ownership", () => {
   });
 
   // The exact shape both offenders hand-rolled. A form body that lays out its own
-  // right-aligned button row is drawing a rail the shell already owns.
+  // right-aligned button row is drawing a rail the shell already owns. This does NOT
+  // ban the full-page create forms' inline `border-t ... pt-4` row: that rail is not
+  // pinned and has no shell to move it to until the CRUD form primitive lands (#337).
   it("no panel form body hand-rolls a right-aligned button row", () => {
     const handRolled = /class="[^"]*\bmt-1 flex justify-end gap-2\b[^"]*"/;
     const offenders = files.filter((f) => handRolled.test(readFileSync(f, "utf8"))).map(rel);

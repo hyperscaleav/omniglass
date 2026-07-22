@@ -40,6 +40,11 @@ available, with no need to enter edit mode: a red **Delete** for a group (a user
 user's is **Disable / Enable**), each behind a confirm. Secondary actions like **Impersonate** fold into a
 **⋯** menu. Edit appears only if your grants allow it, and a read-only blade (a role) shows no bar at all.
 
+The same bar carries **create**. A form that opens in a slide-over (New user, New tag key, Upload
+file) or as its own blade (New interface) puts its **Create** button in the bar at the foot of the
+panel, never floating after the last field, and greys it out until the form is complete. **Cancel**
+sits beside it on the forms that offer one; where it does not, the header **x** closes the panel.
+
 ## Create, edit, delete
 
 - **New** opens a **draft** at the entity's own `/create` address (a form for name, classifier,
