@@ -192,9 +192,9 @@ var ownerContracts = map[string]ownerContract{
 	"component": {"component", "product_id", "product_property", "product_id", "component_id", "id", ErrComponentNotFound},
 	"system":    {"system", "standard_id", "standard_property", "standard_id", "system_id", "id", ErrSystemNotFound},
 	"location":  {"location", "location_type", "location_type_property", "location_type_id", "location_id", "id", ErrLocationNotFound},
-	// A node has the arc but no classifier, so it resolves ad-hoc values only, and
-	// its arc still stores a name until the collection tier converts.
-	"node": {"node", "", "", "", "node_id", "name", ErrNodeNotFound},
+	// A node has the arc but no classifier, so it resolves ad-hoc values only. Its
+	// arc points at principal_id, the node's primary key.
+	"node": {"node", "", "", "", "node_id", "principal_id", ErrNodeNotFound},
 }
 
 // EffectiveProperties resolves an instance's declared properties: every property
@@ -310,9 +310,8 @@ func (p *PG) EffectiveProperties(ctx context.Context, ownerKind, ownerID string,
 // inScope=false so each caller picks its own sentinel. A node is estate-wide (not
 // scope-tree scoped, like a principal), so it is in scope once it exists.
 // ownerArcValue resolves an owner reference to the value its arc column stores.
-// For the three estate kinds that is the entity's uuid: the arc points at the
-// primary key, so a rename never touches it. A node still stores its name until
-// the collection tier converts.
+// For every kind that is the entity's primary key: a uuid for the three estate
+// kinds, principal_id for a node, so a rename never touches the arc.
 //
 // The reference itself may be either form, since scopedByName resolves a uuid or
 // a name; this is only about what gets written.
@@ -336,8 +335,18 @@ func (p *PG) ownerArcValue(ctx context.Context, q querier, ownerKind, ownerRef s
 			return "", err
 		}
 		return l.ID, nil
+	case "node":
+		col := "name"
+		if isUUID(ownerRef) {
+			col = "principal_id"
+		}
+		var pid string
+		if err := q.QueryRow(ctx, `select principal_id from node where `+col+` = $1`, ownerRef).Scan(&pid); err != nil {
+			return "", ErrNodeNotFound
+		}
+		return pid, nil
 	}
-	return ownerRef, nil // node: still keyed by name
+	return ownerRef, nil
 }
 
 func (p *PG) ownerInScope(ctx context.Context, q querier, ownerKind, ownerID string, s scope.Set) (bool, error) {

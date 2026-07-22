@@ -1786,7 +1786,11 @@ below from the project's history. From here it grows one slice at a time.
 
 ### ADR-0053: A name is the address, a uuid is identity
 
-- **Status:** accepted, built.
+- **Status:** superseded in part by
+  [ADR-0056](#adr-0056-every-foreign-key-stores-a-primary-key). Its API half stands: a reference is
+  addressed by name. Its schema half ("a new table references an estate entity by `name` with `on
+  update cascade`") is reversed, and responses now carry the id **beside** the name rather than
+  instead of it.
 - **Context:** the pattern was real and dominant but never applied to the original entities.
   Eleven tables keyed their estate references by `name`, six by `id`, split by age. Worse, the API
   **accepted names on write and returned uuids on read**: a component created with
@@ -1843,7 +1847,10 @@ below from the project's history. From here it grows one slice at a time.
 - **Tracked under** [#332](https://github.com/hyperscaleav/omniglass/issues/332).
 ### ADR-0055: The tag, variable, and secret owner arcs key by name
 
-- **Status:** accepted, built.
+- **Status:** superseded by [ADR-0056](#adr-0056-every-foreign-key-stores-a-primary-key), which
+  converts these nine columns back to uuids along with every other name-keyed foreign key. Kept in
+  full because the reasoning below is a worked example of the mistake: it is internally consistent,
+  it shipped green, and it is wrong at the premise.
 - **Context:** [ADR-0053](#adr-0053-a-name-is-the-address-a-uuid-is-identity) fixed what operators saw
   and deliberately left the schema alone. Three tables still keyed their owner arcs by uuid while every
   table from the collection era onward keyed by name, so the two conventions met inside single queries:
@@ -1873,3 +1880,39 @@ below from the project's history. From here it grows one slice at a time.
 - **No `migrate:down`.** Reversing would have to resolve names back to uuids the forward migration no
   longer records, and any rename since would make that resolution wrong rather than merely absent.
 - **Tracked as** [#339](https://github.com/hyperscaleav/omniglass/issues/339).
+
+### ADR-0056: Every foreign key stores a primary key
+
+- **Date:** 2026-07-22 | **Status:** Accepted | **Pages:** [storage](/architecture/storage/),
+  [api-first](/contributing/api-first/)
+- **Decision:** every foreign key stores the target's **primary key**: a uuid for an estate entity,
+  `principal_id` for a node, and the slug itself for a slug-keyed catalog (`product`, `standard`,
+  `property`, `interface_type`) where the name already *is* the key. No column references a `name`.
+  In exchange, the API accepts **either form** wherever a reference is written (a path segment or a
+  join field in a body), trying the uuid first, and every response carries **both**: the name an
+  operator reads and the id it resolves to.
+- **Context: this reverses a direction set two ADRs ago.** [ADR-0053](#adr-0053-a-name-is-the-address-a-uuid-is-identity)
+  found eleven tables keyed by name and six by id, and resolved the split by declaring the majority
+  correct. [ADR-0055](#adr-0055-the-tag-variable-and-secret-owner-arcs-key-by-name) then converted the
+  six to match, and the follow-on work was converting the rest. The premise was never examined: a
+  friendly, renameable key is valuable *because* it can change, which is the one thing a foreign key
+  must not do.
+- **The tell was `on update cascade`.** ADR-0055 called it "the load-bearing clause" and was pleased
+  that removing it made the test fail. That machinery exists only to fund the wrong choice: it is
+  write amplification across every referencing row, on a rename, to protect a key that did not need
+  to be a name. A uuid arc needs no clause, and the equivalent test passes because there is nothing
+  to rewrite.
+- **A rename was not merely inefficient, it was refused.** With `interface.component` referencing
+  `component (name)` and no `on update` clause, renaming a component that owned any interface failed
+  outright with a foreign-key violation. The name-keyed convention had spread past the point where
+  its own cascade covered it, and the operator-facing symptom was a rename that returned an error.
+- **Scope:** all 30 name-keyed foreign keys, converted across five slices grouped by subsystem rather
+  than by table, so each file changed once: the estate arcs, then health and roles, then the
+  collection tier (`metric_datapoint`, `interface`, `node`) and every node reference.
+- **What stays a name.** The columns whose target is slug-keyed are already conformant and were not
+  touched. Health passes names internally on purpose: its advisory lock hashes `health/<kind>/<name>`,
+  and a mixed currency would hash two keys for one owner and silently stop serializing.
+- **Guarded both ways.** `TestResponsesAddressEntitiesByName` fails on a response that names an entity
+  by uuid alone; the per-tier rename tests fail if an arc stops following a rename. Each conversion was
+  **mutation-checked** rather than trusted: breaking the projection had to turn the suite red.
+- **Tracked as** [#343](https://github.com/hyperscaleav/omniglass/issues/343).

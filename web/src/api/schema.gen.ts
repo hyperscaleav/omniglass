@@ -3205,9 +3205,9 @@ export interface components {
              * @example /api/v1/schemas/CreateInterfaceInputBody.json
              */
             readonly $schema?: string;
-            /** @description Owning component name; omit for a server-hosted interface (needs an all-scoped grant) */
+            /** @description Owning component, by name or id; omit for a server-hosted interface (needs an all-scoped grant) */
             component?: string;
-            /** @description Node placement name */
+            /** @description Node placement, by name or id */
             node?: string;
             /** @description Endpoint/target settings (jsonb) */
             params?: unknown;
@@ -3285,7 +3285,7 @@ export interface components {
             description?: string;
             /** @description Operator label; falls back to the name when empty */
             display_name?: string;
-            /** @description Optional location the node sits in (descriptive placement, not scope) */
+            /** @description Optional location the node sits in, by name or id (descriptive placement, not scope) */
             location?: string;
             /** @description Globally unique node name (also its NATS subject token, so no dots or whitespace) */
             name: string;
@@ -3874,12 +3874,16 @@ export interface components {
             readonly $schema?: string;
             /** @description The owning component name; absent for a server-hosted interface */
             component?: string;
+            /** @description The owning component's id; the stable form of component */
+            component_id?: string;
             /** @description The interface's surrogate id (the address) */
             id: string;
             /** @description The friendly name, unique within the owning component */
             name: string;
             /** @description The node placement name, if assigned */
             node?: string;
+            /** @description The placed node's id; the stable form of node */
+            node_id?: string;
             /** @description The endpoint/target settings (jsonb) */
             params?: unknown;
             type: string;
@@ -4320,6 +4324,8 @@ export interface components {
             last_heartbeat_at?: string;
             /** @description The location the node sits in (descriptive placement, not scope) */
             location?: string;
+            /** @description The location's id; the stable form of location */
+            location_id?: string;
             name: string;
         };
         PrincipalBody: {
@@ -4969,8 +4975,10 @@ export interface components {
             /** @description The interface's surrogate id this task runs over */
             interface_id: string;
             mode: string;
-            /** @description The node placement, projected from the interface */
+            /** @description The node placement name, projected from the interface */
             node?: string;
+            /** @description The placed node's id; the stable form of node */
+            node_id?: string;
             /** @description The inline probe settings (jsonb) */
             spec?: unknown;
         };
@@ -5038,7 +5046,7 @@ export interface components {
              * @example /api/v1/schemas/UpdateInterfaceInputBody.json
              */
             readonly $schema?: string;
-            /** @description Reassign the node placement */
+            /** @description Reassign the node placement, by name or id */
             node?: string;
             /** @description Replace the endpoint/target settings (jsonb) */
             params?: unknown;
@@ -5088,7 +5096,7 @@ export interface components {
             readonly $schema?: string;
             description?: string;
             display_name?: string;
-            /** @description Set the node's location, or "" to clear it */
+            /** @description Set the node's location by name or id, or "" to clear it */
             location?: string;
         };
         UpdatePrincipalInputBody: {

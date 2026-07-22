@@ -32,9 +32,10 @@ contributor build without protoc or a running server.
 
 ## A name is the address, a uuid is identity
 
-**Every request and response addresses another entity by its `name`.** A uuid appears in the
-API only as an entity's **own** `id`, an opaque handle. It is never how one row points at
-another.
+**Every response carries both forms of a reference: the name an operator reads and the id it
+resolves to.** `{"parent": "rack", "parent_id": "0198f..."}`. The name is what a human types
+and what a body round-trips; the id is the stable handle that survives a rename. A response
+that carries only the uuid is the failure this rule names.
 
 The test is a **round trip**: a response body can be fed back to the write that produced it.
 Create a component with `{"parent": "rack"}` and read it back as `{"parent": "rack"}`, not as
@@ -48,9 +49,17 @@ Two exceptions, both narrow:
 - **A slug-keyed catalog** already satisfies the rule, because its id *is* the name:
   `product_id: "cisco-room-bar"`.
 
-Internally a table may key by either, but a **new table references an estate entity by
-`name`**, with `on update cascade` so a rename does not orphan it. That is what every table
-from the collection era onward already does.
+**Every foreign key stores the target's primary key**, which for an estate entity is its uuid.
+A rename then has nothing to rewrite: the friendly name is free to change precisely because
+nothing points at it. A `_id` column holding a name, kept alive by `on update cascade`, is the
+shape this rule exists to prevent; the cascade is machinery that only exists to fund the wrong
+choice. The one class of exception is the **slug-keyed catalog** (`product`, `standard`,
+`property`, `interface_type`), where the name *is* the primary key and pointing at it is
+pointing at the key.
+
+**A path or a join field accepts either form.** `GET /components/{ref}` and a body's
+`{"parent": "..."}` both take a uuid or a name; the uuid is tried first, so an id never
+collides with a name. Operators type names, scripts hold ids, and neither has to convert.
 
 `TestResponsesAddressEntitiesByName` enforces this over the generated OpenAPI, so a body
 cannot reintroduce a uuid reference silently. Its allow-list is the whole of the exception,

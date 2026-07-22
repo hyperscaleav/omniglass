@@ -30,14 +30,16 @@ var (
 // jsonb. ID is the surrogate primary key (a uuidv7); Name is the friendly address,
 // unique within the owning component.
 type Interface struct {
-	ID        string
-	Name      string
-	Type      string
-	Component *string
-	Node      *string
-	Params    []byte
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID          string
+	Name        string
+	Type        string
+	Component   *string
+	ComponentID *string
+	Node        *string
+	NodeID      *string
+	Params      []byte
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
 // InterfaceSpec is the create input. The interface is protocol-named: its name is
@@ -62,14 +64,27 @@ type InterfacePatch struct {
 // interfaceCols is the bare select list (scan order), for the un-aliased
 // insert/update RETURNING and the by-id load; interfaceColsJoin is the same
 // list aliased to `i` for the scoped join over the component table.
+// The two arcs store primary keys (component.id, node.principal_id), so each is
+// selected alongside a scalar subquery for the owner's current name: the id is
+// what the row points at, the name is what an operator reads and types. The
+// subquery form works identically in a plain select and in a RETURNING list, so
+// the insert and update paths need no join. Both derived columns are aliased,
+// since an unaliased `... c.name ...` would emit a second output column called
+// `name` and make `order by name` ambiguous.
 const (
-	interfaceCols     = `id, name, type, component, node_name, params, created_at, updated_at`
-	interfaceColsJoin = `i.id, i.name, i.type, i.component, i.node_name, i.params, i.created_at, i.updated_at`
+	interfaceCols = `id, name, type,
+		(select c.name from component c where c.id = interface.component) as component_name, component,
+		(select n.name from node n where n.principal_id = interface.node_name) as node_name_ref, node_name,
+		params, created_at, updated_at`
+	interfaceColsJoin = `i.id, i.name, i.type,
+		(select c2.name from component c2 where c2.id = i.component) as component_name, i.component,
+		(select n.name from node n where n.principal_id = i.node_name) as node_name_ref, i.node_name,
+		i.params, i.created_at, i.updated_at`
 )
 
 func scanInterface(row pgx.Row) (*Interface, error) {
 	var it Interface
-	if err := row.Scan(&it.ID, &it.Name, &it.Type, &it.Component, &it.Node, &it.Params, &it.CreatedAt, &it.UpdatedAt); err != nil {
+	if err := row.Scan(&it.ID, &it.Name, &it.Type, &it.Component, &it.ComponentID, &it.Node, &it.NodeID, &it.Params, &it.CreatedAt, &it.UpdatedAt); err != nil {
 		return nil, err
 	}
 	return &it, nil
@@ -98,6 +113,44 @@ func componentInScope(ctx context.Context, q querier, componentName *string, set
 		return false, fmt.Errorf("storage: resolve component %q for scope: %w", *componentName, err)
 	}
 	return inScopeTree(ctx, q, componentTable, id, set)
+}
+
+// interfaceComponentID resolves an optional component reference (a name or a
+// uuid) to the component id the arc stores. A nil reference stays nil (a
+// server-hosted interface owns no component); an unknown one is the 422 sentinel
+// rather than a NULL that would silently detach the interface.
+func interfaceComponentID(ctx context.Context, q querier, ref *string) (*string, error) {
+	if ref == nil {
+		return nil, nil
+	}
+	c, err := scopedByName(ctx, q, componentConfig, *ref)
+	if errors.Is(err, ErrComponentNotFound) {
+		return nil, ErrInterfaceComponentNotFound
+	} else if err != nil {
+		return nil, err
+	}
+	return &c.ID, nil
+}
+
+// interfaceNodeID resolves an optional node reference (a name or a principal id)
+// to the principal id the placement arc stores. An unknown node is
+// ErrNodeNotFound, so an unassignable placement fails loudly.
+func interfaceNodeID(ctx context.Context, q querier, ref *string) (*string, error) {
+	if ref == nil {
+		return nil, nil
+	}
+	col := "name"
+	if isUUID(*ref) {
+		col = "principal_id"
+	}
+	var pid string
+	if err := q.QueryRow(ctx, `select principal_id from node where `+col+` = $1`, *ref).Scan(&pid); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNodeNotFound
+		}
+		return nil, fmt.Errorf("storage: resolve node %q: %w", *ref, err)
+	}
+	return &pid, nil
 }
 
 // loadInterface reads one interface by id with no scope check; callers layer
@@ -142,7 +195,7 @@ func (p *PG) ListInterfaces(ctx context.Context, read scope.Set) ([]Interface, e
 				select c.id from component c join sub on c.parent_id = sub.id
 			) cycle id set is_cycle using path
 			select `+interfaceColsJoin+` from interface i
-			join component c on c.name = i.component
+			join component c on c.id = i.component
 			where c.id in (select id from sub) or c.id = any($2::uuid[])
 			order by i.name`, roots, selfIDs)
 	}
@@ -216,11 +269,19 @@ func (p *PG) CreateInterface(ctx context.Context, actorID string, spec Interface
 	if len(params) == 0 {
 		params = []byte("{}")
 	}
+	componentID, err := interfaceComponentID(ctx, tx, spec.Component)
+	if err != nil {
+		return nil, err
+	}
+	nodeID, err := interfaceNodeID(ctx, tx, spec.Node)
+	if err != nil {
+		return nil, err
+	}
 	it, err := scanInterface(tx.QueryRow(ctx, `
 		insert into interface (name, type, component, node_name, params)
 		values ($1, $1, $2, $3, $4)
 		returning `+interfaceCols,
-		spec.Type, spec.Component, spec.Node, params))
+		spec.Type, componentID, nodeID, params))
 	if err != nil {
 		return nil, mapInterfaceWriteErr(err)
 	}
@@ -253,6 +314,10 @@ func (p *PG) UpdateInterface(ctx context.Context, actorID, id string, patch Inte
 	if err != nil {
 		return nil, err
 	}
+	nodeID, err := interfaceNodeID(ctx, tx, patch.Node)
+	if err != nil {
+		return nil, err
+	}
 	after, err := scanInterface(tx.QueryRow(ctx, `
 		update interface set
 			node_name = coalesce($2, node_name),
@@ -260,7 +325,7 @@ func (p *PG) UpdateInterface(ctx context.Context, actorID, id string, patch Inte
 			updated_at = now()
 		where id = $1
 		returning `+interfaceCols,
-		before.ID, patch.Node, nullableJSON(patch.Params)))
+		before.ID, nodeID, nullableJSON(patch.Params)))
 	if err != nil {
 		return nil, mapInterfaceWriteErr(err)
 	}

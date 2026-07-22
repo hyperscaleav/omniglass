@@ -583,10 +583,10 @@ components:
           readOnly: true
           type: string
         component:
-          description: Owning component name; omit for a server-hosted interface (needs an all-scoped grant)
+          description: Owning component, by name or id; omit for a server-hosted interface (needs an all-scoped grant)
           type: string
         node:
-          description: Node placement name
+          description: Node placement, by name or id
           type: string
         params:
           description: Endpoint/target settings (jsonb)
@@ -725,7 +725,7 @@ components:
           description: Operator label; falls back to the name when empty
           type: string
         location:
-          description: Optional location the node sits in (descriptive placement, not scope)
+          description: Optional location the node sits in, by name or id (descriptive placement, not scope)
           type: string
         name:
           description: Globally unique node name (also its NATS subject token, so no dots or whitespace)
@@ -1805,6 +1805,9 @@ components:
         component:
           description: The owning component name; absent for a server-hosted interface
           type: string
+        component_id:
+          description: The owning component's id; the stable form of component
+          type: string
         id:
           description: The interface's surrogate id (the address)
           type: string
@@ -1813,6 +1816,9 @@ components:
           type: string
         node:
           description: The node placement name, if assigned
+          type: string
+        node_id:
+          description: The placed node's id; the stable form of node
           type: string
         params:
           description: The endpoint/target settings (jsonb)
@@ -2704,6 +2710,9 @@ components:
           type: string
         location:
           description: The location the node sits in (descriptive placement, not scope)
+          type: string
+        location_id:
+          description: The location's id; the stable form of location
           type: string
         name:
           type: string
@@ -3907,7 +3916,10 @@ components:
         mode:
           type: string
         node:
-          description: The node placement, projected from the interface
+          description: The node placement name, projected from the interface
+          type: string
+        node_id:
+          description: The placed node's id; the stable form of node
           type: string
         spec:
           description: The inline probe settings (jsonb)
@@ -4019,7 +4031,7 @@ components:
           readOnly: true
           type: string
         node:
-          description: Reassign the node placement
+          description: Reassign the node placement, by name or id
           type: string
         params:
           description: Replace the endpoint/target settings (jsonb)
@@ -4098,7 +4110,7 @@ components:
         display_name:
           type: string
         location:
-          description: Set the node's location, or "" to clear it
+          description: Set the node's location by name or id, or "" to clear it
           type: string
       type: object
     UpdatePrincipalInputBody:

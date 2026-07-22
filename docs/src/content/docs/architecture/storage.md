@@ -80,7 +80,9 @@ template tables), [collection](/architecture/collection/#storage) (interfaces an
 - **Keys**: datapoints and events use a surrogate id plus `ts`; the key registry `datapoint_type`
   carries a **`scope`** (template / org / official) deciding where the name is unique (`(template_id, name)`
   at template scope, `name` at org/official); structural entities are name-keyed; a `task` is **content-addressed**
-  (`hash(interface, kind, schedule, params)`); a `node` by name.
+  (`hash(interface, kind, schedule, params)`); a `node` by its `principal_id`, its enrollment
+  identity. Every foreign key stores the target's primary key, so a rename is free
+  ([ADR-0056](/architecture/decisions/#adr-0056-every-foreign-key-stores-a-primary-key)).
 
 ## How the records relate
 

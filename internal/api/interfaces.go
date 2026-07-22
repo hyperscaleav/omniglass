@@ -18,16 +18,22 @@ import (
 // through as raw JSON.
 
 type interfaceBody struct {
-	ID        string          `json:"id" doc:"The interface's surrogate id (the address)"`
-	Name      string          `json:"name" doc:"The friendly name, unique within the owning component"`
-	Type      string          `json:"type"`
-	Component *string         `json:"component,omitempty" doc:"The owning component name; absent for a server-hosted interface"`
-	Node      *string         `json:"node,omitempty" doc:"The node placement name, if assigned"`
-	Params    json.RawMessage `json:"params,omitempty" doc:"The endpoint/target settings (jsonb)"`
+	ID          string          `json:"id" doc:"The interface's surrogate id (the address)"`
+	Name        string          `json:"name" doc:"The friendly name, unique within the owning component"`
+	Type        string          `json:"type"`
+	Component   *string         `json:"component,omitempty" doc:"The owning component name; absent for a server-hosted interface"`
+	ComponentID *string         `json:"component_id,omitempty" doc:"The owning component's id; the stable form of component"`
+	Node        *string         `json:"node,omitempty" doc:"The node placement name, if assigned"`
+	NodeID      *string         `json:"node_id,omitempty" doc:"The placed node's id; the stable form of node"`
+	Params      json.RawMessage `json:"params,omitempty" doc:"The endpoint/target settings (jsonb)"`
 }
 
 func toInterfaceBody(it *storage.Interface) interfaceBody {
-	b := interfaceBody{ID: it.ID, Name: it.Name, Type: it.Type, Component: it.Component, Node: it.Node}
+	b := interfaceBody{
+		ID: it.ID, Name: it.Name, Type: it.Type,
+		Component: it.Component, ComponentID: it.ComponentID,
+		Node: it.Node, NodeID: it.NodeID,
+	}
 	if len(it.Params) > 0 {
 		b.Params = json.RawMessage(it.Params)
 	}
@@ -51,8 +57,8 @@ type interfacePathInput struct {
 type createInterfaceInput struct {
 	Body struct {
 		Type      string          `json:"type" minLength:"1" doc:"An interface_type name (the protocol); the interface is named by it, unique within the component"`
-		Component *string         `json:"component,omitempty" doc:"Owning component name; omit for a server-hosted interface (needs an all-scoped grant)"`
-		Node      *string         `json:"node,omitempty" doc:"Node placement name"`
+		Component *string         `json:"component,omitempty" doc:"Owning component, by name or id; omit for a server-hosted interface (needs an all-scoped grant)"`
+		Node      *string         `json:"node,omitempty" doc:"Node placement, by name or id"`
 		Params    json.RawMessage `json:"params,omitempty" doc:"Endpoint/target settings (jsonb)"`
 	}
 }
@@ -60,7 +66,7 @@ type createInterfaceInput struct {
 type updateInterfaceInput struct {
 	ID   string `path:"id"`
 	Body struct {
-		Node   *string         `json:"node,omitempty" doc:"Reassign the node placement"`
+		Node   *string         `json:"node,omitempty" doc:"Reassign the node placement, by name or id"`
 		Params json.RawMessage `json:"params,omitempty" doc:"Replace the endpoint/target settings (jsonb)"`
 	}
 }

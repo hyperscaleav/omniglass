@@ -985,8 +985,8 @@ Creates an interface owned by a component (or a server-hosted one, which needs a
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--component` | string | (none) | Owning component name; omit for a server-hosted interface (needs an all-scoped grant) |
-| `--node` | string | (none) | Node placement name |
+| `--component` | string | (none) | Owning component, by name or id; omit for a server-hosted interface (needs an all-scoped grant) |
+| `--node` | string | (none) | Node placement, by name or id |
 | `--params` | string | (none) | Endpoint/target settings (jsonb) |
 | `--type` | string | (none) | An interface_type name (the protocol); the interface is named by it, unique within the component |
 
@@ -1056,7 +1056,7 @@ Patches an interface's node placement or params. Gated by interface:update; read
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--node` | string | (none) | Reassign the node placement |
+| `--node` | string | (none) | Reassign the node placement, by name or id |
 | `--params` | string | (none) | Replace the endpoint/target settings (jsonb) |
 
 Example:
@@ -1585,7 +1585,7 @@ Registers an edge node server-side (day-one enrollment: create, then :enroll to 
 |---|---|---|---|
 | `--description` | string | (none) |  |
 | `--display-name` | string | (none) | Operator label; falls back to the name when empty |
-| `--location` | string | (none) | Optional location the node sits in (descriptive placement, not scope) |
+| `--location` | string | (none) | Optional location the node sits in, by name or id (descriptive placement, not scope) |
 | `--name` | string | (none) | Globally unique node name (also its NATS subject token, so no dots or whitespace) |
 
 Example:
@@ -1729,7 +1729,7 @@ Patches a node's display name, description, and location (a nil field is unchang
 |---|---|---|---|
 | `--description` | string | (none) |  |
 | `--display-name` | string | (none) |  |
-| `--location` | string | (none) | Set the node's location, or "" to clear it |
+| `--location` | string | (none) | Set the node's location by name or id, or "" to clear it |
 
 Example:
 

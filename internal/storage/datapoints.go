@@ -76,9 +76,16 @@ func (p *PG) InsertMetricDatapoints(ctx context.Context, evs []MetricDatapointEv
 		if ts.IsZero() {
 			ts = time.Now().UTC()
 		}
+		// The arc stores the owner's primary key. Resolving here rather than in the
+		// insert means an unknown owner is a named error instead of a NULL that
+		// trips the arc CHECK opaquely.
+		arc, err := p.ownerArcValue(ctx, tx, ev.OwnerKind, ev.OwnerID)
+		if err != nil {
+			return fmt.Errorf("storage: datapoint %s/%s: %w", ev.OwnerID, ev.Key, err)
+		}
 		sql := fmt.Sprintf(`insert into metric_datapoint (ts, owner_kind, %s, key, instance, value, provenance, source)
 			values ($1, $2, $3, $4, $5, $6, 'observed', $7)`, col)
-		if _, err := tx.Exec(ctx, sql, ts, ev.OwnerKind, ev.OwnerID, ev.Key, ev.Instance, ev.Value, ev.Source); err != nil {
+		if _, err := tx.Exec(ctx, sql, ts, ev.OwnerKind, arc, ev.Key, ev.Instance, ev.Value, ev.Source); err != nil {
 			return fmt.Errorf("storage: insert datapoint %s/%s: %w", ev.OwnerID, ev.Key, err)
 		}
 	}
@@ -95,7 +102,7 @@ func (p *PG) LatestMetric(ctx context.Context, componentName, key string) (*Metr
 	err := p.pool.QueryRow(ctx, `
 		select ts, owner_kind, key, instance, value, provenance, source
 		from metric_datapoint
-		where component_id = $1 and key = $2
+		where component_id = (select id from component where name = $1) and key = $2
 		order by ts desc
 		limit 1`, componentName, key).Scan(&dp.TS, &dp.OwnerKind, &dp.Key, &dp.Instance, &dp.Value, &dp.Provenance, &dp.Source)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -116,7 +123,7 @@ func (p *PG) LatestMetricInstance(ctx context.Context, componentName, key, insta
 	err := p.pool.QueryRow(ctx, `
 		select ts, owner_kind, key, instance, value, provenance, source
 		from metric_datapoint
-		where component_id = $1 and key = $2 and instance = $3
+		where component_id = (select id from component where name = $1) and key = $2 and instance = $3
 		order by ts desc
 		limit 1`, componentName, key, instance).Scan(&dp.TS, &dp.OwnerKind, &dp.Key, &dp.Instance, &dp.Value, &dp.Provenance, &dp.Source)
 	if errors.Is(err, pgx.ErrNoRows) {
