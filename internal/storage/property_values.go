@@ -107,7 +107,11 @@ func (p *PG) SetPropertyValue(ctx context.Context, actorID, ownerKind, ownerID, 
 		on conflict (owner_kind, component_id, system_id, location_id, node_id, property_name, instance, provenance)
 		do update set value = excluded.value, updated_at = now()
 		returning `+propertyValueCols, col)
-	pv, err := scanPropertyValue(tx.QueryRow(ctx, sql, ownerKind, ownerID, propertyName, instance, []byte(value)))
+	arc, err := p.ownerArcValue(ctx, tx, ownerKind, ownerID)
+	if err != nil {
+		return nil, err
+	}
+	pv, err := scanPropertyValue(tx.QueryRow(ctx, sql, ownerKind, arc, propertyName, instance, []byte(value)))
 	if err != nil {
 		return nil, mapPropertyValueWriteErr(err)
 	}
@@ -143,7 +147,11 @@ func (p *PG) ClearPropertyValue(ctx context.Context, actorID, ownerKind, ownerID
 		where owner_kind = $1 and %s = $2 and property_name = $3 and instance = $4 and provenance = '`+declaredProvenance+`'
 		returning id`, col)
 	var id string
-	if err := tx.QueryRow(ctx, sql, ownerKind, ownerID, propertyName, instance).Scan(&id); err != nil {
+	arc, err := p.ownerArcValue(ctx, tx, ownerKind, ownerID)
+	if err != nil {
+		return err
+	}
+	if err := tx.QueryRow(ctx, sql, ownerKind, arc, propertyName, instance).Scan(&id); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrPropertyValueNotFound
 		}
@@ -173,15 +181,20 @@ type ownerContract struct {
 	contractTable  string // where the classifier declares its properties ("" = no contract)
 	contractKeyCol string // the contract column matching the classifier
 	arcCol         string // the property_value arc column for this owner kind
-	notFound       error
+	// arcMatch is the instance column the arc points AT: the primary key for the
+	// three estate kinds, and still the name for a node until the collection tier
+	// converts. Naming it here keeps the query shape identical across kinds.
+	arcMatch string
+	notFound error
 }
 
 var ownerContracts = map[string]ownerContract{
-	"component": {"component", "product_id", "product_property", "product_id", "component_id", ErrComponentNotFound},
-	"system":    {"system", "standard_id", "standard_property", "standard_id", "system_id", ErrSystemNotFound},
-	"location":  {"location", "location_type", "location_type_property", "location_type_id", "location_id", ErrLocationNotFound},
-	// A node has the arc but no classifier, so it resolves ad-hoc values only.
-	"node": {"node", "", "", "", "node_id", ErrNodeNotFound},
+	"component": {"component", "product_id", "product_property", "product_id", "component_id", "id", ErrComponentNotFound},
+	"system":    {"system", "standard_id", "standard_property", "standard_id", "system_id", "id", ErrSystemNotFound},
+	"location":  {"location", "location_type", "location_type_property", "location_type_id", "location_id", "id", ErrLocationNotFound},
+	// A node has the arc but no classifier, so it resolves ad-hoc values only, and
+	// its arc still stores a name until the collection tier converts.
+	"node": {"node", "", "", "", "node_id", "name", ErrNodeNotFound},
 }
 
 // EffectiveProperties resolves an instance's declared properties: every property
@@ -217,18 +230,18 @@ func (p *PG) EffectiveProperties(ctx context.Context, ownerKind, ownerID string,
 		       false as from_contract,
 		       pv.id as value_id
 		from inst
-		join property_value pv on pv.%[1]s = inst.name
+		join property_value pv on pv.%[1]s = inst.arc
 		     and pv.instance = '' and pv.provenance = 'declared'
 		join property pr on pr.name = pv.property_name`, oc.arcCol)
 
 	var q string
 	if oc.contractTable == "" {
-		q = fmt.Sprintf(`with inst as (select name from %s where name = $1) %s order by 1`,
-			oc.instanceTable, adHoc)
+		q = fmt.Sprintf(`with inst as (select %[3]s as arc from %[1]s where name = $1) %[2]s order by 1`,
+			oc.instanceTable, adHoc, oc.arcMatch)
 	} else {
 		q = fmt.Sprintf(`
 		with inst as (
-			select name, %[2]s as classifier from %[1]s where name = $1
+			select %[7]s as arc, %[2]s as classifier from %[1]s where name = $1
 		)
 		-- The contract arm: what the instance's classifier declares, resolved
 		-- against the instance's own value.
@@ -243,7 +256,7 @@ func (p *PG) EffectiveProperties(ctx context.Context, ownerKind, ownerID string,
 		join %[3]s c on c.%[4]s = inst.classifier
 		join property pr on pr.name = c.property_name
 		left join property_value pv
-		       on pv.%[5]s = inst.name
+		       on pv.%[5]s = inst.arc
 		      and pv.property_name = c.property_name
 		      and pv.instance = ''
 		      and pv.provenance = 'declared'
@@ -256,7 +269,7 @@ func (p *PG) EffectiveProperties(ctx context.Context, ownerKind, ownerID string,
 			where c.%[4]s = inst.classifier and c.property_name = pv.property_name
 		)
 		order by 1`,
-			oc.instanceTable, oc.classifierCol, oc.contractTable, oc.contractKeyCol, oc.arcCol, adHoc)
+			oc.instanceTable, oc.classifierCol, oc.contractTable, oc.contractKeyCol, oc.arcCol, adHoc, oc.arcMatch)
 	}
 
 	rows, err := p.pool.Query(ctx, q, ownerID)
@@ -296,6 +309,37 @@ func (p *PG) EffectiveProperties(ctx context.Context, ownerKind, ownerID string,
 // sentinel (nothing to disclose); an existing but out-of-scope owner returns
 // inScope=false so each caller picks its own sentinel. A node is estate-wide (not
 // scope-tree scoped, like a principal), so it is in scope once it exists.
+// ownerArcValue resolves an owner reference to the value its arc column stores.
+// For the three estate kinds that is the entity's uuid: the arc points at the
+// primary key, so a rename never touches it. A node still stores its name until
+// the collection tier converts.
+//
+// The reference itself may be either form, since scopedByName resolves a uuid or
+// a name; this is only about what gets written.
+func (p *PG) ownerArcValue(ctx context.Context, q querier, ownerKind, ownerRef string) (string, error) {
+	switch ownerKind {
+	case "component":
+		c, err := scopedByName(ctx, q, componentConfig, ownerRef)
+		if err != nil {
+			return "", err
+		}
+		return c.ID, nil
+	case "system":
+		sys, err := scopedByName(ctx, q, systemConfig, ownerRef)
+		if err != nil {
+			return "", err
+		}
+		return sys.ID, nil
+	case "location":
+		l, err := scopedByName(ctx, q, locationConfig, ownerRef)
+		if err != nil {
+			return "", err
+		}
+		return l.ID, nil
+	}
+	return ownerRef, nil // node: still keyed by name
+}
+
 func (p *PG) ownerInScope(ctx context.Context, q querier, ownerKind, ownerID string, s scope.Set) (bool, error) {
 	switch ownerKind {
 	case "component":
