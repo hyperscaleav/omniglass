@@ -38,9 +38,9 @@ func main() {
 	}
 
 	cmds := buildCommands(doc, base)
-	groups := group(cmds)
+	roots := tree(cmds)
 
-	out, err := render(groups)
+	out, err := render(roots)
 	if err != nil {
 		log.Fatalf("cligen: render: %v", err)
 	}
@@ -178,107 +178,33 @@ type queryField struct {
 	Required bool
 }
 
-// nameOverride maps the non-AIP utility routes (no resource collection) to their
-// command words; everything else derives from the path. This is the documented
-// seam for naming an operation the heuristic cannot.
+// nameOverride names an operation the route cannot. With the parent-qualified
+// rule in commandWords, that is now only the **non-AIP** routes: the /auth family
+// is a session surface rather than a resource collection, so deriving from its
+// path gives `auth me session list` where an operator expects `session list`.
+//
+// This list used to hold fifty entries and every one of them was working around
+// the old leaf-noun rule (its comments each said so: sessions, members, types,
+// properties, all collapsing into one group). Those are gone, because the rule
+// now does what they were doing by hand. An entry here should be rare and should
+// say what is irregular about the ROUTE, never what collides.
 var nameOverride = map[string]([]string){
 	"get-healthz":             {"healthz"},
 	"get-auth-me":             {"auth", "me"},
 	"update-auth-me":          {"auth", "update-profile"},
 	"change-auth-me-password": {"auth", "change-password"},
-	// The admin per-principal session routes share the leaf collection noun
-	// ("sessions") with the self-service `/auth/me/sessions` ones, so the leaf-noun
-	// heuristic would collapse both into one `session` group with two colliding
-	// `list` / `revoke` commands. Group the admin pair under the `principal`
-	// resource instead (alongside reset-password and impersonate), keeping the
-	// self-service pair as the plain `session list` / `session revoke`.
-	"list-principal-sessions":       {"principal", "sessions"},
-	"revoke-principal-session":      {"principal", "revoke-session"},
-	"revoke-all-principal-sessions": {"principal", "revoke-all-sessions"},
-	// The self-service bulk revoke shares the sessions collection with `session list` /
-	// `session revoke`; name it `session revoke-all` explicitly.
+	"remove-auth-me-avatar":   {"auth", "remove-avatar"},
+	"set-auth-me-avatar":      {"auth", "set-avatar"},
+	"stop-impersonation":      {"auth", "stop-impersonation"},
+	"get-auth-me-avatar":      {"auth", "avatar"},
+	"create-auth-me-token":    {"auth", "create-token"},
+	// The self-service session surface: an operator manages their own sessions,
+	// so these are `session <verb>` rather than four levels under /auth/me.
+	"list-auth-me-sessions":       {"session", "list"},
+	"revoke-auth-me-session":      {"session", "revoke"},
 	"revoke-all-auth-me-sessions": {"session", "revoke-all"},
-	// The self-service token creation would collapse to `token create`, colliding with
-	// the hand-written direct-DB `token <username>` command; group it under `auth`.
-	"create-auth-me-token": {"auth", "create-token"},
-	// System membership shares its leaf noun ("members") with principal-group
-	// membership, so the leaf-noun heuristic collapses both into one `member` group
-	// holding two `list` commands and two `delete` commands, where the second of
-	// each silently shadows the first. Group the system side under the resource
-	// that owns it, and read a component's systems from `component`, which is also
-	// where an operator would look for it.
-	"list-system-members":        {"system", "members"},
-	"add-system-member":          {"system", "add-member"},
-	"remove-system-member":       {"system", "remove-member"},
-	"set-primary-member":         {"system", "set-primary-member"},
-	"list-component-memberships": {"component", "systems"},
-	// The type registries live under one /types umbrella (/types/location, ...), so the
-	// leaf-noun heuristic would map each to `<kind> create` and collide with the base
-	// entity commands (location/system/component/secret). Group them under `type`.
-	"list-location-types":  {"type", "location", "list"},
-	"create-location-type": {"type", "location", "create"},
-	"update-location-type": {"type", "location", "update"},
-	"delete-location-type": {"type", "location", "delete"},
-	"list-secret-types":    {"type", "secret", "list"},
-	// The product contract and the component effective read are sub-collections
-	// whose leaf noun ("properties") is the property catalog's own, so the
-	// leaf-noun heuristic would collapse all three into one `property` group with
-	// three colliding `list` / `update` / `delete` commands. Group each under the
-	// resource that owns it, as the admin session routes do.
-	"list-product-properties":   {"product", "properties"},
-	"set-product-property":      {"product", "set-property"},
-	"delete-product-property":   {"product", "delete-property"},
-	"list-component-properties": {"component", "properties"},
-	"set-component-property":    {"component", "set-property"},
-	"clear-component-property":  {"component", "clear-property"},
-	// The standard contract, the location type contract, and the system/location
-	// effective reads collapse the same way. Each goes under the resource that
-	// owns it. The location type contract takes its own `location-type` parent
-	// rather than the `type` umbrella: grouping is two levels (the parent is the
-	// first word, the command the last), so a `type properties` would not say
-	// which registry it means.
-	"list-standard-properties":      {"standard", "properties"},
-	"set-standard-property":         {"standard", "set-property"},
-	"delete-standard-property":      {"standard", "delete-property"},
-	"list-location-type-properties": {"location-type", "properties"},
-	"set-location-type-property":    {"location-type", "set-property"},
-	"delete-location-type-property": {"location-type", "delete-property"},
-	"list-system-properties":        {"system", "properties"},
-	"set-system-property":           {"system", "set-property"},
-	"clear-system-property":         {"system", "clear-property"},
-	"list-location-properties":      {"location", "properties"},
-	"set-location-property":         {"location", "set-property"},
-	"clear-location-property":       {"location", "clear-property"},
-	// The role surface nests three deep (a role under its owner, an assignment
-	// under the role), and its leaf nouns are already taken: "roles" is the RBAC
-	// role catalog's own (`role list`) and "capabilities" is the capability
-	// registry's. Grouping is two levels, so each goes under the resource that
-	// owns it, with the verb in the command word. The assignment pair would
-	// otherwise land as `assignment update` / `assignment delete`, which says
-	// nothing about what is being staffed.
-	"list-standard-roles":         {"standard", "roles"},
-	"set-standard-role":           {"standard", "set-role"},
-	"delete-standard-role":        {"standard", "delete-role"},
-	"list-system-roles":           {"system", "roles"},
-	"set-system-role":             {"system", "set-role"},
-	"delete-system-role":          {"system", "delete-role"},
-	"assign-system-role":          {"system", "assign-role"},
-	"unassign-system-role":        {"system", "unassign-role"},
-	"list-component-capabilities": {"component", "capabilities"},
-	"set-component-capability":    {"component", "set-capability"},
-	"clear-component-capability":  {"component", "clear-capability"},
-	// Alarms are a component sub-collection, so they group under the component the
-	// same way its properties and capabilities do. Left to the leaf-noun heuristic
-	// they would become a top-level `alarm list|create|delete`, which drops the
-	// component the alarm is actually about from the command word.
-	"list-component-alarms": {"component", "alarms"},
-	"raise-component-alarm": {"component", "raise-alarm"},
-	"clear-component-alarm": {"component", "clear-alarm"},
-	// The two health reads share the leaf noun "health", so the heuristic would
-	// collapse both into one `health` group with two colliding `list` commands.
-	// Each goes under the resource whose health it reports.
-	"get-system-health":   {"system", "health"},
-	"get-location-health": {"location", "health"},
+	"login":                       {"auth", "login"},
+	"logout":                      {"auth", "logout"},
 }
 
 func buildCommands(doc spec, base string) []command {
@@ -364,10 +290,23 @@ func queryFields(op operation) []queryField {
 	return out
 }
 
-// commandWords derives the cobra command path. An override wins; otherwise the
-// AIP path drives it: a `{id}:verb` custom method is `<resource> <verb>`, an
-// item path is `<resource> <get|update|delete>`, and a collection is
-// `<resource> <list|create>`.
+// commandWords derives the cobra command path from the route, and it is the
+// whole naming rule: **every collection segment contributes a level**, so a
+// subresource is always addressed under the resource that owns it
+// (`/components/{name}/properties` is `component property list`), and the verb
+// is last.
+//
+// This replaces a rule that used only the collection nearest the leaf. That rule
+// could not distinguish two parents ending in the same noun, so
+// `/principals/{id}/grants` and `/principal-groups/{id}/grants` both became
+// `grant create` and one silently shadowed the other. Across the 195 operations
+// it produced 24 collisions (`property list` seven ways), each of which had to
+// be found by a person typing it and then patched by hand in nameOverride. The
+// overrides were the rule, written out fifty times.
+//
+// Qualifying by the parent produces no collisions, and it does so structurally:
+// a command's name depends only on its own route, never on which other routes
+// happen to exist, so adding a route can never rename an existing command.
 func commandWords(path, method, opID string) []string {
 	if w, ok := nameOverride[opID]; ok {
 		return w
@@ -375,39 +314,42 @@ func commandWords(path, method, opID string) []string {
 	segs := splitPath(path)
 	last := segs[len(segs)-1]
 
-	// Custom method: the final segment is {id}:verb (or collection:verb).
+	// A custom method's verb is explicit; otherwise the HTTP method plus whether
+	// the route addresses an item or a collection decides it.
+	verb := ""
 	if i := strings.Index(last, ":"); i >= 0 {
-		verb := last[i+1:]
-		container := last[:i]
-		if name, ok := pathParam(container); ok {
-			_ = name
-			// resource is the collection segment before the {id}
-			return []string{singular(segs[len(segs)-2]), verb}
-		}
-		return []string{singular(container), verb}
+		verb = last[i+1:]
+		segs[len(segs)-1] = last[:i]
+		last = segs[len(segs)-1]
 	}
-
-	// Item operation: collection/{id}.
-	if _, ok := pathParam(last); ok {
-		resource := singular(segs[len(segs)-2])
-		switch method {
-		case "get":
-			return []string{resource, "get"}
-		case "patch", "put":
-			return []string{resource, "update"}
-		case "delete":
-			return []string{resource, "delete"}
+	if verb == "" {
+		if _, isItem := pathParam(last); isItem {
+			switch method {
+			case "patch", "put":
+				verb = "update"
+			case "delete":
+				verb = "delete"
+			default:
+				verb = "get"
+			}
+		} else if method == "post" {
+			verb = "create"
+		} else {
+			verb = "list"
 		}
 	}
 
-	// Collection operation: list or create.
-	resource := singular(last)
-	switch method {
-	case "post":
-		return []string{resource, "create"}
-	default:
-		return []string{resource, "list"}
+	// The nouns are the collection segments: an {id} addresses an instance of the
+	// collection before it and adds no level. A custom method on a collection
+	// (`/sessions:revokeAll`) leaves that collection as the final noun.
+	var nouns []string
+	for _, sg := range segs {
+		if _, isParam := pathParam(sg); isParam {
+			continue
+		}
+		nouns = append(nouns, singular(sg))
 	}
+	return append(nouns, verb)
 }
 
 func bodyFields(doc spec, op operation) []bodyField {
@@ -472,34 +414,65 @@ func example(words, args []string, body []bodyField) string {
 
 // --- grouping ---------------------------------------------------------------
 
-type cmdGroup struct {
-	Parent   string    // "" for a standalone command
-	Children []command // verbs under the parent, or one standalone command
+// node is one level of the command tree. A node may carry a command of its own,
+// have children, or both (`type location list` makes `type` a pure group and
+// `location` a group under it). Cmd is nil for a pure group.
+type node struct {
+	Name string
+	Cmd  *command
+	Kids []*node
 }
 
-func group(cmds []command) []cmdGroup {
-	order := []string{}
-	byParent := map[string][]command{}
-	for _, c := range cmds {
-		parent := ""
-		if len(c.Words) > 1 {
-			parent = c.Words[0]
+// HasCmd and HasKids keep the template free of nil checks.
+func (n *node) HasCmd() bool  { return n.Cmd != nil }
+func (n *node) HasKids() bool { return len(n.Kids) > 0 }
+
+// Use is the cobra Use string for this node: its own name plus any positional
+// placeholders when it carries a command.
+func (n *node) Use() string {
+	use := n.Name
+	if n.Cmd != nil {
+		for _, a := range n.Cmd.Args {
+			use += " <" + a + ">"
 		}
-		if _, seen := byParent[parent]; !seen {
-			order = append(order, parent)
+	}
+	return use
+}
+
+// tree builds the command forest from each command's full Words path. It is
+// N-level on purpose: the previous version bucketed by Words[0] and used only
+// the LAST word as the leaf name, so a three-word path like
+// `component property list` rendered as `component list` and silently collided
+// with the real one. Any depth the route implies is a real level here.
+func tree(cmds []command) []*node {
+	var roots []*node
+	find := func(kids *[]*node, name string) *node {
+		for _, k := range *kids {
+			if k.Name == name {
+				return k
+			}
 		}
-		byParent[parent] = append(byParent[parent], c)
+		n := &node{Name: name}
+		*kids = append(*kids, n)
+		return n
 	}
-	sort.Strings(order)
-	var groups []cmdGroup
-	for _, parent := range order {
-		kids := byParent[parent]
-		sort.Slice(kids, func(i, j int) bool {
-			return strings.Join(kids[i].Words, " ") < strings.Join(kids[j].Words, " ")
-		})
-		groups = append(groups, cmdGroup{Parent: parent, Children: kids})
+	for i := range cmds {
+		c := cmds[i]
+		cur := find(&roots, c.Words[0])
+		for _, w := range c.Words[1:] {
+			cur = find(&cur.Kids, w)
+		}
+		cur.Cmd = &c
 	}
-	return groups
+	var sortRec func(ns []*node)
+	sortRec = func(ns []*node) {
+		sort.Slice(ns, func(i, j int) bool { return ns[i].Name < ns[j].Name })
+		for _, n := range ns {
+			sortRec(n.Kids)
+		}
+	}
+	sortRec(roots)
+	return roots
 }
 
 // --- path helpers -----------------------------------------------------------
@@ -536,10 +509,21 @@ func pathParamSeg(seg string) (name, suffix string, ok bool) {
 	return seg[1:end], seg[end+1:], true
 }
 
-// singular is a naive depluralizer good enough for the AIP collection nouns in
-// use (locations, roles, properties). A real irregular set can join nameOverride
-// if needed.
+// notPlural are nouns the -s rule would mangle: they end in s without being
+// plural. `status` became `statu`, which shipped as a real command. The list is
+// the whole irregular set in use; a noun that needs more than this belongs in
+// nameOverride.
+var notPlural = map[string]bool{
+	"status": true, "healthz": true, "me": true, "dns": true, "https": true,
+}
+
+// singular depluralizes an AIP collection noun (locations, properties). It is
+// deliberately small: the route vocabulary is ours, so the irregulars are a
+// known set rather than an open English problem.
 func singular(s string) string {
+	if notPlural[s] {
+		return s
+	}
 	if strings.HasSuffix(s, "ies") && len(s) > 3 {
 		return s[:len(s)-3] + "y" // properties -> property
 	}
@@ -578,9 +562,9 @@ func (c command) StandaloneUse() string { return c.LeafUse() }
 
 // --- rendering --------------------------------------------------------------
 
-func render(groups []cmdGroup) ([]byte, error) {
+func render(roots []*node) ([]byte, error) {
 	var b strings.Builder
-	if err := tmpl.Execute(&b, groups); err != nil {
+	if err := tmpl.Execute(&b, roots); err != nil {
 		return nil, err
 	}
 	return []byte(b.String()), nil
@@ -603,26 +587,30 @@ import (
 // clientFor resolves the server and token from the invoking command at run time.
 func generatedCommands() []*cobra.Command {
 	var roots []*cobra.Command
-{{range $g := .}}
-{{- if eq $g.Parent ""}}
-	{{- range $c := $g.Children}}
-	roots = append(roots, {{template "leaf" $c}})
-	{{- end}}
-{{- else}}
-	{
-		parent := &cobra.Command{
-			Use:   {{quote $g.Parent}},
-			Short: {{quote (printf "Commands for the %s resource" $g.Parent)}},
-		}
-		{{- range $c := $g.Children}}
-		parent.AddCommand({{template "leaf" $c}})
-		{{- end}}
-		roots = append(roots, parent)
-	}
-{{- end}}
+{{range $n := .}}
+	roots = append(roots, {{template "node" $n}})
 {{- end}}
 	return roots
 }
+
+{{define "node"}}
+	{{- if .HasCmd}}func() *cobra.Command {
+		cmd := {{template "leaf" .Cmd}}
+		{{- range $k := .Kids}}
+		cmd.AddCommand({{template "node" $k}})
+		{{- end}}
+		return cmd
+	}(){{else}}func() *cobra.Command {
+		parent := &cobra.Command{
+			Use:   {{quote .Name}},
+			Short: {{quote (printf "Commands for the %s resource" .Name)}},
+		}
+		{{- range $k := .Kids}}
+		parent.AddCommand({{template "node" $k}})
+		{{- end}}
+		return parent
+	}(){{end}}
+{{- end}}
 
 {{define "leaf"}}func() *cobra.Command {
 		{{- range $f := .Body}}

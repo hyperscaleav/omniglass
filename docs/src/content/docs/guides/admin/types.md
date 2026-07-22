@@ -69,8 +69,8 @@ to. It is the same editor as a [product](/guides/admin/products/)'s or a
   that property picks up the new value. **Withdraw** removes the line; locations keep any value they
   set, now **off contract**.
 
-From the CLI the contract is `omniglass location-type properties <id>`,
-`omniglass location-type set-property <id> <property>`, and
-`omniglass location-type delete-property <id> <property>`. Note the command name: the registry CRUD is
+From the CLI the contract is `omniglass location-type property list <id>`,
+`omniglass location-type property update <id> <property>`, and
+`omniglass location-type property delete <id> <property>`. Note the command name: the registry CRUD is
 `omniglass type location ...`, while the contract hangs off `omniglass location-type ...`, mirroring the
 routes (`/types/location` for the registry, `/location-types/{id}/properties` for its contract).

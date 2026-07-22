@@ -89,9 +89,9 @@ generated self-scoped commands (each edits only the caller's own profile):
 omniglass auth me                                    # your principal, permissions, and grants
 omniglass auth update-profile --display-name "Ops Lead"
 omniglass auth change-password --current-password 'orange-boat-42x' --new-password 'purple-canyon-7'
-omniglass me setAvatar --image-base64 "$(base64 -w0 me.jpg)"   # set your profile picture
-omniglass me removeAvatar                            # clear it, falling back to initials
-omniglass avatar list                                # read your picture back as { image_base64 }
+omniglass auth set-avatar --image-base64 "$(base64 -w0 me.jpg)"   # set your profile picture
+omniglass auth remove-avatar                            # clear it, falling back to initials
+omniglass principal principal avatar list                                # read your picture back as { image_base64 }
 ```
 
 ## Collection commands
@@ -166,33 +166,35 @@ Read a component's composed reachability (the verdict, the probe-layer signals, 
 recent transitions the availability strip draws):
 
 ```sh
-omniglass reachability list disp-1                              # needs component:read
+omniglass component component reachability list disp-1                              # needs component:read
 ```
 `--image-base64` takes a plain base64 string, not a file path (base64-encode the image
 yourself, as the `$(base64 …)` above does); the server accepts JPEG, PNG, or WebP and
 normalizes it to a 256x256 JPEG. An administrator manages **any** principal's picture with
 `omniglass principal setAvatar <id> --image-base64 …` and `omniglass principal removeAvatar <id>`
-(gated by `principal:set-avatar`), reading one back with `omniglass avatar list <id>` (gated by
+(gated by `principal:set-avatar`), reading one back with `omniglass principal principal avatar list <id>` (gated by
 `principal:read`). A principal with no picture is a 404.
 
 ## Secrets
 
 The [secret](/architecture/variables/) commands are generated like every other resource. `secret`
-covers the encrypted values, `secret-type` lists the shape registry, and `effective-secret` reads the
-masked cascade onto one component. Output is masked JSON, the same as the console; plaintext lives
+covers the encrypted values and `type secret` lists the shape registry. Output is masked JSON, the same as the console; plaintext lives
 behind `reveal`, which the server audits and which only admin and owner may call.
 
 ```sh
-omniglass secret-type list                          # the shape registry (snmp-community, basic-auth)
+omniglass type secret list                          # the shape registry (snmp-community, basic-auth)
 omniglass secret list                               # the all-scope admin directory (masked fields)
 omniglass secret create --name core-snmp --secret-type snmp-community \
   --owner-kind location --owner hq --fields '{"community":"public"}'
 omniglass secret update <id> --fields '{"community":"s3cret"}'   # an omitted field keeps its value
 omniglass secret reveal <id>                        # audited plaintext decrypt (secret:reveal)
 omniglass secret delete <id>
-
-omniglass effective-secret list <component>         # the masked cascade resolved onto a component
 ```
+
+There is no command that resolves the cascade onto one component for either secrets or
+variables: the resolvers exist in the Storage Gateway but no API route exposes them, so no
+command generates ([#359](https://github.com/hyperscaleav/omniglass/issues/359)). Only
+`component effective-tag list` has its route today.
 
 `--owner-kind` is one of `platform | location | system | component`; `--owner` names the owning entity
 and is omitted for a `platform` secret (the install-wide tier, which needs an all-scope grant plus
@@ -201,8 +203,7 @@ and is omitted for a `platform` secret (the install-wide tier, which needs an al
 ## Variables
 
 The [variable](/architecture/variables/) commands are generated the same way. `variable` covers the
-plaintext values and `effective-variable` reads the cascade onto one component. There is no reveal:
-the value is shown in the clear.
+plaintext values. There is no reveal: the value is shown in the clear.
 
 ```sh
 omniglass variable list                             # the all-scope admin directory
@@ -212,8 +213,6 @@ omniglass variable create --name retry --value-type json --owner-kind platform \
   --value '{"retries":3,"backoff":"1s"}'
 omniglass variable update <id> --value 60           # validated against the fixed value_type
 omniglass variable delete <id>
-
-omniglass effective-variable list <component>       # the cascade resolved onto a component
 ```
 
 `--value-type` is one of `string | int | float | bool | json`. `--value` is **parsed as JSON**, so a
@@ -222,7 +221,7 @@ falls back to a string, so the common case needs no quoting. A string value that
 as JSON (`30`, `true`) is quoted to force a string: `--value '"30"'`. (`secret create --fields` parses
 the same way.)
 generated self-scoped commands (`omniglass auth me`, `auth update-profile`,
-`auth change-password`, `me setAvatar` / `removeAvatar`); an administrator manages other
+`auth change-password`, `auth set-avatar` / `removeAvatar`); an administrator manages other
 principals, roles, groups, secrets, and variables through the resource commands, all covered
 in the [admin guide](/guides/admin/) and listed in full in the [CLI reference](/reference/cli/).
 
@@ -249,7 +248,7 @@ omniglass component removeTag codec-1 --key environment
 omniglass system setTag east-auditorium-av --key environment --value prod
 omniglass location setTag hq --key environment --value staging
 
-omniglass effective-tag list codec-1                # the cascade resolved onto a component
+omniglass component component effective-tag list codec-1                # the cascade resolved onto a component
 ```
 
 Binding is a custom method on the entity (`component setTag`), like the principal lifecycle verbs, so it
@@ -346,17 +345,17 @@ A classifier **declares** which properties its instances carry; an instance **se
 are the same three verbs, and the contract commands hang off the classifier that owns them:
 
 ```sh
-omniglass product properties cisco-room-bar                         # a product's contract
-omniglass standard properties huddle-room                           # a standard's contract
-omniglass location-type properties room                             # a location type's contract
-omniglass standard set-property huddle-room room_capacity --default-value 6 --required true
-omniglass standard delete-property huddle-room room_capacity        # systems keep any value they set
+omniglass product property list cisco-room-bar                         # a product's contract
+omniglass standard property list huddle-room                           # a standard's contract
+omniglass location-type property list room                             # a location type's contract
+omniglass standard property update huddle-room room_capacity --default-value 6 --required true
+omniglass standard property delete huddle-room room_capacity        # systems keep any value they set
 
-omniglass component properties dsp-boardroom-3                      # the effective read
-omniglass system properties boardroom                               # same shape, system side
-omniglass location properties east-campus                           # same shape, location side
-omniglass system set-property boardroom room_capacity --value 12    # idempotent
-omniglass system clear-property boardroom room_capacity             # falls back to the contract default
+omniglass component property list dsp-boardroom-3                      # the effective read
+omniglass system property list boardroom                               # same shape, system side
+omniglass location property list east-campus                           # same shape, location side
+omniglass system property update boardroom room_capacity --value 12    # idempotent
+omniglass system property delete boardroom room_capacity             # falls back to the contract default
 ```
 
 The read resolves the classifier's contract against the instance's own values, so a **one-off system**

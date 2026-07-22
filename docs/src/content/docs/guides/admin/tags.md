@@ -26,5 +26,5 @@ opens this same create form), give it a value, and it binds on **Add**; the **x*
 Each write is gated by that entity's own `:update`, so an operator tags what it may already edit. The
 estate directories then **show** each row's effective tags in a colored [Tags column](/guides/operator/inventory/)
 (the resolved cascade, keys unioning and values overriding most-specific-wins). The same operations are
-`omniglass component setTag` / `system setTag` / `location setTag` and `omniglass effective-tag list
+`omniglass component setTag` / `system setTag` / `location setTag` and `omniglass component component effective-tag list
 <component>` from the CLI.

@@ -78,22 +78,14 @@ func TestNoCommandNameCollisions(t *testing.T) {
 	}
 }
 
-// knownCollisions are the shadowed commands that exist today, each tracked and
-// each needing a naming decision rather than a mechanical fix (renaming them
-// changes the documented CLI surface). This list may only shrink: the guard
-// fails on anything NOT in it, so a new collision cannot land, and it fails on
-// an entry that stops colliding, so a fix must delete its entry rather than
-// leave the name unwatched.
+// knownCollisions is empty, and that is the point. It held four entries when the
+// guard was written; fixing cligen's naming rule (ADR-0059) cleared all four, and
+// the guard's second half demanded they be deleted rather than left behind to
+// stop watching those names.
 //
-// The root cause is one thing: cligen's commandWords derives the group from a
-// single path segment, so two different parents ending in the same collection
-// noun collapse into one group.
-var knownCollisions = map[string]string{
-	"omniglass grant create": "#357 (principal grants unreachable; the group variants win)",
-	"omniglass grant delete": "#357",
-	"omniglass avatar list":  "#357 (self vs a principal's, distinguished only by arity)",
-	"omniglass type list":    "#319 (location types vs secret types)",
-}
+// It stays here as the seam: a collision that cannot be fixed immediately gets an
+// entry with its issue, and the ratchet forces the entry out again once it is.
+var knownCollisions = map[string]string{}
 
 func itoa(n int) string {
 	if n < 10 {

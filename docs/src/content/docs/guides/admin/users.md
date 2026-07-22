@@ -75,6 +75,6 @@ users. Because a principal is not part of any location or system tree, that gran
   unless you hold the capability.
 
 From the CLI the same surface is `omniglass principal list` / `get` / `create` / `update` /
-`disable` / `enable` / `archive` / `restore` / `purge`, plus `principal sessions <id>` /
-`principal revoke-session <id> <sid>` / `principal revoke-all-sessions <id>` (see the
+`disable` / `enable` / `archive` / `restore` / `purge`, plus `principal session list <id>` /
+`principal session revoke <id> <sid>` / `principal session revokeAll <id>` (see the
 [CLI reference](/reference/cli/)).

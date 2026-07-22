@@ -50,6 +50,22 @@ omniglass audit-log list
 
 Commands for the auth resource
 
+### `omniglass auth avatar`
+
+Get your own profile picture
+
+```
+omniglass auth avatar
+```
+
+Returns the caller's profile picture as a base64-encoded JPEG. Requires authentication; self-scoped. No picture is a 404.
+
+Example:
+
+```sh
+omniglass auth avatar
+```
+
 ### `omniglass auth change-password`
 
 Change your own password
@@ -92,6 +108,43 @@ Example:
 omniglass auth create-token --description description
 ```
 
+### `omniglass auth login`
+
+Log in with a username and password
+
+```
+omniglass auth login [flags]
+```
+
+Verifies a human's password and sets an httpOnly session cookie. Public; a bad credential is a flat 401, and a correct password against a disabled account is a distinct 403 so the screen can explain it.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--password` | string | (none) |  |
+| `--username` | string | (none) |  |
+
+Example:
+
+```sh
+omniglass auth login --password password --username username
+```
+
+### `omniglass auth logout`
+
+Log out the current session
+
+```
+omniglass auth logout
+```
+
+Revokes the session token and clears the cookie. Public.
+
+Example:
+
+```sh
+omniglass auth logout
+```
+
 ### `omniglass auth me`
 
 The authenticated principal, its permissions, and grants
@@ -106,6 +159,78 @@ Example:
 
 ```sh
 omniglass auth me
+```
+
+### `omniglass auth remove-avatar`
+
+Remove your own profile picture
+
+```
+omniglass auth remove-avatar
+```
+
+Clears the caller's profile picture. Requires authentication; self-scoped.
+
+Example:
+
+```sh
+omniglass auth remove-avatar
+```
+
+### `omniglass auth set-avatar`
+
+Set your own profile picture
+
+```
+omniglass auth set-avatar [flags]
+```
+
+Sets the caller's profile picture (JPEG, PNG, or WebP, base64-encoded), normalized server-side to a 256x256 JPEG. Requires authentication; self-scoped. A bad or oversize image is a 422.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--image-base64` | string | (none) | The image (JPEG, PNG, or WebP), base64-encoded; normalized server-side to a 256x256 JPEG |
+
+Example:
+
+```sh
+omniglass auth set-avatar --image-base64 image_base64
+```
+
+### `omniglass auth status`
+
+Commands for the status resource
+
+#### `omniglass auth status list`
+
+Whether the system has an owner yet
+
+```
+omniglass auth status list
+```
+
+Public: reports whether any owner has been bootstrapped, so the login screen can hide the bootstrap hint.
+
+Example:
+
+```sh
+omniglass auth status list
+```
+
+### `omniglass auth stop-impersonation`
+
+Stop the current impersonation session
+
+```
+omniglass auth stop-impersonation
+```
+
+Revokes the impersonation session presented by the request token, ending the view-as / act-as. Requires an impersonation token.
+
+Example:
+
+```sh
+omniglass auth stop-impersonation
 ```
 
 ### `omniglass auth update-profile`
@@ -126,42 +251,6 @@ Example:
 
 ```sh
 omniglass auth update-profile
-```
-
-## `omniglass avatar`
-
-Commands for the avatar resource
-
-### `omniglass avatar list`
-
-Get your own profile picture
-
-```
-omniglass avatar list
-```
-
-Returns the caller's profile picture as a base64-encoded JPEG. Requires authentication; self-scoped. No picture is a 404.
-
-Example:
-
-```sh
-omniglass avatar list
-```
-
-### `omniglass avatar list`
-
-Get a principal's profile picture
-
-```
-omniglass avatar list <id>
-```
-
-Returns the principal's profile picture as a base64-encoded JPEG. Gated by principal:read:admin. A principal without a picture is a 404.
-
-Example:
-
-```sh
-omniglass avatar list <id>
 ```
 
 ## `omniglass bootstrap`
@@ -276,12 +365,54 @@ omniglass capability update <id>
 
 Commands for the component resource
 
-### `omniglass component alarms`
+### `omniglass component alarm`
+
+Commands for the alarm resource
+
+#### `omniglass component alarm create`
+
+Raise an alarm on a component
+
+```
+omniglass component alarm create <name> [flags]
+```
+
+Records a condition on this component and the capabilities it degrades, then recomputes health in the same transaction: any role requiring a degraded capability can no longer be filled by this component, and its system and location verdicts move with it. An unknown capability is a 422. Gated by component:update; an out-of-scope component is a non-disclosing 404.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--capabilities` | string | (none) | The capabilities this condition degrades; a role requiring one of them can no longer be filled by this component |
+| `--message` | string | (none) | What is wrong, for the operator reading it later |
+| `--severity` | string | (none) | How bad it is; critical puts the component itself in outage |
+
+Example:
+
+```sh
+omniglass component alarm create <name> --severity severity
+```
+
+#### `omniglass component alarm delete`
+
+Clear an alarm
+
+```
+omniglass component alarm delete <name> <id>
+```
+
+Marks the alarm cleared and recomputes health in the same transaction, so the recovery is recorded as a transition at the moment it happened. The row is kept: what was wrong and when outlives the fix. Clearing an alarm that is already cleared or does not exist is a 404. Gated by component:update; an out-of-scope component is a non-disclosing 404.
+
+Example:
+
+```sh
+omniglass component alarm delete <name> <id>
+```
+
+#### `omniglass component alarm list`
 
 List a component's alarms
 
 ```
-omniglass component alarms <name> [flags]
+omniglass component alarm list <name> [flags]
 ```
 
 What is currently wrong with this component, newest first, each with the capabilities it degrades. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.
@@ -293,15 +424,35 @@ What is currently wrong with this component, newest first, each with the capabil
 Example:
 
 ```sh
-omniglass component alarms <name>
+omniglass component alarm list <name>
 ```
 
-### `omniglass component capabilities`
+### `omniglass component capability`
+
+Commands for the capability resource
+
+#### `omniglass component capability delete`
+
+Clear a capability declaration on a component
+
+```
+omniglass component capability delete <name> <capability>
+```
+
+Removes the component's own fact about the capability, so it falls back to whatever its product declares. Clearing a fact the component never declared is a 404. Gated by component:update; an out-of-scope component is a non-disclosing 404.
+
+Example:
+
+```sh
+omniglass component capability delete <name> <capability>
+```
+
+#### `omniglass component capability list`
 
 List a component's effective capabilities
 
 ```
-omniglass component capabilities <name>
+omniglass component capability list <name>
 ```
 
 What this component actually provides: the capabilities its product declares, plus the ones the component adds, minus the ones it suppresses. This is the set the role-assignment guard checks, so a productless component that declares its own can still be staffed. Gated by component:read; an out-of-scope component is a non-disclosing 404.
@@ -309,7 +460,27 @@ What this component actually provides: the capabilities its product declares, pl
 Example:
 
 ```sh
-omniglass component capabilities <name>
+omniglass component capability list <name>
+```
+
+#### `omniglass component capability update`
+
+Declare a capability on a component
+
+```
+omniglass component capability update <name> <capability> [flags]
+```
+
+Records this component's own fact about a capability: present true adds one its product does not claim, present false suppresses one it does. Idempotent. An unknown capability is a 422; an unknown or out-of-scope component is a non-disclosing 404 (the component is resolved in scope first). Gated by component:update.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--present` | string | (none) | True to add the capability, false to suppress one the product declares |
+
+Example:
+
+```sh
+omniglass component capability update <name> <capability> --present present
 ```
 
 ### `omniglass component checkName`
@@ -330,54 +501,6 @@ Example:
 
 ```sh
 omniglass component checkName --name name
-```
-
-### `omniglass component clear-alarm`
-
-Clear an alarm
-
-```
-omniglass component clear-alarm <name> <id>
-```
-
-Marks the alarm cleared and recomputes health in the same transaction, so the recovery is recorded as a transition at the moment it happened. The row is kept: what was wrong and when outlives the fix. Clearing an alarm that is already cleared or does not exist is a 404. Gated by component:update; an out-of-scope component is a non-disclosing 404.
-
-Example:
-
-```sh
-omniglass component clear-alarm <name> <id>
-```
-
-### `omniglass component clear-capability`
-
-Clear a capability declaration on a component
-
-```
-omniglass component clear-capability <name> <capability>
-```
-
-Removes the component's own fact about the capability, so it falls back to whatever its product declares. Clearing a fact the component never declared is a 404. Gated by component:update; an out-of-scope component is a non-disclosing 404.
-
-Example:
-
-```sh
-omniglass component clear-capability <name> <capability>
-```
-
-### `omniglass component clear-property`
-
-Clear a property on a component
-
-```
-omniglass component clear-property <name> <property>
-```
-
-Removes the component's declared value, so the property falls back to the product contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the component never set is a 404. Gated by component:update; an out-of-scope component is a non-disclosing 404.
-
-Example:
-
-```sh
-omniglass component clear-property <name> <property>
 ```
 
 ### `omniglass component create`
@@ -419,6 +542,50 @@ Example:
 
 ```sh
 omniglass component delete <name>
+```
+
+### `omniglass component effective-tag`
+
+Commands for the effective-tag resource
+
+#### `omniglass component effective-tag list`
+
+Effective tags for a component
+
+```
+omniglass component effective-tag list <name> [flags]
+```
+
+Resolves the tags that cascade onto a component (platform -> location -> system -> component): keys union, values override most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves only from a binding on the component itself. The system band comes from MEMBERSHIP: pass ?system= to resolve against one the component belongs to (a shared device answers differently for each), or omit it to resolve against its primary membership. Gated by component:read; the component must be in the caller's component read scope.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--system` | string | (none) | Resolve against this system, which the component must be a member of. Omit to resolve against its primary membership, the default for a caller with no system in hand. |
+
+Example:
+
+```sh
+omniglass component effective-tag list <name>
+```
+
+### `omniglass component event`
+
+Commands for the event resource
+
+#### `omniglass component event list`
+
+List a component's recent events
+
+```
+omniglass component event list <name>
+```
+
+Returns the component's recent log occurrences (the log-kind sink), newest first, bounded to the last 24 hours. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+
+Example:
+
+```sh
+omniglass component event list <name>
 ```
 
 ### `omniglass component get`
@@ -469,12 +636,52 @@ Example:
 omniglass component listTags <name>
 ```
 
-### `omniglass component properties`
+### `omniglass component membership`
+
+Commands for the membership resource
+
+#### `omniglass component membership list`
+
+List the systems a component is in
+
+```
+omniglass component membership list <name>
+```
+
+The systems this component is bound into, ordered by name. A component may belong to several: a rack DSP serving three rooms is a member of all three, and each of them depends on it. Exactly one membership may be marked primary, the default for a question asked without a system in hand. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+
+Example:
+
+```sh
+omniglass component membership list <name>
+```
+
+### `omniglass component property`
+
+Commands for the property resource
+
+#### `omniglass component property delete`
+
+Clear a property on a component
+
+```
+omniglass component property delete <name> <property>
+```
+
+Removes the component's declared value, so the property falls back to the product contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the component never set is a 404. Gated by component:update; an out-of-scope component is a non-disclosing 404.
+
+Example:
+
+```sh
+omniglass component property delete <name> <property>
+```
+
+#### `omniglass component property list`
 
 List a component's effective properties
 
 ```
-omniglass component properties <name>
+omniglass component property list <name>
 ```
 
 Every property the component's product declares, resolved to the component's own value or the contract default (is_set marks the override), plus any property set directly on the component (from_contract false). Gated by component:read; an out-of-scope component is a non-disclosing 404.
@@ -482,29 +689,47 @@ Every property the component's product declares, resolved to the component's own
 Example:
 
 ```sh
-omniglass component properties <name>
+omniglass component property list <name>
 ```
 
-### `omniglass component raise-alarm`
+#### `omniglass component property update`
 
-Raise an alarm on a component
+Set a property on a component
 
 ```
-omniglass component raise-alarm <name> [flags]
+omniglass component property update <name> <property> [flags]
 ```
 
-Records a condition on this component and the capabilities it degrades, then recomputes health in the same transaction: any role requiring a degraded capability can no longer be filled by this component, and its system and location verdicts move with it. An unknown capability is a 422. Gated by component:update; an out-of-scope component is a non-disclosing 404.
+Declares a value for the property on this component, overriding the product contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by component:update; an out-of-scope component is a non-disclosing 404.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--capabilities` | string | (none) | The capabilities this condition degrades; a role requiring one of them can no longer be filled by this component |
-| `--message` | string | (none) | What is wrong, for the operator reading it later |
-| `--severity` | string | (none) | How bad it is; critical puts the component itself in outage |
+| `--value` | string | (none) | The value to declare, shape given by the property's data_type |
 
 Example:
 
 ```sh
-omniglass component raise-alarm <name> --severity severity
+omniglass component property update <name> <property> --value value
+```
+
+### `omniglass component reachability`
+
+Commands for the reachability resource
+
+#### `omniglass component reachability list`
+
+Read a component's per-interface reachability
+
+```
+omniglass component reachability list <name>
+```
+
+Composes, per interface, the latest reachability verdict, the probe-layer signals that compose it, and the recent verdict transitions for the availability strip. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+
+Example:
+
+```sh
+omniglass component reachability list <name>
 ```
 
 ### `omniglass component removeTag`
@@ -527,46 +752,6 @@ Example:
 omniglass component removeTag <name> --key key
 ```
 
-### `omniglass component set-capability`
-
-Declare a capability on a component
-
-```
-omniglass component set-capability <name> <capability> [flags]
-```
-
-Records this component's own fact about a capability: present true adds one its product does not claim, present false suppresses one it does. Idempotent. An unknown capability is a 422; an unknown or out-of-scope component is a non-disclosing 404 (the component is resolved in scope first). Gated by component:update.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--present` | string | (none) | True to add the capability, false to suppress one the product declares |
-
-Example:
-
-```sh
-omniglass component set-capability <name> <capability> --present present
-```
-
-### `omniglass component set-property`
-
-Set a property on a component
-
-```
-omniglass component set-property <name> <property> [flags]
-```
-
-Declares a value for the property on this component, overriding the product contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by component:update; an out-of-scope component is a non-disclosing 404.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--value` | string | (none) | The value to declare, shape given by the property's data_type |
-
-Example:
-
-```sh
-omniglass component set-property <name> <property> --value value
-```
-
 ### `omniglass component setTag`
 
 Set a tag value on a component
@@ -586,22 +771,6 @@ Example:
 
 ```sh
 omniglass component setTag <name> --key key --value value
-```
-
-### `omniglass component systems`
-
-List the systems a component is in
-
-```
-omniglass component systems <name>
-```
-
-The systems this component is bound into, ordered by name. A component may belong to several: a rack DSP serving three rooms is a member of all three, and each of them depends on it. Exactly one membership may be marked primary, the default for a question asked without a system in hand. Gated by component:read; an out-of-scope component is a non-disclosing 404.
-
-Example:
-
-```sh
-omniglass component systems <name>
 ```
 
 ### `omniglass component update`
@@ -720,50 +889,6 @@ Example:
 omniglass driver update <id>
 ```
 
-## `omniglass effective-tag`
-
-Commands for the effective-tag resource
-
-### `omniglass effective-tag list`
-
-Effective tags for a component
-
-```
-omniglass effective-tag list <name> [flags]
-```
-
-Resolves the tags that cascade onto a component (platform -> location -> system -> component): keys union, values override most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves only from a binding on the component itself. The system band comes from MEMBERSHIP: pass ?system= to resolve against one the component belongs to (a shared device answers differently for each), or omit it to resolve against its primary membership. Gated by component:read; the component must be in the caller's component read scope.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--system` | string | (none) | Resolve against this system, which the component must be a member of. Omit to resolve against its primary membership, the default for a caller with no system in hand. |
-
-Example:
-
-```sh
-omniglass effective-tag list <name>
-```
-
-## `omniglass event`
-
-Commands for the event resource
-
-### `omniglass event list`
-
-List a component's recent events
-
-```
-omniglass event list <name>
-```
-
-Returns the component's recent log occurrences (the log-kind sink), newest first, bounded to the last 24 hours. Gated by component:read; an out-of-scope component is a non-disclosing 404.
-
-Example:
-
-```sh
-omniglass event list <name>
-```
-
 ## `omniglass file`
 
 Commands for the file resource
@@ -853,104 +978,6 @@ Example:
 
 ```sh
 omniglass file list
-```
-
-## `omniglass grant`
-
-Commands for the grant resource
-
-### `omniglass grant create`
-
-Grant a role to a group
-
-```
-omniglass grant create <id> [flags]
-```
-
-Assigns a role at a scope to a group; its members inherit it. Gated by principal_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own, exactly as for a direct grant. A duplicate is 409.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--role` | string | (none) | A role id (viewer, operator, admin, owner, or a custom role) |
-| `--scope-id` | string | (none) | The scope root id; omit for the all scope |
-| `--scope-kind` | string | (none) | The scope kind; 'all' confers the whole estate |
-| `--scope-op` | string | (none) | How the scope root matches the tree; moot for the all scope |
-
-Example:
-
-```sh
-omniglass grant create <id> --role role --scope-kind scope_kind
-```
-
-### `omniglass grant create`
-
-Grant a role to a principal
-
-```
-omniglass grant create <id> [flags]
-```
-
-Assigns a role at a scope to a principal. Gated by principal_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own (no promoting anyone, including yourself, to a higher tier such as owner). A duplicate is 409, an unknown role or bad scope 422.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--role` | string | (none) | A role id (viewer, operator, admin, owner, or a custom role) |
-| `--scope-id` | string | (none) | The scope root id; omit for the all scope |
-| `--scope-kind` | string | (none) | The scope kind; 'all' confers the whole estate |
-| `--scope-op` | string | (none) | How the scope root matches the tree: subtree (root + descendants, the default), subtree_excl_root (descendants only for update/delete, root kept for read/create), or self (the root row only). Moot for the all scope. |
-
-Example:
-
-```sh
-omniglass grant create <id> --role role --scope-kind scope_kind
-```
-
-### `omniglass grant delete`
-
-Revoke a group grant
-
-```
-omniglass grant delete <id> <grantId>
-```
-
-Removes one grant from a group. Gated by principal_grant:delete (all-scope).
-
-Example:
-
-```sh
-omniglass grant delete <id> <grantId>
-```
-
-### `omniglass grant delete`
-
-Revoke a grant
-
-```
-omniglass grant delete <id> <grantId>
-```
-
-Removes one grant from a principal. Gated by principal_grant:delete (all-scope). The last owner grant cannot be revoked.
-
-Example:
-
-```sh
-omniglass grant delete <id> <grantId>
-```
-
-### `omniglass grant list`
-
-List a group's grants
-
-```
-omniglass grant list <id>
-```
-
-The role x scope grants a group confers on its members. Gated by principal_group:read:admin.
-
-Example:
-
-```sh
-omniglass grant list <id>
 ```
 
 ## `omniglass healthz`
@@ -1089,22 +1116,6 @@ Example:
 omniglass location checkName --name name
 ```
 
-### `omniglass location clear-property`
-
-Clear a property on a location
-
-```
-omniglass location clear-property <name> <property>
-```
-
-Removes the location's declared value, so the property falls back to the location type contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the location never set is a 404. Gated by location:update; an out-of-scope location is a non-disclosing 404.
-
-Example:
-
-```sh
-omniglass location clear-property <name> <property>
-```
-
 ### `omniglass location create`
 
 Create a location
@@ -1162,10 +1173,14 @@ omniglass location get <name>
 
 ### `omniglass location health`
 
+Commands for the health resource
+
+#### `omniglass location health list`
+
 Read a location's health
 
 ```
-omniglass location health <name>
+omniglass location health list <name>
 ```
 
 The location's current verdict, worst-wins over every system placed anywhere beneath it, with those systems and their verdicts as the drill-down (the system health read names the role, the capability, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.
@@ -1173,7 +1188,7 @@ The location's current verdict, worst-wins over every system placed anywhere ben
 Example:
 
 ```sh
-omniglass location health <name>
+omniglass location health list <name>
 ```
 
 ### `omniglass location list`
@@ -1208,12 +1223,32 @@ Example:
 omniglass location listTags <name>
 ```
 
-### `omniglass location properties`
+### `omniglass location property`
+
+Commands for the property resource
+
+#### `omniglass location property delete`
+
+Clear a property on a location
+
+```
+omniglass location property delete <name> <property>
+```
+
+Removes the location's declared value, so the property falls back to the location type contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the location never set is a 404. Gated by location:update; an out-of-scope location is a non-disclosing 404.
+
+Example:
+
+```sh
+omniglass location property delete <name> <property>
+```
+
+#### `omniglass location property list`
 
 List a location's effective properties
 
 ```
-omniglass location properties <name>
+omniglass location property list <name>
 ```
 
 Every property the location's type declares, resolved to the location's own value or the contract default (is_set marks the override), plus any property set directly on the location (from_contract false). Gated by location:read; an out-of-scope location is a non-disclosing 404.
@@ -1221,7 +1256,27 @@ Every property the location's type declares, resolved to the location's own valu
 Example:
 
 ```sh
-omniglass location properties <name>
+omniglass location property list <name>
+```
+
+#### `omniglass location property update`
+
+Set a property on a location
+
+```
+omniglass location property update <name> <property> [flags]
+```
+
+Declares a value for the property on this location, overriding the location type contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by location:update; an out-of-scope location is a non-disclosing 404.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--value` | string | (none) | The value to declare, shape given by the property's data_type |
+
+Example:
+
+```sh
+omniglass location property update <name> <property> --value value
 ```
 
 ### `omniglass location removeTag`
@@ -1242,26 +1297,6 @@ Example:
 
 ```sh
 omniglass location removeTag <name> --key key
-```
-
-### `omniglass location set-property`
-
-Set a property on a location
-
-```
-omniglass location set-property <name> <property> [flags]
-```
-
-Declares a value for the property on this location, overriding the location type contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by location:update; an out-of-scope location is a non-disclosing 404.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--value` | string | (none) | The value to declare, shape given by the property's data_type |
-
-Example:
-
-```sh
-omniglass location set-property <name> <property> --value value
 ```
 
 ### `omniglass location setTag`
@@ -1312,12 +1347,16 @@ omniglass location update <name>
 
 Commands for the location-type resource
 
-### `omniglass location-type delete-property`
+### `omniglass location-type property`
+
+Commands for the property resource
+
+#### `omniglass location-type property delete`
 
 Withdraw a property from a location type
 
 ```
-omniglass location-type delete-property <id> <property>
+omniglass location-type property delete <id> <property>
 ```
 
 Removes one line from a custom location type's contract; locations of the type keep any value they set for it, now off-contract. A property the type does not declare is a 404, and an official type is read-only (422). Gated by type:delete.
@@ -1325,15 +1364,15 @@ Removes one line from a custom location type's contract; locations of the type k
 Example:
 
 ```sh
-omniglass location-type delete-property <id> <property>
+omniglass location-type property delete <id> <property>
 ```
 
-### `omniglass location-type properties`
+#### `omniglass location-type property list`
 
 List a location type's declared properties
 
 ```
-omniglass location-type properties <id>
+omniglass location-type property list <id>
 ```
 
 Lists the location type's declared-property contract (what every location of the type exposes), ordered by property name, each with its optional default and required flag. Gated by type:read.
@@ -1341,15 +1380,15 @@ Lists the location type's declared-property contract (what every location of the
 Example:
 
 ```sh
-omniglass location-type properties <id>
+omniglass location-type property list <id>
 ```
 
-### `omniglass location-type set-property`
+#### `omniglass location-type property update`
 
 Declare a property on a location type
 
 ```
-omniglass location-type set-property <id> <property> [flags]
+omniglass location-type property update <id> <property> [flags]
 ```
 
 Declares a catalog property on a custom location type, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official location types are read-only (422); an unknown type is a 404 and a property the catalog does not know is a 422. Gated by type:update.
@@ -1362,180 +1401,7 @@ Declares a catalog property on a custom location type, or revises the declaratio
 Example:
 
 ```sh
-omniglass location-type set-property <id> <property>
-```
-
-## `omniglass login`
-
-Commands for the login resource
-
-### `omniglass login create`
-
-Log in with a username and password
-
-```
-omniglass login create [flags]
-```
-
-Verifies a human's password and sets an httpOnly session cookie. Public; a bad credential is a flat 401, and a correct password against a disabled account is a distinct 403 so the screen can explain it.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--password` | string | (none) |  |
-| `--username` | string | (none) |  |
-
-Example:
-
-```sh
-omniglass login create --password password --username username
-```
-
-## `omniglass logout`
-
-Commands for the logout resource
-
-### `omniglass logout create`
-
-Log out the current session
-
-```
-omniglass logout create
-```
-
-Revokes the session token and clears the cookie. Public.
-
-Example:
-
-```sh
-omniglass logout create
-```
-
-## `omniglass me`
-
-Commands for the me resource
-
-### `omniglass me list`
-
-Get the caller's effective settings
-
-```
-omniglass me list
-```
-
-The current principal's resolved settings, client-visible namespaces only, no provenance. Feeds the SPA at boot. Requires authentication.
-
-Example:
-
-```sh
-omniglass me list
-```
-
-### `omniglass me removeAvatar`
-
-Remove your own profile picture
-
-```
-omniglass me removeAvatar
-```
-
-Clears the caller's profile picture. Requires authentication; self-scoped.
-
-Example:
-
-```sh
-omniglass me removeAvatar
-```
-
-### `omniglass me setAvatar`
-
-Set your own profile picture
-
-```
-omniglass me setAvatar [flags]
-```
-
-Sets the caller's profile picture (JPEG, PNG, or WebP, base64-encoded), normalized server-side to a 256x256 JPEG. Requires authentication; self-scoped. A bad or oversize image is a 422.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--image-base64` | string | (none) | The image (JPEG, PNG, or WebP), base64-encoded; normalized server-side to a 256x256 JPEG |
-
-Example:
-
-```sh
-omniglass me setAvatar --image-base64 image_base64
-```
-
-### `omniglass me stopImpersonation`
-
-Stop the current impersonation session
-
-```
-omniglass me stopImpersonation
-```
-
-Revokes the impersonation session presented by the request token, ending the view-as / act-as. Requires an impersonation token.
-
-Example:
-
-```sh
-omniglass me stopImpersonation
-```
-
-## `omniglass member`
-
-Commands for the member resource
-
-### `omniglass member create`
-
-Add a member to a group
-
-```
-omniglass member create <id> [flags]
-```
-
-Adds a principal to a group; its members inherit the group's grants. Gated by principal_group:update (all-scope). Idempotent.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--principal-id` | string | (none) | The principal to add to the group |
-
-Example:
-
-```sh
-omniglass member create <id> --principal-id principal_id
-```
-
-### `omniglass member delete`
-
-Remove a member from a group
-
-```
-omniglass member delete <id> <principalId>
-```
-
-Removes a principal from a group; it stops inheriting the group's grants. Gated by principal_group:update (all-scope).
-
-Example:
-
-```sh
-omniglass member delete <id> <principalId>
-```
-
-### `omniglass member list`
-
-List a group's members
-
-```
-omniglass member list <id>
-```
-
-The principals in a group. Gated by principal_group:read:admin.
-
-Example:
-
-```sh
-omniglass member list <id>
+omniglass location-type property update <id> <property>
 ```
 
 ## `omniglass migrate`
@@ -1773,6 +1639,26 @@ Example:
 omniglass principal archive <id>
 ```
 
+### `omniglass principal avatar`
+
+Commands for the avatar resource
+
+#### `omniglass principal avatar list`
+
+Get a principal's profile picture
+
+```
+omniglass principal avatar list <id>
+```
+
+Returns the principal's profile picture as a base64-encoded JPEG. Gated by principal:read:admin. A principal without a picture is a 404.
+
+Example:
+
+```sh
+omniglass principal avatar list <id>
+```
+
 ### `omniglass principal create`
 
 Create a human principal
@@ -1842,6 +1728,49 @@ Example:
 
 ```sh
 omniglass principal get <id>
+```
+
+### `omniglass principal grant`
+
+Commands for the grant resource
+
+#### `omniglass principal grant create`
+
+Grant a role to a principal
+
+```
+omniglass principal grant create <id> [flags]
+```
+
+Assigns a role at a scope to a principal. Gated by principal_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own (no promoting anyone, including yourself, to a higher tier such as owner). A duplicate is 409, an unknown role or bad scope 422.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--role` | string | (none) | A role id (viewer, operator, admin, owner, or a custom role) |
+| `--scope-id` | string | (none) | The scope root id; omit for the all scope |
+| `--scope-kind` | string | (none) | The scope kind; 'all' confers the whole estate |
+| `--scope-op` | string | (none) | How the scope root matches the tree: subtree (root + descendants, the default), subtree_excl_root (descendants only for update/delete, root kept for read/create), or self (the root row only). Moot for the all scope. |
+
+Example:
+
+```sh
+omniglass principal grant create <id> --role role --scope-kind scope_kind
+```
+
+#### `omniglass principal grant delete`
+
+Revoke a grant
+
+```
+omniglass principal grant delete <id> <grantId>
+```
+
+Removes one grant from a principal. Gated by principal_grant:delete (all-scope). The last owner grant cannot be revoked.
+
+Example:
+
+```sh
+omniglass principal grant delete <id> <grantId>
 ```
 
 ### `omniglass principal impersonate`
@@ -1954,12 +1883,48 @@ Example:
 omniglass principal restore <id>
 ```
 
-### `omniglass principal revoke-all-sessions`
+### `omniglass principal session`
+
+Commands for the session resource
+
+#### `omniglass principal session list`
+
+List a principal's sessions
+
+```
+omniglass principal session list <id>
+```
+
+Lists another principal's active bearer credentials (login sessions and API tokens) with their non-secret metadata, newest first, so an administrator can see where an account is signed in and revoke a session that should not be. Gated by principal:revoke-session (all-scope). The token secret is never returned, and current is always false (there is no "this request's own session" when viewing another principal).
+
+Example:
+
+```sh
+omniglass principal session list <id>
+```
+
+#### `omniglass principal session revoke`
+
+Revoke a principal's session
+
+```
+omniglass principal session revoke <id> <sid>
+```
+
+Revokes one of another principal's sessions or tokens by id (an administrator action; the target is immediately signed out of that credential). Gated by principal:revoke-session (all-scope). Bounded to the target, so a credential id that is not theirs is a non-disclosing 404, never a cross-principal revoke. Refused (403) on an owner (an owner's sessions cannot be revoked by anyone, the takeover guard shared with impersonation and password reset) or when it would exceed the caller's own capabilities. Audited with the administrator as the actor.
+
+Example:
+
+```sh
+omniglass principal session revoke <id> <sid>
+```
+
+#### `omniglass principal session revokeAll`
 
 Revoke all of a principal's sessions or tokens
 
 ```
-omniglass principal revoke-all-sessions <id> [flags]
+omniglass principal session revokeAll <id> [flags]
 ```
 
 Revokes every one of another principal's web-login sessions, or every one of its CLI/API tokens (chosen by purpose), in a single administrator action, returning how many were ended. Gated by principal:revoke-session (all-scope). Bounded to the target and never crosses purpose (revoking sessions leaves tokens, and vice versa). Refused (403) on an owner (the takeover guard shared with impersonation and the password reset) or when it would exceed the caller's own capabilities. Audited with the administrator as the actor.
@@ -1971,39 +1936,7 @@ Revokes every one of another principal's web-login sessions, or every one of its
 Example:
 
 ```sh
-omniglass principal revoke-all-sessions <id> --purpose purpose
-```
-
-### `omniglass principal revoke-session`
-
-Revoke a principal's session
-
-```
-omniglass principal revoke-session <id> <sid>
-```
-
-Revokes one of another principal's sessions or tokens by id (an administrator action; the target is immediately signed out of that credential). Gated by principal:revoke-session (all-scope). Bounded to the target, so a credential id that is not theirs is a non-disclosing 404, never a cross-principal revoke. Refused (403) on an owner (an owner's sessions cannot be revoked by anyone, the takeover guard shared with impersonation and password reset) or when it would exceed the caller's own capabilities. Audited with the administrator as the actor.
-
-Example:
-
-```sh
-omniglass principal revoke-session <id> <sid>
-```
-
-### `omniglass principal sessions`
-
-List a principal's sessions
-
-```
-omniglass principal sessions <id>
-```
-
-Lists another principal's active bearer credentials (login sessions and API tokens) with their non-secret metadata, newest first, so an administrator can see where an account is signed in and revoke a session that should not be. Gated by principal:revoke-session (all-scope). The token secret is never returned, and current is always false (there is no "this request's own session" when viewing another principal).
-
-Example:
-
-```sh
-omniglass principal sessions <id>
+omniglass principal session revokeAll <id> --purpose purpose
 ```
 
 ### `omniglass principal setAvatar`
@@ -2106,6 +2039,65 @@ Example:
 omniglass principal-group get <id>
 ```
 
+### `omniglass principal-group grant`
+
+Commands for the grant resource
+
+#### `omniglass principal-group grant create`
+
+Grant a role to a group
+
+```
+omniglass principal-group grant create <id> [flags]
+```
+
+Assigns a role at a scope to a group; its members inherit it. Gated by principal_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own, exactly as for a direct grant. A duplicate is 409.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--role` | string | (none) | A role id (viewer, operator, admin, owner, or a custom role) |
+| `--scope-id` | string | (none) | The scope root id; omit for the all scope |
+| `--scope-kind` | string | (none) | The scope kind; 'all' confers the whole estate |
+| `--scope-op` | string | (none) | How the scope root matches the tree; moot for the all scope |
+
+Example:
+
+```sh
+omniglass principal-group grant create <id> --role role --scope-kind scope_kind
+```
+
+#### `omniglass principal-group grant delete`
+
+Revoke a group grant
+
+```
+omniglass principal-group grant delete <id> <grantId>
+```
+
+Removes one grant from a group. Gated by principal_grant:delete (all-scope).
+
+Example:
+
+```sh
+omniglass principal-group grant delete <id> <grantId>
+```
+
+#### `omniglass principal-group grant list`
+
+List a group's grants
+
+```
+omniglass principal-group grant list <id>
+```
+
+The role x scope grants a group confers on its members. Gated by principal_group:read:admin.
+
+Example:
+
+```sh
+omniglass principal-group grant list <id>
+```
+
 ### `omniglass principal-group list`
 
 List principal groups
@@ -2120,6 +2112,62 @@ Example:
 
 ```sh
 omniglass principal-group list
+```
+
+### `omniglass principal-group member`
+
+Commands for the member resource
+
+#### `omniglass principal-group member create`
+
+Add a member to a group
+
+```
+omniglass principal-group member create <id> [flags]
+```
+
+Adds a principal to a group; its members inherit the group's grants. Gated by principal_group:update (all-scope). Idempotent.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--principal-id` | string | (none) | The principal to add to the group |
+
+Example:
+
+```sh
+omniglass principal-group member create <id> --principal-id principal_id
+```
+
+#### `omniglass principal-group member delete`
+
+Remove a member from a group
+
+```
+omniglass principal-group member delete <id> <principalId>
+```
+
+Removes a principal from a group; it stops inheriting the group's grants. Gated by principal_group:update (all-scope).
+
+Example:
+
+```sh
+omniglass principal-group member delete <id> <principalId>
+```
+
+#### `omniglass principal-group member list`
+
+List a group's members
+
+```
+omniglass principal-group member list <id>
+```
+
+The principals in a group. Gated by principal_group:read:admin.
+
+Example:
+
+```sh
+omniglass principal-group member list <id>
 ```
 
 ### `omniglass principal-group update`
@@ -2190,22 +2238,6 @@ Example:
 omniglass product delete <id>
 ```
 
-### `omniglass product delete-property`
-
-Withdraw a property from a product
-
-```
-omniglass product delete-property <id> <property>
-```
-
-Removes one line from a custom product's contract; instances keep any value they set for it, now off-contract. A property the product does not declare is a 404, and an official product is read-only (422). Gated by product:delete.
-
-Example:
-
-```sh
-omniglass product delete-property <id> <property>
-```
-
 ### `omniglass product get`
 
 Get a product
@@ -2238,12 +2270,32 @@ Example:
 omniglass product list
 ```
 
-### `omniglass product properties`
+### `omniglass product property`
+
+Commands for the property resource
+
+#### `omniglass product property delete`
+
+Withdraw a property from a product
+
+```
+omniglass product property delete <id> <property>
+```
+
+Removes one line from a custom product's contract; instances keep any value they set for it, now off-contract. A property the product does not declare is a 404, and an official product is read-only (422). Gated by product:delete.
+
+Example:
+
+```sh
+omniglass product property delete <id> <property>
+```
+
+#### `omniglass product property list`
 
 List a product's declared properties
 
 ```
-omniglass product properties <id>
+omniglass product property list <id>
 ```
 
 Lists the product's declared-property contract (what every instance of the product exposes), ordered by property name, each with its optional default and required flag. Gated by product:read.
@@ -2251,15 +2303,15 @@ Lists the product's declared-property contract (what every instance of the produ
 Example:
 
 ```sh
-omniglass product properties <id>
+omniglass product property list <id>
 ```
 
-### `omniglass product set-property`
+#### `omniglass product property update`
 
 Declare a property on a product
 
 ```
-omniglass product set-property <id> <property> [flags]
+omniglass product property update <id> <property> [flags]
 ```
 
 Declares a catalog property on a custom product, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official products are read-only (422), and an unknown product or property is a 422. Gated by product:update.
@@ -2272,7 +2324,7 @@ Declares a catalog property on a custom product, or revises the declaration in p
 Example:
 
 ```sh
-omniglass product set-property <id> <property>
+omniglass product property update <id> <property>
 ```
 
 ### `omniglass product update`
@@ -2399,26 +2451,6 @@ Example:
 
 ```sh
 omniglass property update <name>
-```
-
-## `omniglass reachability`
-
-Commands for the reachability resource
-
-### `omniglass reachability list`
-
-Read a component's per-interface reachability
-
-```
-omniglass reachability list <name>
-```
-
-Composes, per interface, the latest reachability verdict, the probe-layer signals that compose it, and the recent verdict transitions for the availability strip. Gated by component:read; an out-of-scope component is a non-disclosing 404.
-
-Example:
-
-```sh
-omniglass reachability list <name>
 ```
 
 ## `omniglass role`
@@ -2678,6 +2710,26 @@ Example:
 omniglass setting list
 ```
 
+### `omniglass setting me`
+
+Commands for the me resource
+
+#### `omniglass setting me list`
+
+Get the caller's effective settings
+
+```
+omniglass setting me list
+```
+
+The current principal's resolved settings, client-visible namespaces only, no provenance. Feeds the SPA at boot. Requires authentication.
+
+Example:
+
+```sh
+omniglass setting me list
+```
+
 ### `omniglass setting restoreDefaults`
 
 Restore all settings to defaults
@@ -2752,38 +2804,6 @@ Example:
 omniglass standard delete <id>
 ```
 
-### `omniglass standard delete-property`
-
-Withdraw a property from a standard
-
-```
-omniglass standard delete-property <id> <property>
-```
-
-Removes one line from a custom standard's contract; conforming systems keep any value they set for it, now off-contract. A property the standard does not declare is a 404, and an official standard is read-only (422). Gated by standard:delete.
-
-Example:
-
-```sh
-omniglass standard delete-property <id> <property>
-```
-
-### `omniglass standard delete-role`
-
-Withdraw a role from a standard
-
-```
-omniglass standard delete-role <id> <role>
-```
-
-Removes the role from the standard, and with it every assignment conforming systems made to it. A role the standard does not declare is a 404. Gated by standard:delete.
-
-Example:
-
-```sh
-omniglass standard delete-role <id> <role>
-```
-
 ### `omniglass standard get`
 
 Get a standard
@@ -2816,12 +2836,32 @@ Example:
 omniglass standard list
 ```
 
-### `omniglass standard properties`
+### `omniglass standard property`
+
+Commands for the property resource
+
+#### `omniglass standard property delete`
+
+Withdraw a property from a standard
+
+```
+omniglass standard property delete <id> <property>
+```
+
+Removes one line from a custom standard's contract; conforming systems keep any value they set for it, now off-contract. A property the standard does not declare is a 404, and an official standard is read-only (422). Gated by standard:delete.
+
+Example:
+
+```sh
+omniglass standard property delete <id> <property>
+```
+
+#### `omniglass standard property list`
 
 List a standard's declared properties
 
 ```
-omniglass standard properties <id>
+omniglass standard property list <id>
 ```
 
 Lists the standard's declared-property contract (what every system conforming to it exposes), ordered by property name, each with its optional default and required flag. Gated by standard:read.
@@ -2829,31 +2869,15 @@ Lists the standard's declared-property contract (what every system conforming to
 Example:
 
 ```sh
-omniglass standard properties <id>
+omniglass standard property list <id>
 ```
 
-### `omniglass standard roles`
-
-List a standard's declared roles
-
-```
-omniglass standard roles <id>
-```
-
-Lists the roles this standard declares (every conforming system inherits them live), ordered by name, each with its quorum and the capabilities a component must provide to fill it. Gated by standard:read.
-
-Example:
-
-```sh
-omniglass standard roles <id>
-```
-
-### `omniglass standard set-property`
+#### `omniglass standard property update`
 
 Declare a property on a standard
 
 ```
-omniglass standard set-property <id> <property> [flags]
+omniglass standard property update <id> <property> [flags]
 ```
 
 Declares a catalog property on a custom standard, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official standards are read-only (422); an unknown standard is a 404 and a property the catalog does not know is a 422. Gated by standard:update.
@@ -2866,15 +2890,51 @@ Declares a catalog property on a custom standard, or revises the declaration in 
 Example:
 
 ```sh
-omniglass standard set-property <id> <property>
+omniglass standard property update <id> <property>
 ```
 
-### `omniglass standard set-role`
+### `omniglass standard role`
+
+Commands for the role resource
+
+#### `omniglass standard role delete`
+
+Withdraw a role from a standard
+
+```
+omniglass standard role delete <id> <role>
+```
+
+Removes the role from the standard, and with it every assignment conforming systems made to it. A role the standard does not declare is a 404. Gated by standard:delete.
+
+Example:
+
+```sh
+omniglass standard role delete <id> <role>
+```
+
+#### `omniglass standard role list`
+
+List a standard's declared roles
+
+```
+omniglass standard role list <id>
+```
+
+Lists the roles this standard declares (every conforming system inherits them live), ordered by name, each with its quorum and the capabilities a component must provide to fill it. Gated by standard:read.
+
+Example:
+
+```sh
+omniglass standard role list <id>
+```
+
+#### `omniglass standard role update`
 
 Declare a role on a standard
 
 ```
-omniglass standard set-role <id> <role> [flags]
+omniglass standard role update <id> <role> [flags]
 ```
 
 Declares a role every conforming system needs filled, or revises it in place (the role is addressed by name, so the write is idempotent). The capability list replaces the required set wholesale. An unknown standard or capability is a 422. Gated by standard:update.
@@ -2889,7 +2949,7 @@ Declares a role every conforming system needs filled, or revises it in place (th
 Example:
 
 ```sh
-omniglass standard set-role <id> <role>
+omniglass standard role update <id> <role>
 ```
 
 ### `omniglass standard update`
@@ -2913,61 +2973,9 @@ Example:
 omniglass standard update <id>
 ```
 
-## `omniglass statu`
-
-Commands for the statu resource
-
-### `omniglass statu list`
-
-Whether the system has an owner yet
-
-```
-omniglass statu list
-```
-
-Public: reports whether any owner has been bootstrapped, so the login screen can hide the bootstrap hint.
-
-Example:
-
-```sh
-omniglass statu list
-```
-
 ## `omniglass system`
 
 Commands for the system resource
-
-### `omniglass system add-member`
-
-Put a component in a system
-
-```
-omniglass system add-member <name> <component>
-```
-
-Binds this component into the system. Idempotent. A component's first membership becomes its primary with nobody asking, so a component in exactly one system never has to think about the concept; a later membership does not take that default away. Gated by system:update; an out-of-scope system is a non-disclosing 404.
-
-Example:
-
-```sh
-omniglass system add-member <name> <component>
-```
-
-### `omniglass system assign-role`
-
-Assign a component to a role
-
-```
-omniglass system assign-role <name> <role> <component>
-```
-
-Puts this component in the role for this system. Refused with a 422 naming the missing capabilities when the component does not provide everything the role requires (its product's capabilities, plus what it adds, minus what it suppresses). Idempotent. Gated by system:update; an out-of-scope system is a non-disclosing 404.
-
-Example:
-
-```sh
-omniglass system assign-role <name> <role> <component>
-```
 
 ### `omniglass system checkName`
 
@@ -2987,22 +2995,6 @@ Example:
 
 ```sh
 omniglass system checkName --name name
-```
-
-### `omniglass system clear-property`
-
-Clear a property on a system
-
-```
-omniglass system clear-property <name> <property>
-```
-
-Removes the system's declared value, so the property falls back to the standard contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the system never set is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.
-
-Example:
-
-```sh
-omniglass system clear-property <name> <property>
 ```
 
 ### `omniglass system create`
@@ -3045,22 +3037,6 @@ Example:
 omniglass system delete <name>
 ```
 
-### `omniglass system delete-role`
-
-Withdraw a role from a system
-
-```
-omniglass system delete-role <name> <role>
-```
-
-Removes a role declared on this system, and with it every assignment to it. A role the system does not declare itself is a 404 (a role inherited from its standard is withdrawn on the standard, not here). Gated by system:update; an out-of-scope system is a non-disclosing 404.
-
-Example:
-
-```sh
-omniglass system delete-role <name> <role>
-```
-
 ### `omniglass system get`
 
 Get a system
@@ -3079,10 +3055,14 @@ omniglass system get <name>
 
 ### `omniglass system health`
 
+Commands for the health resource
+
+#### `omniglass system health list`
+
 Read a system's health
 
 ```
-omniglass system health <name>
+omniglass system health list <name>
 ```
 
 The system's current verdict and why: every role it needs filled, whether it is impaired, what an impaired role means for the system (impact), and for an impaired role the required capabilities an alarm has taken away plus the alarms that took them. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.
@@ -3090,7 +3070,7 @@ The system's current verdict and why: every role it needs filled, whether it is 
 Example:
 
 ```sh
-omniglass system health <name>
+omniglass system health list <name>
 ```
 
 ### `omniglass system list`
@@ -3125,44 +3105,16 @@ Example:
 omniglass system listTags <name>
 ```
 
-### `omniglass system members`
+### `omniglass system member`
 
-List the components in a system
+Commands for the member resource
 
-```
-omniglass system members <name>
-```
-
-The components bound into this system, ordered by name. Membership is what a role attaches to: every component staffing a role here is a member, and a member may also carry no role at all (a power conditioner is in the room without filling a declared slot). Gated by system:read; an out-of-scope system is a non-disclosing 404.
-
-Example:
-
-```sh
-omniglass system members <name>
-```
-
-### `omniglass system properties`
-
-List a system's effective properties
-
-```
-omniglass system properties <name>
-```
-
-Every property the system's standard declares, resolved to the system's own value or the contract default (is_set marks the override), plus any property set directly on the system (from_contract false). Gated by system:read; an out-of-scope system is a non-disclosing 404.
-
-Example:
-
-```sh
-omniglass system properties <name>
-```
-
-### `omniglass system remove-member`
+#### `omniglass system member delete`
 
 Take a component out of a system
 
 ```
-omniglass system remove-member <name> <component>
+omniglass system member delete <name> <component>
 ```
 
 Unbinds this component from the system. Refused with a 409 while it still fills a role here, since removing it would leave the system staffed by a non-member: unassign the role first. A component that was not a member is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.
@@ -3170,7 +3122,111 @@ Unbinds this component from the system. Refused with a 409 while it still fills 
 Example:
 
 ```sh
-omniglass system remove-member <name> <component>
+omniglass system member delete <name> <component>
+```
+
+#### `omniglass system member list`
+
+List the components in a system
+
+```
+omniglass system member list <name>
+```
+
+The components bound into this system, ordered by name. Membership is what a role attaches to: every component staffing a role here is a member, and a member may also carry no role at all (a power conditioner is in the room without filling a declared slot). Gated by system:read; an out-of-scope system is a non-disclosing 404.
+
+Example:
+
+```sh
+omniglass system member list <name>
+```
+
+#### `omniglass system member setPrimary`
+
+Make this the component's default system
+
+```
+omniglass system member setPrimary <name> <component>
+```
+
+Moves the component's default to this membership. The default answers questions asked without a system in hand; it does not decide anything that names a system explicitly. A component that was not a member here is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.
+
+Example:
+
+```sh
+omniglass system member setPrimary <name> <component>
+```
+
+#### `omniglass system member update`
+
+Put a component in a system
+
+```
+omniglass system member update <name> <component>
+```
+
+Binds this component into the system. Idempotent. A component's first membership becomes its primary with nobody asking, so a component in exactly one system never has to think about the concept; a later membership does not take that default away. Gated by system:update; an out-of-scope system is a non-disclosing 404.
+
+Example:
+
+```sh
+omniglass system member update <name> <component>
+```
+
+### `omniglass system property`
+
+Commands for the property resource
+
+#### `omniglass system property delete`
+
+Clear a property on a system
+
+```
+omniglass system property delete <name> <property>
+```
+
+Removes the system's declared value, so the property falls back to the standard contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the system never set is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.
+
+Example:
+
+```sh
+omniglass system property delete <name> <property>
+```
+
+#### `omniglass system property list`
+
+List a system's effective properties
+
+```
+omniglass system property list <name>
+```
+
+Every property the system's standard declares, resolved to the system's own value or the contract default (is_set marks the override), plus any property set directly on the system (from_contract false). Gated by system:read; an out-of-scope system is a non-disclosing 404.
+
+Example:
+
+```sh
+omniglass system property list <name>
+```
+
+#### `omniglass system property update`
+
+Set a property on a system
+
+```
+omniglass system property update <name> <property> [flags]
+```
+
+Declares a value for the property on this system, overriding the standard contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by system:update; an out-of-scope system is a non-disclosing 404.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--value` | string | (none) | The value to declare, shape given by the property's data_type |
+
+Example:
+
+```sh
+omniglass system property update <name> <property> --value value
 ```
 
 ### `omniglass system removeTag`
@@ -3193,12 +3249,68 @@ Example:
 omniglass system removeTag <name> --key key
 ```
 
-### `omniglass system roles`
+### `omniglass system role`
+
+Commands for the role resource
+
+#### `omniglass system role assignment`
+
+Commands for the assignment resource
+
+##### `omniglass system role assignment delete`
+
+Unassign a component from a role
+
+```
+omniglass system role assignment delete <name> <role> <component>
+```
+
+Takes this component out of the role, leaving the role understaffed until another fills it. A component that was not filling the role is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.
+
+Example:
+
+```sh
+omniglass system role assignment delete <name> <role> <component>
+```
+
+##### `omniglass system role assignment update`
+
+Assign a component to a role
+
+```
+omniglass system role assignment update <name> <role> <component>
+```
+
+Puts this component in the role for this system. Refused with a 422 naming the missing capabilities when the component does not provide everything the role requires (its product's capabilities, plus what it adds, minus what it suppresses). Idempotent. Gated by system:update; an out-of-scope system is a non-disclosing 404.
+
+Example:
+
+```sh
+omniglass system role assignment update <name> <role> <component>
+```
+
+#### `omniglass system role delete`
+
+Withdraw a role from a system
+
+```
+omniglass system role delete <name> <role>
+```
+
+Removes a role declared on this system, and with it every assignment to it. A role the system does not declare itself is a 404 (a role inherited from its standard is withdrawn on the standard, not here). Gated by system:update; an out-of-scope system is a non-disclosing 404.
+
+Example:
+
+```sh
+omniglass system role delete <name> <role>
+```
+
+#### `omniglass system role list`
 
 List a system's effective roles
 
 ```
-omniglass system roles <name>
+omniglass system role list <name>
 ```
 
 Every role this system needs filled: those its standard declares (from_standard true) plus those declared directly on it, each with the capabilities it requires, the components filling it, and how many more it wants before quorum (understaffed). A one-off system shows only its own. Gated by system:read; an out-of-scope system is a non-disclosing 404.
@@ -3206,51 +3318,15 @@ Every role this system needs filled: those its standard declares (from_standard 
 Example:
 
 ```sh
-omniglass system roles <name>
+omniglass system role list <name>
 ```
 
-### `omniglass system set-primary-member`
-
-Make this the component's default system
-
-```
-omniglass system set-primary-member <name> <component>
-```
-
-Moves the component's default to this membership. The default answers questions asked without a system in hand; it does not decide anything that names a system explicitly. A component that was not a member here is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.
-
-Example:
-
-```sh
-omniglass system set-primary-member <name> <component>
-```
-
-### `omniglass system set-property`
-
-Set a property on a system
-
-```
-omniglass system set-property <name> <property> [flags]
-```
-
-Declares a value for the property on this system, overriding the standard contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by system:update; an out-of-scope system is a non-disclosing 404.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--value` | string | (none) | The value to declare, shape given by the property's data_type |
-
-Example:
-
-```sh
-omniglass system set-property <name> <property> --value value
-```
-
-### `omniglass system set-role`
+#### `omniglass system role update`
 
 Declare a role on a system
 
 ```
-omniglass system set-role <name> <role> [flags]
+omniglass system role update <name> <role> [flags]
 ```
 
 Declares a role directly on this system (how a one-off system gets roles at all, and how a conforming one adds what its standard does not cover), or revises it in place. The capability list replaces the required set wholesale. Gated by system:update; an out-of-scope system is a non-disclosing 404.
@@ -3265,7 +3341,7 @@ Declares a role directly on this system (how a one-off system gets roles at all,
 Example:
 
 ```sh
-omniglass system set-role <name> <role>
+omniglass system role update <name> <role>
 ```
 
 ### `omniglass system setTag`
@@ -3287,22 +3363,6 @@ Example:
 
 ```sh
 omniglass system setTag <name> --key key --value value
-```
-
-### `omniglass system unassign-role`
-
-Unassign a component from a role
-
-```
-omniglass system unassign-role <name> <role> <component>
-```
-
-Takes this component out of the role, leaving the role understaffed until another fills it. A component that was not filling the role is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.
-
-Example:
-
-```sh
-omniglass system unassign-role <name> <role> <component>
 ```
 
 ### `omniglass system update`
@@ -3515,12 +3575,16 @@ Issues a new bearer credential for an existing principal, addressed by username,
 
 Commands for the type resource
 
-### `omniglass type create`
+### `omniglass type location`
+
+Commands for the location resource
+
+#### `omniglass type location create`
 
 Create a location type
 
 ```
-omniglass type create [flags]
+omniglass type location create [flags]
 ```
 
 Creates a custom (non-official) location_type. Gated by type:create.
@@ -3538,12 +3602,12 @@ Example:
 omniglass type location create --display-name display_name --id id
 ```
 
-### `omniglass type delete`
+#### `omniglass type location delete`
 
 Delete a location type
 
 ```
-omniglass type delete <id>
+omniglass type location delete <id>
 ```
 
 Deletes a custom location_type, refused if official (422) or still referenced by a location (409). Gated by type:delete.
@@ -3554,12 +3618,12 @@ Example:
 omniglass type location delete <id>
 ```
 
-### `omniglass type list`
+#### `omniglass type location list`
 
 List location types
 
 ```
-omniglass type list
+omniglass type location list
 ```
 
 Lists the location_type registry (the shape-definers a location is classified by), ordered alphabetically by display name. Populates the type picker on the location form. Gated by type:read.
@@ -3570,28 +3634,12 @@ Example:
 omniglass type location list
 ```
 
-### `omniglass type list`
-
-List secret types
-
-```
-omniglass type list
-```
-
-Lists the secret_type shapes a secret can take, for the create form. Gated by secret:read.
-
-Example:
-
-```sh
-omniglass type secret list
-```
-
-### `omniglass type update`
+#### `omniglass type location update`
 
 Update a location type
 
 ```
-omniglass type update <id> [flags]
+omniglass type location update <id> [flags]
 ```
 
 Patches a custom location_type's display_name or icon. Official types are read-only (422). Gated by type:update.
@@ -3606,6 +3654,26 @@ Example:
 
 ```sh
 omniglass type location update <id>
+```
+
+### `omniglass type secret`
+
+Commands for the secret resource
+
+#### `omniglass type secret list`
+
+List secret types
+
+```
+omniglass type secret list
+```
+
+Lists the secret_type shapes a secret can take, for the create form. Gated by secret:read.
+
+Example:
+
+```sh
+omniglass type secret list
 ```
 
 ## `omniglass variable`

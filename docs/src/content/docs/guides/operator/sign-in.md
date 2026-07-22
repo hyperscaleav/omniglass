@@ -58,7 +58,7 @@ only your own account, whatever your role.
   **once**, so copy it then; it cannot be retrieved again.
 
 From the CLI the same actions are `omniglass auth update-profile`, `omniglass auth change-password`,
-`omniglass me setAvatar` / `omniglass me removeAvatar` for the picture,
+`omniglass auth set-avatar` / `omniglass auth remove-avatar` for the picture,
 `omniglass session list` / `session revoke <id>` / `session revoke-all` for your sessions, and
 `omniglass auth create-token --description <what-for>` to mint one for yourself (see
 [the CLI guide](/guides/cli/)).

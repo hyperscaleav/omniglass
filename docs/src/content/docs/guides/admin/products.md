@@ -86,6 +86,6 @@ say what the product can **do**, the contract says what it **carries**.
   Cisco Room Bar and Samsung QM55 ship declaring `serial_number`, `firmware_version`, and
   `model_number`, and those declarations come with the release.
 
-From the CLI the contract is `omniglass product properties <id>`,
-`omniglass product set-property <id> <property>`, and
-`omniglass product delete-property <id> <property>`.
+From the CLI the contract is `omniglass product property list <id>`,
+`omniglass product property update <id> <property>`, and
+`omniglass product property delete <id> <property>`.
