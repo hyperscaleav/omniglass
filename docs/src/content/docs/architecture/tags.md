@@ -106,7 +106,7 @@ reaches for `prod` instead of retyping it, without the key having to declare the
 
 :::caution[Open question]
 The rest of value-domain governance. Beyond the string enum, whether a key may carry a typed **`value_type`**
-(int, bool, date, validated like a [`datapoint_type`](/architecture/datapoints/) domain) and whether it may
+(int, bool, date, validated like a [`property_type`](/architecture/datapoints/) domain) and whether it may
 **normalize** values on input (lowercase, trim, fold synonyms, so `Prod`, `prod `, and `PROD` resolve to one
 value) stay open. The enum is the first, most-asked-for slice; the rest is deferred.
 :::

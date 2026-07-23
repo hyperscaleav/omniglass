@@ -104,7 +104,7 @@ no default**. Absent means absent:
 | Kind | Where its default is declared |
 |---|---|
 | [setting](/architecture/settings/) | The tagged struct field on `Settings` (its `default:` tag). |
-| [property](/architecture/variables/#property-one-typed-name-a-classifier-contract-a-stored-value) | The **classifier contract's** `default_value` column (`product_property`, `standard_property`, `location_type_property`), the shipped instance of the pattern: `EffectiveProperties` reads `coalesce(the instance's set value, the contract default)` ([ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property_value)). |
+| [property](/architecture/variables/#property-one-typed-name-a-classifier-contract-a-stored-value) | The **classifier contract's** `default_value` column (`product_property`, `standard_property`, `location_type_property`), the shipped instance of the pattern: `EffectiveProperties` reads `coalesce(the instance's set value, the contract default)` ([ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property)). |
 | [variable](/architecture/variables/) | None. |
 | secret | None. |
 | [tag](/architecture/tags/) | None. |
@@ -164,7 +164,7 @@ position. The tree is structural; attributes are groups.
 
 ## The registry is outside the cascade
 
-`datapoint_type` defines **identity** (kind, unit, validation, fusion_policy) for
+`property_type` defines **identity** (kind, unit, validation, fusion_policy) for
 every datapoint key, which the cascade never overrides (policy, not ontology). A
 type's **default** lives on that declaration too, off the cascade: it is what the
 value is when no layer bound anything, not a rung the layers compete with. The

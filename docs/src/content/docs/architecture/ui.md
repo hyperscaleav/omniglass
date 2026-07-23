@@ -91,7 +91,7 @@ earns it, the same earn-it-with-a-profile discipline. Presentation that depends 
 level's id to its label and color) resolves client-side from the config view. A datapoint
 value resolves the same way: on read the UI converts canonical to the operator's preferred
 display unit, looked up from the unit registry by the [datapoints](/architecture/datapoints/)
-datapoint_type's canonical unit, so storage stays single-unit while one operator sees
+property_type's canonical unit, so storage stays single-unit while one operator sees
 Celsius and another Fahrenheit.
 
 :::caution[Open question]

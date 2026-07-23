@@ -2022,3 +2022,16 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   both belong to the AV [system role](/architecture/core-entities/) (a slot a component fills in a system),
   not the IAM `role` table, and the bare `role_` prefix invited exactly that confusion. Identifiers only,
   no behaviour change: the init applies clean and the full suite is green.
+- **The name foundation of [ADR-0063](/architecture/decisions/#adr-0063-the-telemetry-model-is-typed-registries-over-bare-noun-data-tables) lands: `property_type`, `property`, `property_type_id`.** The
+  signal-definition registry (long carried in the docs as `datapoint_type`, and built as `property`)
+  becomes **`property_type`**; the latest-value store `property_value` takes the freed bare noun
+  **`property`**; and every data table's FK to the registry (`metric`, `state`, `event`,
+  `product_property`, `standard_property`, `location_type_property`, and `property` itself) is repointed
+  `property_id` to **`property_type_id`**, on the wire as well as in the column. A guarded dbmate
+  migration does the table and column renames (the stale dependent object names are left for a cosmetic
+  pass, as the collapse did); the storage structs (`PropertyType`, `Property`), the API bodies, the
+  generated OpenAPI, typed client, CLI, and JSONSchema, and the console all follow. This closes the
+  `datapoint_type`-to-`property` divergence the docs carried: the registry is `property_type`
+  everywhere. The **public resource surface** (`/properties` route, the `property:*` permission) is a
+  deliberate thin cut, renamed in a follow-up. The fuller ADR-0063 model (the provenance-keyed cache,
+  the `event_type` family, the `command` pillar) is still staged.

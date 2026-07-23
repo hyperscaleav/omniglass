@@ -24,8 +24,8 @@ triggers, macros, and tags, ours ships:
   below;
 - **commands** (command-triggered functions the device supports, e.g. `reboot`, `set-input`), detail
   in [collection](/architecture/collection/);
-- **`datapoint_type`s** (kind / unit / validation live on the registry, see
-  [datapoints](/architecture/datapoints/#the-datapoint_type-registry); a template declares its keys at
+- **`property_type`s** (kind / unit / validation live on the registry, see
+  [datapoints](/architecture/datapoints/#the-property_type-registry); a template declares its keys at
   **template** scope, or references an **org** / **official** key, see [Template-scoped keys](#template-scoped-keys-and-optional-alignment));
 - required **[config](/architecture/variables/)** and defaults, and the **credential shapes** it needs
   (see [config and credentials](/architecture/variables/));
@@ -56,7 +56,7 @@ A template declares its datapoints **and** commands at **template scope** by def
 no registry friction, identified by `(template_id, name)` so two templates can both declare an `input`
 with no collision ([key scope](/architecture/datapoints/#key-scope-template-org-official)). It may
 **optionally align** each datapoint to an org or official canonical key. Alignment is just
-**referencing** a canonical `datapoint_type` (plus an optional value transform), which is what buys
+**referencing** a canonical `property_type` (plus an optional value transform), which is what buys
 cross-fleet comparability, dashboards, and AI; the shipped official set covers the common signals, so
 most templates align by referencing one. That value transform is also where the device's **native
 unit** is normalized to the key's **canonical unit** before the datapoint is emitted (a Fahrenheit
@@ -82,10 +82,10 @@ command results beyond `success-when` map to the `action` row fields.
 - **Alarms / health.** Default `event_rule`s the template ships, the conditions worth catching for
   its device class (the Zabbix-trigger mirror: a fan-stall on a DSP template, a person-entered event
   on an occupancy template). The alarming policy lives on the **template**, not on the
-  `datapoint_type`: a `datapoint_type` is pure identity (kind / unit / domain / validation / fusion)
+  `property_type`: a `property_type` is pure identity (kind / unit / domain / validation / fusion)
   and carries no event rules. A *truly universal* default (e.g. `cpu.utilization > 0.9` everywhere) is
   an official **rule-set scoped by a group or key filter**, resolved through the cascade (the rule
-  accumulation mechanism), not a `datapoint_type` attribute. Owned in detail by
+  accumulation mechanism), not a `property_type` attribute. Owned in detail by
   [alarms and actions](/architecture/alarms-actions/).
 - **Function trigger params are cascade bases.** A function's `interval: 30s` is the floor of the
   cascade, overridable by a location, group, or the instance (the `poll_interval` example in
@@ -196,13 +196,13 @@ can fill the role:
 ```yaml
 role: main-display
 requires:
-  datapoints: [display.power, video.input]   # canonical datapoint_types
+  datapoints: [display.power, video.input]   # canonical property_types
   commands:   [set-input, power]             # canonical command types
 health_role: required
 ```
 
 - **A checklist, not a matching engine.** A component's template **qualifies** when it aligns the
-  required canonical [datapoint_types](/architecture/datapoints/) and command types (its set is a
+  required canonical [property_types](/architecture/datapoints/) and command types (its set is a
   superset of the requirement). The requirement is stated in **canonical** keys, because it only means
   the same thing across templates when it names a canonical signal, not a template-local one.
 - **Qualify, then assign.** Pairing a component to a role **filters the picker to qualifying templates**,
@@ -219,7 +219,7 @@ blocked. The old version is **immutable**, so every live assignment pinned to it
 version simply **no longer qualifies** for any role requiring the dropped signal, so it cannot be adopted
 into that role (the same validate-on-assign check fires at re-point), and a role tracking `latest` or a
 channel will not auto-jump to it. Removal surfaces at adoption against frozen versions, never as a silent
-break. (Deleting an org-canonical `datapoint_type` a requirement references is a registry-governance warn
+break. (Deleting an org-canonical `property_type` a requirement references is a registry-governance warn
 or block, the same surfaced-not-silent pattern.)
 
 **The runtime backstop.** Validate-on-assign is prevention; detection covers anything it misses (an
@@ -245,7 +245,7 @@ ctv: component_template_version { class: node }
 st: system_template { class: node }
 stv: system_template_version { class: node }
 stm: system_template_member { class: node }
-dt: datapoint_type { class: node }
+dt: property_type { class: node }
 component: component { class: node }
 system: system { class: node }
 ct -> ctv: versions

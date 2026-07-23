@@ -41,7 +41,7 @@ template tables), [collection](/architecture/collection/#storage) (interfaces an
 ## Conventions
 
 - **No `tenant_id`.** Isolation is per-database (a database per tenant); there is no tenant column
-  anywhere. The key registries `datapoint_type` and `event_type` carry a **`scope`** (template / org /
+  anywhere. The key registries `property_type` and `event_type` carry a **`scope`** (template / org /
   official) deciding where the name is unique ([key scope](/architecture/datapoints/#key-scope-template-org-official)),
   and the non-template registries and catalogs (`interface_type`, `location_type`, `secret_type`,
   `vendor`, `driver`, `capability`, `product`, `standard`) carry an
@@ -77,7 +77,7 @@ template tables), [collection](/architecture/collection/#storage) (interfaces an
   `node_id`, or none for the singleton `global`) plus a CHECK that exactly the matching column is set
   (or all null for `global`). System-, location-, node-, and global-level datapoints are first-class.
   The full pattern is on [core entities](/architecture/core-entities/#ownership-the-exclusive-arc).
-- **Keys**: datapoints and events use a surrogate id plus `ts`; the key registry `datapoint_type`
+- **Keys**: datapoints and events use a surrogate id plus `ts`; the key registry `property_type`
   carries a **`scope`** (template / org / official) deciding where the name is unique (`(template_id, name)`
   at template scope, `name` at org/official); structural entities are name-keyed; a `task` is **content-addressed**
   (`hash(interface, kind, schedule, params)`); a `node` by its `principal_id`, its enrollment
