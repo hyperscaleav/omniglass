@@ -45,11 +45,15 @@ func isUniqueViolation(err error) bool {
 // A caller passes whichever form it has, and this decides the column. The two can
 // never collide: a handle is kebab and a uuid is not.
 var registryHandles = map[string]bool{
-	"product":    true,
-	"vendor":     true,
-	"capability": true,
-	"standard":   true,
-	"property":   true,
+	"product":        true,
+	"vendor":         true,
+	"capability":     true,
+	"standard":       true,
+	"property":       true,
+	"location_type":  true,
+	"interface_type": true,
+	"secret_type":    true,
+	"driver":         true,
 }
 
 // registryRefCol picks the column that addresses a registry row.

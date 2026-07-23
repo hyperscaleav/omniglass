@@ -257,7 +257,7 @@ func seedSecretTypes(ctx context.Context, gw storage.Gateway) error {
 			fields[i] = secret.Field{Name: f.Name, Type: f.Type, Secret: f.Secret, Origin: secret.Origin(f.Origin)}
 		}
 		if err := gw.UpsertSecretType(ctx, storage.SecretType{
-			ID:                    st.ID,
+			Name:                  st.ID,
 			Official:              true,
 			DisplayName:           st.DisplayName,
 			DefaultAdminSensitive: st.DefaultAdminSensitive,
@@ -298,7 +298,7 @@ func seedDrivers(ctx context.Context, gw storage.Gateway) error {
 	}
 	for _, d := range doc.Drivers {
 		if err := gw.UpsertDriver(ctx, storage.Driver{
-			ID: d.ID, Official: true, DisplayName: d.DisplayName, Version: d.Version,
+			Name: d.ID, Official: true, DisplayName: d.DisplayName, Version: d.Version,
 		}); err != nil {
 			return err
 		}
@@ -461,7 +461,7 @@ func seedLocationTypes(ctx context.Context, gw storage.Gateway) error {
 	}
 	for _, lt := range doc.LocationTypes {
 		if err := gw.SeedLocationType(ctx, storage.LocationType{
-			ID:                 lt.ID,
+			Name:               lt.ID,
 			Official:           false,
 			DisplayName:        lt.DisplayName,
 			Icon:               lt.Icon,

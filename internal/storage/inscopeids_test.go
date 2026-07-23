@@ -21,7 +21,7 @@ func TestInScopeIDs(t *testing.T) {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := gw.UpsertLocationType(ctx, storage.LocationType{ID: "campus", DisplayName: "Campus", Official: true}); err != nil {
+	if err := gw.UpsertLocationType(ctx, storage.LocationType{Name: "campus", DisplayName: "Campus", Official: true}); err != nil {
 		t.Fatalf("seed type: %v", err)
 	}
 	all := scope.Set{All: true}

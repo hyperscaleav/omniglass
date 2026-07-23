@@ -72,11 +72,13 @@ type InterfacePatch struct {
 // since an unaliased `... c.name ...` would emit a second output column called
 // `name` and make `order by name` ambiguous.
 const (
-	interfaceCols = `id, name, type,
+	interfaceCols = `id, name,
+		(select t.name from interface_type t where t.id = interface.type) as type,
 		(select c.name from component c where c.id = interface.component) as component_name, component,
 		(select n.name from node n where n.principal_id = interface.node_name) as node_name_ref, node_name,
 		params, created_at, updated_at`
-	interfaceColsJoin = `i.id, i.name, i.type,
+	interfaceColsJoin = `i.id, i.name,
+		(select t2.name from interface_type t2 where t2.id = i.type) as type,
 		(select c2.name from component c2 where c2.id = i.component) as component_name, i.component,
 		(select n.name from node n where n.principal_id = i.node_name) as node_name_ref, i.node_name,
 		i.params, i.created_at, i.updated_at`
@@ -279,7 +281,7 @@ func (p *PG) CreateInterface(ctx context.Context, actorID string, spec Interface
 	}
 	it, err := scanInterface(tx.QueryRow(ctx, `
 		insert into interface (name, type, component, node_name, params)
-		values ($1, $1, $2, $3, $4)
+		values ($1, (select id from interface_type where name = $1), $2, $3, $4)
 		returning `+interfaceCols,
 		spec.Type, componentID, nodeID, params))
 	if err != nil {
@@ -406,6 +408,10 @@ func mapInterfaceWriteErr(err error) error {
 		switch pgErr.Code {
 		case "23505": // unique_violation
 			return ErrInterfaceExists
+		case "23502": // not-null: an unknown interface_type name resolved to null
+			if pgErr.ColumnName == "type" {
+				return ErrUnknownInterfaceType
+			}
 		case "23503": // foreign_key_violation
 			switch pgErr.ConstraintName {
 			case "interface_type_fkey":

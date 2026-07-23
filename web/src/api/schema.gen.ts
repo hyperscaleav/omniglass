@@ -3165,8 +3165,8 @@ export interface components {
              */
             readonly $schema?: string;
             display_name: string;
-            /** @description Globally unique driver id */
-            id: string;
+            /** @description The globally unique kebab handle; renameable */
+            name: string;
             version?: string;
         };
         CreateFileInputBody: {
@@ -3284,8 +3284,8 @@ export interface components {
             display_name: string;
             /** @description A glyph key; the console falls back to map-pin when empty */
             icon?: string;
-            /** @description Globally unique type id (kebab, e.g. wing); "root" is reserved */
-            id: string;
+            /** @description The globally unique kebab handle (e.g. wing); "root" is reserved */
+            name: string;
         };
         CreateMeTokenInputBody: {
             /**
@@ -3532,7 +3532,10 @@ export interface components {
              */
             readonly $schema?: string;
             display_name: string;
+            /** @description The driver's uuid, the stable handle that survives a rename */
             id: string;
+            /** @description The kebab handle an operator reads and types; renameable */
+            name: string;
             official: boolean;
             version?: string;
         };
@@ -4311,7 +4314,10 @@ export interface components {
             allowed_parent_types: string[] | null;
             display_name: string;
             icon: string;
+            /** @description The location type's uuid, the stable handle that survives a rename */
             id: string;
+            /** @description The kebab handle an operator reads and types; renameable */
+            name: string;
             official: boolean;
         };
         LocationTypePropertyBody: {
@@ -4428,6 +4434,9 @@ export interface components {
             readonly $schema?: string;
             capabilities: string[] | null;
             display_name: string;
+            /** @description The driver's handle */
+            driver?: string;
+            /** @description The driver's uuid; the stable form of driver */
             driver_id?: string;
             /** @description The product's uuid, the stable handle that survives a rename */
             id: string;
@@ -4763,7 +4772,10 @@ export interface components {
             default_admin_sensitive: boolean;
             display_name: string;
             fields: components["schemas"]["SecretTypeFieldBody"][] | null;
+            /** @description The secret type's uuid, the stable handle that survives a rename */
             id: string;
+            /** @description The kebab handle an operator reads and types; renameable */
+            name: string;
             official: boolean;
         };
         SecretTypeFieldBody: {

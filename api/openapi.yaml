@@ -439,14 +439,14 @@ components:
         display_name:
           minLength: 1
           type: string
-        id:
-          description: Globally unique driver id
+        name:
+          description: The globally unique kebab handle; renameable
           minLength: 1
           type: string
         version:
           type: string
       required:
-        - id
+        - name
         - display_name
       type: object
     CreateFileInputBody:
@@ -654,12 +654,12 @@ components:
         icon:
           description: A glyph key; the console falls back to map-pin when empty
           type: string
-        id:
-          description: Globally unique type id (kebab, e.g. wing); "root" is reserved
+        name:
+          description: The globally unique kebab handle (e.g. wing); "root" is reserved
           minLength: 1
           type: string
       required:
-        - id
+        - name
         - display_name
       type: object
     CreateMeTokenInputBody:
@@ -1100,6 +1100,10 @@ components:
         display_name:
           type: string
         id:
+          description: The driver's uuid, the stable handle that survives a rename
+          type: string
+        name:
+          description: The kebab handle an operator reads and types; renameable
           type: string
         official:
           type: boolean
@@ -1107,6 +1111,7 @@ components:
           type: string
       required:
         - id
+        - name
         - display_name
         - official
       type: object
@@ -2611,11 +2616,16 @@ components:
         icon:
           type: string
         id:
+          description: The location type's uuid, the stable handle that survives a rename
+          type: string
+        name:
+          description: The kebab handle an operator reads and types; renameable
           type: string
         official:
           type: boolean
       required:
         - id
+        - name
         - display_name
         - icon
         - allowed_parent_types
@@ -2848,7 +2858,11 @@ components:
             - "null"
         display_name:
           type: string
+        driver:
+          description: The driver's handle
+          type: string
         driver_id:
+          description: The driver's uuid; the stable form of driver
           type: string
         id:
           description: The product's uuid, the stable handle that survives a rename
@@ -3480,11 +3494,16 @@ components:
             - array
             - "null"
         id:
+          description: The secret type's uuid, the stable handle that survives a rename
+          type: string
+        name:
+          description: The kebab handle an operator reads and types; renameable
           type: string
         official:
           type: boolean
       required:
         - id
+        - name
         - display_name
         - official
         - default_admin_sensitive

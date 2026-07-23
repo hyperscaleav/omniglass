@@ -88,8 +88,8 @@ func TestTelemetryRoundTrip(t *testing.T) {
 		t.Fatalf("connect: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `insert into interface (name, type, component, node_name, params) values
-		('disp-1-tcp', 'tcp', (select id from component where name = 'disp-1'), (select principal_id from node where name = 'node-a'), $1::jsonb),
-		('disp-2-tcp', 'tcp', (select id from component where name = 'disp-2'), (select principal_id from node where name = 'node-b'), '{"target":"127.0.0.1:1"}'::jsonb)`,
+		('disp-1-tcp', (select id from interface_type where name = 'tcp'), (select id from component where name = 'disp-1'), (select principal_id from node where name = 'node-a'), $1::jsonb),
+		('disp-2-tcp', (select id from interface_type where name = 'tcp'), (select id from component where name = 'disp-2'), (select principal_id from node where name = 'node-b'), '{"target":"127.0.0.1:1"}'::jsonb)`,
 		`{"target":"`+target+`"}`); err != nil {
 		t.Fatalf("insert interfaces: %v", err)
 	}

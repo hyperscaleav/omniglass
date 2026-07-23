@@ -178,4 +178,97 @@ func TestRegistryHandleRenameKeepsReferences(t *testing.T) {
 		t.Errorf("datapoint key = %v, want tcp.reachable through the rename", dp)
 	}
 
+	// Slice 4: the leaf registries (driver, location_type, secret_type,
+	// interface_type) rename with every inbound reference intact. These are the
+	// last string-keyed registries the epic converts, closing the invariant that
+	// no foreign key anywhere points at a mutable string.
+
+	// driver: a product's driver arc follows the rename.
+	if _, err := gw.CreateDriver(ctx, "", storage.Driver{Name: "acme-ctl", DisplayName: "Acme Controller"}); err != nil {
+		t.Fatalf("driver: %v", err)
+	}
+	if _, err := gw.CreateProduct(ctx, "", storage.Product{
+		Name: "acme-panel", DisplayName: "Acme Panel", Kind: "device", DriverID: strptr("acme-ctl")}); err != nil {
+		t.Fatalf("product with driver: %v", err)
+	}
+	if _, err := conn.Exec(ctx, `update driver set name = 'acme-controller' where name = 'acme-ctl'`); err != nil {
+		t.Fatalf("rename driver: %v", err)
+	}
+	panel, err := gw.GetProduct(ctx, "acme-panel")
+	if err != nil {
+		t.Fatalf("get product after driver rename: %v", err)
+	}
+	if panel.DriverName == nil || *panel.DriverName != "acme-controller" {
+		t.Errorf("driver reads %v, want acme-controller through the rename", panel.DriverName)
+	}
+
+	// location_type: a location's type arc AND a location_type_property contract
+	// both follow the rename (property serial_no exists from the slice-3 rename above).
+	if _, err := gw.CreateLocationType(ctx, "", storage.LocationType{
+		Name: "wing", DisplayName: "Wing", AllowedParentTypes: []string{storage.RootPlacement}}); err != nil {
+		t.Fatalf("location type: %v", err)
+	}
+	if _, err := gw.SetLocationTypeProperty(ctx, "", "wing", storage.LocationTypePropertySpec{
+		PropertyName: "serial_no", Required: true}); err != nil {
+		t.Fatalf("location type property: %v", err)
+	}
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "west-wing", LocationType: "wing"}, all); err != nil {
+		t.Fatalf("location: %v", err)
+	}
+	if _, err := conn.Exec(ctx, `update location_type set name = 'annex' where name = 'wing'`); err != nil {
+		t.Fatalf("rename location type: %v", err)
+	}
+	loc, err := gw.GetLocation(ctx, "west-wing", all)
+	if err != nil {
+		t.Fatalf("get location after type rename: %v", err)
+	}
+	if loc.LocationType != "annex" {
+		t.Errorf("location type reads %q, want annex through the rename", loc.LocationType)
+	}
+	ltProps, err := gw.ListLocationTypeProperties(ctx, "annex")
+	if err != nil {
+		t.Fatalf("list location type properties by the renamed type: %v", err)
+	}
+	if len(ltProps) != 1 || ltProps[0].PropertyName != "serial_no" {
+		t.Errorf("location type contract = %v, want serial_no still declared", ltProps)
+	}
+
+	// secret_type: a secret's type arc follows the rename.
+	if _, err := gw.CreateSecret(ctx, "", storage.SecretSpec{
+		Name: "snmp", SecretType: "snmp-community", OwnerKind: "component", OwnerName: strptr("bar-1"),
+		Fields: map[string]string{"community": "public"}}, all, true); err != nil {
+		t.Fatalf("secret: %v", err)
+	}
+	if _, err := conn.Exec(ctx, `update secret_type set name = 'snmp-comm' where name = 'snmp-community'`); err != nil {
+		t.Fatalf("rename secret type: %v", err)
+	}
+	secrets, err := gw.ListSecrets(ctx, all, true)
+	if err != nil {
+		t.Fatalf("list secrets after type rename: %v", err)
+	}
+	var snmp *storage.Secret
+	for i := range secrets {
+		if secrets[i].Name == "snmp" {
+			snmp = &secrets[i]
+		}
+	}
+	if snmp == nil || snmp.SecretType != "snmp-comm" {
+		t.Errorf("secret type reads %v, want snmp-comm through the rename", snmp)
+	}
+
+	// interface_type: an interface's transport arc follows the rename.
+	iface, err := gw.CreateInterface(ctx, "", storage.InterfaceSpec{Type: "tcp", Component: strptr("bar-1")}, all)
+	if err != nil {
+		t.Fatalf("interface: %v", err)
+	}
+	if _, err := conn.Exec(ctx, `update interface_type set name = 'tcp-connect' where name = 'tcp'`); err != nil {
+		t.Fatalf("rename interface type: %v", err)
+	}
+	gotIf, err := gw.GetInterface(ctx, iface.ID, all)
+	if err != nil {
+		t.Fatalf("get interface after type rename: %v", err)
+	}
+	if gotIf.Type != "tcp-connect" {
+		t.Errorf("interface type reads %q, want tcp-connect through the rename", gotIf.Type)
+	}
 }

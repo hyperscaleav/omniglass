@@ -20,6 +20,7 @@ type productBodyWire struct {
 	Name         string   `json:"name"`
 	Vendor       string   `json:"vendor"`
 	VendorID     string   `json:"vendor_id"`
+	Driver       string   `json:"driver"`
 	DriverID     string   `json:"driver_id"`
 	Kind         string   `json:"kind"`
 	Official     bool     `json:"official"`
@@ -89,7 +90,7 @@ func TestProductsAPI(t *testing.T) {
 	if created.Vendor != "cisco" {
 		t.Fatalf("created vendor = %q, want the handle cisco", created.Vendor)
 	}
-	if created.Vendor != "cisco" || created.DriverID != "cisco-xapi" || created.Kind != "device" {
+	if created.Vendor != "cisco" || created.Driver != "cisco-xapi" || created.Kind != "device" {
 		t.Fatalf("created refs = %+v, want cisco/cisco-xapi/device", created)
 	}
 	if strings.Join(created.Capabilities, ",") != "microphone,speaker" {

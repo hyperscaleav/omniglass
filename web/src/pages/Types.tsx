@@ -333,7 +333,7 @@ export function CreateTypeForm(p: { kind: TypeKind; onCreated: (id: string) => v
     setFormErr(null);
     try {
       await createType(p.kind, {
-        id: id().trim(),
+        name: id().trim(),
         display_name: displayName().trim(),
         ...(p.kind === "location" ? { icon: icon().trim() || "map-pin", allowed_parent_types: allowedParents() } : {}),
       });

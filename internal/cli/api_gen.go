@@ -1030,13 +1030,13 @@ func generatedCommands() []*cobra.Command {
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
 				var fDisplayName string
-				var fId string
+				var fName string
 				var fVersion string
 				cmd := &cobra.Command{
 					Use:     "create",
 					Short:   "Create a driver",
 					Long:    "Creates a custom (non-official) driver. Gated by driver:create.",
-					Example: "  omniglass driver create --display-name display_name --id id",
+					Example: "  omniglass driver create --display-name display_name --name name",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/drivers")
@@ -1044,8 +1044,8 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("display-name") {
 							body["display_name"] = fDisplayName
 						}
-						if cmd.Flags().Changed("id") {
-							body["id"] = fId
+						if cmd.Flags().Changed("name") {
+							body["name"] = fName
 						}
 						if cmd.Flags().Changed("version") {
 							body["version"] = fVersion
@@ -1055,8 +1055,8 @@ func generatedCommands() []*cobra.Command {
 				}
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
 				_ = cmd.MarkFlagRequired("display-name")
-				cmd.Flags().StringVar(&fId, "id", "", "Globally unique driver id")
-				_ = cmd.MarkFlagRequired("id")
+				cmd.Flags().StringVar(&fName, "name", "", "The globally unique kebab handle; renameable")
+				_ = cmd.MarkFlagRequired("name")
 				cmd.Flags().StringVar(&fVersion, "version", "", "")
 				return cmd
 			}()
@@ -1731,12 +1731,12 @@ func generatedCommands() []*cobra.Command {
 				var fAllowedParentTypes string
 				var fDisplayName string
 				var fIcon string
-				var fId string
+				var fName string
 				cmd := &cobra.Command{
 					Use:     "create",
 					Short:   "Create a location type",
 					Long:    "Creates a custom (non-official) location_type. Gated by type:create.",
-					Example: "  omniglass location-type create --display-name display_name --id id",
+					Example: "  omniglass location-type create --display-name display_name --name name",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/location-types")
@@ -1750,8 +1750,8 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("icon") {
 							body["icon"] = fIcon
 						}
-						if cmd.Flags().Changed("id") {
-							body["id"] = fId
+						if cmd.Flags().Changed("name") {
+							body["name"] = fName
 						}
 						return runAPICommand(cmd, "POST", path, body)
 					},
@@ -1760,8 +1760,8 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
 				_ = cmd.MarkFlagRequired("display-name")
 				cmd.Flags().StringVar(&fIcon, "icon", "", "A glyph key; the console falls back to map-pin when empty")
-				cmd.Flags().StringVar(&fId, "id", "", "Globally unique type id (kebab, e.g. wing); \"root\" is reserved")
-				_ = cmd.MarkFlagRequired("id")
+				cmd.Flags().StringVar(&fName, "name", "", "The globally unique kebab handle (e.g. wing); \"root\" is reserved")
+				_ = cmd.MarkFlagRequired("name")
 				return cmd
 			}()
 			return cmd

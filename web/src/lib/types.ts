@@ -68,7 +68,8 @@ export async function listTypes(): Promise<TypeRow[]> {
 }
 
 export type CreateType = {
-  id: string;
+  // The kebab handle. The uuid is the database's to mint.
+  name: string;
   display_name: string;
   icon?: string;
   allowed_parent_types?: string[];

@@ -66,7 +66,7 @@ func TestGrantsAndOwnerInvariant(t *testing.T) {
 	}
 	// A scoped grant targets a real entity by id: a name or unknown id is refused,
 	// a valid location id is fine.
-	if err := gw.UpsertLocationType(ctx, storage.LocationType{ID: "campus", DisplayName: "Campus", Official: true}); err != nil {
+	if err := gw.UpsertLocationType(ctx, storage.LocationType{Name: "campus", DisplayName: "Campus", Official: true}); err != nil {
 		t.Fatalf("seed location type: %v", err)
 	}
 	hq, err := gw.CreateLocation(ctx, owner.ID, storage.LocationSpec{Name: "hq", LocationType: "campus"}, all)

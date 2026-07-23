@@ -178,7 +178,7 @@ func TestRunIdempotent(t *testing.T) {
 	}
 	// A multi-site estate: three campuses, not one.
 	var campuses int
-	if err := conn.QueryRow(ctx, `select count(*) from location where location_type = 'campus'`).Scan(&campuses); err != nil {
+	if err := conn.QueryRow(ctx, `select count(*) from location where location_type = (select id from location_type where name = 'campus')`).Scan(&campuses); err != nil {
 		t.Fatalf("count campuses: %v", err)
 	}
 	if campuses != 3 {

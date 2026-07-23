@@ -42,7 +42,8 @@ type listLocationsOutput struct {
 // "root" sentinel; empty means unconstrained), and whether it ships with the
 // binary. The registry lists alphabetically by display_name.
 type locationTypeBody struct {
-	ID                 string   `json:"id"`
+	ID                 string   `json:"id" doc:"The location type's uuid, the stable handle that survives a rename"`
+	Name               string   `json:"name" doc:"The kebab handle an operator reads and types; renameable"`
 	DisplayName        string   `json:"display_name"`
 	Icon               string   `json:"icon"`
 	AllowedParentTypes []string `json:"allowed_parent_types"`
@@ -61,7 +62,7 @@ type locationTypePathInput struct {
 
 type createLocationTypeInput struct {
 	Body struct {
-		ID                 string   `json:"id" minLength:"1" doc:"Globally unique type id (kebab, e.g. wing); \"root\" is reserved"`
+		Name               string   `json:"name" minLength:"1" doc:"The globally unique kebab handle (e.g. wing); \"root\" is reserved"`
 		DisplayName        string   `json:"display_name" minLength:"1"`
 		Icon               string   `json:"icon,omitempty" doc:"A glyph key; the console falls back to map-pin when empty"`
 		AllowedParentTypes []string `json:"allowed_parent_types,omitempty" doc:"location_type ids and/or the reserved root sentinel this type may be placed under; empty means unconstrained"`
@@ -162,7 +163,7 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		out.Body.LocationTypes = make([]locationTypeBody, 0, len(types))
 		for i := range types {
 			out.Body.LocationTypes = append(out.Body.LocationTypes, locationTypeBody{
-				ID: types[i].ID, DisplayName: types[i].DisplayName, Icon: types[i].Icon,
+				ID: types[i].ID, Name: types[i].Name, DisplayName: types[i].DisplayName, Icon: types[i].Icon,
 				AllowedParentTypes: types[i].AllowedParentTypes, Official: types[i].Official,
 			})
 		}
@@ -178,14 +179,14 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Description:   "Creates a custom (non-official) location_type. Gated by type:create.",
 	}, "type", "create"), func(ctx context.Context, in *createLocationTypeInput) (*locationTypeOutput, error) {
 		lt, err := gw.CreateLocationType(ctx, actorID(ctx), storage.LocationType{
-			ID: in.Body.ID, DisplayName: in.Body.DisplayName, Icon: in.Body.Icon,
+			Name: in.Body.Name, DisplayName: in.Body.DisplayName, Icon: in.Body.Icon,
 			AllowedParentTypes: in.Body.AllowedParentTypes,
 		})
 		if err != nil {
 			return nil, mapTypeErr(err, "location_type")
 		}
 		return &locationTypeOutput{Body: locationTypeBody{
-			ID: lt.ID, DisplayName: lt.DisplayName, Icon: lt.Icon,
+			ID: lt.ID, Name: lt.Name, DisplayName: lt.DisplayName, Icon: lt.Icon,
 			AllowedParentTypes: lt.AllowedParentTypes, Official: lt.Official,
 		}}, nil
 	})
@@ -205,7 +206,7 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 			return nil, mapTypeErr(err, "location_type")
 		}
 		return &locationTypeOutput{Body: locationTypeBody{
-			ID: lt.ID, DisplayName: lt.DisplayName, Icon: lt.Icon,
+			ID: lt.ID, Name: lt.Name, DisplayName: lt.DisplayName, Icon: lt.Icon,
 			AllowedParentTypes: lt.AllowedParentTypes, Official: lt.Official,
 		}}, nil
 	})
