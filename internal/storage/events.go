@@ -63,8 +63,8 @@ func (p *PG) InsertEvents(ctx context.Context, evs []EventOccurrence) error {
 		if len(ev.Attributes) > 0 {
 			attrs = string(ev.Attributes)
 		}
-		sql := fmt.Sprintf(`insert into event (ts, owner_kind, %s, key, instance, message, attributes, provenance, source)
-			values ($1, $2, $3, $4, $5, $6, $7, 'observed', $8)`, col)
+		sql := fmt.Sprintf(`insert into event (ts, owner_kind, %s, property_id, instance, message, attributes, provenance, source)
+			values ($1, $2, $3, (select id from property where name = $4), $5, $6, $7, 'observed', $8)`, col)
 		// The arc points at the primary key, so the owner reference resolves to a
 		// uuid before it is stored. A node still stores its name until the
 		// collection tier converts.
@@ -86,7 +86,8 @@ func (p *PG) InsertEvents(ctx context.Context, evs []EventOccurrence) error {
 // bounded by since and limit. Read helper for the component event log panel.
 func (p *PG) ListComponentEvents(ctx context.Context, componentName string, since time.Time, limit int) ([]Event, error) {
 	rows, err := p.pool.Query(ctx, `
-		select id, ts, owner_kind, key, instance, message, attributes, provenance, source
+		select id, ts, owner_kind,
+			(select p.name from property p where p.id = event.property_id), instance, message, attributes, provenance, source
 		from event
 		where component_id = (select id from component where name = $1) and ts >= $2
 		order by ts desc

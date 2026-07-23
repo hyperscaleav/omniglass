@@ -61,7 +61,7 @@ var (
 // declares. The column carries the other three for the producers that land later.
 const declaredProvenance = "declared"
 
-const propertyValueCols = `id, owner_kind, property_name, instance, provenance, value, created_at, updated_at`
+const propertyValueCols = `id, owner_kind, (select pr.name from property pr where pr.id = property_value.property_id) as property_name, instance, provenance, value, created_at, updated_at`
 
 // scanPropertyValue reads a row into a PropertyValue. OwnerID is not in the column
 // list (it lives in whichever arc column the owner kind selects), so the caller
@@ -102,9 +102,9 @@ func (p *PG) SetPropertyValue(ctx context.Context, actorID, ownerKind, ownerID, 
 	// the same series updates rather than conflicting, so the surface's save is
 	// idempotent.
 	sql := fmt.Sprintf(`
-		insert into property_value (owner_kind, %s, property_name, instance, provenance, value)
-		values ($1, $2, $3, $4, '`+declaredProvenance+`', $5)
-		on conflict (owner_kind, component_id, system_id, location_id, node_id, property_name, instance, provenance)
+		insert into property_value (owner_kind, %s, property_id, instance, provenance, value)
+		values ($1, $2, (select id from property where name = $3), $4, '`+declaredProvenance+`', $5)
+		on conflict (owner_kind, component_id, system_id, location_id, node_id, property_id, instance, provenance)
 		do update set value = excluded.value, updated_at = now()
 		returning `+propertyValueCols, col)
 	arc, err := p.ownerArcValue(ctx, tx, ownerKind, ownerID)
@@ -144,7 +144,7 @@ func (p *PG) ClearPropertyValue(ctx context.Context, actorID, ownerKind, ownerID
 	}
 
 	sql := fmt.Sprintf(`delete from property_value
-		where owner_kind = $1 and %s = $2 and property_name = $3 and instance = $4 and provenance = '`+declaredProvenance+`'
+		where owner_kind = $1 and %s = $2 and property_id = (select id from property where name = $3) and instance = $4 and provenance = '`+declaredProvenance+`'
 		returning id`, col)
 	var id string
 	arc, err := p.ownerArcValue(ctx, tx, ownerKind, ownerID)
@@ -222,7 +222,7 @@ func (p *PG) EffectiveProperties(ctx context.Context, ownerKind, ownerID string,
 
 	// The ad-hoc arm alone when the owner kind has no classifier to inherit from.
 	adHoc := fmt.Sprintf(`
-		select pv.property_name, pr.display_name, pr.data_type, false as required,
+		select pr.name as property_name, pr.display_name, pr.data_type, false as required,
 		       null::jsonb as default_value,
 		       pv.value as set_value,
 		       pv.value as effective_value,
@@ -232,7 +232,7 @@ func (p *PG) EffectiveProperties(ctx context.Context, ownerKind, ownerID string,
 		from inst
 		join property_value pv on pv.%[1]s = inst.arc
 		     and pv.instance = '' and pv.provenance = 'declared'
-		join property pr on pr.name = pv.property_name`, oc.arcCol)
+		join property pr on pr.id = pv.property_id`, oc.arcCol)
 
 	var q string
 	if oc.contractTable == "" {
@@ -245,7 +245,7 @@ func (p *PG) EffectiveProperties(ctx context.Context, ownerKind, ownerID string,
 		)
 		-- The contract arm: what the instance's classifier declares, resolved
 		-- against the instance's own value.
-		select c.property_name, pr.display_name, pr.data_type, c.required,
+		select pr.name as property_name, pr.display_name, pr.data_type, c.required,
 		       c.default_value,
 		       pv.value as set_value,
 		       coalesce(pv.value, c.default_value) as effective_value,
@@ -254,10 +254,10 @@ func (p *PG) EffectiveProperties(ctx context.Context, ownerKind, ownerID string,
 		       pv.id as value_id
 		from inst
 		join %[3]s c on c.%[4]s = inst.classifier
-		join property pr on pr.name = c.property_name
+		join property pr on pr.id = c.property_id
 		left join property_value pv
 		       on pv.%[5]s = inst.arc
-		      and pv.property_name = c.property_name
+		      and pv.property_id = c.property_id
 		      and pv.instance = ''
 		      and pv.provenance = 'declared'
 		union all
@@ -266,7 +266,7 @@ func (p *PG) EffectiveProperties(ctx context.Context, ownerKind, ownerID string,
 		%[6]s
 		where not exists (
 			select 1 from %[3]s c
-			where c.%[4]s = inst.classifier and c.property_name = pv.property_name
+			where c.%[4]s = inst.classifier and c.property_id = pv.property_id
 		)
 		order by 1`,
 			oc.instanceTable, oc.classifierCol, oc.contractTable, oc.contractKeyCol, oc.arcCol, adHoc, oc.arcMatch)
@@ -405,7 +405,9 @@ func (p *PG) guardOwnerScope(ctx context.Context, q querier, ownerKind, ownerID 
 // caller-meaningful sentinel: the owner or the property does not exist.
 func mapPropertyValueWriteErr(err error) error {
 	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == "23503" { // foreign_key_violation
+	if errors.As(err, &pgErr) && (pgErr.Code == "23503" || // foreign_key_violation
+		// an unknown property name resolved to null on the not-null arc
+		(pgErr.Code == "23502" && pgErr.ColumnName == "property_id")) {
 		return ErrPropertyRefNotFound
 	}
 	return fmt.Errorf("storage: set property value: %w", err)

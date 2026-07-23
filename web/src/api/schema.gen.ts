@@ -4469,6 +4469,8 @@ export interface components {
             data_type: string;
             description?: string;
             display_name?: string;
+            /** @description The property's uuid, the stable form the contract and telemetry keys store */
+            id: string;
             kind?: string;
             name: string;
             official: boolean;

@@ -40,11 +40,11 @@ type PropertyPatch struct {
 	Validation  []byte
 }
 
-const propertyCols = `name, coalesce(display_name, ''), kind, data_type, unit, precision, validation, fusion_policy, description, official`
+const propertyCols = `id, name, coalesce(display_name, ''), kind, data_type, unit, precision, validation, fusion_policy, description, official`
 
 func scanProperty(row pgx.Row) (*Property, error) {
 	var prop Property
-	if err := row.Scan(&prop.Name, &prop.DisplayName, &prop.Kind, &prop.DataType, &prop.Unit, &prop.Precision, &prop.Validation, &prop.FusionPolicy, &prop.Description, &prop.Official); err != nil {
+	if err := row.Scan(&prop.ID, &prop.Name, &prop.DisplayName, &prop.Kind, &prop.DataType, &prop.Unit, &prop.Precision, &prop.Validation, &prop.FusionPolicy, &prop.Description, &prop.Official); err != nil {
 		return nil, err
 	}
 	return &prop, nil

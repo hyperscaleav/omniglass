@@ -191,7 +191,7 @@ func TestSeedRolesIdempotent(t *testing.T) {
 	}
 	var barModelDefault string
 	if err := conn.QueryRow(ctx, `select default_value #>> '{}' from product_property
-		where product_id = (select id from product where name = 'cisco-room-bar') and property_name = 'model_number'`).Scan(&barModelDefault); err != nil {
+		where product_id = (select id from product where name = 'cisco-room-bar') and property_id = (select id from property where name = 'model_number')`).Scan(&barModelDefault); err != nil {
 		t.Fatalf("read cisco-room-bar model_number default: %v", err)
 	}
 	if barModelDefault != "Room Bar" {
