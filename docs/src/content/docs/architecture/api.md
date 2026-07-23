@@ -264,7 +264,7 @@ everything" grant sees only masks and **only admin (`secret:*`) and owner (`>`) 
 - `POST /secrets/{id}:reveal` returns the decrypted `{fields: {name: plaintext}}` (`secret:reveal`,
   audited).
 
-A secret's fields are masked in every read: the `secret` body (`{id, name, secret_type, owner_kind,
+A secret's fields are masked in every read: the `secret` body (`{id, name, secret_type, secret_type_id, owner_kind,
 owner_id?, owner_name?, fields:[{name, value, secret}]}`) returns `••••••` for a secret field, and only
 `:reveal` returns plaintext.
 

@@ -1859,11 +1859,16 @@ components:
         params:
           description: The endpoint/target settings (jsonb)
         type:
+          description: The interface_type name (the protocol)
+          type: string
+        type_id:
+          description: The interface_type's uuid, the stable form of type
           type: string
       required:
         - id
         - name
         - type
+        - type_id
       type: object
     Keybindings:
       additionalProperties: false
@@ -2537,6 +2542,10 @@ components:
         id:
           type: string
         location_type:
+          description: The location_type name
+          type: string
+        location_type_id:
+          description: The location_type's uuid, the stable form of location_type
           type: string
         name:
           type: string
@@ -2550,6 +2559,7 @@ components:
         - id
         - name
         - location_type
+        - location_type_id
       type: object
     LocationPropertiesOutputBody:
       additionalProperties: false
@@ -3149,6 +3159,10 @@ components:
         owner_name:
           type: string
         secret_type:
+          description: The secret_type name
+          type: string
+        secret_type_id:
+          description: The secret_type's uuid
           type: string
         winner:
           description: True for the resolved secret; false for a shadowed candidate
@@ -3157,6 +3171,7 @@ components:
         - id
         - name
         - secret_type
+        - secret_type_id
         - owner_kind
         - band
         - depth
@@ -3461,11 +3476,16 @@ components:
         owner_name:
           type: string
         secret_type:
+          description: The secret_type name
+          type: string
+        secret_type_id:
+          description: The secret_type's uuid, the stable form of secret_type
           type: string
       required:
         - id
         - name
         - secret_type
+        - secret_type_id
         - owner_kind
         - admin_sensitive
         - fields

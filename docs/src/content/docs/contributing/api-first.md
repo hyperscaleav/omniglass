@@ -59,8 +59,9 @@ machinery is now retired everywhere, including the last place it lived, the regi
 `{"parent": "..."}` both take a uuid or a name; the uuid is tried first, so an id never
 collides with a name. Operators type names, scripts hold ids, and neither has to convert.
 
-`TestReferencesCarryBothForms` enforces this over the generated OpenAPI, so a body cannot
-reintroduce a uuid-only reference silently. Its exempt list is the whole of the remaining
+`TestReferencesCarryBothForms` enforces this over the generated OpenAPI in both directions, so a body
+cannot silently reintroduce a uuid-only reference (a `*_id` with no name) nor a name-only registry
+reference (a registry handle with no id). Its exempt list is the whole of the remaining
 exception (the nameless entities and a still-slug-keyed taxonomy), and adding to it is a decision:
 if the target has a name, carry the name.
 

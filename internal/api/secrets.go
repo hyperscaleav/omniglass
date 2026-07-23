@@ -39,7 +39,8 @@ type secretTypeBody struct {
 type secretBody struct {
 	ID             string            `json:"id"`
 	Name           string            `json:"name"`
-	SecretType     string            `json:"secret_type"`
+	SecretType     string            `json:"secret_type" doc:"The secret_type name"`
+	SecretTypeID   string            `json:"secret_type_id" doc:"The secret_type's uuid, the stable form of secret_type"`
 	OwnerKind      string            `json:"owner_kind"`
 	OwnerID        *string           `json:"owner_id,omitempty" doc:"The owning entity's id, the canonical handle; absent for a global owner"`
 	OwnerName      string            `json:"owner_name,omitempty"`
@@ -57,7 +58,7 @@ func toSecretFieldBodies(fs []storage.ResolvedField) []secretFieldBody {
 
 func toSecretBody(s *storage.Secret) secretBody {
 	return secretBody{
-		ID: s.ID, Name: s.Name, SecretType: s.SecretType,
+		ID: s.ID, Name: s.Name, SecretType: s.SecretType, SecretTypeID: s.SecretTypeID,
 		OwnerKind: s.OwnerKind, OwnerID: s.OwnerID, OwnerName: s.OwnerName,
 		AdminSensitive: s.AdminSensitive,
 		Fields:         toSecretFieldBodies(s.Fields),
@@ -126,16 +127,17 @@ func (a *authenticator) canSecretAdmin(ctx context.Context, action string) bool 
 // which secret applies to a device and where it comes from, never what it
 // contains. Plaintext stays behind the audited reveal.
 type resolvedSecretBody struct {
-	ID         string            `json:"id"`
-	Name       string            `json:"name"`
-	SecretType string            `json:"secret_type"`
-	OwnerKind  string            `json:"owner_kind"`
-	OwnerID    *string           `json:"owner_id,omitempty" doc:"The owning entity's id, the canonical handle; absent for a platform owner"`
-	OwnerName  string            `json:"owner_name,omitempty"`
-	Band       int               `json:"band" doc:"Cascade tier: 0 platform, 1 location, 3 component"`
-	Depth      int               `json:"depth" doc:"Distance up the tier's tree from the component (0 nearest)"`
-	Winner     bool              `json:"winner" doc:"True for the resolved secret; false for a shadowed candidate"`
-	Fields     []secretFieldBody `json:"fields"`
+	ID           string            `json:"id"`
+	Name         string            `json:"name"`
+	SecretType   string            `json:"secret_type" doc:"The secret_type name"`
+	SecretTypeID string            `json:"secret_type_id" doc:"The secret_type's uuid"`
+	OwnerKind    string            `json:"owner_kind"`
+	OwnerID      *string           `json:"owner_id,omitempty" doc:"The owning entity's id, the canonical handle; absent for a platform owner"`
+	OwnerName    string            `json:"owner_name,omitempty"`
+	Band         int               `json:"band" doc:"Cascade tier: 0 platform, 1 location, 3 component"`
+	Depth        int               `json:"depth" doc:"Distance up the tier's tree from the component (0 nearest)"`
+	Winner       bool              `json:"winner" doc:"True for the resolved secret; false for a shadowed candidate"`
+	Fields       []secretFieldBody `json:"fields"`
 }
 
 type effectiveSecretsInput struct {
@@ -173,7 +175,7 @@ func registerSecretRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 				fields = append(fields, secretFieldBody{Name: f.Name, Value: f.Value, Secret: f.Secret})
 			}
 			out.Body.Secrets = append(out.Body.Secrets, resolvedSecretBody{
-				ID: r.ID, Name: r.Name, SecretType: r.SecretType,
+				ID: r.ID, Name: r.Name, SecretType: r.SecretType, SecretTypeID: r.SecretTypeID,
 				OwnerKind: r.OwnerKind, OwnerID: r.OwnerID, OwnerName: r.OwnerName,
 				Band: r.Band, Depth: r.Depth, Winner: r.Winner, Fields: fields,
 			})
