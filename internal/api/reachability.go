@@ -59,7 +59,7 @@ type reachHistoryBody struct {
 
 type reachInterfaceBody struct {
 	Interface string             `json:"interface" doc:"The interface name"`
-	Type      string             `json:"type" doc:"The interface type (icmp, tcp, ...)"`
+	Type      string             `json:"interface_type" doc:"The interface type (icmp, tcp, ...)"`
 	Endpoint  string             `json:"endpoint,omitempty" doc:"The probed endpoint (target[:port]) from the interface params"`
 	Node      string             `json:"node,omitempty" doc:"The node that probes this interface"`
 	Verdict   *reachVerdictBody  `json:"verdict" doc:"The latest reachability verdict, or null if none yet"`

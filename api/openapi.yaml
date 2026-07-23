@@ -593,17 +593,17 @@ components:
         component:
           description: Owning component, by name or id; omit for a server-hosted interface (needs an all-scoped grant)
           type: string
+        interface_type:
+          description: An interface_type name (the protocol); the interface is named by it, unique within the component
+          minLength: 1
+          type: string
         node:
           description: Node placement, by name or id
           type: string
         params:
           description: Endpoint/target settings (jsonb)
-        type:
-          description: An interface_type name (the protocol); the interface is named by it, unique within the component
-          minLength: 1
-          type: string
       required:
-        - type
+        - interface_type
       type: object
     CreateLocationInputBody:
       additionalProperties: false
@@ -1847,6 +1847,12 @@ components:
         id:
           description: The interface's surrogate id (the address)
           type: string
+        interface_type:
+          description: The interface_type name (the protocol)
+          type: string
+        interface_type_id:
+          description: The interface_type's uuid, the stable form of interface_type
+          type: string
         name:
           description: The friendly name, unique within the owning component
           type: string
@@ -1858,17 +1864,11 @@ components:
           type: string
         params:
           description: The endpoint/target settings (jsonb)
-        type:
-          description: The interface_type name (the protocol)
-          type: string
-        type_id:
-          description: The interface_type's uuid, the stable form of type
-          type: string
       required:
         - id
         - name
-        - type
-        - type_id
+        - interface_type
+        - interface_type_id
       type: object
     Keybindings:
       additionalProperties: false
@@ -3027,6 +3027,9 @@ components:
         interface:
           description: The interface name
           type: string
+        interface_type:
+          description: The interface type (icmp, tcp, ...)
+          type: string
         layers:
           description: The per-layer probe signals that compose the verdict
           items:
@@ -3037,15 +3040,12 @@ components:
         node:
           description: The node that probes this interface
           type: string
-        type:
-          description: The interface type (icmp, tcp, ...)
-          type: string
         verdict:
           $ref: "#/components/schemas/ReachVerdictBody"
           description: The latest reachability verdict, or null if none yet
       required:
         - interface
-        - type
+        - interface_type
         - verdict
         - layers
         - history

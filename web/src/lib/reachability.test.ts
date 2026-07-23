@@ -53,7 +53,7 @@ describe("segments and uptime", () => {
 describe("reason", () => {
   const base: ReachInterface = {
     interface: "disp-1-tcp",
-    type: "tcp",
+    interface_type: "tcp",
     verdict: { value: "down", ts: ago(5_000) },
     layers: [],
     history: [],

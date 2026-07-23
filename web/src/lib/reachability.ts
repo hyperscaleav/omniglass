@@ -21,7 +21,7 @@ export type ReachLayer = { layer: string; check: string; value: number; detail?:
 export type ReachHistory = { ts: string; value: string };
 export type ReachInterface = {
   interface: string;
-  type: string;
+  interface_type: string;
   endpoint?: string;
   node?: string;
   verdict: ReachVerdict | null;

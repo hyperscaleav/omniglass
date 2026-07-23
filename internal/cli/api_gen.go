@@ -1284,14 +1284,14 @@ func generatedCommands() []*cobra.Command {
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
 				var fComponent string
+				var fInterfaceType string
 				var fNode string
 				var fParams string
-				var fType string
 				cmd := &cobra.Command{
 					Use:     "create",
 					Short:   "Create an interface",
 					Long:    "Creates an interface owned by a component (or a server-hosted one, which needs an all-scoped grant). The create scope cascades through the owning component. Gated by interface:create.",
-					Example: "  omniglass interface create --type type",
+					Example: "  omniglass interface create --interface-type interface_type",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/interfaces")
@@ -1299,23 +1299,23 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("component") {
 							body["component"] = fComponent
 						}
+						if cmd.Flags().Changed("interface-type") {
+							body["interface_type"] = fInterfaceType
+						}
 						if cmd.Flags().Changed("node") {
 							body["node"] = fNode
 						}
 						if cmd.Flags().Changed("params") {
 							body["params"] = jsonOrString(fParams)
 						}
-						if cmd.Flags().Changed("type") {
-							body["type"] = fType
-						}
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
 				cmd.Flags().StringVar(&fComponent, "component", "", "Owning component, by name or id; omit for a server-hosted interface (needs an all-scoped grant)")
+				cmd.Flags().StringVar(&fInterfaceType, "interface-type", "", "An interface_type name (the protocol); the interface is named by it, unique within the component")
+				_ = cmd.MarkFlagRequired("interface-type")
 				cmd.Flags().StringVar(&fNode, "node", "", "Node placement, by name or id")
 				cmd.Flags().StringVar(&fParams, "params", "", "Endpoint/target settings (jsonb)")
-				cmd.Flags().StringVar(&fType, "type", "", "An interface_type name (the protocol); the interface is named by it, unique within the component")
-				_ = cmd.MarkFlagRequired("type")
 				return cmd
 			}()
 			return cmd

@@ -25,7 +25,7 @@ const locSeed: Location[] = [
   { name: "east", display_name: "East", location_type: "campus" } as Location,
 ];
 const taskSeed: Task[] = [{ id: "t-hq", interface_id: "if-hq", mode: "poll", enabled: true, node: "edge-hq" }];
-const ifaceSeed: Interface[] = [{ id: "if-hq", name: "disp-1-tcp", type: "tcp", component: "disp-1", node: "edge-hq" }];
+const ifaceSeed: Interface[] = [{ id: "if-hq", name: "disp-1-tcp", interface_type: "tcp", component: "disp-1", node: "edge-hq" }];
 
 const owner: Me = { principal: { id: "p", kind: "human" }, permissions: [">"], grants: [] };
 const reader: Me = { principal: { id: "r", kind: "human" }, permissions: ["node:read"], grants: [] };

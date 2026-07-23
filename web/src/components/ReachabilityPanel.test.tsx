@@ -15,7 +15,7 @@ const seed: Reachability = {
   interfaces: [
     {
       interface: "disp-1-tcp",
-      type: "tcp",
+      interface_type: "tcp",
       endpoint: "10.20.4.11:5000",
       node: "node-a",
       verdict: { value: "up", ts: nowIso },
@@ -27,7 +27,7 @@ const seed: Reachability = {
     },
     {
       interface: "disp-1-icmp",
-      type: "icmp",
+      interface_type: "icmp",
       endpoint: "10.20.4.11",
       node: "node-a",
       verdict: { value: "down", ts: nowIso },
@@ -86,8 +86,8 @@ describe("ReachabilityPanel", () => {
     const stale: Reachability = {
       component: "c2",
       interfaces: [
-        { interface: "i-stale", type: "tcp", verdict: { value: "up", ts: ago(600_000) }, layers: [], history: [] },
-        { interface: "i-unknown", type: "tcp", verdict: null, layers: [], history: [] },
+        { interface: "i-stale", interface_type: "tcp", verdict: { value: "up", ts: ago(600_000) }, layers: [], history: [] },
+        { interface: "i-unknown", interface_type: "tcp", verdict: null, layers: [], history: [] },
       ],
     };
     const { getByText } = mount(stale);
@@ -106,8 +106,8 @@ describe("ReachabilityPanel", () => {
 // component detail passes their callbacks (which it gates on interface:create /
 // interface:read). A row maps to its interface id via the seeded interfaces list.
 const ifaceSeed: Interface[] = [
-  { id: "if-1", name: "disp-1-tcp", type: "tcp", component: "disp-1" },
-  { id: "if-2", name: "disp-1-icmp", type: "icmp", component: "disp-1" },
+  { id: "if-1", name: "disp-1-tcp", interface_type: "tcp", component: "disp-1" },
+  { id: "if-2", name: "disp-1-icmp", interface_type: "icmp", component: "disp-1" },
 ];
 
 function mountManaged(opts: { onAdd?: () => void; onOpenInterface?: (id: string) => void }) {
