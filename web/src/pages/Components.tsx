@@ -102,7 +102,7 @@ export default function Components() {
         display: entityLabel(c),
         children: [],
         actions: c.actions,
-        product: c.product_id ?? "",
+        product: c.product ?? "",
         systemName: c.system ? entityLabel(sysByName().get(c.system) ?? { name: c.system }) : "",
         systemAddr: c.system ?? "",
         systemCount: c.system_count ?? 0,
@@ -279,7 +279,7 @@ export default function Components() {
             ) : <span class="text-base-content/50">—</span>)}
             {ctx.fact("Location", <span>{n().locationName || "—"}</span>)}
             {ctx.fact("Parent", parent() ? <button class="link text-sm" onClick={() => ctx.go(parent()!)}>{parent()!.display}</button> : <span class="text-base-content/50">Root</span>)}
-            {ctx.fact("Product", n().raw.product_id ? <span class="font-data text-sm">{n().raw.product_id}</span> : <span class="text-base-content/50">—</span>)}
+            {ctx.fact("Product", n().raw.product ? <span class="font-data text-sm">{n().raw.product}</span> : <span class="text-base-content/50">—</span>)}
           </div>
         </div>
 

@@ -21,16 +21,6 @@ const (
 	VendorDeveloper    VendorKind = "developer"
 )
 
-// vendorRefCol picks the column a reference addresses: a uuid is the primary
-// key, anything else is the handle. The two can never collide, since a handle is
-// kebab and a uuid is not.
-func vendorRefCol(ref string) string {
-	if isUUID(ref) {
-		return "id"
-	}
-	return "name"
-}
-
 // validVendorKind reports whether s is one of the known vendor kinds.
 func validVendorKind(s string) bool {
 	switch VendorKind(s) {
@@ -126,7 +116,7 @@ func (p *PG) ListVendors(ctx context.Context) ([]Vendor, error) {
 
 // GetVendor resolves one vendor by id. An unknown id is ErrTypeNotFound.
 func (p *PG) GetVendor(ctx context.Context, id string) (*Vendor, error) {
-	m, err := scanVendor(p.pool.QueryRow(ctx, `select `+vendorCols+` from vendor where `+vendorRefCol(id)+` = $1`, id))
+	m, err := scanVendor(p.pool.QueryRow(ctx, `select `+vendorCols+` from vendor where `+registryRefCol(id)+` = $1`, id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrTypeNotFound
 	}
@@ -187,7 +177,7 @@ func (p *PG) UpdateVendor(ctx context.Context, actorID, id string, patch VendorP
 			support_phone = coalesce($5, support_phone),
 			website       = coalesce($6, website),
 			updated_at    = now()
-		where `+vendorRefCol(id)+` = $1
+		where `+registryRefCol(id)+` = $1
 		returning `+vendorCols,
 		id, patch.DisplayName, patch.Kind, patch.Icon, patch.SupportPhone, patch.Website))
 	if err != nil {
@@ -215,7 +205,7 @@ func (p *PG) DeleteVendor(ctx context.Context, actorID, id string) error {
 	if err := guardTypeMutable(ctx, tx, "vendor", id); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, `delete from vendor where `+vendorRefCol(id)+` = $1`, id); err != nil {
+	if _, err := tx.Exec(ctx, `delete from vendor where `+registryRefCol(id)+` = $1`, id); err != nil {
 		return fmt.Errorf("storage: delete vendor %q: %w", id, err)
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "delete", "vendor", id, map[string]string{"id": id}, nil); err != nil {

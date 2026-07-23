@@ -1898,7 +1898,8 @@ below from the project's history. From here it grows one slice at a time.
 
 ### ADR-0056: Every foreign key stores a primary key
 
-- **Date:** 2026-07-22 | **Status:** Accepted | **Pages:** [storage](/architecture/storage/),
+- **Date:** 2026-07-22 | **Status:** Accepted; the slug-keyed carve-out below is retired by
+  [ADR-0062](#adr-0062-a-registry-takes-a-uuid-primary-key-and-a-renameable-handle) | **Pages:** [storage](/architecture/storage/),
   [api-first](/contributing/api-first/)
 - **Decision:** every foreign key stores the target's **primary key**: a uuid for an estate entity,
   `principal_id` for a node, and the slug itself for a slug-keyed catalog (`product`, `standard`,
@@ -1926,7 +1927,9 @@ below from the project's history. From here it grows one slice at a time.
   collection tier (`metric_datapoint`, `interface`, `node`) and every node reference.
 - **What stays a name.** The columns whose target is slug-keyed are already conformant and were not
   touched. Health passes names internally on purpose: its advisory lock hashes `health/<kind>/<name>`,
-  and a mixed currency would hash two keys for one owner and silently stop serializing.
+  and a mixed currency would hash two keys for one owner and silently stop serializing. (The
+  slug-keyed targets themselves later took uuid keys too, so those columns moved to the uuid; see
+  [ADR-0062](#adr-0062-a-registry-takes-a-uuid-primary-key-and-a-renameable-handle).)
 - **Guarded both ways.** `TestResponsesAddressEntitiesByName` fails on a response that names an entity
   by uuid alone; the per-tier rename tests fail if an arc stops following a rename. Each conversion was
   **mutation-checked** rather than trusted: breaking the projection had to turn the suite red.
@@ -2148,3 +2151,11 @@ below from the project's history. From here it grows one slice at a time.
   look like a uuid, so the two cannot collide.
 - **The rename test is written first, each slice.** It renames a handle and asserts every reference still
   resolves and now reads the new one. That is the capability the epic buys, so it is what the slice proves.
+- **The exception is retired, not just the tables.** With all nine registries converted, a closing slice
+  removes the slug-keyed carve-out from the doctrine: the [api-first](/contributing/api-first/) rule now
+  states every foreign key stores a uuid with no exception, [ADR-0056](#adr-0056-every-foreign-key-stores-a-primary-key)'s
+  carve-out is marked retired, and the `TestReferencesCarryBothForms` guard drops its slug-keyed
+  allow-list (the registry references move into the both-forms rule, and the one that surfaced a real
+  gap, a component response that carried `product_id` without the product's name, is fixed). The
+  storage helper collapses too: the per-registry `productRefCol` / `vendorRefCol` and the
+  `registryHandles` set fold into one `registryRefCol(ref)`, since every registry now behaves the same.

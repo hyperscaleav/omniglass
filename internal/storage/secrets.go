@@ -148,7 +148,7 @@ func (p *PG) ListSecretTypes(ctx context.Context) ([]SecretType, error) {
 
 func (p *PG) GetSecretType(ctx context.Context, id string) (*SecretType, error) {
 	st, err := scanSecretType(p.pool.QueryRow(ctx,
-		`select id, name, official, display_name, default_admin_sensitive, schema from secret_type where `+registryRefCol("secret_type", id)+` = $1`, id))
+		`select id, name, official, display_name, default_admin_sensitive, schema from secret_type where `+registryRefCol(id)+` = $1`, id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrUnknownSecretType
 	}

@@ -270,7 +270,7 @@ func (p *PG) recomputeMovedSystem(ctx context.Context, q txQuerier, system strin
 // A product with no components in use recomputes nothing, which is the common
 // case for a catalog edit and costs one query.
 func (p *PG) recomputeProductComponents(ctx context.Context, q txQuerier, productID string) error {
-	rows, err := q.Query(ctx, `select name from component where product_id = (select id from product where `+productRefCol(productID)+` = $1) order by name`, productID)
+	rows, err := q.Query(ctx, `select name from component where product_id = (select id from product where `+registryRefCol(productID)+` = $1) order by name`, productID)
 	if err != nil {
 		return fmt.Errorf("storage: components of product %q: %w", productID, err)
 	}

@@ -91,21 +91,11 @@ const productCols = `id, name, display_name,
 	parent_product_id, (select q.name from product q where q.id = product.parent_product_id) as parent_handle,
 	official, created_at, updated_at`
 
-// productRefCol picks the column a reference addresses: a uuid is the primary
-// key, anything else the handle. A kebab handle can never look like a uuid, so
-// the two cannot collide.
-func productRefCol(ref string) string {
-	if isUUID(ref) {
-		return "id"
-	}
-	return "name"
-}
-
 // resolveProductRef turns a handle or uuid into the product's uuid, for the
 // columns that store one.
 func resolveProductRef(ctx context.Context, q querier, ref string) (string, error) {
 	var id string
-	if err := q.QueryRow(ctx, `select id from product where `+productRefCol(ref)+` = $1`, ref).Scan(&id); err != nil {
+	if err := q.QueryRow(ctx, `select id from product where `+registryRefCol(ref)+` = $1`, ref).Scan(&id); err != nil {
 		return "", ErrProductRefNotFound
 	}
 	return id, nil
@@ -114,7 +104,7 @@ func resolveProductRef(ctx context.Context, q querier, ref string) (string, erro
 // resolveVendorRef does the same for a vendor reference.
 func resolveVendorRef(ctx context.Context, q querier, ref string) (string, error) {
 	var id string
-	if err := q.QueryRow(ctx, `select id from vendor where `+vendorRefCol(ref)+` = $1`, ref).Scan(&id); err != nil {
+	if err := q.QueryRow(ctx, `select id from vendor where `+registryRefCol(ref)+` = $1`, ref).Scan(&id); err != nil {
 		return "", ErrProductRefNotFound
 	}
 	return id, nil
@@ -151,7 +141,7 @@ func productRefs(ctx context.Context, q querier, m *Product) error {
 // resolveDriverRef turns a driver handle or uuid into the driver's uuid.
 func resolveDriverRef(ctx context.Context, q querier, ref string) (string, error) {
 	var id string
-	if err := q.QueryRow(ctx, `select id from driver where `+registryRefCol("driver", ref)+` = $1`, ref).Scan(&id); err != nil {
+	if err := q.QueryRow(ctx, `select id from driver where `+registryRefCol(ref)+` = $1`, ref).Scan(&id); err != nil {
 		return "", ErrProductRefNotFound
 	}
 	return id, nil
@@ -196,7 +186,7 @@ type productCapabilityLoader interface {
 
 // loadProductCapabilities returns a product's capability ids, sorted.
 func loadProductCapabilities(ctx context.Context, q productCapabilityLoader, productID string) ([]string, error) {
-	rows, err := q.Query(ctx, `select cap.name from product_capability pc join capability cap on cap.id = pc.capability_id where pc.product_id = (select id from product where `+productRefCol(productID)+` = $1) order by cap.name`, productID)
+	rows, err := q.Query(ctx, `select cap.name from product_capability pc join capability cap on cap.id = pc.capability_id where pc.product_id = (select id from product where `+registryRefCol(productID)+` = $1) order by cap.name`, productID)
 	if err != nil {
 		return nil, fmt.Errorf("storage: load product capabilities %q: %w", productID, err)
 	}
@@ -331,7 +321,7 @@ func (p *PG) allProductCapabilities(ctx context.Context) (map[string][]string, e
 // GetProduct resolves one product with its capabilities by id. An unknown id is
 // ErrTypeNotFound.
 func (p *PG) GetProduct(ctx context.Context, id string) (*Product, error) {
-	m, err := scanProduct(p.pool.QueryRow(ctx, `select `+productCols+` from product where `+productRefCol(id)+` = $1`, id))
+	m, err := scanProduct(p.pool.QueryRow(ctx, `select `+productCols+` from product where `+registryRefCol(id)+` = $1`, id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrTypeNotFound
 	}
@@ -426,7 +416,7 @@ func (p *PG) UpdateProduct(ctx context.Context, actorID, id string, patch Produc
 			kind              = coalesce($5, kind),
 			parent_product_id = coalesce($6, parent_product_id),
 			updated_at        = now()
-		where `+productRefCol(id)+` = $1
+		where `+registryRefCol(id)+` = $1
 		returning `+productCols,
 		id, patch.DisplayName, resolved.VendorID, resolved.DriverID, patch.Kind, resolved.ParentProductID))
 	if err != nil {
@@ -472,7 +462,7 @@ func (p *PG) DeleteProduct(ctx context.Context, actorID, id string) error {
 	if err := guardTypeMutable(ctx, tx, "product", id); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, `delete from product where `+productRefCol(id)+` = $1`, id); err != nil {
+	if _, err := tx.Exec(ctx, `delete from product where `+registryRefCol(id)+` = $1`, id); err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23503" {
 			return ErrTypeInUse

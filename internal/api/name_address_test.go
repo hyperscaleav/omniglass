@@ -22,13 +22,25 @@ import (
 
 // referenceFields maps a uuid field to the name field that must accompany it, per
 // response schema. A schema listed here must carry both.
+//
+// The registry references join the estate references here now that every registry
+// has a uuid primary key and a renameable `name` (epic #262, ADR-0062). A product,
+// a vendor, a driver, a standard, and their parents are addressed the same way an
+// estate entity is: the id is the handle, the name is the label, and a response
+// carries both.
 var referenceFields = map[string]string{
-	"parent_id":    "parent",
-	"location_id":  "location",
-	"system_id":    "system",
-	"owner_id":     "owner_name",
-	"component_id": "component",
-	"node_id":      "node",
+	"parent_id":          "parent",
+	"location_id":        "location",
+	"system_id":          "system",
+	"owner_id":           "owner_name",
+	"component_id":       "component",
+	"node_id":            "node",
+	"product_id":         "product",
+	"parent_product_id":  "parent_product",
+	"vendor_id":          "vendor",
+	"driver_id":          "driver",
+	"standard_id":        "standard",
+	"parent_standard_id": "parent_standard",
 }
 
 // Schemas where a *_id field addresses something with no name to pair it with.
@@ -44,14 +56,18 @@ var idOnlyIsCorrect = map[string]string{
 	"node_id":      "a node is addressed by its enrollment identity, which is its primary key",
 }
 
-// Catalog ids that ARE names, because the registry is keyed by a written slug.
-var slugKeyedCatalogs = map[string]bool{
-	"product_id": true, "standard_id": true, "parent_standard_id": true, "parent_product_id": true,
-	"driver_id": true, "vendor_id": true, "capability_id": true,
-	"location_type_id": true, "secret_type_id": true, "datapoint_type_id": true,
-	"interface_type_id": true, "property_id": true, "role_id": true, "alarm_id": true,
-	"event_id": true, "audit_id": true, "source_rule_id": true, "product_property_id": true,
-	"tag_id": true,
+// References exempt from the both-forms rule, each for a reason of its own.
+// The nine component-classification registries used to live here, back when their
+// name WAS their primary key; epic #262 gave each a uuid key and a renameable
+// name, so they moved into referenceFields and now carry both like any reference.
+// What remains is a still-slug-keyed taxonomy (`datapoint_type`, whose id is its
+// written kind) and a set of row ids that address rows with no separate name of
+// their own (an alarm, an event, an audit row, a rule, a contract line, a role,
+// a tag binding's key).
+var exemptRefs = map[string]bool{
+	"datapoint_type_id": true, "role_id": true, "alarm_id": true,
+	"event_id": true, "audit_id": true, "source_rule_id": true,
+	"product_property_id": true, "tag_id": true,
 }
 
 func TestReferencesCarryBothForms(t *testing.T) {
@@ -84,7 +100,7 @@ func TestReferencesCarryBothForms(t *testing.T) {
 			if field == "id" || !strings.HasSuffix(field, "_id") {
 				continue
 			}
-			if slugKeyedCatalogs[field] {
+			if exemptRefs[field] {
 				continue
 			}
 			if _, ok := idOnlyIsCorrect[field]; ok {

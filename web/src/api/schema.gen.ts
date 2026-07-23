@@ -3094,7 +3094,9 @@ export interface components {
             parent?: string;
             /** @description The parent component's id, the canonical handle */
             parent_id?: string;
-            /** @description The product (catalog SKU) this component is an instance of, if any. */
+            /** @description The product's name, for display; the form a body round-trips. */
+            product?: string;
+            /** @description The product (catalog SKU) this component is an instance of, if any; the stable handle that survives a rename. */
             product_id?: string;
             /** @description Name of the component's primary system, its default when no system is named. A component may belong to several; read /components/{name}/memberships for all of them. */
             system?: string;

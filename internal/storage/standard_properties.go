@@ -78,7 +78,7 @@ func mapStandardPropertyWriteErr(err error) error {
 // querier, so the seed path needs no transaction for its single statement.
 func upsertStandardPropertyRow(ctx context.Context, q querier, standardID string, spec StandardPropertySpec) (*StandardProperty, error) {
 	var known bool
-	if err := q.QueryRow(ctx, `select true from standard where `+registryRefCol("standard", standardID)+` = $1`, standardID).Scan(&known); err != nil {
+	if err := q.QueryRow(ctx, `select true from standard where `+registryRefCol(standardID)+` = $1`, standardID).Scan(&known); err != nil {
 		return nil, ErrTypeNotFound
 	}
 	if err := requireProperty(ctx, q, spec.PropertyName); err != nil {
@@ -86,7 +86,7 @@ func upsertStandardPropertyRow(ctx context.Context, q querier, standardID string
 	}
 	pp, err := scanStandardProperty(q.QueryRow(ctx, `
 		insert into standard_property (standard_id, property_id, default_value, required)
-		values ((select id from standard where `+registryRefCol("standard", standardID)+` = $1), (select id from property where name = $2), $3, $4)
+		values ((select id from standard where `+registryRefCol(standardID)+` = $1), (select id from property where name = $2), $3, $4)
 		on conflict (standard_id, property_id) do update
 			set default_value = excluded.default_value,
 			    required      = excluded.required,
@@ -104,7 +104,7 @@ func upsertStandardPropertyRow(ctx context.Context, q querier, standardID string
 // standard is indistinguishable from one with an empty contract, since the read
 // side has nothing to disclose.
 func (p *PG) ListStandardProperties(ctx context.Context, standardID string) ([]StandardProperty, error) {
-	rows, err := p.pool.Query(ctx, `select `+standardPropertyCols+` from standard_property where standard_id = (select id from standard where `+registryRefCol("standard", standardID)+` = $1) order by (select pr.name from property pr where pr.id = standard_property.property_id)`, standardID)
+	rows, err := p.pool.Query(ctx, `select `+standardPropertyCols+` from standard_property where standard_id = (select id from standard where `+registryRefCol(standardID)+` = $1) order by (select pr.name from property pr where pr.id = standard_property.property_id)`, standardID)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list standard properties %q: %w", standardID, err)
 	}
@@ -139,7 +139,7 @@ func (p *PG) SetStandardProperty(ctx context.Context, actorID, standardID string
 	// The before-image decides create vs update and gives the audit its old side.
 	var before any
 	prior, err := scanStandardProperty(tx.QueryRow(ctx,
-		`select `+standardPropertyCols+` from standard_property where standard_id = (select id from standard where `+registryRefCol("standard", standardID)+` = $1) and property_id = (select id from property where name = $2)`,
+		`select `+standardPropertyCols+` from standard_property where standard_id = (select id from standard where `+registryRefCol(standardID)+` = $1) and property_id = (select id from property where name = $2)`,
 		standardID, spec.PropertyName))
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
@@ -183,7 +183,7 @@ func (p *PG) DeleteStandardProperty(ctx context.Context, actorID, standardID, pr
 	// the withdrawn declaration and a missing row is caught without a second read.
 	before, err := scanStandardProperty(tx.QueryRow(ctx, `
 		delete from standard_property
-		where standard_id = (select id from standard where `+registryRefCol("standard", standardID)+` = $1) and property_id = (select id from property where name = $2)
+		where standard_id = (select id from standard where `+registryRefCol(standardID)+` = $1) and property_id = (select id from property where name = $2)
 		returning `+standardPropertyCols, standardID, propertyName))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrTypeNotFound
